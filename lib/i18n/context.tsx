@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-type Language = "en" | "zh";
+type Language = "en" | "zh" | "zh-TW";
 
 interface LanguageContextType {
   language: Language;
@@ -18,7 +18,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Load saved language preference
     const savedLang = localStorage.getItem("language") as Language;
-    if (savedLang && (savedLang === "en" || savedLang === "zh")) {
+    if (savedLang && (savedLang === "en" || savedLang === "zh" || savedLang === "zh-TW")) {
       setLanguageState(savedLang);
     }
   }, []);
@@ -130,6 +130,44 @@ const translations = {
       profile: "你的资料",
       email: "电子邮件",
       accountCreated: "账户创建时间"
+    }
+  },
+  "zh-TW": {
+    nav: {
+      getStarted: "開始使用",
+      signIn: "登入",
+      signOut: "登出",
+      dashboard: "控制台"
+    },
+    hero: {
+      title: "追蹤你的習慣，",
+      titleHighlight: "改變你的人生",
+      subtitle: "加入 betterr.me，養成更好的習慣，追蹤你的進步，實現你的目標。今天就開始你的自我提升之旅。"
+    },
+    features: {
+      dailyTracking: {
+        title: "每日追蹤",
+        description: "透過簡單直觀的介面，輕鬆追蹤你的日常習慣。"
+      },
+      progressInsights: {
+        title: "進度洞察",
+        description: "透過詳細的統計數據和洞察，視覺化你的進步。"
+      },
+      stayMotivated: {
+        title: "保持動力",
+        description: "建立連續記錄，獲得成就，在旅程中保持動力。"
+      }
+    },
+    cta: {
+      title: "準備開始你的旅程了嗎？",
+      subtitle: "加入成千上萬已經在養成更好習慣並改變生活的用戶。",
+      button: "免費開始"
+    },
+    dashboard: {
+      welcome: "歡迎來到你的個人控制台",
+      profile: "你的資料",
+      email: "電子郵件",
+      accountCreated: "帳戶創建時間"
     }
   }
 }; 

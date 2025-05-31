@@ -32,7 +32,13 @@ export function LanguageSwitcher() {
           onClick={() => setLanguage("zh")}
           className={language === "zh" ? "font-semibold" : ""}
         >
-          中文
+          简体中文
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => setLanguage("zh-TW")}
+          className={language === "zh-TW" ? "font-semibold" : ""}
+        >
+          繁體中文
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
