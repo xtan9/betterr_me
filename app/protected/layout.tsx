@@ -1,5 +1,6 @@
 import { AuthButton } from "@/components/auth-button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import Link from "next/link";
 
 export default function ProtectedLayout({
@@ -17,6 +18,7 @@ export default function ProtectedLayout({
             </div>
             <div className="flex items-center gap-4">
               <AuthButton />
+              <LanguageSwitcher />
               <ThemeSwitcher />
             </div>
           </div>
