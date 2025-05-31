@@ -1,12 +1,7 @@
-import { DeployButton } from "@/components/deploy-button";
-import { EnvVarWarning } from "@/components/env-var-warning";
 import { AuthButton } from "@/components/auth-button";
-import { Hero } from "@/components/hero";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { ConnectSupabaseSteps } from "@/components/tutorial/connect-supabase-steps";
-import { SignUpUserSteps } from "@/components/tutorial/sign-up-user-steps";
-import { hasEnvVars } from "@/lib/utils";
 import Link from "next/link";
+import { ArrowRight, CheckCircle, Calendar, BarChart, Sparkles } from "lucide-react";
 
 export default function Home() {
   return (
@@ -15,36 +10,82 @@ export default function Home() {
         <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
           <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
             <div className="flex gap-5 items-center font-semibold">
-              <Link href={"/"}>Next.js Supabase Starter</Link>
-              <div className="flex items-center gap-2">
-                <DeployButton />
-              </div>
+              <Link href={"/"}>Betterr.me</Link>
             </div>
-            {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
+            <div className="flex items-center gap-4">
+              <AuthButton />
+              <ThemeSwitcher />
+            </div>
           </div>
         </nav>
-        <div className="flex-1 flex flex-col gap-20 max-w-5xl p-5">
-          <Hero />
-          <main className="flex-1 flex flex-col gap-6 px-4">
-            <h2 className="font-medium text-xl mb-4">Next steps</h2>
-            {hasEnvVars ? <SignUpUserSteps /> : <ConnectSupabaseSteps />}
-          </main>
-        </div>
 
-        <footer className="w-full flex items-center justify-center border-t mx-auto text-center text-xs gap-8 py-16">
-          <p>
-            Powered by{" "}
-            <a
-              href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
-              target="_blank"
-              className="font-bold hover:underline"
-              rel="noreferrer"
+        {/* Hero Section */}
+        <div className="flex-1 flex flex-col gap-20 max-w-5xl p-5">
+          <div className="flex flex-col items-center text-center gap-8">
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
+              Track Your Habits,{" "}
+              <span className="text-primary">Transform Your Life</span>
+            </h1>
+            <p className="text-xl text-muted-foreground max-w-2xl">
+              Join betterr.me to build better habits, track your progress, and achieve your goals. Start your journey to self-improvement today.
+            </p>
+            <div className="flex gap-4">
+              <Link
+                href="/auth/signup"
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+              >
+                Get Started
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+              <Link
+                href="/auth/login"
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
+              >
+                Sign In
+              </Link>
+            </div>
+          </div>
+
+          {/* Features Section */}
+          <div className="grid gap-8 md:grid-cols-3">
+            <div className="flex flex-col gap-4 p-6 rounded-lg border bg-card">
+              <Calendar className="h-8 w-8 text-primary" />
+              <h3 className="text-xl font-semibold">Daily Tracking</h3>
+              <p className="text-muted-foreground">
+                Easily track your habits daily with a simple, intuitive interface.
+              </p>
+            </div>
+            <div className="flex flex-col gap-4 p-6 rounded-lg border bg-card">
+              <BarChart className="h-8 w-8 text-primary" />
+              <h3 className="text-xl font-semibold">Progress Insights</h3>
+              <p className="text-muted-foreground">
+                Visualize your progress with detailed statistics and insights.
+              </p>
+            </div>
+            <div className="flex flex-col gap-4 p-6 rounded-lg border bg-card">
+              <Sparkles className="h-8 w-8 text-primary" />
+              <h3 className="text-xl font-semibold">Stay Motivated</h3>
+              <p className="text-muted-foreground">
+                Build streaks, earn achievements, and stay motivated on your journey.
+              </p>
+            </div>
+          </div>
+
+          {/* CTA Section */}
+          <div className="flex flex-col items-center text-center gap-4 p-8 rounded-lg border bg-card">
+            <h2 className="text-2xl font-semibold">Ready to Start Your Journey?</h2>
+            <p className="text-muted-foreground max-w-2xl">
+              Join thousands of users who are already building better habits and transforming their lives.
+            </p>
+            <Link
+              href="/auth/signup"
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 mt-4"
             >
-              Supabase
-            </a>
-          </p>
-          <ThemeSwitcher />
-        </footer>
+              Get Started for Free
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </div>
+        </div>
       </div>
     </main>
   );
