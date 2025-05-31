@@ -8,24 +8,88 @@ interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: (key: string) => string;
+  isLoading: boolean;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("en");
-
-  useEffect(() => {
-    // Load saved language preference
+// Helper function to detect language synchronously
+const getInitialLanguage = (): Language => {
+  if (typeof window === "undefined") return "en";
+  
+  try {
+    // 1. Check saved preference first
     const savedLang = localStorage.getItem("language") as Language;
     if (savedLang && (savedLang === "en" || savedLang === "zh" || savedLang === "zh-TW")) {
-      setLanguageState(savedLang);
+      return savedLang;
     }
+
+    // 2. Detect browser language
+    const browserLanguages = navigator.languages || [navigator.language];
+    
+    for (const lang of browserLanguages) {
+      const normalizedLang = lang.toLowerCase();
+      
+      if (normalizedLang === "zh-tw" || normalizedLang === "zh-hant") {
+        return "zh-TW";
+      }
+      if (normalizedLang === "zh-cn" || normalizedLang === "zh-hans") {
+        return "zh";
+      }
+      if (normalizedLang.startsWith("zh")) {
+        return "zh";
+      }
+      if (normalizedLang.startsWith("en")) {
+        return "en";
+      }
+    }
+  } catch (error) {
+    console.warn("Error detecting language:", error);
+  }
+  
+  return "en";
+};
+
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [language, setLanguageState] = useState<Language>("en");
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Get the correct language immediately
+    const detectedLang = getInitialLanguage();
+    setLanguageState(detectedLang);
+    
+    // Save to localStorage if it was detected from browser
+    const savedLang = localStorage.getItem("language");
+    if (!savedLang) {
+      localStorage.setItem("language", detectedLang);
+    }
+    
+    // Update HTML lang attribute
+    const langMap = {
+      "en": "en",
+      "zh": "zh-CN", 
+      "zh-TW": "zh-TW"
+    };
+    document.documentElement.lang = langMap[detectedLang];
+    
+    // Stop loading
+    setIsLoading(false);
   }, []);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
     localStorage.setItem("language", lang);
+    
+    // Update HTML lang attribute for accessibility and SEO
+    if (typeof document !== "undefined") {
+      const langMap = {
+        "en": "en",
+        "zh": "zh-CN", 
+        "zh-TW": "zh-TW"
+      };
+      document.documentElement.lang = langMap[lang];
+    }
   };
 
   const t = (key: string): string => {
@@ -39,8 +103,17 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     return value || key;
   };
 
+  // Show loading state to prevent flash
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage, t, isLoading }}>
       {children}
     </LanguageContext.Provider>
   );
