@@ -1,19 +1,20 @@
 "use client";
 
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/client";
 import { InfoIcon } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/context";
 import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 
 export default function ProtectedPage() {
   const { t } = useLanguage();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function checkUser() {
-      const supabase = await createClient();
+      const supabase = createClient();
       const { data, error } = await supabase.auth.getUser();
       
       if (error || !data?.user) {

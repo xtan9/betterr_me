@@ -10,8 +10,8 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Betterr.me - Track Your Habits, Transform Your Life",
-  description: "Build better habits, track your progress, and achieve your goals with betterr.me",
+  title: "BetterR.me - Be a Little Better Every Day",
+  description: "Be a better version of yourself every day. Track your habits, build consistency, and transform your life one small step at a time with BetterR.me",
 };
 
 const geistSans = Geist({
@@ -32,7 +32,7 @@ export default function RootLayout({
           attribute="class"
           defaultTheme="system"
           enableSystem
-          disableTransitionOnChange
+          storageKey="betterr-theme"
         >
           <LanguageProvider>
             {children}

@@ -6,10 +6,11 @@ import { createClient } from "@/lib/supabase/client";
 import { LogoutButton } from "./logout-button";
 import { useLanguage } from "@/lib/i18n/context";
 import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 
 export function AuthButton() {
   const { t } = useLanguage();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

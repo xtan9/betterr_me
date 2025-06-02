@@ -14,12 +14,34 @@ import { useEffect, useState } from "react";
 
 const ThemeSwitcher = () => {
   const [mounted, setMounted] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
 
   // useEffect only runs on the client, so now we can safely show the UI
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (mounted && resolvedTheme) {
+      // Force update HTML class if it doesn't match
+      const currentClass = document.documentElement.className;
+      const shouldHaveDark = resolvedTheme === 'dark';
+      const hasDark = currentClass.includes('dark');
+      
+      if (shouldHaveDark && !hasDark) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else if (!shouldHaveDark && hasDark) {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+      }
+      
+      // Debug logging
+      console.log("Theme:", theme);
+      console.log("Resolved theme:", resolvedTheme);
+      console.log("HTML class:", document.documentElement.className);
+    }
+  }, [mounted, theme, resolvedTheme]);
 
   if (!mounted) {
     return null;
@@ -31,13 +53,13 @@ const ThemeSwitcher = () => {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size={"sm"}>
-          {theme === "light" ? (
+          {resolvedTheme === "light" ? (
             <Sun
               key="light"
               size={ICON_SIZE}
               className={"text-muted-foreground"}
             />
-          ) : theme === "dark" ? (
+          ) : resolvedTheme === "dark" ? (
             <Moon
               key="dark"
               size={ICON_SIZE}
