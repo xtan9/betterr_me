@@ -2,7 +2,6 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useLanguage } from "@/lib/i18n/context";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +18,6 @@ import {
 } from "lucide-react";
 
 export default function DashboardPage() {
-  const { t } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -66,7 +64,7 @@ export default function DashboardPage() {
           {getGreeting()}, {getUserName()}! 👋
         </h1>
         <p className="text-muted-foreground">
-          Ready to be a little better today? Let's check your progress.
+          Ready to be a little better today? Let&apos;s check your progress.
         </p>
       </div>
 
@@ -89,7 +87,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Today's Progress
+              Today&apos;s Progress
             </CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -135,7 +133,7 @@ export default function DashboardPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Today's Habits</CardTitle>
+              <CardTitle>Today&apos;s Habits</CardTitle>
               <CardDescription>
                 Complete your daily habits to build better routines
               </CardDescription>
