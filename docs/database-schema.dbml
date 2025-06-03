@@ -1,0 +1,315 @@
+// BetterR.me Complete Database Schema for dbdiagram.io
+// Copy and paste this into https://dbdiagram.io to visualize
+// PostgreSQL-optimized with JSONB, full-text search, habit tracking and journaling
+
+Table profiles {
+  id uuid [primary key, note: 'References auth.users']
+  email text [unique, not null]
+  full_name text
+  avatar_url text
+  
+  // JSONB for flexible user preferences
+  preferences jsonb [default: '{"timezone":"UTC","date_format":"MM/DD/YYYY","week_start_day":1,"theme":"system","notifications":{"email":true,"push":true,"reminder_time":"09:00"}}', note: 'User preferences as JSONB']
+  
+  // PostgreSQL full-text search
+  search_vector tsvector [note: 'Generated column for full-text search']
+  
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table categories {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  user_id uuid [ref: > profiles.id, not null]
+  name text [not null]
+  
+  // JSONB for flexible styling
+  style jsonb [default: '{"color":"#3B82F6","icon":"target","gradient":null}', note: 'Styling config as JSONB']
+  
+  sort_order integer [default: 0]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+  
+  indexes {
+    (user_id, name) [unique]
+  }
+}
+
+Table habits {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  user_id uuid [ref: > profiles.id, not null]
+  category_id uuid [ref: > categories.id]
+  
+  // Basic info
+  name text [not null]
+  description text
+  search_vector tsvector [note: 'Generated column for full-text search']
+  
+  // JSONB for flexible habit configuration
+  config jsonb [default: '{"type":"boolean","target_value":null,"target_unit":null,"difficulty_level":1,"points_reward":10,"style":{"color":"#3B82F6","icon":"target"}}', note: 'Habit config as JSONB']
+  
+  // Schedule configuration
+  frequency text [default: 'daily', note: 'daily|weekly|monthly|custom']
+  schedule_config jsonb [default: '{"weekly_days":[1,2,3,4,5,6,7],"monthly_days":null,"custom_pattern":null}', note: 'Schedule config as JSONB']
+  
+  // Status
+  status text [default: 'active', note: 'active|paused|archived']
+  
+  // Metadata
+  sort_order integer [default: 0]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+  archived_at timestamptz
+}
+
+Table habit_logs {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  habit_id uuid [ref: > habits.id, not null]
+  user_id uuid [ref: > profiles.id, not null]
+  
+  date date [not null]
+  completed boolean [default: false]
+  
+  // JSONB for flexible log data
+  log_data jsonb [default: '{"value":null,"notes":null,"mood":null,"difficulty":null,"duration_seconds":null}', note: 'Log data as JSONB']
+  
+  logged_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+  
+  indexes {
+    (habit_id, date) [unique]
+  }
+}
+
+Table streaks {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  habit_id uuid [ref: - habits.id, not null]
+  user_id uuid [ref: > profiles.id, not null]
+  
+  current_streak integer [default: 0]
+  best_streak integer [default: 0]
+  last_completed_date date
+  streak_start_date date
+  
+  // JSONB for enhanced streak tracking
+  streak_data jsonb [default: '{"weekly_streaks":0,"monthly_streaks":0,"total_completions":0,"completion_rate":0.0}', note: 'Enhanced streak data as JSONB']
+  
+  updated_at timestamptz [default: `now()`]
+  
+  indexes {
+    habit_id [unique]
+  }
+}
+
+// =============================================================================
+// JOURNAL FEATURE TABLES
+// =============================================================================
+
+Table journal_entries {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  user_id uuid [ref: > profiles.id, not null]
+  
+  // Date and time
+  entry_date date [not null]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+  
+  // JSONB content with flexible fields
+  content jsonb [default: '{"title":null,"body":"","mood":null,"energy_level":null,"gratitude":[],"highlights":[],"challenges":[],"tomorrow_goals":[],"tags":[],"weather":null,"location":null}', note: 'Journal content as JSONB']
+  
+  // Generated metadata
+  word_count integer [note: 'Generated column from body content']
+  search_vector tsvector [note: 'Generated column for full-text search']
+  
+  // Privacy and organization
+  is_private boolean [default: true]
+  template_used text [note: 'Reference to journal templates']
+  
+  indexes {
+    (user_id, entry_date) [unique]
+  }
+}
+
+Table journal_templates {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  user_id uuid [ref: > profiles.id, note: 'NULL for system templates']
+  
+  name text [not null]
+  description text
+  
+  // JSONB template structure
+  template jsonb [default: '{"prompts":[{"label":"What are you grateful for today?","field":"gratitude","type":"list"},{"label":"How was your energy level?","field":"energy_level","type":"rating","scale":5},{"label":"What was the highlight of your day?","field":"highlights","type":"text"}],"default_tags":[],"required_fields":["body"]}', note: 'Template structure as JSONB']
+  
+  is_public boolean [default: false]
+  usage_count integer [default: 0]
+  
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+  
+  indexes {
+    (user_id, name) [unique]
+  }
+}
+
+Table habit_journal_links {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  habit_id uuid [ref: > habits.id, not null]
+  journal_entry_id uuid [ref: > journal_entries.id, not null]
+  user_id uuid [ref: > profiles.id, not null]
+  
+  // Link metadata
+  link_type text [default: 'reflection', note: 'reflection|inspiration|challenge|celebration']
+  notes text
+  
+  created_at timestamptz [default: `now()`]
+  
+  indexes {
+    (habit_id, journal_entry_id) [unique]
+  }
+}
+
+Table journal_media {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  journal_entry_id uuid [ref: > journal_entries.id, not null]
+  user_id uuid [ref: > profiles.id, not null]
+  
+  // Media details
+  file_path text [not null, note: 'Supabase Storage path']
+  file_type text [not null, note: 'image|audio|video|document']
+  file_size integer
+  mime_type text
+  
+  // JSONB metadata
+  metadata jsonb [default: '{"alt_text":null,"caption":null,"transcription":null,"duration_seconds":null,"dimensions":null}', note: 'Media metadata as JSONB']
+  
+  created_at timestamptz [default: `now()`]
+}
+
+// =============================================================================
+// GAMIFICATION TABLES
+// =============================================================================
+
+Table user_stats {
+  user_id uuid [primary key, ref: - profiles.id]
+  
+  // Core stats
+  total_xp integer [default: 0]
+  current_level integer [default: 1]
+  
+  // JSONB for flexible daily stats
+  daily_stats jsonb [default: '{"habits_completed":0,"habits_total":0,"xp_earned":0,"perfect_days":0}', note: 'Daily stats as JSONB (reset daily)']
+  
+  // JSONB for flexible lifetime stats
+  lifetime_stats jsonb [default: '{"habits_completed_total":0,"current_daily_streak":0,"best_daily_streak":0,"achievements_unlocked":0,"total_days_active":0}', note: 'Lifetime stats as JSONB']
+  
+  // JSONB for journal stats
+  journal_stats jsonb [default: '{"entries_this_week":0,"current_journal_streak":0,"total_journal_entries":0,"average_words_per_entry":0}', note: 'Journal stats as JSONB']
+  
+  last_daily_reset date [default: `CURRENT_DATE`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table achievements {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  
+  name text [unique, not null]
+  description text [not null]
+  icon text [default: 'trophy']
+  category text [default: 'general', note: 'streaks|habits|milestones|journal']
+  
+  // Unlock Criteria
+  criteria_type text [not null, note: 'streak|habit_count|total_completions|consecutive_days|journal_streak|journal_entries']
+  criteria_value integer [not null]
+  
+  // Rewards
+  xp_reward integer [default: 100]
+  
+  created_at timestamptz [default: `now()`]
+}
+
+Table user_achievements {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  user_id uuid [ref: > profiles.id, not null]
+  achievement_id uuid [ref: > achievements.id, not null]
+  
+  unlocked_at timestamptz [default: `now()`]
+  
+  indexes {
+    (user_id, achievement_id) [unique]
+  }
+}
+
+// =============================================================================
+// ANALYTICS TABLES
+// =============================================================================
+
+Table daily_summaries {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  user_id uuid [ref: > profiles.id, not null]
+  
+  date date [not null]
+  habits_completed integer [default: 0]
+  habits_total integer [default: 0]
+  completion_rate decimal [note: 'Percentage 0-100']
+  xp_earned integer [default: 0]
+  
+  // Journal integration
+  journal_entry_exists boolean [default: false]
+  journal_word_count integer [default: 0]
+  
+  created_at timestamptz [default: `now()`]
+  
+  indexes {
+    (user_id, date) [unique]
+  }
+}
+
+Table habit_analytics {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  habit_id uuid [ref: > habits.id, not null]
+  user_id uuid [ref: > profiles.id, not null]
+  
+  period_type text [not null, note: 'week|month']
+  period_start date [not null]
+  period_end date [not null]
+  
+  completions integer [default: 0]
+  completion_rate decimal [note: 'Percentage 0-100']
+  average_value decimal [note: 'For counter/duration habits']
+  
+  created_at timestamptz [default: `now()`]
+  
+  indexes {
+    (habit_id, period_type, period_start) [unique]
+  }
+}
+
+// =============================================================================
+// NOTES FOR VISUALIZATION
+// =============================================================================
+
+// Note: DBML limitations - this diagram doesn't show:
+// 
+// POSTGRESQL FEATURES:
+// - Materialized views (user_dashboard_summary, habit_completion_summary)
+// - PostgreSQL functions (calculate_streak, calculate_journal_streak, get_journal_stats)
+// - Triggers (update_updated_at_column)
+// - Advanced constraints and checks
+// - GIN indexes for JSONB fields
+// - TSVECTOR generated columns for full-text search
+// - RLS (Row Level Security) policies
+//
+// INITIAL DATA:
+// - 10 default achievements (First Step, Week Warrior, etc.)
+// - 3 system journal templates (Daily Reflection, Gratitude Journal, Goal Planning)
+//
+// ADVANCED FEATURES:
+// - Full-text search across habits and journal entries
+// - Habit-journal linking for reflection
+// - Media attachments for journal entries
+// - Template system for guided journaling
+// - Comprehensive analytics and insights
+// - Gamification with XP, levels, and achievements
+//
+// To see the complete schema with all PostgreSQL features,
+// refer to docs/001_initial_betterr_schema.sql 
