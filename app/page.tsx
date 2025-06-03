@@ -27,7 +27,7 @@ export default function Home() {
       
       if (user) {
         // User is authenticated, redirect to protected page
-        router.push("/protected");
+        router.push("/dashboard");
         return;
       }
       
