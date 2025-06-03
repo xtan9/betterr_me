@@ -18,7 +18,6 @@ import {
   User as UserIcon, 
   Settings, 
   LogOut, 
-  ChevronDown,
 } from "lucide-react";
 
 export function ProfileAvatar() {
