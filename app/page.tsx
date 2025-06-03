@@ -26,7 +26,7 @@ export default function Home() {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
-        // User is authenticated, redirect to protected page
+        // User is authenticated, redirect to dashboard
         router.push("/dashboard");
         return;
       }
