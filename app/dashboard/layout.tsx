@@ -1,4 +1,4 @@
-import { AuthButton } from "@/components/auth-button";
+import { ProfileAvatar } from "@/components/profile-avatar";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import Link from "next/link";
@@ -9,21 +9,32 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col gap-20 items-center">
-        <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
-          <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
-            <div className="flex gap-5 items-center font-semibold">
-              <Link href={"/"}>Betterr.me</Link>
-            </div>
-            <div className="flex items-center gap-4">
-              <AuthButton />
+    <main className="min-h-screen flex flex-col">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-14 items-center max-w-screen-2xl mx-auto px-4">
+          <div className="flex">
+            <Link href="/dashboard" className="flex items-center space-x-2">
+              <div className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                BetterR.me
+              </div>
+            </Link>
+          </div>
+          
+          {/* Right side navigation */}
+          <div className="flex flex-1 items-center justify-end space-x-4">
+            <nav className="flex items-center space-x-2">
               <LanguageSwitcher />
               <ThemeSwitcher />
-            </div>
+              <ProfileAvatar />
+            </nav>
           </div>
-        </nav>
-        <div className="flex-1 flex flex-col gap-20 max-w-5xl p-5">
+        </div>
+      </header>
+
+      {/* Main content */}
+      <div className="flex-1">
+        <div className="container max-w-screen-2xl mx-auto px-4 py-6">
           {children}
         </div>
       </div>
