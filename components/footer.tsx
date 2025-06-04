@@ -1,11 +1,9 @@
-"use client";
-
 import Link from "next/link";
 import { Twitter, Linkedin, Github } from "lucide-react";
-import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 
-export default function Footer() {
-  const t = useTranslations();
+export default async function Footer() {
+  const t = await getTranslations();
   const currentYear = new Date().getFullYear();
 
   return (

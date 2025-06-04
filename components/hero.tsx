@@ -1,17 +1,15 @@
-"use client";
-
 import Link from "next/link";
 import { ArrowUpRight, Check } from "lucide-react";
-import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 
-export default function Hero() {
-  const t = useTranslations();
+export default async function Hero() {
+  const t = await getTranslations();
 
   // Helper function to check if a translation key exists and has a value
-  const hasTranslation = (key: string) => {
+  const hasTranslation = (key: string): boolean => {
     try {
       const value = t(key);
-      return value && value !== key;
+      return typeof value === 'string' && value !== '' && value !== key;
     } catch {
       return false;
     }
