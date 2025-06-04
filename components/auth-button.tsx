@@ -4,12 +4,12 @@ import Link from "next/link";
 import { Button } from "./ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { LogoutButton } from "./logout-button";
-import { useLanguage } from "@/lib/i18n/context";
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 
 export function AuthButton() {
-  const { t } = useLanguage();
+  const t = useTranslations('nav');
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -36,10 +36,10 @@ export function AuthButton() {
   ) : (
     <div className="flex gap-2">
       <Button asChild size="sm" variant={"outline"}>
-        <Link href="/auth/login">{t("nav.signIn")}</Link>
+        <Link href="/auth/login">{t("signIn")}</Link>
       </Button>
       <Button asChild size="sm" variant={"default"}>
-        <Link href="/auth/sign-up">{t("nav.getStarted")}</Link>
+        <Link href="/auth/sign-up">{t("getStarted")}</Link>
       </Button>
     </div>
   );

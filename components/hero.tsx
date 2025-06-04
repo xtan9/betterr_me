@@ -2,15 +2,19 @@
 
 import Link from "next/link";
 import { ArrowUpRight, Check } from "lucide-react";
-import { useLanguage } from "@/lib/i18n/context";
+import { useTranslations } from 'next-intl';
 
 export default function Hero() {
-  const { t } = useLanguage();
+  const t = useTranslations();
 
   // Helper function to check if a translation key exists and has a value
   const hasTranslation = (key: string) => {
-    const value = t(key);
-    return value && value !== key;
+    try {
+      const value = t(key);
+      return value && value !== key;
+    } catch {
+      return false;
+    }
   };
 
   return (
@@ -38,10 +42,10 @@ export default function Hero() {
               {t("hero.subtitle")}
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
               <Link
-                href="/auth/sign-up"
-                className="inline-flex items-center px-8 py-4 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors text-lg font-medium"
+                href="/auth/signup"
+                className="inline-flex items-center px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl"
               >
                 {t("nav.getStarted")}
                 <ArrowUpRight className="ml-2 w-5 h-5" />
@@ -49,23 +53,24 @@ export default function Hero() {
 
               <Link
                 href="#features"
-                className="inline-flex items-center px-8 py-4 text-secondary-foreground bg-secondary rounded-lg hover:bg-secondary/80 transition-colors text-lg font-medium"
+                className="inline-flex items-center px-8 py-4 border border-border bg-background hover:bg-secondary text-foreground font-semibold rounded-lg transition-colors"
               >
                 {t("nav.learnMore")}
               </Link>
             </div>
 
-            <div className="mt-16 flex flex-col sm:flex-row items-center justify-center gap-8 text-sm text-muted-foreground">
+            {/* Trust indicators */}
+            <div className="flex flex-wrap justify-center items-center gap-8 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
-                <Check className="w-5 h-5 text-green-500" />
+                <Check className="w-4 h-4 text-green-600" />
                 <span>{t("features.freeToUse")}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Check className="w-5 h-5 text-green-500" />
+                <Check className="w-4 h-4 text-green-600" />
                 <span>{t("features.unlimitedHabits")}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Check className="w-5 h-5 text-green-500" />
+                <Check className="w-4 h-4 text-green-600" />
                 <span>{t("features.visualProgress")}</span>
               </div>
             </div>

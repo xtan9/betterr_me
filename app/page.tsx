@@ -1,6 +1,6 @@
 "use client";
 
-import { useLanguage } from "@/lib/i18n/context";
+import { useTranslations } from 'next-intl';
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 export default function Home() {
-  const { t } = useLanguage();
+  const t = useTranslations();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
 
@@ -131,21 +131,18 @@ export default function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-secondary">
+      <section className="py-20 bg-background">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-4 text-secondary-foreground">
+          <h2 className="text-3xl font-bold mb-4 text-foreground">
             {t("cta.title")}
           </h2>
-          <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
+          <p className="text-muted-foreground max-w-2xl mx-auto mb-8">
             {t("cta.subtitle")}
           </p>
-          <a
-            href="/auth/sign-up"
-            className="inline-flex items-center px-6 py-3 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-          >
+          <button className="inline-flex items-center px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl">
             {t("cta.button")}
-            <ArrowUpRight className="ml-2 w-4 h-4" />
-          </a>
+            <ArrowUpRight className="ml-2 w-5 h-5" />
+          </button>
         </div>
       </section>
 

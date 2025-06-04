@@ -3,11 +3,11 @@
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { useLanguage } from "@/lib/i18n/context";
+import { useTranslations } from 'next-intl';
 
 export function LogoutButton() {
   const router = useRouter();
-  const { t } = useLanguage();
+  const t = useTranslations('nav');
 
   const logout = async () => {
     const supabase = createClient();
@@ -15,5 +15,5 @@ export function LogoutButton() {
     router.push("/auth/login");
   };
 
-  return <Button onClick={logout}>{t("nav.signOut")}</Button>;
+  return <Button onClick={logout}>{t("signOut")}</Button>;
 }

@@ -1,0 +1,86 @@
+{
+    "nav": {
+        "getStarted": "開始使用",
+        "signIn": "登入",
+        "signOut": "登出",
+        "dashboard": "控制台",
+        "learnMore": "了解更多"
+    },
+    "hero": {
+        "title": "每天成為",
+        "titleHighlight": "更好的",
+        "titleHighlight2": "自己",
+        "titleSuffix": "",
+        "subtitle": "小小的步驟成就大大的改變。透過 BetterR.me 追蹤你的日常習慣，建立一致性，一天一天地改變你的生活。"
+    },
+    "features": {
+        "freeToUse": "免費使用",
+        "unlimitedHabits": "追蹤無限習慣",
+        "visualProgress": "視覺化進度追蹤",
+        "everythingYouNeed": "你需要的一切，每天變得更好",
+        "powerfulTools": "簡單而強大的工具，幫助你建立一致性，每一天都有進步。",
+        "dailyTracking": {
+            "title": "每日追蹤",
+            "description": "簡單的一鍵習慣完成與連續記錄追蹤"
+        },
+        "calendarView": {
+            "title": "日曆檢視",
+            "description": "習慣完成歷史的視覺化月度概覽"
+        },
+        "customGoals": {
+            "title": "自訂目標",
+            "description": "為每個習慣設置每日、每週或自訂頻率目標"
+        },
+        "progressInsights": {
+            "title": "進度洞察",
+            "description": "追蹤連續記錄，查看你隨時間的改進"
+        },
+        "stayMotivated": {
+            "title": "保持動力",
+            "description": "建立連續記錄，獲得成就，在旅程中保持動力。"
+        }
+    },
+    "stats": {
+        "joinCommunity": "加入成千上萬追求更好生活的人",
+        "subtitle": "世界各地的人們正在透過 BetterR.me 成為更好的自己",
+        "habitsTracked": "10K+",
+        "habitsTrackedLabel": "每日追蹤的習慣",
+        "activeUsers": "2.5K+",
+        "activeUsersLabel": "活躍用戶",
+        "successRate": "85%",
+        "successRateLabel": "成功率"
+    },
+    "cta": {
+        "title": "今天開始變得更好",
+        "subtitle": "邁出成為更好自己的第一步。創建你的帳戶，幾分鐘內開始建立更好的習慣。",
+        "button": "開始我的旅程"
+    },
+    "footer": {
+        "product": "產品",
+        "features": "功能",
+        "habitTemplates": "習慣模板",
+        "mobileApp": "行動應用",
+        "company": "公司",
+        "about": "關於",
+        "blog": "部落格",
+        "careers": "職業",
+        "press": "媒體",
+        "resources": "資源",
+        "documentation": "文件",
+        "helpCenter": "幫助中心",
+        "community": "社群",
+        "status": "狀態",
+        "legal": "法律",
+        "privacy": "隱私",
+        "terms": "條款",
+        "security": "安全",
+        "cookies": "Cookie",
+        "allRightsReserved": "保留所有權利。"
+    },
+    "dashboard": {
+        "welcome": "歡迎來到你的個人控制台",
+        "profile": "你的資料",
+        "email": "電子郵件",
+        "accountCreated": "帳戶創建時間"
+    }
+}

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import { LanguageProvider } from "@/lib/i18n/context";
+import { NextIntlClientProvider } from 'next-intl';
+import { getMessages, getLocale } from 'next-intl/server';
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -20,24 +21,34 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+  
+  // Set the HTML lang attribute based on detected language
+  const langMap = {
+    "en": "en",
+    "zh": "zh-CN", 
+    "zh-TW": "zh-TW"
+  };
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={langMap[locale as keyof typeof langMap]} suppressHydrationWarning>
       <body className={`${geistSans.className} antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          storageKey="betterr-theme"
-        >
-          <LanguageProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            storageKey="betterr-theme"
+          >
             {children}
-          </LanguageProvider>
-        </ThemeProvider>
+          </ThemeProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { Twitter, Linkedin, Github } from "lucide-react";
-import { useLanguage } from "@/lib/i18n/context";
+import { useTranslations } from 'next-intl';
 
 export default function Footer() {
-  const { t } = useLanguage();
+  const t = useTranslations();
   const currentYear = new Date().getFullYear();
 
   return (
@@ -127,25 +127,22 @@ export default function Footer() {
           </div>
         </div>
 
+        {/* Social Links */}
         <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-border">
-          <div className="text-muted-foreground mb-4 md:mb-0">
+          <div className="flex items-center space-x-4 mb-4 md:mb-0">
+            <Link href="#" className="text-muted-foreground hover:text-blue-600">
+              <Twitter className="w-5 h-5" />
+            </Link>
+            <Link href="#" className="text-muted-foreground hover:text-blue-600">
+              <Linkedin className="w-5 h-5" />
+            </Link>
+            <Link href="#" className="text-muted-foreground hover:text-blue-600">
+              <Github className="w-5 h-5" />
+            </Link>
+          </div>
+          <p className="text-sm text-muted-foreground">
             © {currentYear} BetterR.me. {t("footer.allRightsReserved")}
-          </div>
-
-          <div className="flex space-x-6">
-            <a href="#" className="text-muted-foreground hover:text-foreground">
-              <span className="sr-only">Twitter</span>
-              <Twitter className="h-6 w-6" />
-            </a>
-            <a href="#" className="text-muted-foreground hover:text-foreground">
-              <span className="sr-only">LinkedIn</span>
-              <Linkedin className="h-6 w-6" />
-            </a>
-            <a href="#" className="text-muted-foreground hover:text-foreground">
-              <span className="sr-only">GitHub</span>
-              <Github className="h-6 w-6" />
-            </a>
-          </div>
+          </p>
         </div>
       </div>
     </footer>

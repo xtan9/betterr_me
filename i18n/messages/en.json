@@ -1,0 +1,86 @@
+{
+    "nav": {
+        "getStarted": "Get Started",
+        "signIn": "Sign In",
+        "signOut": "Sign Out",
+        "dashboard": "Dashboard",
+        "learnMore": "Learn More"
+    },
+    "hero": {
+        "title": "Be a",
+        "titleHighlight": "BetterR",
+        "titleHighlight2": "Me",
+        "titleSuffix": "Every Day",
+        "subtitle": "Small steps lead to big changes. Track your daily habits, build consistency, and transform your life one day at a time with BetterR.me."
+    },
+    "features": {
+        "freeToUse": "Free to use",
+        "unlimitedHabits": "Track unlimited habits",
+        "visualProgress": "Visual progress tracking",
+        "everythingYouNeed": "Everything You Need to Be Better Every Day",
+        "powerfulTools": "Simple, powerful tools to help you build consistency and make progress every single day.",
+        "dailyTracking": {
+            "title": "Daily Tracking",
+            "description": "Simple one-click habit completion with streak tracking"
+        },
+        "calendarView": {
+            "title": "Calendar View",
+            "description": "Visual monthly overview of your habit completion history"
+        },
+        "customGoals": {
+            "title": "Custom Goals",
+            "description": "Set daily, weekly, or custom frequency goals for each habit"
+        },
+        "progressInsights": {
+            "title": "Progress Insights",
+            "description": "Track streaks and see your improvement over time"
+        },
+        "stayMotivated": {
+            "title": "Stay Motivated",
+            "description": "Build streaks, earn achievements, and stay motivated on your journey."
+        }
+    },
+    "stats": {
+        "joinCommunity": "Join Thousands Building Better Lives",
+        "subtitle": "People around the world are becoming better versions of themselves with BetterR.me",
+        "habitsTracked": "10K+",
+        "habitsTrackedLabel": "Habits Tracked Daily",
+        "activeUsers": "2.5K+",
+        "activeUsersLabel": "Active Users",
+        "successRate": "85%",
+        "successRateLabel": "Success Rate"
+    },
+    "cta": {
+        "title": "Start Being Better Today",
+        "subtitle": "Take the first step towards becoming a better version of yourself. Create your account and start building better habits in minutes.",
+        "button": "Start My Journey"
+    },
+    "footer": {
+        "product": "Product",
+        "features": "Features",
+        "habitTemplates": "Habit Templates",
+        "mobileApp": "Mobile App",
+        "company": "Company",
+        "about": "About",
+        "blog": "Blog",
+        "careers": "Careers",
+        "press": "Press",
+        "resources": "Resources",
+        "documentation": "Documentation",
+        "helpCenter": "Help Center",
+        "community": "Community",
+        "status": "Status",
+        "legal": "Legal",
+        "privacy": "Privacy",
+        "terms": "Terms",
+        "security": "Security",
+        "cookies": "Cookies",
+        "allRightsReserved": "All rights reserved."
+    },
+    "dashboard": {
+        "welcome": "Welcome to your personal dashboard",
+        "profile": "Your Profile",
+        "email": "Email",
+        "accountCreated": "Account Created"
+    }
+}
