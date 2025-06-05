@@ -18,7 +18,6 @@ export default async function Hero() {
 
   return (
     <div className="relative overflow-hidden bg-background">
-      {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-background to-purple-50 opacity-70 dark:from-blue-950/20 dark:to-purple-950/20" />
 
       <div className="relative pt-24 pb-32 sm:pt-32 sm:pb-40">

@@ -16,8 +16,6 @@ export default async function HomePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Middleware now handles redirecting authenticated users to dashboard
-
   const t = await getTranslations('home');
 
   return (

@@ -11,7 +11,6 @@ export default async function Footer() {
     <footer className="bg-secondary border-t border-border">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-          {/* Product Column */}
           <div>
             <h3 className="font-semibold text-foreground mb-4">{t("product")}</h3>
             <ul className="space-y-2">
@@ -44,7 +43,6 @@ export default async function Footer() {
             </ul>
           </div>
 
-          {/* Company Column */}
           <div>
             <h3 className="font-semibold text-foreground mb-4">{t("company")}</h3>
             <ul className="space-y-2">
@@ -71,7 +69,6 @@ export default async function Footer() {
             </ul>
           </div>
 
-          {/* Resources Column */}
           <div>
             <h3 className="font-semibold text-foreground mb-4">{t("resources")}</h3>
             <ul className="space-y-2">
@@ -98,7 +95,6 @@ export default async function Footer() {
             </ul>
           </div>
 
-          {/* Legal Column */}
           <div>
             <h3 className="font-semibold text-foreground mb-4">{t("legal")}</h3>
             <ul className="space-y-2">
@@ -126,7 +122,6 @@ export default async function Footer() {
           </div>
         </div>
 
-        {/* Social Links */}
         <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-border">
           <div className="flex items-center space-x-4 mb-4 md:mb-0">
             <Link href="#" className="text-muted-foreground hover:text-blue-600">
