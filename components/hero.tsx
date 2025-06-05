@@ -7,7 +7,7 @@ export default async function Hero() {
   const navT = await getTranslations('common.nav');
 
   // Helper function to check if a translation key exists and has a value
-  const hasTranslation = (translator: any, key: string): boolean => {
+  const hasTranslation = (translator: (key: string) => string, key: string): boolean => {
     try {
       const value = translator(key);
       return typeof value === 'string' && value !== '' && value !== key;

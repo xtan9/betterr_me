@@ -1,6 +1,4 @@
 import { getTranslations } from 'next-intl/server';
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import Navbar from "@/components/navbar";
 import Hero from "@/components/hero";
 import Footer from "@/components/footer";
@@ -13,9 +11,6 @@ import {
 } from "lucide-react";
 
 export default async function HomePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
   const t = await getTranslations('home');
 
   return (

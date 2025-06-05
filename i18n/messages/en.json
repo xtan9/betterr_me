@@ -86,5 +86,62 @@
         "profile": "Your Profile",
         "email": "Email",
         "accountCreated": "Account Created"
+    },
+    "auth": {
+        "login": {
+            "title": "Login",
+            "description": "Enter your email below to login to your account",
+            "email": "Email",
+            "emailPlaceholder": "m@example.com",
+            "password": "Password",
+            "forgotPassword": "Forgot your password?",
+            "loginButton": "Login",
+            "loggingIn": "Logging in...",
+            "orContinueWith": "Or continue with",
+            "continueWithGoogle": "Continue with Google",
+            "noAccount": "Don't have an account?",
+            "signUp": "Sign up"
+        },
+        "signUp": {
+            "title": "Sign up",
+            "description": "Create a new account",
+            "email": "Email",
+            "emailPlaceholder": "m@example.com",
+            "password": "Password",
+            "repeatPassword": "Repeat Password",
+            "signUpButton": "Sign up",
+            "creatingAccount": "Creating an account...",
+            "orContinueWith": "Or continue with",
+            "continueWithGoogle": "Continue with Google",
+            "haveAccount": "Already have an account?",
+            "login": "Login",
+            "passwordsDoNotMatch": "Passwords do not match"
+        },
+        "forgotPassword": {
+            "title": "Reset Your Password",
+            "description": "Type in your email and we'll send you a link to reset your password",
+            "email": "Email",
+            "emailPlaceholder": "m@example.com",
+            "sendButton": "Send reset email",
+            "sending": "Sending...",
+            "haveAccount": "Already have an account?",
+            "login": "Login",
+            "checkEmail": "Check Your Email",
+            "instructionsSent": "Password reset instructions sent",
+            "emailSentMessage": "If you registered using your email and password, you will receive a password reset email."
+        },
+        "updatePassword": {
+            "title": "Update Password",
+            "description": "Enter your new password below",
+            "password": "New Password",
+            "repeatPassword": "Repeat New Password",
+            "updateButton": "Update Password",
+            "updating": "Updating...",
+            "passwordsDoNotMatch": "Passwords do not match"
+        },
+        "errors": {
+            "generic": "An error occurred",
+            "tryAgain": "Please try again"
+        }
     }
 }

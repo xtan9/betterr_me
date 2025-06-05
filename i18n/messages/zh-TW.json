@@ -86,5 +86,62 @@
         "profile": "你的個人資料",
         "email": "電子郵件",
         "accountCreated": "帳戶建立時間"
+    },
+    "auth": {
+        "login": {
+            "title": "登入",
+            "description": "在下方輸入你的電子郵件來登入你的帳戶",
+            "email": "電子郵件",
+            "emailPlaceholder": "m@example.com",
+            "password": "密碼",
+            "forgotPassword": "忘記密碼？",
+            "loginButton": "登入",
+            "loggingIn": "正在登入...",
+            "orContinueWith": "或繼續使用",
+            "continueWithGoogle": "使用 Google 繼續",
+            "noAccount": "還沒有帳戶？",
+            "signUp": "註冊"
+        },
+        "signUp": {
+            "title": "註冊",
+            "description": "建立一個新帳戶",
+            "email": "電子郵件",
+            "emailPlaceholder": "m@example.com",
+            "password": "密碼",
+            "repeatPassword": "重複密碼",
+            "signUpButton": "註冊",
+            "creatingAccount": "正在建立帳戶...",
+            "orContinueWith": "或繼續使用",
+            "continueWithGoogle": "使用 Google 繼續",
+            "haveAccount": "已經有帳戶？",
+            "login": "登入",
+            "passwordsDoNotMatch": "密碼不相符"
+        },
+        "forgotPassword": {
+            "title": "重設密碼",
+            "description": "輸入你的電子郵件，我們將發送重設密碼的連結給你",
+            "email": "電子郵件",
+            "emailPlaceholder": "m@example.com",
+            "sendButton": "發送重設郵件",
+            "sending": "正在發送...",
+            "haveAccount": "已經有帳戶？",
+            "login": "登入",
+            "checkEmail": "檢查你的電子郵件",
+            "instructionsSent": "密碼重設說明已發送",
+            "emailSentMessage": "如果你使用電子郵件和密碼註冊，你將收到密碼重設郵件。"
+        },
+        "updatePassword": {
+            "title": "更新密碼",
+            "description": "在下方輸入你的新密碼",
+            "password": "新密碼",
+            "repeatPassword": "重複新密碼",
+            "updateButton": "更新密碼",
+            "updating": "正在更新...",
+            "passwordsDoNotMatch": "密碼不相符"
+        },
+        "errors": {
+            "generic": "發生了錯誤",
+            "tryAgain": "請重試"
+        }
     }
 }
