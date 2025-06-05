@@ -5,7 +5,7 @@ import { LogoutButton } from "./logout-button";
 import { getTranslations } from 'next-intl/server';
 
 export async function AuthButton() {
-  const t = await getTranslations('nav');
+  const t = await getTranslations('common.nav');
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 

@@ -3,7 +3,8 @@ import { Twitter, Linkedin, Github } from "lucide-react";
 import { getTranslations } from 'next-intl/server';
 
 export default async function Footer() {
-  const t = await getTranslations();
+  const t = await getTranslations('common.footer');
+  const navT = await getTranslations('common.nav');
   const currentYear = new Date().getFullYear();
 
   return (
@@ -12,14 +13,14 @@ export default async function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
           {/* Product Column */}
           <div>
-            <h3 className="font-semibold text-foreground mb-4">{t("footer.product")}</h3>
+            <h3 className="font-semibold text-foreground mb-4">{t("product")}</h3>
             <ul className="space-y-2">
               <li>
                 <Link
                   href="#features"
                   className="text-muted-foreground hover:text-blue-600"
                 >
-                  {t("footer.features")}
+                  {t("features")}
                 </Link>
               </li>
               <li>
@@ -27,17 +28,17 @@ export default async function Footer() {
                   href="/dashboard"
                   className="text-muted-foreground hover:text-blue-600"
                 >
-                  {t("nav.dashboard")}
+                  {navT("dashboard")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.habitTemplates")}
+                  {t("habitTemplates")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.mobileApp")}
+                  {t("mobileApp")}
                 </Link>
               </li>
             </ul>
@@ -45,26 +46,26 @@ export default async function Footer() {
 
           {/* Company Column */}
           <div>
-            <h3 className="font-semibold text-foreground mb-4">{t("footer.company")}</h3>
+            <h3 className="font-semibold text-foreground mb-4">{t("company")}</h3>
             <ul className="space-y-2">
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.about")}
+                  {t("about")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.blog")}
+                  {t("blog")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.careers")}
+                  {t("careers")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.press")}
+                  {t("press")}
                 </Link>
               </li>
             </ul>
@@ -72,26 +73,26 @@ export default async function Footer() {
 
           {/* Resources Column */}
           <div>
-            <h3 className="font-semibold text-foreground mb-4">{t("footer.resources")}</h3>
+            <h3 className="font-semibold text-foreground mb-4">{t("resources")}</h3>
             <ul className="space-y-2">
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.documentation")}
+                  {t("documentation")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.helpCenter")}
+                  {t("helpCenter")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.community")}
+                  {t("community")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.status")}
+                  {t("status")}
                 </Link>
               </li>
             </ul>
@@ -99,26 +100,26 @@ export default async function Footer() {
 
           {/* Legal Column */}
           <div>
-            <h3 className="font-semibold text-foreground mb-4">{t("footer.legal")}</h3>
+            <h3 className="font-semibold text-foreground mb-4">{t("legal")}</h3>
             <ul className="space-y-2">
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.privacy")}
+                  {t("privacy")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.terms")}
+                  {t("terms")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.security")}
+                  {t("security")}
                 </Link>
               </li>
               <li>
                 <Link href="#" className="text-muted-foreground hover:text-blue-600">
-                  {t("footer.cookies")}
+                  {t("cookies")}
                 </Link>
               </li>
             </ul>
@@ -139,7 +140,7 @@ export default async function Footer() {
             </Link>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {currentYear} BetterR.me. {t("footer.allRightsReserved")}
+            © {currentYear} BetterR.me. {t("allRightsReserved")}
           </p>
         </div>
       </div>

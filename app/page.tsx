@@ -12,17 +12,13 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-export default async function Home() {
-  // Server-side auth check
+export default async function HomePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
-  if (user) {
-    // User is authenticated, redirect to dashboard
-    redirect("/dashboard");
-  }
 
-  const t = await getTranslations();
+  // Middleware now handles redirecting authenticated users to dashboard
+
+  const t = await getTranslations('home');
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary">
