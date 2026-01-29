@@ -18,7 +18,7 @@ To enable automatic database migrations, you need to add these secrets to your G
 ### 2. `SUPABASE_DB_PASSWORD`
 
 **How to get it:**
-1. Go to https://supabase.com/dashboard/project/goiqubwfyzzsfamhzdnt/settings/database
+1. Go to https://supabase.com/dashboard/project/ugkhvvmjdrshuopgaaje/settings/database
 2. Find "Database Password" section
 3. Either use existing password or reset it
 4. Copy the password
@@ -38,5 +38,5 @@ After adding the secrets:
 
 If the workflow fails:
 - Check that both secrets are set correctly
-- Verify the project ID in `.github/workflows/db-migrate.yml` is correct (`goiqubwfyzzsfamhzdnt`)
+- Verify the project ID in `.github/workflows/db-migrate.yml` is correct (`ugkhvvmjdrshuopgaaje`)
 - Check Supabase dashboard for any manual migrations that might conflict
