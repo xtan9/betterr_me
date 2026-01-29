@@ -66,10 +66,53 @@ CREATE INDEX idx_categories_user_id ON categories(user_id);
 CREATE INDEX idx_categories_style ON categories USING GIN (style);
 
 -- =============================================================================
+-- TASKS / TODO LIST
+-- =============================================================================
+
+-- 3. TASKS (Todo list / one-time tasks)
+CREATE TABLE tasks (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+  
+  -- Task details
+  title TEXT NOT NULL,
+  description TEXT,
+  
+  -- Status and priority
+  is_completed BOOLEAN DEFAULT false,
+  priority INTEGER DEFAULT 0 CHECK (priority >= 0 AND priority <= 3), -- 0=none, 1=low, 2=medium, 3=high
+  
+  -- Scheduling
+  due_date DATE,
+  due_time TIME,
+  
+  -- Completion tracking
+  completed_at TIMESTAMPTZ,
+  
+  -- Metadata
+  tags TEXT[] DEFAULT '{}',
+  
+  -- Full-text search
+  search_vector TSVECTOR GENERATED ALWAYS AS (
+    to_tsvector('english', coalesce(title, '') || ' ' || coalesce(description, ''))
+  ) STORED,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_tasks_user_id ON tasks(user_id);
+CREATE INDEX idx_tasks_category_id ON tasks(category_id);
+CREATE INDEX idx_tasks_completed ON tasks(user_id, is_completed);
+CREATE INDEX idx_tasks_due_date ON tasks(user_id, due_date) WHERE due_date IS NOT NULL;
+CREATE INDEX idx_tasks_search ON tasks USING GIN (search_vector);
+
+-- =============================================================================
 -- HABIT TRACKING TABLES
 -- =============================================================================
 
--- 3. HABITS (Enhanced with PostgreSQL features)
+-- 4. HABITS (Enhanced with PostgreSQL features)
 CREATE TABLE habits (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
@@ -130,7 +173,7 @@ CREATE INDEX idx_habits_config ON habits USING GIN (config);
 CREATE INDEX idx_habits_schedule ON habits USING GIN (schedule_config);
 CREATE INDEX idx_habits_search ON habits USING GIN (search_vector);
 
--- 4. HABIT_LOGS (Enhanced daily tracking)
+-- 5. HABIT_LOGS (Enhanced daily tracking)
 CREATE TABLE habit_logs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   habit_id UUID REFERENCES habits(id) ON DELETE CASCADE NOT NULL,
@@ -162,7 +205,7 @@ CREATE INDEX idx_habit_logs_habit_date ON habit_logs(habit_id, date DESC);
 CREATE INDEX idx_habit_logs_completed ON habit_logs(user_id, completed, date) WHERE completed = true;
 CREATE INDEX idx_habit_logs_data ON habit_logs USING GIN (log_data);
 
--- 5. STREAKS (Enhanced streak tracking)
+-- 6. STREAKS (Enhanced streak tracking)
 CREATE TABLE streaks (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   habit_id UUID REFERENCES habits(id) ON DELETE CASCADE NOT NULL,
@@ -196,7 +239,7 @@ CREATE INDEX idx_streaks_habit ON streaks(habit_id);
 CREATE INDEX idx_streaks_user ON streaks(user_id);
 CREATE INDEX idx_streaks_data ON streaks USING GIN (streak_data);
 
--- 6. HABIT_REMINDERS (Dedicated reminders system)
+-- 7. HABIT_REMINDERS (Dedicated reminders system)
 CREATE TABLE habit_reminders (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   habit_id UUID REFERENCES habits(id) ON DELETE CASCADE NOT NULL,
@@ -251,7 +294,7 @@ CREATE INDEX idx_habit_reminders_config ON habit_reminders USING GIN (notificati
 -- JOURNAL FEATURE TABLES
 -- =============================================================================
 
--- 7. JOURNAL_ENTRIES (Main journaling table)
+-- 8. JOURNAL_ENTRIES (Main journaling table)
 CREATE TABLE journal_entries (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
@@ -298,7 +341,7 @@ CREATE INDEX idx_journal_entries_content ON journal_entries USING GIN (content);
 CREATE INDEX idx_journal_entries_search ON journal_entries USING GIN (search_vector);
 CREATE INDEX idx_journal_entries_mood ON journal_entries((content->>'mood')) WHERE content->>'mood' IS NOT NULL;
 
--- 8. JOURNAL_TEMPLATES (Optional prompts/templates)
+-- 9. JOURNAL_TEMPLATES (Optional prompts/templates)
 CREATE TABLE journal_templates (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE, -- NULL for system templates
@@ -329,7 +372,7 @@ CREATE TABLE journal_templates (
 CREATE INDEX idx_journal_templates_user ON journal_templates(user_id);
 CREATE INDEX idx_journal_templates_public ON journal_templates(is_public) WHERE is_public = true;
 
--- 9. HABIT_JOURNAL_LINKS (Connect habits to journal entries)
+-- 10. HABIT_JOURNAL_LINKS (Connect habits to journal entries)
 CREATE TABLE habit_journal_links (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   habit_id UUID REFERENCES habits(id) ON DELETE CASCADE NOT NULL,
@@ -348,7 +391,7 @@ CREATE TABLE habit_journal_links (
 CREATE INDEX idx_habit_journal_links_habit ON habit_journal_links(habit_id);
 CREATE INDEX idx_habit_journal_links_journal ON habit_journal_links(journal_entry_id);
 
--- 10. JOURNAL_MEDIA (Photos, voice notes, etc.)
+-- 11. JOURNAL_MEDIA (Photos, voice notes, etc.)
 CREATE TABLE journal_media (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   journal_entry_id UUID REFERENCES journal_entries(id) ON DELETE CASCADE NOT NULL,
@@ -382,7 +425,7 @@ CREATE INDEX idx_journal_media_type ON journal_media(file_type);
 -- GAMIFICATION TABLES
 -- =============================================================================
 
--- 11. USER_STATS (Enhanced with journal metrics)
+-- 12. USER_STATS (Enhanced with journal metrics)
 CREATE TABLE user_stats (
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE PRIMARY KEY,
   
@@ -425,7 +468,7 @@ CREATE INDEX idx_user_stats_daily ON user_stats USING GIN (daily_stats);
 CREATE INDEX idx_user_stats_lifetime ON user_stats USING GIN (lifetime_stats);
 CREATE INDEX idx_user_stats_journal ON user_stats USING GIN (journal_stats);
 
--- 12. ACHIEVEMENTS (Available achievements)
+-- 13. ACHIEVEMENTS (Available achievements)
 CREATE TABLE achievements (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   
@@ -444,7 +487,7 @@ CREATE TABLE achievements (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 13. USER_ACHIEVEMENTS (User's unlocked achievements)
+-- 14. USER_ACHIEVEMENTS (User's unlocked achievements)
 CREATE TABLE user_achievements (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
@@ -462,7 +505,7 @@ CREATE INDEX idx_user_achievements_achievement ON user_achievements(achievement_
 -- ANALYTICS TABLES
 -- =============================================================================
 
--- 14. DAILY_SUMMARIES (Daily progress summaries)
+-- 15. DAILY_SUMMARIES (Daily progress summaries)
 CREATE TABLE daily_summaries (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
@@ -484,7 +527,7 @@ CREATE TABLE daily_summaries (
 
 CREATE INDEX idx_daily_summaries_user_date ON daily_summaries(user_id, date);
 
--- 15. HABIT_ANALYTICS (Habit-specific analytics)
+-- 16. HABIT_ANALYTICS (Habit-specific analytics)
 CREATE TABLE habit_analytics (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   habit_id UUID REFERENCES habits(id) ON DELETE CASCADE NOT NULL,
