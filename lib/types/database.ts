@@ -94,7 +94,7 @@ export interface HabitLog {
   duration_minutes: number | null;
   notes: string | null;
   mood_rating: number | null; // 1-5
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   created_at: string;
 }
 
@@ -162,7 +162,7 @@ export interface Goal {
   start_date: string;
   target_date: string;
   status: GoalStatus;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -197,7 +197,7 @@ export interface JournalEntry {
   mood: MoodRating | null;
   tags: string[];
   is_private: boolean;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -235,7 +235,7 @@ export interface Reward {
   points_value: number;
   icon_url: string | null;
   rarity: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   created_at: string;
 }
 
@@ -254,7 +254,7 @@ export interface Achievement {
 export interface AchievementCriteria {
   type: string;
   target_value: number;
-  conditions?: Record<string, any>;
+  conditions?: Record<string, unknown>;
 }
 
 export interface UserAchievement {
@@ -263,7 +263,7 @@ export interface UserAchievement {
   achievement_id: string;
   unlocked_at: string;
   progress: number;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 // ============================================================================
