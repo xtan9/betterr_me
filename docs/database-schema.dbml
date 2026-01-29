@@ -8,8 +8,8 @@ Table profiles {
   full_name text
   avatar_url text
   
-  // JSONB for flexible user preferences
-  preferences jsonb [default: '{"timezone":"UTC","date_format":"MM/DD/YYYY","week_start_day":1,"theme":"system","notifications":{"email":true,"push":true,"reminder_time":"09:00"}}', note: 'User preferences as JSONB']
+  // JSONB for flexible user preferences (reminders moved to dedicated table)
+  preferences jsonb [default: '{"timezone":"UTC","date_format":"MM/DD/YYYY","week_start_day":1,"theme":"system","notifications":{"email":true,"push":true}}', note: 'User preferences as JSONB']
   
   // PostgreSQL full-text search
   search_vector tsvector [note: 'Generated column for full-text search']
@@ -99,6 +99,33 @@ Table streaks {
   indexes {
     habit_id [unique]
   }
+}
+
+Table habit_reminders {
+  id uuid [primary key, default: `gen_random_uuid()`]
+  habit_id uuid [ref: > habits.id, not null]
+  user_id uuid [ref: > profiles.id, not null]
+  
+  // Reminder timing
+  reminder_time time [not null]
+  timezone text [default: 'UTC']
+  
+  // Scheduling flexibility
+  days_of_week integer[] [default: '[1,2,3,4,5,6,7]', note: 'Monday=1, Sunday=7']
+  is_active boolean [default: true]
+  
+  // Notification preferences with JSONB
+  notification_config jsonb [default: '{"push":true,"email":false,"sms":false,"sound":"default","vibrate":true}', note: 'Notification config as JSONB']
+  
+  // Reminder behavior
+  snooze_enabled boolean [default: true]
+  snooze_duration_minutes integer [default: 10]
+  max_snoozes integer [default: 3]
+  
+  // Metadata
+  label text [note: 'Optional custom label']
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
 }
 
 // =============================================================================

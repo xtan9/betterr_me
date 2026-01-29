@@ -25,7 +25,7 @@ CREATE TABLE profiles (
   full_name TEXT,
   avatar_url TEXT,
   
-  -- Enhanced user preferences with JSONB
+  -- Enhanced user preferences with JSONB (reminders moved to dedicated table)
   preferences JSONB DEFAULT '{
     "timezone": "UTC",
     "date_format": "MM/DD/YYYY",
@@ -33,8 +33,7 @@ CREATE TABLE profiles (
     "theme": "system",
     "notifications": {
       "email": true,
-      "push": true,
-      "reminder_time": "09:00"
+      "push": true
     }
   }'::jsonb,
   
@@ -177,9 +176,57 @@ CREATE TABLE streaks (
 );
 ```
 
+#### 6. `habit_reminders` (Dedicated Reminders System)
+Comprehensive reminder system with flexible scheduling and notification types.
+
+```sql
+CREATE TABLE habit_reminders (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  habit_id UUID REFERENCES habits(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  
+  -- Reminder timing
+  reminder_time TIME NOT NULL,
+  timezone TEXT DEFAULT 'UTC',
+  
+  -- Scheduling flexibility
+  days_of_week INTEGER[] DEFAULT ARRAY[1,2,3,4,5,6,7], -- Monday=1, Sunday=7
+  is_active BOOLEAN DEFAULT true,
+  
+  -- Notification preferences with JSONB for flexibility
+  notification_config JSONB DEFAULT '{
+    "push": true,
+    "email": false,
+    "sms": false,
+    "sound": "default",
+    "vibrate": true
+  }'::jsonb,
+  
+  -- Reminder behavior
+  snooze_enabled BOOLEAN DEFAULT true,
+  snooze_duration_minutes INTEGER DEFAULT 10,
+  max_snoozes INTEGER DEFAULT 3,
+  
+  -- Metadata
+  label TEXT, -- Optional custom label like "Morning workout reminder"
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- Constraints
+  CONSTRAINT valid_days_of_week CHECK (
+    array_length(days_of_week, 1) > 0 AND
+    days_of_week <@ ARRAY[1,2,3,4,5,6,7]
+  ),
+  CONSTRAINT valid_snooze_settings CHECK (
+    (snooze_enabled = false) OR 
+    (snooze_duration_minutes > 0 AND max_snoozes >= 0)
+  )
+);
+```
+
 ### Journal Feature Tables
 
-#### 6. `journal_entries` (Main Journaling)
+#### 7. `journal_entries` (Main Journaling)
 Comprehensive journaling with JSONB content and full-text search.
 
 ```sql
@@ -211,20 +258,8 @@ CREATE TABLE journal_entries (
     length(regexp_replace(content->>'body', '\s+', ' ', 'g'))
   ) STORED,
   
-  -- Full-text search
-  search_vector TSVECTOR GENERATED ALWAYS AS (
-    to_tsvector('english', 
-      coalesce(content->>'title', '') || ' ' || 
-      coalesce(content->>'body', '') || ' ' ||
-      array_to_string(
-        CASE 
-          WHEN jsonb_typeof(content->'tags') = 'array' 
-          THEN array(SELECT jsonb_array_elements_text(content->'tags'))
-          ELSE ARRAY[]::text[]
-        END, ' '
-      )
-    )
-  ) STORED,
+  -- Full-text search (updated via trigger for proper tag handling)
+  search_vector TSVECTOR,
   
   is_private BOOLEAN DEFAULT true,
   template_used TEXT,
@@ -233,7 +268,7 @@ CREATE TABLE journal_entries (
 );
 ```
 
-#### 7. `journal_templates` (Template System)
+#### 8. `journal_templates` (Template System)
 Customizable journaling templates with JSONB structure.
 
 ```sql
@@ -262,7 +297,7 @@ CREATE TABLE journal_templates (
 );
 ```
 
-#### 8. `habit_journal_links` (Habit-Journal Integration)
+#### 9. `habit_journal_links` (Habit-Journal Integration)
 Connect habits to journal entries for reflection and insights.
 
 ```sql
@@ -281,7 +316,7 @@ CREATE TABLE habit_journal_links (
 );
 ```
 
-#### 9. `journal_media` (Media Attachments)
+#### 10. `journal_media` (Media Attachments)
 Photos, voice notes, and other media for journal entries.
 
 ```sql
@@ -310,7 +345,7 @@ CREATE TABLE journal_media (
 
 ### Gamification Tables
 
-#### 10. `user_stats` (Enhanced User Statistics)
+#### 11. `user_stats` (Enhanced User Statistics)
 Comprehensive user statistics with journal integration.
 
 ```sql
@@ -350,7 +385,7 @@ CREATE TABLE user_stats (
 );
 ```
 
-#### 11. `achievements` (Available Achievements)
+#### 12. `achievements` (Available Achievements)
 Extended achievement system supporting journal milestones.
 
 ```sql
@@ -371,7 +406,7 @@ CREATE TABLE achievements (
 );
 ```
 
-#### 12. `user_achievements` (User's Unlocked Achievements)
+#### 13. `user_achievements` (User's Unlocked Achievements)
 Track user's earned achievements.
 
 ```sql
@@ -388,7 +423,7 @@ CREATE TABLE user_achievements (
 
 ### Analytics Tables
 
-#### 13. `daily_summaries` (Enhanced Daily Analytics)
+#### 14. `daily_summaries` (Enhanced Daily Analytics)
 Daily progress summaries with journal integration.
 
 ```sql
@@ -412,7 +447,7 @@ CREATE TABLE daily_summaries (
 );
 ```
 
-#### 14. `habit_analytics` (Habit Analytics)
+#### 15. `habit_analytics` (Habit Analytics)
 Detailed habit-specific analytics and insights.
 
 ```sql
@@ -469,15 +504,15 @@ CREATE OR REPLACE FUNCTION calculate_journal_streak(target_user_id UUID)
 RETURNS INTEGER AS $$
 DECLARE
   streak_count INTEGER := 0;
-  current_date DATE := CURRENT_DATE;
+  check_date DATE := CURRENT_DATE;
 BEGIN
   LOOP
     IF EXISTS (
       SELECT 1 FROM journal_entries 
-      WHERE user_id = target_user_id AND entry_date = current_date
+      WHERE user_id = target_user_id AND entry_date = check_date
     ) THEN
       streak_count := streak_count + 1;
-      current_date := current_date - INTERVAL '1 day';
+      check_date := check_date - INTERVAL '1 day';
     ELSE
       EXIT;
     END IF;
@@ -522,6 +557,26 @@ BEGIN
   WHERE user_id = target_user_id;
   
   RETURN stats;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Update journal search vector with proper tag extraction
+CREATE OR REPLACE FUNCTION update_journal_search_vector()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Extract tags array and convert to searchable text
+  NEW.search_vector := to_tsvector('english', 
+    coalesce(NEW.content->>'title', '') || ' ' || 
+    coalesce(NEW.content->>'body', '') || ' ' ||
+    CASE 
+      WHEN jsonb_typeof(NEW.content->'tags') = 'array' 
+      THEN array_to_string(
+        array(SELECT jsonb_array_elements_text(NEW.content->'tags')), ' '
+      )
+      ELSE ''
+    END
+  );
+  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 ```
@@ -570,6 +625,7 @@ CREATE INDEX idx_categories_style ON categories USING GIN (style);
 CREATE INDEX idx_habits_config ON habits USING GIN (config);
 CREATE INDEX idx_habits_schedule ON habits USING GIN (schedule_config);
 CREATE INDEX idx_habit_logs_data ON habit_logs USING GIN (log_data);
+CREATE INDEX idx_habit_reminders_config ON habit_reminders USING GIN (notification_config);
 CREATE INDEX idx_journal_entries_content ON journal_entries USING GIN (content);
 ```
 
@@ -587,6 +643,11 @@ CREATE INDEX idx_journal_entries_search ON journal_entries USING GIN (search_vec
 CREATE INDEX idx_habits_user_active ON habits(user_id, status) WHERE status = 'active';
 CREATE INDEX idx_habit_logs_user_date ON habit_logs(user_id, date DESC);
 CREATE INDEX idx_journal_entries_user_date ON journal_entries(user_id, entry_date DESC);
+
+-- Reminder-specific queries
+CREATE INDEX idx_habit_reminders_user_active ON habit_reminders(user_id, is_active) WHERE is_active = true;
+CREATE INDEX idx_habit_reminders_time_zone ON habit_reminders(reminder_time, timezone, is_active) WHERE is_active = true;
+CREATE INDEX idx_habit_reminders_habit ON habit_reminders(habit_id, is_active) WHERE is_active = true;
 
 -- Habit-specific queries
 CREATE INDEX idx_habit_logs_habit_date ON habit_logs(habit_id, date DESC);
@@ -607,6 +668,7 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE habits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE habit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE streaks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE habit_reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE journal_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE journal_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE habit_journal_links ENABLE ROW LEVEL SECURITY;
@@ -620,6 +682,7 @@ CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.
 CREATE POLICY "Users can manage own categories" ON categories FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage own habits" ON habits FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage own habit logs" ON habit_logs FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own reminders" ON habit_reminders FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage own journal entries" ON journal_entries FOR ALL USING (auth.uid() = user_id);
 
 -- Template policies (support public templates)
@@ -693,23 +756,25 @@ INSERT INTO journal_templates (user_id, name, description, template, is_public) 
 3. **categories** ↔ **habits**: One-to-many (category contains multiple habits)
 4. **habits** ↔ **habit_logs**: One-to-many (habit has multiple daily logs)
 5. **habits** ↔ **streaks**: One-to-one (each habit has one streak record)
-6. **profiles** ↔ **user_stats**: One-to-one (each user has one stats record)
+6. **habits** ↔ **habit_reminders**: One-to-many (habit can have multiple reminders)
+7. **profiles** ↔ **user_stats**: One-to-one (each user has one stats record)
 
 ### Journal Relationships
-7. **journal_entries** ↔ **habit_journal_links**: One-to-many (entry can link to multiple habits)
-8. **habits** ↔ **habit_journal_links**: One-to-many (habit can link to multiple entries)
-9. **journal_entries** ↔ **journal_media**: One-to-many (entry can have multiple media files)
-10. **journal_templates** ↔ **journal_entries**: One-to-many (template used by multiple entries)
+8. **journal_entries** ↔ **habit_journal_links**: One-to-many (entry can link to multiple habits)
+9. **habits** ↔ **habit_journal_links**: One-to-many (habit can link to multiple entries)
+10. **journal_entries** ↔ **journal_media**: One-to-many (entry can have multiple media files)
+11. **journal_templates** ↔ **journal_entries**: One-to-many (template used by multiple entries)
 
 ### Gamification Relationships
-11. **achievements** ↔ **user_achievements**: Many-to-many (users unlock multiple achievements)
-12. **profiles** ↔ **user_achievements**: One-to-many (user has multiple achievements)
+12. **achievements** ↔ **user_achievements**: Many-to-many (users unlock multiple achievements)
+13. **profiles** ↔ **user_achievements**: One-to-many (user has multiple achievements)
 
 ## Features Supported
 
 ### Habit Tracking
 - ✅ Flexible habit types (boolean, counter, duration, rating)
 - ✅ Advanced scheduling (daily, weekly, monthly, custom patterns)
+- ✅ Dedicated reminders system with flexible scheduling and notification types
 - ✅ Streak tracking with PostgreSQL functions
 - ✅ Categories with JSONB styling
 - ✅ Performance analytics and insights
