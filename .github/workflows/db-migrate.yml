@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'supabase/migrations/**'
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
   migrate:
