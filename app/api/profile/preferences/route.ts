@@ -80,10 +80,11 @@ export async function PATCH(request: NextRequest) {
 
     const profile = await profilesDB.updatePreferences(user.id, updates);
     return NextResponse.json({ profile });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('PATCH /api/profile/preferences error:', error);
 
-    if (error?.message?.includes('not found')) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('not found')) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 

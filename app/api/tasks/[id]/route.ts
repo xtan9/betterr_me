@@ -110,11 +110,11 @@ export async function PATCH(
 
     const task = await tasksDB.updateTask(id, user.id, updates);
     return NextResponse.json({ task });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('PATCH /api/tasks/[id] error:', error);
-    
-    // Handle not found
-    if (error?.message?.includes('not found')) {
+
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('not found')) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 

@@ -23,11 +23,11 @@ export async function POST(
 
     const task = await tasksDB.toggleTaskCompletion(id, user.id);
     return NextResponse.json({ task });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('POST /api/tasks/[id]/toggle error:', error);
 
-    // Handle not found
-    if (error?.message?.includes('not found')) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('not found')) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
