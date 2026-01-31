@@ -1,0 +1,39 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { tasksDB } from '@/lib/db';
+
+/**
+ * POST /api/tasks/[id]/toggle
+ * Toggle task completion status
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const task = await tasksDB.toggleTaskCompletion(id, user.id);
+    return NextResponse.json({ task });
+  } catch (error: any) {
+    console.error('POST /api/tasks/[id]/toggle error:', error);
+
+    // Handle not found
+    if (error?.message?.includes('not found')) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(
+      { error: 'Failed to toggle task completion' },
+      { status: 500 }
+    );
+  }
+}
