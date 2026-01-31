@@ -15,7 +15,10 @@ class MockQueryBuilder {
   delete = vi.fn().mockReturnThis();
   eq = vi.fn().mockReturnThis();
   is = vi.fn().mockReturnThis();
+  not = vi.fn().mockReturnThis();
+  gt = vi.fn().mockReturnThis();
   gte = vi.fn().mockReturnThis();
+  lt = vi.fn().mockReturnThis();
   lte = vi.fn().mockReturnThis();
   order = vi.fn().mockReturnThis();
 
