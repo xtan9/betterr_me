@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST as togglePost } from '@/app/api/tasks/[id]/toggle/route';
-import { GET as todayGet } from '@/app/api/tasks/today/route';
-import { GET as upcomingGet } from '@/app/api/tasks/upcoming/route';
-import { GET as overdueGet } from '@/app/api/tasks/overdue/route';
+import { GET as tasksGet } from '@/app/api/tasks/route';
 import { NextRequest } from 'next/server';
 
 // Mock dependencies
@@ -65,7 +63,7 @@ describe('POST /api/tasks/[id]/toggle', () => {
   });
 });
 
-describe('GET /api/tasks/today', () => {
+describe('GET /api/tasks?view=today', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -74,8 +72,8 @@ describe('GET /api/tasks/today', () => {
     const mockTasks = [{ id: '1', title: 'Today task' }];
     vi.mocked(tasksDB.getTodayTasks).mockResolvedValue(mockTasks as any);
 
-    const request = new NextRequest('http://localhost:3000/api/tasks/today');
-    const response = await todayGet(request);
+    const request = new NextRequest('http://localhost:3000/api/tasks?view=today');
+    const response = await tasksGet(request);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -84,7 +82,7 @@ describe('GET /api/tasks/today', () => {
   });
 });
 
-describe('GET /api/tasks/upcoming', () => {
+describe('GET /api/tasks?view=upcoming', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -93,8 +91,8 @@ describe('GET /api/tasks/upcoming', () => {
     const mockTasks = [{ id: '1', title: 'Upcoming task' }];
     vi.mocked(tasksDB.getUpcomingTasks).mockResolvedValue(mockTasks as any);
 
-    const request = new NextRequest('http://localhost:3000/api/tasks/upcoming');
-    const response = await upcomingGet(request);
+    const request = new NextRequest('http://localhost:3000/api/tasks?view=upcoming');
+    const response = await tasksGet(request);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -105,21 +103,21 @@ describe('GET /api/tasks/upcoming', () => {
   it('should use custom days parameter', async () => {
     vi.mocked(tasksDB.getUpcomingTasks).mockResolvedValue([]);
 
-    const request = new NextRequest('http://localhost:3000/api/tasks/upcoming?days=14');
-    await upcomingGet(request);
+    const request = new NextRequest('http://localhost:3000/api/tasks?view=upcoming&days=14');
+    await tasksGet(request);
 
     expect(tasksDB.getUpcomingTasks).toHaveBeenCalledWith('user-123', 14);
   });
 
   it('should return 400 if days is invalid', async () => {
-    const request = new NextRequest('http://localhost:3000/api/tasks/upcoming?days=0');
-    const response = await upcomingGet(request);
+    const request = new NextRequest('http://localhost:3000/api/tasks?view=upcoming&days=0');
+    const response = await tasksGet(request);
 
     expect(response.status).toBe(400);
   });
 });
 
-describe('GET /api/tasks/overdue', () => {
+describe('GET /api/tasks?view=overdue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -128,8 +126,8 @@ describe('GET /api/tasks/overdue', () => {
     const mockTasks = [{ id: '1', title: 'Overdue task' }];
     vi.mocked(tasksDB.getOverdueTasks).mockResolvedValue(mockTasks as any);
 
-    const request = new NextRequest('http://localhost:3000/api/tasks/overdue');
-    const response = await overdueGet(request);
+    const request = new NextRequest('http://localhost:3000/api/tasks?view=overdue');
+    const response = await tasksGet(request);
     const data = await response.json();
 
     expect(response.status).toBe(200);

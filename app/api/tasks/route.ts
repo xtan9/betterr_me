@@ -5,7 +5,15 @@ import type { TaskInsert, TaskFilters } from '@/lib/db/types';
 
 /**
  * GET /api/tasks
- * Get all tasks for the authenticated user with optional filters
+ * Get tasks for the authenticated user with optional filters and views
+ * 
+ * Query parameters:
+ * - view: 'today' | 'upcoming' | 'overdue' (special views)
+ * - days: number (for upcoming view, default 7)
+ * - is_completed: boolean
+ * - priority: 0-3
+ * - due_date: YYYY-MM-DD
+ * - has_due_date: boolean
  */
 export async function GET(request: NextRequest) {
   try {
@@ -18,8 +26,33 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse query parameters for filtering
     const searchParams = request.nextUrl.searchParams;
+    const view = searchParams.get('view');
+
+    // Handle special views
+    if (view === 'today') {
+      const tasks = await tasksDB.getTodayTasks(user.id);
+      return NextResponse.json({ tasks });
+    }
+
+    if (view === 'upcoming') {
+      const days = parseInt(searchParams.get('days') || '7');
+      if (isNaN(days) || days < 1) {
+        return NextResponse.json(
+          { error: 'Days must be a positive number' },
+          { status: 400 }
+        );
+      }
+      const tasks = await tasksDB.getUpcomingTasks(user.id, days);
+      return NextResponse.json({ tasks });
+    }
+
+    if (view === 'overdue') {
+      const tasks = await tasksDB.getOverdueTasks(user.id);
+      return NextResponse.json({ tasks });
+    }
+
+    // Handle regular filtering
     const filters: TaskFilters = {};
 
     if (searchParams.has('is_completed')) {
