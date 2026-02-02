@@ -8,6 +8,26 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './tests/setup.ts',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: [
+        'node_modules/',
+        'tests/',
+        '**/*.d.ts',
+        '**/*.config.{js,ts,mjs}',
+        '**/components/ui/**', // Exclude shadcn/ui components (third-party)
+        '.next/',
+        'coverage/',
+      ],
+      thresholds: {
+        // Recommended thresholds for new code
+        lines: 50,
+        functions: 50,
+        branches: 50,
+        statements: 50,
+      },
+    },
   },
   resolve: {
     alias: {
