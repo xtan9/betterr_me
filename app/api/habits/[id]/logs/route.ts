@@ -30,7 +30,7 @@ export async function GET(
     const today = new Date().toISOString().split('T')[0];
 
     let startDate: string;
-    let endDate = searchParams.get('end_date') || today;
+    const endDate = searchParams.get('end_date') || today;
 
     // Use days parameter or start_date
     if (searchParams.has('days')) {

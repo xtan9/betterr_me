@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
-import type { HabitLog, HabitLogInsert, HabitFrequency, Habit } from './types';
+import type { HabitLog, HabitLogInsert, HabitFrequency } from './types';
 import { habitsDB } from './habits';
 
 export class HabitLogsDB {
