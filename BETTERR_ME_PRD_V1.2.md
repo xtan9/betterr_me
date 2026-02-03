@@ -15,6 +15,15 @@
 |---------|------|--------|---------|
 | 1.0 | Feb 2, 2026 | Staff PM | Initial PRD |
 | 1.1 | Feb 2, 2026 | Principal Engineer | Technical fixes, added missing sections |
+| 1.2 | Feb 3, 2026 | Product + Engineering | Added Mood Check-ins feature spec for V1.5 |
+
+### Key Changes in V1.2
+- Added new user persona: "The Self-Awareness Seeker"
+- Added comprehensive Mood Check-ins feature specification for V1.5
+- Added database schema, API routes, and components for Mood Check-ins
+- Added therapist export functionality specification
+- Added privacy considerations for mental health data
+- Updated competitive positioning with mental health angle
 
 ### Key Changes in V1.1
 - Fixed PostgreSQL schema syntax errors
@@ -102,6 +111,13 @@ BetterR.Me is a **daily operating system for self-improvement and productivity**
 - Motivation: Dashboard metrics, trends, insights
 - Frequency: Daily + weekly reviews
 - Example: "I want to know if better sleep correlates with productivity"
+
+**Persona 4: The Self-Awareness Seeker** *(V1.5+)*
+- Goal: Understand emotional patterns and triggers
+- Motivation: Mental health improvement, therapy support
+- Frequency: As-needed (during emotional moments) + weekly review
+- Example: "I want to track when I feel anxious so I can discuss patterns with my therapist"
+- Key need: Quick capture in the moment, exportable reports for healthcare providers
 
 ### Core Values
 1. **Simplicity First** - No friction between intention and action
@@ -235,6 +251,7 @@ These are deferred to V1.5+:
 - Recurring tasks (V1.5)
 - Habit category customization (V1.5)
 - **Habit-task linking (V1.5)** - Originally planned, deferred for scope
+- **Mood Check-ins (V1.5)** - Mental health tracking with therapist export (see Section 27)
 - Leaderboards/comparison (V2)
 - Daily score/consistency index (V2)
 - Health data integrations (V2+ - requires mobile apps)
@@ -1100,6 +1117,7 @@ jobs:
 - Weekly stats dashboard (simple version)
 - Habit-task linking
 - Offline support (basic)
+- **Mood Check-ins** - Quick emotional logging with therapist export (see Section 27)
 - Bug fixes from user feedback
 
 ### V2.0 (Month 2 after V1)
@@ -1194,6 +1212,7 @@ jobs:
 - Cross-platform of Habitify
 - Multilingual support (advantage in APAC)
 - Accessibility-first (underserved market)
+- **Mental health integration (V1.5+)** - Bridge between self-tracking and professional care
 - Coaching integration eventually (unique)
 
 ---
@@ -1317,6 +1336,308 @@ jobs:
 
 ---
 
+## 27. MOOD CHECK-INS (V1.5 Feature Specification)
+
+### 27.1 Overview
+
+**Purpose:** Enable users to quickly capture emotional states and physical sensations in the moment, creating a log that can be reviewed personally or shared with mental health professionals.
+
+**Key Insight:** Most journaling apps expect reflection time. Mood Check-ins are designed for *real-time emotional capture* - when you're feeling anxious with a tight chest, you want to log it in <30 seconds, not write a journal entry.
+
+**Target Persona:** The Self-Awareness Seeker (Persona 4)
+
+### 27.2 User Stories
+
+1. **As a user experiencing anxiety**, I want to quickly log my stress level and physical sensations so I can track patterns over time.
+
+2. **As a therapy client**, I want to export my mood logs as a report so I can share specific incidents with my therapist instead of trying to remember them.
+
+3. **As a self-aware individual**, I want to see correlations between my habits and my mood so I can understand what helps me feel better.
+
+### 27.3 Feature Specification
+
+**Quick Check-in Flow:**
+
+```
+┌──────────────────────────────────────────────────────┐
+│  How are you feeling right now?                      │
+│                                                      │
+│  Stress Level                                        │
+│  [1]   [2]   [3]   [4]   [5]                        │
+│  Calm              Overwhelmed                       │
+│                                                      │
+│  What's going on? (optional)                         │
+│  ┌────────────────────────────────────────────────┐ │
+│  │ Tight chest, anxious about tomorrow's meeting  │ │
+│  └────────────────────────────────────────────────┘ │
+│                                                      │
+│  Body sensations (tap to select)                    │
+│  [Tight chest] [Racing heart] [Tense shoulders]    │
+│  [Headache] [Fatigue] [Restless] [Nausea]         │
+│  [Shortness of breath] [+ Add custom]              │
+│                                                      │
+│                    [Save Check-in]                  │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+```
+
+**Design Principles:**
+- **<30 second capture** - Stress level is required, everything else optional
+- **Pre-built body tags** - Faster than typing, consistent for analysis
+- **No streaks** - Mental health should not be gamified
+- **Compassionate tone** - "It's okay to not be okay"
+- **Private by default** - Data never leaves device without explicit export
+
+### 27.4 Database Schema (V1.5)
+
+```sql
+-- ============================================
+-- MOOD CHECK-INS TABLE
+-- ============================================
+CREATE TABLE mood_checkins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  stress_level INTEGER NOT NULL CHECK (stress_level BETWEEN 1 AND 5),
+  note TEXT,
+  body_sensations TEXT[],  -- Array of tags: ['tight_chest', 'racing_heart']
+  logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),  -- When the feeling occurred
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_mood_checkins_user_id ON mood_checkins(user_id);
+CREATE INDEX idx_mood_checkins_user_logged_at ON mood_checkins(user_id, logged_at);
+
+-- RLS Policies
+ALTER TABLE mood_checkins ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY mood_checkins_select ON mood_checkins
+  FOR SELECT USING (user_id = auth.uid());
+
+CREATE POLICY mood_checkins_insert ON mood_checkins
+  FOR INSERT WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY mood_checkins_update ON mood_checkins
+  FOR UPDATE USING (user_id = auth.uid());
+
+CREATE POLICY mood_checkins_delete ON mood_checkins
+  FOR DELETE USING (user_id = auth.uid());
+
+-- ============================================
+-- BODY SENSATIONS REFERENCE TABLE
+-- ============================================
+CREATE TABLE body_sensations (
+  id TEXT PRIMARY KEY,  -- 'tight_chest', 'racing_heart', etc.
+  label_en TEXT NOT NULL,
+  label_zh TEXT NOT NULL,
+  label_zh_tw TEXT NOT NULL,
+  category TEXT,  -- 'chest', 'head', 'general', etc.
+  sort_order INTEGER DEFAULT 0
+);
+
+-- Pre-populated sensations
+INSERT INTO body_sensations (id, label_en, label_zh, label_zh_tw, category, sort_order) VALUES
+  ('tight_chest', 'Tight chest', '胸闷', '胸悶', 'chest', 1),
+  ('racing_heart', 'Racing heart', '心跳加速', '心跳加速', 'chest', 2),
+  ('shortness_of_breath', 'Shortness of breath', '呼吸困难', '呼吸困難', 'chest', 3),
+  ('tense_shoulders', 'Tense shoulders', '肩膀紧绷', '肩膀緊繃', 'body', 4),
+  ('headache', 'Headache', '头痛', '頭痛', 'head', 5),
+  ('fatigue', 'Fatigue', '疲劳', '疲勞', 'general', 6),
+  ('restless', 'Restless', '坐立不安', '坐立不安', 'general', 7),
+  ('nausea', 'Nausea', '恶心', '噁心', 'stomach', 8),
+  ('dizziness', 'Dizziness', '头晕', '頭暈', 'head', 9),
+  ('muscle_tension', 'Muscle tension', '肌肉紧张', '肌肉緊張', 'body', 10);
+```
+
+### 27.5 API Routes (V1.5)
+
+```
+POST   /api/mood-checkins
+       Body: { stress_level, note?, body_sensations?, logged_at? }
+       Response: Created check-in with id
+       Note: logged_at defaults to now, but can be set to recent past
+       Rate limit: 30/min
+
+GET    /api/mood-checkins
+       Query params: ?start_date=&end_date=&limit=50
+       Response: List of check-ins, newest first
+       Rate limit: 100/min
+
+GET    /api/mood-checkins/[id]
+       Response: Single check-in detail
+       Rate limit: 100/min
+
+PATCH  /api/mood-checkins/[id]
+       Body: { stress_level?, note?, body_sensations? }
+       Response: Updated check-in
+       Rate limit: 30/min
+
+DELETE /api/mood-checkins/[id]
+       Response: 204 No Content
+       Rate limit: 30/min
+
+GET    /api/mood-checkins/stats
+       Query params: ?start_date=&end_date=
+       Response: {
+         total_checkins: 45,
+         average_stress: 3.2,
+         stress_distribution: { "1": 5, "2": 10, "3": 15, "4": 10, "5": 5 },
+         common_sensations: [
+           { id: "tight_chest", count: 23 },
+           { id: "racing_heart", count: 15 }
+         ],
+         by_day_of_week: { "monday": 3.8, "tuesday": 2.9, ... },
+         by_hour: { "9": 3.5, "14": 2.8, "22": 3.9, ... }
+       }
+       Rate limit: 60/min
+
+POST   /api/mood-checkins/export
+       Body: { start_date, end_date, format: "pdf" | "csv" }
+       Response: { export_url, expires_at }
+       Rate limit: 5/hour
+```
+
+### 27.6 Therapist Export Format
+
+**PDF Report Structure:**
+
+```
+═══════════════════════════════════════════════════════
+           MOOD CHECK-IN REPORT
+═══════════════════════════════════════════════════════
+Patient: [User's Name]
+Period: February 1 - February 28, 2026
+Generated: February 28, 2026 at 3:00 PM
+Report ID: RPT-2026-02-ABC123
+
+For use in therapy sessions. Generated by BetterR.Me
+═══════════════════════════════════════════════════════
+
+SUMMARY
+───────────────────────────────────────────────────────
+Total Check-ins:        23
+Average Stress Level:   3.2 / 5
+Highest Stress Day:     Monday, Feb 15 (4.5 avg)
+Most Common Sensation:  Tight chest (12 occurrences)
+
+STRESS DISTRIBUTION
+───────────────────────────────────────────────────────
+Level 1 (Calm):       ██░░░░░░░░  3 (13%)
+Level 2:              ████░░░░░░  5 (22%)
+Level 3:              ██████░░░░  7 (30%)
+Level 4:              ████░░░░░░  5 (22%)
+Level 5 (Overwhelmed): ███░░░░░░░  3 (13%)
+
+DETAILED LOG
+───────────────────────────────────────────────────────
+
+Feb 15, 2026 - 3:42 PM                    Stress: 4/5
+"Tight chest, anxious about tomorrow's presentation.
+Can't focus on work."
+Body: Tight chest, Racing heart, Tense shoulders
+───────────────────────────────────────────────────────
+
+Feb 12, 2026 - 9:15 AM                    Stress: 2/5
+"Feeling okay after morning meditation. Calmer than
+yesterday."
+Body: None noted
+───────────────────────────────────────────────────────
+
+[... additional entries ...]
+
+PATTERNS OBSERVED
+───────────────────────────────────────────────────────
+• Peak stress times: Late afternoon (3-5 PM)
+• Higher stress on: Mondays and Sundays
+• Recurring themes in notes: "meeting", "presentation"
+
+═══════════════════════════════════════════════════════
+This report is for informational purposes and should be
+reviewed with a qualified mental health professional.
+═══════════════════════════════════════════════════════
+```
+
+### 27.7 Frontend Components (V1.5)
+
+**Pages:**
+- `/check-in` - Quick check-in form (optimized for speed)
+- `/check-ins` - List view of past check-ins with filters
+- `/check-ins/insights` - Trends and patterns visualization
+
+**Components:**
+- `MoodCheckinForm` - Quick capture form with stress slider and body tags
+- `StressLevelSelector` - 1-5 scale with visual feedback
+- `BodySensationTags` - Pre-built tag selector with custom option
+- `MoodCheckinCard` - Display single check-in in list
+- `MoodCheckinList` - Filterable list of check-ins
+- `MoodTrendsChart` - Stress level over time visualization
+- `TherapistExportDialog` - Date range picker + format selector + download
+
+**Dashboard Integration:**
+- Optional "Quick Check-in" button on main dashboard
+- NOT prominently featured (avoid over-prompting about emotions)
+- Accessible via menu/navigation
+
+### 27.8 Privacy & Safety Considerations
+
+**Data Privacy:**
+| Concern | Mitigation |
+|---------|-----------|
+| **Sensitive data** | All mood data encrypted at rest, strict RLS policies |
+| **Accidental sharing** | Export requires explicit action + confirmation dialog |
+| **Data portability** | Users can export all their data, delete account |
+| **Third-party access** | No analytics on mood content, only aggregate metrics |
+
+**Mental Health Safety:**
+| Concern | Mitigation |
+|---------|-----------|
+| **Crisis situations** | If stress=5 selected, show crisis resources (hotlines) |
+| **Over-tracking** | No streaks, no gamification, no "you haven't checked in" prompts |
+| **Negative reinforcement** | Compassionate copy: "Thank you for checking in with yourself" |
+| **Professional boundary** | Clear disclaimer: "This is not a substitute for professional care" |
+
+**Crisis Resources Display (when stress_level = 5):**
+```
+┌──────────────────────────────────────────────────────┐
+│  If you're in crisis, help is available:            │
+│                                                      │
+│  🇺🇸 National Suicide Prevention: 988               │
+│  🇺🇸 Crisis Text Line: Text HOME to 741741          │
+│  🌏 International Association for Suicide           │
+│     Prevention: https://www.iasp.info/resources/    │
+│                                                      │
+│  [Continue to save check-in]                        │
+└──────────────────────────────────────────────────────┘
+```
+
+### 27.9 V2+ Enhancements (Future)
+
+- **Habit-Mood Correlation:** "On days you meditated, average stress was 2.1 vs 3.8"
+- **Trigger Identification:** ML-based pattern detection in notes
+- **Therapist Portal:** Direct secure sharing (requires HIPAA compliance work)
+- **Guided Check-ins:** Optional prompts like "What triggered this feeling?"
+- **Voice Notes:** Audio capture for when typing is too much
+
+### 27.10 Success Metrics (V1.5)
+
+| Metric | Target |
+|--------|--------|
+| Check-ins per user per week | 2-5 (not too many, not too few) |
+| Export usage | 10% of check-in users export at least once |
+| Feature retention | 40% of users who try it continue using after 2 weeks |
+| Crisis resource clicks | Track for safety, no target (awareness metric) |
+
+### 27.11 Why V1.5 (Not V1)
+
+1. **Scope discipline** - V1 must ship fast with core habit/task features
+2. **UX sensitivity** - Mental health features need extra design care
+3. **Privacy infrastructure** - Want to ensure data handling is solid first
+4. **User feedback** - See if users request this after V1 launch
+5. **Competitive timing** - Still differentiating, but not blocking launch
+
+---
+
 ## APPENDIX A: GLOSSARY
 
 | Term | Definition |
@@ -1327,6 +1648,9 @@ jobs:
 | **Toggle** | Mark a habit as complete or incomplete for a given day |
 | **Heatmap** | Calendar visualization showing habit completion patterns |
 | **RLS** | Row Level Security - Supabase/PostgreSQL feature for data isolation |
+| **Mood Check-in** | Quick capture of emotional state with stress level and optional notes |
+| **Body Sensation** | Physical feeling associated with emotional state (e.g., tight chest) |
+| **Therapist Export** | PDF/CSV report of mood check-ins formatted for clinical review |
 
 ---
 
@@ -1340,6 +1664,6 @@ jobs:
 
 ---
 
-**Document Version:** 1.1 (Revised)
-**Last Updated:** February 2, 2026
+**Document Version:** 1.2 (Mood Check-ins Added)
+**Last Updated:** February 3, 2026
 **Status:** Ready for Implementation
