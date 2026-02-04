@@ -126,6 +126,13 @@
                 "customDaysRequired": "至少選擇一天"
             }
         },
+        "card": {
+            "currentStreak": "目前",
+            "bestStreak": "最佳",
+            "streakDays": "{count} 天",
+            "thisMonth": "本月 {percent}%",
+            "completedToday": "今日已完成"
+        },
         "categories": {
             "health": "健康",
             "wellness": "身心",
