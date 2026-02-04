@@ -11,8 +11,10 @@ interface FrequencySelectorProps {
   disabled?: boolean;
 }
 
+type FrequencyOptionKey = "daily" | "weekdays" | "weekly" | "timesPerWeek2" | "timesPerWeek3" | "custom";
+
 type FrequencyOption = {
-  key: string;
+  key: FrequencyOptionKey;
   toFrequency: () => HabitFrequency;
   match: (freq: HabitFrequency) => boolean;
 };
@@ -53,27 +55,14 @@ const FREQUENCY_OPTIONS: FrequencyOption[] = [
   },
 ];
 
-function getOptionLabel(
-  key: string,
-  t: (key: string, params?: Record<string, unknown>) => string
-): string {
-  switch (key) {
-    case "daily":
-      return t("daily");
-    case "weekdays":
-      return t("weekdays");
-    case "weekly":
-      return t("weekly");
-    case "timesPerWeek2":
-      return t("timesPerWeek", { count: 2 });
-    case "timesPerWeek3":
-      return t("timesPerWeek", { count: 3 });
-    case "custom":
-      return t("custom");
-    default:
-      return key;
-  }
-}
+const OPTION_LABEL_MAP: Record<FrequencyOptionKey, { i18nKey: string; params?: Record<string, number> }> = {
+  daily: { i18nKey: "daily" },
+  weekdays: { i18nKey: "weekdays" },
+  weekly: { i18nKey: "weekly" },
+  timesPerWeek2: { i18nKey: "timesPerWeek", params: { count: 2 } },
+  timesPerWeek3: { i18nKey: "timesPerWeek", params: { count: 3 } },
+  custom: { i18nKey: "custom" },
+};
 
 export function FrequencySelector({
   value,
@@ -119,7 +108,10 @@ export function FrequencySelector({
       <div className="grid grid-cols-3 gap-2">
         {FREQUENCY_OPTIONS.map((option) => {
           const isActive = option.match(value);
-          const label = getOptionLabel(option.key, t);
+          const labelConfig = OPTION_LABEL_MAP[option.key];
+          const label = labelConfig.params
+            ? t(labelConfig.i18nKey, labelConfig.params)
+            : t(labelConfig.i18nKey);
 
           return (
             <Toggle
