@@ -126,6 +126,13 @@
                 "customDaysRequired": "Select at least one day"
             }
         },
+        "card": {
+            "currentStreak": "Current",
+            "bestStreak": "Best",
+            "streakDays": "{count} days",
+            "thisMonth": "{percent}% this month",
+            "completedToday": "Completed today"
+        },
         "categories": {
             "health": "Health",
             "wellness": "Wellness",
