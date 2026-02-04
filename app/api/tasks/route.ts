@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
       description: body.description?.trim() || null,
       is_completed: body.is_completed ?? false,
       priority: body.priority ?? 0,
+      category: body.category || null,
       due_date: body.due_date || null,
       due_time: body.due_time || null,
     };

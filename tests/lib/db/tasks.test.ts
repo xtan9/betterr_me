@@ -12,6 +12,7 @@ describe('TasksDB', () => {
     description: 'Milk, eggs, bread',
     is_completed: false,
     priority: 2,
+    category: null,
     due_date: '2026-01-31',
     due_time: '14:00:00',
     completed_at: null,
