@@ -104,6 +104,34 @@
                 "fri": "周五",
                 "sat": "周六"
             }
+        },
+        "form": {
+            "createTitle": "创建新习惯",
+            "editTitle": "编辑习惯",
+            "nameLabel": "习惯名称",
+            "namePlaceholder": "例如：晨跑、阅读30分钟...",
+            "descriptionLabel": "描述",
+            "descriptionPlaceholder": "关于这个习惯的备注（可选）",
+            "categoryLabel": "分类",
+            "frequencyLabel": "多久一次？",
+            "cancel": "取消",
+            "create": "创建习惯",
+            "save": "保存更改",
+            "creating": "正在创建...",
+            "saving": "正在保存...",
+            "validation": {
+                "nameRequired": "名称不能为空",
+                "nameMax": "名称不能超过100个字符",
+                "frequencyRequired": "请选择频率",
+                "customDaysRequired": "至少选择一天"
+            }
+        },
+        "categories": {
+            "health": "健康",
+            "wellness": "身心",
+            "learning": "学习",
+            "productivity": "效率",
+            "other": "其他"
         }
     },
     "auth": {

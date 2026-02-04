@@ -104,6 +104,34 @@
                 "fri": "週五",
                 "sat": "週六"
             }
+        },
+        "form": {
+            "createTitle": "建立新習慣",
+            "editTitle": "編輯習慣",
+            "nameLabel": "習慣名稱",
+            "namePlaceholder": "例如：晨跑、閱讀30分鐘...",
+            "descriptionLabel": "描述",
+            "descriptionPlaceholder": "關於這個習慣的備註（選填）",
+            "categoryLabel": "分類",
+            "frequencyLabel": "多久一次？",
+            "cancel": "取消",
+            "create": "建立習慣",
+            "save": "儲存變更",
+            "creating": "正在建立...",
+            "saving": "正在儲存...",
+            "validation": {
+                "nameRequired": "名稱不能為空",
+                "nameMax": "名稱不能超過100個字元",
+                "frequencyRequired": "請選擇頻率",
+                "customDaysRequired": "至少選擇一天"
+            }
+        },
+        "categories": {
+            "health": "健康",
+            "wellness": "身心",
+            "learning": "學習",
+            "productivity": "效率",
+            "other": "其他"
         }
     },
     "auth": {
