@@ -104,6 +104,34 @@
                 "fri": "Fri",
                 "sat": "Sat"
             }
+        },
+        "form": {
+            "createTitle": "Create New Habit",
+            "editTitle": "Edit Habit",
+            "nameLabel": "Habit Name",
+            "namePlaceholder": "e.g., Morning Run, Read 30 mins...",
+            "descriptionLabel": "Description",
+            "descriptionPlaceholder": "Optional notes about this habit",
+            "categoryLabel": "Category",
+            "frequencyLabel": "How often?",
+            "cancel": "Cancel",
+            "create": "Create Habit",
+            "save": "Save Changes",
+            "creating": "Creating...",
+            "saving": "Saving...",
+            "validation": {
+                "nameRequired": "Name is required",
+                "nameMax": "Name must be 100 characters or less",
+                "frequencyRequired": "Please select a frequency",
+                "customDaysRequired": "Select at least one day"
+            }
+        },
+        "categories": {
+            "health": "Health",
+            "wellness": "Wellness",
+            "learning": "Learning",
+            "productivity": "Productivity",
+            "other": "Other"
         }
     },
     "auth": {
