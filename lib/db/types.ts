@@ -32,6 +32,8 @@ export type ProfileUpdate = Partial<Omit<Profile, 'id' | 'email' | 'created_at' 
 // TASKS
 // =============================================================================
 
+export type TaskCategory = 'work' | 'personal' | 'shopping' | 'other';
+
 export interface Task {
   id: string; // UUID
   user_id: string; // UUID
@@ -39,6 +41,7 @@ export interface Task {
   description: string | null;
   is_completed: boolean;
   priority: 0 | 1 | 2 | 3; // 0=none, 1=low, 2=medium, 3=high
+  category: TaskCategory | null;
   due_date: string | null; // DATE (YYYY-MM-DD)
   due_time: string | null; // TIME (HH:MM:SS)
   completed_at: string | null; // TIMESTAMPTZ
