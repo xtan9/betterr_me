@@ -15,16 +15,25 @@ Track daily changes and progress on the BetterR.me project.
   - 12 tests for TimezoneSelector component
   - Uses existing `/api/profile/preferences` endpoint for persistence
 
-- **PR #116**: Add week start day setting (SET-002)
+- **PR #116**: Add week start day setting (SET-002) - MERGED
   - Added WeekStartSelector component with Sunday/Monday toggle
   - Integrated into Settings page below timezone
   - Full i18n support (en, zh, zh-TW)
   - 9 tests for WeekStartSelector component
   - Stores preference as week_start_day (0=Sunday, 1=Monday)
 
+- **PR #117**: Add data export feature (SET-003)
+  - Added CSV export utilities for habits and logs
+  - Server-side export API endpoint (/api/export)
+  - DataExport component with export buttons
+  - Full i18n support (en, zh, zh-TW)
+  - 17 tests (10 CSV utilities, 7 component tests)
+  - CSV format compatible with Excel/Google Sheets
+
 #### Issues Addressed
 - #100: SET-001 - Add timezone selector to Settings UI
 - #101: SET-002 - Add week start day setting
+- #102: SET-003 - Implement data export (CSV)
 
 #### Technical Notes
 - Used `Intl.supportedValuesOf("timeZone")` for IANA timezone list

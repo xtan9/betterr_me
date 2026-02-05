@@ -415,6 +415,14 @@
             "sunday": "Sunday",
             "monday": "Monday"
         },
+        "export": {
+            "title": "Export Data",
+            "description": "Download your habit data as CSV files for backup or analysis",
+            "habits": "Export Habits",
+            "logs": "Export Logs",
+            "success": "Export downloaded successfully",
+            "error": "Failed to export data"
+        },
         "toast": {
             "saveError": "Failed to save settings"
         }
