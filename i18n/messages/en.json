@@ -132,6 +132,21 @@
             "learning": "Learning",
             "productivity": "Productivity",
             "other": "Other"
+        },
+        "streak": {
+            "current": "Current Streak",
+            "best": "Best Streak",
+            "days": "{count} days",
+            "personalBest": "Personal best!",
+            "messages": {
+                "zero": "Start today!",
+                "building": "Building momentum!",
+                "almostWeek": "Almost a week!",
+                "keepGoing": "Keep it going!",
+                "incredible": "Incredible consistency!",
+                "unstoppable": "You're unstoppable!",
+                "legendary": "Legendary streak!"
+            }
         }
     },
     "auth": {
