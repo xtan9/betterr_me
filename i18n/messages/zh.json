@@ -271,6 +271,47 @@
             "title": "我的习惯",
             "createButton": "创建习惯"
         },
+        "detail": {
+            "backToHabits": "返回习惯列表",
+            "edit": "编辑",
+            "status": {
+                "active": "进行中",
+                "paused": "已暂停",
+                "archived": "已归档"
+            },
+            "completion": {
+                "title": "完成率",
+                "thisWeek": "本周",
+                "thisMonth": "本月",
+                "allTime": "总计",
+                "days": "{completed}/{total} 天",
+                "percent": "{percent}%"
+            },
+            "actions": {
+                "pause": "暂停习惯",
+                "resume": "恢复习惯",
+                "archive": "归档习惯",
+                "delete": "删除习惯"
+            },
+            "confirmArchive": "确定要归档这个习惯吗？",
+            "confirmDelete": "确定要删除这个习惯吗？此操作无法撤销。",
+            "cannotEditOldLogs": "无法编辑超过7天的记录",
+            "notFound": "习惯未找到"
+        },
+        "toast": {
+            "createSuccess": "习惯创建成功",
+            "createError": "创建习惯失败",
+            "updateSuccess": "习惯更新成功",
+            "updateError": "更新习惯失败",
+            "pauseSuccess": "习惯已暂停",
+            "pauseError": "暂停习惯失败",
+            "resumeSuccess": "习惯已恢复",
+            "resumeError": "恢复习惯失败",
+            "archiveSuccess": "习惯已归档",
+            "archiveError": "归档习惯失败",
+            "deleteSuccess": "习惯已删除",
+            "deleteError": "删除习惯失败"
+        },
         "error": {
             "title": "加载习惯失败",
             "retry": "重试"

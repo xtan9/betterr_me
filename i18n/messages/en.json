@@ -271,6 +271,47 @@
             "title": "My Habits",
             "createButton": "Create Habit"
         },
+        "detail": {
+            "backToHabits": "Back to Habits",
+            "edit": "Edit",
+            "status": {
+                "active": "Active",
+                "paused": "Paused",
+                "archived": "Archived"
+            },
+            "completion": {
+                "title": "Completion Rate",
+                "thisWeek": "This Week",
+                "thisMonth": "This Month",
+                "allTime": "All Time",
+                "days": "{completed}/{total} days",
+                "percent": "{percent}%"
+            },
+            "actions": {
+                "pause": "Pause Habit",
+                "resume": "Resume Habit",
+                "archive": "Archive Habit",
+                "delete": "Delete Habit"
+            },
+            "confirmArchive": "Are you sure you want to archive this habit?",
+            "confirmDelete": "Are you sure you want to delete this habit? This cannot be undone.",
+            "cannotEditOldLogs": "Cannot edit logs older than 7 days",
+            "notFound": "Habit not found"
+        },
+        "toast": {
+            "createSuccess": "Habit created successfully",
+            "createError": "Failed to create habit",
+            "updateSuccess": "Habit updated successfully",
+            "updateError": "Failed to update habit",
+            "pauseSuccess": "Habit paused",
+            "pauseError": "Failed to pause habit",
+            "resumeSuccess": "Habit resumed",
+            "resumeError": "Failed to resume habit",
+            "archiveSuccess": "Habit archived",
+            "archiveError": "Failed to archive habit",
+            "deleteSuccess": "Habit deleted",
+            "deleteError": "Failed to delete habit"
+        },
         "error": {
             "title": "Failed to load habits",
             "retry": "Try again"
