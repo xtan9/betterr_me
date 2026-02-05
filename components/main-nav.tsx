@@ -20,6 +20,11 @@ export function MainNav() {
       label: t("habits"),
       isActive: pathname.startsWith("/habits"),
     },
+    {
+      href: "/dashboard/settings",
+      label: t("settings"),
+      isActive: pathname.startsWith("/dashboard/settings"),
+    },
   ];
 
   return (

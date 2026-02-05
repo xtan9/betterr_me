@@ -3,6 +3,28 @@
 Track daily changes and progress on the BetterR.me project.
 
 ## 2026-02-05
+### Epic 7: Settings & Polish (In Progress)
+
+#### Pull Requests Created
+- **PR #115**: Add timezone selector to Settings page (SET-001)
+  - Created `/dashboard/settings` page with timezone configuration
+  - Added TimezoneSelector component with searchable dropdown (Command/Popover pattern)
+  - Added Settings link to main navigation
+  - Full i18n support (en, zh, zh-TW)
+  - Added ResizeObserver and scrollIntoView mocks for cmdk testing
+  - 12 tests for TimezoneSelector component
+  - Uses existing `/api/profile/preferences` endpoint for persistence
+
+#### Issues Addressed
+- #100: SET-001 - Add timezone selector to Settings UI
+
+#### Technical Notes
+- Used `Intl.supportedValuesOf("timeZone")` for IANA timezone list
+- Displays timezone with GMT offset (e.g., "America / New York (GMT-5)")
+- SWR for data fetching with automatic revalidation
+
+---
+
 ### Epic 5: Habit Pages (Complete)
 
 #### Pull Requests Created

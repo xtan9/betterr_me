@@ -6,6 +6,7 @@
             "signOut": "退出登录",
             "dashboard": "仪表板",
             "habits": "习惯",
+            "settings": "设置",
             "learnMore": "了解更多"
         },
         "footer": {
@@ -394,6 +395,22 @@
         "errors": {
             "generic": "发生了错误",
             "tryAgain": "请重试"
+        }
+    },
+    "settings": {
+        "title": "设置",
+        "error": "加载设置失败",
+        "save": "保存",
+        "saved": "已保存",
+        "timezone": {
+            "title": "时区",
+            "description": "设置你的本地时区以便准确跟踪习惯",
+            "placeholder": "选择时区",
+            "search": "搜索时区...",
+            "noResults": "未找到时区"
+        },
+        "toast": {
+            "saveError": "保存设置失败"
         }
     }
 }
