@@ -409,6 +409,12 @@
             "search": "搜索时区...",
             "noResults": "未找到时区"
         },
+        "weekStart": {
+            "title": "每周开始于",
+            "description": "选择你的一周从哪天开始，用于统计和日历显示",
+            "sunday": "周日",
+            "monday": "周一"
+        },
         "toast": {
             "saveError": "保存设置失败"
         }

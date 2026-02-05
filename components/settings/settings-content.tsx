@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TimezoneSelector } from "./timezone-selector";
+import { WeekStartSelector } from "./week-start-selector";
 import { CheckCircle, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +33,7 @@ export function SettingsContent() {
   );
 
   const [timezone, setTimezone] = useState<string>("");
+  const [weekStartDay, setWeekStartDay] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -39,6 +41,7 @@ export function SettingsContent() {
   useEffect(() => {
     if (data?.profile?.preferences) {
       setTimezone(data.profile.preferences.timezone || "");
+      setWeekStartDay(data.profile.preferences.week_start_day ?? 0);
     }
   }, [data]);
 
@@ -50,7 +53,7 @@ export function SettingsContent() {
       const response = await fetch("/api/profile/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timezone }),
+        body: JSON.stringify({ timezone, week_start_day: weekStartDay }),
       });
 
       if (!response.ok) {
@@ -68,7 +71,9 @@ export function SettingsContent() {
     }
   };
 
-  const hasChanges = data?.profile?.preferences?.timezone !== timezone;
+  const hasChanges =
+    data?.profile?.preferences?.timezone !== timezone ||
+    data?.profile?.preferences?.week_start_day !== weekStartDay;
 
   if (error) {
     return (
@@ -115,6 +120,24 @@ export function SettingsContent() {
             <TimezoneSelector
               value={timezone}
               onChange={setTimezone}
+              disabled={isSaving}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("weekStart.title")}</CardTitle>
+          <CardDescription>{t("weekStart.description")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-10 w-48" />
+          ) : (
+            <WeekStartSelector
+              value={weekStartDay}
+              onChange={setWeekStartDay}
               disabled={isSaving}
             />
           )}
