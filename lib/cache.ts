@@ -70,8 +70,9 @@ class TTLCache<T = unknown> {
       const keysToDelete = this.cache.size - this.maxSize;
       const iterator = this.cache.keys();
       for (let i = 0; i < keysToDelete; i++) {
-        const { value } = iterator.next();
-        this.cache.delete(value);
+        const result = iterator.next();
+        if (result.done) break;
+        this.cache.delete(result.value);
       }
     }
   }
