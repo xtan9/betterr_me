@@ -260,6 +260,77 @@ export class HabitLogsDB {
   }
 
   /**
+   * Get detailed completion stats for a habit (thisWeek, thisMonth, allTime)
+   */
+  async getDetailedHabitStats(
+    habitId: string,
+    userId: string,
+    frequency: HabitFrequency,
+    createdAt: string
+  ): Promise<{
+    thisWeek: { completed: number; total: number; percent: number };
+    thisMonth: { completed: number; total: number; percent: number };
+    allTime: { completed: number; total: number; percent: number };
+  }> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Calculate start of this week (Sunday)
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+
+    // Calculate start of this month
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    // Habit creation date
+    const habitCreatedAt = new Date(createdAt);
+    habitCreatedAt.setHours(0, 0, 0, 0);
+
+    // Get all logs from habit creation to today
+    const allLogs = await this.getLogsByDateRange(
+      habitId,
+      userId,
+      habitCreatedAt.toISOString().split('T')[0],
+      today.toISOString().split('T')[0]
+    );
+
+    // Create a set of completed dates for quick lookup
+    const completedDates = new Set(
+      allLogs.filter(log => log.completed).map(log => log.logged_date)
+    );
+
+    // Helper to count scheduled and completed days in a range
+    const countDaysInRange = (start: Date, end: Date): { completed: number; total: number; percent: number } => {
+      let total = 0;
+      let completed = 0;
+      const currentDate = new Date(start);
+
+      while (currentDate <= end) {
+        if (currentDate >= habitCreatedAt && this.shouldTrackOnDate(frequency, currentDate)) {
+          total++;
+          const dateStr = currentDate.toISOString().split('T')[0];
+          if (completedDates.has(dateStr)) {
+            completed++;
+          }
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      return {
+        completed,
+        total,
+        percent: total > 0 ? Math.round((completed / total) * 100) : 0,
+      };
+    };
+
+    return {
+      thisWeek: countDaysInRange(startOfWeek, today),
+      thisMonth: countDaysInRange(startOfMonth, today),
+      allTime: countDaysInRange(habitCreatedAt, today),
+    };
+  }
+
+  /**
    * Get logs for multiple habits on a specific date (for dashboard)
    */
   async getLogsForHabitsOnDate(
