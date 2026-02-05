@@ -85,7 +85,17 @@
         "welcome": "歡迎來到你的個人儀表板",
         "profile": "你的個人資料",
         "email": "電子郵件",
-        "accountCreated": "帳戶建立時間"
+        "accountCreated": "帳戶建立時間",
+        "snapshot": {
+            "title": "今日概覽",
+            "activeHabits": "活躍習慣",
+            "todaysProgress": "今日進度",
+            "currentStreak": "當前連續",
+            "completionRate": "完成率 {percent}%",
+            "days": "{count} 天",
+            "vsYesterday": "較昨日 {change}%",
+            "fromLastWeek": "較上週 +{count}"
+        }
     },
     "habits": {
         "frequency": {

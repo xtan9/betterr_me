@@ -85,7 +85,17 @@
         "welcome": "Welcome to your personal dashboard",
         "profile": "Your Profile",
         "email": "Email",
-        "accountCreated": "Account Created"
+        "accountCreated": "Account Created",
+        "snapshot": {
+            "title": "Today's Snapshot",
+            "activeHabits": "Active Habits",
+            "todaysProgress": "Today's Progress",
+            "currentStreak": "Current Streak",
+            "completionRate": "{percent}% completion rate",
+            "days": "{count} days",
+            "vsYesterday": "{change}% vs yesterday",
+            "fromLastWeek": "+{count} from last week"
+        }
     },
     "habits": {
         "frequency": {

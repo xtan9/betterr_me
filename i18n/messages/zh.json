@@ -85,7 +85,17 @@
         "welcome": "欢迎来到你的个人仪表板",
         "profile": "你的个人资料",
         "email": "邮箱",
-        "accountCreated": "账户创建时间"
+        "accountCreated": "账户创建时间",
+        "snapshot": {
+            "title": "今日概览",
+            "activeHabits": "活跃习惯",
+            "todaysProgress": "今日进度",
+            "currentStreak": "当前连续",
+            "completionRate": "完成率 {percent}%",
+            "days": "{count} 天",
+            "vsYesterday": "较昨日 {change}%",
+            "fromLastWeek": "较上周 +{count}"
+        }
     },
     "habits": {
         "frequency": {
