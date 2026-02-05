@@ -15,11 +15,11 @@ interface HabitRowProps {
 }
 
 export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps) {
-  const t = useTranslations("habits.card");
+  const t = useTranslations("habits");
   const categoryColorClass = getCategoryColor(habit.category);
   const categoryLabel = habit.category
-    ? habit.category.charAt(0).toUpperCase() + habit.category.slice(1)
-    : "Other";
+    ? t(`categories.${habit.category}`)
+    : t("categories.other");
 
   const handleCheckboxChange = () => {
     if (!isToggling) {
@@ -47,7 +47,7 @@ export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps
       </span>
       <div className="flex items-center gap-1 text-sm text-muted-foreground whitespace-nowrap">
         {habit.current_streak >= 7 && <Flame className="size-3.5 text-orange-500" />}
-        <span>{t("streakDays", { count: habit.current_streak })}</span>
+        <span>{t("card.streakDays", { count: habit.current_streak })}</span>
       </div>
     </div>
   );

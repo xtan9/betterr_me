@@ -7,7 +7,12 @@ vi.mock('next-intl', () => ({
   useTranslations: () => {
     const t = (key: string, params?: Record<string, unknown>) => {
       const messages: Record<string, string> = {
-        'streakDays': `${params?.count ?? 0} days`,
+        'card.streakDays': `${params?.count ?? 0} days`,
+        'categories.health': 'Health',
+        'categories.wellness': 'Wellness',
+        'categories.learning': 'Learning',
+        'categories.productivity': 'Productivity',
+        'categories.other': 'Other',
       };
       return messages[key] ?? key;
     };
