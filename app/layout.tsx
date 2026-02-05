@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Inter } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getLocale } from 'next-intl/server';
@@ -15,8 +15,8 @@ export const metadata: Metadata = {
   description: "Be a better version of yourself every day. Track your habits, build consistency, and transform your life one small step at a time with BetterR.me",
 };
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-sans",
   display: "swap",
   subsets: ["latin"],
 });
@@ -38,7 +38,7 @@ export default async function RootLayout({
 
   return (
     <html lang={langMap[locale as keyof typeof langMap]} suppressHydrationWarning>
-      <body className={`${geistSans.className} antialiased`}>
+      <body className={`${inter.className} antialiased`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider
             attribute="class"
