@@ -2,9 +2,34 @@ import { Heart, Brain, BookOpen, Zap, MoreHorizontal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { HabitCategory, HabitFrequency } from "@/lib/db/types";
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
+// Returns a translation key and optional params for frequency formatting
+export type FrequencyTranslation = {
+  key: string;
+  params?: Record<string, unknown>;
+};
+
+export function getFrequencyTranslation(freq: HabitFrequency): FrequencyTranslation {
+  switch (freq.type) {
+    case "daily":
+      return { key: "frequency.daily" };
+    case "weekdays":
+      return { key: "frequency.weekdays" };
+    case "weekly":
+      return { key: "frequency.weekly" };
+    case "times_per_week":
+      return { key: "frequency.timesPerWeek", params: { count: freq.count } };
+    case "custom":
+      // For custom days, we need to pass the formatted days string
+      const dayKeys = [...freq.days].sort((a, b) => a - b).map((d) => DAY_KEYS[d]);
+      return { key: "frequency.custom", params: { days: dayKeys.join(", ") } };
+  }
+}
+
+// Legacy function for backwards compatibility - returns English strings
 export function formatFrequency(freq: HabitFrequency): string {
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   switch (freq.type) {
     case "daily":
       return "Every day";

@@ -5,7 +5,7 @@ import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { formatFrequency, getCategoryColor, getCategoryIcon } from "@/lib/habits/format";
+import { getFrequencyTranslation, getCategoryColor, getCategoryIcon } from "@/lib/habits/format";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
 interface HabitCardProps {
@@ -16,12 +16,14 @@ interface HabitCardProps {
 }
 
 export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardProps) {
-  const t = useTranslations("habits.card");
+  const t = useTranslations("habits");
   const Icon = getCategoryIcon(habit.category);
   const categoryColorClass = getCategoryColor(habit.category);
   const categoryLabel = habit.category
-    ? habit.category.charAt(0).toUpperCase() + habit.category.slice(1)
-    : "Other";
+    ? t(`categories.${habit.category}`)
+    : t("categories.other");
+  const freqTrans = getFrequencyTranslation(habit.frequency);
+  const frequencyLabel = t(freqTrans.key, freqTrans.params);
 
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -44,7 +46,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
             <div className="min-w-0">
               <h3 className="font-medium truncate">{habit.name}</h3>
               <p className="text-xs text-muted-foreground">
-                {categoryLabel} · {formatFrequency(habit.frequency)}
+                {categoryLabel} · {frequencyLabel}
               </p>
             </div>
           </div>
@@ -62,16 +64,16 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
             <div className="flex items-center justify-center gap-1">
               {habit.current_streak >= 7 && <Flame className="size-4 text-orange-500" />}
               <span className="font-semibold text-sm">
-                {t("streakDays", { count: habit.current_streak })}
+                {t("card.streakDays", { count: habit.current_streak })}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">{t("currentStreak")}</p>
+            <p className="text-xs text-muted-foreground">{t("card.currentStreak")}</p>
           </div>
           <div className="flex-1 rounded-lg border p-2 text-center">
             <span className="font-semibold text-sm">
-              {t("streakDays", { count: habit.best_streak })}
+              {t("card.streakDays", { count: habit.best_streak })}
             </span>
-            <p className="text-xs text-muted-foreground">{t("bestStreak")}</p>
+            <p className="text-xs text-muted-foreground">{t("card.bestStreak")}</p>
           </div>
         </div>
       </CardContent>
