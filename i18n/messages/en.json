@@ -409,6 +409,12 @@
             "search": "Search timezone...",
             "noResults": "No timezone found"
         },
+        "weekStart": {
+            "title": "Week Starts On",
+            "description": "Choose when your week begins for statistics and calendar views",
+            "sunday": "Sunday",
+            "monday": "Monday"
+        },
         "toast": {
             "saveError": "Failed to save settings"
         }

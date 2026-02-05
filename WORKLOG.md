@@ -6,7 +6,7 @@ Track daily changes and progress on the BetterR.me project.
 ### Epic 7: Settings & Polish (In Progress)
 
 #### Pull Requests Created
-- **PR #115**: Add timezone selector to Settings page (SET-001)
+- **PR #115**: Add timezone selector to Settings page (SET-001) - MERGED
   - Created `/dashboard/settings` page with timezone configuration
   - Added TimezoneSelector component with searchable dropdown (Command/Popover pattern)
   - Added Settings link to main navigation
@@ -15,8 +15,16 @@ Track daily changes and progress on the BetterR.me project.
   - 12 tests for TimezoneSelector component
   - Uses existing `/api/profile/preferences` endpoint for persistence
 
+- **PR #116**: Add week start day setting (SET-002)
+  - Added WeekStartSelector component with Sunday/Monday toggle
+  - Integrated into Settings page below timezone
+  - Full i18n support (en, zh, zh-TW)
+  - 9 tests for WeekStartSelector component
+  - Stores preference as week_start_day (0=Sunday, 1=Monday)
+
 #### Issues Addressed
 - #100: SET-001 - Add timezone selector to Settings UI
+- #101: SET-002 - Add week start day setting
 
 #### Technical Notes
 - Used `Intl.supportedValuesOf("timeZone")` for IANA timezone list
