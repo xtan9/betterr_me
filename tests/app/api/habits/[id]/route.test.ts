@@ -172,7 +172,7 @@ describe('DELETE /api/habits/[id]', () => {
   });
 
   it('should hard delete a habit', async () => {
-    mockDeleteHabit.mockResolvedValue();
+    mockDeleteHabit.mockResolvedValue(undefined);
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
       method: 'DELETE',
