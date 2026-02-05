@@ -140,6 +140,29 @@
             "productivity": "效率",
             "other": "其他"
         },
+        "heatmap": {
+            "title": "最近30天",
+            "completed": "已完成",
+            "missed": "未完成",
+            "notScheduled": "非計畫日",
+            "today": "今天",
+            "cannotEdit": "無法編輯超過7天前的紀錄",
+            "clickToToggle": "點擊切換",
+            "days": {
+                "sun": "週日",
+                "mon": "週一",
+                "tue": "週二",
+                "wed": "週三",
+                "thu": "週四",
+                "fri": "週五",
+                "sat": "週六"
+            },
+            "legend": {
+                "completed": "已完成",
+                "missed": "未完成",
+                "notScheduled": "非計畫日"
+            }
+        },
         "streak": {
             "current": "目前連續",
             "best": "最佳連續",
