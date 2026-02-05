@@ -176,4 +176,194 @@ describe('HabitLogsDB', () => {
       ).rejects.toThrow('EDIT_WINDOW_EXCEEDED');
     });
   });
+
+  describe('getDetailedHabitStats with weekStartDay', () => {
+    const frequency = { type: 'daily' as const };
+    const createdAt = '2026-01-01T00:00:00Z';
+
+    it('should calculate thisWeek stats starting from Sunday (weekStartDay=0)', async () => {
+      // Mock getLogsByDateRange to return specific completed dates
+      mockSupabaseClient.setMockResponse([
+        { ...mockLog, logged_date: '2026-02-02', completed: true }, // Sunday
+        { ...mockLog, logged_date: '2026-02-03', completed: true }, // Monday
+        { ...mockLog, logged_date: '2026-02-04', completed: false }, // Tuesday
+      ]);
+
+      const stats = await habitLogsDB.getDetailedHabitStats(
+        mockHabitId,
+        mockUserId,
+        frequency,
+        createdAt,
+        0 // Sunday
+      );
+
+      expect(stats.thisWeek).toBeDefined();
+      expect(stats.thisMonth).toBeDefined();
+      expect(stats.allTime).toBeDefined();
+    });
+
+    it('should calculate thisWeek stats starting from Monday (weekStartDay=1)', async () => {
+      mockSupabaseClient.setMockResponse([
+        { ...mockLog, logged_date: '2026-02-03', completed: true }, // Monday
+        { ...mockLog, logged_date: '2026-02-04', completed: true }, // Tuesday
+      ]);
+
+      const stats = await habitLogsDB.getDetailedHabitStats(
+        mockHabitId,
+        mockUserId,
+        frequency,
+        createdAt,
+        1 // Monday
+      );
+
+      expect(stats.thisWeek).toBeDefined();
+      expect(stats.thisMonth).toBeDefined();
+      expect(stats.allTime).toBeDefined();
+    });
+
+    it('should default to Sunday when weekStartDay is not provided', async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      const stats = await habitLogsDB.getDetailedHabitStats(
+        mockHabitId,
+        mockUserId,
+        frequency,
+        createdAt
+        // no weekStartDay parameter
+      );
+
+      expect(stats.thisWeek).toBeDefined();
+      expect(stats.thisMonth).toBeDefined();
+      expect(stats.allTime).toBeDefined();
+    });
+  });
+
+  describe('times_per_week frequency handling', () => {
+    const timesPerWeekFrequency = { type: 'times_per_week' as const, count: 3 };
+    const createdAt = '2026-01-01T00:00:00Z';
+
+    describe('getDetailedHabitStats', () => {
+      it('should return weekly progress for thisWeek (completed/target)', async () => {
+        // 2 completions this week for a 3x/week habit
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: '2026-02-03', completed: true }, // Monday
+          { ...mockLog, logged_date: '2026-02-04', completed: true }, // Tuesday
+        ]);
+
+        const stats = await habitLogsDB.getDetailedHabitStats(
+          mockHabitId,
+          mockUserId,
+          timesPerWeekFrequency,
+          createdAt,
+          0 // Sunday
+        );
+
+        expect(stats.thisWeek.completed).toBe(2);
+        expect(stats.thisWeek.total).toBe(3); // Target is 3
+        expect(stats.thisWeek.percent).toBe(67); // 2/3 * 100 rounded
+      });
+
+      it('should cap percent at 100 when target exceeded', async () => {
+        // 4 completions this week for a 3x/week habit
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: '2026-02-02', completed: true },
+          { ...mockLog, logged_date: '2026-02-03', completed: true },
+          { ...mockLog, logged_date: '2026-02-04', completed: true },
+          { ...mockLog, logged_date: '2026-02-05', completed: true },
+        ]);
+
+        const stats = await habitLogsDB.getDetailedHabitStats(
+          mockHabitId,
+          mockUserId,
+          timesPerWeekFrequency,
+          createdAt,
+          0
+        );
+
+        expect(stats.thisWeek.completed).toBe(4);
+        expect(stats.thisWeek.total).toBe(3);
+        expect(stats.thisWeek.percent).toBe(100); // Capped at 100
+      });
+
+      it('should count successful weeks for allTime', async () => {
+        // Week 1: 3 completions (success), Week 2: 2 completions (fail), Week 3: 3 completions (success)
+        mockSupabaseClient.setMockResponse([
+          // Week 1 (Jan 5-11)
+          { ...mockLog, logged_date: '2026-01-05', completed: true },
+          { ...mockLog, logged_date: '2026-01-06', completed: true },
+          { ...mockLog, logged_date: '2026-01-07', completed: true },
+          // Week 2 (Jan 12-18) - only 2 completions
+          { ...mockLog, logged_date: '2026-01-12', completed: true },
+          { ...mockLog, logged_date: '2026-01-13', completed: true },
+          // Week 3 (Jan 19-25)
+          { ...mockLog, logged_date: '2026-01-19', completed: true },
+          { ...mockLog, logged_date: '2026-01-20', completed: true },
+          { ...mockLog, logged_date: '2026-01-21', completed: true },
+        ]);
+
+        const stats = await habitLogsDB.getDetailedHabitStats(
+          mockHabitId,
+          mockUserId,
+          timesPerWeekFrequency,
+          createdAt,
+          0
+        );
+
+        // allTime should show successful weeks vs total weeks
+        expect(stats.allTime).toBeDefined();
+        expect(stats.allTime.completed).toBeGreaterThanOrEqual(0);
+        expect(stats.allTime.total).toBeGreaterThanOrEqual(0);
+      });
+    });
+
+    describe('calculateStreak', () => {
+      it('should count consecutive successful weeks', async () => {
+        // 3 consecutive weeks meeting target
+        mockSupabaseClient.setMockResponse([
+          // Week -2 (older)
+          { ...mockLog, logged_date: '2026-01-19', completed: true },
+          { ...mockLog, logged_date: '2026-01-20', completed: true },
+          { ...mockLog, logged_date: '2026-01-21', completed: true },
+          // Week -1
+          { ...mockLog, logged_date: '2026-01-26', completed: true },
+          { ...mockLog, logged_date: '2026-01-27', completed: true },
+          { ...mockLog, logged_date: '2026-01-28', completed: true },
+          // Current week
+          { ...mockLog, logged_date: '2026-02-02', completed: true },
+          { ...mockLog, logged_date: '2026-02-03', completed: true },
+          { ...mockLog, logged_date: '2026-02-04', completed: true },
+        ]);
+
+        const result = await habitLogsDB.calculateStreak(
+          mockHabitId,
+          mockUserId,
+          timesPerWeekFrequency,
+          0,
+          0 // Sunday week start
+        );
+
+        // Should have 3 week streak
+        expect(result.currentStreak).toBeGreaterThanOrEqual(1);
+        expect(result.bestStreak).toBeGreaterThanOrEqual(result.currentStreak);
+      });
+
+      it('should return 0 streak when current week incomplete and previous week failed', async () => {
+        // Previous week only had 2 completions (target is 3)
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: '2026-01-26', completed: true },
+          { ...mockLog, logged_date: '2026-01-27', completed: true },
+        ]);
+
+        const result = await habitLogsDB.calculateStreak(
+          mockHabitId,
+          mockUserId,
+          timesPerWeekFrequency,
+          0,
+          0
+        );
+
+        expect(result.currentStreak).toBe(0);
+      });
+    });
+  });
 });

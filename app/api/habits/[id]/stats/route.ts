@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { HabitsDB, HabitLogsDB } from '@/lib/db';
+import { HabitsDB, HabitLogsDB, ProfilesDB } from '@/lib/db';
 
 /**
  * GET /api/habits/[id]/stats
@@ -23,6 +23,7 @@ export async function GET(
 
     const habitsDB = new HabitsDB(supabase);
     const habitLogsDB = new HabitLogsDB(supabase);
+    const profilesDB = new ProfilesDB(supabase);
 
     // Get habit
     const habit = await habitsDB.getHabit(habitId, user.id);
@@ -30,12 +31,17 @@ export async function GET(
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
 
+    // Get user's week start day preference (default to Sunday = 0)
+    const profile = await profilesDB.getProfile(user.id);
+    const weekStartDay = profile?.preferences?.week_start_day ?? 0;
+
     // Get detailed completion stats
     const detailedStats = await habitLogsDB.getDetailedHabitStats(
       habitId,
       user.id,
       habit.frequency,
-      habit.created_at
+      habit.created_at,
+      weekStartDay
     );
 
     return NextResponse.json({

@@ -1,8 +1,13 @@
 import { createClient } from '@/lib/supabase/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Profile, ProfileUpdate } from './types';
 
 export class ProfilesDB {
-  private supabase = createClient();
+  private supabase: SupabaseClient;
+
+  constructor(supabase?: SupabaseClient) {
+    this.supabase = supabase || createClient();
+  }
 
   /**
    * Get user profile
