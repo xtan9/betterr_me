@@ -1,6 +1,6 @@
 import { AppLayout } from "@/components/layouts/app-layout";
 
-export default function DashboardLayout({
+export default function HabitsLayout({
   children,
 }: {
   children: React.ReactNode;

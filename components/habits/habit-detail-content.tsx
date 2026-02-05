@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   Edit,
@@ -153,24 +154,27 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       });
       mutateLogs();
       mutateHabit();
-    } catch (error) {
-      console.error("Failed to toggle habit:", error);
+    } catch {
+      toast.error(t("toast.updateError"));
     }
   };
 
   const handlePause = async () => {
     if (!habit) return;
+    const isPausing = habit.status !== "paused";
     try {
-      await fetch(`/api/habits/${habitId}`, {
+      const response = await fetch(`/api/habits/${habitId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: habit.status === "paused" ? "active" : "paused",
+          status: isPausing ? "paused" : "active",
         }),
       });
+      if (!response.ok) throw new Error("Failed to update");
       mutateHabit();
-    } catch (error) {
-      console.error("Failed to update habit status:", error);
+      toast.success(isPausing ? t("toast.pauseSuccess") : t("toast.resumeSuccess"));
+    } catch {
+      toast.error(isPausing ? t("toast.pauseError") : t("toast.resumeError"));
     }
   };
 
@@ -178,12 +182,14 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     const confirmed = window.confirm(t("detail.confirmArchive"));
     if (!confirmed) return;
     try {
-      await fetch(`/api/habits/${habitId}?archive=true`, {
+      const response = await fetch(`/api/habits/${habitId}?archive=true`, {
         method: "DELETE",
       });
+      if (!response.ok) throw new Error("Failed to archive");
+      toast.success(t("toast.archiveSuccess"));
       router.push("/habits");
-    } catch (error) {
-      console.error("Failed to archive habit:", error);
+    } catch {
+      toast.error(t("toast.archiveError"));
     }
   };
 
@@ -191,12 +197,14 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     const confirmed = window.confirm(t("detail.confirmDelete"));
     if (!confirmed) return;
     try {
-      await fetch(`/api/habits/${habitId}`, {
+      const response = await fetch(`/api/habits/${habitId}`, {
         method: "DELETE",
       });
+      if (!response.ok) throw new Error("Failed to delete");
+      toast.success(t("toast.deleteSuccess"));
       router.push("/habits");
-    } catch (error) {
-      console.error("Failed to delete habit:", error);
+    } catch {
+      toast.error(t("toast.deleteError"));
     }
   };
 
