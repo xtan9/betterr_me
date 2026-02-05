@@ -104,6 +104,17 @@
             "allComplete": "全部完成！",
             "noHabits": "还没有习惯",
             "createFirst": "创建你的第一个习惯"
+        },
+        "tasks": {
+            "title": "今日任务",
+            "addTask": "添加任务",
+            "completed": "已完成 {completed}/{total}",
+            "overdue": "已逾期",
+            "dueAt": "截止 {time}",
+            "allDay": "全天",
+            "noTasks": "今天没有任务",
+            "createFirst": "添加任务",
+            "allComplete": "全部完成！"
         }
     },
     "habits": {

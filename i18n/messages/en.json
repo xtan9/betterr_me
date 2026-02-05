@@ -104,6 +104,17 @@
             "allComplete": "All habits complete!",
             "noHabits": "No habits yet",
             "createFirst": "Create your first habit"
+        },
+        "tasks": {
+            "title": "Today's Tasks",
+            "addTask": "Add Task",
+            "completed": "{completed} of {total} completed",
+            "overdue": "Overdue",
+            "dueAt": "Due {time}",
+            "allDay": "All day",
+            "noTasks": "No tasks for today",
+            "createFirst": "Add a task",
+            "allComplete": "All tasks done!"
         }
     },
     "habits": {
