@@ -115,6 +115,15 @@
             "noTasks": "今天沒有任務",
             "createFirst": "新增任務",
             "allComplete": "全部完成！"
+        },
+        "motivation": {
+            "firstDay": "歡迎！成為更好自己的旅程從今天開始。🌟",
+            "allComplete": "完美的一天！你已完成所有習慣。🎉",
+            "streakAtRisk": "你的{habitName}連續記錄已達{count}天 - 不要中斷它！🔥",
+            "almostDone": "還有{remaining}個就完成了！你可以的！💪",
+            "halfway": "已完成一半！保持勢頭。🚀",
+            "gettingStarted": "每完成一個習慣都讓你更接近最好的自己。✨",
+            "noHabits": "準備開始養成更好的習慣了嗎？新增你的第一個！🌱"
         }
     },
     "habits": {

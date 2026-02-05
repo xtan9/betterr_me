@@ -115,6 +115,15 @@
             "noTasks": "No tasks for today",
             "createFirst": "Add a task",
             "allComplete": "All tasks done!"
+        },
+        "motivation": {
+            "firstDay": "Welcome! Your journey to becoming better starts today. 🌟",
+            "allComplete": "Perfect day! You've completed all your habits. 🎉",
+            "streakAtRisk": "Your {habitName} streak is at {count} days - don't break it now! 🔥",
+            "almostDone": "Just {remaining} more to go! You've got this! 💪",
+            "halfway": "Halfway there! Keep the momentum going. 🚀",
+            "gettingStarted": "Every habit completed brings you closer to your best self. ✨",
+            "noHabits": "Ready to start building better habits? Add your first one! 🌱"
         }
     },
     "habits": {
