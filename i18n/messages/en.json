@@ -139,6 +139,38 @@
             "learning": "Learning",
             "productivity": "Productivity",
             "other": "Other"
+        },
+        "empty": {
+            "noHabits": {
+                "title": "Start Your Journey",
+                "description": "Track your first habit and build lasting change.",
+                "cta": "Create First Habit"
+            },
+            "allComplete": {
+                "title": "Perfect Day!",
+                "description": "You've completed all your habits today. Amazing work!"
+            },
+            "noResults": {
+                "title": "No habits matching \"{query}\"",
+                "description": "Try a different search term."
+            },
+            "noPaused": {
+                "title": "No paused habits",
+                "description": "Paused habits will appear here."
+            },
+            "noArchived": {
+                "title": "No archived habits",
+                "description": "Archived habits will appear here."
+            }
+        },
+        "list": {
+            "title": "My Habits",
+            "searchPlaceholder": "Search habits...",
+            "tabs": {
+                "active": "Active",
+                "paused": "Paused",
+                "archived": "Archived"
+            }
         }
     },
     "auth": {
