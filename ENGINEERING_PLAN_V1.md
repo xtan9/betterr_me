@@ -1007,7 +1007,18 @@ jobs:
 | Max habits per user? | Unlimited / 20 / 50 | 20 for V1 (performance) | TBD |
 | Show "vs yesterday" on first day? | Hide / Show "First day!" | Hide and show encouragement | TBD |
 
-### 13.2 Technical Spikes Needed
+### 13.2 Technical Debt & Future Improvements
+
+The following improvements were identified during implementation and should be addressed in future iterations:
+
+| Item | Priority | Description | Issue |
+|------|----------|-------------|-------|
+| Locale-aware week start | P2 | Week stats use Sunday as start (US convention). Add user preference for Monday start. | #95 |
+| Stats API caching | P2 | Cache stats responses for 5 minutes to reduce database load. | #96 |
+| Database optimization for stats | P3 | For habits with years of data, use SQL aggregation instead of fetching all logs. | #97 |
+| "times_per_week" frequency | P2 | Currently treated as daily. Implement proper weekly goal evaluation. | #98 |
+
+### 13.3 Technical Spikes Needed
 
 | Spike | Time | Purpose |
 |-------|------|---------|
@@ -1015,7 +1026,7 @@ jobs:
 | SWR optimistic updates | 1 hour | Confirm pattern for toggle |
 | Supabase RLS testing | 1 hour | Verify policies work as expected |
 
-### 13.3 Dependencies on External
+### 13.4 Dependencies on External
 
 | Dependency | Owner | Status |
 |------------|-------|--------|
@@ -1078,6 +1089,33 @@ A task is "done" when:
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** February 3, 2026
+**Document Version:** 1.1
+**Last Updated:** February 5, 2026
 **Next Review:** After Phase 1 completion
+
+---
+
+## 15. IMPLEMENTATION NOTES
+
+### Stats API (API-008) - Implemented 2026-02-05
+
+The `/api/habits/[id]/stats` endpoint was updated to return detailed stats:
+
+```json
+{
+  "habitId": "...",
+  "currentStreak": 5,
+  "bestStreak": 12,
+  "thisWeek": { "completed": 3, "total": 5, "percent": 60 },
+  "thisMonth": { "completed": 10, "total": 15, "percent": 67 },
+  "allTime": { "completed": 25, "total": 35, "percent": 71 }
+}
+```
+
+**Key implementation details:**
+- Uses `getDetailedHabitStats()` in `lib/db/habit-logs.ts`
+- Frequency-aware: respects weekdays, custom days, etc.
+- Respects habit creation date boundary
+- Week starts on Sunday (US convention)
+
+See PR #94 for implementation.

@@ -4,10 +4,7 @@ import { habitsDB, habitLogsDB } from '@/lib/db';
 
 /**
  * GET /api/habits/[id]/stats
- * Get statistics for a habit
- *
- * Query parameters:
- * - days: number - period to calculate stats for (default: 30)
+ * Get detailed statistics for a habit including thisWeek, thisMonth, and allTime
  */
 export async function GET(
   request: NextRequest,
@@ -30,25 +27,19 @@ export async function GET(
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
 
-    const searchParams = request.nextUrl.searchParams;
-    const days = parseInt(searchParams.get('days') || '30');
-
-    if (isNaN(days) || days < 1 || days > 365) {
-      return NextResponse.json(
-        { error: 'Days must be between 1 and 365' },
-        { status: 400 }
-      );
-    }
-
-    // Get completion stats
-    const stats = await habitLogsDB.getHabitStats(habitId, user.id, days);
+    // Get detailed completion stats
+    const detailedStats = await habitLogsDB.getDetailedHabitStats(
+      habitId,
+      user.id,
+      habit.frequency,
+      habit.created_at
+    );
 
     return NextResponse.json({
       habitId,
-      period: days,
       currentStreak: habit.current_streak,
       bestStreak: habit.best_streak,
-      ...stats,
+      ...detailedStats,
     });
   } catch (error) {
     console.error('GET /api/habits/[id]/stats error:', error);
