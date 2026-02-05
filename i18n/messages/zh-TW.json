@@ -6,6 +6,7 @@
             "signOut": "登出",
             "dashboard": "儀表板",
             "habits": "習慣",
+            "settings": "設定",
             "learnMore": "了解更多"
         },
         "footer": {
@@ -394,6 +395,19 @@
         "errors": {
             "generic": "發生了錯誤",
             "tryAgain": "請重試"
+        }
+    },
+    "settings": {
+        "title": "設定",
+        "error": "載入設定失敗",
+        "save": "儲存",
+        "saved": "已儲存",
+        "timezone": {
+            "title": "時區",
+            "description": "設定你的當地時區以便準確追蹤習慣",
+            "placeholder": "選擇時區",
+            "search": "搜尋時區...",
+            "noResults": "找不到時區"
         }
     }
 }
