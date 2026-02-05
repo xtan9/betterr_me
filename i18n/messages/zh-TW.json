@@ -85,7 +85,46 @@
         "welcome": "歡迎來到你的個人儀表板",
         "profile": "你的個人資料",
         "email": "電子郵件",
-        "accountCreated": "帳戶建立時間"
+        "accountCreated": "帳戶建立時間",
+        "snapshot": {
+            "title": "今日概覽",
+            "activeHabits": "活躍習慣",
+            "todaysProgress": "今日進度",
+            "currentStreak": "當前連續",
+            "completionRate": "完成率 {percent}%",
+            "days": "{count} 天",
+            "vsYesterday": "較昨日 {change}%",
+            "fromLastWeek": "較上週 +{count}"
+        },
+        "habits": {
+            "title": "今日習慣",
+            "addHabit": "新增習慣",
+            "completed": "已完成 {completed}/{total}",
+            "moreToGo": "還有 {count} 個待完成！",
+            "allComplete": "全部完成！",
+            "noHabits": "還沒有習慣",
+            "createFirst": "建立你的第一個習慣"
+        },
+        "tasks": {
+            "title": "今日任務",
+            "addTask": "新增任務",
+            "completed": "已完成 {completed}/{total}",
+            "overdue": "已逾期",
+            "dueAt": "截止 {time}",
+            "allDay": "全天",
+            "noTasks": "今天沒有任務",
+            "createFirst": "新增任務",
+            "allComplete": "全部完成！"
+        },
+        "motivation": {
+            "firstDay": "歡迎！成為更好自己的旅程從今天開始。🌟",
+            "allComplete": "完美的一天！你已完成所有習慣。🎉",
+            "streakAtRisk": "你的{habitName}連續記錄已達{count}天 - 不要中斷它！🔥",
+            "almostDone": "還有{remaining}個就完成了！你可以的！💪",
+            "halfway": "已完成一半！保持勢頭。🚀",
+            "gettingStarted": "每完成一個習慣都讓你更接近最好的自己。✨",
+            "noHabits": "準備開始養成更好的習慣了嗎？新增你的第一個！🌱"
+        }
     },
     "habits": {
         "frequency": {

@@ -85,7 +85,46 @@
         "welcome": "Welcome to your personal dashboard",
         "profile": "Your Profile",
         "email": "Email",
-        "accountCreated": "Account Created"
+        "accountCreated": "Account Created",
+        "snapshot": {
+            "title": "Today's Snapshot",
+            "activeHabits": "Active Habits",
+            "todaysProgress": "Today's Progress",
+            "currentStreak": "Current Streak",
+            "completionRate": "{percent}% completion rate",
+            "days": "{count} days",
+            "vsYesterday": "{change}% vs yesterday",
+            "fromLastWeek": "+{count} from last week"
+        },
+        "habits": {
+            "title": "Today's Habits",
+            "addHabit": "Add Habit",
+            "completed": "{completed} of {total} completed",
+            "moreToGo": "{count} more to go!",
+            "allComplete": "All habits complete!",
+            "noHabits": "No habits yet",
+            "createFirst": "Create your first habit"
+        },
+        "tasks": {
+            "title": "Today's Tasks",
+            "addTask": "Add Task",
+            "completed": "{completed} of {total} completed",
+            "overdue": "Overdue",
+            "dueAt": "Due {time}",
+            "allDay": "All day",
+            "noTasks": "No tasks for today",
+            "createFirst": "Add a task",
+            "allComplete": "All tasks done!"
+        },
+        "motivation": {
+            "firstDay": "Welcome! Your journey to becoming better starts today. 🌟",
+            "allComplete": "Perfect day! You've completed all your habits. 🎉",
+            "streakAtRisk": "Your {habitName} streak is at {count} days - don't break it now! 🔥",
+            "almostDone": "Just {remaining} more to go! You've got this! 💪",
+            "halfway": "Halfway there! Keep the momentum going. 🚀",
+            "gettingStarted": "Every habit completed brings you closer to your best self. ✨",
+            "noHabits": "Ready to start building better habits? Add your first one! 🌱"
+        }
     },
     "habits": {
         "frequency": {
