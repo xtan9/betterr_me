@@ -248,6 +248,16 @@
                 "paused": "已暂停",
                 "archived": "已归档"
             }
+        },
+        "toast": {
+            "createSuccess": "习惯创建成功",
+            "createError": "创建习惯失败",
+            "updateSuccess": "习惯更新成功",
+            "updateError": "更新习惯失败"
+        },
+        "error": {
+            "title": "出了点问题",
+            "retry": "重试"
         }
     },
     "auth": {

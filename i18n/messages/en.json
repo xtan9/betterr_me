@@ -248,6 +248,16 @@
                 "paused": "Paused",
                 "archived": "Archived"
             }
+        },
+        "toast": {
+            "createSuccess": "Habit created successfully",
+            "createError": "Failed to create habit",
+            "updateSuccess": "Habit updated successfully",
+            "updateError": "Failed to update habit"
+        },
+        "error": {
+            "title": "Something went wrong",
+            "retry": "Try again"
         }
     },
     "auth": {

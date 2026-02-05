@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -80,9 +81,10 @@ export function EditHabitContent({ habitId }: EditHabitContentProps) {
       }
 
       await mutate();
+      toast.success(t("toast.updateSuccess"));
       router.back();
     } catch (error) {
-      console.error("Error updating habit:", error);
+      toast.error(t("toast.updateError"));
       throw error;
     } finally {
       setIsSubmitting(false);

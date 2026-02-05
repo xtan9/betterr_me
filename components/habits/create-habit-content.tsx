@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { HabitForm } from "@/components/habits/habit-form";
 import type { HabitFormValues } from "@/lib/validations/habit";
 
 export function CreateHabitContent() {
   const router = useRouter();
+  const t = useTranslations("habits");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (data: HabitFormValues) => {
@@ -22,9 +25,10 @@ export function CreateHabitContent() {
         throw new Error("Failed to create habit");
       }
 
+      toast.success(t("toast.createSuccess"));
       router.push("/habits");
     } catch (error) {
-      console.error("Error creating habit:", error);
+      toast.error(t("toast.createError"));
       throw error;
     } finally {
       setIsLoading(false);
