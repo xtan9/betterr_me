@@ -5,6 +5,7 @@
             "signIn": "登入",
             "signOut": "登出",
             "dashboard": "儀表板",
+            "habits": "習慣",
             "learnMore": "了解更多"
         },
         "footer": {
@@ -82,10 +83,27 @@
         }
     },
     "dashboard": {
-        "welcome": "歡迎來到你的個人儀表板",
+        "greeting": {
+            "morning": "早安",
+            "afternoon": "午安",
+            "evening": "晚安"
+        },
+        "welcome": "準備好今天變得更好了嗎？來看看你的進度吧。",
         "profile": "你的個人資料",
         "email": "電子郵件",
         "accountCreated": "帳戶建立時間",
+        "empty": {
+            "title": "歡迎來到 BetterR.Me！",
+            "subtitle": "開始你的成長之旅。建立你的第一個習慣，開始追蹤你的進度。",
+            "createHabit": "建立你的第一個習慣"
+        },
+        "loading": {
+            "title": "正在載入你的儀表板..."
+        },
+        "error": {
+            "title": "出了點問題",
+            "retry": "重試"
+        },
         "snapshot": {
             "title": "今日概覽",
             "activeHabits": "活躍習慣",
@@ -249,15 +267,57 @@
                 "archived": "已封存"
             }
         },
+        "page": {
+            "title": "我的習慣",
+            "createButton": "建立習慣"
+        },
+        "detail": {
+            "backToHabits": "返回習慣列表",
+            "edit": "編輯",
+            "status": {
+                "active": "進行中",
+                "paused": "已暫停",
+                "archived": "已封存"
+            },
+            "completion": {
+                "title": "完成率",
+                "thisWeek": "本週",
+                "thisMonth": "本月",
+                "allTime": "總計",
+                "days": "{completed}/{total} 天",
+                "percent": "{percent}%"
+            },
+            "actions": {
+                "pause": "暫停習慣",
+                "resume": "恢復習慣",
+                "archive": "封存習慣",
+                "delete": "刪除習慣"
+            },
+            "confirmArchive": "確定要封存這個習慣嗎？",
+            "confirmDelete": "確定要刪除這個習慣嗎？此操作無法復原。",
+            "cannotEditOldLogs": "無法編輯超過7天的紀錄",
+            "notFound": "習慣未找到"
+        },
         "toast": {
             "createSuccess": "習慣建立成功",
             "createError": "建立習慣失敗",
             "updateSuccess": "習慣更新成功",
-            "updateError": "更新習慣失敗"
+            "updateError": "更新習慣失敗",
+            "pauseSuccess": "習慣已暫停",
+            "pauseError": "暫停習慣失敗",
+            "resumeSuccess": "習慣已恢復",
+            "resumeError": "恢復習慣失敗",
+            "archiveSuccess": "習慣已封存",
+            "archiveError": "封存習慣失敗",
+            "deleteSuccess": "習慣已刪除",
+            "deleteError": "刪除習慣失敗"
         },
         "error": {
-            "title": "出了點問題",
+            "title": "載入習慣失敗",
             "retry": "重試"
+        },
+        "loading": {
+            "title": "正在載入習慣..."
         }
     },
     "auth": {
