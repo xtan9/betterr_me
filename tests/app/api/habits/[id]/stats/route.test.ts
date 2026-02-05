@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from '@/app/api/habits/[id]/stats/route';
 import { NextRequest } from 'next/server';
+import { statsCache } from '@/lib/cache';
 
 const { mockGetHabit, mockGetDetailedHabitStats, mockGetProfile } = vi.hoisted(() => ({
   mockGetHabit: vi.fn(),
@@ -53,6 +54,7 @@ const params = Promise.resolve({ id: 'habit-1' });
 describe('GET /api/habits/[id]/stats', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    statsCache.clear(); // Clear cache between tests
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
     } as any);
@@ -165,5 +167,52 @@ describe('GET /api/habits/[id]/stats', () => {
     expect(response.status).toBe(500);
     const data = await response.json();
     expect(data.error).toBe('Failed to fetch stats');
+  });
+
+  describe('caching', () => {
+    it('should include Cache-Control headers with MISS on first request', async () => {
+      mockGetHabit.mockResolvedValue(mockHabit as any);
+      mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
+
+      const request = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
+      const response = await GET(request, { params });
+
+      expect(response.headers.get('Cache-Control')).toBe('private, max-age=300');
+      expect(response.headers.get('X-Cache')).toBe('MISS');
+    });
+
+    it('should return cached response with HIT on subsequent requests', async () => {
+      mockGetHabit.mockResolvedValue(mockHabit as any);
+      mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
+
+      // First request - should be a cache miss
+      const request1 = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
+      const response1 = await GET(request1, { params });
+      expect(response1.headers.get('X-Cache')).toBe('MISS');
+
+      // Second request - should be a cache hit
+      const request2 = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
+      const response2 = await GET(request2, { params });
+      expect(response2.headers.get('X-Cache')).toBe('HIT');
+
+      // Should not call the DB again for the second request
+      expect(mockGetHabit).toHaveBeenCalledTimes(1);
+      expect(mockGetDetailedHabitStats).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return same data from cache', async () => {
+      mockGetHabit.mockResolvedValue(mockHabit as any);
+      mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
+
+      const request1 = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
+      const response1 = await GET(request1, { params });
+      const data1 = await response1.json();
+
+      const request2 = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
+      const response2 = await GET(request2, { params });
+      const data2 = await response2.json();
+
+      expect(data1).toEqual(data2);
+    });
   });
 });

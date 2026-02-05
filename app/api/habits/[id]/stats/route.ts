@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB, HabitLogsDB, ProfilesDB } from '@/lib/db';
+import { statsCache, getStatsCacheKey } from '@/lib/cache';
+
+// Cache TTL for HTTP headers (5 minutes in seconds)
+const CACHE_MAX_AGE = 300;
 
 /**
  * GET /api/habits/[id]/stats
  * Get detailed statistics for a habit including thisWeek, thisMonth, and allTime
+ *
+ * Caching:
+ * - HTTP Cache-Control headers for client-side caching (private, 5 min)
+ * - Server-side in-memory cache (5 min TTL)
+ * - Cache is invalidated when habit log is toggled
  */
 export async function GET(
   request: NextRequest,
@@ -19,6 +28,19 @@ export async function GET(
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check server-side cache first
+    const cacheKey = getStatsCacheKey(habitId, user.id);
+    const cachedStats = statsCache.get(cacheKey);
+
+    if (cachedStats) {
+      return NextResponse.json(cachedStats, {
+        headers: {
+          'Cache-Control': `private, max-age=${CACHE_MAX_AGE}`,
+          'X-Cache': 'HIT',
+        },
+      });
     }
 
     const habitsDB = new HabitsDB(supabase);
@@ -44,11 +66,21 @@ export async function GET(
       weekStartDay
     );
 
-    return NextResponse.json({
+    const responseData = {
       habitId,
       currentStreak: habit.current_streak,
       bestStreak: habit.best_streak,
       ...detailedStats,
+    };
+
+    // Store in server-side cache
+    statsCache.set(cacheKey, responseData);
+
+    return NextResponse.json(responseData, {
+      headers: {
+        'Cache-Control': `private, max-age=${CACHE_MAX_AGE}`,
+        'X-Cache': 'MISS',
+      },
     });
   } catch (error) {
     console.error('GET /api/habits/[id]/stats error:', error);
