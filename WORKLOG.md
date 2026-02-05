@@ -2,6 +2,56 @@
 
 Track daily changes and progress on the BetterR.me project.
 
+## 2026-02-05
+### Epic 5: Habit Pages (Complete)
+
+#### Pull Requests Created
+- **PR #86**: Dashboard Integration with Real Data (DASH-005/006/007)
+  - Created DashboardContent client component with SWR data fetching
+  - Added loading skeleton (DASH-007)
+  - Added empty state for new users (DASH-006)
+  - i18n translations for greeting, empty, loading, error states
+  - 5 tests
+
+- **PR #87**: Habits List Page and Navbar Navigation (PG-001, PG-005)
+  - Created HabitsPageContent with tabs (active/paused/archived)
+  - Created MainNav component with active state styling
+  - Updated dashboard and habits layouts
+  - 5 tests
+
+- **PR #88**: Create and Edit Habit Pages (PG-002, PG-004)
+  - `/habits/new` page with CreateHabitContent
+  - `/habits/[id]/edit` page with EditHabitContent
+  - SWR data fetching for edit with loading/error states
+  - 11 tests
+
+- **PR #89**: Habit Detail Page (PG-003)
+  - `/habits/[id]` page with streak counter, stats, heatmap
+  - Pause/Resume, Archive, Delete actions
+  - Reuses StreakCounter and Heatmap30Day components
+  - 7 tests
+
+- **PR #90**: i18n Audit (PG-006)
+  - Fixed hardcoded category and frequency labels
+  - Added getFrequencyTranslation() helper for i18n
+  - Updated habit-card and habit-row components
+
+#### Review Comments Added
+All PRs reviewed with code review notes:
+- Layout duplication between dashboard and habits (follow-up refactor suggested)
+- Error handling uses console.error (toast notifications suggested)
+- Confirmation dialogs use window.confirm (AlertDialog suggested)
+- Mobile navigation hidden (follow-up task)
+
+### Issues Closed by PRs
+- #75, #76, #77 (DASH-005/006/007)
+- #79, #83 (PG-001, PG-005)
+- #80, #82 (PG-002, PG-004)
+- #81 (PG-003)
+- #84 (PG-006)
+
+---
+
 ## 2026-01-31
 - Set up Figma MCP (Model Context Protocol) integration for design-to-code workflow
 - Explored Figma Code Connect capabilities
