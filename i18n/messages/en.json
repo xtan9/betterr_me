@@ -5,6 +5,7 @@
             "signIn": "Sign In",
             "signOut": "Sign Out",
             "dashboard": "Dashboard",
+            "habits": "Habits",
             "learnMore": "Learn More"
         },
         "footer": {
@@ -265,6 +266,17 @@
                 "paused": "Paused",
                 "archived": "Archived"
             }
+        },
+        "page": {
+            "title": "My Habits",
+            "createButton": "Create Habit"
+        },
+        "error": {
+            "title": "Failed to load habits",
+            "retry": "Try again"
+        },
+        "loading": {
+            "title": "Loading habits..."
         }
     },
     "auth": {

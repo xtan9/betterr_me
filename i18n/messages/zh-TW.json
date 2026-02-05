@@ -5,6 +5,7 @@
             "signIn": "登入",
             "signOut": "登出",
             "dashboard": "儀表板",
+            "habits": "習慣",
             "learnMore": "了解更多"
         },
         "footer": {
@@ -265,6 +266,17 @@
                 "paused": "已暫停",
                 "archived": "已封存"
             }
+        },
+        "page": {
+            "title": "我的習慣",
+            "createButton": "建立習慣"
+        },
+        "error": {
+            "title": "載入習慣失敗",
+            "retry": "重試"
+        },
+        "loading": {
+            "title": "正在載入習慣..."
         }
     },
     "auth": {
