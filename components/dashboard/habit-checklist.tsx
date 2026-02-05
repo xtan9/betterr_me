@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -21,6 +22,7 @@ export function HabitChecklist({
   isLoading,
 }: HabitChecklistProps) {
   const t = useTranslations("dashboard.habits");
+  const router = useRouter();
 
   const completedCount = habits.filter((h) => h.completed_today).length;
   const totalCount = habits.length;
@@ -28,8 +30,7 @@ export function HabitChecklist({
   const allComplete = totalCount > 0 && completedCount === totalCount;
 
   const handleHabitClick = (habitId: string) => {
-    // Navigate to habit detail page - will be implemented later
-    console.log("Navigate to habit:", habitId);
+    router.push(`/habits/${habitId}`);
   };
 
   return (

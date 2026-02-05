@@ -207,7 +207,7 @@ describe("TasksToday", () => {
     expect(onCreateTask).toHaveBeenCalled();
   });
 
-  it("shows loading state", () => {
+  it("disables checkboxes when loading", () => {
     const onToggle = vi.fn();
     const onCreateTask = vi.fn();
 
@@ -220,6 +220,9 @@ describe("TasksToday", () => {
       />
     );
 
-    expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes.forEach((checkbox) => {
+      expect(checkbox).toBeDisabled();
+    });
   });
 });

@@ -4,6 +4,15 @@ import { NextIntlClientProvider } from "next-intl";
 import { HabitChecklist } from "@/components/dashboard/habit-checklist";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
+const mockPush = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: mockPush,
+    replace: vi.fn(),
+    back: vi.fn(),
+  }),
+}));
+
 const messages = {
   dashboard: {
     habits: {
@@ -185,7 +194,7 @@ describe("HabitChecklist", () => {
     expect(onCreateHabit).toHaveBeenCalled();
   });
 
-  it("shows loading state with skeletons", () => {
+  it("disables checkboxes when loading", () => {
     const onToggle = vi.fn();
     const onCreateHabit = vi.fn();
 
@@ -198,8 +207,9 @@ describe("HabitChecklist", () => {
       />
     );
 
-    // When loading, should show some loading indicator
-    // (We'll implement this with disabled state or skeleton)
-    expect(screen.getByText("Today's Habits")).toBeInTheDocument();
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes.forEach((checkbox) => {
+      expect(checkbox).toBeDisabled();
+    });
   });
 });

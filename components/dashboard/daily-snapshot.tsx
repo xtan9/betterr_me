@@ -12,6 +12,7 @@ interface StatCardProps {
   trend?: {
     value: number;
     isPositive: boolean;
+    label: string;
   };
 }
 
@@ -38,9 +39,7 @@ function StatCard({ icon, title, value, subtitle, trend }: StatCardProps) {
           ) : (
             <TrendingDown className="size-4" />
           )}
-          <span>
-            {Math.abs(trend.value)}% vs yesterday
-          </span>
+          <span>{trend.label}</span>
         </div>
       )}
     </div>
@@ -71,7 +70,7 @@ export function DailySnapshot({ stats, yesterdayStats }: DailySnapshotProps) {
       : 0;
 
   // Calculate trend vs yesterday
-  let trend: { value: number; isPositive: boolean } | undefined;
+  let trend: { value: number; isPositive: boolean; label: string } | undefined;
   if (yesterdayStats && yesterdayStats.habits_total > 0) {
     const yesterdayRate = Math.round(
       (yesterdayStats.habits_completed / yesterdayStats.habits_total) * 100
@@ -81,6 +80,7 @@ export function DailySnapshot({ stats, yesterdayStats }: DailySnapshotProps) {
       trend = {
         value: Math.abs(change),
         isPositive: change > 0,
+        label: t("vsYesterday", { change: Math.abs(change) }),
       };
     }
   }
