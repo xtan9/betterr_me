@@ -8,7 +8,9 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "perf:lighthouse": "lhci autorun",
+    "perf:bundle": "npx tsx scripts/analyze-bundle.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",

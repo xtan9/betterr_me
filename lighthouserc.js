@@ -1,0 +1,43 @@
+/**
+ * Lighthouse CI configuration
+ * QA-005: Performance audit
+ *
+ * Targets:
+ * - Lighthouse Performance > 90
+ * - FCP < 1.8s
+ * - LCP < 2.5s
+ * - TTI < 3.8s
+ * - CLS < 0.1
+ */
+module.exports = {
+  ci: {
+    collect: {
+      url: [
+        'http://localhost:3000/',
+        'http://localhost:3000/auth/login',
+      ],
+      startServerCommand: 'pnpm start',
+      startServerReadyPattern: 'Ready in',
+      numberOfRuns: 3,
+      settings: {
+        preset: 'desktop',
+        onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo'],
+      },
+    },
+    assert: {
+      assertions: {
+        'categories:performance': ['error', { minScore: 0.9 }],
+        'categories:accessibility': ['warn', { minScore: 0.9 }],
+        'categories:best-practices': ['warn', { minScore: 0.9 }],
+        'first-contentful-paint': ['error', { maxNumericValue: 1800 }],
+        'largest-contentful-paint': ['error', { maxNumericValue: 2500 }],
+        'interactive': ['error', { maxNumericValue: 3800 }],
+        'cumulative-layout-shift': ['error', { maxNumericValue: 0.1 }],
+        'total-blocking-time': ['warn', { maxNumericValue: 200 }],
+      },
+    },
+    upload: {
+      target: 'temporary-public-storage',
+    },
+  },
+};
