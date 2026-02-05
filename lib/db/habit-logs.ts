@@ -476,7 +476,7 @@ export class HabitLogsDB {
 
       // Find the first week start that's >= rangeStart and >= habitCreatedAt
       const effectiveStart = rangeStart > habitCreatedAt ? rangeStart : habitCreatedAt;
-      let checkWeekStart = getWeekStart(effectiveStart, weekStartDay);
+      const checkWeekStart = getWeekStart(effectiveStart, weekStartDay);
 
       // If the effective start is after the week start, move to next week
       if (effectiveStart > checkWeekStart) {
