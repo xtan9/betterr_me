@@ -408,6 +408,9 @@
             "placeholder": "選擇時區",
             "search": "搜尋時區...",
             "noResults": "找不到時區"
+        },
+        "toast": {
+            "saveError": "儲存設定失敗"
         }
     }
 }

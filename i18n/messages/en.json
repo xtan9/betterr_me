@@ -408,6 +408,9 @@
             "placeholder": "Select timezone",
             "search": "Search timezone...",
             "noResults": "No timezone found"
+        },
+        "toast": {
+            "saveError": "Failed to save settings"
         }
     }
 }

@@ -19,12 +19,24 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-// Get all supported timezones
-const getAllTimezones = (): { value: string; label: string; offset: string }[] => {
+interface TimezoneOption {
+  value: string;
+  label: string;
+  offset: string;
+}
+
+// Lazy-loaded timezone cache for better initial bundle performance
+let timezonesCache: TimezoneOption[] | null = null;
+
+const getTimezones = (): TimezoneOption[] => {
+  if (timezonesCache) {
+    return timezonesCache;
+  }
+
   const timezones = Intl.supportedValuesOf("timeZone");
   const now = new Date();
 
-  return timezones.map((tz) => {
+  timezonesCache = timezones.map((tz) => {
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: tz,
       timeZoneName: "shortOffset",
@@ -42,9 +54,9 @@ const getAllTimezones = (): { value: string; label: string; offset: string }[] =
       offset,
     };
   });
-};
 
-const TIMEZONES = getAllTimezones();
+  return timezonesCache;
+};
 
 interface TimezoneSelectorProps {
   value: string;
@@ -60,7 +72,9 @@ export function TimezoneSelector({
   const [open, setOpen] = React.useState(false);
   const t = useTranslations("settings.timezone");
 
-  const selectedTimezone = TIMEZONES.find((tz) => tz.value === value);
+  // Lazy load timezones when component is used
+  const timezones = React.useMemo(() => getTimezones(), []);
+  const selectedTimezone = timezones.find((tz) => tz.value === value);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -88,7 +102,7 @@ export function TimezoneSelector({
           <CommandList>
             <CommandEmpty>{t("noResults")}</CommandEmpty>
             <CommandGroup>
-              {TIMEZONES.map((tz) => (
+              {timezones.map((tz) => (
                 <CommandItem
                   key={tz.value}
                   value={`${tz.value} ${tz.label}`}

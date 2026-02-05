@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TimezoneSelector } from "./timezone-selector";
-import { Loader2, Save } from "lucide-react";
+import { CheckCircle, Loader2, Save } from "lucide-react";
+import { toast } from "sonner";
 
 interface Profile {
   id: string;
@@ -61,6 +62,7 @@ export function SettingsContent() {
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       console.error("Failed to save settings:", err);
+      toast.error(t("toast.saveError"));
     } finally {
       setIsSaving(false);
     }
@@ -92,6 +94,8 @@ export function SettingsContent() {
         >
           {isSaving ? (
             <Loader2 className="h-4 w-4 animate-spin" />
+          ) : saveSuccess ? (
+            <CheckCircle className="h-4 w-4 text-green-500" />
           ) : (
             <Save className="h-4 w-4" />
           )}
