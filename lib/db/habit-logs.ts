@@ -3,6 +3,26 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HabitLog, HabitLogInsert, HabitFrequency } from './types';
 import { HabitsDB } from './habits';
 
+/**
+ * Get the start of a week for a given date based on week start preference
+ */
+function getWeekStart(date: Date, weekStartDay: number = 0): Date {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  const currentDayOfWeek = result.getDay();
+  const daysToSubtract = (currentDayOfWeek - weekStartDay + 7) % 7;
+  result.setDate(result.getDate() - daysToSubtract);
+  return result;
+}
+
+/**
+ * Get a week identifier string for grouping (YYYY-WW format based on week start)
+ */
+function getWeekKey(date: Date, weekStartDay: number = 0): string {
+  const weekStart = getWeekStart(date, weekStartDay);
+  return weekStart.toISOString().split('T')[0];
+}
+
 export class HabitLogsDB {
   private supabase: SupabaseClient;
   private habitsDB: HabitsDB;
@@ -132,15 +152,18 @@ export class HabitLogsDB {
 
   /**
    * Calculate the current streak for a habit based on frequency
+   * @param weekStartDay - 0 for Sunday (default), 1 for Monday - used for times_per_week
    */
   async calculateStreak(
     habitId: string,
     userId: string,
     frequency: HabitFrequency,
-    previousBestStreak: number = 0
+    previousBestStreak: number = 0,
+    weekStartDay: number = 0
   ): Promise<{ currentStreak: number; bestStreak: number }> {
     // Get all logs for the past 365 days (max streak calculation window)
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const startDate = new Date(today);
     startDate.setDate(startDate.getDate() - 365);
 
@@ -156,7 +179,12 @@ export class HabitLogsDB {
       logs.filter(log => log.completed).map(log => log.logged_date)
     );
 
-    // Calculate streak based on frequency type
+    // Special handling for times_per_week: count consecutive successful weeks
+    if (frequency.type === 'times_per_week') {
+      return this.calculateWeeklyStreak(completedDates, frequency.count, weekStartDay, today, previousBestStreak);
+    }
+
+    // Calculate streak based on frequency type (daily/weekdays/weekly/custom)
     let currentStreak = 0;
     const checkDate = new Date(today);
 
@@ -186,6 +214,70 @@ export class HabitLogsDB {
 
     const bestStreak = Math.max(currentStreak, previousBestStreak);
 
+    return { currentStreak, bestStreak };
+  }
+
+  /**
+   * Calculate streak for times_per_week habits based on consecutive successful weeks
+   */
+  private calculateWeeklyStreak(
+    completedDates: Set<string>,
+    targetPerWeek: number,
+    weekStartDay: number,
+    today: Date,
+    previousBestStreak: number
+  ): { currentStreak: number; bestStreak: number } {
+    // Group completions by week
+    const weekCompletions = new Map<string, number>();
+
+    for (const dateStr of completedDates) {
+      const date = new Date(dateStr);
+      const weekKey = getWeekKey(date, weekStartDay);
+      weekCompletions.set(weekKey, (weekCompletions.get(weekKey) || 0) + 1);
+    }
+
+    // Count consecutive successful weeks starting from current week
+    let currentStreak = 0;
+    const checkWeekStart = getWeekStart(today, weekStartDay);
+    const currentWeekKey = checkWeekStart.toISOString().split('T')[0];
+
+    // Check if current week is complete (for ongoing week, don't break streak if not yet met)
+    const currentWeekCompletions = weekCompletions.get(currentWeekKey) || 0;
+    const isCurrentWeekInProgress = today.getDay() !== (weekStartDay + 6) % 7; // Not last day of week
+
+    if (currentWeekCompletions >= targetPerWeek) {
+      currentStreak = 1;
+    } else if (isCurrentWeekInProgress) {
+      // Current week is in progress and not yet failed - don't count it but don't break streak
+      currentStreak = 0;
+    } else {
+      // Current week is complete but didn't meet target
+      return { currentStreak: 0, bestStreak: previousBestStreak };
+    }
+
+    // Walk backwards through previous weeks
+    checkWeekStart.setDate(checkWeekStart.getDate() - 7);
+
+    while (true) {
+      const weekKey = checkWeekStart.toISOString().split('T')[0];
+      const completions = weekCompletions.get(weekKey) || 0;
+
+      if (completions >= targetPerWeek) {
+        currentStreak++;
+      } else {
+        break;
+      }
+
+      // Move to previous week
+      checkWeekStart.setDate(checkWeekStart.getDate() - 7);
+
+      // Safety limit (52 weeks)
+      if (currentStreak > 52) {
+        break;
+      }
+    }
+
+    const bestStreak = Math.max(currentStreak, previousBestStreak);
     return { currentStreak, bestStreak };
   }
 
@@ -285,11 +377,7 @@ export class HabitLogsDB {
     today.setHours(0, 0, 0, 0);
 
     // Calculate start of this week based on user preference
-    // weekStartDay: 0 = Sunday, 1 = Monday
-    const startOfWeek = new Date(today);
-    const currentDayOfWeek = today.getDay(); // 0=Sunday, 1=Monday, etc.
-    const daysToSubtract = (currentDayOfWeek - weekStartDay + 7) % 7;
-    startOfWeek.setDate(today.getDate() - daysToSubtract);
+    const startOfWeek = getWeekStart(today, weekStartDay);
 
     // Calculate start of this month
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -310,6 +398,11 @@ export class HabitLogsDB {
     const completedDates = new Set(
       allLogs.filter(log => log.completed).map(log => log.logged_date)
     );
+
+    // Special handling for times_per_week: count successful weeks
+    if (frequency.type === 'times_per_week') {
+      return this.getTimesPerWeekStats(completedDates, frequency.count, weekStartDay, today, startOfWeek, startOfMonth, habitCreatedAt);
+    }
 
     // Helper to count scheduled and completed days in a range
     const countDaysInRange = (start: Date, end: Date): { completed: number; total: number; percent: number } => {
@@ -339,6 +432,88 @@ export class HabitLogsDB {
       thisWeek: countDaysInRange(startOfWeek, today),
       thisMonth: countDaysInRange(startOfMonth, today),
       allTime: countDaysInRange(habitCreatedAt, today),
+    };
+  }
+
+  /**
+   * Get stats for times_per_week habits (counts successful weeks, not days)
+   */
+  private getTimesPerWeekStats(
+    completedDates: Set<string>,
+    targetPerWeek: number,
+    weekStartDay: number,
+    today: Date,
+    startOfWeek: Date,
+    startOfMonth: Date,
+    habitCreatedAt: Date
+  ): {
+    thisWeek: { completed: number; total: number; percent: number };
+    thisMonth: { completed: number; total: number; percent: number };
+    allTime: { completed: number; total: number; percent: number };
+  } {
+    // Group completions by week
+    const weekCompletions = new Map<string, number>();
+
+    for (const dateStr of completedDates) {
+      const date = new Date(dateStr);
+      const weekKey = getWeekKey(date, weekStartDay);
+      weekCompletions.set(weekKey, (weekCompletions.get(weekKey) || 0) + 1);
+    }
+
+    // thisWeek: show progress toward target (completed/target for current week)
+    const currentWeekKey = getWeekKey(today, weekStartDay);
+    const thisWeekCompletions = weekCompletions.get(currentWeekKey) || 0;
+    const thisWeek = {
+      completed: thisWeekCompletions,
+      total: targetPerWeek,
+      percent: Math.round((Math.min(thisWeekCompletions, targetPerWeek) / targetPerWeek) * 100),
+    };
+
+    // Helper to count successful weeks in a date range
+    const countWeeksInRange = (rangeStart: Date, rangeEnd: Date): { completed: number; total: number; percent: number } => {
+      let totalWeeks = 0;
+      let successfulWeeks = 0;
+
+      // Find the first week start that's >= rangeStart and >= habitCreatedAt
+      const effectiveStart = rangeStart > habitCreatedAt ? rangeStart : habitCreatedAt;
+      let checkWeekStart = getWeekStart(effectiveStart, weekStartDay);
+
+      // If the effective start is after the week start, move to next week
+      if (effectiveStart > checkWeekStart) {
+        checkWeekStart.setDate(checkWeekStart.getDate() + 7);
+      }
+
+      while (checkWeekStart <= rangeEnd) {
+        const weekKey = checkWeekStart.toISOString().split('T')[0];
+        const completions = weekCompletions.get(weekKey) || 0;
+
+        // Only count weeks that have ended, unless it's the current week
+        const weekEnd = new Date(checkWeekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        const isCurrentWeek = weekKey === currentWeekKey;
+        const weekHasEnded = weekEnd < today;
+
+        if (weekHasEnded || isCurrentWeek) {
+          totalWeeks++;
+          if (completions >= targetPerWeek) {
+            successfulWeeks++;
+          }
+        }
+
+        checkWeekStart.setDate(checkWeekStart.getDate() + 7);
+      }
+
+      return {
+        completed: successfulWeeks,
+        total: totalWeeks,
+        percent: totalWeeks > 0 ? Math.round((successfulWeeks / totalWeeks) * 100) : 0,
+      };
+    };
+
+    return {
+      thisWeek,
+      thisMonth: countWeeksInRange(startOfMonth, today),
+      allTime: countWeeksInRange(habitCreatedAt, today),
     };
   }
 
