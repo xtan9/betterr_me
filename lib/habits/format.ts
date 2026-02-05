@@ -7,7 +7,7 @@ const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 // Returns a translation key and optional params for frequency formatting
 export type FrequencyTranslation = {
   key: string;
-  params?: Record<string, unknown>;
+  params?: Record<string, string | number>;
 };
 
 export function getFrequencyTranslation(freq: HabitFrequency): FrequencyTranslation {
