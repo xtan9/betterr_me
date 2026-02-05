@@ -24,7 +24,7 @@ function escapeCSVValue(value: unknown): string {
 /**
  * Convert an array of objects to CSV string
  */
-function arrayToCSV<T extends Record<string, unknown>>(
+function arrayToCSV<T extends object>(
   data: T[],
   columns: { key: keyof T | string; header: string; transform?: (row: T) => string }[]
 ): string {
@@ -38,7 +38,8 @@ function arrayToCSV<T extends Record<string, unknown>>(
         if (col.transform) {
           return escapeCSVValue(col.transform(row));
         }
-        const value = col.key in row ? row[col.key as keyof T] : "";
+        const key = col.key as keyof T;
+        const value = key in row ? row[key] : "";
         return escapeCSVValue(value);
       })
       .join(",")
