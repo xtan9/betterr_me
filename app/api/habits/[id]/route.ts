@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB } from '@/lib/db';
+import { invalidateStatsCache } from '@/lib/cache';
 import type { HabitUpdate, HabitFrequency, HabitCategory, HabitStatus } from '@/lib/db/types';
 
 const VALID_CATEGORIES: HabitCategory[] = ['health', 'wellness', 'learning', 'productivity', 'other'];
@@ -147,6 +148,10 @@ export async function PATCH(
 
     const habitsDB = new HabitsDB(supabase);
     const habit = await habitsDB.updateHabit(id, user.id, updates);
+
+    // Invalidate stats cache since habit metadata (frequency, status) may affect stats
+    invalidateStatsCache(id, user.id);
+
     return NextResponse.json({ habit });
   } catch (error: unknown) {
     console.error('PATCH /api/habits/[id] error:', error);
@@ -189,11 +194,13 @@ export async function DELETE(
     if (archive) {
       // Soft delete (archive)
       const habit = await habitsDB.archiveHabit(id, user.id);
+      invalidateStatsCache(id, user.id);
       return NextResponse.json({ habit, archived: true });
     }
 
     // Hard delete
     await habitsDB.deleteHabit(id, user.id);
+    invalidateStatsCache(id, user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/habits/[id] error:', error);

@@ -195,9 +195,26 @@ describe('GET /api/habits/[id]/stats', () => {
       const response2 = await GET(request2, { params });
       expect(response2.headers.get('X-Cache')).toBe('HIT');
 
-      // Should not call the DB again for the second request
-      expect(mockGetHabit).toHaveBeenCalledTimes(1);
+      // getHabit is always called to verify existence, but stats should not be recomputed
+      expect(mockGetHabit).toHaveBeenCalledTimes(2);
       expect(mockGetDetailedHabitStats).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return 404 for deleted habit even if cached', async () => {
+      mockGetHabit.mockResolvedValue(mockHabit as any);
+      mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
+
+      // First request - populates cache
+      const request1 = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
+      await GET(request1, { params });
+
+      // Habit gets deleted
+      mockGetHabit.mockResolvedValue(null);
+
+      // Second request - should return 404 despite cache
+      const request2 = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
+      const response2 = await GET(request2, { params });
+      expect(response2.status).toBe(404);
     });
 
     it('should return same data from cache', async () => {

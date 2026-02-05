@@ -127,6 +127,47 @@ describe('TTLCache', () => {
       expect(cache.size).toBe(1);
     });
   });
+
+  describe('max size eviction', () => {
+    it('should evict oldest entries when max size is exceeded', () => {
+      const smallCache = new TTLCache<string>(1000, 3);
+
+      smallCache.set('key1', 'value1');
+      smallCache.set('key2', 'value2');
+      smallCache.set('key3', 'value3');
+      expect(smallCache.size).toBe(3);
+
+      // Adding a 4th entry should evict the oldest (key1)
+      smallCache.set('key4', 'value4');
+      expect(smallCache.size).toBe(3);
+      expect(smallCache.get('key1')).toBeUndefined();
+      expect(smallCache.get('key2')).toBe('value2');
+      expect(smallCache.get('key4')).toBe('value4');
+    });
+  });
+
+  describe('automatic cleanup', () => {
+    it('should run cleanup periodically on set()', () => {
+      // CLEANUP_INTERVAL is 100
+      const autoCache = new TTLCache<string>(500, 1000);
+
+      // Add entries with short TTL
+      for (let i = 0; i < 50; i++) {
+        autoCache.set(`expired-${i}`, 'value', 100);
+      }
+
+      // Expire them
+      vi.advanceTimersByTime(200);
+
+      // Add more entries to trigger cleanup at 100 total sets
+      for (let i = 50; i < 100; i++) {
+        autoCache.set(`fresh-${i}`, 'value', 5000);
+      }
+
+      // After 100 sets, cleanup should have removed the 50 expired entries
+      expect(autoCache.size).toBe(50);
+    });
+  });
 });
 
 describe('statsCache helpers', () => {

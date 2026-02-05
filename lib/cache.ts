@@ -14,13 +14,18 @@ interface CacheEntry<T> {
 class TTLCache<T = unknown> {
   private cache = new Map<string, CacheEntry<T>>();
   private readonly defaultTTL: number;
+  private readonly maxSize: number;
+  private setsSinceCleanup = 0;
+  private static readonly CLEANUP_INTERVAL = 100;
 
   /**
    * Create a new TTL cache
    * @param defaultTTL Default time-to-live in milliseconds (default: 5 minutes)
+   * @param maxSize Maximum number of entries before eviction (default: 1000)
    */
-  constructor(defaultTTL: number = 5 * 60 * 1000) {
+  constructor(defaultTTL: number = 5 * 60 * 1000, maxSize: number = 1000) {
     this.defaultTTL = defaultTTL;
+    this.maxSize = maxSize;
   }
 
   /**
@@ -52,6 +57,23 @@ class TTLCache<T = unknown> {
   set(key: string, data: T, ttl?: number): void {
     const expiry = Date.now() + (ttl ?? this.defaultTTL);
     this.cache.set(key, { data, expiry });
+
+    // Periodically clean up expired entries
+    this.setsSinceCleanup++;
+    if (this.setsSinceCleanup >= TTLCache.CLEANUP_INTERVAL) {
+      this.cleanup();
+      this.setsSinceCleanup = 0;
+    }
+
+    // Evict oldest entries if max size exceeded (after cleanup)
+    if (this.cache.size > this.maxSize) {
+      const keysToDelete = this.cache.size - this.maxSize;
+      const iterator = this.cache.keys();
+      for (let i = 0; i < keysToDelete; i++) {
+        const { value } = iterator.next();
+        this.cache.delete(value);
+      }
+    }
   }
 
   /**

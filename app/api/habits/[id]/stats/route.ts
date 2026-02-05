@@ -13,7 +13,7 @@ const CACHE_MAX_AGE = 300;
  * Caching:
  * - HTTP Cache-Control headers for client-side caching (private, 5 min)
  * - Server-side in-memory cache (5 min TTL)
- * - Cache is invalidated when habit log is toggled
+ * - Cache is invalidated on: habit toggle, habit update/delete, week_start_day change
  */
 export async function GET(
   request: NextRequest,
@@ -30,7 +30,19 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check server-side cache first
+    const habitsDB = new HabitsDB(supabase);
+    const habitLogsDB = new HabitLogsDB(supabase);
+    const profilesDB = new ProfilesDB(supabase);
+
+    // Get habit (always verify it exists, even for cache hits)
+    const habit = await habitsDB.getHabit(habitId, user.id);
+    if (!habit) {
+      // Clean up any stale cache entry for this habit
+      statsCache.delete(getStatsCacheKey(habitId, user.id));
+      return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
+    }
+
+    // Check server-side cache
     const cacheKey = getStatsCacheKey(habitId, user.id);
     const cachedStats = statsCache.get(cacheKey);
 
@@ -41,16 +53,6 @@ export async function GET(
           'X-Cache': 'HIT',
         },
       });
-    }
-
-    const habitsDB = new HabitsDB(supabase);
-    const habitLogsDB = new HabitLogsDB(supabase);
-    const profilesDB = new ProfilesDB(supabase);
-
-    // Get habit
-    const habit = await habitsDB.getHabit(habitId, user.id);
-    if (!habit) {
-      return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
 
     // Get user's week start day preference (default to Sunday = 0)
