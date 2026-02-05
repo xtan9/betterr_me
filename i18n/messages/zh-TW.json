@@ -95,6 +95,15 @@
             "days": "{count} 天",
             "vsYesterday": "較昨日 {change}%",
             "fromLastWeek": "較上週 +{count}"
+        },
+        "habits": {
+            "title": "今日習慣",
+            "addHabit": "新增習慣",
+            "completed": "已完成 {completed}/{total}",
+            "moreToGo": "還有 {count} 個待完成！",
+            "allComplete": "全部完成！",
+            "noHabits": "還沒有習慣",
+            "createFirst": "建立你的第一個習慣"
         }
     },
     "habits": {
