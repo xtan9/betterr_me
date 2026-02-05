@@ -10,11 +10,24 @@ vi.mock('next-intl', () => ({
   useTranslations: () => {
     const t = (key: string, params?: Record<string, unknown>) => {
       const messages: Record<string, string> = {
-        'currentStreak': 'Current',
-        'bestStreak': 'Best',
-        'streakDays': `${params?.count ?? 0} days`,
-        'thisMonth': `${params?.percent ?? 0}% this month`,
-        'completedToday': 'Completed today',
+        // Card translations
+        'card.currentStreak': 'Current',
+        'card.bestStreak': 'Best',
+        'card.streakDays': `${params?.count ?? 0} days`,
+        'card.thisMonth': `${params?.percent ?? 0}% this month`,
+        'card.completedToday': 'Completed today',
+        // Category translations
+        'categories.health': 'Health',
+        'categories.wellness': 'Wellness',
+        'categories.learning': 'Learning',
+        'categories.productivity': 'Productivity',
+        'categories.other': 'Other',
+        // Frequency translations
+        'frequency.daily': 'Every day',
+        'frequency.weekdays': 'Mon – Fri',
+        'frequency.weekly': 'Once a week',
+        'frequency.timesPerWeek': `${params?.count ?? 0} times/week`,
+        'frequency.custom': 'Custom days',
       };
       return messages[key] ?? key;
     };
