@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from '@/app/api/habits/[id]/stats/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetHabit, mockGetDetailedHabitStats } = vi.hoisted(() => ({
+const { mockGetHabit, mockGetDetailedHabitStats, mockGetProfile } = vi.hoisted(() => ({
   mockGetHabit: vi.fn(),
   mockGetDetailedHabitStats: vi.fn(),
+  mockGetProfile: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -21,6 +22,9 @@ vi.mock('@/lib/db', () => ({
   },
   HabitLogsDB: class {
     getDetailedHabitStats = mockGetDetailedHabitStats;
+  },
+  ProfilesDB: class {
+    getProfile = mockGetProfile;
   },
 }));
 
@@ -52,6 +56,11 @@ describe('GET /api/habits/[id]/stats', () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
     } as any);
+    // Default profile with Sunday week start
+    mockGetProfile.mockResolvedValue({
+      id: 'user-123',
+      preferences: { week_start_day: 0 },
+    });
   });
 
   it('should return detailed stats for a habit', async () => {
@@ -76,7 +85,50 @@ describe('GET /api/habits/[id]/stats', () => {
       'habit-1',
       'user-123',
       { type: 'daily' },
-      '2026-01-01T00:00:00Z'
+      '2026-01-01T00:00:00Z',
+      0 // Sunday week start
+    );
+  });
+
+  it('should use Monday week start from user preferences', async () => {
+    mockGetProfile.mockResolvedValue({
+      id: 'user-123',
+      preferences: { week_start_day: 1 },
+    });
+    mockGetHabit.mockResolvedValue(mockHabit as any);
+    mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
+    const response = await GET(request, { params });
+
+    expect(response.status).toBe(200);
+    expect(mockGetDetailedHabitStats).toHaveBeenCalledWith(
+      'habit-1',
+      'user-123',
+      { type: 'daily' },
+      '2026-01-01T00:00:00Z',
+      1 // Monday week start
+    );
+  });
+
+  it('should default to Sunday if profile has no preferences', async () => {
+    mockGetProfile.mockResolvedValue({
+      id: 'user-123',
+      preferences: null,
+    });
+    mockGetHabit.mockResolvedValue(mockHabit as any);
+    mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
+    const response = await GET(request, { params });
+
+    expect(response.status).toBe(200);
+    expect(mockGetDetailedHabitStats).toHaveBeenCalledWith(
+      'habit-1',
+      'user-123',
+      { type: 'daily' },
+      '2026-01-01T00:00:00Z',
+      0 // Default to Sunday
     );
   });
 

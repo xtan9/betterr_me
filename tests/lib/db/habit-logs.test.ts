@@ -176,4 +176,65 @@ describe('HabitLogsDB', () => {
       ).rejects.toThrow('EDIT_WINDOW_EXCEEDED');
     });
   });
+
+  describe('getDetailedHabitStats with weekStartDay', () => {
+    const frequency = { type: 'daily' as const };
+    const createdAt = '2026-01-01T00:00:00Z';
+
+    it('should calculate thisWeek stats starting from Sunday (weekStartDay=0)', async () => {
+      // Mock getLogsByDateRange to return specific completed dates
+      mockSupabaseClient.setMockResponse([
+        { ...mockLog, logged_date: '2026-02-02', completed: true }, // Sunday
+        { ...mockLog, logged_date: '2026-02-03', completed: true }, // Monday
+        { ...mockLog, logged_date: '2026-02-04', completed: false }, // Tuesday
+      ]);
+
+      const stats = await habitLogsDB.getDetailedHabitStats(
+        mockHabitId,
+        mockUserId,
+        frequency,
+        createdAt,
+        0 // Sunday
+      );
+
+      expect(stats.thisWeek).toBeDefined();
+      expect(stats.thisMonth).toBeDefined();
+      expect(stats.allTime).toBeDefined();
+    });
+
+    it('should calculate thisWeek stats starting from Monday (weekStartDay=1)', async () => {
+      mockSupabaseClient.setMockResponse([
+        { ...mockLog, logged_date: '2026-02-03', completed: true }, // Monday
+        { ...mockLog, logged_date: '2026-02-04', completed: true }, // Tuesday
+      ]);
+
+      const stats = await habitLogsDB.getDetailedHabitStats(
+        mockHabitId,
+        mockUserId,
+        frequency,
+        createdAt,
+        1 // Monday
+      );
+
+      expect(stats.thisWeek).toBeDefined();
+      expect(stats.thisMonth).toBeDefined();
+      expect(stats.allTime).toBeDefined();
+    });
+
+    it('should default to Sunday when weekStartDay is not provided', async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      const stats = await habitLogsDB.getDetailedHabitStats(
+        mockHabitId,
+        mockUserId,
+        frequency,
+        createdAt
+        // no weekStartDay parameter
+      );
+
+      expect(stats.thisWeek).toBeDefined();
+      expect(stats.thisMonth).toBeDefined();
+      expect(stats.allTime).toBeDefined();
+    });
+  });
 });

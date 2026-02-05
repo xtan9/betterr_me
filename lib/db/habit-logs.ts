@@ -268,12 +268,14 @@ export class HabitLogsDB {
 
   /**
    * Get detailed completion stats for a habit (thisWeek, thisMonth, allTime)
+   * @param weekStartDay - 0 for Sunday (default), 1 for Monday
    */
   async getDetailedHabitStats(
     habitId: string,
     userId: string,
     frequency: HabitFrequency,
-    createdAt: string
+    createdAt: string,
+    weekStartDay: number = 0
   ): Promise<{
     thisWeek: { completed: number; total: number; percent: number };
     thisMonth: { completed: number; total: number; percent: number };
@@ -282,9 +284,12 @@ export class HabitLogsDB {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Calculate start of this week (Sunday)
+    // Calculate start of this week based on user preference
+    // weekStartDay: 0 = Sunday, 1 = Monday
     const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay());
+    const currentDayOfWeek = today.getDay(); // 0=Sunday, 1=Monday, etc.
+    const daysToSubtract = (currentDayOfWeek - weekStartDay + 7) % 7;
+    startOfWeek.setDate(today.getDate() - daysToSubtract);
 
     // Calculate start of this month
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
