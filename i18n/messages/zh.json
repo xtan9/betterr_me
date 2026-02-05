@@ -139,6 +139,53 @@
             "learning": "学习",
             "productivity": "效率",
             "other": "其他"
+        },
+        "streak": {
+            "current": "当前连续",
+            "best": "最佳连续",
+            "days": "{count} 天",
+            "personalBest": "个人最佳！",
+            "messages": {
+                "zero": "今天开始！",
+                "building": "正在积蓄动力！",
+                "almostWeek": "快一周了！",
+                "keepGoing": "继续保持！",
+                "incredible": "令人难以置信的坚持！",
+                "unstoppable": "你势不可挡！",
+                "legendary": "传奇连续！"
+            }
+        },
+        "empty": {
+            "noHabits": {
+                "title": "开始你的旅程",
+                "description": "跟踪你的第一个习惯，建立持久的改变。",
+                "cta": "创建第一个习惯"
+            },
+            "allComplete": {
+                "title": "完美的一天！",
+                "description": "你已完成今天所有的习惯。太棒了！"
+            },
+            "noResults": {
+                "title": "没有匹配「{query}」的习惯",
+                "description": "试试其他搜索词。"
+            },
+            "noPaused": {
+                "title": "没有暂停的习惯",
+                "description": "暂停的习惯会显示在这里。"
+            },
+            "noArchived": {
+                "title": "没有归档的习惯",
+                "description": "归档的习惯会显示在这里。"
+            }
+        },
+        "list": {
+            "title": "我的习惯",
+            "searchPlaceholder": "搜索习惯...",
+            "tabs": {
+                "active": "进行中",
+                "paused": "已暂停",
+                "archived": "已归档"
+            }
         }
     },
     "auth": {

@@ -139,6 +139,53 @@
             "learning": "學習",
             "productivity": "效率",
             "other": "其他"
+        },
+        "streak": {
+            "current": "目前連續",
+            "best": "最佳連續",
+            "days": "{count} 天",
+            "personalBest": "個人最佳！",
+            "messages": {
+                "zero": "今天開始！",
+                "building": "正在累積動力！",
+                "almostWeek": "快一週了！",
+                "keepGoing": "繼續保持！",
+                "incredible": "令人難以置信的堅持！",
+                "unstoppable": "你勢不可擋！",
+                "legendary": "傳奇連續！"
+            }
+        },
+        "empty": {
+            "noHabits": {
+                "title": "開始你的旅程",
+                "description": "追蹤你的第一個習慣，建立持久的改變。",
+                "cta": "建立第一個習慣"
+            },
+            "allComplete": {
+                "title": "完美的一天！",
+                "description": "你已完成今天所有的習慣。太棒了！"
+            },
+            "noResults": {
+                "title": "沒有符合「{query}」的習慣",
+                "description": "試試其他搜尋詞。"
+            },
+            "noPaused": {
+                "title": "沒有暫停的習慣",
+                "description": "暫停的習慣會顯示在這裡。"
+            },
+            "noArchived": {
+                "title": "沒有封存的習慣",
+                "description": "封存的習慣會顯示在這裡。"
+            }
+        },
+        "list": {
+            "title": "我的習慣",
+            "searchPlaceholder": "搜尋習慣...",
+            "tabs": {
+                "active": "進行中",
+                "paused": "已暫停",
+                "archived": "已封存"
+            }
         }
     },
     "auth": {
