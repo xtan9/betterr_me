@@ -4,7 +4,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { MainNav } from "@/components/main-nav";
 import Link from "next/link";
 
-export default function ProtectedLayout({
+export default function HabitsLayout({
   children,
 }: {
   children: React.ReactNode;

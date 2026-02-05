@@ -5,6 +5,7 @@
             "signIn": "登录",
             "signOut": "退出登录",
             "dashboard": "仪表板",
+            "habits": "习惯",
             "learnMore": "了解更多"
         },
         "footer": {
@@ -248,6 +249,17 @@
                 "paused": "已暂停",
                 "archived": "已归档"
             }
+        },
+        "page": {
+            "title": "我的习惯",
+            "createButton": "创建习惯"
+        },
+        "error": {
+            "title": "加载习惯失败",
+            "retry": "重试"
+        },
+        "loading": {
+            "title": "正在加载习惯..."
         }
     },
     "auth": {
