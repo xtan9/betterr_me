@@ -1,17 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { habitLogsDB } from '@/lib/db/habit-logs';
 import { mockSupabaseClient } from '../../setup';
 import type { HabitLog } from '@/lib/db/types';
 
-// Mock habitsDB since HabitLogsDB depends on it
+// Mock habitsDB class since HabitLogsDB creates its own instance
+const { mockGetHabit, mockUpdateHabitStreak } = vi.hoisted(() => ({
+  mockGetHabit: vi.fn(),
+  mockUpdateHabitStreak: vi.fn(),
+}));
+
 vi.mock('@/lib/db/habits', () => ({
+  HabitsDB: class {
+    getHabit = mockGetHabit;
+    updateHabitStreak = mockUpdateHabitStreak;
+  },
   habitsDB: {
-    getHabit: vi.fn(),
-    updateHabitStreak: vi.fn(),
+    getHabit: mockGetHabit,
+    updateHabitStreak: mockUpdateHabitStreak,
   },
 }));
 
-import { habitsDB } from '@/lib/db/habits';
+import { habitLogsDB } from '@/lib/db/habit-logs';
 
 describe('HabitLogsDB', () => {
   const mockUserId = 'user-123';
