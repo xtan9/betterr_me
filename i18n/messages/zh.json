@@ -415,6 +415,14 @@
             "sunday": "周日",
             "monday": "周一"
         },
+        "export": {
+            "title": "导出数据",
+            "description": "下载习惯数据的 CSV 文件，用于备份或分析",
+            "habits": "导出习惯",
+            "logs": "导出记录",
+            "success": "导出下载成功",
+            "error": "导出数据失败"
+        },
         "toast": {
             "saveError": "保存设置失败"
         }

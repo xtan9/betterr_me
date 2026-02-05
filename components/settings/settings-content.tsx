@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TimezoneSelector } from "./timezone-selector";
 import { WeekStartSelector } from "./week-start-selector";
+import { DataExport } from "./data-export";
 import { CheckCircle, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 
@@ -141,6 +142,16 @@ export function SettingsContent() {
               disabled={isSaving}
             />
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("export.title")}</CardTitle>
+          <CardDescription>{t("export.description")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DataExport />
         </CardContent>
       </Card>
     </div>
