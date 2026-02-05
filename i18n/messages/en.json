@@ -82,10 +82,27 @@
         }
     },
     "dashboard": {
-        "welcome": "Welcome to your personal dashboard",
+        "greeting": {
+            "morning": "Good morning",
+            "afternoon": "Good afternoon",
+            "evening": "Good evening"
+        },
+        "welcome": "Ready to be a little better today? Let's check your progress.",
         "profile": "Your Profile",
         "email": "Email",
         "accountCreated": "Account Created",
+        "empty": {
+            "title": "Welcome to BetterR.Me!",
+            "subtitle": "Start your journey to becoming better. Create your first habit and begin tracking your progress today.",
+            "createHabit": "Create Your First Habit"
+        },
+        "loading": {
+            "title": "Loading your dashboard..."
+        },
+        "error": {
+            "title": "Something went wrong",
+            "retry": "Try again"
+        },
         "snapshot": {
             "title": "Today's Snapshot",
             "activeHabits": "Active Habits",

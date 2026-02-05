@@ -82,10 +82,27 @@
         }
     },
     "dashboard": {
-        "welcome": "欢迎来到你的个人仪表板",
+        "greeting": {
+            "morning": "早上好",
+            "afternoon": "下午好",
+            "evening": "晚上好"
+        },
+        "welcome": "准备好今天变得更好了吗？来看看你的进度吧。",
         "profile": "你的个人资料",
         "email": "邮箱",
         "accountCreated": "账户创建时间",
+        "empty": {
+            "title": "欢迎来到 BetterR.Me！",
+            "subtitle": "开始你的成长之旅。创建你的第一个习惯，开始追踪你的进度。",
+            "createHabit": "创建你的第一个习惯"
+        },
+        "loading": {
+            "title": "正在加载你的仪表板..."
+        },
+        "error": {
+            "title": "出了点问题",
+            "retry": "重试"
+        },
         "snapshot": {
             "title": "今日概览",
             "activeHabits": "活跃习惯",
