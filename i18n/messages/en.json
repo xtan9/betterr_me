@@ -139,6 +139,29 @@
             "learning": "Learning",
             "productivity": "Productivity",
             "other": "Other"
+        },
+        "heatmap": {
+            "title": "Last 30 Days",
+            "completed": "Completed",
+            "missed": "Missed",
+            "notScheduled": "Not scheduled",
+            "today": "Today",
+            "cannotEdit": "Cannot edit days older than 7 days",
+            "clickToToggle": "Click to toggle",
+            "days": {
+                "sun": "Sun",
+                "mon": "Mon",
+                "tue": "Tue",
+                "wed": "Wed",
+                "thu": "Thu",
+                "fri": "Fri",
+                "sat": "Sat"
+            },
+            "legend": {
+                "completed": "Completed",
+                "missed": "Missed",
+                "notScheduled": "Not scheduled"
+            }
         }
     },
     "auth": {
