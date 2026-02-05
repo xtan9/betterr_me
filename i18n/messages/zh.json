@@ -5,6 +5,7 @@
             "signIn": "登录",
             "signOut": "退出登录",
             "dashboard": "仪表板",
+            "habits": "习惯",
             "learnMore": "了解更多"
         },
         "footer": {
@@ -248,6 +249,44 @@
                 "paused": "已暂停",
                 "archived": "已归档"
             }
+        },
+        "page": {
+            "title": "我的习惯",
+            "createButton": "创建习惯"
+        },
+        "detail": {
+            "backToHabits": "返回习惯列表",
+            "edit": "编辑",
+            "status": {
+                "active": "进行中",
+                "paused": "已暂停",
+                "archived": "已归档"
+            },
+            "completion": {
+                "title": "完成率",
+                "thisWeek": "本周",
+                "thisMonth": "本月",
+                "allTime": "总计",
+                "days": "{completed}/{total} 天",
+                "percent": "{percent}%"
+            },
+            "actions": {
+                "pause": "暂停习惯",
+                "resume": "恢复习惯",
+                "archive": "归档习惯",
+                "delete": "删除习惯"
+            },
+            "confirmArchive": "确定要归档这个习惯吗？",
+            "confirmDelete": "确定要删除这个习惯吗？此操作无法撤销。",
+            "cannotEditOldLogs": "无法编辑超过7天的记录",
+            "notFound": "习惯未找到"
+        },
+        "error": {
+            "title": "加载习惯失败",
+            "retry": "重试"
+        },
+        "loading": {
+            "title": "正在加载习惯..."
         }
     },
     "auth": {

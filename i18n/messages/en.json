@@ -5,6 +5,7 @@
             "signIn": "Sign In",
             "signOut": "Sign Out",
             "dashboard": "Dashboard",
+            "habits": "Habits",
             "learnMore": "Learn More"
         },
         "footer": {
@@ -248,6 +249,44 @@
                 "paused": "Paused",
                 "archived": "Archived"
             }
+        },
+        "page": {
+            "title": "My Habits",
+            "createButton": "Create Habit"
+        },
+        "detail": {
+            "backToHabits": "Back to Habits",
+            "edit": "Edit",
+            "status": {
+                "active": "Active",
+                "paused": "Paused",
+                "archived": "Archived"
+            },
+            "completion": {
+                "title": "Completion Rate",
+                "thisWeek": "This Week",
+                "thisMonth": "This Month",
+                "allTime": "All Time",
+                "days": "{completed}/{total} days",
+                "percent": "{percent}%"
+            },
+            "actions": {
+                "pause": "Pause Habit",
+                "resume": "Resume Habit",
+                "archive": "Archive Habit",
+                "delete": "Delete Habit"
+            },
+            "confirmArchive": "Are you sure you want to archive this habit?",
+            "confirmDelete": "Are you sure you want to delete this habit? This cannot be undone.",
+            "cannotEditOldLogs": "Cannot edit logs older than 7 days",
+            "notFound": "Habit not found"
+        },
+        "error": {
+            "title": "Failed to load habits",
+            "retry": "Try again"
+        },
+        "loading": {
+            "title": "Loading habits..."
         }
     },
     "auth": {
