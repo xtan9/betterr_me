@@ -162,6 +162,15 @@
                 "title": "没有归档的习惯",
                 "description": "归档的习惯会显示在这里。"
             }
+        },
+        "list": {
+            "title": "我的习惯",
+            "searchPlaceholder": "搜索习惯...",
+            "tabs": {
+                "active": "进行中",
+                "paused": "已暂停",
+                "archived": "已归档"
+            }
         }
     },
     "auth": {

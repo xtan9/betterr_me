@@ -162,6 +162,15 @@
                 "title": "No archived habits",
                 "description": "Archived habits will appear here."
             }
+        },
+        "list": {
+            "title": "My Habits",
+            "searchPlaceholder": "Search habits...",
+            "tabs": {
+                "active": "Active",
+                "paused": "Paused",
+                "archived": "Archived"
+            }
         }
     },
     "auth": {

@@ -162,6 +162,15 @@
                 "title": "沒有封存的習慣",
                 "description": "封存的習慣會顯示在這裡。"
             }
+        },
+        "list": {
+            "title": "我的習慣",
+            "searchPlaceholder": "搜尋習慣...",
+            "tabs": {
+                "active": "進行中",
+                "paused": "已暫停",
+                "archived": "已封存"
+            }
         }
     },
     "auth": {
