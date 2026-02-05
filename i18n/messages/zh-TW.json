@@ -82,10 +82,27 @@
         }
     },
     "dashboard": {
-        "welcome": "歡迎來到你的個人儀表板",
+        "greeting": {
+            "morning": "早安",
+            "afternoon": "午安",
+            "evening": "晚安"
+        },
+        "welcome": "準備好今天變得更好了嗎？來看看你的進度吧。",
         "profile": "你的個人資料",
         "email": "電子郵件",
         "accountCreated": "帳戶建立時間",
+        "empty": {
+            "title": "歡迎來到 BetterR.Me！",
+            "subtitle": "開始你的成長之旅。建立你的第一個習慣，開始追蹤你的進度。",
+            "createHabit": "建立你的第一個習慣"
+        },
+        "loading": {
+            "title": "正在載入你的儀表板..."
+        },
+        "error": {
+            "title": "出了點問題",
+            "retry": "重試"
+        },
         "snapshot": {
             "title": "今日概覽",
             "activeHabits": "活躍習慣",

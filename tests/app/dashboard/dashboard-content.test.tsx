@@ -1,0 +1,234 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import { DashboardContent } from "@/components/dashboard/dashboard-content";
+
+// Mock next/navigation
+const mockPush = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: mockPush,
+    replace: vi.fn(),
+    back: vi.fn(),
+  }),
+}));
+
+// Mock SWR
+const mockUseSWR = vi.fn();
+vi.mock("swr", () => ({
+  default: (...args: unknown[]) => mockUseSWR(...args),
+}));
+
+const messages = {
+  dashboard: {
+    greeting: {
+      morning: "Good morning",
+      afternoon: "Good afternoon",
+      evening: "Good evening",
+    },
+    welcome: "Ready to be a little better today?",
+    snapshot: {
+      title: "Today's Snapshot",
+      activeHabits: "Active Habits",
+      todaysProgress: "Today's Progress",
+      currentStreak: "Current Streak",
+      completionRate: "{percent}% completion rate",
+      days: "{count} days",
+      vsYesterday: "{change}% vs yesterday",
+    },
+    habits: {
+      title: "Today's Habits",
+      addHabit: "Add Habit",
+      completed: "{completed} of {total} completed",
+      moreToGo: "{count} more to go!",
+      allComplete: "All habits complete!",
+      noHabits: "No habits yet",
+      createFirst: "Create your first habit",
+    },
+    tasks: {
+      title: "Today's Tasks",
+      addTask: "Add Task",
+      completed: "{completed} of {total} completed",
+      dueAt: "Due {time}",
+      allDay: "All day",
+      noTasks: "No tasks for today",
+      createFirst: "Add a task",
+      allComplete: "All tasks done!",
+    },
+    motivation: {
+      firstDay: "Welcome! Your journey starts today.",
+      allComplete: "Perfect day!",
+      noHabits: "Ready to start building better habits?",
+      gettingStarted: "Every habit completed brings you closer.",
+      halfway: "Halfway there!",
+      almostDone: "Just {remaining} more to go!",
+      streakAtRisk: "Your {habitName} streak is at {count} days!",
+    },
+    empty: {
+      title: "Welcome to BetterR.Me!",
+      subtitle: "Start your journey to becoming better",
+      noHabitsTitle: "No habits yet",
+      noHabitsDescription: "Create your first habit to start tracking",
+      createHabit: "Create Your First Habit",
+    },
+    loading: {
+      title: "Loading your dashboard...",
+    },
+    error: {
+      title: "Something went wrong",
+      retry: "Try again",
+    },
+  },
+  habits: {
+    card: {
+      streakDays: "{count} days",
+    },
+  },
+};
+
+function renderWithProviders(component: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={messages}>
+      {component}
+    </NextIntlClientProvider>
+  );
+}
+
+const mockDashboardData = {
+  habits: [
+    {
+      id: "1",
+      user_id: "user-1",
+      name: "Morning Meditation",
+      description: null,
+      category: "wellness",
+      frequency: { type: "daily" },
+      status: "active",
+      current_streak: 7,
+      best_streak: 10,
+      paused_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      completed_today: true,
+    },
+    {
+      id: "2",
+      user_id: "user-1",
+      name: "Daily Exercise",
+      description: null,
+      category: "health",
+      frequency: { type: "daily" },
+      status: "active",
+      current_streak: 3,
+      best_streak: 5,
+      paused_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      completed_today: false,
+    },
+  ],
+  tasks_today: [],
+  stats: {
+    total_habits: 2,
+    completed_today: 1,
+    current_best_streak: 7,
+    tasks_due_today: 0,
+    tasks_completed_today: 0,
+  },
+};
+
+describe("DashboardContent", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows loading skeleton while data is loading", () => {
+    mockUseSWR.mockReturnValue({
+      data: undefined,
+      error: undefined,
+      isLoading: true,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    expect(screen.getByTestId("dashboard-skeleton")).toBeInTheDocument();
+  });
+
+  it("shows error state when fetch fails", () => {
+    mockUseSWR.mockReturnValue({
+      data: undefined,
+      error: new Error("Failed to fetch"),
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+    expect(screen.getByText(/Try again/i)).toBeInTheDocument();
+  });
+
+  it("shows empty state for new users with no habits", () => {
+    mockUseSWR.mockReturnValue({
+      data: {
+        habits: [],
+        tasks_today: [],
+        stats: {
+          total_habits: 0,
+          completed_today: 0,
+          current_best_streak: 0,
+          tasks_due_today: 0,
+          tasks_completed_today: 0,
+        },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    expect(screen.getByText(/Welcome to BetterR.Me!/i)).toBeInTheDocument();
+    expect(screen.getByText(/Create Your First Habit/i)).toBeInTheDocument();
+  });
+
+  it("renders dashboard with habits data", async () => {
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    // Check greeting
+    expect(screen.getByText(/Test User/i)).toBeInTheDocument();
+
+    // Check DailySnapshot
+    expect(screen.getByText("Today's Snapshot")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument(); // total_habits
+
+    // Check HabitChecklist
+    expect(screen.getByText("Today's Habits")).toBeInTheDocument();
+    expect(screen.getByText("Morning Meditation")).toBeInTheDocument();
+    expect(screen.getByText("Daily Exercise")).toBeInTheDocument();
+  });
+
+  it("navigates to create habit page when add habit button clicked", async () => {
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    const addButton = screen.getByText("Add Habit");
+    addButton.click();
+
+    expect(mockPush).toHaveBeenCalledWith("/habits/new");
+  });
+});
