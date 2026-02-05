@@ -1,9 +1,16 @@
 import { createClient } from '@/lib/supabase/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HabitLog, HabitLogInsert, HabitFrequency } from './types';
-import { habitsDB } from './habits';
+import { HabitsDB } from './habits';
 
 export class HabitLogsDB {
-  private supabase = createClient();
+  private supabase: SupabaseClient;
+  private habitsDB: HabitsDB;
+
+  constructor(supabase?: SupabaseClient) {
+    this.supabase = supabase || createClient();
+    this.habitsDB = new HabitsDB(this.supabase);
+  }
 
   /**
    * Get logs for a habit within a date range
@@ -111,14 +118,14 @@ export class HabitLogsDB {
     });
 
     // Get habit for frequency info
-    const habit = await habitsDB.getHabit(habitId, userId);
+    const habit = await this.habitsDB.getHabit(habitId, userId);
     if (!habit) throw new Error('Habit not found');
 
     // Recalculate streak
     const { currentStreak, bestStreak } = await this.calculateStreak(habitId, userId, habit.frequency, habit.best_streak);
 
     // Update habit with new streak values
-    await habitsDB.updateHabitStreak(habitId, userId, currentStreak, bestStreak);
+    await this.habitsDB.updateHabitStreak(habitId, userId, currentStreak, bestStreak);
 
     return { log, currentStreak, bestStreak };
   }

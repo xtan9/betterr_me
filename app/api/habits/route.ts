@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { habitsDB } from '@/lib/db';
+import { HabitsDB } from '@/lib/db';
 import type { HabitInsert, HabitFilters, HabitFrequency, HabitCategory } from '@/lib/db/types';
 
 const VALID_CATEGORIES: HabitCategory[] = ['health', 'wellness', 'learning', 'productivity', 'other'];
@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const habitsDB = new HabitsDB(supabase);
     const searchParams = request.nextUrl.searchParams;
     const withToday = searchParams.get('with_today') === 'true';
 
@@ -128,6 +129,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const habitsDB = new HabitsDB(supabase);
     const habitData: HabitInsert = {
       user_id: user.id,
       name: body.name.trim(),

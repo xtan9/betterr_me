@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, POST } from '@/app/api/habits/route';
 import { NextRequest } from 'next/server';
 
+const { mockGetUserHabits, mockGetHabitsWithTodayStatus, mockCreateHabit } = vi.hoisted(() => ({
+  mockGetUserHabits: vi.fn(),
+  mockGetHabitsWithTodayStatus: vi.fn(),
+  mockCreateHabit: vi.fn(),
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => ({
     auth: {
@@ -11,15 +17,14 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 vi.mock('@/lib/db', () => ({
-  habitsDB: {
-    getUserHabits: vi.fn(),
-    getHabitsWithTodayStatus: vi.fn(),
-    createHabit: vi.fn(),
+  HabitsDB: class {
+    getUserHabits = mockGetUserHabits;
+    getHabitsWithTodayStatus = mockGetHabitsWithTodayStatus;
+    createHabit = mockCreateHabit;
   },
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import { habitsDB } from '@/lib/db';
 
 const mockHabit = {
   id: 'habit-1',
@@ -41,7 +46,7 @@ describe('GET /api/habits', () => {
   });
 
   it('should return habits for authenticated user', async () => {
-    vi.mocked(habitsDB.getUserHabits).mockResolvedValue([mockHabit] as any);
+    mockGetUserHabits.mockResolvedValue([mockHabit] as any);
 
     const request = new NextRequest('http://localhost:3000/api/habits');
     const response = await GET(request);
@@ -52,30 +57,30 @@ describe('GET /api/habits', () => {
   });
 
   it('should filter by status', async () => {
-    vi.mocked(habitsDB.getUserHabits).mockResolvedValue([]);
+    mockGetUserHabits.mockResolvedValue([]);
 
     const request = new NextRequest('http://localhost:3000/api/habits?status=paused');
     await GET(request);
 
-    expect(habitsDB.getUserHabits).toHaveBeenCalledWith('user-123', { status: 'paused' });
+    expect(mockGetUserHabits).toHaveBeenCalledWith('user-123', { status: 'paused' });
   });
 
   it('should filter by category', async () => {
-    vi.mocked(habitsDB.getUserHabits).mockResolvedValue([]);
+    mockGetUserHabits.mockResolvedValue([]);
 
     const request = new NextRequest('http://localhost:3000/api/habits?category=health');
     await GET(request);
 
-    expect(habitsDB.getUserHabits).toHaveBeenCalledWith('user-123', { category: 'health' });
+    expect(mockGetUserHabits).toHaveBeenCalledWith('user-123', { category: 'health' });
   });
 
   it('should use getHabitsWithTodayStatus when with_today=true', async () => {
-    vi.mocked(habitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    mockGetHabitsWithTodayStatus.mockResolvedValue([]);
 
     const request = new NextRequest('http://localhost:3000/api/habits?with_today=true');
     await GET(request);
 
-    expect(habitsDB.getHabitsWithTodayStatus).toHaveBeenCalledWith('user-123', undefined);
+    expect(mockGetHabitsWithTodayStatus).toHaveBeenCalledWith('user-123', undefined);
   });
 
   it('should return 401 if not authenticated', async () => {
@@ -99,7 +104,7 @@ describe('POST /api/habits', () => {
   });
 
   it('should create a new habit', async () => {
-    vi.mocked(habitsDB.createHabit).mockResolvedValue(mockHabit as any);
+    mockCreateHabit.mockResolvedValue(mockHabit as any);
 
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',

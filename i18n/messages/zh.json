@@ -320,6 +320,25 @@
             "title": "正在加载习惯..."
         }
     },
+    "habits": {
+        "frequency": {
+            "daily": "每天",
+            "weekdays": "周一至周五",
+            "weekly": "每周一次",
+            "timesPerWeek": "每周 {count} 次",
+            "custom": "自定义天数",
+            "selectedDays": "已选择：{days}",
+            "days": {
+                "sun": "周日",
+                "mon": "周一",
+                "tue": "周二",
+                "wed": "周三",
+                "thu": "周四",
+                "fri": "周五",
+                "sat": "周六"
+            }
+        }
+    },
     "auth": {
         "login": {
             "title": "登录",

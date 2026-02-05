@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, PATCH, DELETE } from '@/app/api/habits/[id]/route';
 import { NextRequest } from 'next/server';
 
+const { mockGetHabit, mockUpdateHabit, mockDeleteHabit, mockArchiveHabit } = vi.hoisted(() => ({
+  mockGetHabit: vi.fn(),
+  mockUpdateHabit: vi.fn(),
+  mockDeleteHabit: vi.fn(),
+  mockArchiveHabit: vi.fn(),
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => ({
     auth: {
@@ -11,16 +18,15 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 vi.mock('@/lib/db', () => ({
-  habitsDB: {
-    getHabit: vi.fn(),
-    updateHabit: vi.fn(),
-    deleteHabit: vi.fn(),
-    archiveHabit: vi.fn(),
+  HabitsDB: class {
+    getHabit = mockGetHabit;
+    updateHabit = mockUpdateHabit;
+    deleteHabit = mockDeleteHabit;
+    archiveHabit = mockArchiveHabit;
   },
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import { habitsDB } from '@/lib/db';
 
 const mockHabit = {
   id: 'habit-1',
@@ -44,7 +50,7 @@ describe('GET /api/habits/[id]', () => {
   });
 
   it('should return a habit by id', async () => {
-    vi.mocked(habitsDB.getHabit).mockResolvedValue(mockHabit as any);
+    mockGetHabit.mockResolvedValue(mockHabit as any);
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1');
     const response = await GET(request, { params });
@@ -52,11 +58,11 @@ describe('GET /api/habits/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.habit).toEqual(mockHabit);
-    expect(habitsDB.getHabit).toHaveBeenCalledWith('habit-1', 'user-123');
+    expect(mockGetHabit).toHaveBeenCalledWith('habit-1', 'user-123');
   });
 
   it('should return 404 if habit not found', async () => {
-    vi.mocked(habitsDB.getHabit).mockResolvedValue(null);
+    mockGetHabit.mockResolvedValue(null);
 
     const request = new NextRequest('http://localhost:3000/api/habits/nonexistent');
     const response = await GET(request, { params: Promise.resolve({ id: 'nonexistent' }) });
@@ -86,7 +92,7 @@ describe('PATCH /api/habits/[id]', () => {
 
   it('should update habit name', async () => {
     const updated = { ...mockHabit, name: 'Evening Run' };
-    vi.mocked(habitsDB.updateHabit).mockResolvedValue(updated as any);
+    mockUpdateHabit.mockResolvedValue(updated as any);
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
       method: 'PATCH',
@@ -141,7 +147,7 @@ describe('PATCH /api/habits/[id]', () => {
 
   it('should set paused_at when status changes to paused', async () => {
     const paused = { ...mockHabit, status: 'paused' };
-    vi.mocked(habitsDB.updateHabit).mockResolvedValue(paused as any);
+    mockUpdateHabit.mockResolvedValue(paused as any);
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
       method: 'PATCH',
@@ -149,7 +155,7 @@ describe('PATCH /api/habits/[id]', () => {
     });
     await PATCH(request, { params });
 
-    expect(habitsDB.updateHabit).toHaveBeenCalledWith(
+    expect(mockUpdateHabit).toHaveBeenCalledWith(
       'habit-1',
       'user-123',
       expect.objectContaining({ status: 'paused', paused_at: expect.any(String) })
@@ -166,7 +172,7 @@ describe('DELETE /api/habits/[id]', () => {
   });
 
   it('should hard delete a habit', async () => {
-    vi.mocked(habitsDB.deleteHabit).mockResolvedValue();
+    mockDeleteHabit.mockResolvedValue(undefined);
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
       method: 'DELETE',
@@ -180,7 +186,7 @@ describe('DELETE /api/habits/[id]', () => {
 
   it('should archive when archive=true', async () => {
     const archived = { ...mockHabit, status: 'archived' };
-    vi.mocked(habitsDB.archiveHabit).mockResolvedValue(archived as any);
+    mockArchiveHabit.mockResolvedValue(archived as any);
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1?archive=true', {
       method: 'DELETE',
@@ -190,7 +196,7 @@ describe('DELETE /api/habits/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.archived).toBe(true);
-    expect(habitsDB.archiveHabit).toHaveBeenCalledWith('habit-1', 'user-123');
+    expect(mockArchiveHabit).toHaveBeenCalledWith('habit-1', 'user-123');
   });
 
   it('should return 401 if not authenticated', async () => {

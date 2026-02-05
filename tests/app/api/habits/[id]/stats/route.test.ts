@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from '@/app/api/habits/[id]/stats/route';
 import { NextRequest } from 'next/server';
 
+const { mockGetHabit, mockGetDetailedHabitStats } = vi.hoisted(() => ({
+  mockGetHabit: vi.fn(),
+  mockGetDetailedHabitStats: vi.fn(),
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => ({
     auth: {
@@ -11,16 +16,15 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 vi.mock('@/lib/db', () => ({
-  habitsDB: {
-    getHabit: vi.fn(),
+  HabitsDB: class {
+    getHabit = mockGetHabit;
   },
-  habitLogsDB: {
-    getDetailedHabitStats: vi.fn(),
+  HabitLogsDB: class {
+    getDetailedHabitStats = mockGetDetailedHabitStats;
   },
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import { habitsDB, habitLogsDB } from '@/lib/db';
 
 const mockHabit = {
   id: 'habit-1',
@@ -51,8 +55,8 @@ describe('GET /api/habits/[id]/stats', () => {
   });
 
   it('should return detailed stats for a habit', async () => {
-    vi.mocked(habitsDB.getHabit).mockResolvedValue(mockHabit as any);
-    vi.mocked(habitLogsDB.getDetailedHabitStats).mockResolvedValue(mockDetailedStats);
+    mockGetHabit.mockResolvedValue(mockHabit as any);
+    mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
     const response = await GET(request, { params });
@@ -67,8 +71,8 @@ describe('GET /api/habits/[id]/stats', () => {
       thisMonth: { completed: 10, total: 15, percent: 67 },
       allTime: { completed: 25, total: 35, percent: 71 },
     });
-    expect(habitsDB.getHabit).toHaveBeenCalledWith('habit-1', 'user-123');
-    expect(habitLogsDB.getDetailedHabitStats).toHaveBeenCalledWith(
+    expect(mockGetHabit).toHaveBeenCalledWith('habit-1', 'user-123');
+    expect(mockGetDetailedHabitStats).toHaveBeenCalledWith(
       'habit-1',
       'user-123',
       { type: 'daily' },
@@ -77,7 +81,7 @@ describe('GET /api/habits/[id]/stats', () => {
   });
 
   it('should return 404 if habit not found', async () => {
-    vi.mocked(habitsDB.getHabit).mockResolvedValue(null);
+    mockGetHabit.mockResolvedValue(null);
 
     const request = new NextRequest('http://localhost:3000/api/habits/nonexistent/stats');
     const response = await GET(request, { params: Promise.resolve({ id: 'nonexistent' }) });
@@ -101,7 +105,7 @@ describe('GET /api/habits/[id]/stats', () => {
   });
 
   it('should return 500 on internal error', async () => {
-    vi.mocked(habitsDB.getHabit).mockRejectedValue(new Error('Database error'));
+    mockGetHabit.mockRejectedValue(new Error('Database error'));
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1/stats');
     const response = await GET(request, { params });
