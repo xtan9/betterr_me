@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { habitsDB, habitLogsDB } from '@/lib/db';
+import { HabitsDB, HabitLogsDB } from '@/lib/db';
 
 /**
  * GET /api/habits/[id]/stats
@@ -20,6 +20,9 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const habitsDB = new HabitsDB(supabase);
+    const habitLogsDB = new HabitLogsDB(supabase);
 
     // Get habit
     const habit = await habitsDB.getHabit(habitId, user.id);

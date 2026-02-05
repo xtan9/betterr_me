@@ -1,8 +1,13 @@
 import { createClient } from '@/lib/supabase/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Habit, HabitInsert, HabitUpdate, HabitFilters, HabitWithTodayStatus } from './types';
 
 export class HabitsDB {
-  private supabase = createClient();
+  private supabase: SupabaseClient;
+
+  constructor(supabase?: SupabaseClient) {
+    this.supabase = supabase || createClient();
+  }
 
   /**
    * Get all habits for a user with optional filtering

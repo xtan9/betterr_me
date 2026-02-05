@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/habits/[id]/toggle/route';
 import { NextRequest } from 'next/server';
 
+const { mockToggleLog } = vi.hoisted(() => ({
+  mockToggleLog: vi.fn(),
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => ({
     auth: {
@@ -11,13 +15,12 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 vi.mock('@/lib/db', () => ({
-  habitLogsDB: {
-    toggleLog: vi.fn(),
+  HabitLogsDB: class {
+    toggleLog = mockToggleLog;
   },
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import { habitLogsDB } from '@/lib/db';
 
 const params = Promise.resolve({ id: 'habit-1' });
 
@@ -30,7 +33,7 @@ describe('POST /api/habits/[id]/toggle', () => {
   });
 
   it('should toggle habit completion', async () => {
-    vi.mocked(habitLogsDB.toggleLog).mockResolvedValue({
+    mockToggleLog.mockResolvedValue({
       log: {
         id: 'log-1',
         habit_id: 'habit-1',
@@ -58,7 +61,7 @@ describe('POST /api/habits/[id]/toggle', () => {
   });
 
   it('should use provided date', async () => {
-    vi.mocked(habitLogsDB.toggleLog).mockResolvedValue({
+    mockToggleLog.mockResolvedValue({
       log: { completed: true } as any,
       currentStreak: 1,
       bestStreak: 1,
@@ -70,7 +73,7 @@ describe('POST /api/habits/[id]/toggle', () => {
     });
     await POST(request, { params });
 
-    expect(habitLogsDB.toggleLog).toHaveBeenCalledWith('habit-1', 'user-123', '2026-02-01');
+    expect(mockToggleLog).toHaveBeenCalledWith('habit-1', 'user-123', '2026-02-01');
   });
 
   it('should return 400 for invalid date format', async () => {
@@ -84,7 +87,7 @@ describe('POST /api/habits/[id]/toggle', () => {
   });
 
   it('should return 403 when edit window exceeded', async () => {
-    vi.mocked(habitLogsDB.toggleLog).mockRejectedValue(new Error('EDIT_WINDOW_EXCEEDED'));
+    mockToggleLog.mockRejectedValue(new Error('EDIT_WINDOW_EXCEEDED'));
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1/toggle', {
       method: 'POST',
@@ -98,7 +101,7 @@ describe('POST /api/habits/[id]/toggle', () => {
   });
 
   it('should return 404 when habit not found', async () => {
-    vi.mocked(habitLogsDB.toggleLog).mockRejectedValue(new Error('Habit not found'));
+    mockToggleLog.mockRejectedValue(new Error('Habit not found'));
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1/toggle', {
       method: 'POST',

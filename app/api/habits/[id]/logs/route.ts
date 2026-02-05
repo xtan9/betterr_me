@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { habitLogsDB } from '@/lib/db';
+import { HabitLogsDB } from '@/lib/db';
 
 /**
  * GET /api/habits/[id]/logs
@@ -62,6 +62,7 @@ export async function GET(
       );
     }
 
+    const habitLogsDB = new HabitLogsDB(supabase);
     const logs = await habitLogsDB.getLogsByDateRange(habitId, user.id, startDate, endDate);
 
     return NextResponse.json({

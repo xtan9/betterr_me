@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { habitLogsDB } from '@/lib/db';
+import { HabitLogsDB } from '@/lib/db';
 
 /**
  * POST /api/habits/[id]/toggle
@@ -42,6 +42,7 @@ export async function POST(
     }
 
     // Toggle the log
+    const habitLogsDB = new HabitLogsDB(supabase);
     const result = await habitLogsDB.toggleLog(habitId, user.id, date);
 
     return NextResponse.json({
