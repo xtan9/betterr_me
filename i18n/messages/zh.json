@@ -189,7 +189,8 @@
             "bestStreak": "最佳",
             "streakDays": "{count} 天",
             "thisMonth": "本月 {percent}%",
-            "completedToday": "今日已完成"
+            "completedToday": "今日已完成",
+            "markComplete": "标记完成："
         },
         "categories": {
             "health": "健康",

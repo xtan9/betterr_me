@@ -5,7 +5,7 @@ import { AuthButton } from "./auth-button";
 
 export default async function Navbar() {
   return (
-    <nav className="w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-2">
+    <nav aria-label="Main navigation" className="w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-2">
       <div className="container mx-auto px-4 flex justify-between items-center">
         <Link href="/" prefetch className="text-xl font-bold text-blue-600">
           BetterR.me

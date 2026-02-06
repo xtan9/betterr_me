@@ -189,7 +189,8 @@
             "bestStreak": "Best",
             "streakDays": "{count} days",
             "thisMonth": "{percent}% this month",
-            "completedToday": "Completed today"
+            "completedToday": "Completed today",
+            "markComplete": "Mark complete:"
         },
         "categories": {
             "health": "Health",
