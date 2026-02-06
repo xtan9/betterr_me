@@ -27,6 +27,11 @@ export class HabitLogsDB {
   private supabase: SupabaseClient;
   private habitsDB: HabitsDB;
 
+  /**
+   * @param supabase - Optional Supabase client. Omit for client-side usage
+   *   (uses browser client). Pass a server client in API routes:
+   *   `new HabitLogsDB(await createClient())` from `@/lib/supabase/server`.
+   */
   constructor(supabase?: SupabaseClient) {
     this.supabase = supabase || createClient();
     this.habitsDB = new HabitsDB(this.supabase);
@@ -545,4 +550,5 @@ export class HabitLogsDB {
   }
 }
 
+/** Client-side singleton. Do NOT use in API routes — create a new instance with the server client instead. */
 export const habitLogsDB = new HabitLogsDB();
