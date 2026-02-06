@@ -28,6 +28,8 @@ vi.mock("next-intl", () => ({
         rangeCustom: "Custom Range",
         startDate: "Start Date",
         endDate: "End Date",
+        preparing: "Preparing export...",
+        downloading: "Downloading...",
       };
       return messages[key] ?? key;
     };
@@ -252,6 +254,48 @@ describe("DataExport", () => {
         ok: true,
         headers: new Headers(),
         blob: () => Promise.resolve(new Blob(["test"])),
+      });
+    });
+
+    it("shows progress indicator while exporting", async () => {
+      let resolvePromise: (value: unknown) => void;
+      const promise = new Promise((resolve) => {
+        resolvePromise = resolve;
+      });
+
+      mockFetch.mockReturnValueOnce(promise);
+
+      render(<DataExport />);
+      await user.click(
+        screen.getByRole("button", { name: /export habits/i })
+      );
+
+      // Progress message should be visible
+      expect(screen.getByRole("status")).toBeInTheDocument();
+      expect(screen.getByText("Preparing export...")).toBeInTheDocument();
+
+      // Resolve the promise to clean up
+      resolvePromise!({
+        ok: true,
+        headers: new Headers(),
+        blob: () => Promise.resolve(new Blob(["test"])),
+      });
+    });
+
+    it("hides progress indicator after export completes", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers(),
+        blob: () => Promise.resolve(new Blob(["test"])),
+      });
+
+      render(<DataExport />);
+      await user.click(
+        screen.getByRole("button", { name: /export habits/i })
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
       });
     });
   });

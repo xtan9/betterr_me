@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Download, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 
 type ExportType = "habits" | "logs";
@@ -38,12 +39,14 @@ function getDateRangeDates(range: DateRange): {
 export function DataExport() {
   const t = useTranslations("settings.export");
   const [exporting, setExporting] = React.useState<ExportType | null>(null);
+  const [exportProgress, setExportProgress] = React.useState<string | null>(null);
   const [dateRange, setDateRange] = React.useState<DateRange>("all");
   const [customStart, setCustomStart] = React.useState("");
   const [customEnd, setCustomEnd] = React.useState("");
 
   const handleExport = async (type: ExportType) => {
     setExporting(type);
+    setExportProgress(t("preparing"));
 
     try {
       const params = new URLSearchParams({ type });
@@ -64,6 +67,8 @@ export function DataExport() {
       if (!response.ok) {
         throw new Error("Export failed");
       }
+
+      setExportProgress(t("downloading"));
 
       // Get filename from Content-Disposition header or generate one
       const contentDisposition = response.headers.get("Content-Disposition");
@@ -93,6 +98,7 @@ export function DataExport() {
       toast.error(t("error"));
     } finally {
       setExporting(null);
+      setExportProgress(null);
     }
   };
 
@@ -190,6 +196,16 @@ export function DataExport() {
           {t("logs")}
         </Button>
       </div>
+
+      {exportProgress && (
+        <div className="flex flex-col gap-2" role="status" aria-live="polite">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>{exportProgress}</span>
+          </div>
+          <Progress className="h-1.5" />
+        </div>
+      )}
     </div>
   );
 }
