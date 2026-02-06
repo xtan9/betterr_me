@@ -16,16 +16,19 @@ jobs:
       E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
     steps:
-      # Skip all subsequent steps when Supabase secrets are not configured.
+      # Skip all subsequent steps when required secrets are not configured.
+      # IMPORTANT: All steps below must include the check-secrets skip condition.
       - name: Check required secrets
         id: check-secrets
         run: |
-          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || \
+             [ -z "$E2E_TEST_EMAIL" ] || [ -z "$E2E_TEST_PASSWORD" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping E2E tests — Supabase secrets are not configured."
+            echo "::notice::Skipping E2E tests — required secrets are not configured."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+
       - name: Checkout
         if: steps.check-secrets.outputs.skip != 'true'
         uses: actions/checkout@v4
