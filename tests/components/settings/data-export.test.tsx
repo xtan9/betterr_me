@@ -30,6 +30,7 @@ vi.mock("next-intl", () => ({
         endDate: "End Date",
         preparing: "Preparing export...",
         downloading: "Downloading...",
+        zip: "Export All (ZIP)",
       };
       return messages[key] ?? key;
     };
@@ -75,6 +76,13 @@ describe("DataExport", () => {
       render(<DataExport />);
       expect(
         screen.getByRole("button", { name: /export logs/i })
+      ).toBeInTheDocument();
+    });
+
+    it("renders export all (ZIP) button", () => {
+      render(<DataExport />);
+      expect(
+        screen.getByRole("button", { name: /export all/i })
       ).toBeInTheDocument();
     });
 
@@ -224,6 +232,28 @@ describe("DataExport", () => {
 
       expect(screen.queryByLabelText("Start Date")).not.toBeInTheDocument();
       expect(screen.queryByLabelText("End Date")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("export zip", () => {
+    it("calls API with type=zip", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({
+          "Content-Disposition":
+            'attachment; filename="betterrme-export-2026-02-06.zip"',
+        }),
+        blob: () => Promise.resolve(new Blob(["zipdata"])),
+      });
+
+      render(<DataExport />);
+      await user.click(
+        screen.getByRole("button", { name: /export all/i })
+      );
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith("/api/export?type=zip");
+      });
     });
   });
 

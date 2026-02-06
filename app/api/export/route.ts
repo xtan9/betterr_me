@@ -7,13 +7,14 @@ import {
   type HabitLogWithName,
 } from "@/lib/export/csv";
 import type { Habit, HabitLog } from "@/lib/db/types";
+import JSZip from "jszip";
 
 /**
  * GET /api/export
  * Export user data as CSV
  *
  * Query parameters:
- * - type: 'habits' | 'logs' (required)
+ * - type: 'habits' | 'logs' | 'zip' (required)
  * - startDate: YYYY-MM-DD (optional, logs only)
  * - endDate: YYYY-MM-DD (optional, logs only)
  */
@@ -31,9 +32,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const type = searchParams.get("type");
 
-    if (!type || !["habits", "logs"].includes(type)) {
+    if (!type || !["habits", "logs", "zip"].includes(type)) {
       return NextResponse.json(
-        { error: "Invalid export type. Must be 'habits' or 'logs'" },
+        { error: "Invalid export type. Must be 'habits', 'logs', or 'zip'" },
         { status: 400 }
       );
     }
@@ -117,6 +118,41 @@ export async function GET(request: NextRequest) {
       return new NextResponse(csv, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        },
+      });
+    }
+
+    if (type === "zip") {
+      const habitsDB = new HabitsDB(supabase);
+      const habits = await habitsDB.getUserHabits(user.id);
+      const habitMap = new Map(habits.map((h: Habit) => [h.id, h.name]));
+
+      const { data: logs, error: logsError } = await supabase
+        .from("habit_logs")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("logged_date", { ascending: false });
+
+      if (logsError) throw logsError;
+
+      const logsWithNames: HabitLogWithName[] = (logs || []).map(
+        (log: HabitLog) => ({
+          ...log,
+          habit_name: habitMap.get(log.habit_id) || "Unknown",
+        })
+      );
+
+      const zip = new JSZip();
+      zip.file("habits.csv", exportHabitsToCSV(habits));
+      zip.file("logs.csv", exportLogsToCSV(logsWithNames));
+
+      const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+      const filename = `betterrme-export-${date}.zip`;
+
+      return new NextResponse(zipBuffer, {
+        headers: {
+          "Content-Type": "application/zip",
           "Content-Disposition": `attachment; filename="${filename}"`,
         },
       });
