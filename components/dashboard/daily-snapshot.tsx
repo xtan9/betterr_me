@@ -20,7 +20,7 @@ function StatCard({ icon, title, value, subtitle, trend }: StatCardProps) {
   return (
     <div className="min-w-[120px] rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900">
       <div className="flex items-center gap-2 mb-2 text-slate-500 dark:text-slate-400">
-        {icon}
+        <span aria-hidden="true">{icon}</span>
         <span className="text-sm">{title}</span>
       </div>
       <div className="text-3xl font-bold mb-1">{value}</div>
@@ -90,19 +90,19 @@ export function DailySnapshot({ stats, yesterdayStats }: DailySnapshotProps) {
       <h2 className="text-lg font-semibold">{t("title")}</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <StatCard
-          icon={<Target className="size-4" aria-hidden="true" />}
+          icon={<Target className="size-4" />}
           title={t("activeHabits")}
           value={stats.total_habits}
         />
         <StatCard
-          icon={<Target className="size-4" aria-hidden="true" />}
+          icon={<Target className="size-4" />}
           title={t("todaysProgress")}
           value={`${stats.completed_today}/${stats.total_habits}`}
           subtitle={t("completionRate", { percent: completionRate })}
           trend={trend}
         />
         <StatCard
-          icon={<Flame className="size-4" aria-hidden="true" />}
+          icon={<Flame className="size-4" />}
           title={t("currentStreak")}
           value={t("days", { count: stats.current_best_streak })}
         />

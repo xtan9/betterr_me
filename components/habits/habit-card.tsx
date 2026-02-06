@@ -25,30 +25,21 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
   const freqTrans = getFrequencyTranslation(habit.frequency);
   const frequencyLabel = t(freqTrans.key, freqTrans.params);
 
-  const handleCheckboxClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCheckedChange = () => {
     if (!isToggling) {
       onToggle(habit.id);
     }
   };
 
   return (
-    <Card
-      role="button"
-      tabIndex={0}
-      aria-label={habit.name}
-      className="cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={() => onClick(habit.id)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick(habit.id);
-        }
-      }}
-    >
+    <Card className="transition-all hover:shadow-md hover:scale-[1.02] p-5">
       <CardContent className="p-0 space-y-3">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            className="flex items-center gap-2 min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+            onClick={() => onClick(habit.id)}
+          >
             <span className={cn("inline-flex items-center justify-center rounded-md p-1.5", categoryColorClass)}>
               <Icon className="size-4" aria-hidden="true" />
             </span>
@@ -58,15 +49,14 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
                 {categoryLabel} · {frequencyLabel}
               </p>
             </div>
-          </div>
-          <div onClick={handleCheckboxClick}>
-            <Checkbox
-              checked={habit.completed_today}
-              disabled={isToggling}
-              aria-label={`${t("card.markComplete")} ${habit.name}`}
-              className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-            />
-          </div>
+          </button>
+          <Checkbox
+            checked={habit.completed_today}
+            onCheckedChange={handleCheckedChange}
+            disabled={isToggling}
+            aria-label={`${t("card.markComplete")} ${habit.name}`}
+            className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+          />
         </div>
 
         <div className="flex gap-3">
