@@ -386,9 +386,9 @@ export class HabitLogsDB {
     const habitCreatedAt = new Date(createdAt);
     habitCreatedAt.setHours(0, 0, 0, 0);
 
-    const fmt = (d: Date) => d.toISOString().split('T')[0];
-    const todayStr = fmt(today);
-    const createdStr = fmt(habitCreatedAt);
+    const formatDate = (d: Date) => d.toISOString().split('T')[0];
+    const todayStr = formatDate(today);
+    const createdStr = formatDate(habitCreatedAt);
 
     // Special handling for times_per_week: needs individual dates for weekly grouping
     if (frequency.type === 'times_per_week') {
@@ -402,45 +402,90 @@ export class HabitLogsDB {
         .lte('logged_date', todayStr);
 
       if (error) throw error;
-      const completedDates = new Set((completedLogs || []).map(l => l.logged_date));
+      const completedDates = new Set((completedLogs || []).map(log => log.logged_date));
       return this.getTimesPerWeekStats(completedDates, frequency.count, weekStartDay, today, startOfWeek, startOfMonth, habitCreatedAt);
     }
 
-    // Count scheduled days in each period (pure date math, no DB call)
-    const countScheduledDays = (start: Date, end: Date): number => {
+    // Helper to count scheduled and completed days in a range
+    const countDaysInRange = (start: Date, end: Date): { completed: number; total: number; percent: number } => {
       let total = 0;
+      let completed = 0;
       const currentDate = new Date(start);
+
       while (currentDate <= end) {
         if (currentDate >= habitCreatedAt && this.shouldTrackOnDate(frequency, currentDate)) {
           total++;
+          const dateStr = currentDate.toISOString().split('T')[0];
+          if (completedDates.has(dateStr)) {
+            completed++;
+          }
         }
         currentDate.setDate(currentDate.getDate() + 1);
       }
-      return total;
+
+      return {
+        completed,
+        total,
+        percent: total > 0 ? Math.min(Math.round((completed / total) * 100), 100) : 0,
+      };
     };
 
-    const weekTotal = countScheduledDays(startOfWeek, today);
-    const monthTotal = countScheduledDays(startOfMonth, today);
-    const allTimeTotal = countScheduledDays(habitCreatedAt, today);
+    // For daily habits, use optimized parallel COUNT queries (every day is scheduled)
+    if (frequency.type === 'daily') {
+      const countScheduledDays = (start: Date, end: Date): number => {
+        let total = 0;
+        const currentDate = new Date(start);
+        while (currentDate <= end) {
+          if (currentDate >= habitCreatedAt) total++;
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        return total;
+      };
 
-    // Count completed logs with targeted COUNT queries (no row data transferred)
-    const [weekCompleted, monthCompleted, allTimeCompleted] = await Promise.all([
-      this.countCompletedLogs(habitId, userId, fmt(startOfWeek), todayStr),
-      this.countCompletedLogs(habitId, userId, fmt(startOfMonth), todayStr),
-      this.countCompletedLogs(habitId, userId, createdStr, todayStr),
-    ]);
+      const weekTotal = countScheduledDays(startOfWeek, today);
+      const monthTotal = countScheduledDays(startOfMonth, today);
+      const allTimeTotal = countScheduledDays(habitCreatedAt, today);
 
-    const pct = (c: number, t: number) => t > 0 ? Math.round((c / t) * 100) : 0;
+      const [weekCompleted, monthCompleted, allTimeCompleted] = await Promise.all([
+        this.countCompletedLogs(habitId, userId, formatDate(startOfWeek), todayStr),
+        this.countCompletedLogs(habitId, userId, formatDate(startOfMonth), todayStr),
+        this.countCompletedLogs(habitId, userId, createdStr, todayStr),
+      ]);
+
+      const calcPercent = (c: number, t: number) =>
+        t > 0 ? Math.min(Math.round((c / t) * 100), 100) : 0;
+
+      return {
+        thisWeek: { completed: weekCompleted, total: weekTotal, percent: calcPercent(weekCompleted, weekTotal) },
+        thisMonth: { completed: monthCompleted, total: monthTotal, percent: calcPercent(monthCompleted, monthTotal) },
+        allTime: { completed: allTimeCompleted, total: allTimeTotal, percent: calcPercent(allTimeCompleted, allTimeTotal) },
+      };
+    }
+
+    // For non-daily habits (weekdays, weekly, custom), fetch completed dates and
+    // filter by shouldTrackOnDate to avoid counting completions on non-scheduled days
+    const { data: completedLogs, error: logsError } = await this.supabase
+      .from('habit_logs')
+      .select('logged_date')
+      .eq('habit_id', habitId)
+      .eq('user_id', userId)
+      .eq('completed', true)
+      .gte('logged_date', createdStr)
+      .lte('logged_date', todayStr);
+
+    if (logsError) throw logsError;
+    const completedDates = new Set((completedLogs || []).map(log => log.logged_date));
 
     return {
-      thisWeek: { completed: weekCompleted, total: weekTotal, percent: pct(weekCompleted, weekTotal) },
-      thisMonth: { completed: monthCompleted, total: monthTotal, percent: pct(monthCompleted, monthTotal) },
-      allTime: { completed: allTimeCompleted, total: allTimeTotal, percent: pct(allTimeCompleted, allTimeTotal) },
+      thisWeek: countDaysInRange(startOfWeek, today),
+      thisMonth: countDaysInRange(startOfMonth, today),
+      allTime: countDaysInRange(habitCreatedAt, today),
     };
   }
 
   /**
    * Count completed logs in a date range using a HEAD request (returns only the count, no rows).
+   * Only safe for daily habits where every day is a scheduled day.
    */
   private async countCompletedLogs(
     habitId: string,
