@@ -176,5 +176,9 @@ export class TasksDB {
   }
 }
 
-/** Client-side singleton. Uses browser client only — not used in API routes. */
+/**
+ * Client-side singleton. Do NOT use in API routes — create a new instance
+ * with the server client instead. NOTE: TasksDB does not yet support DI
+ * (no constructor parameter for custom client). See tracking issue.
+ */
 export const tasksDB = new TasksDB();

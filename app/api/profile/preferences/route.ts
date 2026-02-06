@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+// TODO: profilesDB singleton uses browser client — should instantiate with server client
 import { profilesDB } from '@/lib/db';
 import { invalidateUserStatsCache } from '@/lib/cache';
 import type { Profile } from '@/lib/db/types';

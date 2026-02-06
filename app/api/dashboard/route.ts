@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+// TODO: habitsDB/tasksDB singletons use browser client — should instantiate with server client
 import { habitsDB, tasksDB } from '@/lib/db';
 import type { DashboardData } from '@/lib/db/types';
 
