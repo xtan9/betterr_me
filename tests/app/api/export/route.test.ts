@@ -176,6 +176,14 @@ describe('GET /api/export', () => {
     expect(data.error).toContain('endDate');
   });
 
+  it('returns 400 for semantically invalid date like 2026-13-45', async () => {
+    const req = new NextRequest('http://localhost:3000/api/export?type=logs&startDate=2026-13-45');
+    const res = await GET(req);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toContain('startDate');
+  });
+
   it('exports habits without date filtering', async () => {
     const req = new NextRequest('http://localhost:3000/api/export?type=habits');
     const res = await GET(req);

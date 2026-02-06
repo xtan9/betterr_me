@@ -24,6 +24,7 @@ function getDateRangeDates(range: DateRange): {
 
   const endDate = new Date().toISOString().split("T")[0];
 
+  // Custom dates are provided directly via customStart/customEnd state
   if (range === "custom") return {};
 
   const days = parseInt(range, 10);
@@ -45,20 +46,20 @@ export function DataExport() {
     setExporting(type);
 
     try {
-      let url = `/api/export?type=${type}`;
+      const params = new URLSearchParams({ type });
 
       if (type === "logs") {
         if (dateRange === "custom") {
-          if (customStart) url += `&startDate=${customStart}`;
-          if (customEnd) url += `&endDate=${customEnd}`;
+          if (customStart) params.set("startDate", customStart);
+          if (customEnd) params.set("endDate", customEnd);
         } else {
           const { startDate, endDate } = getDateRangeDates(dateRange);
-          if (startDate) url += `&startDate=${startDate}`;
-          if (endDate) url += `&endDate=${endDate}`;
+          if (startDate) params.set("startDate", startDate);
+          if (endDate) params.set("endDate", endDate);
         }
       }
 
-      const response = await fetch(url);
+      const response = await fetch(`/api/export?${params}`);
 
       if (!response.ok) {
         throw new Error("Export failed");
@@ -97,14 +98,31 @@ export function DataExport() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="date-range"
-            className="text-sm font-medium text-muted-foreground"
-          >
-            {t("dateRange")}
-          </label>
+      <div className="flex flex-col gap-3">
+        <Button
+          variant="outline"
+          onClick={() => handleExport("habits")}
+          disabled={exporting !== null}
+          className="gap-2 self-start"
+        >
+          {exporting === "habits" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+          {t("habits")}
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="date-range"
+              className="text-sm font-medium text-muted-foreground"
+            >
+              {t("dateRange")}
+            </label>
           <Select
             value={dateRange}
             onValueChange={(v) => setDateRange(v as DateRange)}
@@ -156,27 +174,13 @@ export function DataExport() {
             </div>
           </div>
         )}
-      </div>
+        </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Button
-          variant="outline"
-          onClick={() => handleExport("habits")}
-          disabled={exporting !== null}
-          className="gap-2"
-        >
-          {exporting === "habits" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
-          )}
-          {t("habits")}
-        </Button>
         <Button
           variant="outline"
           onClick={() => handleExport("logs")}
           disabled={exporting !== null}
-          className="gap-2"
+          className="gap-2 self-start"
         >
           {exporting === "logs" ? (
             <Loader2 className="h-4 w-4 animate-spin" />

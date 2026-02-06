@@ -12,6 +12,11 @@ global.ResizeObserver = ResizeObserverMock;
 // Mock scrollIntoView (not available in jsdom)
 Element.prototype.scrollIntoView = vi.fn();
 
+// Polyfill pointer capture methods for Radix UI components in jsdom
+Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+Element.prototype.setPointerCapture = vi.fn();
+Element.prototype.releasePointerCapture = vi.fn();
+
 // Create a thenable query builder mock (like Supabase's real behavior)
 // It chains methods AND can be awaited to return { data, error }
 class MockQueryBuilder {

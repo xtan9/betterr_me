@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DataExport } from "@/components/settings/data-export";
@@ -49,13 +49,6 @@ const mockCreateObjectURL = vi.fn(() => "blob:test");
 const mockRevokeObjectURL = vi.fn();
 global.URL.createObjectURL = mockCreateObjectURL;
 global.URL.revokeObjectURL = mockRevokeObjectURL;
-
-// Polyfill for Radix UI pointer events in jsdom
-beforeAll(() => {
-  Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
-  Element.prototype.setPointerCapture = vi.fn();
-  Element.prototype.releasePointerCapture = vi.fn();
-});
 
 describe("DataExport", () => {
   const user = userEvent.setup();

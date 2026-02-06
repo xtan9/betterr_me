@@ -61,17 +61,20 @@ export async function GET(request: NextRequest) {
       const startDate = searchParams.get("startDate");
       const endDate = searchParams.get("endDate");
 
-      // Validate date format if provided
+      // Validate date format and semantic validity if provided
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (startDate && !dateRegex.test(startDate)) {
+      const isValidDate = (d: string) =>
+        dateRegex.test(d) && !isNaN(new Date(d).getTime());
+
+      if (startDate && !isValidDate(startDate)) {
         return NextResponse.json(
-          { error: "Invalid startDate format. Use YYYY-MM-DD" },
+          { error: "Invalid startDate. Use a valid YYYY-MM-DD date" },
           { status: 400 }
         );
       }
-      if (endDate && !dateRegex.test(endDate)) {
+      if (endDate && !isValidDate(endDate)) {
         return NextResponse.json(
-          { error: "Invalid endDate format. Use YYYY-MM-DD" },
+          { error: "Invalid endDate. Use a valid YYYY-MM-DD date" },
           { status: 400 }
         );
       }
