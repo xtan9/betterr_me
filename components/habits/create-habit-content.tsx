@@ -22,14 +22,15 @@ export function CreateHabitContent() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to create habit");
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to create habit");
       }
 
       toast.success(t("toast.createSuccess"));
       router.push("/habits");
     } catch (error) {
+      console.error("Create habit error:", error);
       toast.error(t("toast.createError"));
-      throw error;
     } finally {
       setIsLoading(false);
     }

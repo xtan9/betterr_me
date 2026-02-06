@@ -208,4 +208,126 @@ describe('POST /api/habits', () => {
     const response = await POST(request);
     expect(response.status).toBe(401);
   });
+
+  it('should return 500 when database throws', async () => {
+    mockCreateHabit.mockRejectedValue(new Error('DB connection failed'));
+
+    const request = new NextRequest('http://localhost:3000/api/habits', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Test',
+        frequency: { type: 'daily' },
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('Failed to create habit');
+  });
+
+  it('should create habit with description', async () => {
+    mockCreateHabit.mockResolvedValue({ ...mockHabit, description: 'My description' } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/habits', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Morning Run',
+        description: 'My description',
+        frequency: { type: 'daily' },
+        category: 'health',
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    expect(mockCreateHabit).toHaveBeenCalledWith(
+      expect.objectContaining({ description: 'My description' })
+    );
+  });
+
+  it('should create habit without category (null)', async () => {
+    mockCreateHabit.mockResolvedValue({ ...mockHabit, category: null } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/habits', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Meditate',
+        frequency: { type: 'daily' },
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    expect(mockCreateHabit).toHaveBeenCalledWith(
+      expect.objectContaining({ category: null })
+    );
+  });
+
+  it('should create habit with valid custom frequency', async () => {
+    mockCreateHabit.mockResolvedValue({
+      ...mockHabit,
+      frequency: { type: 'custom', days: [1, 3, 5] },
+    } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/habits', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Yoga',
+        frequency: { type: 'custom', days: [1, 3, 5] },
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+  });
+
+  it('should create habit with valid times_per_week frequency', async () => {
+    mockCreateHabit.mockResolvedValue({
+      ...mockHabit,
+      frequency: { type: 'times_per_week', count: 2 },
+    } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/habits', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Gym',
+        frequency: { type: 'times_per_week', count: 2 },
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+  });
+
+  it('should trim whitespace from name', async () => {
+    mockCreateHabit.mockResolvedValue(mockHabit as any);
+
+    const request = new NextRequest('http://localhost:3000/api/habits', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '  Morning Run  ',
+        frequency: { type: 'daily' },
+      }),
+    });
+
+    await POST(request);
+    expect(mockCreateHabit).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Morning Run' })
+    );
+  });
+
+  it('should return 400 for whitespace-only name', async () => {
+    const request = new NextRequest('http://localhost:3000/api/habits', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '   ',
+        frequency: { type: 'daily' },
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(400);
+  });
 });
