@@ -8,6 +8,8 @@ on:
 jobs:
   lighthouse:
     runs-on: ubuntu-latest
+    # Only run when Supabase secrets are configured (needed for build)
+    if: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL != '' }}
     timeout-minutes: 15
 
     env:
