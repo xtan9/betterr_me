@@ -129,6 +129,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Ensure user profile exists (required by FK constraint on habits.user_id)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile) {
+      // Auto-create profile if missing (trigger may have failed during signup)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: user.id,
+          email: user.email!,
+          full_name: user.user_metadata?.full_name || null,
+          avatar_url: user.user_metadata?.avatar_url || null,
+        });
+
+      if (profileError) {
+        console.error('Failed to create profile:', profileError);
+        return NextResponse.json(
+          { error: `Profile setup failed: ${profileError.message}` },
+          { status: 500 }
+        );
+      }
+    }
+
     const habitsDB = new HabitsDB(supabase);
     const habitData: HabitInsert = {
       user_id: user.id,
