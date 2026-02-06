@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, PATCH, DELETE } from '@/app/api/habits/[id]/route';
 import { NextRequest } from 'next/server';
+import { statsCache, getStatsCacheKey } from '@/lib/cache';
 
 const { mockGetHabit, mockUpdateHabit, mockDeleteHabit, mockArchiveHabit } = vi.hoisted(() => ({
   mockGetHabit: vi.fn(),
@@ -85,6 +86,7 @@ describe('GET /api/habits/[id]', () => {
 describe('PATCH /api/habits/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    statsCache.clear();
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
     } as any);
@@ -161,11 +163,37 @@ describe('PATCH /api/habits/[id]', () => {
       expect.objectContaining({ status: 'paused', paused_at: expect.any(String) })
     );
   });
+
+  it('should invalidate stats cache after update', async () => {
+    const updated = { ...mockHabit, frequency: { type: 'weekly' } };
+    mockUpdateHabit.mockResolvedValue(updated as any);
+
+    // Pre-populate cache
+    const cacheKey = getStatsCacheKey('habit-1', 'user-123');
+    statsCache.set(cacheKey, {
+      habitId: 'habit-1',
+      currentStreak: 5,
+      bestStreak: 10,
+      thisWeek: { completed: 3, total: 7, percent: 43 },
+      thisMonth: { completed: 15, total: 30, percent: 50 },
+      allTime: { completed: 100, total: 200, percent: 50 },
+    });
+    expect(statsCache.has(cacheKey)).toBe(true);
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ frequency: { type: 'weekly' } }),
+    });
+    await PATCH(request, { params });
+
+    expect(statsCache.has(cacheKey)).toBe(false);
+  });
 });
 
 describe('DELETE /api/habits/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    statsCache.clear();
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
     } as any);
@@ -210,5 +238,50 @@ describe('DELETE /api/habits/[id]', () => {
     const response = await DELETE(request, { params });
 
     expect(response.status).toBe(401);
+  });
+
+  it('should invalidate stats cache after hard delete', async () => {
+    mockDeleteHabit.mockResolvedValue(undefined);
+
+    const cacheKey = getStatsCacheKey('habit-1', 'user-123');
+    statsCache.set(cacheKey, {
+      habitId: 'habit-1',
+      currentStreak: 5,
+      bestStreak: 10,
+      thisWeek: { completed: 3, total: 7, percent: 43 },
+      thisMonth: { completed: 15, total: 30, percent: 50 },
+      allTime: { completed: 100, total: 200, percent: 50 },
+    });
+    expect(statsCache.has(cacheKey)).toBe(true);
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
+      method: 'DELETE',
+    });
+    await DELETE(request, { params });
+
+    expect(statsCache.has(cacheKey)).toBe(false);
+  });
+
+  it('should invalidate stats cache after archive', async () => {
+    const archived = { ...mockHabit, status: 'archived' };
+    mockArchiveHabit.mockResolvedValue(archived as any);
+
+    const cacheKey = getStatsCacheKey('habit-1', 'user-123');
+    statsCache.set(cacheKey, {
+      habitId: 'habit-1',
+      currentStreak: 5,
+      bestStreak: 10,
+      thisWeek: { completed: 3, total: 7, percent: 43 },
+      thisMonth: { completed: 15, total: 30, percent: 50 },
+      allTime: { completed: 100, total: 200, percent: 50 },
+    });
+    expect(statsCache.has(cacheKey)).toBe(true);
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1?archive=true', {
+      method: 'DELETE',
+    });
+    await DELETE(request, { params });
+
+    expect(statsCache.has(cacheKey)).toBe(false);
   });
 });

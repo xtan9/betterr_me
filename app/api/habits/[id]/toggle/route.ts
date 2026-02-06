@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitLogsDB } from '@/lib/db';
+import { invalidateStatsCache } from '@/lib/cache';
 
 /**
  * POST /api/habits/[id]/toggle
@@ -44,6 +45,9 @@ export async function POST(
     // Toggle the log
     const habitLogsDB = new HabitLogsDB(supabase);
     const result = await habitLogsDB.toggleLog(habitId, user.id, date);
+
+    // Invalidate stats cache since completion status changed
+    invalidateStatsCache(habitId, user.id);
 
     return NextResponse.json({
       log: result.log,

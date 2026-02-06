@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PATCH } from '@/app/api/profile/preferences/route';
 import { NextRequest } from 'next/server';
+import { statsCache, getStatsCacheKey } from '@/lib/cache';
 
 // Mock dependencies
 vi.mock('@/lib/supabase/server', () => ({
@@ -22,6 +23,7 @@ import { profilesDB } from '@/lib/db';
 describe('PATCH /api/profile/preferences', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    statsCache.clear();
   });
 
   it('should update preferences', async () => {
@@ -103,5 +105,66 @@ describe('PATCH /api/profile/preferences', () => {
 
     const response = await PATCH(request);
     expect(response.status).toBe(400);
+  });
+
+  it('should invalidate all user stats cache when week_start_day changes', async () => {
+    const updatedProfile = {
+      id: 'user-123',
+      preferences: { week_start_day: 1 },
+    };
+    vi.mocked(profilesDB.updatePreferences).mockResolvedValue(updatedProfile as any);
+
+    // Pre-populate cache with multiple habits for this user
+    statsCache.set(getStatsCacheKey('habit-1', 'user-123'), {
+      habitId: 'habit-1',
+      currentStreak: 5,
+      bestStreak: 10,
+      thisWeek: { completed: 3, total: 7, percent: 43 },
+      thisMonth: { completed: 15, total: 30, percent: 50 },
+      allTime: { completed: 100, total: 200, percent: 50 },
+    });
+    statsCache.set(getStatsCacheKey('habit-2', 'user-123'), {
+      habitId: 'habit-2',
+      currentStreak: 2,
+      bestStreak: 5,
+      thisWeek: { completed: 1, total: 3, percent: 33 },
+      thisMonth: { completed: 8, total: 20, percent: 40 },
+      allTime: { completed: 50, total: 100, percent: 50 },
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ week_start_day: 1 }),
+    });
+    await PATCH(request);
+
+    expect(statsCache.has(getStatsCacheKey('habit-1', 'user-123'))).toBe(false);
+    expect(statsCache.has(getStatsCacheKey('habit-2', 'user-123'))).toBe(false);
+  });
+
+  it('should not invalidate stats cache when only theme changes', async () => {
+    const updatedProfile = {
+      id: 'user-123',
+      preferences: { theme: 'dark' },
+    };
+    vi.mocked(profilesDB.updatePreferences).mockResolvedValue(updatedProfile as any);
+
+    // Pre-populate cache
+    statsCache.set(getStatsCacheKey('habit-1', 'user-123'), {
+      habitId: 'habit-1',
+      currentStreak: 5,
+      bestStreak: 10,
+      thisWeek: { completed: 3, total: 7, percent: 43 },
+      thisMonth: { completed: 15, total: 30, percent: 50 },
+      allTime: { completed: 100, total: 200, percent: 50 },
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ theme: 'dark' }),
+    });
+    await PATCH(request);
+
+    expect(statsCache.has(getStatsCacheKey('habit-1', 'user-123'))).toBe(true);
   });
 });

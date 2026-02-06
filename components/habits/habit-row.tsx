@@ -33,6 +33,7 @@ export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps
         checked={habit.completed_today}
         onCheckedChange={handleCheckboxChange}
         disabled={isToggling}
+        aria-label={`${t("card.markComplete")} ${habit.name}`}
         className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
       />
       <button
@@ -46,7 +47,7 @@ export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps
         {categoryLabel}
       </span>
       <div className="flex items-center gap-1 text-sm text-muted-foreground whitespace-nowrap">
-        {habit.current_streak >= 7 && <Flame className="size-3.5 text-orange-500" />}
+        {habit.current_streak >= 7 && <Flame className="size-3.5 text-orange-500" aria-hidden="true" />}
         <span>{t("card.streakDays", { count: habit.current_streak })}</span>
       </div>
     </div>
