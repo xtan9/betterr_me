@@ -18,7 +18,10 @@ module.exports = {
       url: [
         'http://localhost:3000/',
         'http://localhost:3000/auth/login',
+        'http://localhost:3000/dashboard',
+        'http://localhost:3000/habits',
       ],
+      puppeteerScript: './scripts/lighthouse-auth.js',
       startServerCommand: 'pnpm start',
       startServerReadyPattern: 'Ready in',
       numberOfRuns: 3,
