@@ -9,14 +9,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { HabitList } from "./habit-list";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch habits");
+  const data = await res.json();
+  return data.habits;
+};
 
 export function HabitsPageContent() {
   const t = useTranslations("habits");
   const router = useRouter();
 
   const { data, error, isLoading, mutate } = useSWR<HabitWithTodayStatus[]>(
-    "/api/habits",
+    "/api/habits?with_today=true",
     fetcher,
     {
       revalidateOnFocus: true,
