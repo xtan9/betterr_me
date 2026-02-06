@@ -10,10 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Download, Loader2 } from "lucide-react";
+import { Archive, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type ExportType = "habits" | "logs";
+type ExportType = "habits" | "logs" | "zip";
 type ExportPhase = "preparing" | "downloading";
 type DateRange = "all" | "30" | "90" | "365" | "custom";
 
@@ -52,7 +52,7 @@ export function DataExport() {
     try {
       const params = new URLSearchParams({ type });
 
-      if (type === "logs") {
+      if (type === "logs" || type === "zip") {
         if (dateRange === "custom") {
           if (customStart) params.set("startDate", customStart);
           if (customEnd) params.set("endDate", customEnd);
@@ -73,7 +73,8 @@ export function DataExport() {
 
       // Get filename from Content-Disposition header or generate one
       const contentDisposition = response.headers.get("Content-Disposition");
-      let filename = `betterrme-${type}-${new Date().toISOString().split("T")[0]}.csv`;
+      const ext = type === "zip" ? "zip" : "csv";
+      let filename = `betterrme-${type === "zip" ? "export" : type}-${new Date().toISOString().split("T")[0]}.${ext}`;
 
       if (contentDisposition) {
         const match = contentDisposition.match(/filename="?([^"]+)"?/);
@@ -194,6 +195,22 @@ export function DataExport() {
             <Download className="h-4 w-4" />
           )}
           {t("logs")}
+        </Button>
+      </div>
+
+      <div className="border-t pt-4">
+        <Button
+          variant="outline"
+          onClick={() => handleExport("zip")}
+          disabled={exportState !== null}
+          className="gap-2 self-start"
+        >
+          {exportState?.type === "zip" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Archive className="h-4 w-4" />
+          )}
+          {t("zip")}
         </Button>
       </div>
 

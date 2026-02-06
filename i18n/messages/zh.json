@@ -413,7 +413,8 @@
             "startDate": "开始日期",
             "endDate": "结束日期",
             "preparing": "正在准备导出...",
-            "downloading": "正在下载..."
+            "downloading": "正在下载...",
+            "zip": "导出全部 (ZIP)"
         },
         "toast": {
             "saveError": "保存设置失败"

@@ -133,7 +133,10 @@ export function downloadCSV(csvContent: string, filename: string): void {
 /**
  * Generate filename with current date
  */
-export function generateExportFilename(type: "habits" | "logs"): string {
+export function generateExportFilename(type: "habits" | "logs" | "zip"): string {
   const date = new Date().toISOString().split("T")[0];
+  if (type === "zip") {
+    return `betterrme-export-${date}.zip`;
+  }
   return `betterrme-${type}-${date}.csv`;
 }

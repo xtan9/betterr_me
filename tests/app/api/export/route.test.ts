@@ -16,9 +16,19 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
+const mockZipFile = vi.fn();
+const mockGenerateAsync = vi.fn();
+
 vi.mock('@/lib/db', () => ({
   HabitsDB: class {
     getUserHabits = mockGetUserHabits;
+  },
+}));
+
+vi.mock('jszip', () => ({
+  default: class {
+    file = mockZipFile;
+    generateAsync = mockGenerateAsync;
   },
 }));
 
@@ -192,5 +202,88 @@ describe('GET /api/export', () => {
     const csv = await res.text();
     expect(csv).toContain('id,name,description');
     expect(csv).toContain('Morning Run');
+  });
+
+  describe('type=zip', () => {
+    it('returns a ZIP with correct headers', async () => {
+      const query = createMockQuery(mockLogs);
+      mockSupabaseFrom.mockReturnValue(query);
+      mockGenerateAsync.mockResolvedValue(Buffer.from('ZIPDATA'));
+
+      const req = new NextRequest('http://localhost:3000/api/export?type=zip');
+      const res = await GET(req);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toBe('application/zip');
+      expect(res.headers.get('Content-Disposition')).toMatch(
+        /attachment; filename="betterrme-export-\d{4}-\d{2}-\d{2}\.zip"/
+      );
+    });
+
+    it('bundles habits.csv and logs.csv into the ZIP', async () => {
+      const query = createMockQuery(mockLogs);
+      mockSupabaseFrom.mockReturnValue(query);
+      mockGenerateAsync.mockResolvedValue(Buffer.from('ZIPDATA'));
+
+      const req = new NextRequest('http://localhost:3000/api/export?type=zip');
+      await GET(req);
+
+      expect(mockZipFile).toHaveBeenCalledWith('habits.csv', expect.stringContaining('Morning Run'));
+      expect(mockZipFile).toHaveBeenCalledWith('logs.csv', expect.stringContaining('Morning Run'));
+    });
+
+    it('returns a non-empty ZIP buffer', async () => {
+      const query = createMockQuery(mockLogs);
+      mockSupabaseFrom.mockReturnValue(query);
+      mockGenerateAsync.mockResolvedValue(Buffer.from('ZIPDATA'));
+
+      const req = new NextRequest('http://localhost:3000/api/export?type=zip');
+      const res = await GET(req);
+
+      const buffer = await res.arrayBuffer();
+      expect(buffer.byteLength).toBeGreaterThan(0);
+    });
+
+    it('filters logs by date range in ZIP export', async () => {
+      const query = createMockQuery(mockLogs.slice(0, 1));
+      mockSupabaseFrom.mockReturnValue(query);
+      mockGenerateAsync.mockResolvedValue(Buffer.from('ZIPDATA'));
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/export?type=zip&startDate=2026-02-01&endDate=2026-02-28'
+      );
+      const res = await GET(req);
+
+      expect(res.status).toBe(200);
+      expect(query.gte).toHaveBeenCalledWith('logged_date', '2026-02-01');
+      expect(query.lte).toHaveBeenCalledWith('logged_date', '2026-02-28');
+    });
+
+    it('returns 400 for invalid date params in ZIP export', async () => {
+      const req = new NextRequest(
+        'http://localhost:3000/api/export?type=zip&startDate=not-a-date'
+      );
+      const res = await GET(req);
+
+      expect(res.status).toBe(400);
+      const data = await res.json();
+      expect(data.error).toContain('startDate');
+    });
+
+    it('returns 500 when log query fails', async () => {
+      const query = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: null, error: new Error('DB error') }),
+      };
+      mockSupabaseFrom.mockReturnValue(query);
+
+      const req = new NextRequest('http://localhost:3000/api/export?type=zip');
+      const res = await GET(req);
+
+      expect(res.status).toBe(500);
+    });
   });
 });

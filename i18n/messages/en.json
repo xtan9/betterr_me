@@ -413,7 +413,8 @@
             "startDate": "Start Date",
             "endDate": "End Date",
             "preparing": "Preparing export...",
-            "downloading": "Downloading..."
+            "downloading": "Downloading...",
+            "zip": "Export All (ZIP)"
         },
         "toast": {
             "saveError": "Failed to save settings"

@@ -30,6 +30,7 @@ vi.mock("next-intl", () => ({
         endDate: "End Date",
         preparing: "Preparing export...",
         downloading: "Downloading...",
+        zip: "Export All (ZIP)",
       };
       return messages[key] ?? key;
     };
@@ -75,6 +76,13 @@ describe("DataExport", () => {
       render(<DataExport />);
       expect(
         screen.getByRole("button", { name: /export logs/i })
+      ).toBeInTheDocument();
+    });
+
+    it("renders export all (ZIP) button", () => {
+      render(<DataExport />);
+      expect(
+        screen.getByRole("button", { name: /export all/i })
       ).toBeInTheDocument();
     });
 
@@ -227,6 +235,54 @@ describe("DataExport", () => {
     });
   });
 
+  describe("export zip", () => {
+    it("calls API with type=zip", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({
+          "Content-Disposition":
+            'attachment; filename="betterrme-export-2026-02-06.zip"',
+        }),
+        blob: () => Promise.resolve(new Blob(["zipdata"])),
+      });
+
+      render(<DataExport />);
+      await user.click(
+        screen.getByRole("button", { name: /export all/i })
+      );
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith("/api/export?type=zip");
+      });
+    });
+
+    it("includes date params when a preset range is selected", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers(),
+        blob: () => Promise.resolve(new Blob(["zipdata"])),
+      });
+
+      render(<DataExport />);
+
+      // Select a date range
+      await user.click(screen.getByRole("combobox"));
+      await user.click(screen.getByText("Last 30 Days"));
+
+      // Export ZIP
+      await user.click(
+        screen.getByRole("button", { name: /export all/i })
+      );
+
+      await waitFor(() => {
+        const url = mockFetch.mock.calls[0][0] as string;
+        expect(url).toContain("type=zip");
+        expect(url).toMatch(/startDate=\d{4}-\d{2}-\d{2}/);
+        expect(url).toMatch(/endDate=\d{4}-\d{2}-\d{2}/);
+      });
+    });
+  });
+
   describe("loading state", () => {
     it("disables both buttons while exporting", async () => {
       let resolvePromise: (value: unknown) => void;
@@ -241,12 +297,15 @@ describe("DataExport", () => {
         screen.getByRole("button", { name: /export habits/i })
       );
 
-      // Both buttons should be disabled
+      // All buttons should be disabled
       expect(
         screen.getByRole("button", { name: /export habits/i })
       ).toBeDisabled();
       expect(
         screen.getByRole("button", { name: /export logs/i })
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: /export all/i })
       ).toBeDisabled();
 
       // Resolve the promise to clean up
