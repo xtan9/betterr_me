@@ -282,12 +282,32 @@ describe("DataExport", () => {
       });
     });
 
-    it("hides progress indicator after export completes", async () => {
+    it("shows 'Downloading...' after fetch resolves but before blob completes", async () => {
+      let resolveBlob: (value: Blob) => void;
+      const blobPromise = new Promise<Blob>((resolve) => {
+        resolveBlob = resolve;
+      });
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         headers: new Headers(),
-        blob: () => Promise.resolve(new Blob(["test"])),
+        blob: () => blobPromise,
       });
+
+      render(<DataExport />);
+      await user.click(
+        screen.getByRole("button", { name: /export habits/i })
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Downloading...")).toBeInTheDocument();
+      });
+
+      resolveBlob!(new Blob(["test"]));
+    });
+
+    it("hides progress indicator after export fails", async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false });
 
       render(<DataExport />);
       await user.click(
