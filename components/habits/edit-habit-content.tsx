@@ -77,15 +77,16 @@ export function EditHabitContent({ habitId }: EditHabitContentProps) {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update habit");
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to update habit");
       }
 
       await mutate();
       toast.success(t("toast.updateSuccess"));
       router.back();
     } catch (error) {
+      console.error("Update habit error:", error);
       toast.error(t("toast.updateError"));
-      throw error;
     } finally {
       setIsSubmitting(false);
     }
