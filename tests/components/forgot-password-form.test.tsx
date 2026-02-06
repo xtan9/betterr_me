@@ -55,7 +55,7 @@ describe('ForgotPasswordForm', () => {
 
     await waitFor(() => {
       expect(mockResetPasswordForEmail).toHaveBeenCalledWith('test@example.com', {
-        redirectTo: expect.stringContaining('/auth/update-password'),
+        redirectTo: expect.stringContaining('/auth/callback?next=/auth/update-password'),
       });
     });
   });
