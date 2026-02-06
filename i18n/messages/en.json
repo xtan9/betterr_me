@@ -322,25 +322,6 @@
             "title": "Loading habits..."
         }
     },
-    "habits": {
-        "frequency": {
-            "daily": "Every day",
-            "weekdays": "Mon – Fri",
-            "weekly": "Once a week",
-            "timesPerWeek": "{count} times/week",
-            "custom": "Custom days",
-            "selectedDays": "Selected: {days}",
-            "days": {
-                "sun": "Sun",
-                "mon": "Mon",
-                "tue": "Tue",
-                "wed": "Wed",
-                "thu": "Thu",
-                "fri": "Fri",
-                "sat": "Sat"
-            }
-        }
-    },
     "auth": {
         "login": {
             "title": "Login",
