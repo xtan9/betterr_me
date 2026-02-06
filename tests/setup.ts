@@ -22,6 +22,7 @@ Element.prototype.releasePointerCapture = vi.fn();
 class MockQueryBuilder {
   private mockData: any = null;
   private mockError: any = null;
+  private mockCount: number | null = null;
 
   // Chainable methods
   from = vi.fn().mockReturnThis();
@@ -45,16 +46,17 @@ class MockQueryBuilder {
 
   // Make this thenable so it can be awaited or destructured
   then(onFulfilled?: any, onRejected?: any) {
-    return Promise.resolve({ data: this.mockData, error: this.mockError }).then(
+    return Promise.resolve({ data: this.mockData, error: this.mockError, count: this.mockCount }).then(
       onFulfilled,
       onRejected
     );
   }
 
   // Helper to set mock responses
-  setMockResponse(data: any, error: any = null) {
+  setMockResponse(data: any, error: any = null, count: number | null = null) {
     this.mockData = data;
     this.mockError = error;
+    this.mockCount = count;
     return this;
   }
 }

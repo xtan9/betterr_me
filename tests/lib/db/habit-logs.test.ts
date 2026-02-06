@@ -181,13 +181,9 @@ describe('HabitLogsDB', () => {
     const frequency = { type: 'daily' as const };
     const createdAt = '2026-01-01T00:00:00Z';
 
-    it('should calculate thisWeek stats starting from Sunday (weekStartDay=0)', async () => {
-      // Mock getLogsByDateRange to return specific completed dates
-      mockSupabaseClient.setMockResponse([
-        { ...mockLog, logged_date: '2026-02-02', completed: true }, // Sunday
-        { ...mockLog, logged_date: '2026-02-03', completed: true }, // Monday
-        { ...mockLog, logged_date: '2026-02-04', completed: false }, // Tuesday
-      ]);
+    it('should return completed count from COUNT query for daily habits', async () => {
+      // Daily habits use COUNT queries — mock returns count property
+      mockSupabaseClient.setMockResponse(null, null, 3);
 
       const stats = await habitLogsDB.getDetailedHabitStats(
         mockHabitId,
@@ -197,32 +193,33 @@ describe('HabitLogsDB', () => {
         0 // Sunday
       );
 
-      expect(stats.thisWeek).toBeDefined();
-      expect(stats.thisMonth).toBeDefined();
-      expect(stats.allTime).toBeDefined();
+      // All three periods should have completed=3 (same mock for all)
+      expect(stats.thisWeek.completed).toBe(3);
+      expect(stats.thisMonth.completed).toBe(3);
+      expect(stats.allTime.completed).toBe(3);
+      expect(stats.thisWeek.total).toBeGreaterThan(0);
+      expect(stats.allTime.percent).toBeGreaterThan(0);
     });
 
-    it('should calculate thisWeek stats starting from Monday (weekStartDay=1)', async () => {
-      mockSupabaseClient.setMockResponse([
-        { ...mockLog, logged_date: '2026-02-03', completed: true }, // Monday
-        { ...mockLog, logged_date: '2026-02-04', completed: true }, // Tuesday
-      ]);
+    it('should cap percent at 100%', async () => {
+      // Set count higher than possible scheduled days (e.g., 999)
+      mockSupabaseClient.setMockResponse(null, null, 999);
 
       const stats = await habitLogsDB.getDetailedHabitStats(
         mockHabitId,
         mockUserId,
         frequency,
         createdAt,
-        1 // Monday
+        0
       );
 
-      expect(stats.thisWeek).toBeDefined();
-      expect(stats.thisMonth).toBeDefined();
-      expect(stats.allTime).toBeDefined();
+      expect(stats.thisWeek.percent).toBeLessThanOrEqual(100);
+      expect(stats.thisMonth.percent).toBeLessThanOrEqual(100);
+      expect(stats.allTime.percent).toBeLessThanOrEqual(100);
     });
 
     it('should default to Sunday when weekStartDay is not provided', async () => {
-      mockSupabaseClient.setMockResponse([]);
+      mockSupabaseClient.setMockResponse(null, null, 0);
 
       const stats = await habitLogsDB.getDetailedHabitStats(
         mockHabitId,
