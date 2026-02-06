@@ -5,6 +5,11 @@ import type { Profile, ProfileUpdate } from './types';
 export class ProfilesDB {
   private supabase: SupabaseClient;
 
+  /**
+   * @param supabase - Optional Supabase client. Omit for client-side usage
+   *   (uses browser client). Pass a server client in API routes:
+   *   `new ProfilesDB(await createClient())` from `@/lib/supabase/server`.
+   */
   constructor(supabase?: SupabaseClient) {
     this.supabase = supabase || createClient();
   }
@@ -62,4 +67,5 @@ export class ProfilesDB {
   }
 }
 
+/** Client-side singleton. Do NOT use in API routes — create a new instance with the server client instead. */
 export const profilesDB = new ProfilesDB();

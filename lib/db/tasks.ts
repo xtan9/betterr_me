@@ -176,4 +176,5 @@ export class TasksDB {
   }
 }
 
+/** Client-side singleton. Uses browser client only — not used in API routes. */
 export const tasksDB = new TasksDB();
