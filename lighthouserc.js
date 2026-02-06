@@ -2,6 +2,9 @@
  * Lighthouse CI configuration
  * QA-005: Performance audit
  *
+ * Uses default mobile throttling (simulated 4G + CPU slowdown)
+ * to reflect real-world mobile usage for a habit tracker app.
+ *
  * Targets:
  * - Lighthouse Performance > 90
  * - FCP < 1.8s
@@ -20,7 +23,7 @@ module.exports = {
       startServerReadyPattern: 'Ready in',
       numberOfRuns: 3,
       settings: {
-        preset: 'desktop',
+        // No preset = default mobile throttling (simulated slow 4G + 4x CPU)
         onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo'],
       },
     },

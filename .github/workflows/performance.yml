@@ -8,7 +8,8 @@ on:
 jobs:
   lighthouse:
     runs-on: ubuntu-latest
-    # Only run when Supabase secrets are configured (needed for build)
+    # Only run when Supabase secrets are configured (needed for build).
+    # secrets context is available in job-level if conditions.
     if: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL != '' }}
     timeout-minutes: 15
 
@@ -36,8 +37,7 @@ jobs:
         run: pnpm build
 
       - name: Analyze bundle size
-        run: npx tsx scripts/analyze-bundle.ts
-        continue-on-error: true
+        run: pnpm perf:bundle
 
       - name: Run Lighthouse CI
         uses: treosh/lighthouse-ci-action@v12

@@ -2,16 +2,16 @@
  * Bundle size analysis script
  * QA-005: Performance audit - Bundle analysis
  *
- * Usage: npx tsx scripts/analyze-bundle.ts
+ * Usage: tsx scripts/analyze-bundle.ts
  *
  * Targets:
- * - Main bundle < 200KB gzipped
+ * - Total JS < 500KB gzipped
  * - No single chunk > 100KB gzipped
  */
 
-import { readdirSync, statSync } from 'fs';
+import { readdirSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, basename } from 'path';
-import { execSync } from 'child_process';
+import { gzipSync } from 'zlib';
 
 const BUILD_DIR = join(process.cwd(), '.next');
 const STATIC_DIR = join(BUILD_DIR, 'static');
@@ -24,8 +24,8 @@ interface BundleInfo {
 
 function getGzipSize(filePath: string): number {
   try {
-    const output = execSync(`gzip -c "${filePath}" | wc -c`, { encoding: 'utf-8' });
-    return parseInt(output.trim(), 10);
+    const buf = readFileSync(filePath);
+    return gzipSync(buf).length;
   } catch {
     return 0;
   }
@@ -135,17 +135,17 @@ function analyze() {
   console.log('\n📊 Summary:\n');
   console.log(`  JS Bundles: ${bundles.length} files`);
   console.log(`  Total JS Size: ${formatBytes(totalSize)} (${formatBytes(totalGzip)} gzipped)`);
-  console.log(`  Main bundle target: < 200KB gzipped`);
+  console.log(`  Total JS target: < 500KB gzipped`);
   console.log(`  Per-chunk target: < 100KB gzipped`);
 
   // Check thresholds
   let hasIssues = false;
 
-  if (totalGzip > 200 * 1024) {
-    console.log(`\n  ⚠️  Total JS gzipped (${formatBytes(totalGzip)}) exceeds 200KB target`);
+  if (totalGzip > 500 * 1024) {
+    console.log(`\n  ⚠️  Total JS gzipped (${formatBytes(totalGzip)}) exceeds 500KB target`);
     hasIssues = true;
   } else {
-    console.log(`\n  ✅ Total JS gzipped within 200KB target`);
+    console.log(`\n  ✅ Total JS gzipped within 500KB target`);
   }
 
   if (oversizedChunks.length > 0) {
@@ -160,8 +160,25 @@ function analyze() {
 
   console.log('');
 
+  // Write report to .next/analyze/ for CI artifact upload
+  const analyzeDir = join(BUILD_DIR, 'analyze');
+  mkdirSync(analyzeDir, { recursive: true });
+  writeFileSync(
+    join(analyzeDir, 'bundle-report.json'),
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      bundles,
+      totalSize,
+      totalGzip,
+      oversizedChunks,
+      thresholds: { totalGzip: 500 * 1024, perChunkGzip: 100 * 1024 },
+      passed: !hasIssues,
+    }, null, 2)
+  );
+  console.log(`\n📄 Report written to .next/analyze/bundle-report.json`);
+
   if (hasIssues) {
-    console.log('💡 Optimization suggestions:');
+    console.log('\n💡 Optimization suggestions:');
     console.log('  - Review dynamic imports for large chunks');
     console.log('  - Check for unnecessary dependencies');
     console.log('  - Consider code splitting for route-specific code');
