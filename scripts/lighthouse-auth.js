@@ -33,18 +33,32 @@ module.exports = async (browser, context) => {
     await page.type('input[type="email"]', email);
     await page.type('input[type="password"]', password);
 
-    // Submit
+    // Submit and wait for URL change (Next.js uses client-side pushState
+    // navigation, so waitForNavigation won't detect it)
     const submitButton = await page.waitForSelector(
       'button[type="submit"]',
       { timeout: 5000 }
     );
-    await submitButton.click();
+    await Promise.all([
+      page.waitForFunction(
+        () => window.location.pathname.startsWith('/dashboard'),
+        { timeout: 15000 }
+      ),
+      submitButton.click(),
+    ]);
 
-    // Wait for redirect to dashboard (session established)
-    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 15000 });
+    // Verify auth cookie was set
+    const cookies = await page.cookies();
+    const hasAuthCookie = cookies.some((c) => c.name.startsWith('sb-'));
+    if (!hasAuthCookie) {
+      throw new Error('Auth cookie not found after login');
+    }
+
     console.log(`[lighthouse-auth] Logged in for ${url.pathname}`);
   } catch (err) {
-    console.error('[lighthouse-auth] Login failed:', err.message);
+    const msg = `[lighthouse-auth] Login failed for ${url.pathname}: ${err.message}`;
+    console.error(msg);
+    throw new Error(msg);
   } finally {
     await page.close();
   }
