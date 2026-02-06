@@ -422,7 +422,15 @@
             "habits": "Export Habits",
             "logs": "Export Logs",
             "success": "Export downloaded successfully",
-            "error": "Failed to export data"
+            "error": "Failed to export data",
+            "dateRange": "Date Range",
+            "rangeAll": "All Time",
+            "range30": "Last 30 Days",
+            "range90": "Last 90 Days",
+            "range365": "Last Year",
+            "rangeCustom": "Custom Range",
+            "startDate": "Start Date",
+            "endDate": "End Date"
         },
         "toast": {
             "saveError": "Failed to save settings"

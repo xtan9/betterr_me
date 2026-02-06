@@ -14,6 +14,8 @@ import type { Habit, HabitLog } from "@/lib/db/types";
  *
  * Query parameters:
  * - type: 'habits' | 'logs' (required)
+ * - startDate: YYYY-MM-DD (optional, logs only)
+ * - endDate: YYYY-MM-DD (optional, logs only)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -55,18 +57,46 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === "logs") {
-      // Export all logs with habit names
+      // Export logs with habit names, optionally filtered by date range
+      const startDate = searchParams.get("startDate");
+      const endDate = searchParams.get("endDate");
+
+      // Validate date format if provided
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (startDate && !dateRegex.test(startDate)) {
+        return NextResponse.json(
+          { error: "Invalid startDate format. Use YYYY-MM-DD" },
+          { status: 400 }
+        );
+      }
+      if (endDate && !dateRegex.test(endDate)) {
+        return NextResponse.json(
+          { error: "Invalid endDate format. Use YYYY-MM-DD" },
+          { status: 400 }
+        );
+      }
+
       // First get all habits for name lookup
       const habitsDB = new HabitsDB(supabase);
       const habits = await habitsDB.getUserHabits(user.id);
       const habitMap = new Map(habits.map((h: Habit) => [h.id, h.name]));
 
-      // Get all logs for user
-      const { data: logs, error } = await supabase
+      // Get logs for user with optional date filtering
+      let query = supabase
         .from("habit_logs")
         .select("*")
-        .eq("user_id", user.id)
-        .order("logged_date", { ascending: false });
+        .eq("user_id", user.id);
+
+      if (startDate) {
+        query = query.gte("logged_date", startDate);
+      }
+      if (endDate) {
+        query = query.lte("logged_date", endDate);
+      }
+
+      const { data: logs, error } = await query.order("logged_date", {
+        ascending: false,
+      });
 
       if (error) throw error;
 

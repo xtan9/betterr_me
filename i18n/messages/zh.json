@@ -422,7 +422,15 @@
             "habits": "导出习惯",
             "logs": "导出记录",
             "success": "导出下载成功",
-            "error": "导出数据失败"
+            "error": "导出数据失败",
+            "dateRange": "日期范围",
+            "rangeAll": "全部时间",
+            "range30": "最近 30 天",
+            "range90": "最近 90 天",
+            "range365": "最近一年",
+            "rangeCustom": "自定义范围",
+            "startDate": "开始日期",
+            "endDate": "结束日期"
         },
         "toast": {
             "saveError": "保存设置失败"
