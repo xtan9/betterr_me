@@ -411,7 +411,9 @@
             "range365": "Last Year",
             "rangeCustom": "Custom Range",
             "startDate": "Start Date",
-            "endDate": "End Date"
+            "endDate": "End Date",
+            "preparing": "Preparing export...",
+            "downloading": "Downloading..."
         },
         "toast": {
             "saveError": "Failed to save settings"

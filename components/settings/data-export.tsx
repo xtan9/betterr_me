@@ -14,6 +14,7 @@ import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 type ExportType = "habits" | "logs";
+type ExportPhase = "preparing" | "downloading";
 type DateRange = "all" | "30" | "90" | "365" | "custom";
 
 function getDateRangeDates(range: DateRange): {
@@ -37,13 +38,16 @@ function getDateRangeDates(range: DateRange): {
 
 export function DataExport() {
   const t = useTranslations("settings.export");
-  const [exporting, setExporting] = React.useState<ExportType | null>(null);
+  const [exportState, setExportState] = React.useState<{
+    type: ExportType;
+    phase: ExportPhase;
+  } | null>(null);
   const [dateRange, setDateRange] = React.useState<DateRange>("all");
   const [customStart, setCustomStart] = React.useState("");
   const [customEnd, setCustomEnd] = React.useState("");
 
   const handleExport = async (type: ExportType) => {
-    setExporting(type);
+    setExportState({ type, phase: "preparing" });
 
     try {
       const params = new URLSearchParams({ type });
@@ -64,6 +68,8 @@ export function DataExport() {
       if (!response.ok) {
         throw new Error("Export failed");
       }
+
+      setExportState({ type, phase: "downloading" });
 
       // Get filename from Content-Disposition header or generate one
       const contentDisposition = response.headers.get("Content-Disposition");
@@ -92,7 +98,7 @@ export function DataExport() {
       console.error("Export error:", error);
       toast.error(t("error"));
     } finally {
-      setExporting(null);
+      setExportState(null);
     }
   };
 
@@ -102,10 +108,10 @@ export function DataExport() {
         <Button
           variant="outline"
           onClick={() => handleExport("habits")}
-          disabled={exporting !== null}
+          disabled={exportState !== null}
           className="gap-2 self-start"
         >
-          {exporting === "habits" ? (
+          {exportState?.type === "habits" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Download className="h-4 w-4" />
@@ -179,10 +185,10 @@ export function DataExport() {
         <Button
           variant="outline"
           onClick={() => handleExport("logs")}
-          disabled={exporting !== null}
+          disabled={exportState !== null}
           className="gap-2 self-start"
         >
-          {exporting === "logs" ? (
+          {exportState?.type === "logs" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Download className="h-4 w-4" />
@@ -190,6 +196,12 @@ export function DataExport() {
           {t("logs")}
         </Button>
       </div>
+
+      {exportState && (
+        <p className="text-sm text-muted-foreground" role="status">
+          {t(exportState.phase)}
+        </p>
+      )}
     </div>
   );
 }

@@ -411,7 +411,9 @@
             "range365": "最近一年",
             "rangeCustom": "自定义范围",
             "startDate": "开始日期",
-            "endDate": "结束日期"
+            "endDate": "结束日期",
+            "preparing": "正在准备导出...",
+            "downloading": "正在下载..."
         },
         "toast": {
             "saveError": "保存设置失败"
