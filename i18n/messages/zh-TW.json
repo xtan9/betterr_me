@@ -422,7 +422,15 @@
             "habits": "匯出習慣",
             "logs": "匯出紀錄",
             "success": "匯出下載成功",
-            "error": "匯出資料失敗"
+            "error": "匯出資料失敗",
+            "dateRange": "日期範圍",
+            "rangeAll": "全部時間",
+            "range30": "最近 30 天",
+            "range90": "最近 90 天",
+            "range365": "最近一年",
+            "rangeCustom": "自訂範圍",
+            "startDate": "開始日期",
+            "endDate": "結束日期"
         },
         "toast": {
             "saveError": "儲存設定失敗"
