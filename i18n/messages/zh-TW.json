@@ -322,25 +322,6 @@
             "title": "正在載入習慣..."
         }
     },
-    "habits": {
-        "frequency": {
-            "daily": "每天",
-            "weekdays": "週一至週五",
-            "weekly": "每週一次",
-            "timesPerWeek": "每週 {count} 次",
-            "custom": "自訂天數",
-            "selectedDays": "已選擇：{days}",
-            "days": {
-                "sun": "週日",
-                "mon": "週一",
-                "tue": "週二",
-                "wed": "週三",
-                "thu": "週四",
-                "fri": "週五",
-                "sat": "週六"
-            }
-        }
-    },
     "auth": {
         "login": {
             "title": "登入",
