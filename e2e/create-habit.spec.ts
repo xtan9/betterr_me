@@ -28,7 +28,8 @@ test.describe('Create Habit Flow', () => {
     await page.goto('/dashboard');
     // If user has no habits, there should be a create CTA
     const createButton = page.getByRole('link', { name: /create|new|add/i }).first();
-    if (await createButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+    // Empty state CTA only shows when user has no habits — skip if not present
+    if (await createButton.isVisible({ timeout: 3000 })) {
       await createButton.click();
       await expect(page).toHaveURL('/habits/new');
     }

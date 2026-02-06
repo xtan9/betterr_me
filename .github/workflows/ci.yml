@@ -59,7 +59,8 @@ jobs:
   e2e-tests:
     runs-on: ubuntu-latest
     needs: lint-and-test
-    # Only run E2E tests when Supabase secrets are configured
+    # Only run E2E tests when Supabase secrets are configured.
+    # secrets context is available in job-level if conditions.
     if: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL != '' }}
     timeout-minutes: 30
 

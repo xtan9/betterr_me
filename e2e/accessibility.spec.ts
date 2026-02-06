@@ -19,7 +19,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
   test('should navigate dashboard with keyboard only', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Tab through interactive elements
     await page.keyboard.press('Tab');
@@ -39,7 +39,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
   test('should have visible focus indicators', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Tab to first focusable element
     await page.keyboard.press('Tab');
@@ -61,7 +61,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
   test('should navigate habits page with keyboard', async ({ page }) => {
     await page.goto('/habits');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Tab through elements
     await page.keyboard.press('Tab');
@@ -83,7 +83,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
   test('should navigate create habit form with keyboard', async ({ page }) => {
     await page.goto('/habits/new');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Tab to name input
     await page.keyboard.press('Tab');
@@ -112,7 +112,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
   test('should activate checkboxes with Space key', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Tab to a checkbox
     let foundCheckbox = false;
@@ -135,31 +135,32 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
       // Press Space to toggle
       await page.keyboard.press('Space');
-      await page.waitForTimeout(500);
 
-      const isChecked = await page.evaluate(() => {
-        const el = document.activeElement;
-        return el?.getAttribute('data-state') === 'checked' ||
-               (el as HTMLInputElement)?.checked;
-      });
-
-      expect(isChecked).not.toBe(wasChecked);
+      // Wait for state change
+      await expect(async () => {
+        const isChecked = await page.evaluate(() => {
+          const el = document.activeElement;
+          return el?.getAttribute('data-state') === 'checked' ||
+                 (el as HTMLInputElement)?.checked;
+        });
+        expect(isChecked).not.toBe(wasChecked);
+      }).toPass({ timeout: 3000 });
     }
   });
 
   test('should close dialogs with Escape key', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
-    // If any dialog/modal is triggered, Escape should close it
-    // This tests the general pattern - click something that opens a dialog
+    // Dialog trigger/dialog tests are inherently optional — dialog may not exist
     const dialogTrigger = page.locator('[data-state="closed"]').first();
-    if (await dialogTrigger.isVisible({ timeout: 2000 }).catch(() => false)) {
+    const triggerCount = await dialogTrigger.count();
+    if (triggerCount > 0 && await dialogTrigger.isVisible()) {
       await dialogTrigger.click();
 
-      // If a dialog opened, Escape should close it
       const dialog = page.locator('[role="dialog"]');
-      if (await dialog.isVisible({ timeout: 2000 }).catch(() => false)) {
+      const dialogVisible = await dialog.isVisible().catch(() => false);
+      if (dialogVisible) {
         await page.keyboard.press('Escape');
         await expect(dialog).not.toBeVisible({ timeout: 3000 });
       }
@@ -174,7 +175,7 @@ test.describe('Accessibility - Semantic HTML', () => {
 
   test('should have proper heading hierarchy on dashboard', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const headings = await page.evaluate(() => {
       const h = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
@@ -197,7 +198,7 @@ test.describe('Accessibility - Semantic HTML', () => {
 
   test('should have alt text on images', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const imagesWithoutAlt = await page.evaluate(() => {
       const images = document.querySelectorAll('img');
@@ -209,7 +210,7 @@ test.describe('Accessibility - Semantic HTML', () => {
 
   test('should have labels on form inputs', async ({ page }) => {
     await page.goto('/habits/new');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const unlabeledInputs = await page.evaluate(() => {
       const inputs = document.querySelectorAll('input:not([type="hidden"]), textarea, select');
@@ -229,7 +230,7 @@ test.describe('Accessibility - Semantic HTML', () => {
 
   test('should have proper ARIA roles on interactive elements', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Buttons should be buttons or have button role
     const improperButtons = await page.evaluate(() => {
@@ -237,7 +238,6 @@ test.describe('Accessibility - Semantic HTML', () => {
       return Array.from(clickables).filter(el => {
         const tag = el.tagName.toLowerCase();
         const role = el.getAttribute('role');
-        // Non-semantic elements with click handlers should have proper roles
         return tag !== 'a' && tag !== 'button' && tag !== 'input' &&
                tag !== 'select' && tag !== 'textarea' && !role;
       }).length;
@@ -249,7 +249,7 @@ test.describe('Accessibility - Semantic HTML', () => {
 
   test('should have a main landmark', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const hasMain = await page.evaluate(() => {
       return document.querySelector('main, [role="main"]') !== null;
@@ -262,7 +262,7 @@ test.describe('Accessibility - Semantic HTML', () => {
 test.describe('Accessibility - Color and Contrast', () => {
   test('login page should have sufficient color contrast', async ({ page }) => {
     await page.goto('/auth/login');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('networkidle');
 
     // Check text contrast on key elements
     const contrastIssues = await page.evaluate(() => {
@@ -326,7 +326,7 @@ test.describe('Accessibility - Responsive', () => {
   test('should maintain touch targets of at least 44px on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const smallTouchTargets = await page.evaluate(() => {
       const interactive = document.querySelectorAll('button, a, input, [role="checkbox"], [role="button"]');
@@ -334,18 +334,11 @@ test.describe('Accessibility - Responsive', () => {
 
       interactive.forEach(el => {
         const rect = el.getBoundingClientRect();
-        // Only check visible elements
+        // Only check visible elements.
+        // getBoundingClientRect() returns border-box dimensions (includes padding).
         if (rect.width > 0 && rect.height > 0) {
           if (rect.width < 44 || rect.height < 44) {
-            // Allow icon-only buttons with larger click area via padding
-            const styles = window.getComputedStyle(el);
-            const paddingH = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight);
-            const paddingV = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
-            const effectiveWidth = rect.width + paddingH;
-            const effectiveHeight = rect.height + paddingV;
-            if (effectiveWidth < 44 || effectiveHeight < 44) {
-              small++;
-            }
+            small++;
           }
         }
       });
@@ -360,7 +353,7 @@ test.describe('Accessibility - Responsive', () => {
   test('should not have font size below 16px for inputs on iOS', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/habits/new');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const smallFontInputs = await page.evaluate(() => {
       const inputs = document.querySelectorAll('input, textarea, select');

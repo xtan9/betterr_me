@@ -42,7 +42,7 @@ for (const [viewportName, viewport] of Object.entries(VIEWPORTS)) {
           await ensureAuthenticated(page);
         }
         await page.goto(pageConfig.path);
-        await page.waitForTimeout(2000);
+        await page.waitForLoadState('networkidle');
 
         const hasHorizontalScroll = await page.evaluate(() => {
           return document.documentElement.scrollWidth > document.documentElement.clientWidth;
@@ -56,7 +56,7 @@ for (const [viewportName, viewport] of Object.entries(VIEWPORTS)) {
           await ensureAuthenticated(page);
         }
         await page.goto(pageConfig.path);
-        await page.waitForTimeout(2000);
+        await page.waitForLoadState('networkidle');
 
         const overflowElements = await page.evaluate(() => {
           const body = document.body;
@@ -89,7 +89,7 @@ test.describe('Responsive - Dashboard Layout', () => {
   test('stat cards should stack on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Cards should be in a single column on mobile
     const cards = page.locator('[class*="card"], [class*="Card"]');
@@ -109,7 +109,7 @@ test.describe('Responsive - Dashboard Layout', () => {
   test('stat cards should be in a row on desktop', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const cards = page.locator('[class*="grid"] > [class*="card"], [class*="grid"] > [class*="Card"]');
     const cardCount = await cards.count();
@@ -134,7 +134,7 @@ test.describe('Responsive - Habits Page', () => {
   test('habit cards should stack on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/habits');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const cards = page.locator('[class*="card"], [class*="Card"]');
     const cardCount = await cards.count();
@@ -153,33 +153,31 @@ test.describe('Responsive - Habits Page', () => {
   test('search input should be full width on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/habits');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const searchInput = page.getByPlaceholder(/search/i);
-    if (await searchInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const inputBox = await searchInput.boundingBox();
-      if (inputBox) {
-        // Should be at least 80% of viewport width
-        expect(inputBox.width).toBeGreaterThan(375 * 0.8);
-      }
+    await expect(searchInput).toBeVisible({ timeout: 10000 });
+    const inputBox = await searchInput.boundingBox();
+    if (inputBox) {
+      // Should be at least 80% of viewport width
+      expect(inputBox.width).toBeGreaterThan(375 * 0.8);
     }
   });
 
   test('create button should be accessible on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/habits');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const createButton = page.getByRole('link', { name: /new|create/i });
-    if (await createButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const box = await createButton.boundingBox();
-      if (box) {
-        // Should be visible within viewport
-        expect(box.x).toBeGreaterThanOrEqual(0);
-        expect(box.x + box.width).toBeLessThanOrEqual(375);
-        // Touch target should be at least 44px
-        expect(Math.max(box.width, box.height)).toBeGreaterThanOrEqual(40);
-      }
+    await expect(createButton).toBeVisible({ timeout: 10000 });
+    const box = await createButton.boundingBox();
+    if (box) {
+      // Should be visible within viewport
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(375);
+      // Touch target should be at least 44px
+      expect(Math.max(box.width, box.height)).toBeGreaterThanOrEqual(40);
     }
   });
 });
@@ -192,22 +190,21 @@ test.describe('Responsive - Create Habit Form', () => {
   test('form fields should be full width on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/habits/new');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const nameInput = page.getByLabel(/name/i);
-    if (await nameInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const box = await nameInput.boundingBox();
-      if (box) {
-        // Input should be at least 80% of viewport width
-        expect(box.width).toBeGreaterThan(375 * 0.7);
-      }
+    await expect(nameInput).toBeVisible({ timeout: 10000 });
+    const box = await nameInput.boundingBox();
+    if (box) {
+      // Input should be at least 70% of viewport width
+      expect(box.width).toBeGreaterThan(375 * 0.7);
     }
   });
 
   test('submit button should be visible without scrolling on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/habits/new');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Fill minimum required fields
     await page.getByLabel(/name/i).fill('Test');
@@ -227,7 +224,7 @@ test.describe('Responsive - Create Habit Form', () => {
   test('frequency selector should wrap properly on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/habits/new');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Frequency buttons should not overflow
     const hasOverflow = await page.evaluate(() => {
@@ -248,7 +245,7 @@ test.describe('Responsive - Navigation', () => {
   test('navigation should work on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Look for mobile menu trigger (hamburger) or bottom nav
     const mobileMenu = page.locator('[class*="mobile"], [aria-label*="menu"], button:has(svg)').first();
@@ -264,7 +261,7 @@ test.describe('Responsive - Navigation', () => {
   test('navigation should show all links on desktop', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Desktop should show navigation links directly
     const navLinks = page.getByRole('link');

@@ -5,10 +5,15 @@ import { type Page, expect } from '@playwright/test';
  * These should be set via environment variables in CI.
  * For local development, use a dedicated test account.
  */
-const TEST_USER = {
-  email: process.env.E2E_TEST_EMAIL || 'test@example.com',
-  password: process.env.E2E_TEST_PASSWORD || 'testpassword123',
-};
+const email = process.env.E2E_TEST_EMAIL;
+const password = process.env.E2E_TEST_PASSWORD;
+if (!email || !password) {
+  throw new Error(
+    'E2E_TEST_EMAIL and E2E_TEST_PASSWORD must be set. ' +
+    'See playwright.config.ts for setup instructions.'
+  );
+}
+const TEST_USER = { email, password };
 
 /**
  * Login with email/password and wait for dashboard redirect

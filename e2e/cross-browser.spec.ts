@@ -30,7 +30,7 @@ test.describe('Cross-Browser - Core Functionality', () => {
 
   test('create habit form submits correctly', async ({ page }) => {
     await page.goto('/habits/new');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('networkidle');
 
     // Fill form
     await page.getByLabel(/name/i).fill('Cross-Browser Test Habit');
@@ -46,35 +46,32 @@ test.describe('Cross-Browser - Core Functionality', () => {
 
   test('habit toggle works', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
 
     const checkbox = page.locator('[role="checkbox"], input[type="checkbox"]').first();
-    if (await checkbox.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const before = await checkbox.isChecked();
-      await checkbox.click();
-      await page.waitForTimeout(1000);
-      const after = await checkbox.isChecked();
-      expect(after).not.toBe(before);
-    }
+    await expect(checkbox).toBeVisible({ timeout: 10000 });
+
+    const before = await checkbox.isChecked();
+    await checkbox.click();
+    await page.waitForLoadState('networkidle');
+    const after = await checkbox.isChecked();
+    expect(after).not.toBe(before);
   });
 
   test('page navigation works', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('networkidle');
 
     // Navigate to habits
     const habitsLink = page.getByRole('link', { name: /habit/i }).first();
-    if (await habitsLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await habitsLink.click();
-      await page.waitForURL(/\/habits/, { timeout: 5000 });
-    }
+    await expect(habitsLink).toBeVisible({ timeout: 10000 });
+    await habitsLink.click();
+    await page.waitForURL(/\/habits/, { timeout: 5000 });
 
     // Navigate back to dashboard
     const dashLink = page.getByRole('link', { name: /dashboard/i }).first();
-    if (await dashLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await dashLink.click();
-      await page.waitForURL('/dashboard', { timeout: 5000 });
-    }
+    await expect(dashLink).toBeVisible({ timeout: 10000 });
+    await dashLink.click();
+    await page.waitForURL('/dashboard', { timeout: 5000 });
   });
 });
 
@@ -85,7 +82,7 @@ test.describe('Cross-Browser - Visual Consistency', () => {
 
   test('fonts render correctly', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const fontFamily = await page.evaluate(() => {
       const body = document.body;
@@ -98,23 +95,20 @@ test.describe('Cross-Browser - Visual Consistency', () => {
 
   test('theme toggle works', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Check if theme toggle exists
     const themeToggle = page.locator('button:has(svg[class*="moon"]), button:has(svg[class*="sun"]), [aria-label*="theme"]');
-    if (await themeToggle.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await themeToggle.click();
-      await page.waitForTimeout(500);
+    await expect(themeToggle).toBeVisible({ timeout: 10000 });
+    await themeToggle.click();
 
-      // HTML should have dark/light class
-      const htmlClass = await page.evaluate(() => document.documentElement.className);
-      expect(htmlClass).toMatch(/dark|light/);
-    }
+    // HTML should have dark/light class
+    await expect(page.locator('html')).toHaveAttribute('class', /dark|light/);
   });
 
   test('icons render as SVGs', async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     const svgCount = await page.evaluate(() => {
       return document.querySelectorAll('svg').length;
@@ -126,7 +120,7 @@ test.describe('Cross-Browser - Visual Consistency', () => {
 
   test('CSS Grid/Flexbox renders correctly', async ({ page }) => {
     await page.goto('/habits');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Check that grid/flex containers have proper layout
     const hasGridOrFlex = await page.evaluate(() => {
@@ -149,11 +143,10 @@ test.describe('Cross-Browser - Form Behavior', () => {
   test('input validation displays correctly', async ({ page }) => {
     await ensureAuthenticated(page);
     await page.goto('/habits/new');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('networkidle');
 
     // Try submitting empty form
     await page.getByRole('button', { name: /create/i }).click();
-    await page.waitForTimeout(500);
 
     // Should show validation message (browser-native or custom)
     const hasError = await page.evaluate(() => {
@@ -168,21 +161,21 @@ test.describe('Cross-Browser - Form Behavior', () => {
   test('date inputs work correctly', async ({ page }) => {
     await ensureAuthenticated(page);
     await page.goto('/dashboard');
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
 
     // Check if any date pickers exist and are functional
     const datePicker = page.locator('input[type="date"], [class*="calendar"], [class*="date"]');
-    if (await datePicker.first().isVisible({ timeout: 2000 }).catch(() => false)) {
-      // Date picker should be interactive
+    const count = await datePicker.count();
+    if (count > 0) {
+      await expect(datePicker.first()).toBeVisible({ timeout: 5000 });
       await datePicker.first().click();
-      await page.waitForTimeout(500);
     }
   });
 
   test('focus styles are consistent', async ({ page }) => {
     await ensureAuthenticated(page);
     await page.goto('/habits/new');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('networkidle');
 
     // Tab through form and verify focus styles
     await page.keyboard.press('Tab');
