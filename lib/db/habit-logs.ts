@@ -386,53 +386,79 @@ export class HabitLogsDB {
     const habitCreatedAt = new Date(createdAt);
     habitCreatedAt.setHours(0, 0, 0, 0);
 
-    // Get all logs from habit creation to today
-    const allLogs = await this.getLogsByDateRange(
-      habitId,
-      userId,
-      habitCreatedAt.toISOString().split('T')[0],
-      today.toISOString().split('T')[0]
-    );
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+    const todayStr = fmt(today);
+    const createdStr = fmt(habitCreatedAt);
 
-    // Create a set of completed dates for quick lookup
-    const completedDates = new Set(
-      allLogs.filter(log => log.completed).map(log => log.logged_date)
-    );
-
-    // Special handling for times_per_week: count successful weeks
+    // Special handling for times_per_week: needs individual dates for weekly grouping
     if (frequency.type === 'times_per_week') {
+      const { data: completedLogs, error } = await this.supabase
+        .from('habit_logs')
+        .select('logged_date')
+        .eq('habit_id', habitId)
+        .eq('user_id', userId)
+        .eq('completed', true)
+        .gte('logged_date', createdStr)
+        .lte('logged_date', todayStr);
+
+      if (error) throw error;
+      const completedDates = new Set((completedLogs || []).map(l => l.logged_date));
       return this.getTimesPerWeekStats(completedDates, frequency.count, weekStartDay, today, startOfWeek, startOfMonth, habitCreatedAt);
     }
 
-    // Helper to count scheduled and completed days in a range
-    const countDaysInRange = (start: Date, end: Date): { completed: number; total: number; percent: number } => {
+    // Count scheduled days in each period (pure date math, no DB call)
+    const countScheduledDays = (start: Date, end: Date): number => {
       let total = 0;
-      let completed = 0;
       const currentDate = new Date(start);
-
       while (currentDate <= end) {
         if (currentDate >= habitCreatedAt && this.shouldTrackOnDate(frequency, currentDate)) {
           total++;
-          const dateStr = currentDate.toISOString().split('T')[0];
-          if (completedDates.has(dateStr)) {
-            completed++;
-          }
         }
         currentDate.setDate(currentDate.getDate() + 1);
       }
-
-      return {
-        completed,
-        total,
-        percent: total > 0 ? Math.round((completed / total) * 100) : 0,
-      };
+      return total;
     };
+
+    const weekTotal = countScheduledDays(startOfWeek, today);
+    const monthTotal = countScheduledDays(startOfMonth, today);
+    const allTimeTotal = countScheduledDays(habitCreatedAt, today);
+
+    // Count completed logs with targeted COUNT queries (no row data transferred)
+    const [weekCompleted, monthCompleted, allTimeCompleted] = await Promise.all([
+      this.countCompletedLogs(habitId, userId, fmt(startOfWeek), todayStr),
+      this.countCompletedLogs(habitId, userId, fmt(startOfMonth), todayStr),
+      this.countCompletedLogs(habitId, userId, createdStr, todayStr),
+    ]);
+
+    const pct = (c: number, t: number) => t > 0 ? Math.round((c / t) * 100) : 0;
 
     return {
-      thisWeek: countDaysInRange(startOfWeek, today),
-      thisMonth: countDaysInRange(startOfMonth, today),
-      allTime: countDaysInRange(habitCreatedAt, today),
+      thisWeek: { completed: weekCompleted, total: weekTotal, percent: pct(weekCompleted, weekTotal) },
+      thisMonth: { completed: monthCompleted, total: monthTotal, percent: pct(monthCompleted, monthTotal) },
+      allTime: { completed: allTimeCompleted, total: allTimeTotal, percent: pct(allTimeCompleted, allTimeTotal) },
     };
+  }
+
+  /**
+   * Count completed logs in a date range using a HEAD request (returns only the count, no rows).
+   */
+  private async countCompletedLogs(
+    habitId: string,
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<number> {
+    const { count, error } = await this.supabase
+      .from('habit_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('habit_id', habitId)
+      .eq('user_id', userId)
+      .eq('completed', true)
+      .gte('logged_date', startDate)
+      .lte('logged_date', endDate);
+
+    if (error) throw error;
+    return count || 0;
   }
 
   /**
