@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-// TODO: tasksDB singleton uses browser client — should instantiate with server client
-import { tasksDB } from '@/lib/db';
+import { TasksDB } from '@/lib/db';
 import type { TaskInsert, TaskFilters } from '@/lib/db/types';
 
 /**
@@ -27,6 +26,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const tasksDB = new TasksDB(supabase);
     const searchParams = request.nextUrl.searchParams;
     const view = searchParams.get('view');
 
@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const tasksDB = new TasksDB(supabase);
     const body = await request.json();
 
     // Validate required fields

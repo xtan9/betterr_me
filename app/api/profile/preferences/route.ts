@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-// TODO: profilesDB singleton uses browser client — should instantiate with server client
-import { profilesDB } from '@/lib/db';
+import { ProfilesDB } from '@/lib/db';
 import { invalidateUserStatsCache } from '@/lib/cache';
 import type { Profile } from '@/lib/db/types';
 
@@ -20,6 +19,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const profilesDB = new ProfilesDB(supabase);
     const body = await request.json();
 
     // Validate preferences object
