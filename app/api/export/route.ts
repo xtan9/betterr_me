@@ -7,16 +7,83 @@ import {
   type HabitLogWithName,
 } from "@/lib/export/csv";
 import type { Habit, HabitLog } from "@/lib/db/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import JSZip from "jszip";
+
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const isValidDate = (d: string) =>
+  dateRegex.test(d) && !isNaN(new Date(d).getTime());
+
+/** Fetch all habits for a user. */
+async function fetchHabits(supabase: SupabaseClient, userId: string) {
+  const habitsDB = new HabitsDB(supabase);
+  return habitsDB.getUserHabits(userId);
+}
+
+/** Fetch habit logs with enriched habit names, optionally filtered by date range. */
+async function fetchLogsWithNames(
+  supabase: SupabaseClient,
+  userId: string,
+  habits: Habit[],
+  startDate?: string | null,
+  endDate?: string | null
+): Promise<HabitLogWithName[]> {
+  const habitMap = new Map(habits.map((h) => [h.id, h.name]));
+
+  let query = supabase
+    .from("habit_logs")
+    .select("*")
+    .eq("user_id", userId);
+
+  if (startDate) {
+    query = query.gte("logged_date", startDate);
+  }
+  if (endDate) {
+    query = query.lte("logged_date", endDate);
+  }
+
+  const { data: logs, error } = await query.order("logged_date", {
+    ascending: false,
+  });
+
+  if (error) throw error;
+
+  return (logs || []).map((log: HabitLog) => ({
+    ...log,
+    habit_name: habitMap.get(log.habit_id) || "Unknown",
+  }));
+}
+
+/**
+ * Validate optional date parameters. Returns an error response if invalid, or null if valid.
+ */
+function validateDateParams(
+  startDate: string | null,
+  endDate: string | null
+): NextResponse | null {
+  if (startDate && !isValidDate(startDate)) {
+    return NextResponse.json(
+      { error: "Invalid startDate. Use a valid YYYY-MM-DD date" },
+      { status: 400 }
+    );
+  }
+  if (endDate && !isValidDate(endDate)) {
+    return NextResponse.json(
+      { error: "Invalid endDate. Use a valid YYYY-MM-DD date" },
+      { status: 400 }
+    );
+  }
+  return null;
+}
 
 /**
  * GET /api/export
- * Export user data as CSV
+ * Export user data as CSV or ZIP.
  *
  * Query parameters:
  * - type: 'habits' | 'logs' | 'zip' (required)
- * - startDate: YYYY-MM-DD (optional, logs only)
- * - endDate: YYYY-MM-DD (optional, logs only)
+ * - startDate: YYYY-MM-DD (optional, logs and zip only)
+ * - endDate: YYYY-MM-DD (optional, logs and zip only)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -42,10 +109,7 @@ export async function GET(request: NextRequest) {
     const date = new Date().toISOString().split("T")[0];
 
     if (type === "habits") {
-      // Export all habits
-      const habitsDB = new HabitsDB(supabase);
-      const habits = await habitsDB.getUserHabits(user.id);
-
+      const habits = await fetchHabits(supabase, user.id);
       const csv = exportHabitsToCSV(habits);
       const filename = `betterrme-habits-${date}.csv`;
 
@@ -57,59 +121,21 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Both "logs" and "zip" support date-range filtering
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
+
+    const dateError = validateDateParams(startDate, endDate);
+    if (dateError) return dateError;
+
     if (type === "logs") {
-      // Export logs with habit names, optionally filtered by date range
-      const startDate = searchParams.get("startDate");
-      const endDate = searchParams.get("endDate");
-
-      // Validate date format and semantic validity if provided
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      const isValidDate = (d: string) =>
-        dateRegex.test(d) && !isNaN(new Date(d).getTime());
-
-      if (startDate && !isValidDate(startDate)) {
-        return NextResponse.json(
-          { error: "Invalid startDate. Use a valid YYYY-MM-DD date" },
-          { status: 400 }
-        );
-      }
-      if (endDate && !isValidDate(endDate)) {
-        return NextResponse.json(
-          { error: "Invalid endDate. Use a valid YYYY-MM-DD date" },
-          { status: 400 }
-        );
-      }
-
-      // First get all habits for name lookup
-      const habitsDB = new HabitsDB(supabase);
-      const habits = await habitsDB.getUserHabits(user.id);
-      const habitMap = new Map(habits.map((h: Habit) => [h.id, h.name]));
-
-      // Get logs for user with optional date filtering
-      let query = supabase
-        .from("habit_logs")
-        .select("*")
-        .eq("user_id", user.id);
-
-      if (startDate) {
-        query = query.gte("logged_date", startDate);
-      }
-      if (endDate) {
-        query = query.lte("logged_date", endDate);
-      }
-
-      const { data: logs, error } = await query.order("logged_date", {
-        ascending: false,
-      });
-
-      if (error) throw error;
-
-      // Add habit names to logs
-      const logsWithNames: HabitLogWithName[] = (logs || []).map(
-        (log: HabitLog) => ({
-          ...log,
-          habit_name: habitMap.get(log.habit_id) || "Unknown",
-        })
+      const habits = await fetchHabits(supabase, user.id);
+      const logsWithNames = await fetchLogsWithNames(
+        supabase,
+        user.id,
+        habits,
+        startDate,
+        endDate
       );
 
       const csv = exportLogsToCSV(logsWithNames);
@@ -124,23 +150,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === "zip") {
-      const habitsDB = new HabitsDB(supabase);
-      const habits = await habitsDB.getUserHabits(user.id);
-      const habitMap = new Map(habits.map((h: Habit) => [h.id, h.name]));
-
-      const { data: logs, error: logsError } = await supabase
-        .from("habit_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("logged_date", { ascending: false });
-
-      if (logsError) throw logsError;
-
-      const logsWithNames: HabitLogWithName[] = (logs || []).map(
-        (log: HabitLog) => ({
-          ...log,
-          habit_name: habitMap.get(log.habit_id) || "Unknown",
-        })
+      const habits = await fetchHabits(supabase, user.id);
+      const logsWithNames = await fetchLogsWithNames(
+        supabase,
+        user.id,
+        habits,
+        startDate,
+        endDate
       );
 
       const zip = new JSZip();
