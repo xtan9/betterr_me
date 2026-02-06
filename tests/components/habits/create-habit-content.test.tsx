@@ -13,6 +13,14 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
+const mockGlobalMutate = vi.fn();
+
+vi.mock('swr', () => ({
+  useSWRConfig: () => ({
+    mutate: mockGlobalMutate,
+  }),
+}));
+
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
@@ -112,6 +120,23 @@ describe('CreateHabitContent', () => {
     expect(mockPush).toHaveBeenCalledWith('/habits');
   });
 
+  it('revalidates dashboard and habits cache after successful creation', async () => {
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ habit: { id: 'h1', name: 'Test' } }),
+    } as Response);
+
+    render(<CreateHabitContent />);
+
+    await user.type(screen.getByLabelText('Habit Name'), 'Morning Run');
+    await user.click(screen.getByRole('button', { name: 'Create Habit' }));
+
+    await waitFor(() => {
+      expect(mockGlobalMutate).toHaveBeenCalledWith('/api/dashboard');
+      expect(mockGlobalMutate).toHaveBeenCalledWith('/api/habits');
+    });
+  });
+
   it('shows error toast on API failure', async () => {
     vi.mocked(global.fetch).mockResolvedValue({
       ok: false,
@@ -127,6 +152,7 @@ describe('CreateHabitContent', () => {
       expect(mockToastError).toHaveBeenCalledWith('Failed to create habit');
     });
     expect(mockPush).not.toHaveBeenCalled();
+    expect(mockGlobalMutate).not.toHaveBeenCalled();
   });
 
   it('shows error toast on network failure', async () => {
