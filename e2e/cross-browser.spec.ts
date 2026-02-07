@@ -34,7 +34,7 @@ test.describe('Cross-Browser - Core Functionality', () => {
 
     // Fill form
     await page.getByLabel(/name/i).fill('Cross-Browser Test Habit');
-    await page.getByRole('button', { name: /daily/i }).click();
+    await page.getByRole('button', { name: /every day/i }).click();
 
     // Submit
     await page.getByRole('button', { name: /create/i }).click();

@@ -20,7 +20,7 @@ test.describe('Create Habit Flow', () => {
 
   test('should navigate to create habit page from habits list', async ({ page }) => {
     await page.goto('/habits');
-    await page.getByRole('link', { name: /new|create/i }).click();
+    await page.getByRole('button', { name: /create habit/i }).click();
     await expect(page).toHaveURL('/habits/new');
   });
 
@@ -48,7 +48,7 @@ test.describe('Create Habit Flow', () => {
     await page.getByRole('button', { name: /health/i }).click();
 
     // Select daily frequency (should be default)
-    await page.getByRole('button', { name: /daily/i }).click();
+    await page.getByRole('button', { name: /every day/i }).click();
 
     // Submit the form
     await page.getByRole('button', { name: /create/i }).click();
@@ -66,7 +66,7 @@ test.describe('Create Habit Flow', () => {
     await page.getByLabel(/name/i).fill('E2E Test - Weekday Habit');
 
     // Select weekdays frequency
-    await page.getByRole('button', { name: /weekdays/i }).click();
+    await page.getByRole('button', { name: /mon.*fri/i }).click();
 
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
@@ -77,7 +77,7 @@ test.describe('Create Habit Flow', () => {
     await page.goto('/habits/new');
 
     await page.getByLabel(/name/i).fill('E2E Test - Weekly Habit');
-    await page.getByRole('button', { name: /^weekly$/i }).click();
+    await page.getByRole('button', { name: /once a week/i }).click();
 
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
@@ -88,7 +88,7 @@ test.describe('Create Habit Flow', () => {
     await page.goto('/habits/new');
 
     await page.getByLabel(/name/i).fill('E2E Test - 2x Week Habit');
-    await page.getByRole('button', { name: /2x/i }).click();
+    await page.getByRole('button', { name: /2 times/i }).click();
 
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
@@ -99,7 +99,7 @@ test.describe('Create Habit Flow', () => {
     await page.goto('/habits/new');
 
     await page.getByLabel(/name/i).fill('E2E Test - 3x Week Habit');
-    await page.getByRole('button', { name: /3x/i }).click();
+    await page.getByRole('button', { name: /3 times/i }).click();
 
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
@@ -112,12 +112,12 @@ test.describe('Create Habit Flow', () => {
     await page.getByLabel(/name/i).fill('E2E Test - Custom Habit');
 
     // Select custom frequency
-    await page.getByRole('button', { name: /custom/i }).click();
+    await page.getByRole('button', { name: /custom days/i }).click();
 
-    // Select specific days (Mon, Wed, Fri)
-    await page.getByRole('button', { name: /mon/i }).click();
-    await page.getByRole('button', { name: /wed/i }).click();
-    await page.getByRole('button', { name: /fri/i }).click();
+    // Select specific days (Mon, Wed, Fri) — use aria-label for exact match
+    await page.getByRole('button', { name: 'Mon', exact: true }).click();
+    await page.getByRole('button', { name: 'Wed', exact: true }).click();
+    await page.getByRole('button', { name: 'Fri', exact: true }).click();
 
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
@@ -134,7 +134,7 @@ test.describe('Create Habit Flow', () => {
     await expect(page).toHaveURL('/habits/new');
 
     // Should show validation error
-    const errorMessage = page.getByText(/required|name/i);
+    const errorMessage = page.getByText(/name.*required/i);
     await expect(errorMessage).toBeVisible();
   });
 
@@ -156,18 +156,19 @@ test.describe('Create Habit Flow', () => {
     await page.getByLabel(/name/i).fill('E2E Test - Sequence Habit 1');
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
-    await expect(page.getByText('E2E Test - Sequence Habit 1')).toBeVisible();
+    const habitList = page.locator('[role="tabpanel"]');
+    await expect(habitList.getByText('E2E Test - Sequence Habit 1')).toBeVisible();
 
     // Create second habit
-    await page.getByRole('link', { name: /new|create/i }).click();
+    await page.getByRole('button', { name: /create habit/i }).click();
     await page.waitForURL('/habits/new', { timeout: 5000 });
     await page.getByLabel(/name/i).fill('E2E Test - Sequence Habit 2');
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
 
-    // Both habits should be visible
-    await expect(page.getByText('E2E Test - Sequence Habit 1')).toBeVisible();
-    await expect(page.getByText('E2E Test - Sequence Habit 2')).toBeVisible();
+    // Both habits should be visible in the list
+    await expect(habitList.getByText('E2E Test - Sequence Habit 1')).toBeVisible();
+    await expect(habitList.getByText('E2E Test - Sequence Habit 2')).toBeVisible();
   });
 
   test('should select different categories', async ({ page }) => {
