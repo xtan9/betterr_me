@@ -86,23 +86,29 @@ test.describe('Responsive - Dashboard Layout', () => {
     await ensureAuthenticated(page);
   });
 
-  test('stat cards should stack on mobile', async ({ page }) => {
+  test('stat cards should use 2-column grid on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    // Cards should be in a single column on mobile
-    const cards = page.locator('[class*="card"], [class*="Card"]');
-    const cardCount = await cards.count();
+    // Find stat cards by their bordered container style (rendered by StatCard)
+    const statCards = page.locator('[class*="rounded-xl"][class*="border"]');
+    const cardCount = await statCards.count();
+    expect(cardCount).toBeGreaterThanOrEqual(2);
 
-    if (cardCount > 1) {
-      const firstRect = await cards.first().boundingBox();
-      const secondRect = await cards.nth(1).boundingBox();
+    // Verify 2-column layout: first two cards should be on the same row (similar Y)
+    // but at different X positions (side by side)
+    const first = await statCards.nth(0).boundingBox();
+    const second = await statCards.nth(1).boundingBox();
 
-      if (firstRect && secondRect) {
-        // On mobile, cards should be stacked (second below first, not beside)
-        expect(secondRect.y).toBeGreaterThanOrEqual(firstRect.y + firstRect.height - 5);
-      }
+    if (first && second) {
+      // Same row — Y coordinates should be close
+      expect(Math.abs(second.y - first.y)).toBeLessThan(5);
+      // Side by side — second card should be to the right
+      expect(second.x).toBeGreaterThan(first.x);
+      // Both fit within viewport
+      expect(first.x + first.width).toBeLessThanOrEqual(375 + 5);
+      expect(second.x + second.width).toBeLessThanOrEqual(375 + 5);
     }
   });
 
@@ -169,7 +175,7 @@ test.describe('Responsive - Habits Page', () => {
     await page.goto('/habits');
     await page.waitForLoadState('networkidle');
 
-    const createButton = page.getByRole('link', { name: /new|create/i });
+    const createButton = page.getByRole('button', { name: /create habit/i });
     await expect(createButton).toBeVisible({ timeout: 10000 });
     const box = await createButton.boundingBox();
     if (box) {
