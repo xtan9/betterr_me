@@ -1,0 +1,36 @@
+name: Check Secrets
+description: Check if required Supabase and E2E secrets are configured
+
+inputs:
+  supabase-url:
+    description: NEXT_PUBLIC_SUPABASE_URL secret value
+    required: true
+  supabase-anon-key:
+    description: NEXT_PUBLIC_SUPABASE_ANON_KEY secret value
+    required: true
+  e2e-email:
+    description: E2E_TEST_EMAIL secret value
+    required: true
+  e2e-password:
+    description: E2E_TEST_PASSWORD secret value
+    required: true
+
+outputs:
+  has-secrets:
+    description: Whether all required secrets are configured
+    value: ${{ steps.check.outputs.has-secrets }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check required secrets
+      id: check
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.supabase-url }}" ] || [ -z "${{ inputs.supabase-anon-key }}" ] || \
+           [ -z "${{ inputs.e2e-email }}" ] || [ -z "${{ inputs.e2e-password }}" ]; then
+          echo "has-secrets=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::Skipping — required secrets are not configured."
+        else
+          echo "has-secrets=true" >> "$GITHUB_OUTPUT"
+        fi
