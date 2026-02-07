@@ -131,6 +131,7 @@ const mockDashboardData = {
     total_habits: 2,
     completed_today: 1,
     current_best_streak: 7,
+    total_tasks: 0,
     tasks_due_today: 0,
     tasks_completed_today: 0,
   },
@@ -177,6 +178,7 @@ describe("DashboardContent", () => {
           total_habits: 0,
           completed_today: 0,
           current_best_streak: 0,
+          total_tasks: 0,
           tasks_due_today: 0,
           tasks_completed_today: 0,
         },
@@ -214,6 +216,7 @@ describe("DashboardContent", () => {
           total_habits: 0,
           completed_today: 0,
           current_best_streak: 0,
+          total_tasks: 1,
           tasks_due_today: 1,
           tasks_completed_today: 0,
         },
@@ -229,9 +232,100 @@ describe("DashboardContent", () => {
     expect(
       screen.queryByText(/Welcome to BetterR.Me!/i)
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Today's Snapshot")).toBeInTheDocument();
     expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
     expect(screen.getByText("Buy groceries")).toBeInTheDocument();
+  });
+
+  it("hides DailySnapshot and MotivationMessage when user has only tasks", () => {
+    mockUseSWR.mockReturnValue({
+      data: {
+        habits: [],
+        tasks_today: [
+          {
+            id: "t1",
+            user_id: "user-1",
+            title: "Buy groceries",
+            completed: false,
+            priority: "medium",
+            due_date: new Date().toISOString().split("T")[0],
+            due_time: null,
+            created_at: "2024-01-01T00:00:00Z",
+            updated_at: "2024-01-01T00:00:00Z",
+          },
+        ],
+        stats: {
+          total_habits: 0,
+          completed_today: 0,
+          current_best_streak: 0,
+          total_tasks: 1,
+          tasks_due_today: 1,
+          tasks_completed_today: 0,
+        },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    // Habit-centric widgets should not be shown
+    expect(screen.queryByText("Today's Snapshot")).not.toBeInTheDocument();
+    // Tasks section should still be visible
+    expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
+  });
+
+  it("shows full dashboard for user with future tasks but none today", () => {
+    mockUseSWR.mockReturnValue({
+      data: {
+        habits: [],
+        tasks_today: [],
+        stats: {
+          total_habits: 0,
+          completed_today: 0,
+          current_best_streak: 0,
+          total_tasks: 3,
+          tasks_due_today: 0,
+          tasks_completed_today: 0,
+        },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    // Should NOT show empty state since user has tasks (just not today)
+    expect(
+      screen.queryByText(/Welcome to BetterR.Me!/i)
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
+  });
+
+  it("navigates to create habit page from empty state", () => {
+    mockUseSWR.mockReturnValue({
+      data: {
+        habits: [],
+        tasks_today: [],
+        stats: {
+          total_habits: 0,
+          completed_today: 0,
+          current_best_streak: 0,
+          total_tasks: 0,
+          tasks_due_today: 0,
+          tasks_completed_today: 0,
+        },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    screen.getByText(/Create a Habit/i).click();
+    expect(mockPush).toHaveBeenCalledWith("/habits/new");
   });
 
   it("navigates to create task page from empty state", () => {
@@ -243,6 +337,7 @@ describe("DashboardContent", () => {
           total_habits: 0,
           completed_today: 0,
           current_best_streak: 0,
+          total_tasks: 0,
           tasks_due_today: 0,
           tasks_completed_today: 0,
         },
