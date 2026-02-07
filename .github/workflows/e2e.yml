@@ -3,11 +3,16 @@ name: E2E Tests
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Full cross-browser matrix weekly on Sundays at 06:00 UTC
+    - cron: '0 6 * * 0'
 
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -48,17 +53,29 @@ jobs:
         if: steps.check-secrets.outputs.skip != 'true'
         run: pnpm install --frozen-lockfile
 
+      # PRs: install only chromium (faster). Push to main / schedule: install all browsers.
       - name: Install Playwright browsers
         if: steps.check-secrets.outputs.skip != 'true'
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright install --with-deps chromium
+          else
+            npx playwright install --with-deps chromium firefox webkit
+          fi
 
       - name: Build application
         if: steps.check-secrets.outputs.skip != 'true'
         run: pnpm build
 
+      # PRs: chromium only (~116 tests, ~10min). Push to main / schedule: full matrix (~826 tests).
       - name: Run E2E tests
         if: steps.check-secrets.outputs.skip != 'true'
-        run: pnpm test:e2e
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm test:e2e:chromium
+          else
+            pnpm test:e2e
+          fi
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
