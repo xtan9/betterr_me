@@ -67,9 +67,8 @@ const messages = {
     empty: {
       title: "Welcome to BetterR.Me!",
       subtitle: "Start your journey to becoming better",
-      noHabitsTitle: "No habits yet",
-      noHabitsDescription: "Create your first habit to start tracking",
-      createHabit: "Create Your First Habit",
+      createHabit: "Create a Habit",
+      createTask: "Add a Task",
     },
     loading: {
       title: "Loading your dashboard...",
@@ -169,7 +168,7 @@ describe("DashboardContent", () => {
     expect(screen.getByText(/Try again/i)).toBeInTheDocument();
   });
 
-  it("shows empty state for new users with no habits", () => {
+  it("shows empty state for new users with no habits and no tasks", () => {
     mockUseSWR.mockReturnValue({
       data: {
         habits: [],
@@ -190,7 +189,73 @@ describe("DashboardContent", () => {
     renderWithProviders(<DashboardContent userName="Test User" />);
 
     expect(screen.getByText(/Welcome to BetterR.Me!/i)).toBeInTheDocument();
-    expect(screen.getByText(/Create Your First Habit/i)).toBeInTheDocument();
+    expect(screen.getByText(/Create a Habit/i)).toBeInTheDocument();
+    expect(screen.getByText(/Add a Task/i)).toBeInTheDocument();
+  });
+
+  it("shows full dashboard when user has tasks but no habits", () => {
+    mockUseSWR.mockReturnValue({
+      data: {
+        habits: [],
+        tasks_today: [
+          {
+            id: "t1",
+            user_id: "user-1",
+            title: "Buy groceries",
+            completed: false,
+            priority: "medium",
+            due_date: new Date().toISOString().split("T")[0],
+            due_time: null,
+            created_at: "2024-01-01T00:00:00Z",
+            updated_at: "2024-01-01T00:00:00Z",
+          },
+        ],
+        stats: {
+          total_habits: 0,
+          completed_today: 0,
+          current_best_streak: 0,
+          tasks_due_today: 1,
+          tasks_completed_today: 0,
+        },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    // Should show full dashboard, not empty state
+    expect(
+      screen.queryByText(/Welcome to BetterR.Me!/i)
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Today's Snapshot")).toBeInTheDocument();
+    expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
+    expect(screen.getByText("Buy groceries")).toBeInTheDocument();
+  });
+
+  it("navigates to create task page from empty state", () => {
+    mockUseSWR.mockReturnValue({
+      data: {
+        habits: [],
+        tasks_today: [],
+        stats: {
+          total_habits: 0,
+          completed_today: 0,
+          current_best_streak: 0,
+          tasks_due_today: 0,
+          tasks_completed_today: 0,
+        },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    screen.getByText(/Add a Task/i).click();
+    expect(mockPush).toHaveBeenCalledWith("/tasks/new");
   });
 
   it("renders dashboard with habits data", async () => {

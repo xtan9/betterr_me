@@ -10,7 +10,7 @@ import { DailySnapshot } from "./daily-snapshot";
 import { HabitChecklist } from "./habit-checklist";
 import { TasksToday } from "./tasks-today";
 import { MotivationMessage } from "./motivation-message";
-import { Plus, RefreshCw, Sparkles } from "lucide-react";
+import { ListChecks, Plus, RefreshCw, Sparkles, Target } from "lucide-react";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 import type { Task } from "@/lib/db/types";
 
@@ -104,8 +104,11 @@ export function DashboardContent({ userName }: DashboardContentProps) {
     );
   }
 
-  // Empty state for new users
-  if (!data || data.stats.total_habits === 0) {
+  // Empty state for new users (no habits and no tasks)
+  if (
+    !data ||
+    (data.stats.total_habits === 0 && data.tasks_today.length === 0)
+  ) {
     return (
       <div className="space-y-8">
         {/* Greeting */}
@@ -128,10 +131,16 @@ export function DashboardContent({ userName }: DashboardContentProps) {
                 {t("empty.subtitle")}
               </p>
             </div>
-            <Button onClick={handleCreateHabit} size="lg">
-              <Plus className="size-4 mr-2" />
-              {t("empty.createHabit")}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button onClick={handleCreateHabit} size="lg">
+                <Target className="size-4 mr-2" />
+                {t("empty.createHabit")}
+              </Button>
+              <Button onClick={handleCreateTask} size="lg" variant="outline">
+                <ListChecks className="size-4 mr-2" />
+                {t("empty.createTask")}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
