@@ -30,7 +30,7 @@ export function CreateHabitContent() {
 
       // Revalidate caches so dashboard and habits list show the new habit
       mutate("/api/dashboard");
-      mutate("/api/habits");
+      mutate("/api/habits?with_today=true");
 
       toast.success(t("toast.createSuccess"));
       router.push("/habits");

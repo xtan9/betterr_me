@@ -133,7 +133,7 @@ describe('CreateHabitContent', () => {
 
     await waitFor(() => {
       expect(mockGlobalMutate).toHaveBeenCalledWith('/api/dashboard');
-      expect(mockGlobalMutate).toHaveBeenCalledWith('/api/habits');
+      expect(mockGlobalMutate).toHaveBeenCalledWith('/api/habits?with_today=true');
     });
   });
 
