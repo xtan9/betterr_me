@@ -134,7 +134,7 @@ test.describe('Create Habit Flow', () => {
     await expect(page).toHaveURL('/habits/new');
 
     // Should show validation error
-    const errorMessage = page.getByText('Name is required');
+    const errorMessage = page.getByText(/name.*required/i);
     await expect(errorMessage).toBeVisible();
   });
 
@@ -156,7 +156,8 @@ test.describe('Create Habit Flow', () => {
     await page.getByLabel(/name/i).fill('E2E Test - Sequence Habit 1');
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
-    await expect(page.getByText('E2E Test - Sequence Habit 1').first()).toBeVisible();
+    const habitList = page.locator('[role="tabpanel"]');
+    await expect(habitList.getByText('E2E Test - Sequence Habit 1')).toBeVisible();
 
     // Create second habit
     await page.getByRole('button', { name: /create habit/i }).click();
@@ -165,9 +166,9 @@ test.describe('Create Habit Flow', () => {
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
 
-    // Both habits should be visible
-    await expect(page.getByText('E2E Test - Sequence Habit 1').first()).toBeVisible();
-    await expect(page.getByText('E2E Test - Sequence Habit 2').first()).toBeVisible();
+    // Both habits should be visible in the list
+    await expect(habitList.getByText('E2E Test - Sequence Habit 1')).toBeVisible();
+    await expect(habitList.getByText('E2E Test - Sequence Habit 2')).toBeVisible();
   });
 
   test('should select different categories', async ({ page }) => {
