@@ -11,6 +11,7 @@ import { HabitChecklist } from "./habit-checklist";
 import { TasksToday } from "./tasks-today";
 import { MotivationMessage } from "./motivation-message";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
+import { getLocalDateString } from "@/lib/utils";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 import type { Task } from "@/lib/db/types";
 
@@ -37,12 +38,15 @@ export function DashboardContent({ userName }: DashboardContentProps) {
   const t = useTranslations("dashboard");
   const router = useRouter();
 
+  const today = getLocalDateString();
+
   const { data, error, isLoading, mutate } = useSWR<DashboardData>(
-    "/api/dashboard",
+    `/api/dashboard?date=${today}`,
     fetcher,
     {
       revalidateOnFocus: true,
       refreshInterval: 60000, // Refresh every minute
+      keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
     }
   );
 
@@ -58,7 +62,7 @@ export function DashboardContent({ userName }: DashboardContentProps) {
       await fetch(`/api/habits/${habitId}/toggle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: new Date().toISOString().split("T")[0] }),
+        body: JSON.stringify({ date: today }),
       });
       mutate(); // Revalidate dashboard data
     } catch (err) {

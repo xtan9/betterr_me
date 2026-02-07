@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Archive, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { getLocalDateString } from "@/lib/utils";
 
 type ExportType = "habits" | "logs" | "zip";
 type ExportPhase = "preparing" | "downloading";
@@ -23,7 +24,7 @@ function getDateRangeDates(range: DateRange): {
 } {
   if (range === "all") return {};
 
-  const endDate = new Date().toISOString().split("T")[0];
+  const endDate = getLocalDateString();
 
   // Custom dates are provided directly via customStart/customEnd state
   if (range === "custom") return {};
@@ -31,7 +32,7 @@ function getDateRangeDates(range: DateRange): {
   const days = parseInt(range, 10);
   const start = new Date();
   start.setDate(start.getDate() - days);
-  const startDate = start.toISOString().split("T")[0];
+  const startDate = getLocalDateString(start);
 
   return { startDate, endDate };
 }
@@ -74,7 +75,7 @@ export function DataExport() {
       // Get filename from Content-Disposition header or generate one
       const contentDisposition = response.headers.get("Content-Disposition");
       const ext = type === "zip" ? "zip" : "csv";
-      let filename = `betterrme-${type === "zip" ? "export" : type}-${new Date().toISOString().split("T")[0]}.${ext}`;
+      let filename = `betterrme-${type === "zip" ? "export" : type}-${getLocalDateString()}.${ext}`;
 
       if (contentDisposition) {
         const match = contentDisposition.match(/filename="?([^"]+)"?/);

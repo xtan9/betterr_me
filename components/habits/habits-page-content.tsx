@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getLocalDateString } from "@/lib/utils";
 import { HabitList } from "./habit-list";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
@@ -19,12 +20,14 @@ const fetcher = async (url: string) => {
 export function HabitsPageContent() {
   const t = useTranslations("habits");
   const router = useRouter();
+  const today = getLocalDateString();
 
   const { data, error, isLoading, mutate } = useSWR<HabitWithTodayStatus[]>(
-    "/api/habits?with_today=true",
+    `/api/habits?with_today=true&date=${today}`,
     fetcher,
     {
       revalidateOnFocus: true,
+      keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
     }
   );
 
@@ -33,7 +36,7 @@ export function HabitsPageContent() {
       await fetch(`/api/habits/${habitId}/toggle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: new Date().toISOString().split("T")[0] }),
+        body: JSON.stringify({ date: today }),
       });
       mutate();
     } catch (err) {

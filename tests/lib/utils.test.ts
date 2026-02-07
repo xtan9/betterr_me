@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cn, hasEnvVars } from '@/lib/utils';
+import { cn, getLocalDateString, hasEnvVars } from '@/lib/utils';
 
 describe('cn (className utility)', () => {
   it('merges multiple class strings', () => {
@@ -86,6 +86,65 @@ describe('cn (className utility)', () => {
   it('handles responsive classes', () => {
     const result = cn('sm:p-4', 'md:p-6', 'lg:p-8');
     expect(result).toBe('sm:p-4 md:p-6 lg:p-8');
+  });
+});
+
+describe('getLocalDateString', () => {
+  it('returns YYYY-MM-DD format', () => {
+    const result = getLocalDateString(new Date(2026, 0, 15)); // Jan 15, 2026
+    expect(result).toBe('2026-01-15');
+  });
+
+  it('pads single-digit months and days', () => {
+    const result = getLocalDateString(new Date(2026, 2, 5)); // Mar 5, 2026
+    expect(result).toBe('2026-03-05');
+  });
+
+  it('uses local timezone, not UTC', () => {
+    // Construct a Date at 11:59 PM local time. getLocalDateString should
+    // return that day, whereas toISOString could return the next day
+    // depending on the timezone offset.
+    const localDate = new Date(2026, 1, 6, 23, 59, 59); // Feb 6, 11:59 PM local
+    expect(getLocalDateString(localDate)).toBe('2026-02-06');
+  });
+
+  it('returns the local date even when toISOString crosses the UTC day boundary', () => {
+    // Core timezone bug scenario: construct a date from a UTC timestamp
+    // that is on a different UTC date than the local date.
+    // 2026-02-07T07:30:00 UTC = Feb 6, 11:30 PM in UTC-8 (Pacific)
+    //                        = Feb 7, 07:30 AM in UTC
+    // getLocalDateString must always return the LOCAL date.
+    const lateNight = new Date(2026, 1, 6, 23, 30, 0); // Feb 6, 11:30 PM local
+    const localResult = getLocalDateString(lateNight);
+    const utcResult = lateNight.toISOString().split('T')[0];
+
+    // getLocalDateString always returns the local date
+    expect(localResult).toBe('2026-02-06');
+
+    // In non-UTC timezones west of UTC, utcResult will be '2026-02-07'
+    // proving the divergence. In UTC itself both are '2026-02-06'.
+    // Either way, getLocalDateString is correct.
+    if (lateNight.getTimezoneOffset() < 0) {
+      // East of UTC: UTC date could be earlier (e.g., still Feb 6 in UTC)
+      expect(localResult).toBe('2026-02-06');
+    } else if (lateNight.getTimezoneOffset() > 0) {
+      // West of UTC: UTC date is the NEXT day
+      expect(utcResult).toBe('2026-02-07');
+      expect(localResult).not.toBe(utcResult);
+    }
+    // In UTC (offset=0), both agree — no divergence to prove, but
+    // getLocalDateString still returns the correct answer.
+  });
+
+  it('defaults to current date when no argument provided', () => {
+    const now = new Date();
+    const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    expect(getLocalDateString()).toBe(expected);
+  });
+
+  it('handles end of year correctly', () => {
+    const result = getLocalDateString(new Date(2026, 11, 31)); // Dec 31, 2026
+    expect(result).toBe('2026-12-31');
   });
 });
 
