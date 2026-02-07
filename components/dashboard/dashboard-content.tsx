@@ -10,7 +10,7 @@ import { DailySnapshot } from "./daily-snapshot";
 import { HabitChecklist } from "./habit-checklist";
 import { TasksToday } from "./tasks-today";
 import { MotivationMessage } from "./motivation-message";
-import { ListChecks, Plus, RefreshCw, Sparkles, Target } from "lucide-react";
+import { ListChecks, RefreshCw, Sparkles, Target } from "lucide-react";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 import type { Task } from "@/lib/db/types";
 
