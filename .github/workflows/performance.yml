@@ -31,34 +31,34 @@ jobs:
           fi
 
       - name: Checkout
-        if: steps.check-secrets.outputs.skip != 'true'
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         uses: actions/checkout@v4
 
       - name: Setup pnpm
-        if: steps.check-secrets.outputs.skip != 'true'
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
-        if: steps.check-secrets.outputs.skip != 'true'
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
 
       - name: Install dependencies
-        if: steps.check-secrets.outputs.skip != 'true'
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         run: pnpm install --frozen-lockfile
 
       - name: Build application
-        if: steps.check-secrets.outputs.skip != 'true'
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         run: pnpm build
 
       - name: Analyze bundle size
-        if: steps.check-secrets.outputs.skip != 'true'
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         run: pnpm perf:bundle
 
       - name: Run Lighthouse CI
-        if: steps.check-secrets.outputs.skip != 'true'
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: './lighthouserc.js'
