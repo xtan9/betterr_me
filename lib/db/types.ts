@@ -157,6 +157,7 @@ export interface DashboardData {
     total_habits: number;
     completed_today: number;
     current_best_streak: number;
+    total_tasks: number;
     tasks_due_today: number;
     tasks_completed_today: number;
   };

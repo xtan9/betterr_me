@@ -95,8 +95,9 @@
         "accountCreated": "账户创建时间",
         "empty": {
             "title": "欢迎来到 BetterR.Me！",
-            "subtitle": "开始你的成长之旅。创建你的第一个习惯，开始追踪你的进度。",
-            "createHabit": "创建你的第一个习惯"
+            "subtitle": "开始你的成长之旅。养成习惯来追踪进度，或添加任务来管理你的一天。",
+            "createHabit": "创建习惯",
+            "createTask": "添加任务"
         },
         "loading": {
             "title": "正在加载你的仪表板..."

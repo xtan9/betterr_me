@@ -95,8 +95,9 @@
         "accountCreated": "Account Created",
         "empty": {
             "title": "Welcome to BetterR.Me!",
-            "subtitle": "Start your journey to becoming better. Create your first habit and begin tracking your progress today.",
-            "createHabit": "Create Your First Habit"
+            "subtitle": "Start your journey to becoming better. Build habits to track or add tasks to stay on top of your day.",
+            "createHabit": "Create a Habit",
+            "createTask": "Add a Task"
         },
         "loading": {
             "title": "Loading your dashboard..."
