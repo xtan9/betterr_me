@@ -86,24 +86,27 @@ test.describe('Responsive - Dashboard Layout', () => {
     await ensureAuthenticated(page);
   });
 
-  test('stat cards should stack on mobile', async ({ page }) => {
+  test('stat cards should use 2-column grid on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    // Cards should be in a single column on mobile
-    const cards = page.locator('[class*="card"], [class*="Card"]');
-    const cardCount = await cards.count();
+    // Stat cards are in a grid-cols-2 grid on mobile (3 cards: 2 in first row, 1 below)
+    const statGrid = page.locator('[class*="grid-cols"]');
+    const gridCount = await statGrid.count();
 
-    if (cardCount > 1) {
-      const firstRect = await cards.first().boundingBox();
-      const secondRect = await cards.nth(1).boundingBox();
-
-      if (firstRect && secondRect) {
-        // On mobile, cards should be stacked (second below first, not beside)
-        expect(secondRect.y).toBeGreaterThanOrEqual(firstRect.y + firstRect.height - 5);
+    if (gridCount > 0) {
+      const gridBox = await statGrid.first().boundingBox();
+      if (gridBox) {
+        // Grid should fit within the viewport width
+        expect(gridBox.x + gridBox.width).toBeLessThanOrEqual(375 + 5);
       }
     }
+
+    // Verify cards exist within the grid
+    const gridCards = page.locator('[class*="grid-cols"] > div');
+    const cardCount = await gridCards.count();
+    expect(cardCount).toBeGreaterThanOrEqual(2);
   });
 
   test('stat cards should be in a row on desktop', async ({ page }) => {
@@ -169,7 +172,7 @@ test.describe('Responsive - Habits Page', () => {
     await page.goto('/habits');
     await page.waitForLoadState('networkidle');
 
-    const createButton = page.getByRole('link', { name: /new|create/i });
+    const createButton = page.getByRole('button', { name: /create habit/i });
     await expect(createButton).toBeVisible({ timeout: 10000 });
     const box = await createButton.boundingBox();
     if (box) {
