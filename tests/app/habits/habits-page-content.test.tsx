@@ -114,6 +114,22 @@ describe("HabitsPageContent", () => {
     vi.clearAllMocks();
   });
 
+  it("passes local date in SWR key for timezone-correct queries", () => {
+    mockUseSWR.mockReturnValue({
+      data: undefined,
+      error: undefined,
+      isLoading: true,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<HabitsPageContent />);
+
+    const swrKey = mockUseSWR.mock.calls[0][0];
+    expect(swrKey).toMatch(
+      /^\/api\/habits\?with_today=true&date=\d{4}-\d{2}-\d{2}$/
+    );
+  });
+
   it("shows loading skeleton while data is loading", () => {
     mockUseSWR.mockReturnValue({
       data: undefined,

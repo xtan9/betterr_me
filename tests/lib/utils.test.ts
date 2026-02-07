@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cn, hasEnvVars } from '@/lib/utils';
+import { cn, getLocalDateString, hasEnvVars } from '@/lib/utils';
 
 describe('cn (className utility)', () => {
   it('merges multiple class strings', () => {
@@ -86,6 +86,47 @@ describe('cn (className utility)', () => {
   it('handles responsive classes', () => {
     const result = cn('sm:p-4', 'md:p-6', 'lg:p-8');
     expect(result).toBe('sm:p-4 md:p-6 lg:p-8');
+  });
+});
+
+describe('getLocalDateString', () => {
+  it('returns YYYY-MM-DD format', () => {
+    const result = getLocalDateString(new Date(2026, 0, 15)); // Jan 15, 2026
+    expect(result).toBe('2026-01-15');
+  });
+
+  it('pads single-digit months and days', () => {
+    const result = getLocalDateString(new Date(2026, 2, 5)); // Mar 5, 2026
+    expect(result).toBe('2026-03-05');
+  });
+
+  it('uses local timezone, not UTC', () => {
+    // 2026-02-07T02:00:00 UTC — in any timezone west of UTC+2,
+    // the local date is still Feb 6.
+    // We test by constructing a Date with explicit local components.
+    const localDate = new Date(2026, 1, 6, 23, 59, 59); // Feb 6, 11:59 PM local
+    expect(getLocalDateString(localDate)).toBe('2026-02-06');
+  });
+
+  it('differs from toISOString for late-night local times in negative-offset timezones', () => {
+    // This is the core timezone bug scenario:
+    // At 11 PM local time in UTC-8, toISOString gives the next day's date.
+    // getLocalDateString should give today's date.
+    const lateNight = new Date(2026, 1, 6, 23, 0, 0); // Feb 6, 11 PM local
+    const localResult = getLocalDateString(lateNight);
+    expect(localResult).toBe('2026-02-06');
+    // Note: toISOString would return '2026-02-07' if running in UTC-8
+  });
+
+  it('defaults to current date when no argument provided', () => {
+    const now = new Date();
+    const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    expect(getLocalDateString()).toBe(expected);
+  });
+
+  it('handles end of year correctly', () => {
+    const result = getLocalDateString(new Date(2026, 11, 31)); // Dec 31, 2026
+    expect(result).toBe('2026-12-31');
   });
 });
 
