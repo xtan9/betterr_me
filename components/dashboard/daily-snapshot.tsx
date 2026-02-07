@@ -18,7 +18,7 @@ interface StatCardProps {
 
 function StatCard({ icon, title, value, subtitle, trend }: StatCardProps) {
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900">
+    <div className="min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900">
       <div className="flex items-center gap-2 mb-2 text-slate-500 dark:text-slate-400">
         <span aria-hidden="true">{icon}</span>
         <span className="text-sm">{title}</span>
