@@ -6,7 +6,24 @@ on:
   workflow_dispatch:
 
 jobs:
+  check-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      has-secrets: ${{ steps.check.outputs.has-secrets }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required secrets
+        id: check
+        uses: ./.github/actions/check-secrets
+        with:
+          supabase-url: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          e2e-email: ${{ secrets.E2E_TEST_EMAIL }}
+          e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
+
   lighthouse:
+    needs: check-secrets
+    if: ${{ needs.check-secrets.outputs.has-secrets == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
