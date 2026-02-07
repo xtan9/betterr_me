@@ -340,10 +340,14 @@ test.describe('Accessibility - Responsive', () => {
         // Only check visible elements.
         // getBoundingClientRect() returns border-box dimensions (includes padding).
         if (rect.width > 0 && rect.height > 0) {
-          // Check that at least one dimension meets the 44px minimum.
-          // Inline links and icon buttons may be narrow but tall (or wide but short),
-          // which is acceptable per WCAG 2.5.8 spacing exceptions.
-          if (rect.width < 44 && rect.height < 44) {
+          // Exclude inline links within text (WCAG 2.5.8 inline exception)
+          const tag = el.tagName.toLowerCase();
+          const parentDisplay = window.getComputedStyle(el.parentElement!).display;
+          const isInlineLink = tag === 'a' && (parentDisplay === 'block' || parentDisplay === 'flex')
+            && window.getComputedStyle(el).display === 'inline';
+          if (isInlineLink) return;
+
+          if (rect.width < 44 || rect.height < 44) {
             small++;
           }
         }
@@ -352,8 +356,9 @@ test.describe('Accessibility - Responsive', () => {
       return small;
     });
 
-    // Allow tolerance for small utility elements (icon buttons, inline links)
-    expect(smallTouchTargets).toBeLessThan(15);
+    // Allow some tolerance — inline nav links and small icon toggles may not
+    // meet 44px on one dimension. Keep this tight to catch real regressions.
+    expect(smallTouchTargets).toBeLessThan(8);
   });
 
   test('should not have font size below 16px for inputs on iOS', async ({ page }) => {
