@@ -3,11 +3,33 @@ name: E2E Tests
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Full cross-browser matrix weekly on Sundays at 06:00 UTC
+    - cron: '0 6 * * 0'
 
 jobs:
-  e2e-tests:
+  check-secrets:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    outputs:
+      has-secrets: ${{ steps.check.outputs.has-secrets }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required secrets
+        id: check
+        uses: ./.github/actions/check-secrets
+        with:
+          supabase-url: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          e2e-email: ${{ secrets.E2E_TEST_EMAIL }}
+          e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
+
+  e2e-tests:
+    needs: check-secrets
+    if: ${{ needs.check-secrets.outputs.has-secrets == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -16,53 +38,44 @@ jobs:
       E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
     steps:
-      # Skip all subsequent steps when required secrets are not configured.
-      # IMPORTANT: All steps below must include the check-secrets skip condition.
-      - name: Check required secrets
-        id: check-secrets
-        run: |
-          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || \
-             [ -z "$E2E_TEST_EMAIL" ] || [ -z "$E2E_TEST_PASSWORD" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping E2E tests — required secrets are not configured."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Checkout
-        if: steps.check-secrets.outputs.skip != 'true'
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup pnpm
-        if: steps.check-secrets.outputs.skip != 'true'
         uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
-        if: steps.check-secrets.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
 
       - name: Install dependencies
-        if: steps.check-secrets.outputs.skip != 'true'
         run: pnpm install --frozen-lockfile
 
+      # PRs: install only chromium (faster). Push to main / schedule: install all browsers.
       - name: Install Playwright browsers
-        if: steps.check-secrets.outputs.skip != 'true'
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx playwright install --with-deps chromium
+          else
+            npx playwright install --with-deps chromium firefox webkit
+          fi
 
       - name: Build application
-        if: steps.check-secrets.outputs.skip != 'true'
         run: pnpm build
 
+      # PRs: chromium only (~116 tests, ~10min). Push to main / schedule: full matrix (~826 tests).
       - name: Run E2E tests
-        if: steps.check-secrets.outputs.skip != 'true'
-        run: pnpm test:e2e
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pnpm test:e2e:chromium
+          else
+            pnpm test:e2e
+          fi
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.check-secrets.outputs.skip != 'true' }}
+        if: ${{ !cancelled() }}
         with:
           name: playwright-report
           path: playwright-report/

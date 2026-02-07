@@ -10,7 +10,7 @@ import { DailySnapshot } from "./daily-snapshot";
 import { HabitChecklist } from "./habit-checklist";
 import { TasksToday } from "./tasks-today";
 import { MotivationMessage } from "./motivation-message";
-import { Plus, RefreshCw, Sparkles } from "lucide-react";
+import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 import type { Task } from "@/lib/db/types";
 
@@ -21,6 +21,7 @@ interface DashboardData {
     total_habits: number;
     completed_today: number;
     current_best_streak: number;
+    total_tasks: number;
     tasks_due_today: number;
     tasks_completed_today: number;
   };
@@ -104,8 +105,11 @@ export function DashboardContent({ userName }: DashboardContentProps) {
     );
   }
 
-  // Empty state for new users
-  if (!data || data.stats.total_habits === 0) {
+  // Empty state for new users (no habits and no tasks)
+  if (
+    !data ||
+    (data.stats.total_habits === 0 && data.stats.total_tasks === 0)
+  ) {
     return (
       <div className="space-y-8">
         {/* Greeting */}
@@ -128,10 +132,16 @@ export function DashboardContent({ userName }: DashboardContentProps) {
                 {t("empty.subtitle")}
               </p>
             </div>
-            <Button onClick={handleCreateHabit} size="lg">
-              <Plus className="size-4 mr-2" />
-              {t("empty.createHabit")}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button onClick={handleCreateHabit} size="lg">
+                <Repeat className="size-4 mr-2" />
+                {t("empty.createHabit")}
+              </Button>
+              <Button onClick={handleCreateTask} size="lg" variant="outline">
+                <ListChecks className="size-4 mr-2" />
+                {t("empty.createTask")}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -164,11 +174,15 @@ export function DashboardContent({ userName }: DashboardContentProps) {
         <p className="text-muted-foreground">{t("welcome")}</p>
       </div>
 
-      {/* Motivation Message */}
-      <MotivationMessage stats={data.stats} topStreakHabit={topStreakHabit} />
+      {/* Motivation Message — only show when user has habits */}
+      {data.stats.total_habits > 0 && (
+        <MotivationMessage stats={data.stats} topStreakHabit={topStreakHabit} />
+      )}
 
-      {/* Daily Snapshot */}
-      <DailySnapshot stats={data.stats} />
+      {/* Daily Snapshot — only show when user has habits */}
+      {data.stats.total_habits > 0 && (
+        <DailySnapshot stats={data.stats} />
+      )}
 
       {/* Main content grid */}
       <div className="grid gap-6 lg:grid-cols-2">

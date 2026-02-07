@@ -6,11 +6,25 @@ on:
   workflow_dispatch:
 
 jobs:
-  lighthouse:
+  check-secrets:
     runs-on: ubuntu-latest
-    # Only run when Supabase secrets are configured (needed for build).
-    # secrets context is available in job-level if conditions.
-    if: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL != '' }}
+    outputs:
+      has-secrets: ${{ steps.check.outputs.has-secrets }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required secrets
+        id: check
+        uses: ./.github/actions/check-secrets
+        with:
+          supabase-url: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          e2e-email: ${{ secrets.E2E_TEST_EMAIL }}
+          e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
+
+  lighthouse:
+    needs: check-secrets
+    if: ${{ needs.check-secrets.outputs.has-secrets == 'true' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     env:
@@ -20,28 +34,48 @@ jobs:
       E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
     steps:
+      # Skip all subsequent steps when required secrets are not configured.
+      # IMPORTANT: All steps below must include the check-secrets skip condition.
+      - name: Check required secrets
+        id: check-secrets
+        run: |
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || \
+             [ -z "$E2E_TEST_EMAIL" ] || [ -z "$E2E_TEST_PASSWORD" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping performance audit — required secrets are not configured."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         uses: actions/checkout@v4
 
       - name: Setup pnpm
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
 
       - name: Install dependencies
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         run: pnpm install --frozen-lockfile
 
       - name: Build application
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         run: pnpm build
 
       - name: Analyze bundle size
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         run: pnpm perf:bundle
 
       - name: Run Lighthouse CI
+        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: './lighthouserc.js'
@@ -50,7 +84,7 @@ jobs:
 
       - name: Upload bundle analysis
         uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.check-secrets.outputs.skip != 'true' }}
         with:
           name: bundle-analysis
           path: .next/analyze/

@@ -12,15 +12,12 @@
  * - TTI < 3.8s
  * - CLS < 0.1
  */
+const { BASE_URL, PUBLIC_PATHS, PROTECTED_PATHS } = require('./scripts/lighthouse-config');
+
 module.exports = {
   ci: {
     collect: {
-      url: [
-        'http://localhost:3000/',
-        'http://localhost:3000/auth/login',
-        'http://localhost:3000/dashboard',
-        'http://localhost:3000/habits',
-      ],
+      url: [...PUBLIC_PATHS, ...PROTECTED_PATHS].map((p) => `${BASE_URL}${p}`),
       puppeteerScript: './scripts/lighthouse-auth.js',
       startServerCommand: 'pnpm start',
       startServerReadyPattern: 'Ready in',

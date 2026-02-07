@@ -32,11 +32,13 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
 
     // Fetch data in parallel
-    const [habitsWithStatus, todayTasks, allTodayTasks] = await Promise.all([
+    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks] = await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
       tasksDB.getTodayTasks(user.id),
       // Get all tasks for today to calculate completed count
       tasksDB.getUserTasks(user.id, { due_date: date }),
+      // Get all tasks to determine if user has any tasks at all
+      tasksDB.getUserTasks(user.id),
     ]);
 
     // Calculate stats
@@ -54,6 +56,7 @@ export async function GET(request: NextRequest) {
         total_habits: habitsWithStatus.length,
         completed_today: completedHabitsToday,
         current_best_streak: bestStreak,
+        total_tasks: allTasks.length,
         tasks_due_today: todayTasks.length,
         tasks_completed_today: tasksCompletedToday,
       },

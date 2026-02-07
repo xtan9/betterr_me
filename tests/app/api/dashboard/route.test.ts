@@ -15,7 +15,7 @@ const mockHabitsDB = {
 };
 const mockTasksDB = {
   getTodayTasks: vi.fn(),
-  getUserTasks: vi.fn(),
+  getUserTasks: vi.fn().mockResolvedValue([]),
 };
 
 vi.mock('@/lib/db', () => ({
@@ -43,14 +43,22 @@ describe('GET /api/dashboard', () => {
       { id: 'h2', name: 'Read', current_streak: 3, completed_today: false },
     ];
     const todayTasks = [{ id: 't1', title: 'Task 1', is_completed: false }];
+    const todayDateTasks = [
+      { id: 't1', title: 'Task 1', is_completed: false },
+      { id: 't2', title: 'Task 2', is_completed: true },
+    ];
     const allTasks = [
       { id: 't1', title: 'Task 1', is_completed: false },
       { id: 't2', title: 'Task 2', is_completed: true },
+      { id: 't3', title: 'Task 3', is_completed: false },
     ];
 
     vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
     vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue(todayTasks as any);
-    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue(allTasks as any);
+    // getUserTasks is called twice: once with due_date filter, once without
+    vi.mocked(mockTasksDB.getUserTasks)
+      .mockResolvedValueOnce(todayDateTasks as any)
+      .mockResolvedValueOnce(allTasks as any);
 
     const request = new NextRequest('http://localhost:3000/api/dashboard');
     const response = await GET(request);
@@ -62,6 +70,7 @@ describe('GET /api/dashboard', () => {
     expect(data.stats.total_habits).toBe(2);
     expect(data.stats.completed_today).toBe(1);
     expect(data.stats.current_best_streak).toBe(5);
+    expect(data.stats.total_tasks).toBe(3);
     expect(data.stats.tasks_completed_today).toBe(1);
   });
 
@@ -78,6 +87,7 @@ describe('GET /api/dashboard', () => {
     expect(data.stats.total_habits).toBe(0);
     expect(data.stats.completed_today).toBe(0);
     expect(data.stats.current_best_streak).toBe(0);
+    expect(data.stats.total_tasks).toBe(0);
   });
 
   it('should accept a date parameter', async () => {

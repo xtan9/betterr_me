@@ -7,20 +7,23 @@
  * @param {import('puppeteer').Browser} browser
  * @param {{url: string}} context
  */
+const { PROTECTED_PATHS } = require('./lighthouse-config');
+
 module.exports = async (browser, context) => {
+  // Only authenticate for protected routes — check path first so
+  // public-page audits work even when credentials are absent.
+  const url = new URL(context.url);
+  if (!PROTECTED_PATHS.some((p) => url.pathname.startsWith(p))) {
+    return;
+  }
+
   const email = process.env.E2E_TEST_EMAIL;
   const password = process.env.E2E_TEST_PASSWORD;
 
   if (!email || !password) {
-    console.warn('[lighthouse-auth] Missing credentials — skipping auth');
-    return;
-  }
-
-  // Only authenticate for protected routes
-  const protectedPaths = ['/dashboard', '/habits'];
-  const url = new URL(context.url);
-  if (!protectedPaths.some((p) => url.pathname.startsWith(p))) {
-    return;
+    throw new Error(
+      '[lighthouse-auth] Missing E2E_TEST_EMAIL or E2E_TEST_PASSWORD'
+    );
   }
 
   const page = await browser.newPage();
