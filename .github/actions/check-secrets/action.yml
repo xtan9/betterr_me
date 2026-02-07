@@ -26,9 +26,14 @@ runs:
     - name: Check required secrets
       id: check
       shell: bash
+      env:
+        SUPABASE_URL: ${{ inputs.supabase-url }}
+        SUPABASE_ANON_KEY: ${{ inputs.supabase-anon-key }}
+        E2E_EMAIL: ${{ inputs.e2e-email }}
+        E2E_PASSWORD: ${{ inputs.e2e-password }}
       run: |
-        if [ -z "${{ inputs.supabase-url }}" ] || [ -z "${{ inputs.supabase-anon-key }}" ] || \
-           [ -z "${{ inputs.e2e-email }}" ] || [ -z "${{ inputs.e2e-password }}" ]; then
+        if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || \
+           [ -z "$E2E_EMAIL" ] || [ -z "$E2E_PASSWORD" ]; then
           echo "has-secrets=false" >> "$GITHUB_OUTPUT"
           echo "::notice::Skipping — required secrets are not configured."
         else
