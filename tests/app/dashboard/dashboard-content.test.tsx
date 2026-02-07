@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { getLocalDateString } from "@/lib/utils";
 import { NextIntlClientProvider } from "next-intl";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 
@@ -81,6 +82,14 @@ const messages = {
   habits: {
     card: {
       streakDays: "{count} days",
+      markComplete: "Toggle",
+    },
+    categories: {
+      health: "Health",
+      wellness: "Wellness",
+      learning: "Learning",
+      productivity: "Productivity",
+      other: "Other",
     },
   },
 };
@@ -405,5 +414,38 @@ describe("DashboardContent", () => {
     addButton.click();
 
     expect(mockPush).toHaveBeenCalledWith("/habits/new");
+  });
+
+  it("sends local date in toggle POST body", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: () => ({}) });
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn();
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    // Find checkboxes (habit toggles) and click one
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      const toggleCall = mockFetch.mock.calls.find(
+        (call: unknown[]) =>
+          typeof call[0] === "string" && call[0].includes("/toggle")
+      );
+      expect(toggleCall).toBeDefined();
+      const body = JSON.parse(toggleCall![1].body);
+      expect(body.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(body.date).toBe(getLocalDateString());
+    });
+
+    global.fetch = originalFetch;
   });
 });

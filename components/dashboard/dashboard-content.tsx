@@ -46,6 +46,7 @@ export function DashboardContent({ userName }: DashboardContentProps) {
     {
       revalidateOnFocus: true,
       refreshInterval: 60000, // Refresh every minute
+      keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
     }
   );
 

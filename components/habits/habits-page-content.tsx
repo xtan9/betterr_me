@@ -27,6 +27,7 @@ export function HabitsPageContent() {
     fetcher,
     {
       revalidateOnFocus: true,
+      keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
     }
   );
 
