@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-// TODO: habitsDB/tasksDB singletons use browser client — should instantiate with server client
-import { habitsDB, tasksDB } from '@/lib/db';
+import { HabitsDB, TasksDB } from '@/lib/db';
 import type { DashboardData } from '@/lib/db/types';
 
 /**
@@ -27,6 +26,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const habitsDB = new HabitsDB(supabase);
+    const tasksDB = new TasksDB(supabase);
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
 

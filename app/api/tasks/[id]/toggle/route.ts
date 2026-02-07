@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-// TODO: tasksDB singleton uses browser client — should instantiate with server client
-import { tasksDB } from '@/lib/db';
+import { TasksDB } from '@/lib/db';
 
 /**
  * POST /api/tasks/[id]/toggle
@@ -22,6 +21,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const tasksDB = new TasksDB(supabase);
     const task = await tasksDB.toggleTaskCompletion(id, user.id);
     return NextResponse.json({ task });
   } catch (error: unknown) {

@@ -12,13 +12,15 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
+const mockProfilesDB = {
+  updatePreferences: vi.fn(),
+};
+
 vi.mock('@/lib/db', () => ({
-  profilesDB: {
-    updatePreferences: vi.fn(),
+  ProfilesDB: class {
+    constructor() { return mockProfilesDB; }
   },
 }));
-
-import { profilesDB } from '@/lib/db';
 
 describe('PATCH /api/profile/preferences', () => {
   beforeEach(() => {
@@ -36,7 +38,7 @@ describe('PATCH /api/profile/preferences', () => {
         week_start_day: 1,
       },
     };
-    vi.mocked(profilesDB.updatePreferences).mockResolvedValue(updatedProfile as any);
+    vi.mocked(mockProfilesDB.updatePreferences).mockResolvedValue(updatedProfile as any);
 
     const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
       method: 'PATCH',
@@ -48,7 +50,7 @@ describe('PATCH /api/profile/preferences', () => {
 
     expect(response.status).toBe(200);
     expect(data.profile).toEqual(updatedProfile);
-    expect(profilesDB.updatePreferences).toHaveBeenCalledWith('user-123', {
+    expect(mockProfilesDB.updatePreferences).toHaveBeenCalledWith('user-123', {
       timezone: 'America/New_York',
       theme: 'dark',
     });
@@ -112,7 +114,7 @@ describe('PATCH /api/profile/preferences', () => {
       id: 'user-123',
       preferences: { week_start_day: 1 },
     };
-    vi.mocked(profilesDB.updatePreferences).mockResolvedValue(updatedProfile as any);
+    vi.mocked(mockProfilesDB.updatePreferences).mockResolvedValue(updatedProfile as any);
 
     // Pre-populate cache with multiple habits for this user
     statsCache.set(getStatsCacheKey('habit-1', 'user-123'), {
@@ -147,7 +149,7 @@ describe('PATCH /api/profile/preferences', () => {
       id: 'user-123',
       preferences: { theme: 'dark' },
     };
-    vi.mocked(profilesDB.updatePreferences).mockResolvedValue(updatedProfile as any);
+    vi.mocked(mockProfilesDB.updatePreferences).mockResolvedValue(updatedProfile as any);
 
     // Pre-populate cache
     statsCache.set(getStatsCacheKey('habit-1', 'user-123'), {

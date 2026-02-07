@@ -11,16 +11,19 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
+const mockTasksDB = {
+  getTask: vi.fn(),
+  updateTask: vi.fn(),
+  deleteTask: vi.fn(),
+};
+
 vi.mock('@/lib/db', () => ({
-  tasksDB: {
-    getTask: vi.fn(),
-    updateTask: vi.fn(),
-    deleteTask: vi.fn(),
+  TasksDB: class {
+    constructor() { return mockTasksDB; }
   },
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import { tasksDB } from '@/lib/db';
 
 describe('GET /api/tasks/[id]', () => {
   beforeEach(() => {
@@ -29,7 +32,7 @@ describe('GET /api/tasks/[id]', () => {
 
   it('should return task by ID', async () => {
     const mockTask = { id: 'task-1', user_id: 'user-123', title: 'Task 1' };
-    vi.mocked(tasksDB.getTask).mockResolvedValue(mockTask as any);
+    vi.mocked(mockTasksDB.getTask).mockResolvedValue(mockTask as any);
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1');
     const response = await GET(request, { params: Promise.resolve({ id: 'task-1' }) });
@@ -37,11 +40,11 @@ describe('GET /api/tasks/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.task).toEqual(mockTask);
-    expect(tasksDB.getTask).toHaveBeenCalledWith('task-1', 'user-123');
+    expect(mockTasksDB.getTask).toHaveBeenCalledWith('task-1', 'user-123');
   });
 
   it('should return 404 if task not found', async () => {
-    vi.mocked(tasksDB.getTask).mockResolvedValue(null);
+    vi.mocked(mockTasksDB.getTask).mockResolvedValue(null);
 
     const request = new NextRequest('http://localhost:3000/api/tasks/nonexistent');
     const response = await GET(request, {
@@ -55,6 +58,7 @@ describe('GET /api/tasks/[id]', () => {
 describe('PATCH /api/tasks/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
   });
 
   it('should update task', async () => {
@@ -64,7 +68,7 @@ describe('PATCH /api/tasks/[id]', () => {
       title: 'Updated',
       priority: 3,
     };
-    vi.mocked(tasksDB.updateTask).mockResolvedValue(updatedTask as any);
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue(updatedTask as any);
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
       method: 'PATCH',
@@ -110,10 +114,11 @@ describe('PATCH /api/tasks/[id]', () => {
 describe('DELETE /api/tasks/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
   });
 
   it('should delete task', async () => {
-    vi.mocked(tasksDB.deleteTask).mockResolvedValue();
+    vi.mocked(mockTasksDB.deleteTask).mockResolvedValue();
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
       method: 'DELETE',
@@ -126,6 +131,6 @@ describe('DELETE /api/tasks/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(tasksDB.deleteTask).toHaveBeenCalledWith('task-1', 'user-123');
+    expect(mockTasksDB.deleteTask).toHaveBeenCalledWith('task-1', 'user-123');
   });
 });

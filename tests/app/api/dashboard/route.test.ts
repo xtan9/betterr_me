@@ -10,18 +10,24 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
+const mockHabitsDB = {
+  getHabitsWithTodayStatus: vi.fn(),
+};
+const mockTasksDB = {
+  getTodayTasks: vi.fn(),
+  getUserTasks: vi.fn(),
+};
+
 vi.mock('@/lib/db', () => ({
-  habitsDB: {
-    getHabitsWithTodayStatus: vi.fn(),
+  HabitsDB: class {
+    constructor() { return mockHabitsDB; }
   },
-  tasksDB: {
-    getTodayTasks: vi.fn(),
-    getUserTasks: vi.fn(),
+  TasksDB: class {
+    constructor() { return mockTasksDB; }
   },
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import { habitsDB, tasksDB } from '@/lib/db';
 
 describe('GET /api/dashboard', () => {
   beforeEach(() => {
@@ -42,9 +48,9 @@ describe('GET /api/dashboard', () => {
       { id: 't2', title: 'Task 2', is_completed: true },
     ];
 
-    vi.mocked(habitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
-    vi.mocked(tasksDB.getTodayTasks).mockResolvedValue(todayTasks as any);
-    vi.mocked(tasksDB.getUserTasks).mockResolvedValue(allTasks as any);
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue(todayTasks as any);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue(allTasks as any);
 
     const request = new NextRequest('http://localhost:3000/api/dashboard');
     const response = await GET(request);
@@ -60,9 +66,9 @@ describe('GET /api/dashboard', () => {
   });
 
   it('should handle empty state (new user)', async () => {
-    vi.mocked(habitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
-    vi.mocked(tasksDB.getTodayTasks).mockResolvedValue([]);
-    vi.mocked(tasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
 
     const request = new NextRequest('http://localhost:3000/api/dashboard');
     const response = await GET(request);
@@ -75,14 +81,14 @@ describe('GET /api/dashboard', () => {
   });
 
   it('should accept a date parameter', async () => {
-    vi.mocked(habitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
-    vi.mocked(tasksDB.getTodayTasks).mockResolvedValue([]);
-    vi.mocked(tasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
 
     const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-01');
     await GET(request);
 
-    expect(habitsDB.getHabitsWithTodayStatus).toHaveBeenCalledWith('user-123', '2026-02-01');
+    expect(mockHabitsDB.getHabitsWithTodayStatus).toHaveBeenCalledWith('user-123', '2026-02-01');
   });
 
   it('should return 401 if not authenticated', async () => {

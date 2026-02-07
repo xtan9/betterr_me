@@ -11,15 +11,18 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
+const mockTasksDB = {
+  getUserTasks: vi.fn(),
+  createTask: vi.fn(),
+};
+
 vi.mock('@/lib/db', () => ({
-  tasksDB: {
-    getUserTasks: vi.fn(),
-    createTask: vi.fn(),
+  TasksDB: class {
+    constructor() { return mockTasksDB; }
   },
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import { tasksDB } from '@/lib/db';
 
 describe('GET /api/tasks', () => {
   beforeEach(() => {
@@ -30,7 +33,7 @@ describe('GET /api/tasks', () => {
     const mockTasks = [
       { id: '1', user_id: 'user-123', title: 'Task 1', is_completed: false },
     ];
-    vi.mocked(tasksDB.getUserTasks).mockResolvedValue(mockTasks as any);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue(mockTasks as any);
 
     const request = new NextRequest('http://localhost:3000/api/tasks');
     const response = await GET(request);
@@ -38,18 +41,18 @@ describe('GET /api/tasks', () => {
 
     expect(response.status).toBe(200);
     expect(data.tasks).toEqual(mockTasks);
-    expect(tasksDB.getUserTasks).toHaveBeenCalledWith('user-123', {});
+    expect(mockTasksDB.getUserTasks).toHaveBeenCalledWith('user-123', {});
   });
 
   it('should apply filters from query params', async () => {
-    vi.mocked(tasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
 
     const request = new NextRequest(
       'http://localhost:3000/api/tasks?is_completed=true&priority=2'
     );
     await GET(request);
 
-    expect(tasksDB.getUserTasks).toHaveBeenCalledWith('user-123', {
+    expect(mockTasksDB.getUserTasks).toHaveBeenCalledWith('user-123', {
       is_completed: true,
       priority: 2,
     });
@@ -83,7 +86,7 @@ describe('POST /api/tasks', () => {
       is_completed: false,
       priority: 1,
     };
-    vi.mocked(tasksDB.createTask).mockResolvedValue(newTask as any);
+    vi.mocked(mockTasksDB.createTask).mockResolvedValue(newTask as any);
 
     const request = new NextRequest('http://localhost:3000/api/tasks', {
       method: 'POST',

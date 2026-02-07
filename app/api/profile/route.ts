@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-// TODO: profilesDB singleton uses browser client — should instantiate with server client
-import { profilesDB } from "@/lib/db";
+import { ProfilesDB } from "@/lib/db";
 import type { ProfileUpdate } from "@/lib/db/types";
 
 /**
@@ -19,6 +18,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const profilesDB = new ProfilesDB(supabase);
     const profile = await profilesDB.getProfile(user.id);
 
     if (!profile) {
@@ -50,6 +50,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const profilesDB = new ProfilesDB(supabase);
     const body = await request.json();
 
     // Build update object

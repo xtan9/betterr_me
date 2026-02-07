@@ -11,15 +11,18 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
+const mockProfilesDB = {
+  getProfile: vi.fn(),
+  updateProfile: vi.fn(),
+};
+
 vi.mock('@/lib/db', () => ({
-  profilesDB: {
-    getProfile: vi.fn(),
-    updateProfile: vi.fn(),
+  ProfilesDB: class {
+    constructor() { return mockProfilesDB; }
   },
 }));
 
 import { createClient } from '@/lib/supabase/server';
-import { profilesDB } from '@/lib/db';
 
 describe('GET /api/profile', () => {
   beforeEach(() => {
@@ -33,7 +36,7 @@ describe('GET /api/profile', () => {
       full_name: 'Test User',
       preferences: { theme: 'dark' },
     };
-    vi.mocked(profilesDB.getProfile).mockResolvedValue(mockProfile as any);
+    vi.mocked(mockProfilesDB.getProfile).mockResolvedValue(mockProfile as any);
 
     const request = new NextRequest('http://localhost:3000/api/profile');
     const response = await GET(request);
@@ -41,11 +44,11 @@ describe('GET /api/profile', () => {
 
     expect(response.status).toBe(200);
     expect(data.profile).toEqual(mockProfile);
-    expect(profilesDB.getProfile).toHaveBeenCalledWith('user-123');
+    expect(mockProfilesDB.getProfile).toHaveBeenCalledWith('user-123');
   });
 
   it('should return 404 if profile not found', async () => {
-    vi.mocked(profilesDB.getProfile).mockResolvedValue(null);
+    vi.mocked(mockProfilesDB.getProfile).mockResolvedValue(null);
 
     const request = new NextRequest('http://localhost:3000/api/profile');
     const response = await GET(request);
@@ -79,7 +82,7 @@ describe('PATCH /api/profile', () => {
       full_name: 'Updated Name',
       avatar_url: 'https://example.com/avatar.jpg',
     };
-    vi.mocked(profilesDB.updateProfile).mockResolvedValue(updatedProfile as any);
+    vi.mocked(mockProfilesDB.updateProfile).mockResolvedValue(updatedProfile as any);
 
     const request = new NextRequest('http://localhost:3000/api/profile', {
       method: 'PATCH',

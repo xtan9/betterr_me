@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-// TODO: tasksDB singleton uses browser client — should instantiate with server client
-import { tasksDB } from '@/lib/db';
+import { TasksDB } from '@/lib/db';
 import type { TaskUpdate } from '@/lib/db/types';
 
 /**
@@ -23,6 +22,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const tasksDB = new TasksDB(supabase);
     const task = await tasksDB.getTask(id, user.id);
 
     if (!task) {
@@ -58,6 +58,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const tasksDB = new TasksDB(supabase);
     const body = await request.json();
 
     // Build update object
@@ -145,6 +146,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const tasksDB = new TasksDB(supabase);
     await tasksDB.deleteTask(id, user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
