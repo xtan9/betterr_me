@@ -10,6 +10,13 @@
 const { PROTECTED_PATHS } = require('./lighthouse-config');
 
 module.exports = async (browser, context) => {
+  // Only authenticate for protected routes — check path first so
+  // public-page audits work even when credentials are absent.
+  const url = new URL(context.url);
+  if (!PROTECTED_PATHS.some((p) => url.pathname.startsWith(p))) {
+    return;
+  }
+
   const email = process.env.E2E_TEST_EMAIL;
   const password = process.env.E2E_TEST_PASSWORD;
 
@@ -17,12 +24,6 @@ module.exports = async (browser, context) => {
     throw new Error(
       '[lighthouse-auth] Missing E2E_TEST_EMAIL or E2E_TEST_PASSWORD'
     );
-  }
-
-  // Only authenticate for protected routes
-  const url = new URL(context.url);
-  if (!PROTECTED_PATHS.some((p) => url.pathname.startsWith(p))) {
-    return;
   }
 
   const page = await browser.newPage();

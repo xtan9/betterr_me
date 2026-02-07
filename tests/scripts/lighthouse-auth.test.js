@@ -63,6 +63,20 @@ describe('lighthouse-auth', () => {
     ).rejects.toThrow('Missing E2E_TEST_EMAIL or E2E_TEST_PASSWORD');
   });
 
+  it('does not throw for public paths when credentials are missing', async () => {
+    delete process.env.E2E_TEST_EMAIL;
+    delete process.env.E2E_TEST_PASSWORD;
+    await loadModule();
+    const { mockBrowser } = createMockBrowser();
+
+    // Should silently skip — no throw, no login attempt
+    await lighthouseAuth(mockBrowser, {
+      url: 'http://localhost:3000/auth/login',
+    });
+
+    expect(mockBrowser.newPage).not.toHaveBeenCalled();
+  });
+
   it('skips authentication for public paths', async () => {
     await loadModule();
     const { mockBrowser } = createMockBrowser();
