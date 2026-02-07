@@ -385,13 +385,6 @@
         "error": "加载设置失败",
         "save": "保存",
         "saved": "已保存",
-        "timezone": {
-            "title": "时区",
-            "description": "设置你的本地时区以便准确跟踪习惯",
-            "placeholder": "选择时区",
-            "search": "搜索时区...",
-            "noResults": "未找到时区"
-        },
         "weekStart": {
             "title": "每周开始于",
             "description": "选择你的一周从哪天开始，用于统计和日历显示",
