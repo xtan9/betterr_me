@@ -6,11 +6,25 @@ on:
   workflow_dispatch:
 
 jobs:
-  lighthouse:
+  check-secrets:
     runs-on: ubuntu-latest
-    # Only run when Supabase secrets are configured (needed for build).
-    # secrets context is available in job-level if conditions.
-    if: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL != '' }}
+    outputs:
+      has-secrets: ${{ steps.check.outputs.has-secrets }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required secrets
+        id: check
+        uses: ./.github/actions/check-secrets
+        with:
+          supabase-url: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          e2e-email: ${{ secrets.E2E_TEST_EMAIL }}
+          e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
+
+  lighthouse:
+    needs: check-secrets
+    if: ${{ needs.check-secrets.outputs.has-secrets == 'true' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     env:
