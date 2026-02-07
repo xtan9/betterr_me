@@ -17,7 +17,6 @@ CREATE TABLE profiles (
   
   -- User preferences
   preferences JSONB DEFAULT '{
-    "timezone": "UTC",
     "date_format": "MM/DD/YYYY",
     "week_start_day": 1,
     "theme": "system"

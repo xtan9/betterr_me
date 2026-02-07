@@ -32,7 +32,6 @@ describe('PATCH /api/profile/preferences', () => {
     const updatedProfile = {
       id: 'user-123',
       preferences: {
-        timezone: 'America/New_York',
         theme: 'dark',
         date_format: 'MM/DD/YYYY',
         week_start_day: 1,
@@ -42,7 +41,7 @@ describe('PATCH /api/profile/preferences', () => {
 
     const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
       method: 'PATCH',
-      body: JSON.stringify({ timezone: 'America/New_York', theme: 'dark' }),
+      body: JSON.stringify({ theme: 'dark' }),
     });
 
     const response = await PATCH(request);
@@ -51,19 +50,8 @@ describe('PATCH /api/profile/preferences', () => {
     expect(response.status).toBe(200);
     expect(data.profile).toEqual(updatedProfile);
     expect(mockProfilesDB.updatePreferences).toHaveBeenCalledWith('user-123', {
-      timezone: 'America/New_York',
       theme: 'dark',
     });
-  });
-
-  it('should validate timezone', async () => {
-    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
-      method: 'PATCH',
-      body: JSON.stringify({ timezone: 123 }),
-    });
-
-    const response = await PATCH(request);
-    expect(response.status).toBe(400);
   });
 
   it('should validate theme', async () => {

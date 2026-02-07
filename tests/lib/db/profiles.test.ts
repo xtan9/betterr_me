@@ -10,7 +10,6 @@ describe('ProfilesDB', () => {
     full_name: 'Test User',
     avatar_url: 'https://example.com/avatar.jpg',
     preferences: {
-      timezone: 'America/Los_Angeles',
       date_format: 'MM/DD/YYYY',
       week_start_day: 1,
       theme: 'dark',
@@ -86,7 +85,6 @@ describe('ProfilesDB', () => {
 
       const newPreferences = {
         theme: 'light' as const,
-        timezone: 'America/New_York',
       };
 
       const expectedProfile = {

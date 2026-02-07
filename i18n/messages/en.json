@@ -385,13 +385,6 @@
         "error": "Failed to load settings",
         "save": "Save",
         "saved": "Saved",
-        "timezone": {
-            "title": "Timezone",
-            "description": "Set your local timezone for accurate habit tracking",
-            "placeholder": "Select timezone",
-            "search": "Search timezone...",
-            "noResults": "No timezone found"
-        },
         "weekStart": {
             "title": "Week Starts On",
             "description": "Choose when your week begins for statistics and calendar views",

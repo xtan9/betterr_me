@@ -6,7 +6,6 @@ import useSWR from "swr";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TimezoneSelector } from "./timezone-selector";
 import { WeekStartSelector } from "./week-start-selector";
 import { DataExport } from "./data-export";
 import { CheckCircle, Loader2, Save } from "lucide-react";
@@ -17,7 +16,6 @@ interface Profile {
   email: string;
   full_name: string | null;
   preferences: {
-    timezone: string;
     date_format: string;
     week_start_day: number;
     theme: "system" | "light" | "dark";
@@ -33,7 +31,6 @@ export function SettingsContent() {
     fetcher
   );
 
-  const [timezone, setTimezone] = useState<string>("");
   const [weekStartDay, setWeekStartDay] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -41,7 +38,6 @@ export function SettingsContent() {
   // Initialize form with profile data
   useEffect(() => {
     if (data?.profile?.preferences) {
-      setTimezone(data.profile.preferences.timezone || "");
       setWeekStartDay(data.profile.preferences.week_start_day ?? 0);
     }
   }, [data]);
@@ -54,7 +50,7 @@ export function SettingsContent() {
       const response = await fetch("/api/profile/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timezone, week_start_day: weekStartDay }),
+        body: JSON.stringify({ week_start_day: weekStartDay }),
       });
 
       if (!response.ok) {
@@ -73,7 +69,6 @@ export function SettingsContent() {
   };
 
   const hasChanges =
-    data?.profile?.preferences?.timezone !== timezone ||
     data?.profile?.preferences?.week_start_day !== weekStartDay;
 
   if (error) {
@@ -108,24 +103,6 @@ export function SettingsContent() {
           {saveSuccess ? t("saved") : t("save")}
         </Button>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("timezone.title")}</CardTitle>
-          <CardDescription>{t("timezone.description")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Skeleton className="h-10 w-full" />
-          ) : (
-            <TimezoneSelector
-              value={timezone}
-              onChange={setTimezone}
-              disabled={isSaving}
-            />
-          )}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>

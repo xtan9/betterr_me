@@ -32,16 +32,6 @@ export async function PATCH(request: NextRequest) {
 
     const updates: Partial<Profile['preferences']> = {};
 
-    if (body.timezone !== undefined) {
-      if (typeof body.timezone !== 'string') {
-        return NextResponse.json(
-          { error: 'Timezone must be a string' },
-          { status: 400 }
-        );
-      }
-      updates.timezone = body.timezone;
-    }
-
     if (body.date_format !== undefined) {
       if (typeof body.date_format !== 'string') {
         return NextResponse.json(

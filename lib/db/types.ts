@@ -16,7 +16,6 @@ export interface Profile {
 }
 
 export interface ProfilePreferences {
-  timezone: string;
   date_format: string;
   week_start_day: number;
   theme: 'system' | 'light' | 'dark';
