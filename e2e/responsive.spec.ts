@@ -91,22 +91,25 @@ test.describe('Responsive - Dashboard Layout', () => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    // Stat cards are in a grid-cols-2 grid on mobile (3 cards: 2 in first row, 1 below)
-    const statGrid = page.locator('[class*="grid-cols"]');
-    const gridCount = await statGrid.count();
-
-    if (gridCount > 0) {
-      const gridBox = await statGrid.first().boundingBox();
-      if (gridBox) {
-        // Grid should fit within the viewport width
-        expect(gridBox.x + gridBox.width).toBeLessThanOrEqual(375 + 5);
-      }
-    }
-
-    // Verify cards exist within the grid
-    const gridCards = page.locator('[class*="grid-cols"] > div');
-    const cardCount = await gridCards.count();
+    // Find stat cards by their bordered container style (rendered by StatCard)
+    const statCards = page.locator('[class*="rounded-xl"][class*="border"]');
+    const cardCount = await statCards.count();
     expect(cardCount).toBeGreaterThanOrEqual(2);
+
+    // Verify 2-column layout: first two cards should be on the same row (similar Y)
+    // but at different X positions (side by side)
+    const first = await statCards.nth(0).boundingBox();
+    const second = await statCards.nth(1).boundingBox();
+
+    if (first && second) {
+      // Same row — Y coordinates should be close
+      expect(Math.abs(second.y - first.y)).toBeLessThan(5);
+      // Side by side — second card should be to the right
+      expect(second.x).toBeGreaterThan(first.x);
+      // Both fit within viewport
+      expect(first.x + first.width).toBeLessThanOrEqual(375 + 5);
+      expect(second.x + second.width).toBeLessThanOrEqual(375 + 5);
+    }
   });
 
   test('stat cards should be in a row on desktop', async ({ page }) => {
