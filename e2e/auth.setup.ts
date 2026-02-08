@@ -1,4 +1,7 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { test as setup, expect } from '@playwright/test';
+import { STORAGE_STATE } from './constants';
 
 /**
  * Playwright auth setup — runs once before all browser projects.
@@ -25,5 +28,6 @@ setup('authenticate', async ({ page }) => {
   await page.waitForURL('/dashboard', { timeout: 15000 });
   await expect(page).toHaveURL('/dashboard');
 
-  await page.context().storageState({ path: 'e2e/.auth/user.json' });
+  fs.mkdirSync(path.dirname(STORAGE_STATE), { recursive: true });
+  await page.context().storageState({ path: STORAGE_STATE });
 });

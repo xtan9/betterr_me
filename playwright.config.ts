@@ -1,6 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-
-const STORAGE_STATE = 'e2e/.auth/user.json';
+import { STORAGE_STATE } from './e2e/constants';
 
 /**
  * Playwright configuration for E2E testing
