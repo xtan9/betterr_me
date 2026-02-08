@@ -52,7 +52,7 @@ test.describe('Create Habit Flow', () => {
     await page.waitForURL('/habits', { timeout: 10000 });
 
     // Verify the habit appears in the list
-    await expect(page.getByText('E2E Test - Morning Run')).toBeVisible();
+    await expect(page.getByText('E2E Test - Morning Run').first()).toBeVisible();
   });
 
   test('should create a weekdays habit', async ({ page }) => {
@@ -65,7 +65,7 @@ test.describe('Create Habit Flow', () => {
 
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
-    await expect(page.getByText('E2E Test - Weekday Habit')).toBeVisible();
+    await expect(page.getByText('E2E Test - Weekday Habit').first()).toBeVisible();
   });
 
   test('should create a weekly habit', async ({ page }) => {
@@ -76,7 +76,7 @@ test.describe('Create Habit Flow', () => {
 
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
-    await expect(page.getByText('E2E Test - Weekly Habit')).toBeVisible();
+    await expect(page.getByText('E2E Test - Weekly Habit').first()).toBeVisible();
   });
 
   test('should create a times-per-week habit (2x/week)', async ({ page }) => {
@@ -87,7 +87,7 @@ test.describe('Create Habit Flow', () => {
 
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
-    await expect(page.getByText('E2E Test - 2x Week Habit')).toBeVisible();
+    await expect(page.getByText('E2E Test - 2x Week Habit').first()).toBeVisible();
   });
 
   test('should create a times-per-week habit (3x/week)', async ({ page }) => {
@@ -98,7 +98,7 @@ test.describe('Create Habit Flow', () => {
 
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
-    await expect(page.getByText('E2E Test - 3x Week Habit')).toBeVisible();
+    await expect(page.getByText('E2E Test - 3x Week Habit').first()).toBeVisible();
   });
 
   test('should create a custom frequency habit', async ({ page }) => {
@@ -116,7 +116,7 @@ test.describe('Create Habit Flow', () => {
 
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
-    await expect(page.getByText('E2E Test - Custom Habit')).toBeVisible();
+    await expect(page.getByText('E2E Test - Custom Habit').first()).toBeVisible();
   });
 
   test('should show validation error when name is empty', async ({ page }) => {
@@ -152,7 +152,7 @@ test.describe('Create Habit Flow', () => {
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
     const habitList = page.locator('[role="tabpanel"]');
-    await expect(habitList.getByText('E2E Test - Sequence Habit 1')).toBeVisible();
+    await expect(habitList.getByText('E2E Test - Sequence Habit 1').first()).toBeVisible();
 
     // Create second habit
     await page.getByRole('button', { name: /create habit/i }).click();
@@ -162,8 +162,8 @@ test.describe('Create Habit Flow', () => {
     await page.waitForURL('/habits', { timeout: 10000 });
 
     // Both habits should be visible in the list
-    await expect(habitList.getByText('E2E Test - Sequence Habit 1')).toBeVisible();
-    await expect(habitList.getByText('E2E Test - Sequence Habit 2')).toBeVisible();
+    await expect(habitList.getByText('E2E Test - Sequence Habit 1').first()).toBeVisible();
+    await expect(habitList.getByText('E2E Test - Sequence Habit 2').first()).toBeVisible();
   });
 
   test('should select different categories', async ({ page }) => {
