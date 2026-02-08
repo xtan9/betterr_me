@@ -28,15 +28,15 @@ test.describe('Cross-Browser - Core Functionality', () => {
     await page.waitForLoadState('networkidle');
 
     // Fill form
-    await page.getByLabel(/name/i).fill('Cross-Browser Test Habit');
+    await page.getByLabel(/name/i).fill('E2E Test - Cross-Browser Habit');
     await page.getByRole('button', { name: /every day/i }).click();
 
     // Submit
     await page.getByRole('button', { name: /create/i }).click();
     await page.waitForURL('/habits', { timeout: 10000 });
 
-    // Verify
-    await expect(page.getByText('Cross-Browser Test Habit')).toBeVisible();
+    // Verify — use .first() in case duplicates linger from a previous run
+    await expect(page.getByText('E2E Test - Cross-Browser Habit').first()).toBeVisible();
   });
 
   test('habit toggle works', async ({ page }) => {

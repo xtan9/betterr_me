@@ -8,10 +8,10 @@ const STORAGE_STATE = 'e2e/.auth/user.json';
  */
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
+  fullyParallel: !process.env.CI,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? 'html' : 'list',
   timeout: 30000,
   globalTeardown: './e2e/global-teardown.ts',
