@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { DashboardPage } from './pages/dashboard.page';
+import { HabitsPage } from './pages/habits.page';
+import { CreateHabitPage } from './pages/create-habit.page';
 
 /**
  * QA-006: Cross-browser testing
@@ -24,27 +27,24 @@ test.describe('Cross-Browser - Core Functionality', () => {
   });
 
   test('create habit form submits correctly', async ({ page }) => {
-    await page.goto('/habits/new');
-    await page.waitForLoadState('networkidle');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
-    // Fill form
-    await page.getByLabel(/name/i).fill('E2E Test - Cross-Browser Habit');
-    await page.getByRole('button', { name: /every day/i }).click();
-
-    // Submit
-    await page.getByRole('button', { name: /create/i }).click();
-    await page.waitForURL('/habits', { timeout: 10000 });
+    await createPage.fillName('E2E Test - Cross-Browser Habit');
+    await createPage.selectFrequency(/every day/i);
+    await createPage.submit();
+    await createPage.waitForRedirect();
 
     // Verify — use .first() in case duplicates linger from a previous run
     await expect(page.getByText('E2E Test - Cross-Browser Habit').first()).toBeVisible();
   });
 
   test('habit toggle works', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Target a specific seed habit to avoid parallel contention with other test files
-    const checkbox = page.locator('[role="checkbox"][aria-label*="E2E Test - Seed Habit 3"]');
+    const checkbox = dashboard.habitCheckbox('E2E Test - Seed Habit 3');
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
     const before = await checkbox.getAttribute('data-state');
@@ -55,8 +55,8 @@ test.describe('Cross-Browser - Core Functionality', () => {
   });
 
   test('page navigation works', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Navigate to habits
     const habitsLink = page.getByRole('link', { name: /habit/i }).first();
@@ -74,8 +74,8 @@ test.describe('Cross-Browser - Core Functionality', () => {
 
 test.describe('Cross-Browser - Visual Consistency', () => {
   test('fonts render correctly', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     const fontFamily = await page.evaluate(() => {
       const body = document.body;
@@ -87,8 +87,8 @@ test.describe('Cross-Browser - Visual Consistency', () => {
   });
 
   test('theme toggle works', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Check if theme toggle exists
     const themeToggle = page.locator('button:has(svg[class*="moon"]), button:has(svg[class*="sun"]), [aria-label*="theme"]');
@@ -100,8 +100,8 @@ test.describe('Cross-Browser - Visual Consistency', () => {
   });
 
   test('icons render as SVGs', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     const svgCount = await page.evaluate(() => {
       return document.querySelectorAll('svg').length;
@@ -112,8 +112,8 @@ test.describe('Cross-Browser - Visual Consistency', () => {
   });
 
   test('CSS Grid/Flexbox renders correctly', async ({ page }) => {
-    await page.goto('/habits');
-    await page.waitForLoadState('networkidle');
+    const habits = new HabitsPage(page);
+    await habits.goto();
 
     // Check that grid/flex containers have proper layout
     const hasGridOrFlex = await page.evaluate(() => {
@@ -134,11 +134,11 @@ test.describe('Cross-Browser - Visual Consistency', () => {
 
 test.describe('Cross-Browser - Form Behavior', () => {
   test('input validation displays correctly', async ({ page }) => {
-    await page.goto('/habits/new');
-    await page.waitForLoadState('networkidle');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
     // Try submitting empty form
-    await page.getByRole('button', { name: /create/i }).click();
+    await createPage.submit();
 
     // Should show validation message (browser-native or custom)
     const hasError = await page.evaluate(() => {
@@ -151,8 +151,8 @@ test.describe('Cross-Browser - Form Behavior', () => {
   });
 
   test('date inputs work correctly', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Check if any date pickers exist and are functional
     const datePicker = page.locator('input[type="date"], [class*="calendar"], [class*="date"]');
@@ -164,12 +164,11 @@ test.describe('Cross-Browser - Form Behavior', () => {
   });
 
   test('focus styles are consistent', async ({ page }) => {
-    await page.goto('/habits/new');
-    await page.waitForLoadState('networkidle');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
     // Focus the name input directly — tabbing order varies by browser/viewport
-    const nameInput = page.getByLabel(/name/i);
-    await nameInput.focus();
+    await createPage.nameInput.focus();
 
     const hasFocusRing = await page.evaluate(() => {
       const el = document.activeElement;

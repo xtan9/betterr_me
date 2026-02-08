@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { DashboardPage } from './pages/dashboard.page';
+import { HabitsPage } from './pages/habits.page';
+import { CreateHabitPage } from './pages/create-habit.page';
 
 /**
  * QA-004: Accessibility audit
@@ -13,8 +16,8 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Accessibility - Keyboard Navigation', () => {
   test('should navigate dashboard with keyboard only', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Tab through interactive elements
     await page.keyboard.press('Tab');
@@ -33,8 +36,8 @@ test.describe('Accessibility - Keyboard Navigation', () => {
   });
 
   test('should have visible focus indicators', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Tab through several elements — the first Tab may land on a skip-link
     // or element without visible focus ring. Check multiple elements.
@@ -59,8 +62,8 @@ test.describe('Accessibility - Keyboard Navigation', () => {
   });
 
   test('should navigate habits page with keyboard', async ({ page }) => {
-    await page.goto('/habits');
-    await page.waitForLoadState('networkidle');
+    const habits = new HabitsPage(page);
+    await habits.goto();
 
     // Tab through elements
     await page.keyboard.press('Tab');
@@ -81,12 +84,11 @@ test.describe('Accessibility - Keyboard Navigation', () => {
   });
 
   test('should navigate create habit form with keyboard', async ({ page }) => {
-    await page.goto('/habits/new');
-    await page.waitForLoadState('networkidle');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
     // Focus the name input directly so we start tabbing from within the form
-    const nameInput = page.getByLabel(/name/i);
-    await nameInput.focus();
+    await createPage.nameInput.focus();
 
     // Type habit name
     await page.keyboard.type('Keyboard Test Habit');
@@ -113,11 +115,11 @@ test.describe('Accessibility - Keyboard Navigation', () => {
   });
 
   test('should activate checkboxes with Space key', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Target a specific seed habit to avoid parallel contention with other test files
-    const checkbox = page.locator('[role="checkbox"][aria-label*="E2E Test - Seed Habit 2"]');
+    const checkbox = dashboard.habitCheckbox('E2E Test - Seed Habit 2');
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
     const wasChecked = await checkbox.getAttribute('data-state') === 'checked';
@@ -132,8 +134,8 @@ test.describe('Accessibility - Keyboard Navigation', () => {
   });
 
   test('should close dialogs with Escape key', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Dialog trigger/dialog tests are inherently optional — dialog may not exist
     const dialogTrigger = page.locator('[data-state="closed"]').first();
@@ -153,8 +155,8 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
 test.describe('Accessibility - Semantic HTML', () => {
   test('should have proper heading hierarchy on dashboard', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     const headings = await page.evaluate(() => {
       const h = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
@@ -176,8 +178,8 @@ test.describe('Accessibility - Semantic HTML', () => {
   });
 
   test('should have alt text on images', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     const imagesWithoutAlt = await page.evaluate(() => {
       const images = document.querySelectorAll('img');
@@ -188,8 +190,8 @@ test.describe('Accessibility - Semantic HTML', () => {
   });
 
   test('should have labels on form inputs', async ({ page }) => {
-    await page.goto('/habits/new');
-    await page.waitForLoadState('networkidle');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
     const unlabeledInputs = await page.evaluate(() => {
       const inputs = document.querySelectorAll('input:not([type="hidden"]), textarea, select');
@@ -208,8 +210,8 @@ test.describe('Accessibility - Semantic HTML', () => {
   });
 
   test('should have proper ARIA roles on interactive elements', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Buttons should be buttons or have button role
     const improperButtons = await page.evaluate(() => {
@@ -227,8 +229,8 @@ test.describe('Accessibility - Semantic HTML', () => {
   });
 
   test('should have a main landmark', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     const hasMain = await page.evaluate(() => {
       return document.querySelector('main, [role="main"]') !== null;
@@ -303,8 +305,8 @@ test.describe('Accessibility - Color and Contrast', () => {
 test.describe('Accessibility - Responsive', () => {
   test('should maintain touch targets of at least 44px on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     const smallTouchTargets = await page.evaluate(() => {
       const interactive = document.querySelectorAll('button, a, input, [role="checkbox"], [role="button"]');
@@ -346,8 +348,8 @@ test.describe('Accessibility - Responsive', () => {
 
   test('should not have font size below 16px for inputs on iOS', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/habits/new');
-    await page.waitForLoadState('networkidle');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
     const smallFontInputs = await page.evaluate(() => {
       const inputs = document.querySelectorAll('input, textarea, select');

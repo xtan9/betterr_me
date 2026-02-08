@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { CreateHabitPage } from './pages/create-habit.page';
+import { HabitsPage } from './pages/habits.page';
 
 /**
  * QA-001: E2E test - Create habit flow
@@ -14,8 +16,9 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Create Habit Flow', () => {
   test('should navigate to create habit page from habits list', async ({ page }) => {
-    await page.goto('/habits');
-    await page.getByRole('button', { name: /create habit/i }).click();
+    const habits = new HabitsPage(page);
+    await habits.goto();
+    await habits.createButton.click();
     await expect(page).toHaveURL('/habits/new');
   });
 
@@ -31,147 +34,136 @@ test.describe('Create Habit Flow', () => {
   });
 
   test('should create a daily habit successfully', async ({ page }) => {
-    await page.goto('/habits/new');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
-    // Fill in habit name
-    await page.getByLabel(/name/i).fill('E2E Test - Morning Run');
-
-    // Fill in description (optional)
-    await page.getByLabel(/description/i).fill('A test habit created by E2E test suite');
-
-    // Select category
-    await page.getByRole('button', { name: /health/i }).click();
-
-    // Select daily frequency (should be default)
-    await page.getByRole('button', { name: /every day/i }).click();
-
-    // Submit the form
-    await page.getByRole('button', { name: /create/i }).click();
-
-    // Should redirect to habits list
-    await page.waitForURL('/habits', { timeout: 10000 });
+    await createPage.fillName('E2E Test - Morning Run');
+    await createPage.fillDescription('A test habit created by E2E test suite');
+    await createPage.selectCategory('health');
+    await createPage.selectFrequency(/every day/i);
+    await createPage.submit();
+    await createPage.waitForRedirect();
 
     // Verify the habit appears in the list
     await expect(page.getByText('E2E Test - Morning Run').first()).toBeVisible();
   });
 
   test('should create a weekdays habit', async ({ page }) => {
-    await page.goto('/habits/new');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
-    await page.getByLabel(/name/i).fill('E2E Test - Weekday Habit');
-
-    // Select weekdays frequency
-    await page.getByRole('button', { name: /mon.*fri/i }).click();
-
-    await page.getByRole('button', { name: /create/i }).click();
-    await page.waitForURL('/habits', { timeout: 10000 });
+    await createPage.fillName('E2E Test - Weekday Habit');
+    await createPage.selectFrequency(/mon.*fri/i);
+    await createPage.submit();
+    await createPage.waitForRedirect();
     await expect(page.getByText('E2E Test - Weekday Habit').first()).toBeVisible();
   });
 
   test('should create a weekly habit', async ({ page }) => {
-    await page.goto('/habits/new');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
-    await page.getByLabel(/name/i).fill('E2E Test - Weekly Habit');
-    await page.getByRole('button', { name: /once a week/i }).click();
-
-    await page.getByRole('button', { name: /create/i }).click();
-    await page.waitForURL('/habits', { timeout: 10000 });
+    await createPage.fillName('E2E Test - Weekly Habit');
+    await createPage.selectFrequency(/once a week/i);
+    await createPage.submit();
+    await createPage.waitForRedirect();
     await expect(page.getByText('E2E Test - Weekly Habit').first()).toBeVisible();
   });
 
   test('should create a times-per-week habit (2x/week)', async ({ page }) => {
-    await page.goto('/habits/new');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
-    await page.getByLabel(/name/i).fill('E2E Test - 2x Week Habit');
-    await page.getByRole('button', { name: /2 times/i }).click();
-
-    await page.getByRole('button', { name: /create/i }).click();
-    await page.waitForURL('/habits', { timeout: 10000 });
+    await createPage.fillName('E2E Test - 2x Week Habit');
+    await createPage.selectFrequency(/2 times/i);
+    await createPage.submit();
+    await createPage.waitForRedirect();
     await expect(page.getByText('E2E Test - 2x Week Habit').first()).toBeVisible();
   });
 
   test('should create a times-per-week habit (3x/week)', async ({ page }) => {
-    await page.goto('/habits/new');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
-    await page.getByLabel(/name/i).fill('E2E Test - 3x Week Habit');
-    await page.getByRole('button', { name: /3 times/i }).click();
-
-    await page.getByRole('button', { name: /create/i }).click();
-    await page.waitForURL('/habits', { timeout: 10000 });
+    await createPage.fillName('E2E Test - 3x Week Habit');
+    await createPage.selectFrequency(/3 times/i);
+    await createPage.submit();
+    await createPage.waitForRedirect();
     await expect(page.getByText('E2E Test - 3x Week Habit').first()).toBeVisible();
   });
 
   test('should create a custom frequency habit', async ({ page }) => {
-    await page.goto('/habits/new');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
-    await page.getByLabel(/name/i).fill('E2E Test - Custom Habit');
-
-    // Select custom frequency
-    await page.getByRole('button', { name: /custom days/i }).click();
+    await createPage.fillName('E2E Test - Custom Habit');
+    await createPage.selectFrequency(/custom days/i);
 
     // Select specific days (Mon, Wed, Fri) — use aria-label for exact match
     await page.getByRole('button', { name: 'Mon', exact: true }).click();
     await page.getByRole('button', { name: 'Wed', exact: true }).click();
     await page.getByRole('button', { name: 'Fri', exact: true }).click();
 
-    await page.getByRole('button', { name: /create/i }).click();
-    await page.waitForURL('/habits', { timeout: 10000 });
+    await createPage.submit();
+    await createPage.waitForRedirect();
     await expect(page.getByText('E2E Test - Custom Habit').first()).toBeVisible();
   });
 
   test('should show validation error when name is empty', async ({ page }) => {
-    await page.goto('/habits/new');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
     // Try to submit without filling name
-    await page.getByRole('button', { name: /create/i }).click();
+    await createPage.submit();
 
     // Should stay on the create page
     await expect(page).toHaveURL('/habits/new');
 
     // Should show validation error
-    const errorMessage = page.getByText(/name.*required/i);
-    await expect(errorMessage).toBeVisible();
+    await expect(createPage.validationError).toBeVisible();
   });
 
   test('should handle cancel button', async ({ page }) => {
-    await page.goto('/habits/new');
+    const createPage = new CreateHabitPage(page);
+    await createPage.goto();
 
-    await page.getByLabel(/name/i).fill('This should be cancelled');
-
-    // Click cancel
-    await page.getByRole('button', { name: /cancel/i }).click();
+    await createPage.fillName('This should be cancelled');
+    await createPage.cancel();
 
     // Should navigate away from create page
     await expect(page).not.toHaveURL('/habits/new');
   });
 
   test('should create multiple habits in sequence', async ({ page }) => {
+    const createPage = new CreateHabitPage(page);
+    const habits = new HabitsPage(page);
+
     // Create first habit
-    await page.goto('/habits/new');
-    await page.getByLabel(/name/i).fill('E2E Test - Sequence Habit 1');
-    await page.getByRole('button', { name: /create/i }).click();
-    await page.waitForURL('/habits', { timeout: 10000 });
-    const habitList = page.locator('[role="tabpanel"]');
-    await expect(habitList.getByText('E2E Test - Sequence Habit 1').first()).toBeVisible();
+    await createPage.goto();
+    await createPage.fillName('E2E Test - Sequence Habit 1');
+    await createPage.submit();
+    await createPage.waitForRedirect();
+    await expect(habits.tabPanel.getByText('E2E Test - Sequence Habit 1').first()).toBeVisible();
 
     // Create second habit
-    await page.getByRole('button', { name: /create habit/i }).click();
+    await habits.createButton.click();
     await page.waitForURL('/habits/new', { timeout: 5000 });
-    await page.getByLabel(/name/i).fill('E2E Test - Sequence Habit 2');
-    await page.getByRole('button', { name: /create/i }).click();
-    await page.waitForURL('/habits', { timeout: 10000 });
+    await createPage.fillName('E2E Test - Sequence Habit 2');
+    await createPage.submit();
+    await createPage.waitForRedirect();
 
     // Both habits should be visible in the list
-    await expect(habitList.getByText('E2E Test - Sequence Habit 1').first()).toBeVisible();
-    await expect(habitList.getByText('E2E Test - Sequence Habit 2').first()).toBeVisible();
+    await expect(habits.tabPanel.getByText('E2E Test - Sequence Habit 1').first()).toBeVisible();
+    await expect(habits.tabPanel.getByText('E2E Test - Sequence Habit 2').first()).toBeVisible();
   });
 
   test('should select different categories', async ({ page }) => {
     const categories = ['health', 'wellness', 'learning', 'productivity'];
+    const createPage = new CreateHabitPage(page);
 
     for (const category of categories) {
-      await page.goto('/habits/new');
-      await page.getByLabel(/name/i).fill(`E2E Test - ${category} category`);
+      await createPage.goto();
+      await createPage.fillName(`E2E Test - ${category} category`);
 
       // Click the category button
       const categoryButton = page.getByRole('button', { name: new RegExp(category, 'i') });

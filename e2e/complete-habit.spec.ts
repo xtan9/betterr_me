@@ -1,4 +1,7 @@
-import { test, expect, type Locator, type Page } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import { DashboardPage } from './pages/dashboard.page';
+import { HabitsPage } from './pages/habits.page';
+import { isRadixChecked, toggleAndVerify } from './helpers/checkbox';
 
 /**
  * QA-002: E2E test - Complete habit flow
@@ -15,22 +18,6 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 /** The seed habit this file exclusively toggles (avoids parallel contention). */
 const TARGET_HABIT = 'E2E Test - Seed Habit 1';
 
-/** Read Radix Checkbox state via data-state attribute. */
-async function isRadixChecked(locator: Locator): Promise<boolean> {
-  return (await locator.getAttribute('data-state')) === 'checked';
-}
-
-/** Toggle a Radix checkbox and assert the state flipped. Returns the previous checked state.
- *  The checkbox is controlled — data-state only updates after the API call + SWR refetch. */
-async function toggleAndVerify(checkbox: Locator): Promise<boolean> {
-  const wasChecked = await isRadixChecked(checkbox);
-  const expectedState = wasChecked ? 'unchecked' : 'checked';
-  // Click triggers API POST → mutate() → SWR refetch → re-render.
-  await checkbox.click();
-  await expect(checkbox).toHaveAttribute('data-state', expectedState, { timeout: 10000 });
-  return wasChecked;
-}
-
 /** Locate the checkbox for TARGET_HABIT by its aria-label. */
 function targetCheckbox(page: Page) {
   return page.locator(`[role="checkbox"][aria-label*="${TARGET_HABIT}"]`);
@@ -42,8 +29,8 @@ test.describe('Complete Habit Flow - Toggle', () => {
   test.describe.configure({ mode: 'serial' });
 
   test('should toggle a habit as complete from dashboard', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
@@ -52,7 +39,8 @@ test.describe('Complete Habit Flow - Toggle', () => {
   });
 
   test('should toggle a habit as complete from habits page', async ({ page }) => {
-    await page.goto('/habits');
+    const habits = new HabitsPage(page);
+    await habits.goto();
 
     const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
@@ -61,8 +49,8 @@ test.describe('Complete Habit Flow - Toggle', () => {
   });
 
   test('should persist habit completion after page refresh', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
@@ -85,8 +73,8 @@ test.describe('Complete Habit Flow - Toggle', () => {
   });
 
   test('should uncomplete a previously completed habit', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Ensure the target habit is checked
     const checkbox = targetCheckbox(page);
@@ -106,8 +94,8 @@ test.describe('Complete Habit Flow - Toggle', () => {
   });
 
   test('should update streak display after completing a habit', async ({ page }) => {
-    await page.goto('/habits');
-    await page.waitForLoadState('networkidle');
+    const habits = new HabitsPage(page);
+    await habits.goto();
 
     const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
@@ -134,8 +122,8 @@ test.describe('Complete Habit Flow - Toggle', () => {
   });
 
   test('should handle rapid toggling gracefully', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
@@ -158,11 +146,11 @@ test.describe('Complete Habit Flow - Toggle', () => {
 
 test.describe('Complete Habit Flow - Read', () => {
   test('should navigate to habit detail page by clicking a habit', async ({ page }) => {
-    await page.goto('/habits');
-    await page.waitForLoadState('networkidle');
+    const habits = new HabitsPage(page);
+    await habits.goto();
 
     // Click the habit name button inside the first habit card (data-testid="habit-card-*")
-    const habitCard = page.locator('[data-testid^="habit-card"]').first();
+    const habitCard = habits.habitCards.first();
     await expect(habitCard).toBeVisible({ timeout: 10000 });
     const habitName = habitCard.locator('button[type="button"]').first();
     await habitName.click();
@@ -172,11 +160,10 @@ test.describe('Complete Habit Flow - Read', () => {
   });
 
   test('should show completion progress on dashboard', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Look for completion text like "X of Y completed" or "X/Y"
-    const completionText = page.getByText(/\d+\s*(of|\/)\s*\d+/i).first();
-    await expect(completionText).toBeVisible({ timeout: 10000 });
+    await expect(dashboard.completionText).toBeVisible({ timeout: 10000 });
   });
 });
