@@ -7,8 +7,7 @@ const TEST_DATA_PREFIX = 'E2E Test -';
  * Deletes all habits (and their logs) matching the "E2E Test -" prefix
  * so each test run starts with a clean slate.
  *
- * Unlike e2e/helpers/auth.ts (which throws on missing credentials because
- * tests cannot run without auth), this teardown warns gracefully — a
+ * This teardown warns gracefully on missing credentials — a
  * teardown failure should never mask actual test results.
  */
 async function globalTeardown() {

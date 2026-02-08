@@ -1,5 +1,4 @@
 import { test, expect, type Locator } from '@playwright/test';
-import { ensureAuthenticated } from './helpers/auth';
 
 /**
  * QA-002: E2E test - Complete habit flow
@@ -26,10 +25,6 @@ async function toggleAndVerify(checkbox: Locator): Promise<boolean> {
 }
 
 test.describe('Complete Habit Flow', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('should toggle a habit as complete from dashboard', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');

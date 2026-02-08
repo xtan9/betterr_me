@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { ensureAuthenticated } from './helpers/auth';
 
 /**
  * QA-004: Accessibility audit
@@ -13,10 +12,6 @@ import { ensureAuthenticated } from './helpers/auth';
  */
 
 test.describe('Accessibility - Keyboard Navigation', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('should navigate dashboard with keyboard only', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
@@ -172,10 +167,6 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 });
 
 test.describe('Accessibility - Semantic HTML', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('should have proper heading hierarchy on dashboard', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
@@ -263,6 +254,9 @@ test.describe('Accessibility - Semantic HTML', () => {
 });
 
 test.describe('Accessibility - Color and Contrast', () => {
+  // Login page test — needs unauthenticated state to avoid potential redirect
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test('login page should have sufficient color contrast', async ({ page }) => {
     await page.goto('/auth/login');
     await page.waitForLoadState('networkidle');
@@ -322,10 +316,6 @@ test.describe('Accessibility - Color and Contrast', () => {
 });
 
 test.describe('Accessibility - Responsive', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('should maintain touch targets of at least 44px on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/dashboard');

@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { login, ensureAuthenticated } from './helpers/auth';
 
 /**
  * QA-003: E2E test - Dashboard load
@@ -13,7 +12,10 @@ import { login, ensureAuthenticated } from './helpers/auth';
  * - Runs in <30 seconds
  */
 
-test.describe('Dashboard Load', () => {
+test.describe('Dashboard - Auth Required', () => {
+  // Uses unauthenticated state to verify redirect behaviour
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test('should require authentication to access dashboard', async ({ page }) => {
     await page.goto('/dashboard');
 
@@ -22,10 +24,10 @@ test.describe('Dashboard Load', () => {
     const url = page.url();
     expect(url.includes('/dashboard') || url.includes('/auth/login')).toBe(true);
   });
+});
 
+test.describe('Dashboard Load', () => {
   test('should load dashboard within 5 seconds', async ({ page }) => {
-    await ensureAuthenticated(page);
-
     const startTime = Date.now();
     await page.goto('/dashboard');
 
@@ -45,8 +47,6 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should display loading skeleton initially', async ({ page }) => {
-    await ensureAuthenticated(page);
-
     // Use network throttling to make loading visible
     await page.goto('/dashboard');
 
@@ -58,7 +58,6 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should display greeting message', async ({ page }) => {
-    await ensureAuthenticated(page);
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
@@ -68,7 +67,6 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should display snapshot cards section', async ({ page }) => {
-    await ensureAuthenticated(page);
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
@@ -82,7 +80,6 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should display habit checklist section', async ({ page }) => {
-    await ensureAuthenticated(page);
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
@@ -92,7 +89,6 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should have navigation elements', async ({ page }) => {
-    await ensureAuthenticated(page);
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
@@ -103,7 +99,6 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should handle refresh correctly', async ({ page }) => {
-    await ensureAuthenticated(page);
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
@@ -121,8 +116,6 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should not have layout shift during load', async ({ page }) => {
-    await ensureAuthenticated(page);
-
     // Measure CLS during page load
     await page.goto('/dashboard');
 
@@ -152,7 +145,6 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should display motivation message section', async ({ page }) => {
-    await ensureAuthenticated(page);
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
@@ -164,10 +156,6 @@ test.describe('Dashboard Load', () => {
 });
 
 test.describe('Dashboard - Responsive Layout', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('should render correctly on mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/dashboard');
