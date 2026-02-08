@@ -239,12 +239,24 @@ describe('HabitLogsDB', () => {
     const timesPerWeekFrequency = { type: 'times_per_week' as const, count: 3 };
     const createdAt = '2026-01-01T00:00:00Z';
 
+    // Compute dates in the current week dynamically so tests stay valid as time advances
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const daysFromSunday = (now.getDay() - 0 + 7) % 7; // weekStartDay = 0 (Sunday)
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - daysFromSunday);
+    const weekDate = (offset: number): string => {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + offset);
+      return d.toISOString().split('T')[0];
+    };
+
     describe('getDetailedHabitStats', () => {
       it('should return weekly progress for thisWeek (completed/target)', async () => {
         // 2 completions this week for a 3x/week habit
         mockSupabaseClient.setMockResponse([
-          { ...mockLog, logged_date: '2026-02-03', completed: true }, // Monday
-          { ...mockLog, logged_date: '2026-02-04', completed: true }, // Tuesday
+          { ...mockLog, logged_date: weekDate(0), completed: true },
+          { ...mockLog, logged_date: weekDate(1), completed: true },
         ]);
 
         const stats = await habitLogsDB.getDetailedHabitStats(
@@ -263,10 +275,10 @@ describe('HabitLogsDB', () => {
       it('should cap percent at 100 when target exceeded', async () => {
         // 4 completions this week for a 3x/week habit
         mockSupabaseClient.setMockResponse([
-          { ...mockLog, logged_date: '2026-02-02', completed: true },
-          { ...mockLog, logged_date: '2026-02-03', completed: true },
-          { ...mockLog, logged_date: '2026-02-04', completed: true },
-          { ...mockLog, logged_date: '2026-02-05', completed: true },
+          { ...mockLog, logged_date: weekDate(0), completed: true },
+          { ...mockLog, logged_date: weekDate(1), completed: true },
+          { ...mockLog, logged_date: weekDate(2), completed: true },
+          { ...mockLog, logged_date: weekDate(3), completed: true },
         ]);
 
         const stats = await habitLogsDB.getDetailedHabitStats(
