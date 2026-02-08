@@ -32,7 +32,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
   };
 
   return (
-    <Card className="transition-all hover:shadow-md hover:scale-[1.02] p-5">
+    <Card data-testid={`habit-card-${habit.id}`} className="transition-all hover:shadow-md hover:scale-[1.02] p-5">
       <CardContent className="p-0 space-y-3">
         <div className="flex items-start justify-between">
           <button

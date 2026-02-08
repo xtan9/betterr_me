@@ -214,8 +214,8 @@ function DashboardSkeleton() {
     <div className="space-y-8" data-testid="dashboard-skeleton">
       {/* Greeting skeleton */}
       <div className="space-y-2">
-        <Skeleton className="h-9 w-64" />
-        <Skeleton className="h-5 w-96" />
+        <Skeleton className="h-9 w-full max-w-64" />
+        <Skeleton className="h-5 w-full max-w-96" />
       </div>
 
       {/* Motivation skeleton */}

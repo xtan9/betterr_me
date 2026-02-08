@@ -120,7 +120,7 @@ export function HabitForm({
               <FormItem>
                 <FormLabel>{t("categoryLabel")}</FormLabel>
                 <FormControl>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {CATEGORY_OPTIONS.map(({ value, icon: Icon, colorClass }) => (
                       <Toggle
                         key={value}

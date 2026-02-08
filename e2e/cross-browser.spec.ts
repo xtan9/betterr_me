@@ -41,15 +41,17 @@ test.describe('Cross-Browser - Core Functionality', () => {
 
   test('habit toggle works', async ({ page }) => {
     await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
 
-    const checkbox = page.locator('[role="checkbox"], input[type="checkbox"]').first();
+    // Target a specific seed habit to avoid parallel contention with other test files
+    const checkbox = page.locator('[role="checkbox"][aria-label*="E2E Test - Seed Habit 3"]');
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
-    const before = await checkbox.isChecked();
+    const before = await checkbox.getAttribute('data-state');
+    const expectedState = before === 'checked' ? 'unchecked' : 'checked';
+    // Checkbox is controlled — data-state updates after API call + SWR refetch
     await checkbox.click();
-    await page.waitForLoadState('networkidle');
-    const after = await checkbox.isChecked();
-    expect(after).not.toBe(before);
+    await expect(checkbox).toHaveAttribute('data-state', expectedState, { timeout: 10000 });
   });
 
   test('page navigation works', async ({ page }) => {
@@ -80,8 +82,8 @@ test.describe('Cross-Browser - Visual Consistency', () => {
       return window.getComputedStyle(body).fontFamily;
     });
 
-    // Should use the Geist font (or fallback sans-serif)
-    expect(fontFamily).toMatch(/geist|sans-serif/i);
+    // Should use the Inter font (or fallback sans-serif)
+    expect(fontFamily).toMatch(/inter|sans-serif/i);
   });
 
   test('theme toggle works', async ({ page }) => {
@@ -165,15 +167,16 @@ test.describe('Cross-Browser - Form Behavior', () => {
     await page.goto('/habits/new');
     await page.waitForLoadState('networkidle');
 
-    // Tab through form and verify focus styles
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
+    // Focus the name input directly — tabbing order varies by browser/viewport
+    const nameInput = page.getByLabel(/name/i);
+    await nameInput.focus();
 
     const hasFocusRing = await page.evaluate(() => {
       const el = document.activeElement;
       if (!el) return false;
       const styles = window.getComputedStyle(el);
-      return styles.outlineStyle !== 'none' || styles.boxShadow !== 'none';
+      return (styles.outlineStyle !== 'none' && styles.outlineWidth !== '0px') ||
+             styles.boxShadow !== 'none';
     });
 
     expect(hasFocusRing).toBe(true);
