@@ -1,5 +1,8 @@
+import dotenv from 'dotenv';
 import { defineConfig, devices } from '@playwright/test';
 import { STORAGE_STATE } from './e2e/constants';
+
+dotenv.config({ path: '.env.local' });
 
 /**
  * Playwright configuration for E2E testing
@@ -13,6 +16,7 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? 'html' : 'list',
   timeout: 30000,
+  globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
 
   use: {

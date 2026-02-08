@@ -12,24 +12,38 @@ import { test, expect, type Locator } from '@playwright/test';
  * - Runs in <30 seconds
  */
 
-/** Toggle a checkbox and assert the state flipped. Returns the previous state. */
+/** The seed habit this file exclusively toggles (avoids parallel contention). */
+const TARGET_HABIT = 'E2E Test - Seed Habit 1';
+
+/** Read Radix Checkbox state via data-state attribute. */
+async function isRadixChecked(locator: Locator): Promise<boolean> {
+  return (await locator.getAttribute('data-state')) === 'checked';
+}
+
+/** Toggle a Radix checkbox and assert the state flipped. Returns the previous checked state.
+ *  The checkbox is controlled — data-state only updates after the API call + SWR refetch. */
 async function toggleAndVerify(checkbox: Locator): Promise<boolean> {
-  const wasChecked = await checkbox.isChecked();
+  const wasChecked = await isRadixChecked(checkbox);
+  const expectedState = wasChecked ? 'unchecked' : 'checked';
+  // Click triggers API POST → mutate() → SWR refetch → re-render.
   await checkbox.click();
-  if (wasChecked) {
-    await expect(checkbox).not.toBeChecked({ timeout: 5000 });
-  } else {
-    await expect(checkbox).toBeChecked({ timeout: 5000 });
-  }
+  await expect(checkbox).toHaveAttribute('data-state', expectedState, { timeout: 10000 });
   return wasChecked;
 }
 
+/** Locate the checkbox for TARGET_HABIT by its aria-label. */
+function targetCheckbox(page: import('@playwright/test').Page) {
+  return page.locator(`[role="checkbox"][aria-label*="${TARGET_HABIT}"]`);
+}
+
 test.describe('Complete Habit Flow', () => {
+  // Run tests serially — they all toggle the same habit and would interfere in parallel
+  test.describe.configure({ mode: 'serial' });
   test('should toggle a habit as complete from dashboard', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    const checkbox = page.locator('[role="checkbox"], input[type="checkbox"]').first();
+    const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
     await toggleAndVerify(checkbox);
@@ -38,7 +52,7 @@ test.describe('Complete Habit Flow', () => {
   test('should toggle a habit as complete from habits page', async ({ page }) => {
     await page.goto('/habits');
 
-    const checkbox = page.locator('[role="checkbox"], input[type="checkbox"]').first();
+    const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
     await toggleAndVerify(checkbox);
@@ -48,7 +62,7 @@ test.describe('Complete Habit Flow', () => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    const checkbox = page.locator('[role="checkbox"], input[type="checkbox"]').first();
+    const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
     const wasChecked = await toggleAndVerify(checkbox);
@@ -60,64 +74,45 @@ test.describe('Complete Habit Flow', () => {
     await page.reload();
 
     // Wait for content to reload
-    await page.waitForSelector('[role="checkbox"], input[type="checkbox"]', { timeout: 10000 });
+    await page.waitForSelector('[role="checkbox"]', { timeout: 10000 });
 
-    // The first checkbox should have the toggled state
-    const refreshedCheckbox = page.locator('[role="checkbox"], input[type="checkbox"]').first();
-    if (wasChecked) {
-      await expect(refreshedCheckbox).not.toBeChecked({ timeout: 5000 });
-    } else {
-      await expect(refreshedCheckbox).toBeChecked({ timeout: 5000 });
-    }
+    // The same habit checkbox should have the toggled state
+    const refreshedCheckbox = targetCheckbox(page);
+    const expectedState = wasChecked ? 'unchecked' : 'checked';
+    await expect(refreshedCheckbox).toHaveAttribute('data-state', expectedState, { timeout: 5000 });
   });
 
   test('should uncomplete a previously completed habit', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    // Ensure a completed habit exists: toggle the first checkbox to checked
-    const firstCheckbox = page.locator('[role="checkbox"], input[type="checkbox"]').first();
-    await expect(firstCheckbox).toBeVisible({ timeout: 10000 });
+    // Ensure the target habit is checked
+    const checkbox = targetCheckbox(page);
+    await expect(checkbox).toBeVisible({ timeout: 10000 });
 
-    if (!(await firstCheckbox.isChecked())) {
-      await firstCheckbox.click();
-      await expect(firstCheckbox).toBeChecked({ timeout: 5000 });
+    if (!(await isRadixChecked(checkbox))) {
+      await checkbox.click();
+      await expect(checkbox).toHaveAttribute('data-state', 'checked', { timeout: 10000 });
       await page.waitForLoadState('networkidle');
     }
 
-    // Now find the checked checkbox (guaranteed to exist)
-    const allCheckboxes = page.locator('[role="checkbox"], input[type="checkbox"]');
-    const count = await allCheckboxes.count();
-
-    let targetIndex = -1;
-    for (let i = 0; i < count; i++) {
-      if (await allCheckboxes.nth(i).isChecked()) {
-        targetIndex = i;
-        break;
-      }
-    }
-
-    expect(targetIndex).toBeGreaterThanOrEqual(0);
-
-    const checkedBox = allCheckboxes.nth(targetIndex);
-
     // Uncomplete it
-    await checkedBox.click();
+    await checkbox.click();
 
     // Should become unchecked
-    await expect(checkedBox).not.toBeChecked({ timeout: 5000 });
+    await expect(checkbox).toHaveAttribute('data-state', 'unchecked', { timeout: 10000 });
   });
 
   test('should update streak display after completing a habit', async ({ page }) => {
     await page.goto('/habits');
     await page.waitForLoadState('networkidle');
 
-    const checkbox = page.locator('[role="checkbox"], input[type="checkbox"]').first();
+    const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
     // Capture streak text before toggle from the same habit card
-    const card = checkbox.locator('xpath=ancestor::div[contains(@class, "flex")]').first();
-    const streakBefore = await card.getByText(/\d+\s*day/i).textContent().catch(() => null);
+    const card = checkbox.locator('xpath=ancestor::div[starts-with(@data-testid, "habit-card")]').first();
+    const streakBefore = await card.getByText(/\d+\s*day/i).first().textContent().catch(() => null);
 
     await toggleAndVerify(checkbox);
 
@@ -125,7 +120,7 @@ test.describe('Complete Habit Flow', () => {
     await page.waitForLoadState('networkidle');
 
     // Verify streak text is still visible and potentially changed
-    const streakAfter = await card.getByText(/\d+\s*day/i).textContent().catch(() => null);
+    const streakAfter = await card.getByText(/\d+\s*day/i).first().textContent().catch(() => null);
     // Streak display must exist after toggling
     expect(streakAfter).toBeTruthy();
     // If we went from unchecked→checked, streak should differ (or at least still be present)
@@ -163,10 +158,10 @@ test.describe('Complete Habit Flow', () => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    const checkbox = page.locator('[role="checkbox"], input[type="checkbox"]').first();
+    const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
-    const initialState = await checkbox.isChecked();
+    const initialState = await checkbox.getAttribute('data-state');
 
     // Rapidly toggle — two clicks with no wait in between to test debounce/race handling
     await checkbox.click();
@@ -176,10 +171,6 @@ test.describe('Complete Habit Flow', () => {
     await page.waitForLoadState('networkidle');
 
     // Should return to initial state after double toggle
-    if (initialState) {
-      await expect(checkbox).toBeChecked({ timeout: 5000 });
-    } else {
-      await expect(checkbox).not.toBeChecked({ timeout: 5000 });
-    }
+    await expect(checkbox).toHaveAttribute('data-state', initialState!, { timeout: 5000 });
   });
 });

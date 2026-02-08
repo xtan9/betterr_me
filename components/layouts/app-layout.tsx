@@ -31,7 +31,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main content */}
-      <div className="flex-1">
+      <div className="flex-1 overflow-x-hidden">
         <div className="container max-w-screen-2xl mx-auto px-4 py-6">
           {children}
         </div>

@@ -3,6 +3,7 @@
 ## IMPORTANT Rules
 
 - **Documentation lookup**: ALWAYS use the `context7-plugin:documentation-lookup` skill FIRST when looking up docs for any library/framework. Only fall back to WebSearch/WebFetch if the skill doesn't return sufficient results.
+- **GitHub issues**: ALWAYS use the `/github-issues` skill for creating, updating, and managing GitHub issues. Do NOT use `gh` CLI directly for issue operations.
 
 ## Project Overview
 
