@@ -1,417 +1,452 @@
 {
-    "common": {
-        "nav": {
-            "getStarted": "開始使用",
-            "signIn": "登入",
-            "signOut": "登出",
-            "dashboard": "儀表板",
-            "habits": "習慣",
-            "settings": "設定",
-            "learnMore": "了解更多"
-        },
-        "footer": {
-            "product": "產品",
-            "features": "功能",
-            "habitTemplates": "習慣模板",
-            "mobileApp": "行動應用程式",
-            "company": "公司",
-            "about": "關於",
-            "blog": "部落格",
-            "careers": "徵才",
-            "press": "媒體",
-            "resources": "資源",
-            "documentation": "文件",
-            "helpCenter": "幫助中心",
-            "community": "社群",
-            "status": "狀態",
-            "legal": "法律",
-            "privacy": "隱私",
-            "terms": "條款",
-            "security": "安全",
-            "cookies": "Cookie",
-            "allRightsReserved": "保留所有權利。"
-        }
+  "common": {
+    "nav": {
+      "getStarted": "開始使用",
+      "signIn": "登入",
+      "signOut": "登出",
+      "dashboard": "儀表板",
+      "habits": "習慣",
+      "settings": "設定",
+      "learnMore": "了解更多"
     },
-    "home": {
-        "hero": {
-            "title": "做一個",
-            "titleHighlight": "更好的",
-            "titleHighlight2": "自己",
-            "titleSuffix": "每一天",
-            "subtitle": "小步驟帶來大改變。追蹤你的日常習慣，建立一致性，用 BetterR.me 一天一天地改變你的生活。"
-        },
-        "features": {
-            "freeToUse": "免費使用",
-            "unlimitedHabits": "追蹤無限習慣",
-            "visualProgress": "視覺化進度追蹤",
-            "everythingYouNeed": "每天變得更好所需的一切",
-            "powerfulTools": "簡單、強大的工具，幫助你建立一致性，每天都有進步。",
-            "dailyTracking": {
-                "title": "日常追蹤",
-                "description": "簡單的一鍵習慣完成與連續記錄追蹤"
-            },
-            "calendarView": {
-                "title": "行事曆檢視",
-                "description": "習慣完成歷史的視覺化月度概覽"
-            },
-            "customGoals": {
-                "title": "自訂目標",
-                "description": "為每個習慣設定每日、每週或自訂頻率目標"
-            },
-            "progressInsights": {
-                "title": "進度洞察",
-                "description": "追蹤連續記錄，查看隨時間的改進"
-            },
-            "stayMotivated": {
-                "title": "保持動力",
-                "description": "建立連續記錄，獲得成就，在你的旅程中保持動力。"
-            }
-        },
-        "stats": {
-            "joinCommunity": "加入數千人建設更好生活的行列",
-            "subtitle": "世界各地的人們正在使用 BetterR.me 成為更好的自己",
-            "habitsTracked": "10K+",
-            "habitsTrackedLabel": "每日追蹤的習慣",
-            "activeUsers": "2.5K+",
-            "activeUsersLabel": "活躍使用者",
-            "successRate": "85%",
-            "successRateLabel": "成功率"
-        },
-        "cta": {
-            "title": "今天開始變得更好",
-            "subtitle": "邁出成為更好自己的第一步。建立你的帳戶，幾分鐘內開始建立更好的習慣。",
-            "button": "開始我的旅程"
-        }
+    "footer": {
+      "product": "產品",
+      "features": "功能",
+      "habitTemplates": "習慣模板",
+      "mobileApp": "行動應用程式",
+      "company": "公司",
+      "about": "關於",
+      "blog": "部落格",
+      "careers": "徵才",
+      "press": "媒體",
+      "resources": "資源",
+      "documentation": "文件",
+      "helpCenter": "幫助中心",
+      "community": "社群",
+      "status": "狀態",
+      "legal": "法律",
+      "privacy": "隱私",
+      "terms": "條款",
+      "security": "安全",
+      "cookies": "Cookie",
+      "allRightsReserved": "保留所有權利。"
+    }
+  },
+  "home": {
+    "hero": {
+      "title": "做一個",
+      "titleHighlight": "更好的",
+      "titleHighlight2": "自己",
+      "titleSuffix": "每一天",
+      "subtitle": "小步驟帶來大改變。追蹤你的日常習慣，建立一致性，用 BetterR.me 一天一天地改變你的生活。"
     },
-    "dashboard": {
-        "greeting": {
-            "morning": "早安",
-            "afternoon": "午安",
-            "evening": "晚安"
-        },
-        "welcome": "準備好今天變得更好了嗎？來看看你的進度吧。",
-        "profile": "你的個人資料",
-        "email": "電子郵件",
-        "accountCreated": "帳戶建立時間",
-        "empty": {
-            "title": "歡迎來到 BetterR.Me！",
-            "subtitle": "開始你的成長之旅。養成習慣來追蹤進度，或新增任務來管理你的一天。",
-            "createHabit": "建立習慣",
-            "createTask": "新增任務"
-        },
-        "loading": {
-            "title": "正在載入你的儀表板..."
-        },
-        "error": {
-            "title": "出了點問題",
-            "retry": "重試"
-        },
-        "snapshot": {
-            "title": "今日概覽",
-            "activeHabits": "活躍習慣",
-            "todaysProgress": "今日進度",
-            "currentStreak": "當前連續",
-            "completionRate": "完成率 {percent}%",
-            "days": "{count} 天",
-            "vsYesterday": "較昨日 {change}%",
-            "fromLastWeek": "較上週 +{count}"
-        },
-        "habits": {
-            "title": "今日習慣",
-            "addHabit": "新增習慣",
-            "completed": "已完成 {completed}/{total}",
-            "moreToGo": "還有 {count} 個待完成！",
-            "allComplete": "全部完成！",
-            "noHabits": "還沒有習慣",
-            "createFirst": "建立你的第一個習慣"
-        },
-        "tasks": {
-            "title": "今日任務",
-            "addTask": "新增任務",
-            "completed": "已完成 {completed}/{total}",
-            "overdue": "已逾期",
-            "dueAt": "截止 {time}",
-            "allDay": "全天",
-            "noTasks": "今天沒有任務",
-            "createFirst": "新增任務",
-            "allComplete": "全部完成！"
-        },
-        "motivation": {
-            "firstDay": "歡迎！成為更好自己的旅程從今天開始。🌟",
-            "allComplete": "完美的一天！你已完成所有習慣。🎉",
-            "streakAtRisk": "你的{habitName}連續記錄已達{count}天 - 不要中斷它！🔥",
-            "almostDone": "還有{remaining}個就完成了！你可以的！💪",
-            "halfway": "已完成一半！保持勢頭。🚀",
-            "gettingStarted": "每完成一個習慣都讓你更接近最好的自己。✨",
-            "noHabits": "準備開始養成更好的習慣了嗎？新增你的第一個！🌱"
-        }
+    "features": {
+      "freeToUse": "免費使用",
+      "unlimitedHabits": "追蹤無限習慣",
+      "visualProgress": "視覺化進度追蹤",
+      "everythingYouNeed": "每天變得更好所需的一切",
+      "powerfulTools": "簡單、強大的工具，幫助你建立一致性，每天都有進步。",
+      "dailyTracking": {
+        "title": "日常追蹤",
+        "description": "簡單的一鍵習慣完成與連續記錄追蹤"
+      },
+      "calendarView": {
+        "title": "行事曆檢視",
+        "description": "習慣完成歷史的視覺化月度概覽"
+      },
+      "customGoals": {
+        "title": "自訂目標",
+        "description": "為每個習慣設定每日、每週或自訂頻率目標"
+      },
+      "progressInsights": {
+        "title": "進度洞察",
+        "description": "追蹤連續記錄，查看隨時間的改進"
+      },
+      "stayMotivated": {
+        "title": "保持動力",
+        "description": "建立連續記錄，獲得成就，在你的旅程中保持動力。"
+      }
+    },
+    "stats": {
+      "joinCommunity": "加入數千人建設更好生活的行列",
+      "subtitle": "世界各地的人們正在使用 BetterR.me 成為更好的自己",
+      "habitsTracked": "10K+",
+      "habitsTrackedLabel": "每日追蹤的習慣",
+      "activeUsers": "2.5K+",
+      "activeUsersLabel": "活躍使用者",
+      "successRate": "85%",
+      "successRateLabel": "成功率"
+    },
+    "cta": {
+      "title": "今天開始變得更好",
+      "subtitle": "邁出成為更好自己的第一步。建立你的帳戶，幾分鐘內開始建立更好的習慣。",
+      "button": "開始我的旅程"
+    }
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "早安",
+      "afternoon": "午安",
+      "evening": "晚安"
+    },
+    "welcome": "準備好今天變得更好了嗎？來看看你的進度吧。",
+    "profile": "你的個人資料",
+    "email": "電子郵件",
+    "accountCreated": "帳戶建立時間",
+    "empty": {
+      "title": "歡迎來到 BetterR.Me！",
+      "subtitle": "開始你的成長之旅。養成習慣來追蹤進度，或新增任務來管理你的一天。",
+      "createHabit": "建立習慣",
+      "createTask": "新增任務"
+    },
+    "loading": {
+      "title": "正在載入你的儀表板..."
+    },
+    "error": {
+      "title": "出了點問題",
+      "retry": "重試"
+    },
+    "snapshot": {
+      "title": "今日概覽",
+      "activeHabits": "活躍習慣",
+      "todaysProgress": "今日進度",
+      "currentStreak": "當前連續",
+      "completionRate": "完成率 {percent}%",
+      "days": "{count} 天",
+      "vsYesterday": "較昨日 {change}%",
+      "fromLastWeek": "較上週 +{count}"
     },
     "habits": {
-        "frequency": {
-            "daily": "每天",
-            "weekdays": "週一至週五",
-            "weekly": "每週一次",
-            "timesPerWeek": "每週 {count} 次",
-            "custom": "自訂天數",
-            "selectedDays": "已選擇：{days}",
-            "days": {
-                "sun": "週日",
-                "mon": "週一",
-                "tue": "週二",
-                "wed": "週三",
-                "thu": "週四",
-                "fri": "週五",
-                "sat": "週六"
-            }
-        },
-        "form": {
-            "createTitle": "建立新習慣",
-            "editTitle": "編輯習慣",
-            "nameLabel": "習慣名稱",
-            "namePlaceholder": "例如：晨跑、閱讀30分鐘...",
-            "descriptionLabel": "描述",
-            "descriptionPlaceholder": "關於這個習慣的備註（選填）",
-            "categoryLabel": "分類",
-            "frequencyLabel": "多久一次？",
-            "cancel": "取消",
-            "create": "建立習慣",
-            "save": "儲存變更",
-            "creating": "正在建立...",
-            "saving": "正在儲存...",
-            "validation": {
-                "nameRequired": "名稱不能為空",
-                "nameMax": "名稱不能超過100個字元",
-                "frequencyRequired": "請選擇頻率",
-                "customDaysRequired": "至少選擇一天"
-            }
-        },
-        "card": {
-            "currentStreak": "目前",
-            "bestStreak": "最佳",
-            "streakDays": "{count} 天",
-            "thisMonth": "本月 {percent}%",
-            "completedToday": "今日已完成",
-            "markComplete": "標記完成："
-        },
-        "categories": {
-            "health": "健康",
-            "wellness": "身心",
-            "learning": "學習",
-            "productivity": "效率",
-            "other": "其他"
-        },
-        "heatmap": {
-            "title": "最近30天",
-            "completed": "已完成",
-            "missed": "未完成",
-            "notScheduled": "非計畫日",
-            "today": "今天",
-            "cannotEdit": "無法編輯超過7天前的紀錄",
-            "clickToToggle": "點擊切換",
-            "days": {
-                "sun": "週日",
-                "mon": "週一",
-                "tue": "週二",
-                "wed": "週三",
-                "thu": "週四",
-                "fri": "週五",
-                "sat": "週六"
-            },
-            "legend": {
-                "completed": "已完成",
-                "missed": "未完成",
-                "notScheduled": "非計畫日"
-            }
-        },
-        "streak": {
-            "current": "目前連續",
-            "best": "最佳連續",
-            "days": "{count} 天",
-            "personalBest": "個人最佳！",
-            "messages": {
-                "zero": "今天開始！",
-                "building": "正在累積動力！",
-                "almostWeek": "快一週了！",
-                "keepGoing": "繼續保持！",
-                "incredible": "令人難以置信的堅持！",
-                "unstoppable": "你勢不可擋！",
-                "legendary": "傳奇連續！"
-            }
-        },
-        "empty": {
-            "noHabits": {
-                "title": "開始你的旅程",
-                "description": "追蹤你的第一個習慣，建立持久的改變。",
-                "cta": "建立第一個習慣"
-            },
-            "allComplete": {
-                "title": "完美的一天！",
-                "description": "你已完成今天所有的習慣。太棒了！"
-            },
-            "noResults": {
-                "title": "沒有符合「{query}」的習慣",
-                "description": "試試其他搜尋詞。"
-            },
-            "noPaused": {
-                "title": "沒有暫停的習慣",
-                "description": "暫停的習慣會顯示在這裡。"
-            },
-            "noArchived": {
-                "title": "沒有封存的習慣",
-                "description": "封存的習慣會顯示在這裡。"
-            }
-        },
-        "list": {
-            "title": "我的習慣",
-            "searchPlaceholder": "搜尋習慣...",
-            "tabs": {
-                "active": "進行中",
-                "paused": "已暫停",
-                "archived": "已封存"
-            }
-        },
-        "page": {
-            "title": "我的習慣",
-            "createButton": "建立習慣"
-        },
-        "detail": {
-            "backToHabits": "返回習慣列表",
-            "edit": "編輯",
-            "status": {
-                "active": "進行中",
-                "paused": "已暫停",
-                "archived": "已封存"
-            },
-            "completion": {
-                "title": "完成率",
-                "thisWeek": "本週",
-                "thisMonth": "本月",
-                "allTime": "總計",
-                "days": "{completed}/{total} 天",
-                "percent": "{percent}%"
-            },
-            "actions": {
-                "pause": "暫停習慣",
-                "resume": "恢復習慣",
-                "archive": "封存習慣",
-                "delete": "刪除習慣"
-            },
-            "confirmArchive": "確定要封存這個習慣嗎？",
-            "confirmDelete": "確定要刪除這個習慣嗎？此操作無法復原。",
-            "cannotEditOldLogs": "無法編輯超過7天的紀錄",
-            "notFound": "習慣未找到"
-        },
-        "toast": {
-            "createSuccess": "習慣建立成功",
-            "createError": "建立習慣失敗",
-            "updateSuccess": "習慣更新成功",
-            "updateError": "更新習慣失敗",
-            "pauseSuccess": "習慣已暫停",
-            "pauseError": "暫停習慣失敗",
-            "resumeSuccess": "習慣已恢復",
-            "resumeError": "恢復習慣失敗",
-            "archiveSuccess": "習慣已封存",
-            "archiveError": "封存習慣失敗",
-            "deleteSuccess": "習慣已刪除",
-            "deleteError": "刪除習慣失敗"
-        },
-        "error": {
-            "title": "載入習慣失敗",
-            "retry": "重試"
-        },
-        "loading": {
-            "title": "正在載入習慣..."
-        }
+      "title": "今日習慣",
+      "addHabit": "新增習慣",
+      "completed": "已完成 {completed}/{total}",
+      "moreToGo": "還有 {count} 個待完成！",
+      "allComplete": "全部完成！",
+      "noHabits": "還沒有習慣",
+      "createFirst": "建立你的第一個習慣"
     },
-    "auth": {
-        "login": {
-            "title": "登入",
-            "description": "在下方輸入你的電子郵件來登入你的帳戶",
-            "email": "電子郵件",
-            "emailPlaceholder": "m@example.com",
-            "password": "密碼",
-            "forgotPassword": "忘記密碼？",
-            "loginButton": "登入",
-            "loggingIn": "正在登入...",
-            "orContinueWith": "或繼續使用",
-            "continueWithGoogle": "使用 Google 繼續",
-            "noAccount": "還沒有帳戶？",
-            "signUp": "註冊"
-        },
-        "signUp": {
-            "title": "註冊",
-            "description": "建立一個新帳戶",
-            "email": "電子郵件",
-            "emailPlaceholder": "m@example.com",
-            "password": "密碼",
-            "repeatPassword": "重複密碼",
-            "signUpButton": "註冊",
-            "creatingAccount": "正在建立帳戶...",
-            "orContinueWith": "或繼續使用",
-            "continueWithGoogle": "使用 Google 繼續",
-            "haveAccount": "已經有帳戶？",
-            "login": "登入",
-            "passwordsDoNotMatch": "密碼不相符"
-        },
-        "forgotPassword": {
-            "title": "重設密碼",
-            "description": "輸入你的電子郵件，我們將發送重設密碼的連結給你",
-            "email": "電子郵件",
-            "emailPlaceholder": "m@example.com",
-            "sendButton": "發送重設郵件",
-            "sending": "正在發送...",
-            "haveAccount": "已經有帳戶？",
-            "login": "登入",
-            "checkEmail": "檢查你的電子郵件",
-            "instructionsSent": "密碼重設說明已發送",
-            "emailSentMessage": "如果你使用電子郵件和密碼註冊，你將收到密碼重設郵件。"
-        },
-        "updatePassword": {
-            "title": "更新密碼",
-            "description": "在下方輸入你的新密碼",
-            "password": "新密碼",
-            "repeatPassword": "重複新密碼",
-            "updateButton": "更新密碼",
-            "updating": "正在更新...",
-            "passwordsDoNotMatch": "密碼不相符"
-        },
-        "errors": {
-            "generic": "發生了錯誤",
-            "tryAgain": "請重試"
-        }
+    "tasks": {
+      "title": "今日任務",
+      "addTask": "新增任務",
+      "completed": "已完成 {completed}/{total}",
+      "overdue": "已逾期",
+      "dueAt": "截止 {time}",
+      "allDay": "全天",
+      "noTasks": "今天沒有任務",
+      "createFirst": "新增任務",
+      "allComplete": "全部完成！"
     },
-    "settings": {
-        "title": "設定",
-        "error": "載入設定失敗",
-        "save": "儲存",
-        "saved": "已儲存",
-        "weekStart": {
-            "title": "每週開始於",
-            "description": "選擇你的一週從哪天開始，用於統計和日曆顯示",
-            "sunday": "週日",
-            "monday": "週一"
-        },
-        "export": {
-            "title": "匯出資料",
-            "description": "下載習慣資料的 CSV 檔案，用於備份或分析",
-            "habits": "匯出習慣",
-            "logs": "匯出紀錄",
-            "success": "匯出下載成功",
-            "error": "匯出資料失敗",
-            "dateRange": "日期範圍",
-            "rangeAll": "全部時間",
-            "range30": "最近 30 天",
-            "range90": "最近 90 天",
-            "range365": "最近一年",
-            "rangeCustom": "自訂範圍",
-            "startDate": "開始日期",
-            "endDate": "結束日期",
-            "preparing": "正在準備匯出...",
-            "downloading": "正在下載...",
-            "zip": "匯出全部 (ZIP)"
-        },
-        "toast": {
-            "saveError": "儲存設定失敗"
-        }
+    "motivation": {
+      "firstDay": "歡迎！成為更好自己的旅程從今天開始。🌟",
+      "allComplete": "完美的一天！你已完成所有習慣。🎉",
+      "streakAtRisk": "你的{habitName}連續記錄已達{count}天 - 不要中斷它！🔥",
+      "almostDone": "還有{remaining}個就完成了！你可以的！💪",
+      "halfway": "已完成一半！保持勢頭。🚀",
+      "gettingStarted": "每完成一個習慣都讓你更接近最好的自己。✨",
+      "noHabits": "準備開始養成更好的習慣了嗎？新增你的第一個！🌱"
     }
+  },
+  "habits": {
+    "frequency": {
+      "daily": "每天",
+      "weekdays": "週一至週五",
+      "weekly": "每週一次",
+      "timesPerWeek": "每週 {count} 次",
+      "custom": "自訂天數",
+      "selectedDays": "已選擇：{days}",
+      "days": {
+        "sun": "週日",
+        "mon": "週一",
+        "tue": "週二",
+        "wed": "週三",
+        "thu": "週四",
+        "fri": "週五",
+        "sat": "週六"
+      }
+    },
+    "form": {
+      "createTitle": "建立新習慣",
+      "editTitle": "編輯習慣",
+      "nameLabel": "習慣名稱",
+      "namePlaceholder": "例如：晨跑、閱讀30分鐘...",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "關於這個習慣的備註（選填）",
+      "categoryLabel": "分類",
+      "frequencyLabel": "多久一次？",
+      "cancel": "取消",
+      "create": "建立習慣",
+      "save": "儲存變更",
+      "creating": "正在建立...",
+      "saving": "正在儲存...",
+      "validation": {
+        "nameRequired": "名稱不能為空",
+        "nameMax": "名稱不能超過100個字元",
+        "frequencyRequired": "請選擇頻率",
+        "customDaysRequired": "至少選擇一天"
+      }
+    },
+    "card": {
+      "currentStreak": "目前",
+      "bestStreak": "最佳",
+      "streakDays": "{count} 天",
+      "thisMonth": "本月 {percent}%",
+      "completedToday": "今日已完成",
+      "markComplete": "標記完成："
+    },
+    "categories": {
+      "health": "健康",
+      "wellness": "身心",
+      "learning": "學習",
+      "productivity": "效率",
+      "other": "其他"
+    },
+    "heatmap": {
+      "title": "最近30天",
+      "completed": "已完成",
+      "missed": "未完成",
+      "notScheduled": "非計畫日",
+      "today": "今天",
+      "cannotEdit": "無法編輯超過7天前的紀錄",
+      "clickToToggle": "點擊切換",
+      "days": {
+        "sun": "週日",
+        "mon": "週一",
+        "tue": "週二",
+        "wed": "週三",
+        "thu": "週四",
+        "fri": "週五",
+        "sat": "週六"
+      },
+      "legend": {
+        "completed": "已完成",
+        "missed": "未完成",
+        "notScheduled": "非計畫日"
+      }
+    },
+    "streak": {
+      "current": "目前連續",
+      "best": "最佳連續",
+      "days": "{count} 天",
+      "personalBest": "個人最佳！",
+      "messages": {
+        "zero": "今天開始！",
+        "building": "正在累積動力！",
+        "almostWeek": "快一週了！",
+        "keepGoing": "繼續保持！",
+        "incredible": "令人難以置信的堅持！",
+        "unstoppable": "你勢不可擋！",
+        "legendary": "傳奇連續！"
+      }
+    },
+    "empty": {
+      "noHabits": {
+        "title": "開始你的旅程",
+        "description": "追蹤你的第一個習慣，建立持久的改變。",
+        "cta": "建立第一個習慣"
+      },
+      "allComplete": {
+        "title": "完美的一天！",
+        "description": "你已完成今天所有的習慣。太棒了！"
+      },
+      "noResults": {
+        "title": "沒有符合「{query}」的習慣",
+        "description": "試試其他搜尋詞。"
+      },
+      "noPaused": {
+        "title": "沒有暫停的習慣",
+        "description": "暫停的習慣會顯示在這裡。"
+      },
+      "noArchived": {
+        "title": "沒有封存的習慣",
+        "description": "封存的習慣會顯示在這裡。"
+      }
+    },
+    "list": {
+      "title": "我的習慣",
+      "searchPlaceholder": "搜尋習慣...",
+      "tabs": {
+        "active": "進行中",
+        "paused": "已暫停",
+        "archived": "已封存"
+      }
+    },
+    "page": {
+      "title": "我的習慣",
+      "createButton": "建立習慣"
+    },
+    "detail": {
+      "backToHabits": "返回習慣列表",
+      "edit": "編輯",
+      "status": {
+        "active": "進行中",
+        "paused": "已暫停",
+        "archived": "已封存"
+      },
+      "completion": {
+        "title": "完成率",
+        "thisWeek": "本週",
+        "thisMonth": "本月",
+        "allTime": "總計",
+        "days": "{completed}/{total} 天",
+        "percent": "{percent}%"
+      },
+      "actions": {
+        "pause": "暫停習慣",
+        "resume": "恢復習慣",
+        "archive": "封存習慣",
+        "delete": "刪除習慣"
+      },
+      "confirmArchive": "確定要封存這個習慣嗎？",
+      "confirmDelete": "確定要刪除這個習慣嗎？此操作無法復原。",
+      "cannotEditOldLogs": "無法編輯超過7天的紀錄",
+      "notFound": "習慣未找到"
+    },
+    "toast": {
+      "createSuccess": "習慣建立成功",
+      "createError": "建立習慣失敗",
+      "updateSuccess": "習慣更新成功",
+      "updateError": "更新習慣失敗",
+      "pauseSuccess": "習慣已暫停",
+      "pauseError": "暫停習慣失敗",
+      "resumeSuccess": "習慣已恢復",
+      "resumeError": "恢復習慣失敗",
+      "archiveSuccess": "習慣已封存",
+      "archiveError": "封存習慣失敗",
+      "deleteSuccess": "習慣已刪除",
+      "deleteError": "刪除習慣失敗"
+    },
+    "error": {
+      "title": "載入習慣失敗",
+      "retry": "重試"
+    },
+    "loading": {
+      "title": "正在載入習慣..."
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "登入",
+      "description": "在下方輸入你的電子郵件來登入你的帳戶",
+      "email": "電子郵件",
+      "emailPlaceholder": "m@example.com",
+      "password": "密碼",
+      "forgotPassword": "忘記密碼？",
+      "loginButton": "登入",
+      "loggingIn": "正在登入...",
+      "orContinueWith": "或繼續使用",
+      "continueWithGoogle": "使用 Google 繼續",
+      "noAccount": "還沒有帳戶？",
+      "signUp": "註冊"
+    },
+    "signUp": {
+      "title": "註冊",
+      "description": "建立一個新帳戶",
+      "email": "電子郵件",
+      "emailPlaceholder": "m@example.com",
+      "password": "密碼",
+      "repeatPassword": "重複密碼",
+      "signUpButton": "註冊",
+      "creatingAccount": "正在建立帳戶...",
+      "orContinueWith": "或繼續使用",
+      "continueWithGoogle": "使用 Google 繼續",
+      "haveAccount": "已經有帳戶？",
+      "login": "登入",
+      "passwordsDoNotMatch": "密碼不相符"
+    },
+    "forgotPassword": {
+      "title": "重設密碼",
+      "description": "輸入你的電子郵件，我們將發送重設密碼的連結給你",
+      "email": "電子郵件",
+      "emailPlaceholder": "m@example.com",
+      "sendButton": "發送重設郵件",
+      "sending": "正在發送...",
+      "haveAccount": "已經有帳戶？",
+      "login": "登入",
+      "checkEmail": "檢查你的電子郵件",
+      "instructionsSent": "密碼重設說明已發送",
+      "emailSentMessage": "如果你使用電子郵件和密碼註冊，你將收到密碼重設郵件。"
+    },
+    "updatePassword": {
+      "title": "更新密碼",
+      "description": "在下方輸入你的新密碼",
+      "password": "新密碼",
+      "repeatPassword": "重複新密碼",
+      "updateButton": "更新密碼",
+      "updating": "正在更新...",
+      "passwordsDoNotMatch": "密碼不相符"
+    },
+    "errors": {
+      "generic": "發生了錯誤",
+      "tryAgain": "請重試"
+    }
+  },
+  "tasks": {
+    "form": {
+      "createTitle": "建立新任務",
+      "editTitle": "編輯任務",
+      "titleLabel": "任務標題",
+      "titlePlaceholder": "例如：買菜、完成報告...",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "關於這個任務的備註（選填）",
+      "categoryLabel": "分類",
+      "priorityLabel": "優先順序",
+      "dueDateLabel": "截止日期",
+      "dueTimeLabel": "截止時間",
+      "cancel": "取消",
+      "create": "建立任務",
+      "save": "儲存變更",
+      "creating": "正在建立...",
+      "saving": "正在儲存..."
+    },
+    "categories": {
+      "work": "工作",
+      "personal": "個人",
+      "shopping": "購物",
+      "other": "其他"
+    },
+    "priorities": {
+      "0": "無",
+      "1": "低",
+      "2": "中",
+      "3": "高"
+    },
+    "toast": {
+      "createSuccess": "任務建立成功",
+      "createError": "建立任務失敗"
+    }
+  },
+  "settings": {
+    "title": "設定",
+    "error": "載入設定失敗",
+    "save": "儲存",
+    "saved": "已儲存",
+    "weekStart": {
+      "title": "每週開始於",
+      "description": "選擇你的一週從哪天開始，用於統計和日曆顯示",
+      "sunday": "週日",
+      "monday": "週一"
+    },
+    "export": {
+      "title": "匯出資料",
+      "description": "下載習慣資料的 CSV 檔案，用於備份或分析",
+      "habits": "匯出習慣",
+      "logs": "匯出紀錄",
+      "success": "匯出下載成功",
+      "error": "匯出資料失敗",
+      "dateRange": "日期範圍",
+      "rangeAll": "全部時間",
+      "range30": "最近 30 天",
+      "range90": "最近 90 天",
+      "range365": "最近一年",
+      "rangeCustom": "自訂範圍",
+      "startDate": "開始日期",
+      "endDate": "結束日期",
+      "preparing": "正在準備匯出...",
+      "downloading": "正在下載...",
+      "zip": "匯出全部 (ZIP)"
+    },
+    "toast": {
+      "saveError": "儲存設定失敗"
+    }
+  }
 }
