@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * QA-002: E2E test - Complete habit flow
@@ -32,13 +32,15 @@ async function toggleAndVerify(checkbox: Locator): Promise<boolean> {
 }
 
 /** Locate the checkbox for TARGET_HABIT by its aria-label. */
-function targetCheckbox(page: import('@playwright/test').Page) {
+function targetCheckbox(page: Page) {
   return page.locator(`[role="checkbox"][aria-label*="${TARGET_HABIT}"]`);
 }
 
-test.describe('Complete Habit Flow', () => {
-  // Run tests serially — they all toggle the same habit and would interfere in parallel
+// --- Toggle tests: serial to avoid contention on the shared seed habit ---
+
+test.describe('Complete Habit Flow - Toggle', () => {
   test.describe.configure({ mode: 'serial' });
+
   test('should toggle a habit as complete from dashboard', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
@@ -131,6 +133,30 @@ test.describe('Complete Habit Flow', () => {
     }
   });
 
+  test('should handle rapid toggling gracefully', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+
+    const checkbox = targetCheckbox(page);
+    await expect(checkbox).toBeVisible({ timeout: 10000 });
+
+    const initialState = await checkbox.getAttribute('data-state');
+
+    // Rapidly toggle — two clicks with no wait in between to test debounce/race handling
+    await checkbox.click();
+    await checkbox.click();
+
+    // Wait for API calls to settle
+    await page.waitForLoadState('networkidle');
+
+    // Should return to initial state after double toggle
+    await expect(checkbox).toHaveAttribute('data-state', initialState!, { timeout: 5000 });
+  });
+});
+
+// --- Read-only tests: safe to run in parallel ---
+
+test.describe('Complete Habit Flow - Read', () => {
   test('should navigate to habit detail page by clicking a habit', async ({ page }) => {
     await page.goto('/habits');
     await page.waitForLoadState('networkidle');
@@ -152,25 +178,5 @@ test.describe('Complete Habit Flow', () => {
     // Look for completion text like "X of Y completed" or "X/Y"
     const completionText = page.getByText(/\d+\s*(of|\/)\s*\d+/i).first();
     await expect(completionText).toBeVisible({ timeout: 10000 });
-  });
-
-  test('should handle rapid toggling gracefully', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
-
-    const checkbox = targetCheckbox(page);
-    await expect(checkbox).toBeVisible({ timeout: 10000 });
-
-    const initialState = await checkbox.getAttribute('data-state');
-
-    // Rapidly toggle — two clicks with no wait in between to test debounce/race handling
-    await checkbox.click();
-    await checkbox.click();
-
-    // Wait for API calls to settle
-    await page.waitForLoadState('networkidle');
-
-    // Should return to initial state after double toggle
-    await expect(checkbox).toHaveAttribute('data-state', initialState!, { timeout: 5000 });
   });
 });

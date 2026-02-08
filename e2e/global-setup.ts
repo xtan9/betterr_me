@@ -33,8 +33,7 @@ async function globalSetup() {
     });
 
     if (authError || !authData.user) {
-      console.error('[setup] Auth failed:', authError?.message);
-      return;
+      throw new Error(`[setup] Auth failed: ${authError?.message}`);
     }
 
     const userId = authData.user.id;

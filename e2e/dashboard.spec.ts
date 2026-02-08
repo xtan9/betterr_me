@@ -27,7 +27,7 @@ test.describe('Dashboard - Auth Required', () => {
 });
 
 test.describe('Dashboard Load', () => {
-  test('should load dashboard within 5 seconds', async ({ page }) => {
+  test('should load dashboard within acceptable time', async ({ page }) => {
     const startTime = Date.now();
     await page.goto('/dashboard');
 

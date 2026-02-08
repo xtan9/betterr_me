@@ -30,7 +30,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* Main content */}
+      {/* Main content — overflow-x-hidden prevents skeleton/greeting widths from causing horizontal scroll on small viewports */}
       <div className="flex-1 overflow-x-hidden">
         <div className="container max-w-screen-2xl mx-auto px-4 py-6">
           {children}
