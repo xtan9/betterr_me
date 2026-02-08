@@ -2,6 +2,88 @@
 
 Track daily changes and progress on the BetterR.me project.
 
+## 2026-02-08
+### Bug Fixes & Cleanup
+
+#### Pull Requests Created
+- **PR #181**: Fix: Use local timezone for habit completion dates — MERGED
+  - Created `getLocalDateString()` utility in `lib/utils.ts` using browser-local date (not UTC)
+  - Updated `dashboard-content.tsx` and `habits-page-content.tsx` to use local date in SWR keys and toggle requests
+  - Updated `data-export.tsx` to use local dates for export filenames and date ranges
+  - Added `keepPreviousData: true` to SWR configs to prevent skeleton flash at midnight
+  - 8 new tests (6 unit for getLocalDateString, 2 SWR key verification)
+  - Closes issue #180
+
+- **PR #183**: Refactor: Remove unused timezone preference setting — MERGED
+  - Deleted `timezone-selector.tsx` component and its 228-line test file
+  - Removed timezone from settings UI, API validation, DB types, i18n (3 locales), and migration default
+  - Kept `HabitReminder.timezone` (separate per-reminder feature)
+  - Net -433 lines across 12 files
+  - Closes issue #182
+
+#### Issues Created
+- **#180**: Bug: Habit completion status ignores user timezone (CLOSED by PR #181)
+- **#182**: Remove unused timezone preference setting (CLOSED by PR #183)
+
+#### Technical Notes
+- Root cause: `new Date().toISOString().split("T")[0]` returns UTC date, not local. At 11pm PST, this returns tomorrow's UTC date.
+- Fix: `getLocalDateString()` uses `getFullYear()/getMonth()/getDate()` which return browser-local values
+- Timezone preference was stored in DB but never actually used — dead code after switching to client-local dates
+- SWR key includes date string, so cache misses at midnight. `keepPreviousData: true` keeps old data visible while fetching.
+
+---
+
+## 2026-02-07
+### CI & Dependency Fixes
+
+#### Pull Requests Created
+- **PR #170**: Lighthouse CI improvements — shared config, settings page, auth tests — MERGED
+  - Fixed credential check order in `lighthouse-auth.js` (path check before cred check)
+  - Added test for public paths not requiring credentials
+  - 10 total tests for lighthouse auth
+
+- **PR #178**: Refactor: Use two-job pattern for workflow secret checks — MERGED
+  - Replaced inline `if:` conditions with reusable two-job pattern (check-secrets → conditional job)
+
+- **PR #179**: Feat: Migrate to unified radix-ui package — MERGED
+  - Regenerated `pnpm-lock.yaml` to match `"radix-ui": "^1.4.3"` in package.json
+  - All 652 tests passed
+  - Replaced PR #177 which had lockfile/package.json mismatch
+
+#### E2E Test Fixes
+- **PR #171**: Fix stale selectors in create-habit tests — MERGED
+- **PR #172**: Fix habit completion toggle tests with stable selectors — MERGED
+- **PR #173**: Prevent horizontal overflow on mobile viewports — MERGED
+- **PR #174**: Fix accessibility keyboard nav and touch target tests — MERGED
+- **PR #175**: Fix mobile responsive layout tests — MERGED
+
+#### Issues Addressed
+- #153: Lighthouse CI improvements
+- #162: Refactor workflow secret checks
+- #165-168: E2E test failures (selectors, toggles, overflow, a11y, responsive)
+- #176: Upgrade Radix UI
+
+---
+
+## 2026-02-06
+### Stats & Infrastructure
+
+#### Pull Requests Created
+- **PR #152**: Optimize stats calculation with COUNT queries and composite index — MERGED
+- **PR #155**: Refactor E2E workflow to skip steps instead of entire job — MERGED
+- **PR #158**: Fix dashboard showing welcome screen after habit creation — MERGED
+- **PR #159**: Migrate API routes from DB singletons to server-client instances — MERGED
+- **PR #160**: Fix performance workflow to skip steps instead of job — MERGED
+- **PR #161**: Run chromium-only E2E on PRs, full matrix on main/schedule — MERGED
+- **PR #163**: Show both habit and task CTAs in dashboard empty state — MERGED
+
+#### Issues Addressed
+- #154: Refactor API routes from DB singletons to server-client instances
+- #156: E2E tests timeout in CI
+- #157: Dashboard shows welcome screen after creating first habit
+
+---
+
 ## 2026-02-05
 ### Epic 7: Settings & Polish (In Progress)
 
