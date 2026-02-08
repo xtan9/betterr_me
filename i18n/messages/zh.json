@@ -1,417 +1,452 @@
 {
-    "common": {
-        "nav": {
-            "getStarted": "开始使用",
-            "signIn": "登录",
-            "signOut": "退出登录",
-            "dashboard": "仪表板",
-            "habits": "习惯",
-            "settings": "设置",
-            "learnMore": "了解更多"
-        },
-        "footer": {
-            "product": "产品",
-            "features": "功能",
-            "habitTemplates": "习惯模板",
-            "mobileApp": "移动应用",
-            "company": "公司",
-            "about": "关于",
-            "blog": "博客",
-            "careers": "招聘",
-            "press": "媒体",
-            "resources": "资源",
-            "documentation": "文档",
-            "helpCenter": "帮助中心",
-            "community": "社区",
-            "status": "状态",
-            "legal": "法律",
-            "privacy": "隐私",
-            "terms": "条款",
-            "security": "安全",
-            "cookies": "Cookie",
-            "allRightsReserved": "保留所有权利。"
-        }
+  "common": {
+    "nav": {
+      "getStarted": "开始使用",
+      "signIn": "登录",
+      "signOut": "退出登录",
+      "dashboard": "仪表板",
+      "habits": "习惯",
+      "settings": "设置",
+      "learnMore": "了解更多"
     },
-    "home": {
-        "hero": {
-            "title": "做一个",
-            "titleHighlight": "更好的",
-            "titleHighlight2": "自己",
-            "titleSuffix": "每一天",
-            "subtitle": "小步骤带来大改变。跟踪你的日常习惯，建立一致性，用 BetterR.me 一天一天地改变你的生活。"
-        },
-        "features": {
-            "freeToUse": "免费使用",
-            "unlimitedHabits": "跟踪无限习惯",
-            "visualProgress": "可视化进度跟踪",
-            "everythingYouNeed": "每天变得更好所需的一切",
-            "powerfulTools": "简单、强大的工具，帮助你建立一致性，每天都有进步。",
-            "dailyTracking": {
-                "title": "日常跟踪",
-                "description": "简单的一键习惯完成和连续记录跟踪"
-            },
-            "calendarView": {
-                "title": "日历视图",
-                "description": "习惯完成历史的可视化月度概览"
-            },
-            "customGoals": {
-                "title": "自定义目标",
-                "description": "为每个习惯设置每日、每周或自定义频率目标"
-            },
-            "progressInsights": {
-                "title": "进度洞察",
-                "description": "跟踪连续记录，查看随时间的改进"
-            },
-            "stayMotivated": {
-                "title": "保持动力",
-                "description": "建立连续记录，获得成就，在你的旅程中保持动力。"
-            }
-        },
-        "stats": {
-            "joinCommunity": "加入数千人建设更好生活的行列",
-            "subtitle": "世界各地的人们正在使用 BetterR.me 成为更好的自己",
-            "habitsTracked": "10K+",
-            "habitsTrackedLabel": "每日跟踪的习惯",
-            "activeUsers": "2.5K+",
-            "activeUsersLabel": "活跃用户",
-            "successRate": "85%",
-            "successRateLabel": "成功率"
-        },
-        "cta": {
-            "title": "今天开始变得更好",
-            "subtitle": "迈出成为更好自己的第一步。创建你的账户，几分钟内开始建立更好的习惯。",
-            "button": "开始我的旅程"
-        }
+    "footer": {
+      "product": "产品",
+      "features": "功能",
+      "habitTemplates": "习惯模板",
+      "mobileApp": "移动应用",
+      "company": "公司",
+      "about": "关于",
+      "blog": "博客",
+      "careers": "招聘",
+      "press": "媒体",
+      "resources": "资源",
+      "documentation": "文档",
+      "helpCenter": "帮助中心",
+      "community": "社区",
+      "status": "状态",
+      "legal": "法律",
+      "privacy": "隐私",
+      "terms": "条款",
+      "security": "安全",
+      "cookies": "Cookie",
+      "allRightsReserved": "保留所有权利。"
+    }
+  },
+  "home": {
+    "hero": {
+      "title": "做一个",
+      "titleHighlight": "更好的",
+      "titleHighlight2": "自己",
+      "titleSuffix": "每一天",
+      "subtitle": "小步骤带来大改变。跟踪你的日常习惯，建立一致性，用 BetterR.me 一天一天地改变你的生活。"
     },
-    "dashboard": {
-        "greeting": {
-            "morning": "早上好",
-            "afternoon": "下午好",
-            "evening": "晚上好"
-        },
-        "welcome": "准备好今天变得更好了吗？来看看你的进度吧。",
-        "profile": "你的个人资料",
-        "email": "邮箱",
-        "accountCreated": "账户创建时间",
-        "empty": {
-            "title": "欢迎来到 BetterR.Me！",
-            "subtitle": "开始你的成长之旅。养成习惯来追踪进度，或添加任务来管理你的一天。",
-            "createHabit": "创建习惯",
-            "createTask": "添加任务"
-        },
-        "loading": {
-            "title": "正在加载你的仪表板..."
-        },
-        "error": {
-            "title": "出了点问题",
-            "retry": "重试"
-        },
-        "snapshot": {
-            "title": "今日概览",
-            "activeHabits": "活跃习惯",
-            "todaysProgress": "今日进度",
-            "currentStreak": "当前连续",
-            "completionRate": "完成率 {percent}%",
-            "days": "{count} 天",
-            "vsYesterday": "较昨日 {change}%",
-            "fromLastWeek": "较上周 +{count}"
-        },
-        "habits": {
-            "title": "今日习惯",
-            "addHabit": "添加习惯",
-            "completed": "已完成 {completed}/{total}",
-            "moreToGo": "还有 {count} 个待完成！",
-            "allComplete": "全部完成！",
-            "noHabits": "还没有习惯",
-            "createFirst": "创建你的第一个习惯"
-        },
-        "tasks": {
-            "title": "今日任务",
-            "addTask": "添加任务",
-            "completed": "已完成 {completed}/{total}",
-            "overdue": "已逾期",
-            "dueAt": "截止 {time}",
-            "allDay": "全天",
-            "noTasks": "今天没有任务",
-            "createFirst": "添加任务",
-            "allComplete": "全部完成！"
-        },
-        "motivation": {
-            "firstDay": "欢迎！成为更好自己的旅程从今天开始。🌟",
-            "allComplete": "完美的一天！你已完成所有习惯。🎉",
-            "streakAtRisk": "你的{habitName}连续记录已达{count}天 - 不要中断它！🔥",
-            "almostDone": "还有{remaining}个就完成了！你可以的！💪",
-            "halfway": "已完成一半！保持势头。🚀",
-            "gettingStarted": "每完成一个习惯都让你更接近最好的自己。✨",
-            "noHabits": "准备开始养成更好的习惯了吗？添加你的第一个！🌱"
-        }
+    "features": {
+      "freeToUse": "免费使用",
+      "unlimitedHabits": "跟踪无限习惯",
+      "visualProgress": "可视化进度跟踪",
+      "everythingYouNeed": "每天变得更好所需的一切",
+      "powerfulTools": "简单、强大的工具，帮助你建立一致性，每天都有进步。",
+      "dailyTracking": {
+        "title": "日常跟踪",
+        "description": "简单的一键习惯完成和连续记录跟踪"
+      },
+      "calendarView": {
+        "title": "日历视图",
+        "description": "习惯完成历史的可视化月度概览"
+      },
+      "customGoals": {
+        "title": "自定义目标",
+        "description": "为每个习惯设置每日、每周或自定义频率目标"
+      },
+      "progressInsights": {
+        "title": "进度洞察",
+        "description": "跟踪连续记录，查看随时间的改进"
+      },
+      "stayMotivated": {
+        "title": "保持动力",
+        "description": "建立连续记录，获得成就，在你的旅程中保持动力。"
+      }
+    },
+    "stats": {
+      "joinCommunity": "加入数千人建设更好生活的行列",
+      "subtitle": "世界各地的人们正在使用 BetterR.me 成为更好的自己",
+      "habitsTracked": "10K+",
+      "habitsTrackedLabel": "每日跟踪的习惯",
+      "activeUsers": "2.5K+",
+      "activeUsersLabel": "活跃用户",
+      "successRate": "85%",
+      "successRateLabel": "成功率"
+    },
+    "cta": {
+      "title": "今天开始变得更好",
+      "subtitle": "迈出成为更好自己的第一步。创建你的账户，几分钟内开始建立更好的习惯。",
+      "button": "开始我的旅程"
+    }
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "早上好",
+      "afternoon": "下午好",
+      "evening": "晚上好"
+    },
+    "welcome": "准备好今天变得更好了吗？来看看你的进度吧。",
+    "profile": "你的个人资料",
+    "email": "邮箱",
+    "accountCreated": "账户创建时间",
+    "empty": {
+      "title": "欢迎来到 BetterR.Me！",
+      "subtitle": "开始你的成长之旅。养成习惯来追踪进度，或添加任务来管理你的一天。",
+      "createHabit": "创建习惯",
+      "createTask": "添加任务"
+    },
+    "loading": {
+      "title": "正在加载你的仪表板..."
+    },
+    "error": {
+      "title": "出了点问题",
+      "retry": "重试"
+    },
+    "snapshot": {
+      "title": "今日概览",
+      "activeHabits": "活跃习惯",
+      "todaysProgress": "今日进度",
+      "currentStreak": "当前连续",
+      "completionRate": "完成率 {percent}%",
+      "days": "{count} 天",
+      "vsYesterday": "较昨日 {change}%",
+      "fromLastWeek": "较上周 +{count}"
     },
     "habits": {
-        "frequency": {
-            "daily": "每天",
-            "weekdays": "周一至周五",
-            "weekly": "每周一次",
-            "timesPerWeek": "每周 {count} 次",
-            "custom": "自定义天数",
-            "selectedDays": "已选择：{days}",
-            "days": {
-                "sun": "周日",
-                "mon": "周一",
-                "tue": "周二",
-                "wed": "周三",
-                "thu": "周四",
-                "fri": "周五",
-                "sat": "周六"
-            }
-        },
-        "form": {
-            "createTitle": "创建新习惯",
-            "editTitle": "编辑习惯",
-            "nameLabel": "习惯名称",
-            "namePlaceholder": "例如：晨跑、阅读30分钟...",
-            "descriptionLabel": "描述",
-            "descriptionPlaceholder": "关于这个习惯的备注（可选）",
-            "categoryLabel": "分类",
-            "frequencyLabel": "多久一次？",
-            "cancel": "取消",
-            "create": "创建习惯",
-            "save": "保存更改",
-            "creating": "正在创建...",
-            "saving": "正在保存...",
-            "validation": {
-                "nameRequired": "名称不能为空",
-                "nameMax": "名称不能超过100个字符",
-                "frequencyRequired": "请选择频率",
-                "customDaysRequired": "至少选择一天"
-            }
-        },
-        "card": {
-            "currentStreak": "当前",
-            "bestStreak": "最佳",
-            "streakDays": "{count} 天",
-            "thisMonth": "本月 {percent}%",
-            "completedToday": "今日已完成",
-            "markComplete": "标记完成："
-        },
-        "categories": {
-            "health": "健康",
-            "wellness": "身心",
-            "learning": "学习",
-            "productivity": "效率",
-            "other": "其他"
-        },
-        "heatmap": {
-            "title": "最近30天",
-            "completed": "已完成",
-            "missed": "未完成",
-            "notScheduled": "非计划日",
-            "today": "今天",
-            "cannotEdit": "无法编辑超过7天前的记录",
-            "clickToToggle": "点击切换",
-            "days": {
-                "sun": "周日",
-                "mon": "周一",
-                "tue": "周二",
-                "wed": "周三",
-                "thu": "周四",
-                "fri": "周五",
-                "sat": "周六"
-            },
-            "legend": {
-                "completed": "已完成",
-                "missed": "未完成",
-                "notScheduled": "非计划日"
-            }
-        },
-        "streak": {
-            "current": "当前连续",
-            "best": "最佳连续",
-            "days": "{count} 天",
-            "personalBest": "个人最佳！",
-            "messages": {
-                "zero": "今天开始！",
-                "building": "正在积蓄动力！",
-                "almostWeek": "快一周了！",
-                "keepGoing": "继续保持！",
-                "incredible": "令人难以置信的坚持！",
-                "unstoppable": "你势不可挡！",
-                "legendary": "传奇连续！"
-            }
-        },
-        "empty": {
-            "noHabits": {
-                "title": "开始你的旅程",
-                "description": "跟踪你的第一个习惯，建立持久的改变。",
-                "cta": "创建第一个习惯"
-            },
-            "allComplete": {
-                "title": "完美的一天！",
-                "description": "你已完成今天所有的习惯。太棒了！"
-            },
-            "noResults": {
-                "title": "没有匹配「{query}」的习惯",
-                "description": "试试其他搜索词。"
-            },
-            "noPaused": {
-                "title": "没有暂停的习惯",
-                "description": "暂停的习惯会显示在这里。"
-            },
-            "noArchived": {
-                "title": "没有归档的习惯",
-                "description": "归档的习惯会显示在这里。"
-            }
-        },
-        "list": {
-            "title": "我的习惯",
-            "searchPlaceholder": "搜索习惯...",
-            "tabs": {
-                "active": "进行中",
-                "paused": "已暂停",
-                "archived": "已归档"
-            }
-        },
-        "page": {
-            "title": "我的习惯",
-            "createButton": "创建习惯"
-        },
-        "detail": {
-            "backToHabits": "返回习惯列表",
-            "edit": "编辑",
-            "status": {
-                "active": "进行中",
-                "paused": "已暂停",
-                "archived": "已归档"
-            },
-            "completion": {
-                "title": "完成率",
-                "thisWeek": "本周",
-                "thisMonth": "本月",
-                "allTime": "总计",
-                "days": "{completed}/{total} 天",
-                "percent": "{percent}%"
-            },
-            "actions": {
-                "pause": "暂停习惯",
-                "resume": "恢复习惯",
-                "archive": "归档习惯",
-                "delete": "删除习惯"
-            },
-            "confirmArchive": "确定要归档这个习惯吗？",
-            "confirmDelete": "确定要删除这个习惯吗？此操作无法撤销。",
-            "cannotEditOldLogs": "无法编辑超过7天的记录",
-            "notFound": "习惯未找到"
-        },
-        "toast": {
-            "createSuccess": "习惯创建成功",
-            "createError": "创建习惯失败",
-            "updateSuccess": "习惯更新成功",
-            "updateError": "更新习惯失败",
-            "pauseSuccess": "习惯已暂停",
-            "pauseError": "暂停习惯失败",
-            "resumeSuccess": "习惯已恢复",
-            "resumeError": "恢复习惯失败",
-            "archiveSuccess": "习惯已归档",
-            "archiveError": "归档习惯失败",
-            "deleteSuccess": "习惯已删除",
-            "deleteError": "删除习惯失败"
-        },
-        "error": {
-            "title": "加载习惯失败",
-            "retry": "重试"
-        },
-        "loading": {
-            "title": "正在加载习惯..."
-        }
+      "title": "今日习惯",
+      "addHabit": "添加习惯",
+      "completed": "已完成 {completed}/{total}",
+      "moreToGo": "还有 {count} 个待完成！",
+      "allComplete": "全部完成！",
+      "noHabits": "还没有习惯",
+      "createFirst": "创建你的第一个习惯"
     },
-    "auth": {
-        "login": {
-            "title": "登录",
-            "description": "在下方输入你的邮箱来登录你的账户",
-            "email": "邮箱",
-            "emailPlaceholder": "m@example.com",
-            "password": "密码",
-            "forgotPassword": "忘记密码？",
-            "loginButton": "登录",
-            "loggingIn": "正在登录...",
-            "orContinueWith": "或继续使用",
-            "continueWithGoogle": "使用 Google 继续",
-            "noAccount": "还没有账户？",
-            "signUp": "注册"
-        },
-        "signUp": {
-            "title": "注册",
-            "description": "创建一个新账户",
-            "email": "邮箱",
-            "emailPlaceholder": "m@example.com",
-            "password": "密码",
-            "repeatPassword": "重复密码",
-            "signUpButton": "注册",
-            "creatingAccount": "正在创建账户...",
-            "orContinueWith": "或继续使用",
-            "continueWithGoogle": "使用 Google 继续",
-            "haveAccount": "已经有账户？",
-            "login": "登录",
-            "passwordsDoNotMatch": "密码不匹配"
-        },
-        "forgotPassword": {
-            "title": "重置密码",
-            "description": "输入你的邮箱，我们将发送重置密码的链接给你",
-            "email": "邮箱",
-            "emailPlaceholder": "m@example.com",
-            "sendButton": "发送重置邮件",
-            "sending": "正在发送...",
-            "haveAccount": "已经有账户？",
-            "login": "登录",
-            "checkEmail": "检查你的邮箱",
-            "instructionsSent": "密码重置说明已发送",
-            "emailSentMessage": "如果你使用邮箱和密码注册，你将收到密码重置邮件。"
-        },
-        "updatePassword": {
-            "title": "更新密码",
-            "description": "在下方输入你的新密码",
-            "password": "新密码",
-            "repeatPassword": "重复新密码",
-            "updateButton": "更新密码",
-            "updating": "正在更新...",
-            "passwordsDoNotMatch": "密码不匹配"
-        },
-        "errors": {
-            "generic": "发生了错误",
-            "tryAgain": "请重试"
-        }
+    "tasks": {
+      "title": "今日任务",
+      "addTask": "添加任务",
+      "completed": "已完成 {completed}/{total}",
+      "overdue": "已逾期",
+      "dueAt": "截止 {time}",
+      "allDay": "全天",
+      "noTasks": "今天没有任务",
+      "createFirst": "添加任务",
+      "allComplete": "全部完成！"
     },
-    "settings": {
-        "title": "设置",
-        "error": "加载设置失败",
-        "save": "保存",
-        "saved": "已保存",
-        "weekStart": {
-            "title": "每周开始于",
-            "description": "选择你的一周从哪天开始，用于统计和日历显示",
-            "sunday": "周日",
-            "monday": "周一"
-        },
-        "export": {
-            "title": "导出数据",
-            "description": "下载习惯数据的 CSV 文件，用于备份或分析",
-            "habits": "导出习惯",
-            "logs": "导出记录",
-            "success": "导出下载成功",
-            "error": "导出数据失败",
-            "dateRange": "日期范围",
-            "rangeAll": "全部时间",
-            "range30": "最近 30 天",
-            "range90": "最近 90 天",
-            "range365": "最近一年",
-            "rangeCustom": "自定义范围",
-            "startDate": "开始日期",
-            "endDate": "结束日期",
-            "preparing": "正在准备导出...",
-            "downloading": "正在下载...",
-            "zip": "导出全部 (ZIP)"
-        },
-        "toast": {
-            "saveError": "保存设置失败"
-        }
+    "motivation": {
+      "firstDay": "欢迎！成为更好自己的旅程从今天开始。🌟",
+      "allComplete": "完美的一天！你已完成所有习惯。🎉",
+      "streakAtRisk": "你的{habitName}连续记录已达{count}天 - 不要中断它！🔥",
+      "almostDone": "还有{remaining}个就完成了！你可以的！💪",
+      "halfway": "已完成一半！保持势头。🚀",
+      "gettingStarted": "每完成一个习惯都让你更接近最好的自己。✨",
+      "noHabits": "准备开始养成更好的习惯了吗？添加你的第一个！🌱"
     }
+  },
+  "habits": {
+    "frequency": {
+      "daily": "每天",
+      "weekdays": "周一至周五",
+      "weekly": "每周一次",
+      "timesPerWeek": "每周 {count} 次",
+      "custom": "自定义天数",
+      "selectedDays": "已选择：{days}",
+      "days": {
+        "sun": "周日",
+        "mon": "周一",
+        "tue": "周二",
+        "wed": "周三",
+        "thu": "周四",
+        "fri": "周五",
+        "sat": "周六"
+      }
+    },
+    "form": {
+      "createTitle": "创建新习惯",
+      "editTitle": "编辑习惯",
+      "nameLabel": "习惯名称",
+      "namePlaceholder": "例如：晨跑、阅读30分钟...",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "关于这个习惯的备注（可选）",
+      "categoryLabel": "分类",
+      "frequencyLabel": "多久一次？",
+      "cancel": "取消",
+      "create": "创建习惯",
+      "save": "保存更改",
+      "creating": "正在创建...",
+      "saving": "正在保存...",
+      "validation": {
+        "nameRequired": "名称不能为空",
+        "nameMax": "名称不能超过100个字符",
+        "frequencyRequired": "请选择频率",
+        "customDaysRequired": "至少选择一天"
+      }
+    },
+    "card": {
+      "currentStreak": "当前",
+      "bestStreak": "最佳",
+      "streakDays": "{count} 天",
+      "thisMonth": "本月 {percent}%",
+      "completedToday": "今日已完成",
+      "markComplete": "标记完成："
+    },
+    "categories": {
+      "health": "健康",
+      "wellness": "身心",
+      "learning": "学习",
+      "productivity": "效率",
+      "other": "其他"
+    },
+    "heatmap": {
+      "title": "最近30天",
+      "completed": "已完成",
+      "missed": "未完成",
+      "notScheduled": "非计划日",
+      "today": "今天",
+      "cannotEdit": "无法编辑超过7天前的记录",
+      "clickToToggle": "点击切换",
+      "days": {
+        "sun": "周日",
+        "mon": "周一",
+        "tue": "周二",
+        "wed": "周三",
+        "thu": "周四",
+        "fri": "周五",
+        "sat": "周六"
+      },
+      "legend": {
+        "completed": "已完成",
+        "missed": "未完成",
+        "notScheduled": "非计划日"
+      }
+    },
+    "streak": {
+      "current": "当前连续",
+      "best": "最佳连续",
+      "days": "{count} 天",
+      "personalBest": "个人最佳！",
+      "messages": {
+        "zero": "今天开始！",
+        "building": "正在积蓄动力！",
+        "almostWeek": "快一周了！",
+        "keepGoing": "继续保持！",
+        "incredible": "令人难以置信的坚持！",
+        "unstoppable": "你势不可挡！",
+        "legendary": "传奇连续！"
+      }
+    },
+    "empty": {
+      "noHabits": {
+        "title": "开始你的旅程",
+        "description": "跟踪你的第一个习惯，建立持久的改变。",
+        "cta": "创建第一个习惯"
+      },
+      "allComplete": {
+        "title": "完美的一天！",
+        "description": "你已完成今天所有的习惯。太棒了！"
+      },
+      "noResults": {
+        "title": "没有匹配「{query}」的习惯",
+        "description": "试试其他搜索词。"
+      },
+      "noPaused": {
+        "title": "没有暂停的习惯",
+        "description": "暂停的习惯会显示在这里。"
+      },
+      "noArchived": {
+        "title": "没有归档的习惯",
+        "description": "归档的习惯会显示在这里。"
+      }
+    },
+    "list": {
+      "title": "我的习惯",
+      "searchPlaceholder": "搜索习惯...",
+      "tabs": {
+        "active": "进行中",
+        "paused": "已暂停",
+        "archived": "已归档"
+      }
+    },
+    "page": {
+      "title": "我的习惯",
+      "createButton": "创建习惯"
+    },
+    "detail": {
+      "backToHabits": "返回习惯列表",
+      "edit": "编辑",
+      "status": {
+        "active": "进行中",
+        "paused": "已暂停",
+        "archived": "已归档"
+      },
+      "completion": {
+        "title": "完成率",
+        "thisWeek": "本周",
+        "thisMonth": "本月",
+        "allTime": "总计",
+        "days": "{completed}/{total} 天",
+        "percent": "{percent}%"
+      },
+      "actions": {
+        "pause": "暂停习惯",
+        "resume": "恢复习惯",
+        "archive": "归档习惯",
+        "delete": "删除习惯"
+      },
+      "confirmArchive": "确定要归档这个习惯吗？",
+      "confirmDelete": "确定要删除这个习惯吗？此操作无法撤销。",
+      "cannotEditOldLogs": "无法编辑超过7天的记录",
+      "notFound": "习惯未找到"
+    },
+    "toast": {
+      "createSuccess": "习惯创建成功",
+      "createError": "创建习惯失败",
+      "updateSuccess": "习惯更新成功",
+      "updateError": "更新习惯失败",
+      "pauseSuccess": "习惯已暂停",
+      "pauseError": "暂停习惯失败",
+      "resumeSuccess": "习惯已恢复",
+      "resumeError": "恢复习惯失败",
+      "archiveSuccess": "习惯已归档",
+      "archiveError": "归档习惯失败",
+      "deleteSuccess": "习惯已删除",
+      "deleteError": "删除习惯失败"
+    },
+    "error": {
+      "title": "加载习惯失败",
+      "retry": "重试"
+    },
+    "loading": {
+      "title": "正在加载习惯..."
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "登录",
+      "description": "在下方输入你的邮箱来登录你的账户",
+      "email": "邮箱",
+      "emailPlaceholder": "m@example.com",
+      "password": "密码",
+      "forgotPassword": "忘记密码？",
+      "loginButton": "登录",
+      "loggingIn": "正在登录...",
+      "orContinueWith": "或继续使用",
+      "continueWithGoogle": "使用 Google 继续",
+      "noAccount": "还没有账户？",
+      "signUp": "注册"
+    },
+    "signUp": {
+      "title": "注册",
+      "description": "创建一个新账户",
+      "email": "邮箱",
+      "emailPlaceholder": "m@example.com",
+      "password": "密码",
+      "repeatPassword": "重复密码",
+      "signUpButton": "注册",
+      "creatingAccount": "正在创建账户...",
+      "orContinueWith": "或继续使用",
+      "continueWithGoogle": "使用 Google 继续",
+      "haveAccount": "已经有账户？",
+      "login": "登录",
+      "passwordsDoNotMatch": "密码不匹配"
+    },
+    "forgotPassword": {
+      "title": "重置密码",
+      "description": "输入你的邮箱，我们将发送重置密码的链接给你",
+      "email": "邮箱",
+      "emailPlaceholder": "m@example.com",
+      "sendButton": "发送重置邮件",
+      "sending": "正在发送...",
+      "haveAccount": "已经有账户？",
+      "login": "登录",
+      "checkEmail": "检查你的邮箱",
+      "instructionsSent": "密码重置说明已发送",
+      "emailSentMessage": "如果你使用邮箱和密码注册，你将收到密码重置邮件。"
+    },
+    "updatePassword": {
+      "title": "更新密码",
+      "description": "在下方输入你的新密码",
+      "password": "新密码",
+      "repeatPassword": "重复新密码",
+      "updateButton": "更新密码",
+      "updating": "正在更新...",
+      "passwordsDoNotMatch": "密码不匹配"
+    },
+    "errors": {
+      "generic": "发生了错误",
+      "tryAgain": "请重试"
+    }
+  },
+  "tasks": {
+    "form": {
+      "createTitle": "创建新任务",
+      "editTitle": "编辑任务",
+      "titleLabel": "任务标题",
+      "titlePlaceholder": "例如：买菜、完成报告...",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "关于这个任务的备注（可选）",
+      "categoryLabel": "分类",
+      "priorityLabel": "优先级",
+      "dueDateLabel": "截止日期",
+      "dueTimeLabel": "截止时间",
+      "cancel": "取消",
+      "create": "创建任务",
+      "save": "保存更改",
+      "creating": "正在创建...",
+      "saving": "正在保存..."
+    },
+    "categories": {
+      "work": "工作",
+      "personal": "个人",
+      "shopping": "购物",
+      "other": "其他"
+    },
+    "priorities": {
+      "0": "无",
+      "1": "低",
+      "2": "中",
+      "3": "高"
+    },
+    "toast": {
+      "createSuccess": "任务创建成功",
+      "createError": "创建任务失败"
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "error": "加载设置失败",
+    "save": "保存",
+    "saved": "已保存",
+    "weekStart": {
+      "title": "每周开始于",
+      "description": "选择你的一周从哪天开始，用于统计和日历显示",
+      "sunday": "周日",
+      "monday": "周一"
+    },
+    "export": {
+      "title": "导出数据",
+      "description": "下载习惯数据的 CSV 文件，用于备份或分析",
+      "habits": "导出习惯",
+      "logs": "导出记录",
+      "success": "导出下载成功",
+      "error": "导出数据失败",
+      "dateRange": "日期范围",
+      "rangeAll": "全部时间",
+      "range30": "最近 30 天",
+      "range90": "最近 90 天",
+      "range365": "最近一年",
+      "rangeCustom": "自定义范围",
+      "startDate": "开始日期",
+      "endDate": "结束日期",
+      "preparing": "正在准备导出...",
+      "downloading": "正在下载...",
+      "zip": "导出全部 (ZIP)"
+    },
+    "toast": {
+      "saveError": "保存设置失败"
+    }
+  }
 }

@@ -1,417 +1,452 @@
 {
-    "common": {
-        "nav": {
-            "getStarted": "Get Started",
-            "signIn": "Sign In",
-            "signOut": "Sign Out",
-            "dashboard": "Dashboard",
-            "habits": "Habits",
-            "settings": "Settings",
-            "learnMore": "Learn More"
-        },
-        "footer": {
-            "product": "Product",
-            "features": "Features",
-            "habitTemplates": "Habit Templates",
-            "mobileApp": "Mobile App",
-            "company": "Company",
-            "about": "About",
-            "blog": "Blog",
-            "careers": "Careers",
-            "press": "Press",
-            "resources": "Resources",
-            "documentation": "Documentation",
-            "helpCenter": "Help Center",
-            "community": "Community",
-            "status": "Status",
-            "legal": "Legal",
-            "privacy": "Privacy",
-            "terms": "Terms",
-            "security": "Security",
-            "cookies": "Cookies",
-            "allRightsReserved": "All rights reserved."
-        }
+  "common": {
+    "nav": {
+      "getStarted": "Get Started",
+      "signIn": "Sign In",
+      "signOut": "Sign Out",
+      "dashboard": "Dashboard",
+      "habits": "Habits",
+      "settings": "Settings",
+      "learnMore": "Learn More"
     },
-    "home": {
-        "hero": {
-            "title": "Be a",
-            "titleHighlight": "BetterR",
-            "titleHighlight2": "Me",
-            "titleSuffix": "Every Day",
-            "subtitle": "Small steps lead to big changes. Track your daily habits, build consistency, and transform your life one day at a time with BetterR.me."
-        },
-        "features": {
-            "freeToUse": "Free to use",
-            "unlimitedHabits": "Track unlimited habits",
-            "visualProgress": "Visual progress tracking",
-            "everythingYouNeed": "Everything You Need to Be Better Every Day",
-            "powerfulTools": "Simple, powerful tools to help you build consistency and make progress every single day.",
-            "dailyTracking": {
-                "title": "Daily Tracking",
-                "description": "Simple one-click habit completion with streak tracking"
-            },
-            "calendarView": {
-                "title": "Calendar View",
-                "description": "Visual monthly overview of your habit completion history"
-            },
-            "customGoals": {
-                "title": "Custom Goals",
-                "description": "Set daily, weekly, or custom frequency goals for each habit"
-            },
-            "progressInsights": {
-                "title": "Progress Insights",
-                "description": "Track streaks and see your improvement over time"
-            },
-            "stayMotivated": {
-                "title": "Stay Motivated",
-                "description": "Build streaks, earn achievements, and stay motivated on your journey."
-            }
-        },
-        "stats": {
-            "joinCommunity": "Join Thousands Building Better Lives",
-            "subtitle": "People around the world are becoming better versions of themselves with BetterR.me",
-            "habitsTracked": "10K+",
-            "habitsTrackedLabel": "Habits Tracked Daily",
-            "activeUsers": "2.5K+",
-            "activeUsersLabel": "Active Users",
-            "successRate": "85%",
-            "successRateLabel": "Success Rate"
-        },
-        "cta": {
-            "title": "Start Being Better Today",
-            "subtitle": "Take the first step towards becoming a better version of yourself. Create your account and start building better habits in minutes.",
-            "button": "Start My Journey"
-        }
+    "footer": {
+      "product": "Product",
+      "features": "Features",
+      "habitTemplates": "Habit Templates",
+      "mobileApp": "Mobile App",
+      "company": "Company",
+      "about": "About",
+      "blog": "Blog",
+      "careers": "Careers",
+      "press": "Press",
+      "resources": "Resources",
+      "documentation": "Documentation",
+      "helpCenter": "Help Center",
+      "community": "Community",
+      "status": "Status",
+      "legal": "Legal",
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "security": "Security",
+      "cookies": "Cookies",
+      "allRightsReserved": "All rights reserved."
+    }
+  },
+  "home": {
+    "hero": {
+      "title": "Be a",
+      "titleHighlight": "BetterR",
+      "titleHighlight2": "Me",
+      "titleSuffix": "Every Day",
+      "subtitle": "Small steps lead to big changes. Track your daily habits, build consistency, and transform your life one day at a time with BetterR.me."
     },
-    "dashboard": {
-        "greeting": {
-            "morning": "Good morning",
-            "afternoon": "Good afternoon",
-            "evening": "Good evening"
-        },
-        "welcome": "Ready to be a little better today? Let's check your progress.",
-        "profile": "Your Profile",
-        "email": "Email",
-        "accountCreated": "Account Created",
-        "empty": {
-            "title": "Welcome to BetterR.Me!",
-            "subtitle": "Start your journey to becoming better. Build habits to track or add tasks to stay on top of your day.",
-            "createHabit": "Create a Habit",
-            "createTask": "Add a Task"
-        },
-        "loading": {
-            "title": "Loading your dashboard..."
-        },
-        "error": {
-            "title": "Something went wrong",
-            "retry": "Try again"
-        },
-        "snapshot": {
-            "title": "Today's Snapshot",
-            "activeHabits": "Active Habits",
-            "todaysProgress": "Today's Progress",
-            "currentStreak": "Current Streak",
-            "completionRate": "{percent}% completion rate",
-            "days": "{count} days",
-            "vsYesterday": "{change}% vs yesterday",
-            "fromLastWeek": "+{count} from last week"
-        },
-        "habits": {
-            "title": "Today's Habits",
-            "addHabit": "Add Habit",
-            "completed": "{completed} of {total} completed",
-            "moreToGo": "{count} more to go!",
-            "allComplete": "All habits complete!",
-            "noHabits": "No habits yet",
-            "createFirst": "Create your first habit"
-        },
-        "tasks": {
-            "title": "Today's Tasks",
-            "addTask": "Add Task",
-            "completed": "{completed} of {total} completed",
-            "overdue": "Overdue",
-            "dueAt": "Due {time}",
-            "allDay": "All day",
-            "noTasks": "No tasks for today",
-            "createFirst": "Add a task",
-            "allComplete": "All tasks done!"
-        },
-        "motivation": {
-            "firstDay": "Welcome! Your journey to becoming better starts today. 🌟",
-            "allComplete": "Perfect day! You've completed all your habits. 🎉",
-            "streakAtRisk": "Your {habitName} streak is at {count} days - don't break it now! 🔥",
-            "almostDone": "Just {remaining} more to go! You've got this! 💪",
-            "halfway": "Halfway there! Keep the momentum going. 🚀",
-            "gettingStarted": "Every habit completed brings you closer to your best self. ✨",
-            "noHabits": "Ready to start building better habits? Add your first one! 🌱"
-        }
+    "features": {
+      "freeToUse": "Free to use",
+      "unlimitedHabits": "Track unlimited habits",
+      "visualProgress": "Visual progress tracking",
+      "everythingYouNeed": "Everything You Need to Be Better Every Day",
+      "powerfulTools": "Simple, powerful tools to help you build consistency and make progress every single day.",
+      "dailyTracking": {
+        "title": "Daily Tracking",
+        "description": "Simple one-click habit completion with streak tracking"
+      },
+      "calendarView": {
+        "title": "Calendar View",
+        "description": "Visual monthly overview of your habit completion history"
+      },
+      "customGoals": {
+        "title": "Custom Goals",
+        "description": "Set daily, weekly, or custom frequency goals for each habit"
+      },
+      "progressInsights": {
+        "title": "Progress Insights",
+        "description": "Track streaks and see your improvement over time"
+      },
+      "stayMotivated": {
+        "title": "Stay Motivated",
+        "description": "Build streaks, earn achievements, and stay motivated on your journey."
+      }
+    },
+    "stats": {
+      "joinCommunity": "Join Thousands Building Better Lives",
+      "subtitle": "People around the world are becoming better versions of themselves with BetterR.me",
+      "habitsTracked": "10K+",
+      "habitsTrackedLabel": "Habits Tracked Daily",
+      "activeUsers": "2.5K+",
+      "activeUsersLabel": "Active Users",
+      "successRate": "85%",
+      "successRateLabel": "Success Rate"
+    },
+    "cta": {
+      "title": "Start Being Better Today",
+      "subtitle": "Take the first step towards becoming a better version of yourself. Create your account and start building better habits in minutes.",
+      "button": "Start My Journey"
+    }
+  },
+  "dashboard": {
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "welcome": "Ready to be a little better today? Let's check your progress.",
+    "profile": "Your Profile",
+    "email": "Email",
+    "accountCreated": "Account Created",
+    "empty": {
+      "title": "Welcome to BetterR.Me!",
+      "subtitle": "Start your journey to becoming better. Build habits to track or add tasks to stay on top of your day.",
+      "createHabit": "Create a Habit",
+      "createTask": "Add a Task"
+    },
+    "loading": {
+      "title": "Loading your dashboard..."
+    },
+    "error": {
+      "title": "Something went wrong",
+      "retry": "Try again"
+    },
+    "snapshot": {
+      "title": "Today's Snapshot",
+      "activeHabits": "Active Habits",
+      "todaysProgress": "Today's Progress",
+      "currentStreak": "Current Streak",
+      "completionRate": "{percent}% completion rate",
+      "days": "{count} days",
+      "vsYesterday": "{change}% vs yesterday",
+      "fromLastWeek": "+{count} from last week"
     },
     "habits": {
-        "frequency": {
-            "daily": "Every day",
-            "weekdays": "Mon – Fri",
-            "weekly": "Once a week",
-            "timesPerWeek": "{count} times/week",
-            "custom": "Custom days",
-            "selectedDays": "Selected: {days}",
-            "days": {
-                "sun": "Sun",
-                "mon": "Mon",
-                "tue": "Tue",
-                "wed": "Wed",
-                "thu": "Thu",
-                "fri": "Fri",
-                "sat": "Sat"
-            }
-        },
-        "form": {
-            "createTitle": "Create New Habit",
-            "editTitle": "Edit Habit",
-            "nameLabel": "Habit Name",
-            "namePlaceholder": "e.g., Morning Run, Read 30 mins...",
-            "descriptionLabel": "Description",
-            "descriptionPlaceholder": "Optional notes about this habit",
-            "categoryLabel": "Category",
-            "frequencyLabel": "How often?",
-            "cancel": "Cancel",
-            "create": "Create Habit",
-            "save": "Save Changes",
-            "creating": "Creating...",
-            "saving": "Saving...",
-            "validation": {
-                "nameRequired": "Name is required",
-                "nameMax": "Name must be 100 characters or less",
-                "frequencyRequired": "Please select a frequency",
-                "customDaysRequired": "Select at least one day"
-            }
-        },
-        "card": {
-            "currentStreak": "Current",
-            "bestStreak": "Best",
-            "streakDays": "{count} days",
-            "thisMonth": "{percent}% this month",
-            "completedToday": "Completed today",
-            "markComplete": "Mark complete:"
-        },
-        "categories": {
-            "health": "Health",
-            "wellness": "Wellness",
-            "learning": "Learning",
-            "productivity": "Productivity",
-            "other": "Other"
-        },
-        "heatmap": {
-            "title": "Last 30 Days",
-            "completed": "Completed",
-            "missed": "Missed",
-            "notScheduled": "Not scheduled",
-            "today": "Today",
-            "cannotEdit": "Cannot edit days older than 7 days",
-            "clickToToggle": "Click to toggle",
-            "days": {
-                "sun": "Sun",
-                "mon": "Mon",
-                "tue": "Tue",
-                "wed": "Wed",
-                "thu": "Thu",
-                "fri": "Fri",
-                "sat": "Sat"
-            },
-            "legend": {
-                "completed": "Completed",
-                "missed": "Missed",
-                "notScheduled": "Not scheduled"
-            }
-        },
-        "streak": {
-            "current": "Current Streak",
-            "best": "Best Streak",
-            "days": "{count} days",
-            "personalBest": "Personal best!",
-            "messages": {
-                "zero": "Start today!",
-                "building": "Building momentum!",
-                "almostWeek": "Almost a week!",
-                "keepGoing": "Keep it going!",
-                "incredible": "Incredible consistency!",
-                "unstoppable": "You're unstoppable!",
-                "legendary": "Legendary streak!"
-            }
-        },
-        "empty": {
-            "noHabits": {
-                "title": "Start Your Journey",
-                "description": "Track your first habit and build lasting change.",
-                "cta": "Create First Habit"
-            },
-            "allComplete": {
-                "title": "Perfect Day!",
-                "description": "You've completed all your habits today. Amazing work!"
-            },
-            "noResults": {
-                "title": "No habits matching \"{query}\"",
-                "description": "Try a different search term."
-            },
-            "noPaused": {
-                "title": "No paused habits",
-                "description": "Paused habits will appear here."
-            },
-            "noArchived": {
-                "title": "No archived habits",
-                "description": "Archived habits will appear here."
-            }
-        },
-        "list": {
-            "title": "My Habits",
-            "searchPlaceholder": "Search habits...",
-            "tabs": {
-                "active": "Active",
-                "paused": "Paused",
-                "archived": "Archived"
-            }
-        },
-        "page": {
-            "title": "My Habits",
-            "createButton": "Create Habit"
-        },
-        "detail": {
-            "backToHabits": "Back to Habits",
-            "edit": "Edit",
-            "status": {
-                "active": "Active",
-                "paused": "Paused",
-                "archived": "Archived"
-            },
-            "completion": {
-                "title": "Completion Rate",
-                "thisWeek": "This Week",
-                "thisMonth": "This Month",
-                "allTime": "All Time",
-                "days": "{completed}/{total} days",
-                "percent": "{percent}%"
-            },
-            "actions": {
-                "pause": "Pause Habit",
-                "resume": "Resume Habit",
-                "archive": "Archive Habit",
-                "delete": "Delete Habit"
-            },
-            "confirmArchive": "Are you sure you want to archive this habit?",
-            "confirmDelete": "Are you sure you want to delete this habit? This cannot be undone.",
-            "cannotEditOldLogs": "Cannot edit logs older than 7 days",
-            "notFound": "Habit not found"
-        },
-        "toast": {
-            "createSuccess": "Habit created successfully",
-            "createError": "Failed to create habit",
-            "updateSuccess": "Habit updated successfully",
-            "updateError": "Failed to update habit",
-            "pauseSuccess": "Habit paused",
-            "pauseError": "Failed to pause habit",
-            "resumeSuccess": "Habit resumed",
-            "resumeError": "Failed to resume habit",
-            "archiveSuccess": "Habit archived",
-            "archiveError": "Failed to archive habit",
-            "deleteSuccess": "Habit deleted",
-            "deleteError": "Failed to delete habit"
-        },
-        "error": {
-            "title": "Failed to load habits",
-            "retry": "Try again"
-        },
-        "loading": {
-            "title": "Loading habits..."
-        }
+      "title": "Today's Habits",
+      "addHabit": "Add Habit",
+      "completed": "{completed} of {total} completed",
+      "moreToGo": "{count} more to go!",
+      "allComplete": "All habits complete!",
+      "noHabits": "No habits yet",
+      "createFirst": "Create your first habit"
     },
-    "auth": {
-        "login": {
-            "title": "Login",
-            "description": "Enter your email below to login to your account",
-            "email": "Email",
-            "emailPlaceholder": "m@example.com",
-            "password": "Password",
-            "forgotPassword": "Forgot your password?",
-            "loginButton": "Login",
-            "loggingIn": "Logging in...",
-            "orContinueWith": "Or continue with",
-            "continueWithGoogle": "Continue with Google",
-            "noAccount": "Don't have an account?",
-            "signUp": "Sign up"
-        },
-        "signUp": {
-            "title": "Sign up",
-            "description": "Create a new account",
-            "email": "Email",
-            "emailPlaceholder": "m@example.com",
-            "password": "Password",
-            "repeatPassword": "Repeat Password",
-            "signUpButton": "Sign up",
-            "creatingAccount": "Creating an account...",
-            "orContinueWith": "Or continue with",
-            "continueWithGoogle": "Continue with Google",
-            "haveAccount": "Already have an account?",
-            "login": "Login",
-            "passwordsDoNotMatch": "Passwords do not match"
-        },
-        "forgotPassword": {
-            "title": "Reset Your Password",
-            "description": "Type in your email and we'll send you a link to reset your password",
-            "email": "Email",
-            "emailPlaceholder": "m@example.com",
-            "sendButton": "Send reset email",
-            "sending": "Sending...",
-            "haveAccount": "Already have an account?",
-            "login": "Login",
-            "checkEmail": "Check Your Email",
-            "instructionsSent": "Password reset instructions sent",
-            "emailSentMessage": "If you registered using your email and password, you will receive a password reset email."
-        },
-        "updatePassword": {
-            "title": "Update Password",
-            "description": "Enter your new password below",
-            "password": "New Password",
-            "repeatPassword": "Repeat New Password",
-            "updateButton": "Update Password",
-            "updating": "Updating...",
-            "passwordsDoNotMatch": "Passwords do not match"
-        },
-        "errors": {
-            "generic": "An error occurred",
-            "tryAgain": "Please try again"
-        }
+    "tasks": {
+      "title": "Today's Tasks",
+      "addTask": "Add Task",
+      "completed": "{completed} of {total} completed",
+      "overdue": "Overdue",
+      "dueAt": "Due {time}",
+      "allDay": "All day",
+      "noTasks": "No tasks for today",
+      "createFirst": "Add a task",
+      "allComplete": "All tasks done!"
     },
-    "settings": {
-        "title": "Settings",
-        "error": "Failed to load settings",
-        "save": "Save",
-        "saved": "Saved",
-        "weekStart": {
-            "title": "Week Starts On",
-            "description": "Choose when your week begins for statistics and calendar views",
-            "sunday": "Sunday",
-            "monday": "Monday"
-        },
-        "export": {
-            "title": "Export Data",
-            "description": "Download your habit data as CSV files for backup or analysis",
-            "habits": "Export Habits",
-            "logs": "Export Logs",
-            "success": "Export downloaded successfully",
-            "error": "Failed to export data",
-            "dateRange": "Date Range",
-            "rangeAll": "All Time",
-            "range30": "Last 30 Days",
-            "range90": "Last 90 Days",
-            "range365": "Last Year",
-            "rangeCustom": "Custom Range",
-            "startDate": "Start Date",
-            "endDate": "End Date",
-            "preparing": "Preparing export...",
-            "downloading": "Downloading...",
-            "zip": "Export All (ZIP)"
-        },
-        "toast": {
-            "saveError": "Failed to save settings"
-        }
+    "motivation": {
+      "firstDay": "Welcome! Your journey to becoming better starts today. 🌟",
+      "allComplete": "Perfect day! You've completed all your habits. 🎉",
+      "streakAtRisk": "Your {habitName} streak is at {count} days - don't break it now! 🔥",
+      "almostDone": "Just {remaining} more to go! You've got this! 💪",
+      "halfway": "Halfway there! Keep the momentum going. 🚀",
+      "gettingStarted": "Every habit completed brings you closer to your best self. ✨",
+      "noHabits": "Ready to start building better habits? Add your first one! 🌱"
     }
+  },
+  "habits": {
+    "frequency": {
+      "daily": "Every day",
+      "weekdays": "Mon – Fri",
+      "weekly": "Once a week",
+      "timesPerWeek": "{count} times/week",
+      "custom": "Custom days",
+      "selectedDays": "Selected: {days}",
+      "days": {
+        "sun": "Sun",
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat"
+      }
+    },
+    "form": {
+      "createTitle": "Create New Habit",
+      "editTitle": "Edit Habit",
+      "nameLabel": "Habit Name",
+      "namePlaceholder": "e.g., Morning Run, Read 30 mins...",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Optional notes about this habit",
+      "categoryLabel": "Category",
+      "frequencyLabel": "How often?",
+      "cancel": "Cancel",
+      "create": "Create Habit",
+      "save": "Save Changes",
+      "creating": "Creating...",
+      "saving": "Saving...",
+      "validation": {
+        "nameRequired": "Name is required",
+        "nameMax": "Name must be 100 characters or less",
+        "frequencyRequired": "Please select a frequency",
+        "customDaysRequired": "Select at least one day"
+      }
+    },
+    "card": {
+      "currentStreak": "Current",
+      "bestStreak": "Best",
+      "streakDays": "{count} days",
+      "thisMonth": "{percent}% this month",
+      "completedToday": "Completed today",
+      "markComplete": "Mark complete:"
+    },
+    "categories": {
+      "health": "Health",
+      "wellness": "Wellness",
+      "learning": "Learning",
+      "productivity": "Productivity",
+      "other": "Other"
+    },
+    "heatmap": {
+      "title": "Last 30 Days",
+      "completed": "Completed",
+      "missed": "Missed",
+      "notScheduled": "Not scheduled",
+      "today": "Today",
+      "cannotEdit": "Cannot edit days older than 7 days",
+      "clickToToggle": "Click to toggle",
+      "days": {
+        "sun": "Sun",
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat"
+      },
+      "legend": {
+        "completed": "Completed",
+        "missed": "Missed",
+        "notScheduled": "Not scheduled"
+      }
+    },
+    "streak": {
+      "current": "Current Streak",
+      "best": "Best Streak",
+      "days": "{count} days",
+      "personalBest": "Personal best!",
+      "messages": {
+        "zero": "Start today!",
+        "building": "Building momentum!",
+        "almostWeek": "Almost a week!",
+        "keepGoing": "Keep it going!",
+        "incredible": "Incredible consistency!",
+        "unstoppable": "You're unstoppable!",
+        "legendary": "Legendary streak!"
+      }
+    },
+    "empty": {
+      "noHabits": {
+        "title": "Start Your Journey",
+        "description": "Track your first habit and build lasting change.",
+        "cta": "Create First Habit"
+      },
+      "allComplete": {
+        "title": "Perfect Day!",
+        "description": "You've completed all your habits today. Amazing work!"
+      },
+      "noResults": {
+        "title": "No habits matching \"{query}\"",
+        "description": "Try a different search term."
+      },
+      "noPaused": {
+        "title": "No paused habits",
+        "description": "Paused habits will appear here."
+      },
+      "noArchived": {
+        "title": "No archived habits",
+        "description": "Archived habits will appear here."
+      }
+    },
+    "list": {
+      "title": "My Habits",
+      "searchPlaceholder": "Search habits...",
+      "tabs": {
+        "active": "Active",
+        "paused": "Paused",
+        "archived": "Archived"
+      }
+    },
+    "page": {
+      "title": "My Habits",
+      "createButton": "Create Habit"
+    },
+    "detail": {
+      "backToHabits": "Back to Habits",
+      "edit": "Edit",
+      "status": {
+        "active": "Active",
+        "paused": "Paused",
+        "archived": "Archived"
+      },
+      "completion": {
+        "title": "Completion Rate",
+        "thisWeek": "This Week",
+        "thisMonth": "This Month",
+        "allTime": "All Time",
+        "days": "{completed}/{total} days",
+        "percent": "{percent}%"
+      },
+      "actions": {
+        "pause": "Pause Habit",
+        "resume": "Resume Habit",
+        "archive": "Archive Habit",
+        "delete": "Delete Habit"
+      },
+      "confirmArchive": "Are you sure you want to archive this habit?",
+      "confirmDelete": "Are you sure you want to delete this habit? This cannot be undone.",
+      "cannotEditOldLogs": "Cannot edit logs older than 7 days",
+      "notFound": "Habit not found"
+    },
+    "toast": {
+      "createSuccess": "Habit created successfully",
+      "createError": "Failed to create habit",
+      "updateSuccess": "Habit updated successfully",
+      "updateError": "Failed to update habit",
+      "pauseSuccess": "Habit paused",
+      "pauseError": "Failed to pause habit",
+      "resumeSuccess": "Habit resumed",
+      "resumeError": "Failed to resume habit",
+      "archiveSuccess": "Habit archived",
+      "archiveError": "Failed to archive habit",
+      "deleteSuccess": "Habit deleted",
+      "deleteError": "Failed to delete habit"
+    },
+    "error": {
+      "title": "Failed to load habits",
+      "retry": "Try again"
+    },
+    "loading": {
+      "title": "Loading habits..."
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Login",
+      "description": "Enter your email below to login to your account",
+      "email": "Email",
+      "emailPlaceholder": "m@example.com",
+      "password": "Password",
+      "forgotPassword": "Forgot your password?",
+      "loginButton": "Login",
+      "loggingIn": "Logging in...",
+      "orContinueWith": "Or continue with",
+      "continueWithGoogle": "Continue with Google",
+      "noAccount": "Don't have an account?",
+      "signUp": "Sign up"
+    },
+    "signUp": {
+      "title": "Sign up",
+      "description": "Create a new account",
+      "email": "Email",
+      "emailPlaceholder": "m@example.com",
+      "password": "Password",
+      "repeatPassword": "Repeat Password",
+      "signUpButton": "Sign up",
+      "creatingAccount": "Creating an account...",
+      "orContinueWith": "Or continue with",
+      "continueWithGoogle": "Continue with Google",
+      "haveAccount": "Already have an account?",
+      "login": "Login",
+      "passwordsDoNotMatch": "Passwords do not match"
+    },
+    "forgotPassword": {
+      "title": "Reset Your Password",
+      "description": "Type in your email and we'll send you a link to reset your password",
+      "email": "Email",
+      "emailPlaceholder": "m@example.com",
+      "sendButton": "Send reset email",
+      "sending": "Sending...",
+      "haveAccount": "Already have an account?",
+      "login": "Login",
+      "checkEmail": "Check Your Email",
+      "instructionsSent": "Password reset instructions sent",
+      "emailSentMessage": "If you registered using your email and password, you will receive a password reset email."
+    },
+    "updatePassword": {
+      "title": "Update Password",
+      "description": "Enter your new password below",
+      "password": "New Password",
+      "repeatPassword": "Repeat New Password",
+      "updateButton": "Update Password",
+      "updating": "Updating...",
+      "passwordsDoNotMatch": "Passwords do not match"
+    },
+    "errors": {
+      "generic": "An error occurred",
+      "tryAgain": "Please try again"
+    }
+  },
+  "tasks": {
+    "form": {
+      "createTitle": "Create New Task",
+      "editTitle": "Edit Task",
+      "titleLabel": "Task Title",
+      "titlePlaceholder": "e.g., Buy groceries, Finish report...",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Optional notes about this task",
+      "categoryLabel": "Category",
+      "priorityLabel": "Priority",
+      "dueDateLabel": "Due Date",
+      "dueTimeLabel": "Due Time",
+      "cancel": "Cancel",
+      "create": "Create Task",
+      "save": "Save Changes",
+      "creating": "Creating...",
+      "saving": "Saving..."
+    },
+    "categories": {
+      "work": "Work",
+      "personal": "Personal",
+      "shopping": "Shopping",
+      "other": "Other"
+    },
+    "priorities": {
+      "0": "None",
+      "1": "Low",
+      "2": "Medium",
+      "3": "High"
+    },
+    "toast": {
+      "createSuccess": "Task created successfully",
+      "createError": "Failed to create task"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "error": "Failed to load settings",
+    "save": "Save",
+    "saved": "Saved",
+    "weekStart": {
+      "title": "Week Starts On",
+      "description": "Choose when your week begins for statistics and calendar views",
+      "sunday": "Sunday",
+      "monday": "Monday"
+    },
+    "export": {
+      "title": "Export Data",
+      "description": "Download your habit data as CSV files for backup or analysis",
+      "habits": "Export Habits",
+      "logs": "Export Logs",
+      "success": "Export downloaded successfully",
+      "error": "Failed to export data",
+      "dateRange": "Date Range",
+      "rangeAll": "All Time",
+      "range30": "Last 30 Days",
+      "range90": "Last 90 Days",
+      "range365": "Last Year",
+      "rangeCustom": "Custom Range",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "preparing": "Preparing export...",
+      "downloading": "Downloading...",
+      "zip": "Export All (ZIP)"
+    },
+    "toast": {
+      "saveError": "Failed to save settings"
+    }
+  }
 }
