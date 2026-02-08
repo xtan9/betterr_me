@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { login, ensureAuthenticated } from './helpers/auth';
 
 /**
  * QA-001: E2E test - Create habit flow
@@ -14,10 +13,6 @@ import { login, ensureAuthenticated } from './helpers/auth';
  */
 
 test.describe('Create Habit Flow', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('should navigate to create habit page from habits list', async ({ page }) => {
     await page.goto('/habits');
     await page.getByRole('button', { name: /create habit/i }).click();

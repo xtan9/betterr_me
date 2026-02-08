@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { ensureAuthenticated } from './helpers/auth';
 
 /**
  * QA-007: Mobile responsive testing
@@ -22,12 +21,12 @@ const VIEWPORTS = {
   'desktop': { width: 1280, height: 800 },
 };
 
-const PAGES = [
-  { name: 'Dashboard', path: '/dashboard', requiresAuth: true },
-  { name: 'Habits', path: '/habits', requiresAuth: true },
-  { name: 'Create Habit', path: '/habits/new', requiresAuth: true },
-  { name: 'Settings', path: '/dashboard/settings', requiresAuth: true },
-  { name: 'Login', path: '/auth/login', requiresAuth: false },
+// Authenticated pages use storageState from config; login page needs unauthenticated state
+const AUTH_PAGES = [
+  { name: 'Dashboard', path: '/dashboard' },
+  { name: 'Habits', path: '/habits' },
+  { name: 'Create Habit', path: '/habits/new' },
+  { name: 'Settings', path: '/dashboard/settings' },
 ];
 
 for (const [viewportName, viewport] of Object.entries(VIEWPORTS)) {
@@ -36,11 +35,8 @@ for (const [viewportName, viewport] of Object.entries(VIEWPORTS)) {
       await page.setViewportSize(viewport);
     });
 
-    for (const pageConfig of PAGES) {
+    for (const pageConfig of AUTH_PAGES) {
       test(`${pageConfig.name}: no horizontal scroll`, async ({ page }) => {
-        if (pageConfig.requiresAuth) {
-          await ensureAuthenticated(page);
-        }
         await page.goto(pageConfig.path);
         await page.waitForLoadState('networkidle');
 
@@ -52,9 +48,6 @@ for (const [viewportName, viewport] of Object.entries(VIEWPORTS)) {
       });
 
       test(`${pageConfig.name}: no content overflow`, async ({ page }) => {
-        if (pageConfig.requiresAuth) {
-          await ensureAuthenticated(page);
-        }
         await page.goto(pageConfig.path);
         await page.waitForLoadState('networkidle');
 
@@ -79,13 +72,52 @@ for (const [viewportName, viewport] of Object.entries(VIEWPORTS)) {
       });
     }
   });
+
+  // Login page tests — unauthenticated to ensure we see the actual login page
+  test.describe(`Responsive - ${viewportName} (${viewport.width}px) - Login`, () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+
+    test.beforeEach(async ({ page }) => {
+      await page.setViewportSize(viewport);
+    });
+
+    test('Login: no horizontal scroll', async ({ page }) => {
+      await page.goto('/auth/login');
+      await page.waitForLoadState('networkidle');
+
+      const hasHorizontalScroll = await page.evaluate(() => {
+        return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+      });
+
+      expect(hasHorizontalScroll).toBe(false);
+    });
+
+    test('Login: no content overflow', async ({ page }) => {
+      await page.goto('/auth/login');
+      await page.waitForLoadState('networkidle');
+
+      const overflowElements = await page.evaluate(() => {
+        const body = document.body;
+        const bodyWidth = body.clientWidth;
+        let overflowCount = 0;
+
+        const elements = document.querySelectorAll('body > *, main > *, main > * > *');
+        elements.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          if (rect.right > bodyWidth + 5) {
+            overflowCount++;
+          }
+        });
+
+        return overflowCount;
+      });
+
+      expect(overflowElements).toBe(0);
+    });
+  });
 }
 
 test.describe('Responsive - Dashboard Layout', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('stat cards should use 2-column grid on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/dashboard');
@@ -133,10 +165,6 @@ test.describe('Responsive - Dashboard Layout', () => {
 });
 
 test.describe('Responsive - Habits Page', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('habit cards should stack on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/habits');
@@ -189,10 +217,6 @@ test.describe('Responsive - Habits Page', () => {
 });
 
 test.describe('Responsive - Create Habit Form', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('form fields should be full width on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/habits/new');
@@ -244,10 +268,6 @@ test.describe('Responsive - Create Habit Form', () => {
 });
 
 test.describe('Responsive - Navigation', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('navigation should work on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/dashboard');

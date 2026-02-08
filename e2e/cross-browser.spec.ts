@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { ensureAuthenticated } from './helpers/auth';
 
 /**
  * QA-006: Cross-browser testing
@@ -18,12 +17,8 @@ import { ensureAuthenticated } from './helpers/auth';
  */
 
 test.describe('Cross-Browser - Core Functionality', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('login flow completes successfully', async ({ page }) => {
-    // Already authenticated in beforeEach
+    // Already authenticated via storageState
     await page.goto('/dashboard');
     await expect(page).toHaveURL('/dashboard');
   });
@@ -76,10 +71,6 @@ test.describe('Cross-Browser - Core Functionality', () => {
 });
 
 test.describe('Cross-Browser - Visual Consistency', () => {
-  test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
-  });
-
   test('fonts render correctly', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
@@ -141,7 +132,6 @@ test.describe('Cross-Browser - Visual Consistency', () => {
 
 test.describe('Cross-Browser - Form Behavior', () => {
   test('input validation displays correctly', async ({ page }) => {
-    await ensureAuthenticated(page);
     await page.goto('/habits/new');
     await page.waitForLoadState('networkidle');
 
@@ -159,7 +149,6 @@ test.describe('Cross-Browser - Form Behavior', () => {
   });
 
   test('date inputs work correctly', async ({ page }) => {
-    await ensureAuthenticated(page);
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
@@ -173,7 +162,6 @@ test.describe('Cross-Browser - Form Behavior', () => {
   });
 
   test('focus styles are consistent', async ({ page }) => {
-    await ensureAuthenticated(page);
     await page.goto('/habits/new');
     await page.waitForLoadState('networkidle');
 

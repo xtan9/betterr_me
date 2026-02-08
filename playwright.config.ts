@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const STORAGE_STATE = 'e2e/.auth/user.json';
+
 /**
  * Playwright configuration for E2E testing
  * Covers QA-001 through QA-003 (E2E tests), QA-006 (cross-browser), QA-007 (mobile responsive)
@@ -20,48 +22,62 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
-  /* QA-006: Cross-browser testing - Chrome, Firefox, Safari */
   projects: [
+    // Auth setup — runs once, saves session for all browser projects
+    {
+      name: 'setup',
+      testMatch: /.*\.setup\.ts/,
+    },
+
     // Desktop browsers
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
     },
     {
       name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Firefox'], storageState: STORAGE_STATE },
     },
     {
       name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Safari'], storageState: STORAGE_STATE },
     },
 
     // QA-007: Mobile responsive testing
     {
       name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
+      dependencies: ['setup'],
+      use: { ...devices['Pixel 5'], storageState: STORAGE_STATE },
     },
     {
       name: 'mobile-safari',
-      use: { ...devices['iPhone 12'] },
+      dependencies: ['setup'],
+      use: { ...devices['iPhone 12'], storageState: STORAGE_STATE },
     },
 
     // QA-007: Tablet viewport
     {
       name: 'tablet',
+      dependencies: ['setup'],
       use: {
         ...devices['iPad (gen 7)'],
+        storageState: STORAGE_STATE,
       },
     },
 
     // QA-007: Small mobile (375px minimum supported width)
     {
       name: 'mobile-small',
+      dependencies: ['setup'],
       use: {
         viewport: { width: 375, height: 667 },
         userAgent: devices['iPhone SE'].userAgent,
         isMobile: true,
         hasTouch: true,
+        storageState: STORAGE_STATE,
       },
     },
   ],
