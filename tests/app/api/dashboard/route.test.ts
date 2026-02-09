@@ -39,8 +39,8 @@ describe('GET /api/dashboard', () => {
 
   it('should return aggregated dashboard data', async () => {
     const habits = [
-      { id: 'h1', name: 'Run', current_streak: 5, completed_today: true },
-      { id: 'h2', name: 'Read', current_streak: 3, completed_today: false },
+      { id: 'h1', name: 'Run', current_streak: 5, completed_today: true, monthly_completion_rate: 80 },
+      { id: 'h2', name: 'Read', current_streak: 3, completed_today: false, monthly_completion_rate: 60 },
     ];
     const todayTasks = [{ id: 't1', title: 'Task 1', is_completed: false }];
     const todayDateTasks = [

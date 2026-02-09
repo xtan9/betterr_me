@@ -68,6 +68,7 @@ describe('HabitList', () => {
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     completed_today: false,
+    monthly_completion_rate: 75,
     ...overrides,
   });
 
@@ -89,11 +90,6 @@ describe('HabitList', () => {
   });
 
   describe('rendering', () => {
-    it('renders the title', () => {
-      render(<HabitList {...defaultProps} />);
-      expect(screen.getByText('My Habits')).toBeInTheDocument();
-    });
-
     it('renders status tabs', () => {
       render(<HabitList {...defaultProps} />);
       expect(screen.getByRole('tab', { name: /Active/i })).toBeInTheDocument();

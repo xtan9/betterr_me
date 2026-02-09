@@ -91,6 +91,7 @@ const mockHabits = [
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     completed_today: true,
+    monthly_completion_rate: 80,
   },
   {
     id: "2",
@@ -106,6 +107,7 @@ const mockHabits = [
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     completed_today: false,
+    monthly_completion_rate: 40,
   },
 ];
 

@@ -74,7 +74,7 @@ export function HabitsPageContent() {
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">{t("page.title")}</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">{t("page.title")}</h1>
         <Button onClick={handleCreateHabit}>
           <Plus className="size-4 mr-2" />
           {t("page.createButton")}

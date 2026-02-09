@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Habit, HabitInsert, HabitUpdate, HabitFilters, HabitWithTodayStatus } from './types';
+import type { HabitFrequency } from './types';
 import { getLocalDateString } from '@/lib/utils';
+import { shouldTrackOnDate } from '@/lib/habits/format';
 
 export class HabitsDB {
   private supabase: SupabaseClient;
@@ -168,14 +170,76 @@ export class HabitsDB {
 
     if (logsError) throw logsError;
 
+    // Get this month's logs for progress bars
+    const monthStart = today.substring(0, 7) + '-01';
+    const { data: monthLogs, error: monthLogsError } = await this.supabase
+      .from('habit_logs')
+      .select('habit_id, logged_date, completed')
+      .eq('user_id', userId)
+      .gte('logged_date', monthStart)
+      .lte('logged_date', today)
+      .eq('completed', true);
+
+    if (monthLogsError) throw monthLogsError;
+
+    // Count completed days per habit this month
+    const monthlyCompletions = new Map<string, number>();
+    (monthLogs || []).forEach(log => {
+      monthlyCompletions.set(log.habit_id, (monthlyCompletions.get(log.habit_id) || 0) + 1);
+    });
+
     // Create a set of completed habit IDs
     const completedHabitIds = new Set((logs || []).map(log => log.habit_id));
 
-    // Add today status to each habit
-    return habits.map(habit => ({
-      ...habit,
-      completed_today: completedHabitIds.has(habit.id),
-    }));
+    // Count scheduled days per frequency for the month so far
+    const scheduledDaysCache = new Map<string, number>();
+    const getScheduledDays = (frequency: HabitFrequency): number => {
+      const key = JSON.stringify(frequency);
+      if (scheduledDaysCache.has(key)) return scheduledDaysCache.get(key)!;
+
+      if (frequency.type === 'times_per_week') {
+        // Count full weeks from month start to today, multiply by target
+        const [y, m, d] = today.split('-').map(Number);
+        const start = new Date(y, m - 1, 1);
+        const end = new Date(y, m - 1, d);
+        let weeks = 0;
+        const cursor = new Date(start);
+        while (cursor <= end) {
+          if (cursor.getDay() === 1) weeks++; // count Mondays as week markers
+          cursor.setDate(cursor.getDate() + 1);
+        }
+        // At minimum 1 partial week if we have any days
+        const scheduled = Math.max(weeks, 1) * frequency.count;
+        scheduledDaysCache.set(key, scheduled);
+        return scheduled;
+      }
+
+      // For daily, weekdays, weekly, custom — count days shouldTrackOnDate returns true
+      const [y, m, d] = today.split('-').map(Number);
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m - 1, d);
+      let count = 0;
+      const cursor = new Date(start);
+      while (cursor <= end) {
+        if (shouldTrackOnDate(frequency, cursor)) count++;
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      scheduledDaysCache.set(key, count);
+      return count;
+    };
+
+    // Add today status and monthly rate to each habit
+    return habits.map(habit => {
+      const scheduled = getScheduledDays(habit.frequency);
+      const completed = monthlyCompletions.get(habit.id) || 0;
+      return {
+        ...habit,
+        completed_today: completedHabitIds.has(habit.id),
+        monthly_completion_rate: scheduled > 0
+          ? Math.min(Math.round((completed / scheduled) * 100), 100)
+          : 0,
+      };
+    });
   }
 
   /**

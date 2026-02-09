@@ -139,6 +139,7 @@ export type HabitLogUpdate = Partial<Pick<HabitLog, 'completed'>>;
 
 export interface HabitWithTodayStatus extends Habit {
   completed_today: boolean;
+  monthly_completion_rate: number; // 0-100, percentage of days completed this month
 }
 
 export interface HabitWithLogs extends Habit {

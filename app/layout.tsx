@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Lexend } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getLocale } from 'next-intl/server';
@@ -22,6 +22,12 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const lexend = Lexend({
+  variable: "--font-display",
+  display: "swap",
+  subsets: ["latin"],
+});
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -39,7 +45,7 @@ export default async function RootLayout({
 
   return (
     <html lang={langMap[locale as keyof typeof langMap]} suppressHydrationWarning>
-      <body className={`${inter.className} antialiased`}>
+      <body className={`${inter.className} ${lexend.variable} antialiased`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider
             attribute="class"

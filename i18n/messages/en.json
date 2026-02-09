@@ -7,7 +7,8 @@
       "dashboard": "Dashboard",
       "habits": "Habits",
       "settings": "Settings",
-      "learnMore": "Learn More"
+      "learnMore": "Learn More",
+      "profile": "Profile"
     },
     "footer": {
       "product": "Product",
@@ -122,6 +123,8 @@
       "completed": "{completed} of {total} completed",
       "moreToGo": "{count} more to go!",
       "allComplete": "All habits complete!",
+      "perfectDay": "Perfect day!",
+      "allCompletedDesc": "You completed all {count} habits today.",
       "noHabits": "No habits yet",
       "createFirst": "Create your first habit"
     },

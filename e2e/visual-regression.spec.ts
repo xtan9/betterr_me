@@ -85,6 +85,7 @@ test.describe('Visual Regression', () => {
         // Mask only dynamic sub-elements, not entire cards
         page.locator('[role="checkbox"]'),
         page.locator('[data-testid="habit-streaks"]'),
+        page.locator('[data-testid="habit-monthly-progress"]'),
       ],
     });
   });
