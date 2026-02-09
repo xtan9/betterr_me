@@ -6,6 +6,16 @@ const SEED_HABITS = [
   { name: 'E2E Test - Seed Habit 3', category: 'learning' },
 ];
 
+const SEED_TASKS = [
+  {
+    title: 'E2E Test - Seed Task 1',
+    description: 'Seeded for E2E testing',
+    priority: 2,
+    category: 'work',
+    is_completed: false,
+  },
+];
+
 /**
  * Global setup for E2E tests.
  * Seeds the test account with a few habits so that tests expecting
@@ -68,6 +78,37 @@ async function globalSetup() {
         console.error('[setup] Failed to seed habits:', insertError.message);
       } else {
         console.log(`[setup] Seeded ${toInsert.length} habit(s)`);
+      }
+
+      // --- Seed tasks ---
+      const { data: existingTasks } = await supabase
+        .from('tasks')
+        .select('title')
+        .eq('user_id', userId)
+        .in('title', SEED_TASKS.map((t) => t.title));
+
+      const existingTaskTitles = new Set((existingTasks ?? []).map((t) => t.title));
+      const tasksToInsert = SEED_TASKS.filter((t) => !existingTaskTitles.has(t.title));
+
+      if (tasksToInsert.length === 0) {
+        console.log('[setup] Seed tasks already exist — skipping');
+      } else {
+        const { error: taskInsertError } = await supabase.from('tasks').insert(
+          tasksToInsert.map((t) => ({
+            user_id: userId,
+            title: t.title,
+            description: t.description,
+            priority: t.priority,
+            category: t.category,
+            is_completed: t.is_completed,
+          }))
+        );
+
+        if (taskInsertError) {
+          console.error('[setup] Failed to seed tasks:', taskInsertError.message);
+        } else {
+          console.log(`[setup] Seeded ${tasksToInsert.length} task(s)`);
+        }
       }
     } finally {
       await supabase.auth.signOut();
