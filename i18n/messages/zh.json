@@ -448,6 +448,20 @@
       "downloading": "正在下载...",
       "zip": "导出全部 (ZIP)"
     },
+    "profile": {
+      "title": "个人资料",
+      "description": "管理你的个人信息",
+      "fullName": "显示名称",
+      "fullNamePlaceholder": "输入你的名字",
+      "email": "邮箱",
+      "emailDescription": "你的邮箱地址无法在此修改",
+      "avatarUrl": "头像链接",
+      "avatarUrlPlaceholder": "https://example.com/avatar.jpg",
+      "save": "保存资料",
+      "saving": "正在保存...",
+      "success": "个人资料更新成功",
+      "error": "更新个人资料失败"
+    },
     "toast": {
       "saveError": "保存设置失败"
     }

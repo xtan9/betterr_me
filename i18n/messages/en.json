@@ -448,6 +448,20 @@
       "downloading": "Downloading...",
       "zip": "Export All (ZIP)"
     },
+    "profile": {
+      "title": "Profile",
+      "description": "Manage your personal information",
+      "fullName": "Display Name",
+      "fullNamePlaceholder": "Enter your name",
+      "email": "Email",
+      "emailDescription": "Your email address cannot be changed here",
+      "avatarUrl": "Avatar URL",
+      "avatarUrlPlaceholder": "https://example.com/avatar.jpg",
+      "save": "Save Profile",
+      "saving": "Saving...",
+      "success": "Profile updated successfully",
+      "error": "Failed to update profile"
+    },
     "toast": {
       "saveError": "Failed to save settings"
     }
