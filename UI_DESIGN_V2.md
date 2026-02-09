@@ -173,10 +173,10 @@ The current `main-nav.tsx` uses `hidden md:flex` — on screens below 768px, the
 │                                             │
 ├─────────────────────────────────────────────┤  ← top border (border-t)
 │                                             │
-│  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐
-│  │  🏠    │  │  📋    │  │  ⚙️    │  │  👤    │
-│  │  Home  │  │ Habits │  │Settings│  │Profile │
-│  └────────┘  └────────┘  └────────┘  └────────┘
+│     ┌────────┐    ┌────────┐    ┌────────┐
+│     │  🏠    │    │  📋    │    │  ⚙️    │
+│     │  Home  │    │ Habits │    │Settings│
+│     └────────┘    └────────┘    └────────┘
 │                                             │
 │            (safe area inset)                │
 └─────────────────────────────────────────────┘
@@ -201,10 +201,10 @@ The current `main-nav.tsx` uses `hidden md:flex` — on screens below 768px, the
 | Home | `Home` (lucide) | Dashboard* | `/dashboard` | `pathname === "/dashboard"` |
 | Habits | `ClipboardList` (lucide) | Habits | `/habits` | `pathname.startsWith("/habits")` |
 | Settings | `Settings` (lucide) | Settings | `/dashboard/settings` | `pathname.startsWith("/dashboard/settings")` |
-| Profile | `User` (lucide) | Profile** | `/dashboard/settings` | — (shares route with settings) |
 
-*Uses existing `common.nav.dashboard` translation key
-**Requires new `common.nav.profile` translation key in all 3 locales
+*Uses existing `common.nav.dashboard`, `common.nav.habits`, `common.nav.settings` translation keys
+
+**Design decision:** 3 tabs, not 4. The Profile tab from V1 wireframes is omitted because: (a) there is no separate `/profile` page — it would go to the same `/dashboard/settings` route as Settings, creating a confusing duplicate; (b) the profile avatar is already visible in the header on all viewports; (c) 3 tabs is cleaner and avoids the awkward "two tabs, same destination" problem.
 
 ### 4.5 Active/Inactive States
 
@@ -260,8 +260,8 @@ This adds 80px of padding on mobile (enough for 64px nav + 16px breathing room) 
 │ (scrollable)                    │
 │                                 │
 ├─────────────────────────────────┤
-│  [🏠]    [📋]    [⚙️]    [👤]  │
-│  Home   Habits  Settings Profile│
+│    [🏠]     [📋]      [⚙️]    │
+│    Home    Habits    Settings   │
 └─────────────────────────────────┘
 ```
 
@@ -461,13 +461,15 @@ transition-all hover:shadow-lg hover:scale-[1.03] hover:-translate-y-0.5 duratio
 
 ### 6.3 Landing Page Color Alignment
 
-**Current:** Landing page uses `blue-600` for:
+**Current:** Landing page uses `blue-600` throughout:
 - Hero CTA button: `bg-blue-600 hover:bg-blue-700`
 - Hero gradient text: `from-blue-600 to-purple-600`
 - Hero background: `from-blue-50 ... to-purple-50`
 - Feature icons: `text-blue-600`
 - Stats section: `bg-blue-600 text-white`
 - CTA button: `bg-blue-600 hover:bg-blue-700`
+- Landing navbar logo: `text-blue-600` (`navbar.tsx:10`)
+- Footer link hovers: `hover:text-blue-600` (`footer.tsx`, 20+ occurrences)
 
 **V2:** Shift to emerald to match the new app-wide primary:
 
@@ -480,6 +482,8 @@ transition-all hover:shadow-lg hover:scale-[1.03] hover:-translate-y-0.5 duratio
 | Stats section | `bg-blue-600` | `bg-emerald-600` |
 | Stats subtitle | `text-blue-100` | `text-emerald-100` |
 | CTA button | `bg-blue-600 hover:bg-blue-700` | `bg-emerald-600 hover:bg-emerald-700` |
+| Landing navbar logo | `text-blue-600` | `text-emerald-600` |
+| Footer link hovers | `hover:text-blue-600` | `hover:text-emerald-600` |
 
 ### 6.4 App Header Logo Color
 
@@ -559,7 +563,7 @@ All V2 changes maintain dark mode parity:
 
 | Key | EN | ZH (Simplified) | ZH-TW (Traditional) |
 |-----|----|----|------|
-| `common.nav.profile` | Profile | 个人资料 | 個人資料 |
+| `common.nav.profile` | Profile | 个人资料 | 個人資料 | (for profile dropdown item — currently hardcoded English)
 | `habits.card.thisMonth` | This month | 本月 | 本月 |
 | `dashboard.habits.perfectDay` | Perfect day! | 完美的一天！ | 完美的一天！ |
 | `dashboard.habits.allCompletedDesc` | You completed all {count} habits today. | 你今天完成了所有 {count} 个习惯。 | 你今天完成了所有 {count} 個習慣。 |

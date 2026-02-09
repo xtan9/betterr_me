@@ -18,7 +18,7 @@ This plan implements UI/UX improvements across 5 phases:
 4. **Phase 4:** Bug fixes — broken dropdown links, duplicate title, landing page colors (P2)
 5. **Phase 5:** Celebration animations (P3 — deferred, requires framer-motion)
 
-**Estimated scope:** ~15 files modified, 2 files created, 1 new component, 1 backend enhancement.
+**Estimated scope:** ~20 files modified, 2 files created, 1 new component, 1 backend enhancement.
 
 ---
 
@@ -39,14 +39,13 @@ This plan implements UI/UX improvements across 5 phases:
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, ClipboardList, Settings, User } from "lucide-react";
+import { Home, ClipboardList, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", icon: Home, labelKey: "dashboard", match: (p: string) => p === "/dashboard" },
   { href: "/habits", icon: ClipboardList, labelKey: "habits", match: (p: string) => p.startsWith("/habits") },
   { href: "/dashboard/settings", icon: Settings, labelKey: "settings", match: (p: string) => p.startsWith("/dashboard/settings") },
-  { href: "/dashboard/settings", icon: User, labelKey: "profile", match: () => false }, // profile shares settings route
 ];
 
 export function MobileBottomNav() {
@@ -89,7 +88,7 @@ export function MobileBottomNav() {
 - `aria-current="page"` for screen reader announcement of active tab
 - `pb-[env(safe-area-inset-bottom)]` for iOS home indicator
 - Emerald-600/400 active states to match the app's completion color
-- Profile tab navigates to `/dashboard/settings` (no separate profile page)
+- 3 tabs only — Profile tab omitted (no separate `/profile` page; would duplicate Settings destination)
 
 ### 2.3 Modify `components/layouts/app-layout.tsx`
 
@@ -127,7 +126,7 @@ export function MobileBottomNav() {
 
 ### 2.4 i18n Changes
 
-Add `"profile"` key to `common.nav` in all 3 locale files:
+Add `"profile"` key to `common.nav` in all 3 locale files (used by the profile dropdown item in `profile-avatar.tsx`, which currently has hardcoded English text):
 
 | File | Key | Value |
 |------|-----|-------|
@@ -135,13 +134,15 @@ Add `"profile"` key to `common.nav` in all 3 locale files:
 | `i18n/messages/zh.json` | `common.nav.profile` | `"个人资料"` |
 | `i18n/messages/zh-TW.json` | `common.nav.profile` | `"個人資料"` |
 
+**Note:** The bottom nav itself only uses 3 existing keys (`dashboard`, `habits`, `settings`). The `profile` key is for the avatar dropdown.
+
 ### 2.5 Test Plan
 
 **Create `tests/components/mobile-bottom-nav.test.tsx`:**
 
 | Test Case | Assertion |
 |-----------|-----------|
-| Renders all 4 nav items | 4 links present with correct hrefs |
+| Renders all 3 nav items | 3 links present with correct hrefs |
 | Highlights active tab based on pathname | Dashboard link gets active class when pathname is `/dashboard` |
 | Habits tab active for nested routes | Active when pathname is `/habits/abc-123` |
 | Correct icon rendering | Each tab renders its lucide icon |
@@ -701,6 +702,18 @@ Replace all blue references with emerald:
 |------|---------|-----|
 | 15 | `from-blue-600 to-purple-600` (logo gradient) | `from-emerald-600 to-teal-500` |
 
+**File: `components/navbar.tsx`** (landing page navbar)
+
+| Line | Current | New |
+|------|---------|-----|
+| 10 | `text-blue-600` (logo text) | `text-emerald-600` |
+
+**File: `components/footer.tsx`** (landing page footer)
+
+| Lines | Current | New |
+|-------|---------|-----|
+| 20, 28, 34, 39, 50, 55, 60, 65, 76, 81, 86, 91, 102, 107, 112, 117, 127, 130, 133 | `hover:text-blue-600` (link hovers) | `hover:text-emerald-600` |
+
 ### 9.4 Files Changed
 
 | File | Action | Lines Changed (est.) |
@@ -710,6 +723,8 @@ Replace all blue references with emerald:
 | `components/hero.tsx` | Modify | ~5 |
 | `app/page.tsx` | Modify | ~6 |
 | `components/layouts/app-layout.tsx` | Modify | 1 |
+| `components/navbar.tsx` | Modify | 1 |
+| `components/footer.tsx` | Modify | ~19 (replace_all) |
 
 ---
 
@@ -854,10 +869,12 @@ All changes can be reverted by reverting the Git commits. The CSS variable chang
 | `components/hero.tsx` | 2A, 4 | Modify |
 | `app/page.tsx` | 4 | Modify |
 | `components/profile-avatar.tsx` | 4 | Modify |
+| `components/navbar.tsx` | 4 | Modify |
+| `components/footer.tsx` | 4 | Modify |
 | `lib/db/types.ts` | 3C | Modify |
 | `lib/db/habits.ts` | 3C | Modify |
 
-**Total: 20 files (2 new, 18 modified)**
+**Total: 22 files (2 new, 20 modified)**
 
 ---
 
