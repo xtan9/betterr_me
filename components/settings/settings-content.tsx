@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ProfileForm } from "./profile-form";
 import { WeekStartSelector } from "./week-start-selector";
 import { DataExport } from "./data-export";
 import { CheckCircle, Loader2, Save } from "lucide-react";
@@ -103,6 +104,16 @@ export function SettingsContent() {
           {saveSuccess ? t("saved") : t("save")}
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("profile.title")}</CardTitle>
+          <CardDescription>{t("profile.description")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ProfileForm />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
