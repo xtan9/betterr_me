@@ -4,8 +4,8 @@ const TEST_DATA_PREFIX = 'E2E Test -';
 
 /**
  * Global teardown for E2E tests.
- * Deletes all habits (and their logs) matching the "E2E Test -" prefix
- * so each test run starts with a clean slate.
+ * Deletes all habits (and their logs) and tasks matching the "E2E Test -"
+ * prefix so each test run starts with a clean slate.
  *
  * This teardown warns gracefully on missing credentials — a
  * teardown failure should never mask actual test results.
@@ -75,6 +75,32 @@ async function globalTeardown() {
         console.error('[teardown] Failed to delete habits:', deleteError.message);
       } else {
         console.log(`[teardown] Cleaned up ${habits.length} test habit(s)`);
+      }
+
+      // --- Clean up test tasks ---
+      const { data: tasks, error: taskFetchError } = await supabase
+        .from('tasks')
+        .select('id, title')
+        .ilike('title', `${TEST_DATA_PREFIX}%`);
+
+      if (taskFetchError) {
+        console.error('[teardown] Failed to fetch test tasks:', taskFetchError.message);
+      } else if (!tasks || tasks.length === 0) {
+        console.log('[teardown] No test tasks to clean up');
+      } else {
+        const taskIds = tasks.map((t) => t.id);
+        console.log(`[teardown] Cleaning up ${tasks.length} test task(s)...`);
+
+        const { error: taskDeleteError } = await supabase
+          .from('tasks')
+          .delete()
+          .in('id', taskIds);
+
+        if (taskDeleteError) {
+          console.error('[teardown] Failed to delete tasks:', taskDeleteError.message);
+        } else {
+          console.log(`[teardown] Cleaned up ${tasks.length} test task(s)`);
+        }
       }
     } finally {
       await supabase.auth.signOut();

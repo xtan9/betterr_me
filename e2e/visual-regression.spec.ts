@@ -42,12 +42,15 @@ test.describe('Visual Regression', () => {
 
     await expect(page).toHaveScreenshot('dashboard-light.png', {
       maxDiffPixelRatio: 0.01,
-      fullPage: true,
+      // Use viewport clip (not fullPage) because parallel create-habit tests
+      // add habits mid-run, making the full-page height non-deterministic.
       mask: [
         // Mask dynamic greeting text
         dashboard.greeting,
         // Mask dynamic stat numbers (streaks, counts, percentages)
         page.locator('[data-testid="stat-card"]'),
+        // Mask habit checklist and tasks (content varies with parallel tests)
+        page.locator('[role="checkbox"]'),
       ],
     });
   });
@@ -66,10 +69,11 @@ test.describe('Visual Regression', () => {
 
     await expect(page).toHaveScreenshot('dashboard-dark.png', {
       maxDiffPixelRatio: 0.01,
-      fullPage: true,
+      // Use viewport clip (not fullPage) — same rationale as light mode
       mask: [
         dashboard.greeting,
         page.locator('[data-testid="stat-card"]'),
+        page.locator('[role="checkbox"]'),
       ],
     });
   });
@@ -80,7 +84,7 @@ test.describe('Visual Regression', () => {
 
     await expect(page).toHaveScreenshot('habits-list.png', {
       maxDiffPixelRatio: 0.01,
-      fullPage: true,
+      // Use viewport clip (not fullPage) — habit count varies with parallel create-habit tests
       mask: [
         // Mask only dynamic sub-elements, not entire cards
         page.locator('[role="checkbox"]'),
@@ -108,9 +112,10 @@ test.describe('Visual Regression', () => {
       maxDiffPixelRatio: 0.01,
       fullPage: true,
       mask: [
-        // Mask user-specific content (email, name)
+        // Mask user-specific content (email, name, avatar URL from profile form)
         page.locator('input[type="email"]'),
-        page.locator('input[name="name"], input[name="display_name"]'),
+        page.locator('input[name="full_name"]'),
+        page.locator('input[name="avatar_url"]'),
       ],
     });
   });
