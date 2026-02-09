@@ -1,4 +1,4 @@
-import { expect, type Locator } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /** Read Radix Checkbox state via data-state attribute. */
 export async function isRadixChecked(locator: Locator): Promise<boolean> {
@@ -16,4 +16,9 @@ export async function toggleAndVerify(checkbox: Locator): Promise<boolean> {
   await checkbox.click();
   await expect(checkbox).toHaveAttribute('data-state', expectedState, { timeout: 10000 });
   return wasChecked;
+}
+
+/** Locate a habit checkbox by habit name. */
+export function habitCheckbox(page: Page, name: string): Locator {
+  return page.locator(`[role="checkbox"][aria-label*="${name}"]`);
 }

@@ -45,7 +45,7 @@ test.describe('Responsive - Dashboard Layout', () => {
     const dashboard = new DashboardPage(page);
     await dashboard.goto();
 
-    const cards = page.locator('[class*="grid"] > [class*="card"], [class*="grid"] > [class*="Card"]');
+    const cards = dashboard.statCards;
     const cardCount = await cards.count();
 
     if (cardCount > 1) {

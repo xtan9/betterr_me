@@ -59,7 +59,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
           />
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3" data-testid="habit-streaks">
           <div className="flex-1 rounded-lg border p-2 text-center">
             <div className="flex items-center justify-center gap-1">
               {habit.current_streak >= 7 && <Flame className="size-4 text-orange-500" aria-hidden="true" />}

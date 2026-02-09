@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { DashboardPage } from './pages/dashboard.page';
 import { HabitsPage } from './pages/habits.page';
 import { CreateHabitPage } from './pages/create-habit.page';
+import { toggleAndVerify } from './helpers/checkbox';
 
 /**
  * QA-006: Cross-browser testing
@@ -47,11 +48,7 @@ test.describe('Cross-Browser - Core Functionality', () => {
     const checkbox = dashboard.habitCheckbox('E2E Test - Seed Habit 3');
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
-    const before = await checkbox.getAttribute('data-state');
-    const expectedState = before === 'checked' ? 'unchecked' : 'checked';
-    // Checkbox is controlled — data-state updates after API call + SWR refetch
-    await checkbox.click();
-    await expect(checkbox).toHaveAttribute('data-state', expectedState, { timeout: 10000 });
+    await toggleAndVerify(checkbox);
   });
 
   test('page navigation works', async ({ page }) => {

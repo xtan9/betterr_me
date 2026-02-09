@@ -48,7 +48,7 @@ test.describe('Visual Regression', () => {
         // Mask dynamic greeting text
         dashboard.greeting,
         // Mask dynamic stat numbers (streaks, counts, percentages)
-        page.locator('[class*="rounded-xl"][class*="border"]'),
+        page.locator('[data-testid="stat-card"]'),
       ],
     });
   });
@@ -70,7 +70,7 @@ test.describe('Visual Regression', () => {
       fullPage: true,
       mask: [
         dashboard.greeting,
-        page.locator('[class*="rounded-xl"][class*="border"]'),
+        page.locator('[data-testid="stat-card"]'),
       ],
     });
   });
@@ -83,9 +83,9 @@ test.describe('Visual Regression', () => {
       maxDiffPixelRatio: 0.01,
       fullPage: true,
       mask: [
-        // Mask checkbox states and streak counts which change between runs
+        // Mask only dynamic sub-elements, not entire cards
         page.locator('[role="checkbox"]'),
-        page.locator('[data-testid^="habit-card"]'),
+        page.locator('[data-testid="habit-streaks"]'),
       ],
     });
   });

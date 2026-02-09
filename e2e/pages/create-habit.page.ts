@@ -55,7 +55,7 @@ export class CreateHabitPage {
 
   /** Validation error message */
   get validationError() {
-    return this.page.getByText(/name.*required/i);
+    return this.page.locator('[data-slot="form-message"]');
   }
 
   /** Submit (Create) button locator */

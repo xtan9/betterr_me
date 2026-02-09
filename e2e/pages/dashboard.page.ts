@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { habitCheckbox } from '../helpers/checkbox';
 
 export class DashboardPage {
   constructor(private page: Page) {}
@@ -23,14 +24,14 @@ export class DashboardPage {
     return this.page.getByRole('link');
   }
 
-  /** Stat cards (bordered rounded containers) */
+  /** Stat cards */
   get statCards() {
-    return this.page.locator('[class*="rounded-xl"][class*="border"]');
+    return this.page.locator('[data-testid="stat-card"]');
   }
 
   /** Locate a habit checkbox by habit name */
   habitCheckbox(name: string) {
-    return this.page.locator(`[role="checkbox"][aria-label*="${name}"]`);
+    return habitCheckbox(this.page, name);
   }
 
   /** Dashboard skeleton loader */

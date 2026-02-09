@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { habitCheckbox } from '../helpers/checkbox';
 
 export class HabitsPage {
   constructor(private page: Page) {}
@@ -23,14 +24,14 @@ export class HabitsPage {
     return this.page.locator('[data-testid^="habit-card"]');
   }
 
-  /** All cards (broader selector for layout tests) */
+  /** All cards (for layout tests) */
   get cards() {
-    return this.page.locator('[class*="card"], [class*="Card"]');
+    return this.page.locator('[data-testid^="habit-card"]');
   }
 
   /** Locate a habit checkbox by habit name */
   habitCheckbox(name: string) {
-    return this.page.locator(`[role="checkbox"][aria-label*="${name}"]`);
+    return habitCheckbox(this.page, name);
   }
 
   /** Tab panel containing the habit list */
