@@ -7,6 +7,7 @@
       "dashboard": "Dashboard",
       "habits": "Habits",
       "settings": "Settings",
+      "tasks": "Tasks",
       "learnMore": "Learn More",
       "profile": "Profile"
     },
@@ -442,6 +443,37 @@
       "createSuccess": "Task created successfully",
       "createError": "Failed to create task",
       "toggleError": "Failed to update task"
+    },
+    "page": {
+      "title": "My Tasks",
+      "createButton": "Create Task"
+    },
+    "list": {
+      "searchPlaceholder": "Search tasks...",
+      "tabs": {
+        "pending": "Pending",
+        "completed": "Completed"
+      }
+    },
+    "empty": {
+      "noTasks": {
+        "title": "No tasks yet",
+        "description": "Add your first task to stay organized.",
+        "cta": "Create First Task"
+      },
+      "noResults": {
+        "title": "No matching tasks",
+        "description": "Try a different search term."
+      },
+      "allComplete": {
+        "title": "All tasks complete!",
+        "description": "Great job! All your tasks are done."
+      }
+    },
+    "card": {
+      "markComplete": "Mark complete",
+      "overdue": "Overdue",
+      "noDueDate": "No due date"
     },
     "error": {
       "title": "Failed to load task",

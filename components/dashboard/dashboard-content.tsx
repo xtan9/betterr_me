@@ -85,6 +85,10 @@ export function DashboardContent({ userName }: DashboardContentProps) {
     router.push("/habits/new");
   };
 
+  const handleTaskClick = (taskId: string) => {
+    router.push(`/tasks/${taskId}`);
+  };
+
   const handleCreateTask = () => {
     router.push("/tasks/new");
   };
@@ -201,6 +205,7 @@ export function DashboardContent({ userName }: DashboardContentProps) {
         <TasksToday
           tasks={data.tasks_today}
           onToggle={handleToggleTask}
+          onTaskClick={handleTaskClick}
           onCreateTask={handleCreateTask}
         />
       </div>

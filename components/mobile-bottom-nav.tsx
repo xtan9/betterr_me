@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, ClipboardList, Settings } from "lucide-react";
+import { Home, ClipboardList, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", icon: Home, labelKey: "dashboard", match: (p: string) => p === "/dashboard" },
   { href: "/habits", icon: ClipboardList, labelKey: "habits", match: (p: string) => p.startsWith("/habits") },
-  { href: "/dashboard/settings", icon: Settings, labelKey: "settings", match: (p: string) => p.startsWith("/dashboard/settings") },
+  { href: "/tasks", icon: ListChecks, labelKey: "tasks", match: (p: string) => p.startsWith("/tasks") },
 ] as const;
 
 export function MobileBottomNav() {

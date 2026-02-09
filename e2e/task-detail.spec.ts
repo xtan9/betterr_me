@@ -89,7 +89,7 @@ test.describe('Task Detail Page', () => {
     await expect(page).toHaveURL(new RegExp(`/tasks/${taskId}/edit`), { timeout: 10000 });
   });
 
-  test('should navigate back to dashboard', async ({ page }) => {
+  test('should navigate back to tasks list', async ({ page }) => {
     const taskId = await getSeedTaskId(page);
     await page.goto(`/tasks/${taskId}`);
     await page.waitForLoadState('networkidle');
@@ -101,8 +101,8 @@ test.describe('Task Detail Page', () => {
     await expect(backButton).toBeVisible();
     await backButton.click();
 
-    // Should navigate to dashboard
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
+    // Should navigate to tasks list
+    await expect(page).toHaveURL(/\/tasks$/, { timeout: 10000 });
   });
 
   test('should show error state for invalid task ID', async ({ page }) => {

@@ -7,6 +7,7 @@
       "dashboard": "仪表板",
       "habits": "习惯",
       "settings": "设置",
+      "tasks": "任务",
       "learnMore": "了解更多",
       "profile": "个人资料"
     },
@@ -442,6 +443,37 @@
       "createSuccess": "任务创建成功",
       "createError": "创建任务失败",
       "toggleError": "更新任务失败"
+    },
+    "page": {
+      "title": "我的任务",
+      "createButton": "创建任务"
+    },
+    "list": {
+      "searchPlaceholder": "搜索任务...",
+      "tabs": {
+        "pending": "待完成",
+        "completed": "已完成"
+      }
+    },
+    "empty": {
+      "noTasks": {
+        "title": "还没有任务",
+        "description": "添加你的第一个任务来保持条理。",
+        "cta": "创建第一个任务"
+      },
+      "noResults": {
+        "title": "没有匹配的任务",
+        "description": "试试其他搜索词。"
+      },
+      "allComplete": {
+        "title": "全部任务完成！",
+        "description": "干得好！你的所有任务都完成了。"
+      }
+    },
+    "card": {
+      "markComplete": "标记完成",
+      "overdue": "已逾期",
+      "noDueDate": "无截止日期"
     },
     "error": {
       "title": "加载任务失败",

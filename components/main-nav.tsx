@@ -21,9 +21,9 @@ export function MainNav() {
       isActive: pathname.startsWith("/habits"),
     },
     {
-      href: "/dashboard/settings",
-      label: t("settings"),
-      isActive: pathname.startsWith("/dashboard/settings"),
+      href: "/tasks",
+      label: t("tasks"),
+      isActive: pathname.startsWith("/tasks"),
     },
   ];
 

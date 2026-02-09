@@ -89,7 +89,7 @@ describe('CreateTaskContent', () => {
     expect(screen.getByRole('button', { name: 'Create Task' })).toBeInTheDocument();
   });
 
-  it('navigates to /dashboard on successful creation', async () => {
+  it('navigates to /tasks on successful creation', async () => {
     vi.mocked(global.fetch).mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ task: { id: 't1', title: 'Test' } }),
@@ -103,7 +103,7 @@ describe('CreateTaskContent', () => {
     await waitFor(() => {
       expect(mockToastSuccess).toHaveBeenCalledWith('Task created successfully');
     });
-    expect(mockPush).toHaveBeenCalledWith('/dashboard');
+    expect(mockPush).toHaveBeenCalledWith('/tasks');
   });
 
   it('revalidates dashboard and tasks cache after successful creation', async () => {

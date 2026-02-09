@@ -214,7 +214,7 @@ describe('TaskDetailContent', () => {
     render(<TaskDetailContent taskId="task-1" />);
 
     await user.click(screen.getByRole('button', { name: /back/i }));
-    expect(mockPush).toHaveBeenCalledWith('/dashboard');
+    expect(mockPush).toHaveBeenCalledWith('/tasks');
   });
 
   it('shows delete confirmation dialog', async () => {
@@ -254,7 +254,7 @@ describe('TaskDetailContent', () => {
       });
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Task deleted successfully');
-    expect(mockPush).toHaveBeenCalledWith('/dashboard');
+    expect(mockPush).toHaveBeenCalledWith('/tasks');
   });
 
   it('shows error toast on delete failure', async () => {
