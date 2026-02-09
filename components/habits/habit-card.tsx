@@ -78,7 +78,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
         </div>
 
         {/* Monthly progress bar */}
-        <div className="space-y-1">
+        <div className="space-y-1" data-testid="habit-monthly-progress">
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>{t("card.thisMonth", { percent: habit.monthly_completion_rate })}</span>
           </div>
