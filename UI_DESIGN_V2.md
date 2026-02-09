@@ -469,7 +469,7 @@ transition-all hover:shadow-lg hover:scale-[1.03] hover:-translate-y-0.5 duratio
 - Stats section: `bg-blue-600 text-white`
 - CTA button: `bg-blue-600 hover:bg-blue-700`
 - Landing navbar logo: `text-blue-600` (`navbar.tsx:10`)
-- Footer link hovers: `hover:text-blue-600` (`footer.tsx`, 20+ occurrences)
+- Footer link hovers: `hover:text-blue-600` (`footer.tsx`, 19 occurrences)
 
 **V2:** Shift to emerald to match the new app-wide primary:
 
@@ -564,7 +564,6 @@ All V2 changes maintain dark mode parity:
 | Key | EN | ZH (Simplified) | ZH-TW (Traditional) |
 |-----|----|----|------|
 | `common.nav.profile` | Profile | 个人资料 | 個人資料 | (for profile dropdown item — currently hardcoded English)
-| `habits.card.thisMonth` | This month | 本月 | 本月 |
 | `dashboard.habits.perfectDay` | Perfect day! | 完美的一天！ | 完美的一天！ |
 | `dashboard.habits.allCompletedDesc` | You completed all {count} habits today. | 你今天完成了所有 {count} 个习惯。 | 你今天完成了所有 {count} 個習慣。 |
 
@@ -572,6 +571,7 @@ All V2 changes maintain dark mode parity:
 
 - `common.nav.dashboard`, `common.nav.habits`, `common.nav.settings` — all exist
 - `dashboard.habits.allComplete` — exists, used for celebration heading
+- `habits.card.thisMonth` — **already exists** at `en.json:192` as `"{percent}% this month"` (currently unused by any component; will be used by the new monthly progress bar in Phase 3C). A separate key `habits.detail.completion.thisMonth` (line 288) exists in a different namespace — no conflict.
 
 ---
 
@@ -616,6 +616,6 @@ The following elements from V1 remain as-is:
 
 ---
 
-**Document Version:** 2.0
+**Document Version:** 2.1
 **Last Updated:** February 9, 2026
-**Status:** Proposed — Pending Review
+**Status:** Proposed — Updated with deep technical review findings

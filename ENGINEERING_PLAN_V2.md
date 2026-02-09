@@ -287,6 +287,7 @@ Components that use `bg-primary`, `text-primary`, `ring-primary`, or shadcn butt
 | Empty state icon | `bg-primary/10 text-primary` | Yes |
 | Focus rings | `ring-ring` | Yes |
 | `Badge` | `bg-primary` | Yes |
+| `main-nav.tsx:37` | `hover:text-primary` (link hovers) | Yes — **positive side effect:** nav link hovers shift from black to emerald, reinforcing the brand theme |
 
 **No manual changes needed** for these components — the CSS variable swap handles everything.
 
@@ -533,6 +534,8 @@ async getHabitsWithTodayStatus(userId: string, date?: string): Promise<HabitWith
 
 **Note:** The `getUserHabits()` method (used by `GET /api/habits` without `with_today`) returns `Habit[]` not `HabitWithTodayStatus[]`, so it doesn't need changes. The habits list page (`habits-page-content.tsx`) uses `with_today=true`, which calls `getHabitsWithTodayStatus()` — so the monthly rate will be available there too.
 
+**Scope note:** `getHabitsWithTodayStatus()` calls `this.getActiveHabits(userId)` (line 158 of `habits.ts`), which filters to `status: 'active'` only. This is **intentional and acceptable** — progress bars only appear on habit cards within the active tab. Paused/archived habits are fetched via `getUserHabits()` (returns `Habit[]`, not `HabitWithTodayStatus[]`), so they won't have progress bars. No code change needed for this.
+
 ### 7.3 Frontend: Add Progress Bar to `components/habits/habit-card.tsx`
 
 Add after the streaks section (after line 78):
@@ -555,9 +558,13 @@ Add after the streaks section (after line 78):
 
 ### 7.4 i18n Key
 
-| Key | EN | ZH | ZH-TW |
-|-----|----|----|-------|
-| `habits.card.thisMonth` | `"This month"` | `"本月"` | `"本月"` |
+**No new key needed.** The key `habits.card.thisMonth` already exists in all locale files (e.g., `en.json:192` has `"thisMonth": "{percent}% this month"`). It is currently unused by any component — this phase will be the first to actually reference it. The test mock at `habit-card.test.tsx:17` also already mocks this key.
+
+**Note:** A separate key at `habits.detail.completion.thisMonth` (line 288) exists in a different namespace — no conflict.
+
+| Key | EN | ZH | ZH-TW | Status |
+|-----|----|----|-------|--------|
+| `habits.card.thisMonth` | `"{percent}% this month"` | (existing) | (existing) | **Existing unused key — reuse** |
 
 ### 7.5 API Route Impact
 
@@ -569,9 +576,22 @@ Add after the streaks section (after line 78):
 
 | Test | File | Assertion |
 |------|------|-----------|
-| `getHabitsWithTodayStatus` returns `monthly_completion_rate` | `tests/lib/db/habits.test.ts` (if exists) | New field is a number 0-100 |
-| Habit card renders progress bar | `tests/components/habits/habit-card.test.tsx` (if exists) | Progress bar element present, width matches rate |
-| API response includes new field | `tests/api/habits.test.ts` (if exists) | JSON response has `monthly_completion_rate` |
+| `getHabitsWithTodayStatus` returns `monthly_completion_rate` | `tests/lib/db/habits.test.ts` | New field is a number 0-100 |
+| Habit card renders progress bar | `tests/components/habits/habit-card.test.tsx` | Progress bar element present, width matches rate |
+| API response includes new field | `tests/app/api/habits/route.test.ts` | JSON response has `monthly_completion_rate` |
+
+**⚠️ Important: `getHabitsWithTodayStatus` has ZERO existing tests.** No test file currently covers this DB method. A NEW test case must be created in `tests/lib/db/habits.test.ts` — this is not just an update to existing tests.
+
+**⚠️ Test files requiring mock updates:** Adding `monthly_completion_rate: number` to the `HabitWithTodayStatus` type will cause TypeScript compile errors in these 4 test files (they create `HabitWithTodayStatus` objects without the new field):
+
+| File | Location | Mock Object |
+|------|----------|-------------|
+| `tests/components/habits/habit-card.test.tsx` | Lines 52-66 | `baseHabit` object |
+| `tests/components/dashboard/habit-checklist.test.tsx` | Lines 43-58 | `mockHabits` array |
+| `tests/components/habits/habit-list.test.tsx` | Mock data | Habit objects |
+| `tests/components/habits/habit-row.test.tsx` | Mock data | Habit objects |
+
+**Fix:** Add `monthly_completion_rate: 75` (or any number 0-100) to each mock object. This is a TypeScript compile error, not a logic error — straightforward fix.
 
 ### 7.7 Files Changed
 
@@ -617,10 +637,14 @@ Ensure the clickable button inside the card uses `focus-visible:ring-primary` (a
 
 **Problem:** Lines 64-71 have `<DropdownMenuItem>` elements that are not wrapped in `<Link>` — clicking "Profile" or "Settings" does nothing. Additionally, the "Settings" item **duplicates** the Settings link already present in the top navbar (`main-nav.tsx:24-27`) and the new mobile bottom nav (Phase 1). Having Settings in the dropdown creates redundancy.
 
-**Fix:** This is a **server component** (it calls `await createClient()`). Remove the "Settings" dropdown item entirely (it's redundant with the navbar) and make "Profile" functional using Next.js `<Link>` with `asChild`:
+**Fix:** This is a **server component** (it calls `await createClient()`). Remove the "Settings" dropdown item entirely (it's redundant with the navbar) and make "Profile" functional using Next.js `<Link>` with `asChild`. Since this is a server component, use `await getTranslations()` (NOT `useTranslations()`) to i18n the "Profile" label:
 
 ```diff
 +import Link from "next/link";
++import { getTranslations } from "next-intl/server";
+
+ // In the component body (server component — use await):
++const t = await getTranslations("common.nav");
 
  <DropdownMenuSeparator />
 -<DropdownMenuItem>
@@ -634,12 +658,14 @@ Ensure the clickable button inside the card uses `focus-visible:ring-primary` (a
 +<DropdownMenuItem asChild>
 +  <Link href="/dashboard/settings">
 +    <UserIcon className="mr-2 h-4 w-4" />
-+    <span>Profile</span>
++    <span>{t("profile")}</span>
 +  </Link>
 +</DropdownMenuItem>
 ```
 
 **Rationale:** Settings is accessible via the top navbar (desktop) and bottom nav (mobile). The dropdown should contain only user-specific items: Profile and Log out. The unused `Settings` import from lucide-react can also be removed.
+
+**⚠️ Server component note:** `profile-avatar.tsx` is a server component (uses `await createClient()`). It MUST use `getTranslations` from `"next-intl/server"`, NOT `useTranslations` (which is a client hook). This is the standard Next.js App Router server component i18n pattern.
 
 ### 9.2 Remove Duplicate "My Habits" Title
 
@@ -785,8 +811,9 @@ Phase 1 (Mobile Nav)
 | `MobileBottomNav` | New test file; mock pathname, verify active states |
 | `StatCard` redesign | Update existing `daily-snapshot.test.tsx` if it exists; verify new `iconBgClass` prop |
 | Celebration state | Update existing `habit-checklist.test.tsx` if it exists; verify gradient card renders when all complete |
-| Monthly progress bar | Update `habit-card.test.tsx` if it exists; verify bar renders with correct width |
-| `getHabitsWithTodayStatus` | Update DB tests; mock Supabase responses for monthly logs |
+| Monthly progress bar | Update `habit-card.test.tsx`; verify bar renders with correct width |
+| `getHabitsWithTodayStatus` | **Create new test case** in `tests/lib/db/habits.test.ts`; mock Supabase responses for monthly logs (no existing test covers this method) |
+| Mock object updates (Phase 3C) | Add `monthly_completion_rate` to mock `HabitWithTodayStatus` objects in: `habit-card.test.tsx`, `habit-checklist.test.tsx`, `habit-list.test.tsx`, `habit-row.test.tsx` |
 
 ### 12.2 Integration Tests
 
@@ -821,10 +848,12 @@ Existing Playwright tests in `e2e/` should continue to pass. The mobile bottom n
 
 ### 13.1 Breaking Changes
 
-**None.** All changes are additive or modify presentation only:
+**No runtime breaking changes.** All changes are additive or modify presentation only:
 - CSS variable changes affect visual appearance, not behavior
 - New `monthly_completion_rate` field is added to existing type (non-breaking for consumers)
 - Bottom nav is additive (hidden on desktop)
+
+**⚠️ TypeScript compile-time impact:** Adding `monthly_completion_rate` to the `HabitWithTodayStatus` interface will cause compile errors in 4 test files that construct mock objects of this type without the new required field. See Section 7.6 for the full list. Fix is trivial — add the field to each mock object.
 
 ### 13.2 Database Changes
 
@@ -897,6 +926,6 @@ Before merging:
 
 ---
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Last Updated:** February 9, 2026
-**Status:** Proposed — Pending Review
+**Status:** Proposed — Updated with deep technical review findings
