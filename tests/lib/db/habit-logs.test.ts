@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockSupabaseClient } from '../../setup';
 import type { HabitLog } from '@/lib/db/types';
+import { getLocalDateString } from '@/lib/utils';
 
 // Mock habitsDB class since HabitLogsDB creates its own instance
 const { mockGetHabit, mockUpdateHabitStreak } = vi.hoisted(() => ({
@@ -169,7 +170,7 @@ describe('HabitLogsDB', () => {
     it('should throw EDIT_WINDOW_EXCEEDED for dates older than 7 days', async () => {
       const oldDate = new Date();
       oldDate.setDate(oldDate.getDate() - 10);
-      const dateStr = oldDate.toISOString().split('T')[0];
+      const dateStr = getLocalDateString(oldDate);
 
       await expect(
         habitLogsDB.toggleLog(mockHabitId, mockUserId, dateStr)
@@ -248,11 +249,7 @@ describe('HabitLogsDB', () => {
     const weekDate = (offset: number): string => {
       const d = new Date(weekStart);
       d.setDate(d.getDate() + offset);
-      // Use local date formatting to avoid UTC timezone shifts
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      return getLocalDateString(d);
     };
 
     describe('getDetailedHabitStats', () => {
@@ -377,6 +374,38 @@ describe('HabitLogsDB', () => {
 
         expect(result.currentStreak).toBe(0);
       });
+    });
+  });
+
+  describe('date string parsing (YYYY-MM-DD → local Date)', () => {
+    // The production code parses date strings like:
+    //   const [y, m, d] = dateStr.split('-').map(Number);
+    //   const date = new Date(y, m - 1, d);
+    // This must produce a local-timezone date, not UTC.
+
+    it('should parse date string as local date, not UTC', () => {
+      const dateStr = '2026-06-15';
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+
+      expect(date.getFullYear()).toBe(2026);
+      expect(date.getMonth()).toBe(5); // June is 0-indexed
+      expect(date.getDate()).toBe(15);
+      // Hours should be 0 (midnight local), not shifted by timezone offset
+      expect(date.getHours()).toBe(0);
+    });
+
+    it('should not shift the date across day boundaries like UTC parsing can', () => {
+      // new Date('2026-01-01') can be interpreted as UTC midnight,
+      // which in negative-offset timezones becomes Dec 31 local time.
+      // The split-and-construct approach avoids this.
+      const dateStr = '2026-01-01';
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const localDate = new Date(y, m - 1, d);
+
+      expect(localDate.getDate()).toBe(1);
+      expect(localDate.getMonth()).toBe(0); // January
+      expect(getLocalDateString(localDate)).toBe('2026-01-01');
     });
   });
 });

@@ -1,6 +1,11 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Silence console noise during tests (API error handlers, etc.)
+// Restore with vi.restoreAllMocks() in individual tests if needed.
+vi.spyOn(console, 'error').mockImplementation(() => {});
+vi.spyOn(console, 'warn').mockImplementation(() => {});
+
 // Mock ResizeObserver (used by cmdk and other components)
 class ResizeObserverMock {
   observe() {}

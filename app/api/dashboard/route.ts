@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB, TasksDB } from '@/lib/db';
 import type { DashboardData } from '@/lib/db/types';
+import { getLocalDateString } from '@/lib/utils';
 
 /**
  * GET /api/dashboard
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
     const habitsDB = new HabitsDB(supabase);
     const tasksDB = new TasksDB(supabase);
     const searchParams = request.nextUrl.searchParams;
-    const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
+    const date = searchParams.get('date') || getLocalDateString();
 
     // Fetch data in parallel
     const [habitsWithStatus, todayTasks, allTodayTasks, allTasks] = await Promise.all([

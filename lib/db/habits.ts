@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Habit, HabitInsert, HabitUpdate, HabitFilters, HabitWithTodayStatus } from './types';
+import { getLocalDateString } from '@/lib/utils';
 
 export class HabitsDB {
   private supabase: SupabaseClient;
@@ -152,7 +153,7 @@ export class HabitsDB {
    * Used for dashboard view
    */
   async getHabitsWithTodayStatus(userId: string, date?: string): Promise<HabitWithTodayStatus[]> {
-    const today = date || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const today = date || getLocalDateString();
 
     // Get active habits
     const habits = await this.getActiveHabits(userId);
