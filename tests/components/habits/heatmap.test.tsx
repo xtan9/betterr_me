@@ -34,7 +34,7 @@ vi.mock('next-intl', () => ({
 // Mock Tooltip to render simple title for testing
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) => (
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => (
     <span data-testid="tooltip-trigger">{children}</span>
   ),
   TooltipContent: ({ children }: { children: React.ReactNode }) => (

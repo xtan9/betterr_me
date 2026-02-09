@@ -94,11 +94,12 @@ describe('getCategoryIcon', () => {
 
 describe('shouldTrackOnDate', () => {
   // 2026-02-02 = Monday, 2026-02-07 = Saturday, 2026-02-08 = Sunday
-  const monday = new Date('2026-02-02');
-  const tuesday = new Date('2026-02-03');
-  const wednesday = new Date('2026-02-04');
-  const saturday = new Date('2026-02-07');
-  const sunday = new Date('2026-02-08');
+  // Use local date constructors (not ISO strings) to avoid UTC timezone shifts
+  const monday = new Date(2026, 1, 2);
+  const tuesday = new Date(2026, 1, 3);
+  const wednesday = new Date(2026, 1, 4);
+  const saturday = new Date(2026, 1, 7);
+  const sunday = new Date(2026, 1, 8);
 
   it('daily tracks every day', () => {
     expect(shouldTrackOnDate({ type: 'daily' }, monday)).toBe(true);

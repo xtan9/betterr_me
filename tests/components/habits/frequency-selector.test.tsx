@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FrequencySelector } from '@/components/habits/frequency-selector';
-import type { HabitFrequency } from '@/lib/db/types';
 
 // Mock next-intl
 vi.mock('next-intl', () => ({

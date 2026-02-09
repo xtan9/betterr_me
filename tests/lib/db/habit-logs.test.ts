@@ -236,7 +236,7 @@ describe('HabitLogsDB', () => {
   });
 
   describe('times_per_week frequency handling', () => {
-    const timesPerWeekFrequency = { type: 'times_per_week' as const, count: 3 };
+    const timesPerWeekFrequency = { type: 'times_per_week', count: 3 } as const;
     const createdAt = '2026-01-01T00:00:00Z';
 
     // Compute dates in the current week dynamically so tests stay valid as time advances
@@ -248,7 +248,11 @@ describe('HabitLogsDB', () => {
     const weekDate = (offset: number): string => {
       const d = new Date(weekStart);
       d.setDate(d.getDate() + offset);
-      return d.toISOString().split('T')[0];
+      // Use local date formatting to avoid UTC timezone shifts
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     };
 
     describe('getDetailedHabitStats', () => {
