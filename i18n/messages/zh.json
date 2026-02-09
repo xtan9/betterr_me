@@ -413,9 +413,39 @@
       "2": "中",
       "3": "高"
     },
+    "detail": {
+      "title": "任务详情",
+      "edit": "编辑",
+      "delete": "删除任务",
+      "deleteConfirm": "确定要删除这个任务吗？",
+      "deleteCancel": "取消",
+      "back": "返回",
+      "completed": "已完成",
+      "pending": "待完成",
+      "dueDate": "截止日期",
+      "dueTime": "截止时间",
+      "priority": "优先级",
+      "category": "分类",
+      "noDueDate": "无截止日期",
+      "notFound": "任务未找到"
+    },
+    "edit": {
+      "title": "编辑任务",
+      "success": "任务更新成功",
+      "error": "更新任务失败"
+    },
+    "delete": {
+      "success": "任务删除成功",
+      "error": "删除任务失败"
+    },
     "toast": {
       "createSuccess": "任务创建成功",
-      "createError": "创建任务失败"
+      "createError": "创建任务失败",
+      "toggleError": "更新任务失败"
+    },
+    "error": {
+      "title": "加载任务失败",
+      "retry": "重试"
     }
   },
   "settings": {
@@ -447,6 +477,20 @@
       "preparing": "正在准备导出...",
       "downloading": "正在下载...",
       "zip": "导出全部 (ZIP)"
+    },
+    "profile": {
+      "title": "个人资料",
+      "description": "管理你的个人信息",
+      "fullName": "显示名称",
+      "fullNamePlaceholder": "输入你的名字",
+      "email": "邮箱",
+      "emailDescription": "你的邮箱地址无法在此修改",
+      "avatarUrl": "头像链接",
+      "avatarUrlPlaceholder": "https://example.com/avatar.jpg",
+      "save": "保存资料",
+      "saving": "正在保存...",
+      "success": "个人资料更新成功",
+      "error": "更新个人资料失败"
     },
     "toast": {
       "saveError": "保存设置失败"

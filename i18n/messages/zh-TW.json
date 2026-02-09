@@ -413,9 +413,39 @@
       "2": "中",
       "3": "高"
     },
+    "detail": {
+      "title": "任務詳情",
+      "edit": "編輯",
+      "delete": "刪除任務",
+      "deleteConfirm": "確定要刪除這個任務嗎？",
+      "deleteCancel": "取消",
+      "back": "返回",
+      "completed": "已完成",
+      "pending": "待完成",
+      "dueDate": "截止日期",
+      "dueTime": "截止時間",
+      "priority": "優先順序",
+      "category": "分類",
+      "noDueDate": "無截止日期",
+      "notFound": "任務未找到"
+    },
+    "edit": {
+      "title": "編輯任務",
+      "success": "任務更新成功",
+      "error": "更新任務失敗"
+    },
+    "delete": {
+      "success": "任務刪除成功",
+      "error": "刪除任務失敗"
+    },
     "toast": {
       "createSuccess": "任務建立成功",
-      "createError": "建立任務失敗"
+      "createError": "建立任務失敗",
+      "toggleError": "更新任務失敗"
+    },
+    "error": {
+      "title": "載入任務失敗",
+      "retry": "重試"
     }
   },
   "settings": {
@@ -447,6 +477,20 @@
       "preparing": "正在準備匯出...",
       "downloading": "正在下載...",
       "zip": "匯出全部 (ZIP)"
+    },
+    "profile": {
+      "title": "個人資料",
+      "description": "管理你的個人資訊",
+      "fullName": "顯示名稱",
+      "fullNamePlaceholder": "輸入你的名字",
+      "email": "電子郵件",
+      "emailDescription": "你的電子郵件地址無法在此修改",
+      "avatarUrl": "頭像連結",
+      "avatarUrlPlaceholder": "https://example.com/avatar.jpg",
+      "save": "儲存資料",
+      "saving": "正在儲存...",
+      "success": "個人資料更新成功",
+      "error": "更新個人資料失敗"
     },
     "toast": {
       "saveError": "儲存設定失敗"
