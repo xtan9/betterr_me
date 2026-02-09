@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HabitLog, HabitLogInsert, HabitFrequency } from './types';
 import { HabitsDB } from './habits';
+import { getLocalDateString } from '@/lib/utils';
 
 /**
  * Get the start of a week for a given date based on week start preference
@@ -20,7 +21,7 @@ function getWeekStart(date: Date, weekStartDay: number = 0): Date {
  */
 function getWeekKey(date: Date, weekStartDay: number = 0): string {
   const weekStart = getWeekStart(date, weekStartDay);
-  return weekStart.toISOString().split('T')[0];
+  return getLocalDateString(weekStart);
 }
 
 export class HabitLogsDB {
@@ -175,8 +176,8 @@ export class HabitLogsDB {
     const logs = await this.getLogsByDateRange(
       habitId,
       userId,
-      startDate.toISOString().split('T')[0],
-      today.toISOString().split('T')[0]
+      getLocalDateString(startDate),
+      getLocalDateString(today)
     );
 
     // Create a set of completed dates for quick lookup
@@ -195,14 +196,14 @@ export class HabitLogsDB {
 
     // Walk backwards from today counting consecutive completions
     while (true) {
-      const dateStr = checkDate.toISOString().split('T')[0];
+      const dateStr = getLocalDateString(checkDate);
 
       if (this.shouldTrackOnDate(frequency, checkDate)) {
         if (completedDates.has(dateStr)) {
           currentStreak++;
         } else {
           // Allow today to be incomplete without breaking streak
-          if (dateStr !== today.toISOString().split('T')[0]) {
+          if (dateStr !== getLocalDateString(today)) {
             break;
           }
         }
@@ -236,7 +237,9 @@ export class HabitLogsDB {
     const weekCompletions = new Map<string, number>();
 
     for (const dateStr of completedDates) {
-      const date = new Date(dateStr);
+      // Parse YYYY-MM-DD as local date (not UTC) to avoid timezone shifts
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
       const weekKey = getWeekKey(date, weekStartDay);
       weekCompletions.set(weekKey, (weekCompletions.get(weekKey) || 0) + 1);
     }
@@ -244,7 +247,7 @@ export class HabitLogsDB {
     // Count consecutive successful weeks starting from current week
     let currentStreak = 0;
     const checkWeekStart = getWeekStart(today, weekStartDay);
-    const currentWeekKey = checkWeekStart.toISOString().split('T')[0];
+    const currentWeekKey = getLocalDateString(checkWeekStart);
 
     // Check if current week is complete (for ongoing week, don't break streak if not yet met)
     const currentWeekCompletions = weekCompletions.get(currentWeekKey) || 0;
@@ -264,7 +267,7 @@ export class HabitLogsDB {
     checkWeekStart.setDate(checkWeekStart.getDate() - 7);
 
     while (true) {
-      const weekKey = checkWeekStart.toISOString().split('T')[0];
+      const weekKey = getLocalDateString(checkWeekStart);
       const completions = weekCompletions.get(weekKey) || 0;
 
       if (completions >= targetPerWeek) {
@@ -350,8 +353,8 @@ export class HabitLogsDB {
     const logs = await this.getLogsByDateRange(
       habitId,
       userId,
-      startDate.toISOString().split('T')[0],
-      today.toISOString().split('T')[0]
+      getLocalDateString(startDate),
+      getLocalDateString(today)
     );
 
     const completedDays = logs.filter(log => log.completed).length;
@@ -391,7 +394,7 @@ export class HabitLogsDB {
     const habitCreatedAt = new Date(createdAt);
     habitCreatedAt.setHours(0, 0, 0, 0);
 
-    const formatDate = (d: Date) => d.toISOString().split('T')[0];
+    const formatDate = (d: Date) => getLocalDateString(d);
     const todayStr = formatDate(today);
     const createdStr = formatDate(habitCreatedAt);
 
@@ -420,7 +423,7 @@ export class HabitLogsDB {
       while (currentDate <= end) {
         if (currentDate >= habitCreatedAt && this.shouldTrackOnDate(frequency, currentDate)) {
           total++;
-          const dateStr = currentDate.toISOString().split('T')[0];
+          const dateStr = getLocalDateString(currentDate);
           if (completedDates.has(dateStr)) {
             completed++;
           }
@@ -531,7 +534,9 @@ export class HabitLogsDB {
     const weekCompletions = new Map<string, number>();
 
     for (const dateStr of completedDates) {
-      const date = new Date(dateStr);
+      // Parse YYYY-MM-DD as local date (not UTC) to avoid timezone shifts
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
       const weekKey = getWeekKey(date, weekStartDay);
       weekCompletions.set(weekKey, (weekCompletions.get(weekKey) || 0) + 1);
     }
@@ -560,7 +565,7 @@ export class HabitLogsDB {
       }
 
       while (checkWeekStart <= rangeEnd) {
-        const weekKey = checkWeekStart.toISOString().split('T')[0];
+        const weekKey = getLocalDateString(checkWeekStart);
         const completions = weekCompletions.get(weekKey) || 0;
 
         // Only count weeks that have ended, unless it's the current week

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { HabitFrequency, HabitLog } from '@/lib/db/types';
-import { buildHeatmapData, type HeatmapCell } from '@/lib/habits/heatmap';
+import { buildHeatmapData } from '@/lib/habits/heatmap';
 
 describe('buildHeatmapData', () => {
   beforeEach(() => {

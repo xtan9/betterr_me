@@ -97,9 +97,6 @@ test.describe('Dashboard Load', () => {
     const dashboard = new DashboardPage(page);
     await dashboard.goto();
 
-    // Get initial content
-    const initialContent = await dashboard.main.textContent();
-
     // Refresh
     await page.reload();
     await page.waitForLoadState('networkidle');

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitLogsDB } from '@/lib/db';
+import { getLocalDateString } from '@/lib/utils';
 
 /**
  * GET /api/habits/[id]/logs
@@ -27,7 +28,7 @@ export async function GET(
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
 
     let startDate: string;
     const endDate = searchParams.get('end_date') || today;
@@ -43,14 +44,14 @@ export async function GET(
       }
       const start = new Date();
       start.setDate(start.getDate() - days);
-      startDate = start.toISOString().split('T')[0];
+      startDate = getLocalDateString(start);
     } else if (searchParams.has('start_date')) {
       startDate = searchParams.get('start_date')!;
     } else {
       // Default to last 30 days
       const start = new Date();
       start.setDate(start.getDate() - 30);
-      startDate = start.toISOString().split('T')[0];
+      startDate = getLocalDateString(start);
     }
 
     // Validate date formats

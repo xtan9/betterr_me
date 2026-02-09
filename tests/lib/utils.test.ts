@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cn, getLocalDateString, hasEnvVars } from '@/lib/utils';
+import { describe, it, expect, afterEach } from 'vitest';
+import { cn, getLocalDateString } from '@/lib/utils';
 
 describe('cn (className utility)', () => {
   it('merges multiple class strings', () => {

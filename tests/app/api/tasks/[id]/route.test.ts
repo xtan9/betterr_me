@@ -23,8 +23,6 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-import { createClient } from '@/lib/supabase/server';
-
 describe('GET /api/tasks/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();

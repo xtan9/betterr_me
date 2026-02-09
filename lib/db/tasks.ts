@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Task, TaskInsert, TaskUpdate, TaskFilters } from './types';
+import { getLocalDateString } from '@/lib/utils';
 
 export class TasksDB {
   private supabase: SupabaseClient;
@@ -130,7 +131,7 @@ export class TasksDB {
    * Get today's tasks (due today or overdue)
    */
   async getTodayTasks(userId: string): Promise<Task[]> {
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const today = getLocalDateString();
 
     const { data, error } = await this.supabase
       .from('tasks')
@@ -149,10 +150,10 @@ export class TasksDB {
    * Get upcoming tasks (due in the future)
    */
   async getUpcomingTasks(userId: string, days: number = 7): Promise<Task[]> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + days);
-    const future = futureDate.toISOString().split('T')[0];
+    const future = getLocalDateString(futureDate);
 
     const { data, error } = await this.supabase
       .from('tasks')
@@ -171,7 +172,7 @@ export class TasksDB {
    * Get overdue tasks
    */
   async getOverdueTasks(userId: string): Promise<Task[]> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
 
     const { data, error } = await this.supabase
       .from('tasks')

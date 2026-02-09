@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test';
 import { DashboardPage } from './pages/dashboard.page';
 import { HabitsPage } from './pages/habits.page';
 import { CreateHabitPage } from './pages/create-habit.page';
-import { LoginPage } from './pages/login.page';
 
 /**
  * Visual regression tests — screenshot comparison for key pages.
