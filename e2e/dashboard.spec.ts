@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { DashboardPage } from './pages/dashboard.page';
 
 /**
  * QA-003: E2E test - Dashboard load
@@ -28,14 +29,12 @@ test.describe('Dashboard - Auth Required', () => {
 
 test.describe('Dashboard Load', () => {
   test('should load dashboard within acceptable time', async ({ page }) => {
+    const dashboard = new DashboardPage(page);
     const startTime = Date.now();
-    await page.goto('/dashboard');
+    await dashboard.goto();
 
     // Wait for the skeleton to disappear (indicates content has loaded)
-    await page.waitForSelector('[data-testid="dashboard-skeleton"]', {
-      state: 'hidden',
-      timeout: 10000,
-    }).catch(() => {
+    await dashboard.skeleton.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {
       // Skeleton may not appear if data loads fast
     });
 
@@ -48,32 +47,29 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should display loading skeleton initially', async ({ page }) => {
+    const dashboard = new DashboardPage(page);
     // Use network throttling to make loading visible
     await page.goto('/dashboard');
 
     // Check if skeleton appears (may be very brief)
-    const skeleton = page.locator('[data-testid="dashboard-skeleton"]');
     // Skeleton should appear or content should be visible
-    const hasContent = await page.locator('main').isVisible({ timeout: 5000 });
+    const hasContent = await dashboard.main.isVisible({ timeout: 5000 });
     expect(hasContent).toBe(true);
   });
 
   test('should display greeting message', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
-    // Look for greeting text (Good morning/afternoon/evening or welcome)
-    const greeting = page.getByText(/good\s*(morning|afternoon|evening)|welcome|hello/i);
-    await expect(greeting).toBeVisible({ timeout: 10000 });
+    await expect(dashboard.greeting).toBeVisible({ timeout: 10000 });
   });
 
   test('should display snapshot cards section', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Look for stat-like content (numbers, percentages, streaks)
-    const statsArea = page.locator('main');
-    await expect(statsArea).toBeVisible();
+    await expect(dashboard.main).toBeVisible();
 
     // Should have some numeric content (habit counts, streaks, etc.)
     const numbers = page.getByText(/\d+/);
@@ -81,8 +77,8 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should display habit checklist section', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Look for habits section header or checkbox elements
     const habitsSection = page.getByText(/habit/i).first();
@@ -90,28 +86,26 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should have navigation elements', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
-    // Check for navigation links — at least one should be visible
-    const navLinks = page.getByRole('link');
-    const navCount = await navLinks.count();
+    const navCount = await dashboard.navLinks.count();
     expect(navCount).toBeGreaterThan(0);
   });
 
   test('should handle refresh correctly', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // Get initial content
-    const initialContent = await page.locator('main').textContent();
+    const initialContent = await dashboard.main.textContent();
 
     // Refresh
     await page.reload();
     await page.waitForLoadState('networkidle');
 
     // Content should reload (same or updated)
-    const refreshedContent = await page.locator('main').textContent();
+    const refreshedContent = await dashboard.main.textContent();
     expect(refreshedContent).toBeDefined();
     expect(refreshedContent!.length).toBeGreaterThan(0);
   });
@@ -146,11 +140,11 @@ test.describe('Dashboard Load', () => {
   });
 
   test('should display motivation message section', async ({ page }) => {
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    const dashboard = new DashboardPage(page);
+    await dashboard.goto();
 
     // The dashboard includes a MotivationMessage component
-    const mainContent = await page.locator('main').textContent();
+    const mainContent = await dashboard.main.textContent();
     expect(mainContent).toBeDefined();
     expect(mainContent!.length).toBeGreaterThan(10);
   });
@@ -158,9 +152,9 @@ test.describe('Dashboard Load', () => {
 
 test.describe('Dashboard - Responsive Layout', () => {
   test('should render correctly on mobile viewport', async ({ page }) => {
+    const dashboard = new DashboardPage(page);
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await dashboard.goto();
 
     // Should not have horizontal scrollbar
     const hasHorizontalScroll = await page.evaluate(() => {
@@ -169,14 +163,13 @@ test.describe('Dashboard - Responsive Layout', () => {
     expect(hasHorizontalScroll).toBe(false);
 
     // Content should be visible
-    const mainContent = page.locator('main');
-    await expect(mainContent).toBeVisible();
+    await expect(dashboard.main).toBeVisible();
   });
 
   test('should render correctly on tablet viewport', async ({ page }) => {
+    const dashboard = new DashboardPage(page);
     await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await dashboard.goto();
 
     const hasHorizontalScroll = await page.evaluate(() => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;
@@ -185,9 +178,9 @@ test.describe('Dashboard - Responsive Layout', () => {
   });
 
   test('should render correctly on desktop viewport', async ({ page }) => {
+    const dashboard = new DashboardPage(page);
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await dashboard.goto();
 
     const hasHorizontalScroll = await page.evaluate(() => {
       return document.documentElement.scrollWidth > document.documentElement.clientWidth;
