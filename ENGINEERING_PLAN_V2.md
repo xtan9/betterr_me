@@ -614,9 +614,9 @@ Ensure the clickable button inside the card uses `focus-visible:ring-primary` (a
 
 **File:** `components/profile-avatar.tsx`
 
-**Problem:** Lines 64-71 have `<DropdownMenuItem>` elements that are not wrapped in `<Link>` — clicking "Profile" or "Settings" does nothing.
+**Problem:** Lines 64-71 have `<DropdownMenuItem>` elements that are not wrapped in `<Link>` — clicking "Profile" or "Settings" does nothing. Additionally, the "Settings" item **duplicates** the Settings link already present in the top navbar (`main-nav.tsx:24-27`) and the new mobile bottom nav (Phase 1). Having Settings in the dropdown creates redundancy.
 
-**Fix:** This is a **server component** (it calls `await createClient()`), so we use Next.js `<Link>` with `asChild`:
+**Fix:** This is a **server component** (it calls `await createClient()`). Remove the "Settings" dropdown item entirely (it's redundant with the navbar) and make "Profile" functional using Next.js `<Link>` with `asChild`:
 
 ```diff
 +import Link from "next/link";
@@ -636,13 +636,9 @@ Ensure the clickable button inside the card uses `focus-visible:ring-primary` (a
 +    <span>Profile</span>
 +  </Link>
 +</DropdownMenuItem>
-+<DropdownMenuItem asChild>
-+  <Link href="/dashboard/settings">
-+    <Settings className="mr-2 h-4 w-4" />
-+    <span>Settings</span>
-+  </Link>
-+</DropdownMenuItem>
 ```
+
+**Rationale:** Settings is accessible via the top navbar (desktop) and bottom nav (mobile). The dropdown should contain only user-specific items: Profile and Log out. The unused `Settings` import from lucide-react can also be removed.
 
 ### 9.2 Remove Duplicate "My Habits" Title
 

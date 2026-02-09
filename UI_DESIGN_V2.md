@@ -22,6 +22,7 @@ Before proposing changes, we performed a comprehensive visual audit of the live 
 | **Habit cards** | Minimal: text + streaks + checkbox, `hover:shadow-md hover:scale-[1.02]` | No monthly progress indicator, subtle hover |
 | **Landing page** | Bold blue-600 gradients, feature cards, stats section | Best-looking page — but authenticated app doesn't carry this quality |
 | **Profile dropdown** | "Profile" and "Settings" items are dead `<DropdownMenuItem>` with no links | Broken navigation — clicking does nothing |
+| **Settings duplication** | Settings link in top navbar (`main-nav.tsx`) AND profile dropdown (`profile-avatar.tsx`) | Redundant once dropdown is fixed — Settings accessible from two places on desktop |
 | **Habits page** | `<h1>` in both `habits-page-content.tsx` and `habit-list.tsx` | Duplicate "My Habits" title |
 | **App header logo** | `bg-gradient-to-r from-blue-600 to-purple-600` | Blue/purple gradient disconnected from emerald app theme |
 
@@ -435,18 +436,20 @@ transition-all hover:shadow-lg hover:scale-[1.03] hover:-translate-y-0.5 duratio
 
 **Current:** "Profile" and "Settings" menu items are bare `<DropdownMenuItem>` elements with no navigation. Only "Log out" works (handled by `ProfileAvatarClient`).
 
-**Fix:** Wrap items with Next.js `<Link>` using `asChild` pattern:
+**Fix:** Remove the "Settings" item entirely from the dropdown (it already exists in the top navbar via `main-nav.tsx` and the mobile bottom nav). Keep only "Profile" and make it functional by wrapping with Next.js `<Link>`:
 
 ```
 <DropdownMenuItem asChild>
   <Link href="/dashboard/settings">
-    <Settings className="mr-2 h-4 w-4" />
-    <span>Settings</span>
+    <UserIcon className="mr-2 h-4 w-4" />
+    <span>Profile</span>
   </Link>
 </DropdownMenuItem>
 ```
 
-Both "Profile" and "Settings" should navigate to `/dashboard/settings` (no separate profile page exists).
+**Rationale:** Settings is already accessible via the top navbar (desktop) and the bottom nav (mobile). Having it in the dropdown too creates redundancy. The dropdown should contain only user-specific items: Profile and Log out.
+
+"Profile" navigates to `/dashboard/settings` (no separate profile page exists).
 
 ### 6.2 Remove Duplicate "My Habits" Title
 
