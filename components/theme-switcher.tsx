@@ -17,9 +17,8 @@ const ThemeSwitcher = () => {
   const { theme, setTheme, resolvedTheme } = useTheme();
 
   // useEffect only runs on the client, so now we can safely show the UI
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- standard hydration guard pattern
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (mounted && resolvedTheme) {

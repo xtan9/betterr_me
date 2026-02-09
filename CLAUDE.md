@@ -7,7 +7,7 @@
 
 ## Project Overview
 
-**BetterR.Me** — habit tracking web app. Next.js 15.5 (App Router), Supabase, TypeScript (strict), three locales (en, zh, zh-TW), dark mode, tested with Vitest + Playwright.
+**BetterR.Me** — habit tracking web app. Next.js 16 (App Router), Supabase, TypeScript (strict), three locales (en, zh, zh-TW), dark mode, tested with Vitest + Playwright.
 
 ## Quick Reference
 
@@ -24,7 +24,7 @@ pnpm test:e2e:chromium  # Playwright (Chromium only — fastest)
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 15.5 (App Router) |
+| Framework | Next.js 16 (App Router) |
 | Auth & DB | Supabase SSR (`@supabase/ssr`) |
 | UI | shadcn/ui + Radix UI (unified `radix-ui` package) + Tailwind CSS 3 |
 | Forms | react-hook-form + zod |
@@ -38,7 +38,7 @@ pnpm test:e2e:chromium  # Playwright (Chromium only — fastest)
 
 ### Supabase Client Pattern
 
-Three clients: **Browser** (`lib/supabase/client.ts`), **Server** (`lib/supabase/server.ts`), **Middleware** (`lib/supabase/middleware.ts`).
+Three clients: **Browser** (`lib/supabase/client.ts`), **Server** (`lib/supabase/server.ts`), **Proxy** (`lib/supabase/proxy.ts`).
 
 API routes must always instantiate DB classes with a fresh server client — no singletons:
 ```ts
@@ -46,9 +46,9 @@ const supabase = await createClient();
 const habitsDB = new HabitsDB(supabase);
 ```
 
-### Middleware Auth Flow
+### Proxy Auth Flow
 
-`middleware.ts` → `updateSession()`: refreshes session, redirects authenticated `/` → `/dashboard`, unauthenticated protected routes → `/auth/login`.
+`proxy.ts` → `updateSession()`: refreshes session, redirects authenticated `/` → `/dashboard`, unauthenticated protected routes → `/auth/login`.
 
 ### Timezone Handling
 

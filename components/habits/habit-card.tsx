@@ -5,6 +5,7 @@ import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { createElement } from "react";
 import { getFrequencyTranslation, getCategoryColor, getCategoryIcon } from "@/lib/habits/format";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
@@ -17,7 +18,6 @@ interface HabitCardProps {
 
 export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardProps) {
   const t = useTranslations("habits");
-  const Icon = getCategoryIcon(habit.category);
   const categoryColorClass = getCategoryColor(habit.category);
   const categoryLabel = habit.category
     ? t(`categories.${habit.category}`)
@@ -41,7 +41,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
             onClick={() => onClick(habit.id)}
           >
             <span className={cn("inline-flex items-center justify-center rounded-md p-1.5", categoryColorClass)}>
-              <Icon className="size-4" aria-hidden="true" />
+              {createElement(getCategoryIcon(habit.category), { className: "size-4", "aria-hidden": "true" })}
             </span>
             <div className="min-w-0">
               <h3 className="font-medium truncate">{habit.name}</h3>
