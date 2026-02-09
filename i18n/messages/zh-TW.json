@@ -413,9 +413,39 @@
       "2": "中",
       "3": "高"
     },
+    "detail": {
+      "title": "任務詳情",
+      "edit": "編輯",
+      "delete": "刪除任務",
+      "deleteConfirm": "確定要刪除這個任務嗎？",
+      "deleteCancel": "取消",
+      "back": "返回",
+      "completed": "已完成",
+      "pending": "待完成",
+      "dueDate": "截止日期",
+      "dueTime": "截止時間",
+      "priority": "優先順序",
+      "category": "分類",
+      "noDueDate": "無截止日期",
+      "notFound": "任務未找到"
+    },
+    "edit": {
+      "title": "編輯任務",
+      "success": "任務更新成功",
+      "error": "更新任務失敗"
+    },
+    "delete": {
+      "success": "任務刪除成功",
+      "error": "刪除任務失敗"
+    },
     "toast": {
       "createSuccess": "任務建立成功",
-      "createError": "建立任務失敗"
+      "createError": "建立任務失敗",
+      "toggleError": "更新任務失敗"
+    },
+    "error": {
+      "title": "載入任務失敗",
+      "retry": "重試"
     }
   },
   "settings": {
