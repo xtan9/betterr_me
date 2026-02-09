@@ -21,6 +21,8 @@ const messages = {
       completed: "{completed} of {total} completed",
       moreToGo: "{count} more to go!",
       allComplete: "All habits complete!",
+      perfectDay: "Perfect day!",
+      allCompletedDesc: "You completed all {count} habits today.",
       noHabits: "No habits yet",
       createFirst: "Create your first habit",
     },
@@ -55,6 +57,7 @@ const mockHabits: HabitWithTodayStatus[] = [
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     completed_today: true,
+    monthly_completion_rate: 75,
   },
   {
     id: "2",
@@ -70,6 +73,7 @@ const mockHabits: HabitWithTodayStatus[] = [
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     completed_today: false,
+    monthly_completion_rate: 50,
   },
   {
     id: "3",
@@ -85,6 +89,7 @@ const mockHabits: HabitWithTodayStatus[] = [
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
     completed_today: false,
+    monthly_completion_rate: 30,
   },
 ];
 
@@ -157,7 +162,7 @@ describe("HabitChecklist", () => {
       />
     );
 
-    expect(screen.getByText(/All habits complete!/)).toBeInTheDocument();
+    expect(screen.getByText("Perfect day!")).toBeInTheDocument();
   });
 
   it("shows empty state when no habits", () => {

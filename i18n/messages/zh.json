@@ -7,7 +7,8 @@
       "dashboard": "仪表板",
       "habits": "习惯",
       "settings": "设置",
-      "learnMore": "了解更多"
+      "learnMore": "了解更多",
+      "profile": "个人资料"
     },
     "footer": {
       "product": "产品",
@@ -122,6 +123,8 @@
       "completed": "已完成 {completed}/{total}",
       "moreToGo": "还有 {count} 个待完成！",
       "allComplete": "全部完成！",
+      "perfectDay": "完美的一天！",
+      "allCompletedDesc": "你今天完成了所有 {count} 个习惯。",
       "noHabits": "还没有习惯",
       "createFirst": "创建你的第一个习惯"
     },

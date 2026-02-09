@@ -168,13 +168,36 @@ export class HabitsDB {
 
     if (logsError) throw logsError;
 
+    // Get this month's logs for progress bars
+    const monthStart = today.substring(0, 7) + '-01';
+    const { data: monthLogs, error: monthLogsError } = await this.supabase
+      .from('habit_logs')
+      .select('habit_id, logged_date, completed')
+      .eq('user_id', userId)
+      .gte('logged_date', monthStart)
+      .lte('logged_date', today)
+      .eq('completed', true);
+
+    if (monthLogsError) throw monthLogsError;
+
+    // Count completed days per habit this month
+    const monthlyCompletions = new Map<string, number>();
+    (monthLogs || []).forEach(log => {
+      monthlyCompletions.set(log.habit_id, (monthlyCompletions.get(log.habit_id) || 0) + 1);
+    });
+
+    const dayOfMonth = parseInt(today.split('-')[2], 10);
+
     // Create a set of completed habit IDs
     const completedHabitIds = new Set((logs || []).map(log => log.habit_id));
 
-    // Add today status to each habit
+    // Add today status and monthly rate to each habit
     return habits.map(habit => ({
       ...habit,
       completed_today: completedHabitIds.has(habit.id),
+      monthly_completion_rate: dayOfMonth > 0
+        ? Math.round(((monthlyCompletions.get(habit.id) || 0) / dayOfMonth) * 100)
+        : 0,
     }));
   }
 

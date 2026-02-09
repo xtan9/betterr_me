@@ -57,7 +57,7 @@ export default async function HomePage() {
                 key={index}
                 className="p-6 bg-card rounded-xl shadow-sm hover:shadow-md transition-shadow border"
               >
-                <div className="text-blue-600 mb-4">{feature.icon}</div>
+                <div className="text-emerald-600 mb-4">{feature.icon}</div>
                 <h3 className="text-xl font-semibold mb-2 text-card-foreground">{feature.title}</h3>
                 <p className="text-muted-foreground">{feature.description}</p>
               </div>
@@ -67,28 +67,28 @@ export default async function HomePage() {
       </section>
 
       {/* Stats Section */}
-      <section className="py-20 bg-blue-600 text-white">
+      <section className="py-20 bg-emerald-600 text-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold mb-4">
               {t("stats.joinCommunity")}
             </h2>
-            <p className="text-blue-100 max-w-2xl mx-auto">
+            <p className="text-emerald-100 max-w-2xl mx-auto">
               {t("stats.subtitle")}
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-8 text-center">
             <div>
               <div className="text-4xl font-bold mb-2">{t("stats.habitsTracked")}</div>
-              <div className="text-blue-100">{t("stats.habitsTrackedLabel")}</div>
+              <div className="text-emerald-100">{t("stats.habitsTrackedLabel")}</div>
             </div>
             <div>
               <div className="text-4xl font-bold mb-2">{t("stats.activeUsers")}</div>
-              <div className="text-blue-100">{t("stats.activeUsersLabel")}</div>
+              <div className="text-emerald-100">{t("stats.activeUsersLabel")}</div>
             </div>
             <div>
               <div className="text-4xl font-bold mb-2">{t("stats.successRate")}</div>
-              <div className="text-blue-100">{t("stats.successRateLabel")}</div>
+              <div className="text-emerald-100">{t("stats.successRateLabel")}</div>
             </div>
           </div>
         </div>
@@ -103,7 +103,7 @@ export default async function HomePage() {
           <p className="text-muted-foreground max-w-2xl mx-auto mb-8">
             {t("cta.subtitle")}
           </p>
-          <button className="inline-flex items-center px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl">
+          <button className="inline-flex items-center px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl">
             {t("cta.button")}
             <ArrowUpRight className="ml-2 w-5 h-5" />
           </button>

@@ -32,7 +32,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
   };
 
   return (
-    <Card data-testid={`habit-card-${habit.id}`} className="transition-all hover:shadow-md hover:scale-[1.02] p-5">
+    <Card data-testid={`habit-card-${habit.id}`} className="transition-all hover:shadow-lg hover:scale-[1.03] hover:-translate-y-0.5 duration-200 p-5">
       <CardContent className="p-0 space-y-3">
         <div className="flex items-start justify-between">
           <button
@@ -44,7 +44,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
               {createElement(getCategoryIcon(habit.category), { className: "size-4", "aria-hidden": "true" })}
             </span>
             <div className="min-w-0">
-              <h3 className="font-medium truncate">{habit.name}</h3>
+              <h3 className="font-display font-medium truncate">{habit.name}</h3>
               <p className="text-xs text-muted-foreground">
                 {categoryLabel} · {frequencyLabel}
               </p>
@@ -74,6 +74,19 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
               {t("card.streakDays", { count: habit.best_streak })}
             </span>
             <p className="text-xs text-muted-foreground">{t("card.bestStreak")}</p>
+          </div>
+        </div>
+
+        {/* Monthly progress bar */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>{t("card.thisMonth", { percent: habit.monthly_completion_rate })}</span>
+          </div>
+          <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700" aria-hidden="true">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+              style={{ width: `${habit.monthly_completion_rate}%` }}
+            />
           </div>
         </div>
       </CardContent>

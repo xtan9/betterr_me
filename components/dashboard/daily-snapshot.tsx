@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 interface StatCardProps {
   icon: React.ReactNode;
+  iconBgClass: string;
   title: string;
   value: string | number;
   subtitle?: string;
@@ -16,32 +17,36 @@ interface StatCardProps {
   };
 }
 
-function StatCard({ icon, title, value, subtitle, trend }: StatCardProps) {
+function StatCard({ icon, iconBgClass, title, value, subtitle, trend }: StatCardProps) {
   return (
-    <div data-testid="stat-card" className="min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900">
-      <div className="flex items-center gap-2 mb-2 text-slate-500 dark:text-slate-400">
-        <span aria-hidden="true">{icon}</span>
-        <span className="text-sm">{title}</span>
-      </div>
-      <div className="text-3xl font-bold mb-1">{value}</div>
-      {subtitle && (
-        <div className="text-sm text-slate-500 dark:text-slate-400">{subtitle}</div>
-      )}
-      {trend && (
-        <div
-          className={cn(
-            "flex items-center gap-1 text-sm mt-1",
-            trend.isPositive ? "text-emerald-500" : "text-red-500"
-          )}
-        >
-          {trend.isPositive ? (
-            <TrendingUp className="size-4" aria-hidden="true" />
-          ) : (
-            <TrendingDown className="size-4" aria-hidden="true" />
-          )}
-          <span>{trend.label}</span>
+    <div data-testid="stat-card" className="min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className={cn("rounded-full p-2.5 shrink-0", iconBgClass)} aria-hidden="true">
+          {icon}
         </div>
-      )}
+        <div className="min-w-0">
+          <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
+          <p className="font-display text-3xl font-bold mt-0.5">{value}</p>
+          {subtitle && (
+            <p className="text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
+          )}
+          {trend && (
+            <div
+              className={cn(
+                "flex items-center gap-1 text-sm mt-1",
+                trend.isPositive ? "text-emerald-500" : "text-red-500"
+              )}
+            >
+              {trend.isPositive ? (
+                <TrendingUp className="size-4" aria-hidden="true" />
+              ) : (
+                <TrendingDown className="size-4" aria-hidden="true" />
+              )}
+              <span>{trend.label}</span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -87,22 +92,25 @@ export function DailySnapshot({ stats, yesterdayStats }: DailySnapshotProps) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">{t("title")}</h2>
+      <h2 className="font-display text-lg font-semibold">{t("title")}</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <StatCard
-          icon={<Target className="size-4" />}
+          icon={<Target className="size-4 text-blue-600 dark:text-blue-400" />}
+          iconBgClass="bg-blue-100 dark:bg-blue-900/30"
           title={t("activeHabits")}
           value={stats.total_habits}
         />
         <StatCard
-          icon={<Target className="size-4" />}
+          icon={<Target className="size-4 text-emerald-600 dark:text-emerald-400" />}
+          iconBgClass="bg-emerald-100 dark:bg-emerald-900/30"
           title={t("todaysProgress")}
           value={`${stats.completed_today}/${stats.total_habits}`}
           subtitle={t("completionRate", { percent: completionRate })}
           trend={trend}
         />
         <StatCard
-          icon={<Flame className="size-4" />}
+          icon={<Flame className="size-4 text-orange-600 dark:text-orange-400" />}
+          iconBgClass="bg-orange-100 dark:bg-orange-900/30"
           title={t("currentStreak")}
           value={t("days", { count: stats.current_best_streak })}
         />

@@ -118,7 +118,7 @@ export function DashboardContent({ userName }: DashboardContentProps) {
       <div className="space-y-8">
         {/* Greeting */}
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="font-display text-3xl font-bold tracking-tight">
             {getGreeting()}, {userName}! 👋
           </h1>
           <p className="text-muted-foreground">{t("welcome")}</p>
@@ -172,7 +172,7 @@ export function DashboardContent({ userName }: DashboardContentProps) {
     <div className="space-y-8">
       {/* Greeting */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">
+        <h1 className="font-display text-3xl font-bold tracking-tight">
           {getGreeting()}, {userName}! 👋
         </h1>
         <p className="text-muted-foreground">{t("welcome")}</p>

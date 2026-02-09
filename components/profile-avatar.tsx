@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getTranslations } from "next-intl/server";
+import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import {
   DropdownMenu,
@@ -9,15 +11,13 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Button } from "./ui/button";
-import { 
-  User as UserIcon, 
-  Settings,
-} from "lucide-react";
+import { User as UserIcon } from "lucide-react";
 import { ProfileAvatarClient } from "./profile-avatar-client";
 
 export async function ProfileAvatar() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  const t = await getTranslations("common.nav");
 
   if (!user) {
     return null;
@@ -61,13 +61,11 @@ export async function ProfileAvatar() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <UserIcon className="mr-2 h-4 w-4" />
-          <span>Profile</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Settings className="mr-2 h-4 w-4" />
-          <span>Settings</span>
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard/settings">
+            <UserIcon className="mr-2 h-4 w-4" />
+            <span>{t("profile")}</span>
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <ProfileAvatarClient />

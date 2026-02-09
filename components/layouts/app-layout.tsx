@@ -2,6 +2,7 @@ import { ProfileAvatar } from "@/components/profile-avatar";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { MainNav } from "@/components/main-nav";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 import Link from "next/link";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -12,7 +13,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="container flex h-14 items-center max-w-screen-2xl mx-auto px-4">
           <div className="flex items-center gap-6">
             <Link href="/dashboard" className="flex items-center space-x-2">
-              <div className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <div className="font-display font-bold text-xl bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">
                 BetterR.me
               </div>
             </Link>
@@ -31,11 +32,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main content — overflow-x-hidden prevents skeleton/greeting widths from causing horizontal scroll on small viewports */}
-      <div className="flex-1 overflow-x-hidden">
+      <div className="flex-1 overflow-x-hidden pb-20 md:pb-0">
         <div className="container max-w-screen-2xl mx-auto px-4 py-6">
           {children}
         </div>
       </div>
+
+      {/* Mobile bottom navigation */}
+      <MobileBottomNav />
     </main>
   );
 }
