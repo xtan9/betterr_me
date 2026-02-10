@@ -288,6 +288,26 @@ describe("TasksToday", () => {
     expect(screen.queryByText("Should not appear")).not.toBeInTheDocument();
   });
 
+  it("does not show intention subtitle for P3 tasks with empty string intention", () => {
+    const tasksWithEmptyIntention: Task[] = [
+      {
+        ...mockTasks[0],
+        intention: "",
+      },
+    ];
+
+    renderWithIntl(
+      <TasksToday
+        tasks={tasksWithEmptyIntention}
+        onToggle={vi.fn()}
+        onCreateTask={vi.fn()}
+      />
+    );
+
+    const taskRow = screen.getByText("Finish proposal").closest("div");
+    expect(taskRow?.parentElement?.querySelector("p.italic")).toBeNull();
+  });
+
   it("does not show intention subtitle for P3 tasks without intention", () => {
     renderWithIntl(
       <TasksToday

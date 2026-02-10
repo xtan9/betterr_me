@@ -149,29 +149,27 @@ export function TaskForm({
             )}
           />
 
-          {(mode === "create" || initialData?.intention !== undefined) && (
-            <FormField
-              control={form.control}
-              name="intention"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-muted-foreground italic">
-                    {t("intentionLabel")}
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder={t("intentionPlaceholder")}
-                      disabled={isLoading}
-                      className="italic text-muted-foreground"
-                      {...field}
-                      value={field.value ?? ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
+          <FormField
+            control={form.control}
+            name="intention"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground italic">
+                  {t("intentionLabel")}
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={t("intentionPlaceholder")}
+                    disabled={isLoading}
+                    className="italic text-muted-foreground"
+                    {...field}
+                    value={field.value ?? ""}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}

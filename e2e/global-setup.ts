@@ -59,9 +59,7 @@ async function globalSetup() {
       const existingNames = new Set((existing ?? []).map((h) => h.name));
       const toInsert = SEED_HABITS.filter((h) => !existingNames.has(h.name));
 
-      if (toInsert.length === 0) {
-        console.log('[setup] Seed habits already exist — skipping');
-      } else {
+      if (toInsert.length > 0) {
         const { error: insertError } = await supabase.from('habits').insert(
           toInsert.map((h) => ({
             user_id: userId,
@@ -77,6 +75,8 @@ async function globalSetup() {
         } else {
           console.log(`[setup] Seeded ${toInsert.length} habit(s)`);
         }
+      } else {
+        console.log('[setup] Seed habits already exist — skipping');
       }
 
       // --- Seed tasks ---

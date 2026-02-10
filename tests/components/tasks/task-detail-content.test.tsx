@@ -305,6 +305,23 @@ describe('TaskDetailContent', () => {
     expect(screen.queryByText('Your Why')).not.toBeInTheDocument();
   });
 
+  it('hides Your Why card when intention is empty string', () => {
+    const taskWithEmptyIntention = {
+      ...mockTask,
+      intention: '',
+    };
+    vi.mocked(useSWR).mockReturnValue({
+      data: taskWithEmptyIntention,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+      isValidating: false,
+    } as any);
+
+    render(<TaskDetailContent taskId="task-1" />);
+    expect(screen.queryByText('Your Why')).not.toBeInTheDocument();
+  });
+
   it('shows error toast on toggle failure', async () => {
     vi.mocked(global.fetch).mockRejectedValue(new Error('Network error'));
 

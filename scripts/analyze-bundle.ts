@@ -5,7 +5,7 @@
  * Usage: tsx scripts/analyze-bundle.ts
  *
  * Targets:
- * - Total JS < 520KB gzipped
+ * - Total JS < 505KB gzipped
  * - No single chunk > 100KB gzipped
  */
 
@@ -135,17 +135,17 @@ function analyze() {
   console.log('\n📊 Summary:\n');
   console.log(`  JS Bundles: ${bundles.length} files`);
   console.log(`  Total JS Size: ${formatBytes(totalSize)} (${formatBytes(totalGzip)} gzipped)`);
-  console.log(`  Total JS target: < 520KB gzipped`);
+  console.log(`  Total JS target: < 505KB gzipped`);
   console.log(`  Per-chunk target: < 100KB gzipped`);
 
   // Check thresholds
   let hasIssues = false;
 
-  if (totalGzip > 520 * 1024) {
-    console.log(`\n  ⚠️  Total JS gzipped (${formatBytes(totalGzip)}) exceeds 520KB target`);
+  if (totalGzip > 505 * 1024) {
+    console.log(`\n  ⚠️  Total JS gzipped (${formatBytes(totalGzip)}) exceeds 505KB target`);
     hasIssues = true;
   } else {
-    console.log(`\n  ✅ Total JS gzipped within 520KB target`);
+    console.log(`\n  ✅ Total JS gzipped within 505KB target`);
   }
 
   if (oversizedChunks.length > 0) {
@@ -171,7 +171,7 @@ function analyze() {
       totalSize,
       totalGzip,
       oversizedChunks,
-      thresholds: { totalGzip: 520 * 1024, perChunkGzip: 100 * 1024 },
+      thresholds: { totalGzip: 505 * 1024, perChunkGzip: 100 * 1024 },
       passed: !hasIssues,
     }, null, 2)
   );
