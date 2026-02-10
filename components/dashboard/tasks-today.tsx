@@ -11,10 +11,11 @@ import type { Task } from "@/lib/db/types";
 interface TaskRowProps {
   task: Task;
   onToggle: (taskId: string) => Promise<void>;
+  onClick?: (taskId: string) => void;
   isToggling?: boolean;
 }
 
-function TaskRow({ task, onToggle, isToggling }: TaskRowProps) {
+function TaskRow({ task, onToggle, onClick, isToggling }: TaskRowProps) {
   const t = useTranslations("dashboard.tasks");
 
   const priorityColors = {
@@ -52,14 +53,16 @@ function TaskRow({ task, onToggle, isToggling }: TaskRowProps) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <Circle className={cn("size-2 fill-current", priorityColor)} />
-          <span
+          <button
+            type="button"
             className={cn(
-              "font-medium",
+              "font-medium text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md",
               task.is_completed && "line-through text-muted-foreground"
             )}
+            onClick={() => onClick?.(task.id)}
           >
             {task.title}
-          </span>
+          </button>
         </div>
         <div className="text-xs text-muted-foreground mt-0.5">
           {task.due_time
@@ -74,6 +77,7 @@ function TaskRow({ task, onToggle, isToggling }: TaskRowProps) {
 interface TasksTodayProps {
   tasks: Task[];
   onToggle: (taskId: string) => Promise<void>;
+  onTaskClick?: (taskId: string) => void;
   onCreateTask: () => void;
   isLoading?: boolean;
 }
@@ -81,6 +85,7 @@ interface TasksTodayProps {
 export function TasksToday({
   tasks,
   onToggle,
+  onTaskClick,
   onCreateTask,
   isLoading,
 }: TasksTodayProps) {
@@ -139,6 +144,7 @@ export function TasksToday({
                   key={task.id}
                   task={task}
                   onToggle={onToggle}
+                  onClick={onTaskClick}
                   isToggling={isLoading}
                 />
               ))}

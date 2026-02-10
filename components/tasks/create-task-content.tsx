@@ -40,7 +40,7 @@ export function CreateTaskContent() {
       );
 
       toast.success(t("toast.createSuccess"));
-      router.push("/dashboard");
+      router.push("/tasks");
     } catch (error) {
       console.error("Create task error:", error);
       toast.error(t("toast.createError"));

@@ -225,4 +225,46 @@ describe("TasksToday", () => {
       expect(checkbox).toBeDisabled();
     });
   });
+
+  it("calls onTaskClick when task title is clicked", () => {
+    const onToggle = vi.fn();
+    const onCreateTask = vi.fn();
+    const onTaskClick = vi.fn();
+
+    renderWithIntl(
+      <TasksToday
+        tasks={mockTasks}
+        onToggle={onToggle}
+        onTaskClick={onTaskClick}
+        onCreateTask={onCreateTask}
+      />
+    );
+
+    const taskTitle = screen.getByText("Finish proposal");
+    fireEvent.click(taskTitle);
+
+    expect(onTaskClick).toHaveBeenCalledWith("1");
+  });
+
+  it("renders task titles as buttons for accessibility", () => {
+    const onToggle = vi.fn();
+    const onCreateTask = vi.fn();
+
+    renderWithIntl(
+      <TasksToday
+        tasks={mockTasks}
+        onToggle={onToggle}
+        onCreateTask={onCreateTask}
+      />
+    );
+
+    const buttons = screen.getAllByRole("button");
+    const taskButtons = buttons.filter(
+      (b) =>
+        b.textContent === "Finish proposal" ||
+        b.textContent === "Team standup" ||
+        b.textContent === "Read documentation"
+    );
+    expect(taskButtons).toHaveLength(3);
+  });
 });

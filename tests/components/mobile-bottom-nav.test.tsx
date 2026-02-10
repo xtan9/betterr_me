@@ -27,7 +27,7 @@ describe("MobileBottomNav", () => {
     const links = screen.getAllByRole("link");
     expect(links[0]).toHaveAttribute("href", "/dashboard");
     expect(links[1]).toHaveAttribute("href", "/habits");
-    expect(links[2]).toHaveAttribute("href", "/dashboard/settings");
+    expect(links[2]).toHaveAttribute("href", "/tasks");
   });
 
   it("renders labels via i18n keys", () => {
@@ -35,7 +35,7 @@ describe("MobileBottomNav", () => {
 
     expect(screen.getByText("dashboard")).toBeInTheDocument();
     expect(screen.getByText("habits")).toBeInTheDocument();
-    expect(screen.getByText("settings")).toBeInTheDocument();
+    expect(screen.getByText("tasks")).toBeInTheDocument();
   });
 
   it("highlights active tab when pathname matches /dashboard", () => {
@@ -54,12 +54,12 @@ describe("MobileBottomNav", () => {
     expect(activeLink).toHaveAttribute("href", "/habits");
   });
 
-  it("highlights settings tab when on settings page", () => {
-    mockPathname.mockReturnValue("/dashboard/settings");
+  it("highlights tasks tab when on tasks page", () => {
+    mockPathname.mockReturnValue("/tasks");
     render(<MobileBottomNav />);
 
     const activeLink = screen.getByRole("link", { current: "page" });
-    expect(activeLink).toHaveAttribute("href", "/dashboard/settings");
+    expect(activeLink).toHaveAttribute("href", "/tasks");
   });
 
   it("has aria-current=page only on active tab", () => {

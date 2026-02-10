@@ -124,7 +124,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
       });
       if (!response.ok) throw new Error("Failed to delete");
       toast.success(t("delete.success"));
-      router.push("/dashboard");
+      router.push("/tasks");
     } catch {
       toast.error(t("delete.error"));
     } finally {
@@ -167,7 +167,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
-          onClick={() => router.push("/dashboard")}
+          onClick={() => router.push("/tasks")}
           className="gap-2"
         >
           <ArrowLeft className="size-4" />

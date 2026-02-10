@@ -7,6 +7,7 @@
       "dashboard": "儀表板",
       "habits": "習慣",
       "settings": "設定",
+      "tasks": "任務",
       "learnMore": "了解更多",
       "profile": "個人資料"
     },
@@ -442,6 +443,37 @@
       "createSuccess": "任務建立成功",
       "createError": "建立任務失敗",
       "toggleError": "更新任務失敗"
+    },
+    "page": {
+      "title": "我的任務",
+      "createButton": "建立任務"
+    },
+    "list": {
+      "searchPlaceholder": "搜尋任務...",
+      "tabs": {
+        "pending": "待完成",
+        "completed": "已完成"
+      }
+    },
+    "empty": {
+      "noTasks": {
+        "title": "還沒有任務",
+        "description": "新增你的第一個任務來保持條理。",
+        "cta": "建立第一個任務"
+      },
+      "noResults": {
+        "title": "沒有符合的任務",
+        "description": "試試其他搜尋詞。"
+      },
+      "allComplete": {
+        "title": "全部任務完成！",
+        "description": "做得好！你的所有任務都完成了。"
+      }
+    },
+    "card": {
+      "markComplete": "標記完成",
+      "overdue": "已逾期",
+      "noDueDate": "無截止日期"
     },
     "error": {
       "title": "載入任務失敗",
