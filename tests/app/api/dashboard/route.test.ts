@@ -17,6 +17,9 @@ const mockTasksDB = {
   getTodayTasks: vi.fn(),
   getUserTasks: vi.fn().mockResolvedValue([]),
 };
+const mockHabitLogsDB = {
+  getAllUserLogs: vi.fn().mockResolvedValue([]),
+};
 
 vi.mock('@/lib/db', () => ({
   HabitsDB: class {
@@ -24,6 +27,9 @@ vi.mock('@/lib/db', () => ({
   },
   TasksDB: class {
     constructor() { return mockTasksDB; }
+  },
+  HabitLogsDB: class {
+    constructor() { return mockHabitLogsDB; }
   },
 }));
 
@@ -39,8 +45,16 @@ describe('GET /api/dashboard', () => {
 
   it('should return aggregated dashboard data', async () => {
     const habits = [
-      { id: 'h1', name: 'Run', current_streak: 5, completed_today: true, monthly_completion_rate: 80 },
-      { id: 'h2', name: 'Read', current_streak: 3, completed_today: false, monthly_completion_rate: 60 },
+      {
+        id: 'h1', name: 'Run', current_streak: 5, completed_today: true,
+        monthly_completion_rate: 80, frequency: { type: 'daily' },
+        created_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'h2', name: 'Read', current_streak: 3, completed_today: false,
+        monthly_completion_rate: 60, frequency: { type: 'daily' },
+        created_at: '2026-01-01T00:00:00Z',
+      },
     ];
     const todayTasks = [{ id: 't1', title: 'Task 1', is_completed: false }];
     const todayDateTasks = [
@@ -52,7 +66,6 @@ describe('GET /api/dashboard', () => {
       { id: 't2', title: 'Task 2', is_completed: true },
       { id: 't3', title: 'Task 3', is_completed: false },
     ];
-
     const tomorrowTasks = [{ id: 't4', title: 'Tomorrow task', is_completed: false }];
 
     vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
@@ -77,6 +90,33 @@ describe('GET /api/dashboard', () => {
     expect(data.stats.current_best_streak).toBe(5);
     expect(data.stats.total_tasks).toBe(3);
     expect(data.stats.tasks_completed_today).toBe(1);
+  });
+
+  // TODO: Enable after feat/h1-absence-backend merges into this branch
+  it.skip('should compute absence data from bulk logs', async () => {
+    const habits = [
+      {
+        id: 'h1', name: 'Run', current_streak: 0, completed_today: false,
+        monthly_completion_rate: 50, frequency: { type: 'daily' },
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ];
+
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockHabitLogsDB.getAllUserLogs).mockResolvedValue([
+      { habit_id: 'h1', logged_date: '2026-02-05', completed: true },
+      { habit_id: 'h1', logged_date: '2026-02-04', completed: true },
+      { habit_id: 'h1', logged_date: '2026-02-06', completed: false },
+    ] as any);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-09');
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(data.habits[0].missed_scheduled_days).toBe(3);
+    expect(data.habits[0].previous_streak).toBe(2);
   });
 
   it('should handle empty state (new user)', async () => {
@@ -106,6 +146,22 @@ describe('GET /api/dashboard', () => {
     expect(mockHabitsDB.getHabitsWithTodayStatus).toHaveBeenCalledWith('user-123', '2026-02-01');
   });
 
+  // TODO: Enable after feat/h1-absence-backend merges into this branch
+  it.skip('should call getAllUserLogs with 30-day window', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-09');
+    await GET(request);
+
+    expect(mockHabitLogsDB.getAllUserLogs).toHaveBeenCalledWith(
+      'user-123',
+      '2026-01-10', // 30 days before 2026-02-09
+      '2026-02-09'
+    );
+  });
+
   it('should fetch tomorrow tasks based on client date param', async () => {
     vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
     vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
@@ -114,9 +170,7 @@ describe('GET /api/dashboard', () => {
     const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-28');
     await GET(request);
 
-    // getUserTasks called 3 times: today due_date, all tasks, tomorrow due_date
     const calls = vi.mocked(mockTasksDB.getUserTasks).mock.calls;
-    // Third call should be for tomorrow (2026-03-01) with is_completed: false
     expect(calls[2]).toEqual(['user-123', { due_date: '2026-03-01', is_completed: false }]);
   });
 

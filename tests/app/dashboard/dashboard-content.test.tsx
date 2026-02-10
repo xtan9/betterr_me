@@ -72,6 +72,10 @@ const messages = {
       noTasks: "No tasks for today",
       createFirst: "Add a task",
       allComplete: "All tasks done!",
+      comingUp: "Coming Up Tomorrow",
+      headStart: "Get a Head Start",
+      moreTomorrow: "+{count} more tomorrow",
+      viewAll: "View all tasks",
     },
     motivation: {
       firstDay: "Welcome! Your journey starts today.",
