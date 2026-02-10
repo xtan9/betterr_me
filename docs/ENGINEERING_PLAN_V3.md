@@ -182,51 +182,67 @@ const remainingTomorrow = (tasksTomorrow?.length ?? 0) - (tomorrowToShow?.length
 
 **DB layer:** `lib/db/habit-logs.ts`
 
-Add a new public method (note: `shouldTrackOnDate` is currently private, needs to be reused):
+Add a bulk query method and a pure computation function:
 
 ```typescript
 /**
- * Calculate the number of consecutive scheduled days missed
- * for a habit, walking backwards from yesterday.
- * Returns 0 if no days were missed (or habit was completed yesterday).
+ * Fetch all completed logs for a user in the last N days.
+ * ONE query for all habits — avoids N+1 problem on dashboard.
  */
-async getMissedScheduledDays(
-  habitId: string,
+async getAllUserLogs(
   userId: string,
-  frequency: HabitFrequency,
-  maxLookback: number = 30
-): Promise<{ missedDays: number; previousStreak: number }>
+  startDate: string,  // YYYY-MM-DD
+  endDate: string     // YYYY-MM-DD
+): Promise<HabitLog[]>
 ```
 
-**Algorithm:**
-1. Fetch completed logs for the last `maxLookback` days
-2. Walk backwards from yesterday, checking `shouldTrackOnDate()` for each day
-3. For each scheduled day: if no completed log exists, increment `missedDays`
-4. Stop when a completed log is found (or maxLookback reached)
-5. Return `missedDays` and the habit's `current_streak` from before the lapse (available from the habit record's `best_streak` or the streak at last completion)
+Add a **pure function** (no DB access) for computing absence from pre-fetched logs:
 
-**Refactor:** Extract `shouldTrackOnDate` from private to a standalone exported utility function in `lib/habits/frequency.ts` (or make it a static method) so it can be reused by the dashboard API without instantiating a full HabitLogsDB.
+```typescript
+/**
+ * Compute missed scheduled days for a single habit from pre-fetched logs.
+ * Pure function — operates entirely in memory.
+ */
+export function computeMissedDays(
+  habitId: string,
+  frequency: HabitFrequency,
+  logs: HabitLog[],       // Pre-fetched, filtered to this habit
+  maxLookback: number = 30
+): { missedDays: number; previousStreak: number }
+```
+
+**Algorithm (in `computeMissedDays`):**
+1. Filter `logs` to this habit's completed entries, build a `Set<string>` of completed dates for O(1) lookup
+2. Walk backwards from yesterday, checking `shouldTrackOnDate()` for each day
+3. For each scheduled day: if date not in completed set, increment `missedDays`
+4. Stop when a completed date is found (or maxLookback reached)
+5. Return `missedDays` and the habit's streak before the lapse
+
+**Refactor:** Extract `shouldTrackOnDate` from private to a standalone exported utility function in `lib/habits/frequency.ts` (or make it a static method) so it can be reused without instantiating a full HabitLogsDB.
 
 **API:** `app/api/dashboard/route.ts`
 
-Extend the habits data in the dashboard response:
+**Critical: 1 query, not N+1.** Fetch all user logs in bulk, then compute absence in memory:
 
 ```typescript
-// For each active habit, compute missed days:
-const habitsWithAbsence = await Promise.all(
-  habits.map(async (habit) => {
-    const logsDB = new HabitLogsDB(supabase);
-    const absence = await logsDB.getMissedScheduledDays(
-      habit.id, user.id, habit.frequency
-    );
-    return {
-      ...habit,
-      missed_scheduled_days: absence.missedDays,
-      previous_streak: absence.previousStreak,
-    };
-  })
-);
+// ONE query for all habit logs in last 30 days:
+const logsDB = new HabitLogsDB(supabase);
+const thirtyDaysAgo = /* compute from localDate */;
+const allLogs = await logsDB.getAllUserLogs(user.id, thirtyDaysAgo, localDate);
+
+// Compute absence in memory — no additional queries:
+const habitsWithAbsence = habits.map(habit => {
+  const habitLogs = allLogs.filter(l => l.habit_id === habit.id);
+  const absence = computeMissedDays(habit.id, habit.frequency, habitLogs);
+  return {
+    ...habit,
+    missed_scheduled_days: absence.missedDays,
+    previous_streak: absence.previousStreak,
+  };
+});
 ```
+
+**Why:** Dashboard load time is critical. With 10 habits, the original plan fired 10 separate SQL queries (N+1 problem). This approach uses exactly 1 query regardless of habit count, then filters in memory which is negligible.
 
 **Types:** `lib/db/types.ts`
 
@@ -722,7 +738,7 @@ Each feature must include:
 - Existing queries are unaffected (SELECT * picks up new columns automatically)
 
 ### Performance Considerations
-- H1 (absence calculation): Limit lookback to 30 days. For each habit, this is 1 query for logs + in-memory walk. With 7 habits = 7 queries, acceptable for dashboard load.
+- H1 (absence calculation): 1 bulk query for all user logs in last 30 days, then in-memory computation per habit. O(1) queries regardless of habit count — no N+1 problem.
 - H3 (weekly insights): Compute on-demand via separate API endpoint. Not included in main dashboard load. Cached via SWR on the client.
 - H2 (milestones): Record milestone inline during toggle. Dashboard query for today's milestones is 1 query.
 
