@@ -61,23 +61,22 @@ async function globalSetup() {
 
       if (toInsert.length === 0) {
         console.log('[setup] Seed habits already exist — skipping');
-        return;
-      }
-
-      const { error: insertError } = await supabase.from('habits').insert(
-        toInsert.map((h) => ({
-          user_id: userId,
-          name: h.name,
-          description: 'Seeded for E2E testing',
-          category: h.category,
-          frequency: { type: 'daily' },
-        }))
-      );
-
-      if (insertError) {
-        console.error('[setup] Failed to seed habits:', insertError.message);
       } else {
-        console.log(`[setup] Seeded ${toInsert.length} habit(s)`);
+        const { error: insertError } = await supabase.from('habits').insert(
+          toInsert.map((h) => ({
+            user_id: userId,
+            name: h.name,
+            description: 'Seeded for E2E testing',
+            category: h.category,
+            frequency: { type: 'daily' },
+          }))
+        );
+
+        if (insertError) {
+          console.error('[setup] Failed to seed habits:', insertError.message);
+        } else {
+          console.log(`[setup] Seeded ${toInsert.length} habit(s)`);
+        }
       }
 
       // --- Seed tasks ---
