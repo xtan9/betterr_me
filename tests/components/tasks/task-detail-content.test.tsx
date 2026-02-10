@@ -84,6 +84,7 @@ const mockTask = {
   user_id: 'user-1',
   title: 'Buy groceries',
   description: 'Milk, eggs, bread',
+  intention: null,
   is_completed: false,
   priority: 2 as const,
   category: 'shopping' as const,
