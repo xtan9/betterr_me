@@ -148,22 +148,11 @@ test.describe('Task Edit Page', () => {
     // Should navigate back after successful update
     await page.waitForLoadState('networkidle');
 
-    // Revert the title back to original for other tests
-    await page.goto(`/tasks/${taskId}/edit`);
-    await page.waitForLoadState('networkidle');
-    const revertInput = page.locator('input[name="title"]');
-    await expect(revertInput).toBeVisible({ timeout: 10000 });
-    await revertInput.clear();
-    await revertInput.fill(SEED_TASK_TITLE);
-    const revertSaveButton = page.getByRole('button', { name: /save|update/i });
-    await revertSaveButton.click();
-    await page.waitForLoadState('networkidle');
-
-    // Verify the revert persisted via API
-    const verifyResponse = await page.request.get('/api/tasks');
-    const { tasks } = await verifyResponse.json();
-    const revertedTask = tasks.find((t: { id: string }) => t.id === taskId);
-    expect(revertedTask?.title).toBe(SEED_TASK_TITLE);
+    // Revert the title back to original for other tests (via API for reliability)
+    const revertResponse = await page.request.patch(`/api/tasks/${taskId}`, {
+      data: { title: SEED_TASK_TITLE },
+    });
+    expect(revertResponse.ok()).toBe(true);
   });
 
   test('should navigate back on cancel', async ({ page }) => {
