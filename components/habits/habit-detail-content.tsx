@@ -24,7 +24,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { StreakCounter } from "@/components/habits/streak-counter";
-import { Heatmap30Day } from "@/components/habits/heatmap";
+import dynamic from "next/dynamic";
+
+const Heatmap30Day = dynamic(() => import("@/components/habits/heatmap").then(m => ({ default: m.Heatmap30Day })));
 import type { Habit, HabitLog, HabitCategory } from "@/lib/db/types";
 
 interface HabitDetailContentProps {
