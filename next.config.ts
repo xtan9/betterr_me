@@ -4,6 +4,9 @@ import createNextIntlPlugin from 'next-intl/plugin';
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
 const nextConfig: NextConfig = {
+  experimental: {
+    optimizePackageImports: ['radix-ui', 'lucide-react', 'recharts', 'date-fns'],
+  },
   images: {
     remotePatterns: [
       {
