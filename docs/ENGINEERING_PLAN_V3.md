@@ -490,15 +490,18 @@ After toggling to completed, include `completion_difficulty` in the response so 
 
 | File | Change |
 |------|--------|
-| `components/dashboard/tasks-today.tsx` | In `TaskRow`: after toggle-to-complete for qualifying tasks (P3 or has intention), show inline reflection strip instead of immediately marking as done. Use `useState` for a `reflectingTaskId` and a `setTimeout` for 3s auto-dismiss. |
+| `components/dashboard/tasks-today.tsx` | In `TaskRow`: after toggle-to-complete for qualifying tasks (P3 or has intention), show inline reflection strip instead of immediately marking as done. Use `useState` for `reflectingTaskId` + `reflectingTask` (local snapshot) and a `setTimeout` for 3s auto-dismiss. The local snapshot pins the task in place even if SWR revalidation re-sorts or hides completed tasks before the 3s window expires. |
 | `components/tasks/task-card.tsx` | Same reflection logic for the tasks list page. |
 | `components/tasks/task-detail-content.tsx` | Display saved reflection as a badge/label: "You rated this: Easy/Good/Hard" with the corresponding emoji. |
 
 **Reflection strip implementation pattern:**
 
+> **UI Stability Note:** When a task is toggled complete, `onToggle` calls SWR `mutate()`, which triggers a re-fetch. The re-fetched data marks the task as `is_completed: true`, causing a re-render that could re-sort or hide the task before the 3s reflection window expires. To prevent this, we keep a local snapshot of the task being reflected on (`reflectingTask`) and render from that snapshot instead of from the SWR-provided list. The snapshot pins the task in place until the reflection strip completes (user taps an emoji or 3s elapses).
+
 ```typescript
-// Inside TaskRow:
+// Inside TaskRow / TasksToday:
 const [reflectingTaskId, setReflectingTaskId] = useState<string | null>(null);
+const [reflectingTask, setReflectingTask] = useState<Task | null>(null);
 const reflectionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
 const handleToggle = async (taskId: string) => {
@@ -506,12 +509,19 @@ const handleToggle = async (taskId: string) => {
   const isCompleting = task && !task.is_completed;
   const qualifies = task && (task.priority === 3 || task.intention);
 
+  // Snapshot the task BEFORE the toggle so we can render it during reflection
+  // even if SWR revalidation removes/reorders it in the list.
+  if (isCompleting && qualifies) {
+    setReflectingTask({ ...task, is_completed: true });
+    setReflectingTaskId(taskId);
+  }
+
   await onToggle(taskId);
 
   if (isCompleting && qualifies) {
-    setReflectingTaskId(taskId);
     reflectionTimerRef.current = setTimeout(() => {
       setReflectingTaskId(null);
+      setReflectingTask(null);
     }, 3000);
   }
 };
@@ -519,12 +529,23 @@ const handleToggle = async (taskId: string) => {
 const handleReflection = async (taskId: string, difficulty: 1 | 2 | 3) => {
   if (reflectionTimerRef.current) clearTimeout(reflectionTimerRef.current);
   setReflectingTaskId(null);
+  setReflectingTask(null);
   await fetch(`/api/tasks/${taskId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ completion_difficulty: difficulty }),
   });
 };
+
+// When rendering the task list, merge the reflecting task back into
+// the list if SWR has already removed it:
+const visibleTasks = useMemo(() => {
+  if (!reflectingTask || !reflectingTaskId) return tasks;
+  const exists = tasks.some(t => t.id === reflectingTaskId);
+  if (exists) return tasks;
+  // SWR removed it — re-inject at the end so it stays visible
+  return [...tasks, reflectingTask];
+}, [tasks, reflectingTask, reflectingTaskId]);
 ```
 
 **Reflection strip UI:**
@@ -559,7 +580,7 @@ const handleReflection = async (taskId: string, difficulty: 1 | 2 | 3) => {
 ```
 
 **Tests:**
-- `tests/components/dashboard/tasks-today.test.tsx` — reflection strip shows for P3 tasks, auto-dismisses after 3s, saves on tap, does NOT show for P0-P2 without intention
+- `tests/components/dashboard/tasks-today.test.tsx` — reflection strip shows for P3 tasks, auto-dismisses after 3s, saves on tap, does NOT show for P0-P2 without intention, **reflection strip survives SWR revalidation** (simulate SWR returning a new list without the completed task — strip should remain visible via local snapshot)
 - `tests/components/tasks/task-card.test.tsx` — same reflection behavior
 - `tests/components/tasks/task-detail-content.test.tsx` — displays saved reflection
 
