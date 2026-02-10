@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB, TasksDB, HabitLogsDB } from '@/lib/db';
 import type { DashboardData } from '@/lib/db/types';
-import { getLocalDateString } from '@/lib/utils';
+import { getLocalDateString, getNextDateString } from '@/lib/utils';
 import { computeMissedDays } from '@/lib/habits/absence';
 
 /**
@@ -15,7 +15,8 @@ import { computeMissedDays } from '@/lib/habits/absence';
  * Response:
  * - habits: HabitWithTodayStatus[] - active habits with completion status
  * - tasks_today: Task[] - tasks due today or overdue
- * - stats: { total_habits, completed_today, current_best_streak, tasks_due_today, tasks_completed_today }
+ * - tasks_tomorrow: Task[] - incomplete tasks due tomorrow
+ * - stats: { total_habits, completed_today, current_best_streak, total_tasks, tasks_due_today, tasks_completed_today }
  */
 export async function GET(request: NextRequest) {
   try {
@@ -34,6 +35,16 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
 
+    // Validate date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return NextResponse.json(
+        { error: 'Invalid date format. Use YYYY-MM-DD' },
+        { status: 400 }
+      );
+    }
+
+    const tomorrowStr = getNextDateString(date);
+
     // 30-day lookback window for absence computation
     const [year, month, day] = date.split('-').map(Number);
     const thirtyDaysAgo = new Date(year, month - 1, day - 30);
@@ -44,13 +55,15 @@ export async function GET(request: NextRequest) {
     ].join('-');
 
     // Fetch data in parallel (including bulk logs for absence computation)
-    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, allLogs] = await Promise.all([
+    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow, allLogs] = await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
       tasksDB.getTodayTasks(user.id),
       // Get all tasks for today to calculate completed count
       tasksDB.getUserTasks(user.id, { due_date: date }),
       // Get all tasks to determine if user has any tasks at all
       tasksDB.getUserTasks(user.id),
+      // Get incomplete tasks for tomorrow
+      tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
       // Bulk fetch 30-day logs for all habits (1 query, avoids N+1)
       habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date),
     ]);
@@ -89,6 +102,7 @@ export async function GET(request: NextRequest) {
     const dashboardData: DashboardData = {
       habits: enrichedHabits,
       tasks_today: todayTasks,
+      tasks_tomorrow: tasksTomorrow,
       stats: {
         total_habits: enrichedHabits.length,
         completed_today: completedHabitsToday,
