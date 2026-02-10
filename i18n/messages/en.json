@@ -148,6 +148,16 @@
       "halfway": "Halfway there! Keep the momentum going. 🚀",
       "gettingStarted": "Every habit completed brings you closer to your best self. ✨",
       "noHabits": "Ready to start building better habits? Add your first one! 🌱"
+    },
+    "insight": {
+      "title": "Your Week in Review",
+      "bestWeek": "You completed {percent}% of habits this week — your best week yet!",
+      "worstDay": "You tend to skip habits on {day}. Consider adjusting your {day} routine.",
+      "bestHabit": "{habit} is your strongest habit at {percent}% this week.",
+      "streakProximity": "{habit} is {days} days from a {milestone}-day milestone!",
+      "improvement": "Up {change}% from last week. You're building momentum.",
+      "decline": "This week was {percent}%, down from {lastPercent}%. Everyone has off weeks.",
+      "dismiss": "Dismiss"
     }
   },
   "habits": {
