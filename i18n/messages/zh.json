@@ -325,6 +325,18 @@
     },
     "loading": {
       "title": "正在加载习惯..."
+    },
+    "milestone": {
+      "celebration": "太棒了！{habit} 达到了 {count} 天！",
+      "celebration7": "一周坚持！",
+      "celebration14": "两周不断！",
+      "celebration30": "整整一个月！你正在建立真正的习惯。",
+      "celebration50": "50天。一半的人永远到不了这里。",
+      "celebration100": "三位数。传奇般的坚持。",
+      "celebration200": "200天。这已经不是习惯了——这就是你。",
+      "celebration365": "整整一年。令人难以置信的毅力。",
+      "nextMilestone": "再坚持 {days} 天就能达到 {milestone} 天里程碑！",
+      "noNextMilestone": "你已经超越了所有里程碑。继续前进！"
     }
   },
   "auth": {

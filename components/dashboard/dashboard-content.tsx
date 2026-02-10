@@ -10,14 +10,16 @@ import { DailySnapshot } from "./daily-snapshot";
 import { HabitChecklist } from "./habit-checklist";
 import { TasksToday } from "./tasks-today";
 import { MotivationMessage } from "./motivation-message";
+import { MilestoneCards } from "@/components/habits/milestone-card";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
-import type { HabitWithTodayStatus } from "@/lib/db/types";
+import type { HabitWithTodayStatus, HabitMilestone } from "@/lib/db/types";
 import type { Task } from "@/lib/db/types";
 
 interface DashboardData {
   habits: HabitWithTodayStatus[];
   tasks_today: Task[];
+  milestones_today: HabitMilestone[];
   stats: {
     total_habits: number;
     completed_today: number;
@@ -190,6 +192,11 @@ export function DashboardContent({ userName }: DashboardContentProps) {
       {/* Daily Snapshot — only show when user has habits */}
       {data.stats.total_habits > 0 && (
         <DailySnapshot stats={data.stats} />
+      )}
+
+      {/* Milestone celebrations */}
+      {data.milestones_today && data.milestones_today.length > 0 && (
+        <MilestoneCards milestones={data.milestones_today} habits={data.habits} />
       )}
 
       {/* Main content grid */}

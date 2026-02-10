@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { StreakCounter } from "@/components/habits/streak-counter";
+import { NextMilestone } from "@/components/habits/next-milestone";
 import { Heatmap30Day } from "@/components/habits/heatmap";
 import type { Habit, HabitLog, HabitCategory } from "@/lib/db/types";
 
@@ -276,6 +277,9 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
         currentStreak={habit.current_streak}
         bestStreak={habit.best_streak}
       />
+
+      {/* Next Milestone */}
+      <NextMilestone currentStreak={habit.current_streak} />
 
       {/* Completion Stats */}
       <div className="space-y-4">
