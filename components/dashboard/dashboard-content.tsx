@@ -14,29 +14,16 @@ const TasksToday = dynamic(() => import("./tasks-today").then(m => ({ default: m
 import { MotivationMessage } from "./motivation-message";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
-import type { HabitWithTodayStatus } from "@/lib/db/types";
-import type { Task } from "@/lib/db/types";
-
-interface DashboardData {
-  habits: HabitWithTodayStatus[];
-  tasks_today: Task[];
-  stats: {
-    total_habits: number;
-    completed_today: number;
-    current_best_streak: number;
-    total_tasks: number;
-    tasks_due_today: number;
-    tasks_completed_today: number;
-  };
-}
+import type { DashboardData } from "@/lib/db/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 interface DashboardContentProps {
   userName: string;
+  initialData?: DashboardData;
 }
 
-export function DashboardContent({ userName }: DashboardContentProps) {
+export function DashboardContent({ userName, initialData }: DashboardContentProps) {
   const t = useTranslations("dashboard");
   const router = useRouter();
 
@@ -46,6 +33,7 @@ export function DashboardContent({ userName }: DashboardContentProps) {
     `/api/dashboard?date=${today}`,
     fetcher,
     {
+      fallbackData: initialData,
       revalidateOnFocus: true,
       refreshInterval: 60000, // Refresh every minute
       keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
