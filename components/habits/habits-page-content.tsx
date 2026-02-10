@@ -17,7 +17,11 @@ const fetcher = async (url: string) => {
   return data.habits;
 };
 
-export function HabitsPageContent() {
+interface HabitsPageContentProps {
+  initialHabits?: HabitWithTodayStatus[];
+}
+
+export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
   const t = useTranslations("habits");
   const router = useRouter();
   const today = getLocalDateString();
@@ -26,6 +30,7 @@ export function HabitsPageContent() {
     `/api/habits?with_today=true&date=${today}`,
     fetcher,
     {
+      fallbackData: initialHabits,
       revalidateOnFocus: true,
       keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
     }

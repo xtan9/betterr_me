@@ -400,7 +400,9 @@
       "create": "Create Task",
       "save": "Save Changes",
       "creating": "Creating...",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "intentionLabel": "Why This Matters",
+      "intentionPlaceholder": "Why does this matter to you?"
     },
     "categories": {
       "work": "Work",
@@ -428,7 +430,8 @@
       "priority": "Priority",
       "category": "Category",
       "noDueDate": "No due date",
-      "notFound": "Task not found"
+      "notFound": "Task not found",
+      "yourWhy": "Your Why"
     },
     "edit": {
       "title": "Edit Task",

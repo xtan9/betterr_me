@@ -10,12 +10,12 @@ import { test, expect } from '@playwright/test';
 
 const SEED_TASK_TITLE = 'E2E Test - Seed Task 1';
 
-/** Fetch the seed task's ID via the API. */
+/** Fetch the seed task's ID via the API (prefix match to handle mid-rename state). */
 async function getSeedTaskId(page: import('@playwright/test').Page): Promise<string> {
   const response = await page.request.get('/api/tasks');
   expect(response.ok()).toBe(true);
   const { tasks } = await response.json();
-  const seedTask = tasks.find((t: { title: string }) => t.title === SEED_TASK_TITLE);
+  const seedTask = tasks.find((t: { title: string }) => t.title.startsWith(SEED_TASK_TITLE));
   expect(seedTask).toBeDefined();
   return seedTask.id;
 }
@@ -148,16 +148,11 @@ test.describe('Task Edit Page', () => {
     // Should navigate back after successful update
     await page.waitForLoadState('networkidle');
 
-    // Revert the title back to original for other tests
-    await page.goto(`/tasks/${taskId}/edit`);
-    await page.waitForLoadState('networkidle');
-    const revertInput = page.locator('input[name="title"]');
-    await expect(revertInput).toBeVisible({ timeout: 10000 });
-    await revertInput.clear();
-    await revertInput.fill(SEED_TASK_TITLE);
-    const revertSaveButton = page.getByRole('button', { name: /save|update/i });
-    await revertSaveButton.click();
-    await page.waitForLoadState('networkidle');
+    // Revert the title back to original for other tests (via API for reliability)
+    const revertResponse = await page.request.patch(`/api/tasks/${taskId}`, {
+      data: { title: SEED_TASK_TITLE },
+    });
+    expect(revertResponse.ok()).toBe(true);
   });
 
   test('should navigate back on cancel', async ({ page }) => {
