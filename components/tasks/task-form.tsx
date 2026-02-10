@@ -85,6 +85,7 @@ export function TaskForm({
     defaultValues: {
       title: initialData?.title ?? "",
       description: initialData?.description ?? null,
+      intention: initialData?.intention ?? null,
       priority: initialData?.priority ?? 0,
       category: initialData?.category ?? null,
       due_date: initialData?.due_date ?? null,
@@ -96,6 +97,7 @@ export function TaskForm({
     await onSubmit({
       ...data,
       description: data.description || null,
+      intention: data.intention || null,
     });
   };
 
@@ -138,6 +140,28 @@ export function TaskForm({
                   <Textarea
                     placeholder={t("descriptionPlaceholder")}
                     disabled={isLoading}
+                    {...field}
+                    value={field.value ?? ""}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="intention"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-muted-foreground italic">
+                  {t("intentionLabel")}
+                </FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={t("intentionPlaceholder")}
+                    disabled={isLoading}
+                    className="italic text-muted-foreground"
                     {...field}
                     value={field.value ?? ""}
                   />

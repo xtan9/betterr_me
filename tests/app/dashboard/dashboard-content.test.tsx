@@ -2,7 +2,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { getLocalDateString } from "@/lib/utils";
 import { NextIntlClientProvider } from "next-intl";
+import React from "react";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
+
+// Mock next/dynamic to eagerly resolve lazy components in tests
+vi.mock("next/dynamic", () => ({
+  __esModule: true,
+  default: (importFn: () => Promise<any>, options?: any) => {
+    const LazyComponent = React.lazy(importFn);
+    const DynamicMock = (props: any) =>
+      React.createElement(
+        React.Suspense,
+        { fallback: options?.loading?.() ?? null },
+        React.createElement(LazyComponent, props)
+      );
+    DynamicMock.displayName = "DynamicMock";
+    return DynamicMock;
+  },
+}));
 
 // Mock next/navigation
 const mockPush = vi.fn();
@@ -221,7 +238,7 @@ describe("DashboardContent", () => {
     expect(screen.getByText(/Add a Task/i)).toBeInTheDocument();
   });
 
-  it("shows full dashboard when user has tasks but no habits", () => {
+  it("shows full dashboard when user has tasks but no habits", async () => {
     mockUseSWR.mockReturnValue({
       data: {
         habits: [],
@@ -258,11 +275,11 @@ describe("DashboardContent", () => {
     expect(
       screen.queryByText(/Welcome to BetterR.Me!/i)
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
-    expect(screen.getByText("Buy groceries")).toBeInTheDocument();
+    expect(await screen.findByText("Today's Tasks")).toBeInTheDocument();
+    expect(await screen.findByText("Buy groceries")).toBeInTheDocument();
   });
 
-  it("hides DailySnapshot and MotivationMessage when user has only tasks", () => {
+  it("hides DailySnapshot and MotivationMessage when user has only tasks", async () => {
     mockUseSWR.mockReturnValue({
       data: {
         habits: [],
@@ -295,13 +312,13 @@ describe("DashboardContent", () => {
 
     renderWithProviders(<DashboardContent userName="Test User" />);
 
+    // Wait for dynamic components to load, then verify
+    expect(await screen.findByText("Today's Tasks")).toBeInTheDocument();
     // Habit-centric widgets should not be shown
     expect(screen.queryByText("Today's Snapshot")).not.toBeInTheDocument();
-    // Tasks section should still be visible
-    expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
   });
 
-  it("shows full dashboard for user with future tasks but none today", () => {
+  it("shows full dashboard for user with future tasks but none today", async () => {
     mockUseSWR.mockReturnValue({
       data: {
         habits: [],
@@ -326,7 +343,7 @@ describe("DashboardContent", () => {
     expect(
       screen.queryByText(/Welcome to BetterR.Me!/i)
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
+    expect(await screen.findByText("Today's Tasks")).toBeInTheDocument();
   });
 
   it("navigates to create habit page from empty state", () => {
@@ -392,12 +409,12 @@ describe("DashboardContent", () => {
     // Check greeting
     expect(screen.getByText(/Test User/i)).toBeInTheDocument();
 
-    // Check DailySnapshot
-    expect(screen.getByText("Today's Snapshot")).toBeInTheDocument();
+    // Check DailySnapshot (lazy-loaded)
+    expect(await screen.findByText("Today's Snapshot")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument(); // total_habits
 
-    // Check HabitChecklist
-    expect(screen.getByText("Today's Habits")).toBeInTheDocument();
+    // Check HabitChecklist (lazy-loaded)
+    expect(await screen.findByText("Today's Habits")).toBeInTheDocument();
     expect(screen.getByText("Morning Meditation")).toBeInTheDocument();
     expect(screen.getByText("Daily Exercise")).toBeInTheDocument();
   });
@@ -412,7 +429,7 @@ describe("DashboardContent", () => {
 
     renderWithProviders(<DashboardContent userName="Test User" />);
 
-    const addButton = screen.getByText("Add Habit");
+    const addButton = await screen.findByText("Add Habit");
     addButton.click();
 
     expect(mockPush).toHaveBeenCalledWith("/habits/new");
@@ -433,7 +450,8 @@ describe("DashboardContent", () => {
 
     renderWithProviders(<DashboardContent userName="Test User" />);
 
-    // Find checkboxes (habit toggles) and click one
+    // Wait for lazy-loaded HabitChecklist to render, then find checkboxes
+    await screen.findByText("Today's Habits");
     const checkboxes = screen.getAllByRole("checkbox");
     checkboxes[0]?.click();
 

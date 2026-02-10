@@ -39,6 +39,7 @@ const allTranslations: Record<string, Record<string, string>> = {
     'detail.category': 'Category',
     'detail.noDueDate': 'No due date',
     'detail.notFound': 'Task not found',
+    'detail.yourWhy': 'Your Why',
     'edit.success': 'Task updated successfully',
     'edit.error': 'Failed to update task',
     'delete.success': 'Task deleted successfully',
@@ -84,6 +85,7 @@ const mockTask = {
   user_id: 'user-1',
   title: 'Buy groceries',
   description: 'Milk, eggs, bread',
+  intention: null,
   is_completed: false,
   priority: 2 as const,
   category: 'shopping' as const,
@@ -278,6 +280,46 @@ describe('TaskDetailContent', () => {
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith('Failed to delete task');
     });
+  });
+
+  it('shows Your Why card when task has intention', () => {
+    const taskWithIntention = {
+      ...mockTask,
+      intention: 'To stay organized and focused',
+    };
+    vi.mocked(useSWR).mockReturnValue({
+      data: taskWithIntention,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+      isValidating: false,
+    } as any);
+
+    render(<TaskDetailContent taskId="task-1" />);
+    expect(screen.getByText('Your Why')).toBeInTheDocument();
+    expect(screen.getByText('To stay organized and focused')).toBeInTheDocument();
+  });
+
+  it('hides Your Why card when task has no intention', () => {
+    render(<TaskDetailContent taskId="task-1" />);
+    expect(screen.queryByText('Your Why')).not.toBeInTheDocument();
+  });
+
+  it('hides Your Why card when intention is empty string', () => {
+    const taskWithEmptyIntention = {
+      ...mockTask,
+      intention: '',
+    };
+    vi.mocked(useSWR).mockReturnValue({
+      data: taskWithEmptyIntention,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+      isValidating: false,
+    } as any);
+
+    render(<TaskDetailContent taskId="task-1" />);
+    expect(screen.queryByText('Your Why')).not.toBeInTheDocument();
   });
 
   it('shows error toast on toggle failure', async () => {

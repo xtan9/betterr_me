@@ -400,7 +400,9 @@
       "create": "创建任务",
       "save": "保存更改",
       "creating": "正在创建...",
-      "saving": "正在保存..."
+      "saving": "正在保存...",
+      "intentionLabel": "为什么重要",
+      "intentionPlaceholder": "这件事对你来说为什么重要？"
     },
     "categories": {
       "work": "工作",
@@ -428,7 +430,8 @@
       "priority": "优先级",
       "category": "分类",
       "noDueDate": "无截止日期",
-      "notFound": "任务未找到"
+      "notFound": "任务未找到",
+      "yourWhy": "你的初衷"
     },
     "edit": {
       "title": "编辑任务",

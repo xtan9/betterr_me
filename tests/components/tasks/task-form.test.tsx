@@ -29,6 +29,8 @@ vi.mock('next-intl', () => ({
         'personal': 'Personal',
         'shopping': 'Shopping',
         'other': 'Other',
+        'intentionLabel': 'Why This Matters',
+        'intentionPlaceholder': 'Why does this matter to you?',
         // priority keys
         '0': 'None',
         '1': 'Low',
@@ -46,6 +48,7 @@ const mockTask: Task = {
   user_id: 'user-1',
   title: 'Buy groceries',
   description: 'Milk, eggs, bread',
+  intention: null,
   is_completed: false,
   priority: 2,
   category: 'shopping',
@@ -169,6 +172,7 @@ describe('TaskForm', () => {
         expect(mockOnSubmit).toHaveBeenCalledWith({
           title: 'Write report',
           description: 'Q1 metrics',
+          intention: null,
           category: 'work',
           priority: 0,
           due_date: null,
@@ -193,6 +197,7 @@ describe('TaskForm', () => {
         expect(mockOnSubmit).toHaveBeenCalledWith({
           title: 'Quick task',
           description: null,
+          intention: null,
           category: null,
           priority: 0,
           due_date: null,
@@ -331,6 +336,78 @@ describe('TaskForm', () => {
       const personalButton = screen.getByRole('button', { name: /Personal/ });
       expect(workButton).toHaveAttribute('data-state', 'off');
       expect(personalButton).toHaveAttribute('data-state', 'on');
+    });
+  });
+
+  describe('intention field', () => {
+    it('renders intention field in create mode', () => {
+      render(
+        <TaskForm
+          mode="create"
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      expect(screen.getByText('Why This Matters')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Why does this matter to you?')).toBeInTheDocument();
+    });
+
+    it('submits intention value when provided', async () => {
+      render(
+        <TaskForm
+          mode="create"
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      await user.type(screen.getByLabelText('Title'), 'Go to gym');
+      await user.type(screen.getByPlaceholderText('Why does this matter to you?'), 'To stay healthy');
+      await user.click(screen.getByRole('button', { name: 'Create Task' }));
+
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ intention: 'To stay healthy' })
+        );
+      });
+    });
+
+    it('submits null intention when left empty', async () => {
+      render(
+        <TaskForm
+          mode="create"
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      await user.type(screen.getByLabelText('Title'), 'Quick task');
+      await user.click(screen.getByRole('button', { name: 'Create Task' }));
+
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ intention: null })
+        );
+      });
+    });
+
+    it('pre-populates intention in edit mode', () => {
+      const taskWithIntention = {
+        ...mockTask,
+        intention: 'To feel better about myself',
+      };
+
+      render(
+        <TaskForm
+          mode="edit"
+          initialData={taskWithIntention}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      expect(screen.getByDisplayValue('To feel better about myself')).toBeInTheDocument();
     });
   });
 

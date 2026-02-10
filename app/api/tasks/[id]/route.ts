@@ -78,6 +78,10 @@ export async function PATCH(
       updates.description = body.description?.trim() || null;
     }
 
+    if (body.intention !== undefined) {
+      updates.intention = body.intention?.trim() || null;
+    }
+
     if (body.is_completed !== undefined) {
       updates.is_completed = Boolean(body.is_completed);
       // Set completed_at timestamp

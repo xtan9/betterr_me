@@ -131,4 +131,63 @@ describe('taskFormSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts valid intention', () => {
+    const result = taskFormSchema.safeParse({
+      title: 'Test',
+      priority: 0,
+      intention: 'To stay healthy and feel better',
+      category: null,
+      due_date: null,
+      due_time: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts null intention', () => {
+    const result = taskFormSchema.safeParse({
+      title: 'Test',
+      priority: 0,
+      intention: null,
+      category: null,
+      due_date: null,
+      due_time: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts omitted intention', () => {
+    const result = taskFormSchema.safeParse({
+      title: 'Test',
+      priority: 0,
+      category: null,
+      due_date: null,
+      due_time: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts intention at exactly 200 characters', () => {
+    const result = taskFormSchema.safeParse({
+      title: 'Test',
+      priority: 0,
+      intention: 'a'.repeat(200),
+      category: null,
+      due_date: null,
+      due_time: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects intention longer than 200 characters', () => {
+    const result = taskFormSchema.safeParse({
+      title: 'Test',
+      priority: 0,
+      intention: 'a'.repeat(201),
+      category: null,
+      due_date: null,
+      due_time: null,
+    });
+    expect(result.success).toBe(false);
+  });
 });

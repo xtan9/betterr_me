@@ -25,11 +25,16 @@ interface Profile {
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-export function SettingsContent() {
+interface SettingsContentProps {
+  initialProfile?: { profile: Profile };
+}
+
+export function SettingsContent({ initialProfile }: SettingsContentProps) {
   const t = useTranslations("settings");
   const { data, error, isLoading, mutate } = useSWR<{ profile: Profile }>(
     "/api/profile",
-    fetcher
+    fetcher,
+    { fallbackData: initialProfile }
   );
 
   const [weekStartDay, setWeekStartDay] = useState<number>(0);
