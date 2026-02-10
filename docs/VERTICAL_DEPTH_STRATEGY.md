@@ -31,26 +31,31 @@ This document proposes **Vertical Depth** features — not more modules, but dee
 ## Part 2: The Critique — Motivation Gaps
 
 ### Gap 1: "Input Without Purpose" — Tasks Lack Intention
-**Problem:** The task creation form asks *what* but never *why*. There's no field for motivation, no prompt for intention-setting. A task like "Go to gym" sits alongside "Buy milk" with no differentiation in emotional weight. The user never connects the task to their larger goals.
+
+**Problem:** The task creation form asks "what" but never "why". There's no field for motivation, no prompt for intention-setting. A task like "Go to gym" sits alongside "Buy milk" with no differentiation in emotional weight. The user never connects the task to their larger goals.
 
 **Evidence:** `task-form.tsx` — fields are: title, description, category, priority, due_date, due_time. Zero fields related to purpose, outcome, or personal meaning. The `description` field is labeled "Optional notes about this task" — purely logistical.
 
 ### Gap 2: "Flat Completion" — Finishing Feels Like Nothing
+
 **Problem:** Completing a task produces: a green checkbox + strikethrough text + SWR refetch. Completing ALL tasks for the day produces a single text line: "All tasks done! 🎉". There is no moment of satisfaction, no reflection prompt, no acknowledgment of effort. The completion event — the most motivating moment in any productivity tool — is anti-climactic.
 
 **Evidence:** `tasks-today.tsx:152-159` — the "all complete" state is a `<span>` with emerald text. `motivation-message.tsx` — a static `<p>` tag inside a light background div. No animation, no celebration card, no confetti, no sound.
 
 ### Gap 3: "Silent Failure" — Missed Days Are Invisible
-**Problem:** When a user misses a habit day, the only signal is a light gray cell on the 30-day heatmap (visible only on the habit detail page). The dashboard shows no indication of broken streaks or missed days. The user returns after a missed day to see... the same screen, slightly less green. There's no recovery protocol, no "that's okay, here's how to get back on track."
+
+**Problem:** When a user misses a habit day, the only signal is a light gray cell on the 30-day heatmap (visible only on the habit detail page). The dashboard shows no indication of broken streaks or missed days. The user returns after a missed day to see the same screen, slightly less green. There's no recovery protocol, no "that's okay, here's how to get back on track."
 
 **Evidence:** `heatmap.tsx` — missed days render as `bg-slate-100 dark:bg-slate-800`. `streak-counter.tsx:13` — streak 0 message is just "Start today!" No distinction between "never started" and "just broke a 30-day streak."
 
 ### Gap 4: "No Coaching Voice" — The App Doesn't Guide
+
 **Problem:** The motivation message component has 7 priority levels but they're all generic one-liners ("Getting started", "Halfway", "Almost done"). The app never says anything specific to the user's behavior patterns. It doesn't notice that you always skip Mondays, or that your streak is about to hit a milestone, or that you've been crushing it this week.
 
 **Evidence:** `motivation-message.tsx:29-77` — pure if/else on completion percentage. No personalization, no behavioral insight, no time-awareness beyond morning/afternoon/evening greeting.
 
 ### Gap 5: "No Emotional Arc" — Days Feel Identical
+
 **Problem:** Monday feels like Friday. Day 1 of a streak feels like Day 50. The dashboard layout never changes. There's no sense of progression, no "level up" moment, no visual evolution as the user builds consistency. Every day the user opens the app to the exact same static layout.
 
 **Evidence:** `dashboard-content.tsx` — the layout is fixed: greeting → motivation text → stat cards → 2-column grid (habits + tasks). No conditional rendering based on streak milestones, no progressive UI elements, no time-of-day adaptations beyond the greeting word.
@@ -62,9 +67,10 @@ This document proposes **Vertical Depth** features — not more modules, but dee
 ### A. Task Deep Features (Intention & Clarity)
 
 #### Feature T1: "Why This Matters" — Intention Field
-**Concept:** Add an optional `intention` text field to tasks. When creating a task, a subtle prompt asks: *"Why does this matter to you?"* or *"What will completing this make possible?"*
 
-**Behavioral Principle:** Implementation intention (Gollwitzer, 1999). People who articulate *why* they're doing something are 2-3x more likely to follow through.
+**Concept:** Add an optional `intention` text field to tasks. When creating a task, a subtle prompt asks: "Why does this matter to you?" or "What will completing this make possible?"
+
+**Behavioral Principle:** Implementation intention (Gollwitzer, 1999). People who articulate "why" they're doing something are 2-3x more likely to follow through.
 
 **Implementation:**
 - Add `intention` column to `tasks` table (TEXT, nullable)
@@ -84,6 +90,7 @@ This document proposes **Vertical Depth** features — not more modules, but dee
 - Migration SQL file
 
 #### Feature T4: "Task Horizon" — Reduce Anxiety, Increase Control
+
 **Concept:** Extend the dashboard's "Today's Tasks" section with a subtle "Coming Up" preview showing tomorrow's tasks. Gives the user forward visibility without overwhelming today's focus. When today is all done, tomorrow auto-expands so the user can get a head start.
 
 **Behavioral Principle:** Zeigarnik effect + anxiety reduction. Knowing what's coming next reduces cognitive load and the "what am I forgetting?" feeling. The auto-expand on completion turns a dead-end into a doorway — momentum, not a wall.
@@ -113,17 +120,17 @@ This document proposes **Vertical Depth** features — not more modules, but dee
 **Display hierarchy:** Overdue (red accent) → Today → Coming Up (dimmed)
 
 **Behavior:**
-- **Default state**: Show max 3 tomorrow tasks at reduced opacity (`opacity-50`), with `+N more tomorrow →` link if more exist
-- **All today complete**: Auto-expand tomorrow section to full opacity, show all tasks (not just 3), header changes to *"Get a head start on tomorrow"*
+- **Default state**: Show max 3 tomorrow tasks at reduced opacity (`opacity-50`), with `+N more tomorrow` link if more exist
+- **All today complete**: Auto-expand tomorrow section to full opacity, show all tasks (not just 3), header changes to "Get a head start on tomorrow"
 - **No tomorrow tasks**: Section hidden entirely (no empty state noise)
-- **"View all tasks →"**: Link at bottom of card, navigates to `/tasks`
+- **"View all tasks"**: Link at bottom of card, navigates to `/tasks`
 
 **Implementation:**
 - Backend: Extend `GET /api/dashboard` response to include `tasks_tomorrow` array — reuses existing `TasksDB.getUpcomingTasks(userId, 1)` method filtered to tomorrow only
 - Frontend: Extend `TasksToday` component with a "Coming Up" section below the existing task list
 - Tomorrow tasks use the same `TaskRow` component but with `opacity-50` wrapper class
 - Auto-expand logic: when `tasks_today` are all completed, toggle `opacity-50` off and show full list
-- Add "View all tasks →" link at component bottom
+- Add "View all tasks" link at component bottom
 
 **Files to modify:**
 - `app/api/dashboard/route.ts` — add `tasks_tomorrow` to response (using existing `getUpcomingTasks`)
@@ -132,6 +139,7 @@ This document proposes **Vertical Depth** features — not more modules, but dee
 - `i18n/messages/{en,zh,zh-TW}.json` — translations for "Coming Up", "Get a head start", "+N more tomorrow", "View all tasks"
 
 #### Feature T3: "Completion Reflection" — The App That Listens
+
 **Concept:** For meaningful tasks only, offer a passive inline reflection moment at completion. No popups, no modals — the completed task lingers for 3 seconds with an inline emoji strip, then fades away whether the user engages or not.
 
 **Trigger Filter:** Only activates for **Priority 3 (High)** tasks OR tasks with an **Intention** field set. Low-priority busywork checks off silently as before.
@@ -168,6 +176,7 @@ This document proposes **Vertical Depth** features — not more modules, but dee
 ### B. Habit Deep Features (Retention & Streaks)
 
 #### Feature H1: "Absence-Aware Recovery" — Never Miss Twice + Lapse + Hiatus
+
 **Concept:** When a user returns after missing habit days, show a context-appropriate card on the dashboard. The tone and actions adapt based on how long they've been away — because "you missed yesterday" feels wrong on day 4 of a lapse.
 
 **Behavioral Principle:** James Clear's "Never Miss Twice" rule for short absences. For longer lapses, the priority shifts from streak preservation to preventing the "what-the-hell effect" (abandonment spiral). For extended hiatuses, the goal is a warm re-engagement that respects the user's changed circumstances.
@@ -200,7 +209,7 @@ For each active habit scheduled today:
 ```
 
 **Important nuances:**
-- **Frequency-aware calculation**: "missed days" counts *scheduled* days only. A weekly habit with no log for 3 calendar days is NOT a miss — they only need to complete it once per week. Uses existing `shouldTrackOnDate()` logic from `lib/db/habit-logs.ts`.
+- **Frequency-aware calculation**: "missed days" counts scheduled days only. A weekly habit with no log for 3 calendar days is NOT a miss — they only need to complete it once per week. Uses existing `shouldTrackOnDate()` logic from `lib/db/habit-logs.ts`.
 - **Dashboard real estate cap**: Show max **3 cards**. Priority order: Hiatus > Lapse > Recovery. Within same tier, prioritize by longest-streak-before-lapse (most to lose = most urgent to recover).
 - **No card shown if**: habit was completed today, habit is paused/archived, or habit is not scheduled today.
 - **Success state transformation**: When user completes a habit from any card, the card transforms to a brief success message before fading away.
@@ -219,6 +228,7 @@ For each active habit scheduled today:
 - `i18n/messages/{en,zh,zh-TW}.json` — translations for all 3 tiers + success states
 
 #### Feature H2: "Streak Milestones & Celebrations"
+
 **Concept:** At specific streak thresholds (7, 14, 30, 50, 100, 365 days), show a celebration moment: a milestone card with the achievement, a congratulatory message, and the option to share/screenshot. Also show a "next milestone" indicator on the habit detail page.
 
 **Behavioral Principle:** Variable reward scheduling + loss aversion. Knowing you're 2 days from a milestone creates powerful motivation to not break the streak. The celebration moment creates a dopamine spike that reinforces the habit loop.
@@ -241,7 +251,8 @@ For each active habit scheduled today:
 - Optional: migration for `habit_milestones` table
 
 #### Feature H3: "Weekly Insight Card" — Behavioral Pattern Recognition
-**Concept:** Every Monday (or user's configured week start), show a "Your Week in Review" card on the dashboard that surfaces one behavioral insight: *"You completed 85% of habits this week — your best week yet!"* or *"You tend to skip habits on Wednesdays. Consider adjusting your Wednesday routine."* or *"Your morning habits have 90% completion vs 60% for evening. You're a morning person!"*
+
+**Concept:** Every Monday (or user's configured week start), show a "Your Week in Review" card on the dashboard that surfaces one behavioral insight. Examples: "You completed 85% of habits this week — your best week yet!" or "You tend to skip habits on Wednesdays. Consider adjusting your Wednesday routine." or "Your morning habits have 90% completion vs 60% for evening. You're a morning person!"
 
 **Behavioral Principle:** Self-awareness drives self-improvement. Reflecting on patterns (not just data) helps users understand their own behavior and make intentional adjustments. This is the "coaching" in self-coaching.
 
@@ -277,7 +288,7 @@ For each active habit scheduled today:
 5. **T3: Completion Reflection** — Passive inline reflection for meaningful tasks. Lightweight CSS transition + conditional trigger.
 
 ### Phase 3 — Deeper Investment (3-5 days)
-6. **H3: Weekly Insight Card** — Requires the most backend work (pattern computation), but delivers the most "coaching" value. Can eventually infer energy patterns from completion timestamps (replacing the dropped T2).
+6. **H3: Weekly Insight Card** — Requires the most backend work (pattern computation), but delivers the most "coaching" value. Can eventually infer energy patterns from completion timestamps.
 
 ---
 
