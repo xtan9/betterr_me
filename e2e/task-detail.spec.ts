@@ -10,12 +10,12 @@ import { test, expect } from '@playwright/test';
 
 const SEED_TASK_TITLE = 'E2E Test - Seed Task 1';
 
-/** Fetch the seed task's ID via the API. */
+/** Fetch the seed task's ID via the API (prefix match to handle mid-rename state). */
 async function getSeedTaskId(page: import('@playwright/test').Page): Promise<string> {
   const response = await page.request.get('/api/tasks');
   expect(response.ok()).toBe(true);
   const { tasks } = await response.json();
-  const seedTask = tasks.find((t: { title: string }) => t.title === SEED_TASK_TITLE);
+  const seedTask = tasks.find((t: { title: string }) => t.title.startsWith(SEED_TASK_TITLE));
   expect(seedTask).toBeDefined();
   return seedTask.id;
 }
@@ -158,6 +158,12 @@ test.describe('Task Edit Page', () => {
     const revertSaveButton = page.getByRole('button', { name: /save|update/i });
     await revertSaveButton.click();
     await page.waitForLoadState('networkidle');
+
+    // Verify the revert persisted via API
+    const verifyResponse = await page.request.get('/api/tasks');
+    const { tasks } = await verifyResponse.json();
+    const revertedTask = tasks.find((t: { id: string }) => t.id === taskId);
+    expect(revertedTask?.title).toBe(SEED_TASK_TITLE);
   });
 
   test('should navigate back on cancel', async ({ page }) => {
