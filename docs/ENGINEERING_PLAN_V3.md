@@ -93,25 +93,29 @@ intention: z.string().max(200).optional().nullable(),
 
 **API:** `app/api/dashboard/route.ts`
 
-Extend the dashboard response to include tomorrow's tasks:
+Extend the dashboard response to include tomorrow's tasks.
+
+**Timezone safety:** The dashboard API already receives `?date=YYYY-MM-DD` from the client (via `getLocalDateString()`). Per project convention, dates are always browser-local, never UTC. Tomorrow must be derived from this client-sent param — never from server-side `new Date()`.
 
 ```typescript
-// Add to Promise.all:
-const tomorrow = new Date();
-tomorrow.setDate(tomorrow.getDate() + 1);
-const tomorrowStr = tomorrow.toISOString().split('T')[0]; // WRONG — use getLocalDateString()
+// `localDate` is already extracted from ?date query param (existing code)
+// Derive tomorrow from the CLIENT-sent date, not server time:
+const [year, month, day] = localDate.split('-').map(Number);
+const tomorrowDate = new Date(year, month - 1, day + 1);
+const tomorrowStr = [
+  tomorrowDate.getFullYear(),
+  String(tomorrowDate.getMonth() + 1).padStart(2, '0'),
+  String(tomorrowDate.getDate()).padStart(2, '0'),
+].join('-');
 
-// Correct approach: compute tomorrow from local date
-const todayParts = localDate.split('-').map(Number);
-const tomorrowDate = new Date(todayParts[0], todayParts[1] - 1, todayParts[2] + 1);
-const tomorrowStr = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
-
-// Fetch: filter getUpcomingTasks to tomorrow only
+// Fetch tomorrow's tasks:
 const tasksTomorrow = await tasksDB.getUserTasks(user.id, {
   due_date: tomorrowStr,
   is_completed: false,
 });
 ```
+
+**Why this matters:** If the server is in UTC and the user is in UTC+8, `new Date()` on the server at 11pm user-local time would compute "tomorrow" as today in the user's timezone. Deriving from the client-sent `?date` param avoids this entirely.
 
 Add `tasks_tomorrow: Task[]` to the response JSON.
 
