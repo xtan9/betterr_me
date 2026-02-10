@@ -67,7 +67,6 @@ describe('GET /api/dashboard', () => {
       { id: 't2', title: 'Task 2', is_completed: true },
       { id: 't3', title: 'Task 3', is_completed: false },
     ];
-
     const tomorrowTasks = [{ id: 't4', title: 'Tomorrow task', is_completed: false }];
 
     vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
@@ -179,9 +178,7 @@ describe('GET /api/dashboard', () => {
     const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-28');
     await GET(request);
 
-    // getUserTasks called 3 times: today due_date, all tasks, tomorrow due_date
     const calls = vi.mocked(mockTasksDB.getUserTasks).mock.calls;
-    // Third call should be for tomorrow (2026-03-01) with is_completed: false
     expect(calls[2]).toEqual(['user-123', { due_date: '2026-03-01', is_completed: false }]);
   });
 
