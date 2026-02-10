@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 import { HabitsDB, TasksDB } from "@/lib/db";
-import { getLocalDateString } from "@/lib/utils";
+import { getLocalDateString, getNextDateString } from "@/lib/utils";
 import type { DashboardData } from "@/lib/db/types";
 
 export default async function DashboardPage() {
@@ -23,12 +23,16 @@ export default async function DashboardPage() {
   const tasksDB = new TasksDB(supabase);
   const date = getLocalDateString();
 
-  const [habitsWithStatus, todayTasks, allTodayTasks, allTasks] =
+  // Server-side date — may differ from client timezone; SWR will revalidate with correct client date
+  const tomorrowStr = getNextDateString(date);
+
+  const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow] =
     await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
       tasksDB.getTodayTasks(user.id),
       tasksDB.getUserTasks(user.id, { due_date: date }),
       tasksDB.getUserTasks(user.id),
+      tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
     ]);
 
   const completedHabitsToday = habitsWithStatus.filter(
@@ -45,6 +49,7 @@ export default async function DashboardPage() {
   const initialData: DashboardData = {
     habits: habitsWithStatus,
     tasks_today: todayTasks,
+    tasks_tomorrow: tasksTomorrow,
     stats: {
       total_habits: habitsWithStatus.length,
       completed_today: completedHabitsToday,

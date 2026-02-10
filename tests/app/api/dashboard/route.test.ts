@@ -68,11 +68,15 @@ describe('GET /api/dashboard', () => {
       { id: 't3', title: 'Task 3', is_completed: false },
     ];
 
+    const tomorrowTasks = [{ id: 't4', title: 'Tomorrow task', is_completed: false }];
+
     vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
     vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue(todayTasks as any);
+    // getUserTasks is called 3 times: due_date today, all tasks, due_date tomorrow
     vi.mocked(mockTasksDB.getUserTasks)
       .mockResolvedValueOnce(todayDateTasks as any)
-      .mockResolvedValueOnce(allTasks as any);
+      .mockResolvedValueOnce(allTasks as any)
+      .mockResolvedValueOnce(tomorrowTasks as any);
     // Return logs so absence computation can work
     vi.mocked(mockHabitLogsDB.getAllUserLogs).mockResolvedValue([]);
 
@@ -83,6 +87,8 @@ describe('GET /api/dashboard', () => {
     expect(response.status).toBe(200);
     expect(data.habits).toHaveLength(2);
     expect(data.tasks_today).toHaveLength(1);
+    expect(data.tasks_tomorrow).toHaveLength(1);
+    expect(data.tasks_tomorrow[0].title).toBe('Tomorrow task');
     expect(data.stats.total_habits).toBe(2);
     expect(data.stats.completed_today).toBe(1);
     expect(data.stats.current_best_streak).toBe(5);
@@ -163,6 +169,41 @@ describe('GET /api/dashboard', () => {
       '2026-01-10', // 30 days before 2026-02-09
       '2026-02-09'
     );
+  });
+
+  it('should fetch tomorrow tasks based on client date param', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-28');
+    await GET(request);
+
+    // getUserTasks called 3 times: today due_date, all tasks, tomorrow due_date
+    const calls = vi.mocked(mockTasksDB.getUserTasks).mock.calls;
+    // Third call should be for tomorrow (2026-03-01) with is_completed: false
+    expect(calls[2]).toEqual(['user-123', { due_date: '2026-03-01', is_completed: false }]);
+  });
+
+  it('should derive Jan 1 for Dec 31 date param (year rollover)', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-12-31');
+    await GET(request);
+
+    const calls = vi.mocked(mockTasksDB.getUserTasks).mock.calls;
+    expect(calls[2]).toEqual(['user-123', { due_date: '2027-01-01', is_completed: false }]);
+  });
+
+  it('should return 400 for invalid date format', async () => {
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=not-a-date');
+    const response = await GET(request);
+
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toContain('Invalid date format');
   });
 
   it('should return 401 if not authenticated', async () => {
