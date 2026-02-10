@@ -10,6 +10,7 @@ import { DailySnapshot } from "./daily-snapshot";
 import { HabitChecklist } from "./habit-checklist";
 import { TasksToday } from "./tasks-today";
 import { MotivationMessage } from "./motivation-message";
+import { AbsenceCard } from "./absence-card";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
@@ -186,6 +187,29 @@ export function DashboardContent({ userName }: DashboardContentProps) {
       {data.stats.total_habits > 0 && (
         <MotivationMessage stats={data.stats} topStreakHabit={topStreakHabit} />
       )}
+
+      {/* Absence Recovery Cards — habits with missed scheduled days */}
+      {(() => {
+        const absenceHabits = data.habits
+          .filter(h => h.missed_scheduled_days > 0 && !h.completed_today)
+          .sort((a, b) => b.missed_scheduled_days - a.missed_scheduled_days)
+          .slice(0, 3);
+
+        if (absenceHabits.length === 0) return null;
+
+        return (
+          <div className="space-y-3">
+            {absenceHabits.map(habit => (
+              <AbsenceCard
+                key={habit.id}
+                habit={habit}
+                onToggle={handleToggleHabit}
+                onNavigate={(path) => router.push(path)}
+              />
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Daily Snapshot — only show when user has habits */}
       {data.stats.total_habits > 0 && (
