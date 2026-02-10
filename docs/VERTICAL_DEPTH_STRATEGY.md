@@ -131,11 +131,6 @@ This document proposes **Vertical Depth** features — not more modules, but dee
 - `components/dashboard/dashboard-content.tsx` — pass `tasks_tomorrow` prop
 - `i18n/messages/{en,zh,zh-TW}.json` — translations for "Coming Up", "Get a head start", "+N more tomorrow", "View all tasks"
 
-#### ~~Feature T2: "Energy Level Tagging"~~ — REMOVED
-**Decision:** Dropped from plan. Energy level + priority creates two competing sort dimensions, increases form friction, and adds a learning curve disproportionate to its value. Most users have 3-5 tasks/day — not enough to benefit from energy-based sorting.
-
-**Future consideration:** If energy awareness matters later, it could be inferred from completion timestamps via the Weekly Insight card (H3) — e.g., *"You tend to complete your hardest tasks before noon"* — rather than requiring the user to self-report at creation time.
-
 #### Feature T3: "Completion Reflection" — The App That Listens
 **Concept:** For meaningful tasks only, offer a passive inline reflection moment at completion. No popups, no modals — the completed task lingers for 3 seconds with an inline emoji strip, then fades away whether the user engages or not.
 
@@ -307,7 +302,6 @@ For each feature:
 | T4 | Task Horizon | Tasks | No Forward Visibility | Low | High |
 | H2 | Streak Milestones | Habits | Flat Completion / No Arc | Medium | High |
 | T3 | Completion Reflection | Tasks | Flat Completion | Medium | Medium |
-| ~~T2~~ | ~~Energy Level Tagging~~ | ~~Tasks~~ | — | — | *Removed* |
 | H3 | Weekly Insight Card | Habits | No Coaching Voice | High | High |
 
 **6 features, 3 phases.** The goal is not more features — it's deeper features. Each one transforms a moment that currently feels empty into a moment that feels meaningful.
