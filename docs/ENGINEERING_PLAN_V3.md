@@ -624,27 +624,41 @@ export class InsightsDB {
 // 1. Fetch all habit logs for previous week + the week before (for comparison)
 // 2. Compute per-habit completion rates for both weeks
 // 3. Compute per-day-of-week completion rates
-// 4. Generate insight candidates:
+// 4. Generate insight candidates (see Relevance Hierarchy below)
+// 5. Sort by priority descending, return top 1-2 insights
+```
 
-// best_week: if this week's overall rate > all previous weeks
-//   → "You completed {percent}% of habits this week — your best week yet!"
+**Relevance Hierarchy:**
 
-// worst_day: find the day with lowest completion rate
-//   → "You tend to skip habits on {day}. Consider adjusting your {day} routine."
+Each insight type has a fixed priority tier. Within a tier, the algorithm picks the candidate with the strongest signal (e.g., closest milestone, biggest improvement). The top 1-2 insights by priority are returned.
 
-// best_habit: highest completion rate habit
-//   → "{habit} is your strongest habit at {percent}% this week."
+| Priority | Tier | Insight Types | Rationale |
+|----------|------|--------------|-----------|
+| 100 | Urgent | `streak_proximity` | Act now or lose the streak. Time-sensitive, highest motivation to act today. |
+| 80 | Celebration | `best_week`, `best_habit` | Reinforce good behavior. Positive feedback cements habits. |
+| 60 | Correction | `worst_day`, `decline` | Gentle nudge toward self-awareness. Actionable but not urgent. |
+| 40 | Generic | `improvement` | Nice to know, but no specific action needed. Filler when nothing else qualifies. |
 
-// streak_proximity: any habit within 3 days of a milestone
+**Insight candidates:**
+
+```typescript
+// streak_proximity (Priority 100): any habit within 3 days of a milestone [7,14,30,50,100,200,365]
 //   → "{habit} is {days} days from a {milestone}-day milestone!"
 
-// improvement: week-over-week rate increase > 10%
-//   → "Up {change}% from last week. You're building momentum."
+// best_week (Priority 80): if this week's overall rate > all previous weeks
+//   → "You completed {percent}% of habits this week — your best week yet!"
 
-// decline: week-over-week rate decrease > 15%
+// best_habit (Priority 80): highest completion rate habit (must be >= 80% to qualify)
+//   → "{habit} is your strongest habit at {percent}% this week."
+
+// worst_day (Priority 60): day with lowest completion rate (must be <= 50% to surface)
+//   → "You tend to skip habits on {day}. Consider adjusting your {day} routine."
+
+// decline (Priority 60): week-over-week rate decrease > 15%
 //   → "This week was {percent}%, down from {lastPercent}%. Everyone has off weeks."
 
-// 5. Sort by priority, return top 1-2 insights
+// improvement (Priority 40): week-over-week rate increase > 10%
+//   → "Up {change}% from last week. You're building momentum."
 ```
 
 **API route:** `app/api/insights/weekly/route.ts` (new file)
