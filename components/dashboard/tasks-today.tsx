@@ -1,7 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Plus, Circle } from "lucide-react";
+import { Plus, Circle, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -76,6 +77,7 @@ function TaskRow({ task, onToggle, onClick, isToggling }: TaskRowProps) {
 
 interface TasksTodayProps {
   tasks: Task[];
+  tasksTomorrow?: Task[];
   onToggle: (taskId: string) => Promise<void>;
   onTaskClick?: (taskId: string) => void;
   onCreateTask: () => void;
@@ -84,6 +86,7 @@ interface TasksTodayProps {
 
 export function TasksToday({
   tasks,
+  tasksTomorrow = [],
   onToggle,
   onTaskClick,
   onCreateTask,
@@ -115,6 +118,11 @@ export function TasksToday({
   const completedCount = tasks.filter((t) => t.is_completed).length;
   const totalCount = tasks.length;
   const allComplete = totalCount > 0 && completedCount === totalCount;
+
+  // Show up to 3 tomorrow tasks; auto-expand to full opacity when all today tasks complete
+  const maxTomorrowPreview = 3;
+  const visibleTomorrow = tasksTomorrow.slice(0, maxTomorrowPreview);
+  const extraTomorrow = tasksTomorrow.length - maxTomorrowPreview;
 
   return (
     <Card>
@@ -159,6 +167,57 @@ export function TasksToday({
               )}
             </div>
           </>
+        )}
+
+        {/* Coming Up — tomorrow tasks */}
+        {visibleTomorrow.length > 0 && (
+          <div
+            className={cn(
+              "mt-4 pt-4 border-t",
+              !allComplete && "opacity-50"
+            )}
+          >
+            <p className="text-sm font-medium text-muted-foreground mb-2">
+              {allComplete ? t("headStart") : t("comingUp")}
+            </p>
+            <div className="space-y-1">
+              {visibleTomorrow.map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-muted-foreground"
+                >
+                  <Circle
+                    className={cn(
+                      "size-2 fill-current",
+                      {
+                        0: "text-slate-400",
+                        1: "text-green-500",
+                        2: "text-yellow-500",
+                        3: "text-red-500",
+                      }[task.priority]
+                    )}
+                  />
+                  <span>{task.title}</span>
+                </div>
+              ))}
+            </div>
+            {extraTomorrow > 0 && (
+              <Link
+                href="/tasks"
+                className="flex items-center justify-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {t("moreTomorrow", { count: extraTomorrow })}
+                <ChevronRight className="size-3" />
+              </Link>
+            )}
+            <Link
+              href="/tasks"
+              className="flex items-center justify-center gap-1 mt-2 text-xs text-primary hover:underline"
+            >
+              {t("viewAll")}
+              <ChevronRight className="size-3" />
+            </Link>
+          </div>
         )}
       </CardContent>
     </Card>

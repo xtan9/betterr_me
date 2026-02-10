@@ -138,7 +138,11 @@
       "allDay": "全天",
       "noTasks": "今天没有任务",
       "createFirst": "添加任务",
-      "allComplete": "全部完成！"
+      "allComplete": "全部完成！",
+      "comingUp": "明日待办",
+      "headStart": "提前准备",
+      "moreTomorrow": "明天还有 {count} 项",
+      "viewAll": "查看所有任务"
     },
     "motivation": {
       "firstDay": "欢迎！成为更好自己的旅程从今天开始。🌟",

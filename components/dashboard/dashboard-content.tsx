@@ -18,6 +18,7 @@ import type { Task } from "@/lib/db/types";
 interface DashboardData {
   habits: HabitWithTodayStatus[];
   tasks_today: Task[];
+  tasks_tomorrow: Task[];
   stats: {
     total_habits: number;
     completed_today: number;
@@ -204,6 +205,7 @@ export function DashboardContent({ userName }: DashboardContentProps) {
         {/* Tasks Today */}
         <TasksToday
           tasks={data.tasks_today}
+          tasksTomorrow={data.tasks_tomorrow}
           onToggle={handleToggleTask}
           onTaskClick={handleTaskClick}
           onCreateTask={handleCreateTask}
