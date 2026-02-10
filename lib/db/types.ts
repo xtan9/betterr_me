@@ -153,6 +153,7 @@ export interface HabitWithLogs extends Habit {
 export interface DashboardData {
   habits: HabitWithTodayStatus[];
   tasks_today: Task[];
+  tasks_tomorrow: Task[];
   stats: {
     total_habits: number;
     completed_today: number;

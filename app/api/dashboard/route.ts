@@ -32,14 +32,25 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
 
+    // Derive tomorrow from the CLIENT-sent date, not server time (timezone safety)
+    const [year, month, day] = date.split('-').map(Number);
+    const tomorrowDate = new Date(year, month - 1, day + 1);
+    const tomorrowStr = [
+      tomorrowDate.getFullYear(),
+      String(tomorrowDate.getMonth() + 1).padStart(2, '0'),
+      String(tomorrowDate.getDate()).padStart(2, '0'),
+    ].join('-');
+
     // Fetch data in parallel
-    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks] = await Promise.all([
+    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow] = await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
       tasksDB.getTodayTasks(user.id),
       // Get all tasks for today to calculate completed count
       tasksDB.getUserTasks(user.id, { due_date: date }),
       // Get all tasks to determine if user has any tasks at all
       tasksDB.getUserTasks(user.id),
+      // Get incomplete tasks for tomorrow
+      tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
     ]);
 
     // Calculate stats
@@ -53,6 +64,7 @@ export async function GET(request: NextRequest) {
     const dashboardData: DashboardData = {
       habits: habitsWithStatus,
       tasks_today: todayTasks,
+      tasks_tomorrow: tasksTomorrow,
       stats: {
         total_habits: habitsWithStatus.length,
         completed_today: completedHabitsToday,

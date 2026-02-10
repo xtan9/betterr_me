@@ -53,12 +53,15 @@ describe('GET /api/dashboard', () => {
       { id: 't3', title: 'Task 3', is_completed: false },
     ];
 
+    const tomorrowTasks = [{ id: 't4', title: 'Tomorrow task', is_completed: false }];
+
     vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
     vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue(todayTasks as any);
-    // getUserTasks is called twice: once with due_date filter, once without
+    // getUserTasks is called 3 times: due_date today, all tasks, due_date tomorrow
     vi.mocked(mockTasksDB.getUserTasks)
       .mockResolvedValueOnce(todayDateTasks as any)
-      .mockResolvedValueOnce(allTasks as any);
+      .mockResolvedValueOnce(allTasks as any)
+      .mockResolvedValueOnce(tomorrowTasks as any);
 
     const request = new NextRequest('http://localhost:3000/api/dashboard');
     const response = await GET(request);
@@ -67,6 +70,8 @@ describe('GET /api/dashboard', () => {
     expect(response.status).toBe(200);
     expect(data.habits).toHaveLength(2);
     expect(data.tasks_today).toHaveLength(1);
+    expect(data.tasks_tomorrow).toHaveLength(1);
+    expect(data.tasks_tomorrow[0].title).toBe('Tomorrow task');
     expect(data.stats.total_habits).toBe(2);
     expect(data.stats.completed_today).toBe(1);
     expect(data.stats.current_best_streak).toBe(5);
@@ -99,6 +104,20 @@ describe('GET /api/dashboard', () => {
     await GET(request);
 
     expect(mockHabitsDB.getHabitsWithTodayStatus).toHaveBeenCalledWith('user-123', '2026-02-01');
+  });
+
+  it('should fetch tomorrow tasks based on client date param', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-28');
+    await GET(request);
+
+    // getUserTasks called 3 times: today due_date, all tasks, tomorrow due_date
+    const calls = vi.mocked(mockTasksDB.getUserTasks).mock.calls;
+    // Third call should be for tomorrow (2026-03-01) with is_completed: false
+    expect(calls[2]).toEqual(['user-123', { due_date: '2026-03-01', is_completed: false }]);
   });
 
   it('should return 401 if not authenticated', async () => {
