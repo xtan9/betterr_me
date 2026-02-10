@@ -43,14 +43,16 @@ export interface Task {
   category: TaskCategory | null;
   due_date: string | null; // DATE (YYYY-MM-DD)
   due_time: string | null; // TIME (HH:MM:SS)
+  completion_difficulty: 1 | 2 | 3 | null;
   completed_at: string | null; // TIMESTAMPTZ
   created_at: string;
   updated_at: string;
 }
 
-export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category'> & {
+export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'completion_difficulty'> & {
   id?: string;
   category?: TaskCategory | null;
+  completion_difficulty?: 1 | 2 | 3 | null;
 };
 
 export type TaskUpdate = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;

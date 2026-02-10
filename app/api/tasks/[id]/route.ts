@@ -103,6 +103,17 @@ export async function PATCH(
       updates.due_time = body.due_time || null;
     }
 
+    if (body.completion_difficulty !== undefined) {
+      const diff = body.completion_difficulty;
+      if (diff !== null && (diff < 1 || diff > 3)) {
+        return NextResponse.json(
+          { error: 'completion_difficulty must be 1, 2, 3, or null' },
+          { status: 400 }
+        );
+      }
+      updates.completion_difficulty = diff;
+    }
+
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
         { error: 'No valid updates provided' },
