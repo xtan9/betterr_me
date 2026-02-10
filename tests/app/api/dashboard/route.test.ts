@@ -120,6 +120,27 @@ describe('GET /api/dashboard', () => {
     expect(calls[2]).toEqual(['user-123', { due_date: '2026-03-01', is_completed: false }]);
   });
 
+  it('should derive Jan 1 for Dec 31 date param (year rollover)', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-12-31');
+    await GET(request);
+
+    const calls = vi.mocked(mockTasksDB.getUserTasks).mock.calls;
+    expect(calls[2]).toEqual(['user-123', { due_date: '2027-01-01', is_completed: false }]);
+  });
+
+  it('should return 400 for invalid date format', async () => {
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=not-a-date');
+    const response = await GET(request);
+
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toContain('Invalid date format');
+  });
+
   it('should return 401 if not authenticated', async () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },

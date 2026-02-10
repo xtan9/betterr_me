@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 import { HabitsDB, TasksDB } from "@/lib/db";
-import { getLocalDateString } from "@/lib/utils";
+import { getLocalDateString, getNextDateString } from "@/lib/utils";
 import type { DashboardData } from "@/lib/db/types";
 
 export default async function DashboardPage() {
@@ -23,14 +23,8 @@ export default async function DashboardPage() {
   const tasksDB = new TasksDB(supabase);
   const date = getLocalDateString();
 
-  // Derive tomorrow from the client-sent date (timezone safety)
-  const [year, month, day] = date.split('-').map(Number);
-  const tomorrowDate = new Date(year, month - 1, day + 1);
-  const tomorrowStr = [
-    tomorrowDate.getFullYear(),
-    String(tomorrowDate.getMonth() + 1).padStart(2, '0'),
-    String(tomorrowDate.getDate()).padStart(2, '0'),
-  ].join('-');
+  // Server-side date — may differ from client timezone; SWR will revalidate with correct client date
+  const tomorrowStr = getNextDateString(date);
 
   const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow] =
     await Promise.all([
