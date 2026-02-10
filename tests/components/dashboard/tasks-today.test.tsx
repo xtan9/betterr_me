@@ -357,6 +357,7 @@ const mockTomorrowTasks: Task[] = [
     user_id: "user-1",
     title: "Plan presentation",
     description: null,
+    intention: null,
     is_completed: false,
     priority: 3,
     category: null,
@@ -371,6 +372,7 @@ const mockTomorrowTasks: Task[] = [
     user_id: "user-1",
     title: "Buy groceries",
     description: null,
+    intention: null,
     is_completed: false,
     priority: 1,
     category: null,
@@ -433,6 +435,7 @@ describe("TasksToday — Coming Up section", () => {
       user_id: "user-1",
       title: `Tomorrow task ${i + 1}`,
       description: null,
+      intention: null,
       is_completed: false,
       priority: 1 as const,
       category: null,
@@ -458,11 +461,13 @@ describe("TasksToday — Coming Up section", () => {
     expect(screen.getByText("Tomorrow task 3")).toBeInTheDocument();
     expect(screen.queryByText("Tomorrow task 4")).not.toBeInTheDocument();
 
-    // "+2 more tomorrow" link
-    expect(screen.getByText("+2 more tomorrow")).toBeInTheDocument();
+    // "+2 more tomorrow" link pointing to /tasks
+    const moreLink = screen.getByText("+2 more tomorrow").closest("a");
+    expect(moreLink).toBeInTheDocument();
+    expect(moreLink).toHaveAttribute("href", "/tasks");
   });
 
-  it("shows 'View all tasks' link", () => {
+  it("shows 'View all tasks' link pointing to /tasks", () => {
     renderWithIntl(
       <TasksToday
         tasks={mockTasks}
@@ -472,7 +477,23 @@ describe("TasksToday — Coming Up section", () => {
       />
     );
 
-    expect(screen.getByText("View all tasks")).toBeInTheDocument();
+    const viewAllLink = screen.getByText("View all tasks").closest("a");
+    expect(viewAllLink).toBeInTheDocument();
+    expect(viewAllLink).toHaveAttribute("href", "/tasks");
+  });
+
+  it("shows 'Get a Head Start' at full opacity when zero today tasks", () => {
+    renderWithIntl(
+      <TasksToday
+        tasks={[]}
+        tasksTomorrow={mockTomorrowTasks}
+        onToggle={vi.fn()}
+        onCreateTask={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Get a Head Start")).toBeInTheDocument();
+    expect(screen.queryByText("Coming Up Tomorrow")).not.toBeInTheDocument();
   });
 
   it("applies reduced opacity when today tasks are not all complete", () => {

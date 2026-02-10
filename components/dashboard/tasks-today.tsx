@@ -123,6 +123,8 @@ export function TasksToday({
   const completedCount = tasks.filter((t) => t.is_completed).length;
   const totalCount = tasks.length;
   const allComplete = totalCount > 0 && completedCount === totalCount;
+  // For Coming Up section: treat "no today tasks" the same as "all complete"
+  const todayClear = totalCount === 0 || allComplete;
 
   // Show up to 3 tomorrow tasks; auto-expand to full opacity when all today tasks complete
   const maxTomorrowPreview = 3;
@@ -179,11 +181,11 @@ export function TasksToday({
           <div
             className={cn(
               "mt-4 pt-4 border-t",
-              !allComplete && "opacity-50"
+              !todayClear && "opacity-50"
             )}
           >
             <p className="text-sm font-medium text-muted-foreground mb-2">
-              {allComplete ? t("headStart") : t("comingUp")}
+              {todayClear ? t("headStart") : t("comingUp")}
             </p>
             <div className="space-y-1">
               {visibleTomorrow.map((task) => (
