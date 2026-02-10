@@ -36,6 +36,7 @@ const mockTasks: Task[] = [
     user_id: "user-1",
     title: "Finish proposal",
     description: null,
+    intention: null,
     is_completed: false,
     priority: 3,
     category: null,
@@ -50,6 +51,7 @@ const mockTasks: Task[] = [
     user_id: "user-1",
     title: "Team standup",
     description: null,
+    intention: null,
     is_completed: true,
     priority: 2,
     category: null,
@@ -64,6 +66,7 @@ const mockTasks: Task[] = [
     user_id: "user-1",
     title: "Read documentation",
     description: null,
+    intention: null,
     is_completed: false,
     priority: 1,
     category: null,
@@ -244,6 +247,59 @@ describe("TasksToday", () => {
     fireEvent.click(taskTitle);
 
     expect(onTaskClick).toHaveBeenCalledWith("1");
+  });
+
+  it("shows intention subtitle for P3 tasks with intention", () => {
+    const tasksWithIntention: Task[] = [
+      {
+        ...mockTasks[0],
+        intention: "Career growth depends on this",
+      },
+    ];
+
+    renderWithIntl(
+      <TasksToday
+        tasks={tasksWithIntention}
+        onToggle={vi.fn()}
+        onCreateTask={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Career growth depends on this")).toBeInTheDocument();
+  });
+
+  it("does not show intention subtitle for non-P3 tasks", () => {
+    const nonP3WithIntention: Task[] = [
+      {
+        ...mockTasks[1],
+        priority: 2,
+        intention: "Should not appear",
+      },
+    ];
+
+    renderWithIntl(
+      <TasksToday
+        tasks={nonP3WithIntention}
+        onToggle={vi.fn()}
+        onCreateTask={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Should not appear")).not.toBeInTheDocument();
+  });
+
+  it("does not show intention subtitle for P3 tasks without intention", () => {
+    renderWithIntl(
+      <TasksToday
+        tasks={[mockTasks[0]]}
+        onToggle={vi.fn()}
+        onCreateTask={vi.fn()}
+      />
+    );
+
+    // Task 0 is P3 but has null intention - no subtitle should appear
+    const taskRow = screen.getByText("Finish proposal").closest("div");
+    expect(taskRow?.parentElement?.querySelector("p.italic")).toBeNull();
   });
 
   it("renders task titles as buttons for accessibility", () => {
