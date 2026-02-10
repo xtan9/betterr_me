@@ -83,46 +83,88 @@ This document proposes **Vertical Depth** features — not more modules, but dee
 - `i18n/messages/{en,zh,zh-TW}.json` — add translations
 - Migration SQL file
 
-#### Feature T2: "Energy Level Tagging" — Right Task, Right Time
-**Concept:** Add an `energy_level` field to tasks: "Low Energy", "Medium Energy", "High Energy". The dashboard groups tasks by energy match — morning shows high-energy tasks first, evening shows low-energy tasks.
+#### Feature T4: "Task Horizon" — Reduce Anxiety, Increase Control
+**Concept:** Extend the dashboard's "Today's Tasks" section with a subtle "Coming Up" preview showing tomorrow's tasks. Gives the user forward visibility without overwhelming today's focus. When today is all done, tomorrow auto-expands so the user can get a head start.
 
-**Behavioral Principle:** Chronotype alignment. Matching task difficulty to energy state reduces friction and increases completion rates.
+**Behavioral Principle:** Zeigarnik effect + anxiety reduction. Knowing what's coming next reduces cognitive load and the "what am I forgetting?" feeling. The auto-expand on completion turns a dead-end into a doorway — momentum, not a wall.
+
+**UX Design:**
+
+```
+┌─────────────────────────────────────┐
+│  Today's Tasks                [+ Add]│
+│                                      │
+│  ☐ Prepare presentation       🔴 P3  │
+│  ☐ Review PR #226             🟡 P2  │
+│  ✅ Buy groceries (strikethrough)    │
+│                                      │
+│  ── Coming Up (Tomorrow) ──────────  │
+│                                      │
+│  ☐ Team standup              (dim)   │
+│  ☐ Submit report             (dim)   │
+│  ☐ Call dentist              (dim)   │
+│  +2 more tomorrow →                  │
+│                                      │
+│  ─────────────────────────────────── │
+│  View all tasks →                    │
+└─────────────────────────────────────┘
+```
+
+**Display hierarchy:** Overdue (red accent) → Today → Coming Up (dimmed)
+
+**Behavior:**
+- **Default state**: Show max 3 tomorrow tasks at reduced opacity (`opacity-50`), with `+N more tomorrow →` link if more exist
+- **All today complete**: Auto-expand tomorrow section to full opacity, show all tasks (not just 3), header changes to *"Get a head start on tomorrow"*
+- **No tomorrow tasks**: Section hidden entirely (no empty state noise)
+- **"View all tasks →"**: Link at bottom of card, navigates to `/tasks`
 
 **Implementation:**
-- Add `energy_level` column to `tasks` table (INTEGER 1-3, nullable)
-- Add toggle buttons to TaskForm (Battery icons: low/medium/high)
-- Dashboard `TasksToday` sorts by energy-time alignment:
-  - Before noon: high energy tasks surface first
-  - Afternoon: medium energy
-  - Evening: low energy
-- Task cards show a small battery icon indicator
+- Backend: Extend `GET /api/dashboard` response to include `tasks_tomorrow` array — reuses existing `TasksDB.getUpcomingTasks(userId, 1)` method filtered to tomorrow only
+- Frontend: Extend `TasksToday` component with a "Coming Up" section below the existing task list
+- Tomorrow tasks use the same `TaskRow` component but with `opacity-50` wrapper class
+- Auto-expand logic: when `tasks_today` are all completed, toggle `opacity-50` off and show full list
+- Add "View all tasks →" link at component bottom
 
 **Files to modify:**
-- `lib/db/tasks.ts`, `lib/db/types.ts`, `lib/validations/task.ts`
-- `components/tasks/task-form.tsx` — energy toggle buttons
-- `components/tasks/task-card.tsx` — battery icon
-- `components/dashboard/tasks-today.tsx` — time-aware sorting
-- `i18n/messages/{en,zh,zh-TW}.json`
-- Migration SQL file
+- `app/api/dashboard/route.ts` — add `tasks_tomorrow` to response (using existing `getUpcomingTasks`)
+- `components/dashboard/tasks-today.tsx` — add "Coming Up" section, auto-expand logic, "View all tasks" link
+- `components/dashboard/dashboard-content.tsx` — pass `tasks_tomorrow` prop
+- `i18n/messages/{en,zh,zh-TW}.json` — translations for "Coming Up", "Get a head start", "+N more tomorrow", "View all tasks"
 
-#### Feature T3: "Completion Reflection" — Micro-Journal on Done
-**Concept:** When a user completes a task, instead of just a checkbox toggle, offer an optional one-tap reflection: *"How did it go?"* with 3 options: "Easy", "Just Right", "Hard". Store as `completion_difficulty` on the task. Over time, this builds a personal difficulty calibration.
+#### ~~Feature T2: "Energy Level Tagging"~~ — REMOVED
+**Decision:** Dropped from plan. Energy level + priority creates two competing sort dimensions, increases form friction, and adds a learning curve disproportionate to its value. Most users have 3-5 tasks/day — not enough to benefit from energy-based sorting.
 
-**Behavioral Principle:** Metacognitive reflection. Brief post-completion reflection strengthens the sense of achievement and improves future planning accuracy.
+**Future consideration:** If energy awareness matters later, it could be inferred from completion timestamps via the Weekly Insight card (H3) — e.g., *"You tend to complete your hardest tasks before noon"* — rather than requiring the user to self-report at creation time.
+
+#### Feature T3: "Completion Reflection" — The App That Listens
+**Concept:** For meaningful tasks only, offer a passive inline reflection moment at completion. No popups, no modals — the completed task lingers for 3 seconds with an inline emoji strip, then fades away whether the user engages or not.
+
+**Trigger Filter:** Only activates for **Priority 3 (High)** tasks OR tasks with an **Intention** field set. Low-priority busywork checks off silently as before.
+
+**Behavioral Principle:** Selective metacognitive reflection. Prompting reflection only on tasks the user already signaled as important avoids "nag fatigue" while still building self-awareness and planning calibration over time.
+
+**UX Flow:**
+1. User checks a qualifying task (P3 or has intention)
+2. Task stays visible for ~3 seconds instead of immediately moving to completed
+3. A small inline emoji row appears where the description was:
+   `How was it?  ⚡ Easy  👌 Good  💪 Hard`
+4. **If user taps an option:** saves the reflection, task animates away immediately
+5. **If user does nothing:** task fades away automatically after 3 seconds
+6. Non-qualifying tasks (P0-P2 without intention) toggle instantly with no reflection — zero change to current behavior
 
 **Implementation:**
 - Add `completion_difficulty` column to `tasks` table (INTEGER 1-3, nullable)
-- After toggle-to-complete, show a small inline popover (not a modal — zero friction):
-  "How was it?" → [Easy] [Just Right] [Hard]
-- Dismissible — user can ignore it and it auto-closes after 5 seconds
-- On task detail page, show the reflection if present
-- Dashboard weekly summary could eventually show difficulty distribution
+- Reflection UI is inline inside the task card/row — no popover, no overlay, no z-index
+- 3-second CSS transition with opacity fade (`transition-opacity duration-300`)
+- Save via `PATCH /api/tasks/[id]` with `completion_difficulty` field
+- On task detail page, show the saved reflection if present
+- Weekly insight (H3) can aggregate difficulty distribution over time
 
 **Files to modify:**
 - `lib/db/tasks.ts`, `lib/db/types.ts`
-- `components/tasks/task-card.tsx` — inline reflection popover
-- `components/dashboard/tasks-today.tsx` — inline reflection popover
-- `components/tasks/task-detail-content.tsx` — show reflection
+- `components/tasks/task-card.tsx` — inline reflection row with 3s linger + fade
+- `components/dashboard/tasks-today.tsx` — inline reflection row with 3s linger + fade
+- `components/tasks/task-detail-content.tsx` — display saved reflection
 - `i18n/messages/{en,zh,zh-TW}.json`
 - Migration SQL file
 
@@ -130,24 +172,56 @@ This document proposes **Vertical Depth** features — not more modules, but dee
 
 ### B. Habit Deep Features (Retention & Streaks)
 
-#### Feature H1: "Never Miss Twice" Protocol
-**Concept:** When a user misses a habit day and returns, show a targeted recovery card on the dashboard: *"You missed [habit] yesterday. That's okay — the rule is simple: never miss twice. Check in today to keep your momentum."* If they complete it, show: *"Back on track! Streak: 1 day (and counting)."*
+#### Feature H1: "Absence-Aware Recovery" — Never Miss Twice + Lapse + Hiatus
+**Concept:** When a user returns after missing habit days, show a context-appropriate card on the dashboard. The tone and actions adapt based on how long they've been away — because "you missed yesterday" feels wrong on day 4 of a lapse.
 
-**Behavioral Principle:** James Clear's "Never Miss Twice" rule. The most dangerous moment for habit death is the day after a miss. Targeted intervention at this exact moment prevents the "what-the-hell effect" (abandonment spiral).
+**Behavioral Principle:** James Clear's "Never Miss Twice" rule for short absences. For longer lapses, the priority shifts from streak preservation to preventing the "what-the-hell effect" (abandonment spiral). For extended hiatuses, the goal is a warm re-engagement that respects the user's changed circumstances.
+
+**3-Tier Logic Tree:**
+
+```
+For each active habit scheduled today:
+  missedDays = count of scheduled days (per frequency) with no completed log,
+               walking backwards from yesterday until the last completed day
+
+  Case A — Recovery (missedDays == 1):
+    Amber card, light tone
+    "You missed [habit] yesterday. The rule: never miss twice."
+    CTA: inline checkbox to complete today
+    On completion: "Back on track!"
+
+  Case B — Lapse (missedDays 2-6):
+    Blue/neutral card, honest acknowledgment
+    "It's been [X] days since [habit]. No judgment — today is a good day to restart."
+    Shows previous streak: "Your streak was [N] days. Let's build a new one."
+    CTA: inline checkbox to complete today
+    On completion: "Day 1. Let's go."
+
+  Case C — Hiatus (missedDays >= 7):
+    Warm/welcoming card — a homecoming, not a guilt trip
+    "Welcome back! It's been a while. Want to continue [habit], or adjust your routine?"
+    CTAs: "Resume" (complete today) | "Pause this habit" | "Change frequency"
+    On resume: "Fresh start! Day 1."
+```
+
+**Important nuances:**
+- **Frequency-aware calculation**: "missed days" counts *scheduled* days only. A weekly habit with no log for 3 calendar days is NOT a miss — they only need to complete it once per week. Uses existing `shouldTrackOnDate()` logic from `lib/db/habit-logs.ts`.
+- **Dashboard real estate cap**: Show max **3 cards**. Priority order: Hiatus > Lapse > Recovery. Within same tier, prioritize by longest-streak-before-lapse (most to lose = most urgent to recover).
+- **No card shown if**: habit was completed today, habit is paused/archived, or habit is not scheduled today.
+- **Success state transformation**: When user completes a habit from any card, the card transforms to a brief success message before fading away.
 
 **Implementation:**
-- New component: `RecoveryCard` — shown on dashboard when a habit was missed yesterday but is scheduled today
-- Backend: `GET /api/dashboard` already returns habits with `completed_today`. Add `completed_yesterday` field (or compute client-side from logs)
-- Visual: amber/warm card with encouraging tone, not guilt-inducing
-- If user completes the recovered habit, transform the card to a success state: "Welcome back!"
-- Track recovery events for future analytics
+- Backend: Extend `GET /api/dashboard` to include `missed_scheduled_days` per habit (computed from logs using `shouldTrackOnDate()` + last completed log date)
+- New component: `AbsenceCard` — single component with 3 visual variants (recovery/lapse/hiatus) driven by `missedDays` prop
+- Hiatus variant includes action buttons for pause/frequency change (reuses existing PATCH `/api/habits/[id]` endpoint)
+- Dashboard renders up to 3 `AbsenceCard` components between motivation message and stat cards
 
 **Files to modify:**
-- `lib/db/habit-logs.ts` — add `getYesterdayStatus()` or extend dashboard query
-- `app/api/dashboard/route.ts` — include yesterday completion data
-- New: `components/dashboard/recovery-card.tsx`
-- `components/dashboard/dashboard-content.tsx` — render RecoveryCard between motivation and stats
-- `i18n/messages/{en,zh,zh-TW}.json`
+- `lib/db/habit-logs.ts` — add `getMissedScheduledDays(habitId, frequency)` method
+- `app/api/dashboard/route.ts` — include missed days data per habit
+- New: `components/dashboard/absence-card.tsx` — 3-variant component
+- `components/dashboard/dashboard-content.tsx` — render AbsenceCards between motivation and stats, capped at 3
+- `i18n/messages/{en,zh,zh-TW}.json` — translations for all 3 tiers + success states
 
 #### Feature H2: "Streak Milestones & Celebrations"
 **Concept:** At specific streak thresholds (7, 14, 30, 50, 100, 365 days), show a celebration moment: a milestone card with the achievement, a congratulatory message, and the option to share/screenshot. Also show a "next milestone" indicator on the habit detail page.
@@ -199,16 +273,16 @@ This document proposes **Vertical Depth** features — not more modules, but dee
 ## Part 4: Implementation Priority & Phasing
 
 ### Phase 1 — Quick Wins (1-2 days each)
-1. **H1: Never Miss Twice Protocol** — Highest impact-to-effort ratio. Addresses the #1 habit killer (the day after a miss). Mostly frontend with minor API extension.
+1. **H1: Absence-Aware Recovery** — Highest impact-to-effort ratio. Addresses the #1 habit killer (the day after a miss). 3-tier logic with frequency-aware calculation.
 2. **T1: Intention Field** — Simple schema + form change with outsized motivational impact.
+3. **T4: Task Horizon** — Extends existing dashboard component with "Coming Up" section. Reuses existing `getUpcomingTasks()` API. Low risk, immediate anxiety reduction.
 
 ### Phase 2 — Medium Effort (2-3 days each)
-3. **H2: Streak Milestones** — Adds the celebration and anticipation that the app completely lacks. New components but straightforward logic.
-4. **T3: Completion Reflection** — Adds the missing emotional moment at task completion. Requires a popover UI component.
+4. **H2: Streak Milestones** — Adds the celebration and anticipation that the app completely lacks. New components but straightforward logic.
+5. **T3: Completion Reflection** — Passive inline reflection for meaningful tasks. Lightweight CSS transition + conditional trigger.
 
-### Phase 3 — Deeper Investment (3-5 days each)
-5. **T2: Energy Level Tagging** — Requires time-aware sorting logic and a new UX pattern.
-6. **H3: Weekly Insight Card** — Requires the most backend work (pattern computation), but delivers the most "coaching" value.
+### Phase 3 — Deeper Investment (3-5 days)
+6. **H3: Weekly Insight Card** — Requires the most backend work (pattern computation), but delivers the most "coaching" value. Can eventually infer energy patterns from completion timestamps (replacing the dropped T2).
 
 ---
 
@@ -228,11 +302,12 @@ For each feature:
 
 | # | Feature | Module | Gap Addressed | Effort | Impact |
 |---|---------|--------|---------------|--------|--------|
-| H1 | Never Miss Twice | Habits | Silent Failure | Low | High |
+| H1 | Absence-Aware Recovery | Habits | Silent Failure | Low | High |
 | T1 | Intention Field | Tasks | Input Without Purpose | Low | High |
+| T4 | Task Horizon | Tasks | No Forward Visibility | Low | High |
 | H2 | Streak Milestones | Habits | Flat Completion / No Arc | Medium | High |
 | T3 | Completion Reflection | Tasks | Flat Completion | Medium | Medium |
-| T2 | Energy Level Tagging | Tasks | No Coaching Voice | Medium | Medium |
+| ~~T2~~ | ~~Energy Level Tagging~~ | ~~Tasks~~ | — | — | *Removed* |
 | H3 | Weekly Insight Card | Habits | No Coaching Voice | High | High |
 
-The goal is not more features — it's deeper features. Each one transforms a moment that currently feels empty into a moment that feels meaningful.
+**6 features, 3 phases.** The goal is not more features — it's deeper features. Each one transforms a moment that currently feels empty into a moment that feels meaningful.
