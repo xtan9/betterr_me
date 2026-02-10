@@ -6,9 +6,11 @@ import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DailySnapshot } from "./daily-snapshot";
-import { HabitChecklist } from "./habit-checklist";
-import { TasksToday } from "./tasks-today";
+import dynamic from "next/dynamic";
+
+const DailySnapshot = dynamic(() => import("./daily-snapshot").then(m => ({ default: m.DailySnapshot })));
+const HabitChecklist = dynamic(() => import("./habit-checklist").then(m => ({ default: m.HabitChecklist })));
+const TasksToday = dynamic(() => import("./tasks-today").then(m => ({ default: m.TasksToday })));
 import { MotivationMessage } from "./motivation-message";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
