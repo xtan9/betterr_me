@@ -23,12 +23,22 @@ export default async function DashboardPage() {
   const tasksDB = new TasksDB(supabase);
   const date = getLocalDateString();
 
-  const [habitsWithStatus, todayTasks, allTodayTasks, allTasks] =
+  // Derive tomorrow from the client-sent date (timezone safety)
+  const [year, month, day] = date.split('-').map(Number);
+  const tomorrowDate = new Date(year, month - 1, day + 1);
+  const tomorrowStr = [
+    tomorrowDate.getFullYear(),
+    String(tomorrowDate.getMonth() + 1).padStart(2, '0'),
+    String(tomorrowDate.getDate()).padStart(2, '0'),
+  ].join('-');
+
+  const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow] =
     await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
       tasksDB.getTodayTasks(user.id),
       tasksDB.getUserTasks(user.id, { due_date: date }),
       tasksDB.getUserTasks(user.id),
+      tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
     ]);
 
   const completedHabitsToday = habitsWithStatus.filter(
@@ -45,6 +55,7 @@ export default async function DashboardPage() {
   const initialData: DashboardData = {
     habits: habitsWithStatus,
     tasks_today: todayTasks,
+    tasks_tomorrow: tasksTomorrow,
     stats: {
       total_habits: habitsWithStatus.length,
       completed_today: completedHabitsToday,

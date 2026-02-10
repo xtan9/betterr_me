@@ -155,6 +155,7 @@ const mockDashboardData = {
     },
   ],
   tasks_today: [],
+  tasks_tomorrow: [],
   stats: {
     total_habits: 2,
     completed_today: 1,
@@ -217,6 +218,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -255,6 +257,7 @@ describe("DashboardContent", () => {
             updated_at: "2024-01-01T00:00:00Z",
           },
         ],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -296,6 +299,7 @@ describe("DashboardContent", () => {
             updated_at: "2024-01-01T00:00:00Z",
           },
         ],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -323,6 +327,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -351,6 +356,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -376,6 +382,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
