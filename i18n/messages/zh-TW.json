@@ -138,7 +138,13 @@
       "allDay": "全天",
       "noTasks": "今天沒有任務",
       "createFirst": "新增任務",
-      "allComplete": "全部完成！"
+      "allComplete": "全部完成！",
+      "reflection": {
+        "howWasIt": "感覺如何？",
+        "easy": "簡單",
+        "good": "還行",
+        "hard": "困難"
+      }
     },
     "motivation": {
       "firstDay": "歡迎！成為更好自己的旅程從今天開始。🌟",
@@ -428,7 +434,12 @@
       "priority": "優先順序",
       "category": "分類",
       "noDueDate": "無截止日期",
-      "notFound": "任務未找到"
+      "notFound": "任務未找到",
+      "reflection": {
+        "easy": "你評價了：簡單 ⚡",
+        "good": "你評價了：還行 👌",
+        "hard": "你評價了：困難 💪"
+      }
     },
     "edit": {
       "title": "編輯任務",

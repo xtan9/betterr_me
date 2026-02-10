@@ -138,7 +138,13 @@
       "allDay": "All day",
       "noTasks": "No tasks for today",
       "createFirst": "Add a task",
-      "allComplete": "All tasks done!"
+      "allComplete": "All tasks done!",
+      "reflection": {
+        "howWasIt": "How was it?",
+        "easy": "Easy",
+        "good": "Good",
+        "hard": "Hard"
+      }
     },
     "motivation": {
       "firstDay": "Welcome! Your journey to becoming better starts today. 🌟",
@@ -428,7 +434,12 @@
       "priority": "Priority",
       "category": "Category",
       "noDueDate": "No due date",
-      "notFound": "Task not found"
+      "notFound": "Task not found",
+      "reflection": {
+        "easy": "You rated this: Easy ⚡",
+        "good": "You rated this: Good 👌",
+        "hard": "You rated this: Hard 💪"
+      }
     },
     "edit": {
       "title": "Edit Task",
