@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       title: body.title.trim(),
       description: body.description?.trim() || null,
+      intention: body.intention?.trim() || null,
       is_completed: body.is_completed ?? false,
       priority: body.priority ?? 0,
       category: body.category || null,

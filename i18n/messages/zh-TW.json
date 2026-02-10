@@ -404,7 +404,9 @@
       "create": "建立任務",
       "save": "儲存變更",
       "creating": "正在建立...",
-      "saving": "正在儲存..."
+      "saving": "正在儲存...",
+      "intentionLabel": "為什麼重要",
+      "intentionPlaceholder": "這件事對你來說為什麼重要？"
     },
     "categories": {
       "work": "工作",
@@ -432,7 +434,8 @@
       "priority": "優先順序",
       "category": "分類",
       "noDueDate": "無截止日期",
-      "notFound": "任務未找到"
+      "notFound": "任務未找到",
+      "yourWhy": "你的初衷"
     },
     "edit": {
       "title": "編輯任務",

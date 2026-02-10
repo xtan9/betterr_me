@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB, TasksDB } from '@/lib/db';
 import type { DashboardData } from '@/lib/db/types';
-import { getLocalDateString } from '@/lib/utils';
+import { getLocalDateString, getNextDateString } from '@/lib/utils';
 
 /**
  * GET /api/dashboard
@@ -14,7 +14,8 @@ import { getLocalDateString } from '@/lib/utils';
  * Response:
  * - habits: HabitWithTodayStatus[] - active habits with completion status
  * - tasks_today: Task[] - tasks due today or overdue
- * - stats: { total_habits, completed_today, current_best_streak, tasks_due_today, tasks_completed_today }
+ * - tasks_tomorrow: Task[] - incomplete tasks due tomorrow
+ * - stats: { total_habits, completed_today, current_best_streak, total_tasks, tasks_due_today, tasks_completed_today }
  */
 export async function GET(request: NextRequest) {
   try {
@@ -32,14 +33,15 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
 
-    // Derive tomorrow from the CLIENT-sent date, not server time (timezone safety)
-    const [year, month, day] = date.split('-').map(Number);
-    const tomorrowDate = new Date(year, month - 1, day + 1);
-    const tomorrowStr = [
-      tomorrowDate.getFullYear(),
-      String(tomorrowDate.getMonth() + 1).padStart(2, '0'),
-      String(tomorrowDate.getDate()).padStart(2, '0'),
-    ].join('-');
+    // Validate date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return NextResponse.json(
+        { error: 'Invalid date format. Use YYYY-MM-DD' },
+        { status: 400 }
+      );
+    }
+
+    const tomorrowStr = getNextDateString(date);
 
     // Fetch data in parallel
     const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow] = await Promise.all([

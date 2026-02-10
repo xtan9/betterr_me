@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { cn, getLocalDateString } from '@/lib/utils';
+import { cn, getLocalDateString, getNextDateString } from '@/lib/utils';
 
 describe('cn (className utility)', () => {
   it('merges multiple class strings', () => {
@@ -145,6 +145,29 @@ describe('getLocalDateString', () => {
   it('handles end of year correctly', () => {
     const result = getLocalDateString(new Date(2026, 11, 31)); // Dec 31, 2026
     expect(result).toBe('2026-12-31');
+  });
+});
+
+describe('getNextDateString', () => {
+  it('returns the next day for a regular date', () => {
+    expect(getNextDateString('2026-02-08')).toBe('2026-02-09');
+  });
+
+  it('handles month rollover (Feb 28 → Mar 1 non-leap year)', () => {
+    expect(getNextDateString('2027-02-28')).toBe('2027-03-01');
+  });
+
+  it('handles leap year (Feb 28 → Feb 29)', () => {
+    expect(getNextDateString('2028-02-28')).toBe('2028-02-29');
+  });
+
+  it('handles year rollover (Dec 31 → Jan 1)', () => {
+    expect(getNextDateString('2026-12-31')).toBe('2027-01-01');
+  });
+
+  it('pads single-digit months and days', () => {
+    expect(getNextDateString('2026-01-01')).toBe('2026-01-02');
+    expect(getNextDateString('2026-03-09')).toBe('2026-03-10');
   });
 });
 
