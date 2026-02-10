@@ -17,6 +17,9 @@ const mockTasksDB = {
   getTodayTasks: vi.fn(),
   getUserTasks: vi.fn().mockResolvedValue([]),
 };
+const mockMilestonesDB = {
+  getTodaysMilestones: vi.fn().mockResolvedValue([]),
+};
 
 vi.mock('@/lib/db', () => ({
   HabitsDB: class {
@@ -24,6 +27,9 @@ vi.mock('@/lib/db', () => ({
   },
   TasksDB: class {
     constructor() { return mockTasksDB; }
+  },
+  HabitMilestonesDB: class {
+    constructor() { return mockMilestonesDB; }
   },
 }));
 
@@ -99,6 +105,25 @@ describe('GET /api/dashboard', () => {
     await GET(request);
 
     expect(mockHabitsDB.getHabitsWithTodayStatus).toHaveBeenCalledWith('user-123', '2026-02-01');
+  });
+
+  it('should return milestones_today in response', async () => {
+    const milestones = [
+      { id: 'm1', habit_id: 'h1', user_id: 'user-123', milestone: 7, achieved_at: '2026-02-09T00:00:00Z', created_at: '2026-02-09T00:00:00Z' },
+    ];
+
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockMilestonesDB.getTodaysMilestones).mockResolvedValue(milestones);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard');
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.milestones_today).toHaveLength(1);
+    expect(data.milestones_today[0].milestone).toBe(7);
   });
 
   it('should return 401 if not authenticated', async () => {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { HabitsDB, TasksDB } from '@/lib/db';
+import { HabitsDB, TasksDB, HabitMilestonesDB } from '@/lib/db';
 import type { DashboardData } from '@/lib/db/types';
 import { getLocalDateString } from '@/lib/utils';
 
@@ -29,17 +29,20 @@ export async function GET(request: NextRequest) {
 
     const habitsDB = new HabitsDB(supabase);
     const tasksDB = new TasksDB(supabase);
+    const milestonesDB = new HabitMilestonesDB(supabase);
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
 
     // Fetch data in parallel
-    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks] = await Promise.all([
+    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, milestonesToday] = await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
       tasksDB.getTodayTasks(user.id),
       // Get all tasks for today to calculate completed count
       tasksDB.getUserTasks(user.id, { due_date: date }),
       // Get all tasks to determine if user has any tasks at all
       tasksDB.getUserTasks(user.id),
+      // Get milestones achieved today
+      milestonesDB.getTodaysMilestones(user.id),
     ]);
 
     // Calculate stats
@@ -53,6 +56,7 @@ export async function GET(request: NextRequest) {
     const dashboardData: DashboardData = {
       habits: habitsWithStatus,
       tasks_today: todayTasks,
+      milestones_today: milestonesToday,
       stats: {
         total_habits: habitsWithStatus.length,
         completed_today: completedHabitsToday,
