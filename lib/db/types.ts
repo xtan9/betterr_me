@@ -151,6 +151,19 @@ export interface HabitWithLogs extends Habit {
 }
 
 // =============================================================================
+// HABIT MILESTONES
+// =============================================================================
+
+export interface HabitMilestone {
+  id: string; // UUID
+  habit_id: string; // UUID
+  user_id: string; // UUID
+  milestone: number;
+  achieved_at: string; // TIMESTAMPTZ
+  created_at: string;
+}
+
+// =============================================================================
 // DASHBOARD TYPES
 // =============================================================================
 
@@ -158,6 +171,7 @@ export interface DashboardData {
   habits: HabitWithTodayStatus[];
   tasks_today: Task[];
   tasks_tomorrow: Task[];
+  milestones_today: HabitMilestone[];
   stats: {
     total_habits: number;
     completed_today: number;
