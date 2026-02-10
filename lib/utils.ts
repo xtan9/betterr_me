@@ -18,6 +18,17 @@ export function getLocalDateString(date: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Returns the next day's date as YYYY-MM-DD given a YYYY-MM-DD string.
+ *
+ * Correctly handles month/year rollovers (e.g., Feb 28 → Mar 1, Dec 31 → Jan 1).
+ */
+export function getNextDateString(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const next = new Date(year, month - 1, day + 1);
+  return getLocalDateString(next);
+}
+
 // This check can be removed, it is just for tutorial purposes
 export const hasEnvVars =
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
