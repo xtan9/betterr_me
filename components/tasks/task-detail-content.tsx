@@ -214,6 +214,20 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
         )}
       </div>
 
+      {/* Your Why */}
+      {task.intention && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border-l-4 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-950/20">
+          <div>
+            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+              {t("detail.yourWhy")}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1 italic">
+              {task.intention}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Reflection badge */}
       {task.completion_difficulty && (
         <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
