@@ -45,6 +45,9 @@ export default async function RootLayout({
 
   return (
     <html lang={langMap[locale as keyof typeof langMap]} suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
+      </head>
       <body className={`${inter.className} ${lexend.variable} antialiased`}>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider

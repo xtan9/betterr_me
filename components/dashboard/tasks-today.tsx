@@ -64,6 +64,11 @@ function TaskRow({ task, onToggle, onClick, isToggling }: TaskRowProps) {
             {task.title}
           </button>
         </div>
+        {task.priority === 3 && task.intention && (
+          <p className="text-xs text-muted-foreground italic mt-0.5">
+            {task.intention}
+          </p>
+        )}
         <div className="text-xs text-muted-foreground mt-0.5">
           {task.due_time
             ? t("dueAt", { time: formatTime(task.due_time) })
