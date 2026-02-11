@@ -59,6 +59,20 @@ describe("MilestoneCard", () => {
     expect(screen.getByText("celebration365")).toBeInTheDocument();
   });
 
+  it("renders no sub-message for unknown milestone threshold", () => {
+    const { container } = render(
+      <MilestoneCard
+        milestone={{ ...baseMilestone, milestone: 999 }}
+        habitName="Walk"
+      />
+    );
+    // Primary celebration message should render
+    expect(screen.getByText(/celebration.*habit=Walk.*count=999/)).toBeInTheDocument();
+    // No sub-message element with a threshold-specific key
+    const subMessages = container.querySelectorAll("p.text-sm");
+    expect(subMessages.length).toBe(0);
+  });
+
   it("has no accessibility violations", async () => {
     const { container } = render(
       <MilestoneCard milestone={baseMilestone} habitName="Run" />
@@ -89,5 +103,27 @@ describe("MilestoneCards", () => {
     render(<MilestoneCards milestones={milestones} habits={habits} />);
     const cards = screen.getAllByText(/celebration /);
     expect(cards.length).toBe(2);
+  });
+
+  it("filters out milestones referencing non-existent habits", () => {
+    const milestones = [
+      { ...baseMilestone, id: "m1", habit_id: "h-deleted", milestone: 7 },
+      { ...baseMilestone, id: "m2", habit_id: "h1", milestone: 14 },
+    ];
+    render(<MilestoneCards milestones={milestones} habits={habits} />);
+    const cards = screen.getAllByText(/celebration /);
+    expect(cards.length).toBe(1);
+    expect(screen.getByText(/habit=Run/)).toBeInTheDocument();
+  });
+
+  it("renders nothing when all milestones reference non-existent habits", () => {
+    const milestones = [
+      { ...baseMilestone, id: "m1", habit_id: "h-deleted", milestone: 7 },
+      { ...baseMilestone, id: "m2", habit_id: "h-gone", milestone: 14 },
+    ];
+    const { container } = render(
+      <MilestoneCards milestones={milestones} habits={habits} />
+    );
+    expect(container.innerHTML).toBe("");
   });
 });

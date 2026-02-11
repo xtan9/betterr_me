@@ -238,6 +238,8 @@ export class HabitsDB {
         monthly_completion_rate: scheduled > 0
           ? Math.min(Math.round((completed / scheduled) * 100), 100)
           : 0,
+        missed_scheduled_days: 0, // enriched by dashboard route via computeMissedDays
+        previous_streak: 0, // enriched by dashboard route via computeMissedDays
       };
     });
   }

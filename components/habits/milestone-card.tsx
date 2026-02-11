@@ -10,7 +10,7 @@ interface MilestoneCardProps {
   habitName: string;
 }
 
-function getCelebrationKey(milestone: number): string {
+function getCelebrationKey(milestone: number): string | null {
   const thresholdKeys: Record<number, string> = {
     7: "celebration7",
     14: "celebration14",
@@ -20,7 +20,7 @@ function getCelebrationKey(milestone: number): string {
     200: "celebration200",
     365: "celebration365",
   };
-  return thresholdKeys[milestone] || "celebration";
+  return thresholdKeys[milestone] || null;
 }
 
 export function MilestoneCard({ milestone, habitName }: MilestoneCardProps) {
@@ -38,9 +38,11 @@ export function MilestoneCard({ milestone, habitName }: MilestoneCardProps) {
           <p className="font-semibold text-emerald-900 dark:text-emerald-100 truncate">
             {t("celebration", { habit: habitName, count: milestone.milestone })}
           </p>
-          <p className="text-sm text-emerald-700 dark:text-emerald-300">
-            {t(celebrationKey)}
-          </p>
+          {celebrationKey && (
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">
+              {t(celebrationKey)}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -56,20 +58,21 @@ export function MilestoneCards({ milestones, habits }: MilestoneCardsProps) {
   if (milestones.length === 0) return null;
 
   const habitMap = new Map(habits.map(h => [h.id, h]));
-  const displayMilestones = milestones.slice(0, 2);
+  const displayMilestones = milestones
+    .filter(m => habitMap.has(m.habit_id))
+    .slice(0, 2);
+
+  if (displayMilestones.length === 0) return null;
 
   return (
     <div className="space-y-3">
-      {displayMilestones.map(m => {
-        const habit = habitMap.get(m.habit_id);
-        return (
-          <MilestoneCard
-            key={m.id}
-            milestone={m}
-            habitName={habit?.name || ""}
-          />
-        );
-      })}
+      {displayMilestones.map(m => (
+        <MilestoneCard
+          key={m.id}
+          milestone={m}
+          habitName={habitMap.get(m.habit_id)!.name}
+        />
+      ))}
     </div>
   );
 }
