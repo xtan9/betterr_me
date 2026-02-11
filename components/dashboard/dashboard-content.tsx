@@ -49,16 +49,15 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
   };
 
   const handleToggleHabit = async (habitId: string) => {
-    try {
-      await fetch(`/api/habits/${habitId}/toggle`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: today }),
-      });
-      mutate(); // Revalidate dashboard data
-    } catch (err) {
-      console.error("Failed to toggle habit:", err);
+    const response = await fetch(`/api/habits/${habitId}/toggle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: today }),
+    });
+    if (!response.ok) {
+      throw new Error("Failed to toggle habit");
     }
+    mutate(); // Revalidate dashboard data
   };
 
   const handleToggleTask = async (taskId: string) => {

@@ -135,4 +135,78 @@ describe("AbsenceCard", () => {
 
     expect(screen.queryByText(/streak before/)).not.toBeInTheDocument();
   });
+
+  it("does not show success state when onToggle rejects", async () => {
+    const onToggle = vi.fn().mockRejectedValue(new Error("Network error"));
+    const habit = makeHabit({ missed_scheduled_days: 1 });
+
+    renderWithIntl(
+      <AbsenceCard habit={habit} onToggle={onToggle} onNavigate={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    await waitFor(() => expect(onToggle).toHaveBeenCalled());
+    expect(screen.queryByText(/welcome back/)).not.toBeInTheDocument();
+  });
+
+  it("calls onToggle and shows success when clicking 'Resume today' (hiatus)", async () => {
+    const onToggle = vi.fn().mockResolvedValue(undefined);
+    const habit = makeHabit({ missed_scheduled_days: 10 });
+
+    renderWithIntl(
+      <AbsenceCard habit={habit} onToggle={onToggle} onNavigate={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByText("Resume today"));
+    await waitFor(() => {
+      expect(screen.getByText(/Morning Run — welcome back!/)).toBeInTheDocument();
+    });
+    expect(onToggle).toHaveBeenCalledWith("h1");
+  });
+
+  it("does not show previous streak for hiatus variant even when previous_streak > 0", () => {
+    const habit = makeHabit({ missed_scheduled_days: 10, previous_streak: 15 });
+
+    renderWithIntl(
+      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+    );
+
+    expect(screen.queryByText(/streak before/)).not.toBeInTheDocument();
+  });
+
+  it("renders lapse variant at exactly 3 missed days (boundary)", () => {
+    const habit = makeHabit({ missed_scheduled_days: 3 });
+
+    renderWithIntl(
+      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+    );
+
+    expect(screen.getByText(/3 days since last check-in/)).toBeInTheDocument();
+  });
+
+  it("renders hiatus variant at exactly 7 missed days (boundary)", () => {
+    const habit = makeHabit({ missed_scheduled_days: 7 });
+
+    renderWithIntl(
+      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+    );
+
+    expect(screen.getByText(/it's been 7 days/)).toBeInTheDocument();
+    expect(screen.getByText("Resume today")).toBeInTheDocument();
+  });
+
+  it("disables checkbox while toggle is in flight", async () => {
+    let resolveToggle!: () => void;
+    const onToggle = vi.fn(() => new Promise<void>(r => { resolveToggle = r; }));
+    const habit = makeHabit({ missed_scheduled_days: 1 });
+
+    renderWithIntl(
+      <AbsenceCard habit={habit} onToggle={onToggle} onNavigate={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(screen.getByRole("checkbox")).toBeDisabled();
+    resolveToggle();
+    await waitFor(() => expect(screen.getByText(/welcome back/)).toBeInTheDocument());
+  });
 });

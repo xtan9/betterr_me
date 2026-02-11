@@ -60,6 +60,8 @@ export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
     try {
       await onToggle(habit.id);
       setJustCompleted(true);
+    } catch {
+      // Toggle failed — do not show success state
     } finally {
       setIsCompleting(false);
     }

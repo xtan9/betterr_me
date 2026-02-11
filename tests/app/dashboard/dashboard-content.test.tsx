@@ -95,6 +95,16 @@ const messages = {
       title: "Something went wrong",
       retry: "Try again",
     },
+    absence: {
+      recoveryTitle: "{name} — missed {days} day(s)",
+      lapseTitle: "{name} — {days} days since last check-in",
+      hiatusTitle: "{name} — it's been {days} days",
+      previousStreak: "You had a {days}-day streak before",
+      markComplete: "Complete today",
+      completed: "{name} — welcome back!",
+      resume: "Resume today",
+      changeFrequency: "Change frequency",
+    },
   },
   habits: {
     card: {
@@ -136,6 +146,8 @@ const mockDashboardData = {
       updated_at: "2024-01-01T00:00:00Z",
       completed_today: true,
       monthly_completion_rate: 80,
+      missed_scheduled_days: 0,
+      previous_streak: 0,
     },
     {
       id: "2",
@@ -152,6 +164,8 @@ const mockDashboardData = {
       updated_at: "2024-01-01T00:00:00Z",
       completed_today: false,
       monthly_completion_rate: 40,
+      missed_scheduled_days: 0,
+      previous_streak: 0,
     },
   ],
   tasks_today: [],
@@ -474,5 +488,60 @@ describe("DashboardContent", () => {
     });
 
     global.fetch = originalFetch;
+  });
+
+  it("renders up to 3 absence cards sorted by missed_scheduled_days descending", async () => {
+    const baseFields = {
+      user_id: "user-1",
+      description: null,
+      category: "health" as const,
+      frequency: { type: "daily" as const },
+      status: "active" as const,
+      current_streak: 0,
+      best_streak: 0,
+      paused_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      monthly_completion_rate: 50,
+    };
+
+    const habitsWithAbsence = [
+      { ...baseFields, id: "a", name: "A", missed_scheduled_days: 2, previous_streak: 0, completed_today: false },
+      { ...baseFields, id: "b", name: "B", missed_scheduled_days: 8, previous_streak: 3, completed_today: false },
+      { ...baseFields, id: "c", name: "C", missed_scheduled_days: 0, previous_streak: 0, completed_today: false },
+      { ...baseFields, id: "d", name: "D", missed_scheduled_days: 5, previous_streak: 1, completed_today: false },
+      { ...baseFields, id: "e", name: "E", missed_scheduled_days: 1, previous_streak: 0, completed_today: true },
+    ];
+
+    mockUseSWR.mockReturnValue({
+      data: {
+        habits: habitsWithAbsence,
+        tasks_today: [],
+        tasks_tomorrow: [],
+        stats: {
+          total_habits: 5,
+          completed_today: 1,
+          current_best_streak: 0,
+          total_tasks: 0,
+          tasks_due_today: 0,
+          tasks_completed_today: 0,
+        },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="User" />);
+
+    // B (8 days hiatus), D (5 days lapse), A (2 days recovery) shown
+    // C (0 missed) and E (completed today) excluded; max 3 cards
+    await waitFor(() => {
+      expect(screen.getByText(/B — it's been 8 days/)).toBeInTheDocument();
+      expect(screen.getByText(/D — 5 days since last check-in/)).toBeInTheDocument();
+      expect(screen.getByText(/A — missed 2 day/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/C —/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/E —/)).not.toBeInTheDocument();
   });
 });
