@@ -11,6 +11,7 @@ export const taskFormSchema = z.object({
   category: z.enum(["work", "personal", "shopping", "other"]).nullable(),
   due_date: z.string().nullable(),
   due_time: z.string().nullable(),
+  completion_difficulty: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
 });
 
 export type TaskFormValues = z.infer<typeof taskFormSchema>;
