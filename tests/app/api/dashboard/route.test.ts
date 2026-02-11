@@ -256,6 +256,24 @@ describe('GET /api/dashboard', () => {
     expect(mockMilestonesDB.getTodaysMilestones).toHaveBeenCalledWith('user-123', '2026-02-09');
   });
 
+  it('should return dashboard data even when milestones fetch fails', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockMilestonesDB.getTodaysMilestones).mockRejectedValue(
+      new Error('Milestones table missing')
+    );
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard');
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.milestones_today).toEqual([]);
+    expect(data.habits).toBeDefined();
+    expect(data.stats).toBeDefined();
+  });
+
   it('should return 401 if not authenticated', async () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
