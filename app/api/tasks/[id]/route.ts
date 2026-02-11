@@ -109,13 +109,18 @@ export async function PATCH(
 
     if (body.completion_difficulty !== undefined) {
       const diff = body.completion_difficulty;
-      if (diff !== null && (diff < 1 || diff > 3)) {
-        return NextResponse.json(
-          { error: 'completion_difficulty must be 1, 2, 3, or null' },
-          { status: 400 }
-        );
+      if (diff !== null) {
+        const parsed = parseInt(diff);
+        if (isNaN(parsed) || parsed < 1 || parsed > 3) {
+          return NextResponse.json(
+            { error: 'completion_difficulty must be 1, 2, 3, or null' },
+            { status: 400 }
+          );
+        }
+        updates.completion_difficulty = parsed as 1 | 2 | 3;
+      } else {
+        updates.completion_difficulty = null;
       }
-      updates.completion_difficulty = diff;
     }
 
     if (Object.keys(updates).length === 0) {

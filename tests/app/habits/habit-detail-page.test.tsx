@@ -109,6 +109,18 @@ const messages = {
     loading: {
       title: "Loading...",
     },
+    milestone: {
+      celebration: "{habit} reached {count} days!",
+      celebration7: "One week strong!",
+      celebration14: "Two weeks in!",
+      celebration30: "A whole month!",
+      celebration50: "50 days!",
+      celebration100: "Triple digits!",
+      celebration200: "200 days!",
+      celebration365: "One full year!",
+      nextMilestone: "{days} more days to your {milestone}-day milestone!",
+      noNextMilestone: "You've passed every milestone. Keep going!",
+    },
     error: {
       title: "Failed to load habit",
       retry: "Try again",
@@ -255,6 +267,23 @@ describe("HabitDetailContent", () => {
     renderWithProviders(<HabitDetailContent habitId="habit-1" />);
 
     expect(screen.getByText("Active")).toBeInTheDocument();
+  });
+
+  it("renders NextMilestone with correct streak data", () => {
+    mockUseSWR.mockImplementation((key: unknown) => {
+      if (typeof key === "string" && key.includes("/logs")) {
+        return { data: mockLogs, error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      if (typeof key === "string" && key.includes("/stats")) {
+        return { data: mockStats, error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      return { data: mockHabit, error: undefined, isLoading: false, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<HabitDetailContent habitId="habit-1" />);
+
+    // mockHabit has current_streak: 23, next milestone is 30, days remaining = 7
+    expect(screen.getByText("7 more days to your 30-day milestone!")).toBeInTheDocument();
   });
 
   it("shows completion stats", () => {

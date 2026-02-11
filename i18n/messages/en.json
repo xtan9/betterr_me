@@ -106,7 +106,9 @@
     },
     "error": {
       "title": "Something went wrong",
-      "retry": "Try again"
+      "retry": "Try again",
+      "toggleHabitFailed": "Failed to update habit. Please try again.",
+      "toggleTaskFailed": "Failed to update task. Please try again."
     },
     "snapshot": {
       "title": "Today's Snapshot",
@@ -144,7 +146,11 @@
         "easy": "Easy",
         "good": "Good",
         "hard": "Hard"
-      }
+      },
+      "comingUp": "Coming Up Tomorrow",
+      "headStart": "Get a Head Start",
+      "moreTomorrow": "+{count} more tomorrow",
+      "viewAll": "View all tasks"
     },
     "motivation": {
       "firstDay": "Welcome! Your journey to becoming better starts today. 🌟",
@@ -154,6 +160,16 @@
       "halfway": "Halfway there! Keep the momentum going. 🚀",
       "gettingStarted": "Every habit completed brings you closer to your best self. ✨",
       "noHabits": "Ready to start building better habits? Add your first one! 🌱"
+    },
+    "absence": {
+      "recoveryTitle": "{name} — missed {days, plural, one {# day} other {# days}}",
+      "lapseTitle": "{name} — {days, plural, one {# day} other {# days}} since last check-in",
+      "hiatusTitle": "{name} — it's been {days, plural, one {# day} other {# days}}",
+      "previousStreak": "You had a {days}-day streak before",
+      "markComplete": "Complete today",
+      "completed": "{name} — welcome back!",
+      "resume": "Resume today",
+      "changeFrequency": "Change frequency"
     }
   },
   "habits": {
@@ -331,6 +347,18 @@
     },
     "loading": {
       "title": "Loading habits..."
+    },
+    "milestone": {
+      "celebration": "Incredible! {habit} just hit {count} days!",
+      "celebration7": "One week strong!",
+      "celebration14": "Two weeks and counting!",
+      "celebration30": "A full month! You're building something real.",
+      "celebration50": "50 days. Half the people who start never get here.",
+      "celebration100": "Triple digits. Legendary.",
+      "celebration200": "200 days. This isn't a habit anymore — it's who you are.",
+      "celebration365": "One full year. Unbelievable commitment.",
+      "nextMilestone": "{days} more days to your {milestone}-day milestone!",
+      "noNextMilestone": "You've passed every milestone. Keep going!"
     }
   },
   "auth": {

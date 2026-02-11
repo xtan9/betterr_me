@@ -144,10 +144,27 @@ export type HabitLogUpdate = Partial<Pick<HabitLog, 'completed'>>;
 export interface HabitWithTodayStatus extends Habit {
   completed_today: boolean;
   monthly_completion_rate: number; // 0-100, percentage of days completed this month
+  missed_scheduled_days: number; // consecutive scheduled-but-missed days before today
+  previous_streak: number; // streak length before the current absence gap
 }
 
 export interface HabitWithLogs extends Habit {
   logs: HabitLog[];
+}
+
+// =============================================================================
+// HABIT MILESTONES
+// =============================================================================
+
+import type { MilestoneThreshold } from '@/lib/habits/milestones';
+
+export interface HabitMilestone {
+  id: string; // UUID
+  habit_id: string; // UUID
+  user_id: string; // UUID
+  milestone: MilestoneThreshold;
+  achieved_at: string; // TIMESTAMPTZ
+  created_at: string;
 }
 
 // =============================================================================
@@ -157,6 +174,8 @@ export interface HabitWithLogs extends Habit {
 export interface DashboardData {
   habits: HabitWithTodayStatus[];
   tasks_today: Task[];
+  tasks_tomorrow: Task[];
+  milestones_today: HabitMilestone[];
   stats: {
     total_habits: number;
     completed_today: number;
