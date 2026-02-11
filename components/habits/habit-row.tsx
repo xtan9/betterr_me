@@ -23,7 +23,9 @@ export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps
 
   const handleCheckboxChange = () => {
     if (!isToggling) {
-      onToggle(habit.id);
+      onToggle(habit.id).catch((err) => {
+        console.error("Failed to toggle habit:", err);
+      });
     }
   };
 

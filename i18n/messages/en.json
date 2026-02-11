@@ -152,6 +152,16 @@
       "halfway": "Halfway there! Keep the momentum going. 🚀",
       "gettingStarted": "Every habit completed brings you closer to your best self. ✨",
       "noHabits": "Ready to start building better habits? Add your first one! 🌱"
+    },
+    "absence": {
+      "recoveryTitle": "{name} — missed {days, plural, one {# day} other {# days}}",
+      "lapseTitle": "{name} — {days, plural, one {# day} other {# days}} since last check-in",
+      "hiatusTitle": "{name} — it's been {days, plural, one {# day} other {# days}}",
+      "previousStreak": "You had a {days}-day streak before",
+      "markComplete": "Complete today",
+      "completed": "{name} — welcome back!",
+      "resume": "Resume today",
+      "changeFrequency": "Change frequency"
     }
   },
   "habits": {

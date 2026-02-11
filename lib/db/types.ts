@@ -142,6 +142,8 @@ export type HabitLogUpdate = Partial<Pick<HabitLog, 'completed'>>;
 export interface HabitWithTodayStatus extends Habit {
   completed_today: boolean;
   monthly_completion_rate: number; // 0-100, percentage of days completed this month
+  missed_scheduled_days: number; // consecutive scheduled-but-missed days before today
+  previous_streak: number; // streak length before the current absence gap
 }
 
 export interface HabitWithLogs extends Habit {
