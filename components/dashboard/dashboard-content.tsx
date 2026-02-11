@@ -61,14 +61,13 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
   };
 
   const handleToggleTask = async (taskId: string) => {
-    try {
-      await fetch(`/api/tasks/${taskId}/toggle`, {
-        method: "POST",
-      });
-      mutate(); // Revalidate dashboard data
-    } catch (err) {
-      console.error("Failed to toggle task:", err);
+    const response = await fetch(`/api/tasks/${taskId}/toggle`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to toggle task ${taskId}: ${response.status}`);
     }
+    mutate(); // Revalidate dashboard data
   };
 
   const handleCreateHabit = () => {
