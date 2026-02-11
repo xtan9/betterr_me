@@ -20,6 +20,9 @@ const mockTasksDB = {
 const mockHabitLogsDB = {
   getAllUserLogs: vi.fn().mockResolvedValue([]),
 };
+const mockMilestonesDB = {
+  getTodaysMilestones: vi.fn().mockResolvedValue([]),
+};
 
 vi.mock('@/lib/db', () => ({
   HabitsDB: class {
@@ -30,6 +33,9 @@ vi.mock('@/lib/db', () => ({
   },
   HabitLogsDB: class {
     constructor() { return mockHabitLogsDB; }
+  },
+  HabitMilestonesDB: class {
+    constructor() { return mockMilestonesDB; }
   },
 }));
 
@@ -42,6 +48,7 @@ describe('GET /api/dashboard', () => {
       auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
     } as any);
     vi.mocked(mockHabitLogsDB.getAllUserLogs).mockResolvedValue([]);
+    vi.mocked(mockMilestonesDB.getTodaysMilestones).mockResolvedValue([]);
   });
 
   it('should return aggregated dashboard data with absence info', async () => {
@@ -155,6 +162,25 @@ describe('GET /api/dashboard', () => {
     expect(mockHabitsDB.getHabitsWithTodayStatus).toHaveBeenCalledWith('user-123', '2026-02-01');
   });
 
+  it('should return milestones_today in response', async () => {
+    const milestones = [
+      { id: 'm1', habit_id: 'h1', user_id: 'user-123', milestone: 7, achieved_at: '2026-02-09T00:00:00Z', created_at: '2026-02-09T00:00:00Z' },
+    ];
+
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockMilestonesDB.getTodaysMilestones).mockResolvedValue(milestones);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard');
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.milestones_today).toHaveLength(1);
+    expect(data.milestones_today[0].milestone).toBe(7);
+  });
+
   it('should call getAllUserLogs with 30-day window', async () => {
     vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
     vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
@@ -217,6 +243,35 @@ describe('GET /api/dashboard', () => {
     expect(response.status).toBe(500);
     const data = await response.json();
     expect(data.error).toBe('Failed to fetch dashboard data');
+  });
+
+  it('should pass client date to getTodaysMilestones', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-09');
+    await GET(request);
+
+    expect(mockMilestonesDB.getTodaysMilestones).toHaveBeenCalledWith('user-123', '2026-02-09');
+  });
+
+  it('should return dashboard data even when milestones fetch fails', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockMilestonesDB.getTodaysMilestones).mockRejectedValue(
+      new Error('Milestones table missing')
+    );
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard');
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.milestones_today).toEqual([]);
+    expect(data.habits).toBeDefined();
+    expect(data.stats).toBeDefined();
   });
 
   it('should return 401 if not authenticated', async () => {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { HabitsDB, TasksDB, HabitLogsDB } from '@/lib/db';
-import type { DashboardData } from '@/lib/db/types';
+import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
+import type { DashboardData, HabitMilestone } from '@/lib/db/types';
 import { getLocalDateString, getNextDateString } from '@/lib/utils';
 import { computeMissedDays } from '@/lib/habits/absence';
 
@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     const habitsDB = new HabitsDB(supabase);
     const tasksDB = new TasksDB(supabase);
     const habitLogsDB = new HabitLogsDB(supabase);
+    const milestonesDB = new HabitMilestonesDB(supabase);
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
 
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
     ].join('-');
 
     // Fetch data in parallel (including bulk logs for absence computation)
-    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow, allLogs] = await Promise.all([
+    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow, allLogs, milestonesToday] = await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
       tasksDB.getTodayTasks(user.id),
       // Get all tasks for today to calculate completed count
@@ -66,6 +67,11 @@ export async function GET(request: NextRequest) {
       tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
       // Bulk fetch 30-day logs for all habits (1 query, avoids N+1)
       habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date),
+      // Get milestones achieved today
+      milestonesDB.getTodaysMilestones(user.id, date).catch((err) => {
+        console.error('Failed to fetch milestones:', err);
+        return [] as HabitMilestone[];
+      }),
     ]);
 
     // Group completed logs by habit_id for absence computation
@@ -109,6 +115,7 @@ export async function GET(request: NextRequest) {
       habits: enrichedHabits,
       tasks_today: todayTasks,
       tasks_tomorrow: tasksTomorrow,
+      milestones_today: milestonesToday,
       stats: {
         total_habits: enrichedHabits.length,
         completed_today: completedHabitsToday,
