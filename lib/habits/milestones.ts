@@ -6,7 +6,7 @@ export function getNextMilestone(currentStreak: number): MilestoneThreshold | nu
   return MILESTONE_THRESHOLDS.find(m => m > currentStreak) ?? null;
 }
 
-export function isMilestoneStreak(streak: number): boolean {
+export function isMilestoneStreak(streak: number): streak is MilestoneThreshold {
   return (MILESTONE_THRESHOLDS as readonly number[]).includes(streak);
 }
 
