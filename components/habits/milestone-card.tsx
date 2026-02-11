@@ -66,13 +66,17 @@ export function MilestoneCards({ milestones, habits }: MilestoneCardsProps) {
 
   return (
     <div className="space-y-3">
-      {displayMilestones.map(m => (
-        <MilestoneCard
-          key={m.id}
-          milestone={m}
-          habitName={habitMap.get(m.habit_id)!.name}
-        />
-      ))}
+      {displayMilestones.map(m => {
+        const habit = habitMap.get(m.habit_id);
+        if (!habit) return null;
+        return (
+          <MilestoneCard
+            key={m.id}
+            milestone={m}
+            habitName={habit.name}
+          />
+        );
+      })}
     </div>
   );
 }

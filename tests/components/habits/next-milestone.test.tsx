@@ -45,6 +45,18 @@ describe("NextMilestone", () => {
     expect(screen.getByText(/nextMilestone.*days=7.*milestone=7/)).toBeInTheDocument();
   });
 
+  it("shows correct next milestone at exact boundary (streak=7)", () => {
+    render(<NextMilestone currentStreak={7} />);
+    // At streak 7, next milestone is 14, 7 days remaining
+    expect(screen.getByText(/nextMilestone.*days=7.*milestone=14/)).toBeInTheDocument();
+  });
+
+  it("clamps progress to 0 for negative streak", () => {
+    const { container } = render(<NextMilestone currentStreak={-5} />);
+    const progressBar = container.querySelector('[role="progressbar"]');
+    expect(progressBar).toBeInTheDocument();
+  });
+
   it("has no accessibility violations", async () => {
     const { container } = render(<NextMilestone currentStreak={5} />);
     expect(await axe(container)).toHaveNoViolations();

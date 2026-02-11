@@ -14,6 +14,7 @@ const TasksToday = dynamic(() => import("./tasks-today").then(m => ({ default: m
 import { MotivationMessage } from "./motivation-message";
 import { MilestoneCards } from "@/components/habits/milestone-card";
 import { AbsenceCard } from "./absence-card";
+import { toast } from "sonner";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
 import type { DashboardData } from "@/lib/db/types";
@@ -50,25 +51,35 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
   };
 
   const handleToggleHabit = async (habitId: string) => {
-    const response = await fetch(`/api/habits/${habitId}/toggle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: today }),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to toggle habit ${habitId}: ${response.status}`);
+    try {
+      const response = await fetch(`/api/habits/${habitId}/toggle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: today }),
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to toggle habit ${habitId}: ${response.status}`);
+      }
+      mutate(); // Revalidate dashboard data
+    } catch (err) {
+      console.error("Failed to toggle habit:", err);
+      toast.error(t("error.toggleHabitFailed"));
     }
-    mutate(); // Revalidate dashboard data
   };
 
   const handleToggleTask = async (taskId: string) => {
-    const response = await fetch(`/api/tasks/${taskId}/toggle`, {
-      method: "POST",
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to toggle task ${taskId}: ${response.status}`);
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/toggle`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to toggle task ${taskId}: ${response.status}`);
+      }
+      mutate(); // Revalidate dashboard data
+    } catch (err) {
+      console.error("Failed to toggle task:", err);
+      toast.error(t("error.toggleTaskFailed"));
     }
-    mutate(); // Revalidate dashboard data
   };
 
   const handleCreateHabit = () => {

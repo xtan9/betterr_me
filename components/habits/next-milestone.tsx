@@ -24,7 +24,7 @@ export function NextMilestone({ currentStreak }: NextMilestoneProps) {
     );
   }
 
-  const progress = Math.round((currentStreak / nextMilestone) * 100);
+  const progress = Math.max(0, Math.round((currentStreak / nextMilestone) * 100));
 
   return (
     <div className="space-y-2 rounded-lg bg-muted/50 p-3">

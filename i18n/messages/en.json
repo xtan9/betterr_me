@@ -106,7 +106,9 @@
     },
     "error": {
       "title": "Something went wrong",
-      "retry": "Try again"
+      "retry": "Try again",
+      "toggleHabitFailed": "Failed to update habit. Please try again.",
+      "toggleTaskFailed": "Failed to update task. Please try again."
     },
     "snapshot": {
       "title": "Today's Snapshot",

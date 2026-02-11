@@ -37,6 +37,12 @@ vi.mock("swr", () => ({
   default: (...args: unknown[]) => mockUseSWR(...args),
 }));
 
+// Mock sonner
+const mockToastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { error: (...args: unknown[]) => mockToastError(...args) },
+}));
+
 const messages = {
   dashboard: {
     greeting: {
@@ -98,6 +104,8 @@ const messages = {
     error: {
       title: "Something went wrong",
       retry: "Try again",
+      toggleHabitFailed: "Failed to update habit. Please try again.",
+      toggleTaskFailed: "Failed to update task. Please try again.",
     },
     absence: {
       recoveryTitle: "{name} — missed {days} day(s)",
@@ -614,6 +622,31 @@ describe("DashboardContent", () => {
 
     await screen.findByText("Today's Habits");
     expect(screen.queryByText(/reached.*days!/)).not.toBeInTheDocument();
+  });
+
+  it("shows toast error when habit toggle fails", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => ({ error: "Server error" }) });
+    global.fetch = mockFetch;
+
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("Failed to update habit. Please try again.");
+    });
+
+    global.fetch = originalFetch;
   });
 
   it("does not call mutate when toggle API returns non-ok response", async () => {

@@ -126,4 +126,15 @@ describe("MilestoneCards", () => {
     );
     expect(container.innerHTML).toBe("");
   });
+
+  it("has no accessibility violations with multiple cards", async () => {
+    const milestones = [
+      { ...baseMilestone, id: "m1", habit_id: "h1", milestone: 7 },
+      { ...baseMilestone, id: "m2", habit_id: "h2", milestone: 14 },
+    ];
+    const { container } = render(
+      <MilestoneCards milestones={milestones} habits={habits} />
+    );
+    expect(await axe(container)).toHaveNoViolations();
+  });
 });

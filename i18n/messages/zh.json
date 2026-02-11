@@ -106,7 +106,9 @@
     },
     "error": {
       "title": "出了点问题",
-      "retry": "重试"
+      "retry": "重试",
+      "toggleHabitFailed": "更新习惯失败，请重试。",
+      "toggleTaskFailed": "更新任务失败，请重试。"
     },
     "snapshot": {
       "title": "今日概览",

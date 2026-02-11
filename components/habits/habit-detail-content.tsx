@@ -157,7 +157,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       });
       mutateLogs();
       mutateHabit();
-    } catch {
+    } catch (err) {
+      console.error("Failed to toggle habit date:", err);
       toast.error(t("toast.updateError"));
     }
   };
@@ -176,7 +177,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       if (!response.ok) throw new Error("Failed to update");
       mutateHabit();
       toast.success(isPausing ? t("toast.pauseSuccess") : t("toast.resumeSuccess"));
-    } catch {
+    } catch (err) {
+      console.error("Failed to update habit status:", err);
       toast.error(isPausing ? t("toast.pauseError") : t("toast.resumeError"));
     }
   };
@@ -191,7 +193,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       if (!response.ok) throw new Error("Failed to archive");
       toast.success(t("toast.archiveSuccess"));
       router.push("/habits");
-    } catch {
+    } catch (err) {
+      console.error("Failed to archive habit:", err);
       toast.error(t("toast.archiveError"));
     }
   };
@@ -206,7 +209,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       if (!response.ok) throw new Error("Failed to delete");
       toast.success(t("toast.deleteSuccess"));
       router.push("/habits");
-    } catch {
+    } catch (err) {
+      console.error("Failed to delete habit:", err);
       toast.error(t("toast.deleteError"));
     }
   };
