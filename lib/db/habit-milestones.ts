@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HabitMilestone } from './types';
 import type { MilestoneThreshold } from '@/lib/habits/milestones';
+import { getNextDateString } from '@/lib/utils';
 
 export class HabitMilestonesDB {
   constructor(private supabase: SupabaseClient) {}
@@ -30,12 +31,14 @@ export class HabitMilestonesDB {
 
   async getTodaysMilestones(userId: string, date: string): Promise<HabitMilestone[]> {
     const todayStart = `${date}T00:00:00`;
+    const tomorrowStart = `${getNextDateString(date)}T00:00:00`;
 
     const { data, error } = await this.supabase
       .from('habit_milestones')
       .select('*')
       .eq('user_id', userId)
       .gte('achieved_at', todayStart)
+      .lt('achieved_at', tomorrowStart)
       .order('milestone', { ascending: false });
 
     if (error) throw error;

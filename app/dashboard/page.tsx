@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 import { HabitsDB, TasksDB, HabitMilestonesDB } from "@/lib/db";
 import { getLocalDateString, getNextDateString } from "@/lib/utils";
-import type { DashboardData } from "@/lib/db/types";
+import type { DashboardData, HabitMilestone } from "@/lib/db/types";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -34,7 +34,10 @@ export default async function DashboardPage() {
       tasksDB.getUserTasks(user.id, { due_date: date }),
       tasksDB.getUserTasks(user.id),
       tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
-      milestonesDB.getTodaysMilestones(user.id, date),
+      milestonesDB.getTodaysMilestones(user.id, date).catch((err) => {
+        console.error("Failed to fetch milestones:", err);
+        return [] as HabitMilestone[];
+      }),
     ]);
 
   const completedHabitsToday = habitsWithStatus.filter(
