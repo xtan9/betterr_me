@@ -3,8 +3,9 @@ import { POST } from '@/app/api/habits/[id]/toggle/route';
 import { NextRequest } from 'next/server';
 import { statsCache, getStatsCacheKey } from '@/lib/cache';
 
-const { mockToggleLog } = vi.hoisted(() => ({
+const { mockToggleLog, mockRecordMilestone } = vi.hoisted(() => ({
   mockToggleLog: vi.fn(),
+  mockRecordMilestone: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -18,6 +19,9 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/db', () => ({
   HabitLogsDB: class {
     toggleLog = mockToggleLog;
+  },
+  HabitMilestonesDB: class {
+    recordMilestone = mockRecordMilestone;
   },
 }));
 
@@ -127,6 +131,26 @@ describe('POST /api/habits/[id]/toggle', () => {
     expect(response.status).toBe(401);
   });
 
+  it('should return 200 even when milestone recording fails', async () => {
+    mockToggleLog.mockResolvedValue({
+      log: { id: 'log-1', completed: true } as any,
+      currentStreak: 7,
+      bestStreak: 7,
+    });
+    mockRecordMilestone.mockRejectedValue(new Error('DB write failed'));
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1/toggle', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    const response = await POST(request, { params });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.completed).toBe(true);
+    expect(data.currentStreak).toBe(7);
+  });
+
   it('should invalidate stats cache on successful toggle', async () => {
     // Pre-populate the cache
     const cacheKey = getStatsCacheKey('habit-1', 'user-123');
@@ -155,5 +179,54 @@ describe('POST /api/habits/[id]/toggle', () => {
     expect(response.status).toBe(200);
     // Cache should be invalidated
     expect(statsCache.has(cacheKey)).toBe(false);
+  });
+
+  it('should record milestone when streak hits a threshold', async () => {
+    mockToggleLog.mockResolvedValue({
+      log: { id: 'log-1', completed: true } as any,
+      currentStreak: 30,
+      bestStreak: 30,
+    });
+    mockRecordMilestone.mockResolvedValue(undefined);
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1/toggle', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    await POST(request, { params });
+
+    expect(mockRecordMilestone).toHaveBeenCalledWith('habit-1', 'user-123', 30);
+  });
+
+  it('should not record milestone for non-threshold streak', async () => {
+    mockToggleLog.mockResolvedValue({
+      log: { id: 'log-1', completed: true } as any,
+      currentStreak: 6,
+      bestStreak: 12,
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1/toggle', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    await POST(request, { params });
+
+    expect(mockRecordMilestone).not.toHaveBeenCalled();
+  });
+
+  it('should not record milestone when uncompleting a habit', async () => {
+    mockToggleLog.mockResolvedValue({
+      log: { id: 'log-1', completed: false } as any,
+      currentStreak: 7,
+      bestStreak: 12,
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1/toggle', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    await POST(request, { params });
+
+    expect(mockRecordMilestone).not.toHaveBeenCalled();
   });
 });

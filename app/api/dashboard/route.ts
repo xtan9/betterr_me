@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
-import type { DashboardData } from '@/lib/db/types';
+import type { DashboardData, HabitMilestone } from '@/lib/db/types';
 import { getLocalDateString, getNextDateString } from '@/lib/utils';
 import { computeMissedDays } from '@/lib/habits/absence';
 
@@ -68,7 +68,10 @@ export async function GET(request: NextRequest) {
       // Bulk fetch 30-day logs for all habits (1 query, avoids N+1)
       habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date),
       // Get milestones achieved today
-      milestonesDB.getTodaysMilestones(user.id),
+      milestonesDB.getTodaysMilestones(user.id, date).catch((err) => {
+        console.error('Failed to fetch milestones:', err);
+        return [] as HabitMilestone[];
+      }),
     ]);
 
     // Group completed logs by habit_id for absence computation

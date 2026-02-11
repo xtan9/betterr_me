@@ -24,4 +24,9 @@ CREATE POLICY "Users can insert own milestones"
   ON habit_milestones FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Users can update own milestones"
+  ON habit_milestones FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
 COMMENT ON TABLE habit_milestones IS 'Records when a habit reaches a streak milestone (7, 14, 30, etc.)';

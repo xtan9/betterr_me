@@ -34,7 +34,7 @@ export default async function DashboardPage() {
       tasksDB.getUserTasks(user.id, { due_date: date }),
       tasksDB.getUserTasks(user.id),
       tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
-      milestonesDB.getTodaysMilestones(user.id),
+      milestonesDB.getTodaysMilestones(user.id, date),
     ]);
 
   const completedHabitsToday = habitsWithStatus.filter(
