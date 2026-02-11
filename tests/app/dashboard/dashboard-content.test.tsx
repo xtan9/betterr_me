@@ -548,4 +548,47 @@ describe("DashboardContent", () => {
     expect(screen.queryByText(/C —/)).not.toBeInTheDocument();
     expect(screen.queryByText(/E —/)).not.toBeInTheDocument();
   });
+
+  it("does not show absence cards when no habits have missed days", async () => {
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    expect(screen.queryByText(/missed|since last check-in|it's been/)).not.toBeInTheDocument();
+  });
+
+  it("does not call mutate when toggle API returns non-ok response", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => ({ error: "Server error" }) });
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn();
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    // mutate should NOT be called since the toggle failed
+    expect(mockMutate).not.toHaveBeenCalled();
+
+    global.fetch = originalFetch;
+  });
 });

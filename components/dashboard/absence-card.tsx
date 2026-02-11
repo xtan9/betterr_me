@@ -60,8 +60,8 @@ export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
     try {
       await onToggle(habit.id);
       setJustCompleted(true);
-    } catch {
-      // Toggle failed — do not show success state
+    } catch (err) {
+      console.error("Failed to complete habit:", err);
     } finally {
       setIsCompleting(false);
     }
@@ -89,9 +89,7 @@ export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
       <Icon className={cn("size-5 shrink-0 mt-0.5", config.iconColor)} />
       <div className="flex-1 min-w-0">
         <p className={cn("text-sm font-medium", config.titleColor)}>
-          {variant === "recovery" && t("recoveryTitle", { name: habit.name, days: habit.missed_scheduled_days })}
-          {variant === "lapse" && t("lapseTitle", { name: habit.name, days: habit.missed_scheduled_days })}
-          {variant === "hiatus" && t("hiatusTitle", { name: habit.name, days: habit.missed_scheduled_days })}
+          {t(`${variant}Title`, { name: habit.name, days: habit.missed_scheduled_days })}
         </p>
 
         {variant === "lapse" && habit.previous_streak > 0 && (

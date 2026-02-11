@@ -39,7 +39,9 @@ function TaskRow({ task, onToggle, onClick, isToggling }: TaskRowProps) {
 
   const handleCheckboxChange = () => {
     if (!isToggling) {
-      onToggle(task.id);
+      onToggle(task.id).catch((err) => {
+        console.error("Failed to toggle task:", err);
+      });
     }
   };
 

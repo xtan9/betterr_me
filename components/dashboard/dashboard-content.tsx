@@ -55,7 +55,7 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
       body: JSON.stringify({ date: today }),
     });
     if (!response.ok) {
-      throw new Error("Failed to toggle habit");
+      throw new Error(`Failed to toggle habit ${habitId}: ${response.status}`);
     }
     mutate(); // Revalidate dashboard data
   };
@@ -162,6 +162,11 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
     return top;
   }, null);
 
+  const absenceHabits = data.habits
+    .filter(h => h.missed_scheduled_days > 0 && !h.completed_today)
+    .sort((a, b) => b.missed_scheduled_days - a.missed_scheduled_days)
+    .slice(0, 3);
+
   return (
     <div className="space-y-8">
       {/* Greeting */}
@@ -178,27 +183,18 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
       )}
 
       {/* Absence Recovery Cards — habits with missed scheduled days */}
-      {(() => {
-        const absenceHabits = data.habits
-          .filter(h => h.missed_scheduled_days > 0 && !h.completed_today)
-          .sort((a, b) => b.missed_scheduled_days - a.missed_scheduled_days)
-          .slice(0, 3);
-
-        if (absenceHabits.length === 0) return null;
-
-        return (
-          <div className="space-y-3">
-            {absenceHabits.map(habit => (
-              <AbsenceCard
-                key={habit.id}
-                habit={habit}
-                onToggle={handleToggleHabit}
-                onNavigate={(path) => router.push(path)}
-              />
-            ))}
-          </div>
-        );
-      })()}
+      {absenceHabits.length > 0 && (
+        <div className="space-y-3">
+          {absenceHabits.map(habit => (
+            <AbsenceCard
+              key={habit.id}
+              habit={habit}
+              onToggle={handleToggleHabit}
+              onNavigate={router.push}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Daily Snapshot — only show when user has habits */}
       {data.stats.total_habits > 0 && (
