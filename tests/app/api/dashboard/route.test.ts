@@ -128,33 +128,6 @@ describe('GET /api/dashboard', () => {
     expect(data.habits[0].previous_streak).toBe(2);
   });
 
-  // TODO: Enable after feat/h1-absence-backend merges into this branch
-  it.skip('should compute absence data from bulk logs', async () => {
-    const habits = [
-      {
-        id: 'h1', name: 'Run', current_streak: 0, completed_today: false,
-        monthly_completion_rate: 50, frequency: { type: 'daily' },
-        created_at: '2026-01-01T00:00:00Z',
-      },
-    ];
-
-    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
-    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
-    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
-    vi.mocked(mockHabitLogsDB.getAllUserLogs).mockResolvedValue([
-      { habit_id: 'h1', logged_date: '2026-02-05', completed: true },
-      { habit_id: 'h1', logged_date: '2026-02-04', completed: true },
-      { habit_id: 'h1', logged_date: '2026-02-06', completed: false },
-    ] as any);
-
-    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-09');
-    const response = await GET(request);
-    const data = await response.json();
-
-    expect(data.habits[0].missed_scheduled_days).toBe(3);
-    expect(data.habits[0].previous_streak).toBe(2);
-  });
-
   it('should handle empty state (new user)', async () => {
     vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
     vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
@@ -228,6 +201,22 @@ describe('GET /api/dashboard', () => {
     expect(response.status).toBe(400);
     const data = await response.json();
     expect(data.error).toContain('Invalid date format');
+  });
+
+  it('should return 500 when getAllUserLogs throws', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockHabitLogsDB.getAllUserLogs).mockRejectedValue(
+      new Error('Database connection failed')
+    );
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-09');
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.error).toBe('Failed to fetch dashboard data');
   });
 
   it('should return 401 if not authenticated', async () => {

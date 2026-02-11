@@ -88,6 +88,7 @@ export async function GET(request: NextRequest) {
           completedDates,
           date,
           habit.created_at,
+          thirtyDaysAgoStr,
         );
         return { ...habit, missed_scheduled_days, previous_streak };
       } catch (err) {
