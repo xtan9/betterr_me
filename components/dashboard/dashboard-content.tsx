@@ -217,6 +217,7 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
         {/* Tasks Today */}
         <TasksToday
           tasks={data.tasks_today}
+          tasksTomorrow={data.tasks_tomorrow}
           onToggle={handleToggleTask}
           onTaskClick={handleTaskClick}
           onCreateTask={handleCreateTask}
