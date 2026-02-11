@@ -245,6 +245,17 @@ describe('GET /api/dashboard', () => {
     expect(data.error).toBe('Failed to fetch dashboard data');
   });
 
+  it('should pass client date to getTodaysMilestones', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-09');
+    await GET(request);
+
+    expect(mockMilestonesDB.getTodaysMilestones).toHaveBeenCalledWith('user-123', '2026-02-09');
+  });
+
   it('should return 401 if not authenticated', async () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },

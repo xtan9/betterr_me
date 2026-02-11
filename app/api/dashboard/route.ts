@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
       // Bulk fetch 30-day logs for all habits (1 query, avoids N+1)
       habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date),
       // Get milestones achieved today
-      milestonesDB.getTodaysMilestones(user.id),
+      milestonesDB.getTodaysMilestones(user.id, date),
     ]);
 
     // Group completed logs by habit_id for absence computation
