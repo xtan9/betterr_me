@@ -203,6 +203,22 @@ describe('GET /api/dashboard', () => {
     expect(data.error).toContain('Invalid date format');
   });
 
+  it('should return 500 when getAllUserLogs throws', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockHabitLogsDB.getAllUserLogs).mockRejectedValue(
+      new Error('Database connection failed')
+    );
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-09');
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.error).toBe('Failed to fetch dashboard data');
+  });
+
   it('should return 401 if not authenticated', async () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },

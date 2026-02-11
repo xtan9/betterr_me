@@ -81,14 +81,19 @@ export async function GET(request: NextRequest) {
 
     // Enrich habits with absence data
     const enrichedHabits = habitsWithStatus.map(habit => {
-      const completedDates = logsByHabit.get(habit.id) || new Set<string>();
-      const { missed_scheduled_days, previous_streak } = computeMissedDays(
-        habit.frequency,
-        completedDates,
-        date,
-        habit.created_at,
-      );
-      return { ...habit, missed_scheduled_days, previous_streak };
+      try {
+        const completedDates = logsByHabit.get(habit.id) || new Set<string>();
+        const { missed_scheduled_days, previous_streak } = computeMissedDays(
+          habit.frequency,
+          completedDates,
+          date,
+          habit.created_at,
+          thirtyDaysAgoStr,
+        );
+        return { ...habit, missed_scheduled_days, previous_streak };
+      } catch {
+        return { ...habit, missed_scheduled_days: 0, previous_streak: 0 };
+      }
     });
 
     // Calculate stats

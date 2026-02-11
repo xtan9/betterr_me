@@ -69,7 +69,7 @@ describe('computeMissedDays', () => {
     expect(result.previous_streak).toBe(0);
   });
 
-  it('returns 0 missed for habit created yesterday with no logs', () => {
+  it('returns 1 missed day for habit created yesterday with no logs', () => {
     const result = computeMissedDays(daily, new Set(), '2026-02-09', '2026-02-08');
 
     expect(result.missed_scheduled_days).toBe(1);
@@ -138,5 +138,44 @@ describe('computeMissedDays', () => {
 
     expect(result.missed_scheduled_days).toBe(1);
     expect(result.previous_streak).toBe(2);
+  });
+
+  it('treats every day as scheduled for times_per_week frequency', () => {
+    const timesPerWeek: HabitFrequency = { type: 'times_per_week', count: 3 };
+    // Today is Mon Feb 9. Completed Thu Feb 5 and Wed Feb 4.
+    // shouldTrackOnDate returns true every day, so:
+    // Feb 8 (Sun) - not completed → missed
+    // Feb 7 (Sat) - not completed → missed
+    // Feb 6 (Fri) - not completed → missed
+    // Feb 5 (Thu) - completed → previous_streak starts
+    // Feb 4 (Wed) - completed → previous_streak continues
+    const completed = new Set(['2026-02-05', '2026-02-04']);
+    const result = computeMissedDays(timesPerWeek, completed, '2026-02-09', '2026-01-01');
+
+    expect(result.missed_scheduled_days).toBe(3);
+    expect(result.previous_streak).toBe(2);
+  });
+
+  it('returns 0 for invalid createdAtStr', () => {
+    const result = computeMissedDays(daily, new Set(), '2026-02-09', 'not-a-date');
+    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.previous_streak).toBe(0);
+  });
+
+  it('returns 0 for empty createdAtStr', () => {
+    const result = computeMissedDays(daily, new Set(), '2026-02-09', '');
+    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.previous_streak).toBe(0);
+  });
+
+  it('caps backward walk at dataStartStr boundary', () => {
+    // Daily habit created Jan 1, but dataStartStr is Feb 5.
+    // Today Feb 9, no completions at all.
+    // Without dataStartStr: would count back to Jan 1 (39 missed).
+    // With dataStartStr Feb 5: only Feb 5,6,7,8 = 4 missed.
+    const result = computeMissedDays(daily, new Set(), '2026-02-09', '2026-01-01', '2026-02-05');
+
+    expect(result.missed_scheduled_days).toBe(4);
+    expect(result.previous_streak).toBe(0);
   });
 });

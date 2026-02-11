@@ -26,17 +26,37 @@ function parseDate(s: string): Date {
  *
  * Today is excluded (the user still has time to complete it).
  *
- * @returns missed_scheduled_days — consecutive scheduled-but-uncompleted days
- *          previous_streak — streak length before the gap started
+ * @param frequency - The habit's scheduling frequency
+ * @param completedDatesSet - Set of YYYY-MM-DD strings for completed dates
+ * @param todayStr - Today's date as YYYY-MM-DD
+ * @param createdAtStr - Habit creation date; accepts YYYY-MM-DD or full ISO timestamp
+ * @param dataStartStr - Optional earliest date with reliable log data (caps backward walk)
+ * @returns An object with:
+ *   - `missed_scheduled_days`: consecutive scheduled-but-uncompleted days
+ *   - `previous_streak`: streak length before the gap started
  */
 export function computeMissedDays(
   frequency: HabitFrequency,
   completedDatesSet: Set<string>,
   todayStr: string,
   createdAtStr: string,
+  dataStartStr?: string,
 ): { missed_scheduled_days: number; previous_streak: number } {
+  if (!createdAtStr) {
+    return { missed_scheduled_days: 0, previous_streak: 0 };
+  }
+
   const today = parseDate(todayStr);
+  if (isNaN(today.getTime())) {
+    return { missed_scheduled_days: 0, previous_streak: 0 };
+  }
+
   const createdDate = parseDate(createdAtStr.substring(0, 10));
+  if (isNaN(createdDate.getTime())) {
+    return { missed_scheduled_days: 0, previous_streak: 0 };
+  }
+
+  const dataStart = dataStartStr ? parseDate(dataStartStr) : null;
 
   const checkDate = new Date(today);
   checkDate.setDate(checkDate.getDate() - 1); // start from yesterday
@@ -47,6 +67,7 @@ export function computeMissedDays(
 
   for (let i = 0; i < 365; i++) {
     if (checkDate < createdDate) break;
+    if (dataStart && checkDate < dataStart) break;
 
     const dateStr = formatDate(checkDate);
 
