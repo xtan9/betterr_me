@@ -154,11 +154,13 @@ export interface HabitWithLogs extends Habit {
 // HABIT MILESTONES
 // =============================================================================
 
+import type { MilestoneThreshold } from '@/lib/habits/milestones';
+
 export interface HabitMilestone {
   id: string; // UUID
   habit_id: string; // UUID
   user_id: string; // UUID
-  milestone: number;
+  milestone: MilestoneThreshold;
   achieved_at: string; // TIMESTAMPTZ
   created_at: string;
 }

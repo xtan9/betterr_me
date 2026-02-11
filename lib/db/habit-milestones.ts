@@ -1,10 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HabitMilestone } from './types';
+import type { MilestoneThreshold } from '@/lib/habits/milestones';
 
 export class HabitMilestonesDB {
   constructor(private supabase: SupabaseClient) {}
 
-  async recordMilestone(habitId: string, userId: string, milestone: number): Promise<void> {
+  async recordMilestone(habitId: string, userId: string, milestone: MilestoneThreshold): Promise<void> {
     const { error } = await this.supabase
       .from('habit_milestones')
       .upsert(
