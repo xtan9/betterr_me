@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import type { Task } from "@/lib/db/types";
 
 function qualifiesForReflection(task: Task): boolean {
-  return task.priority === 3 || !!(task as Record<string, unknown>).intention;
+  return task.priority === 3 || !!task.intention;
 }
 
 interface ReflectionStripProps {
