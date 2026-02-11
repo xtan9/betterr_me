@@ -377,6 +377,33 @@ describe('HabitLogsDB', () => {
     });
   });
 
+  describe('getAllUserLogs', () => {
+    it('should return logs for user in date range', async () => {
+      const mockLogs = [
+        { id: '1', habit_id: 'h1', user_id: 'user-1', logged_date: '2026-02-05', completed: true },
+        { id: '2', habit_id: 'h2', user_id: 'user-1', logged_date: '2026-02-06', completed: false },
+      ];
+      mockSupabaseClient.setMockResponse(mockLogs);
+
+      const result = await habitLogsDB.getAllUserLogs('user-1', '2026-02-01', '2026-02-09');
+      expect(result).toEqual(mockLogs);
+    });
+
+    it('should return empty array when no logs exist', async () => {
+      mockSupabaseClient.setMockResponse(null);
+
+      const result = await habitLogsDB.getAllUserLogs('user-1', '2026-02-01', '2026-02-09');
+      expect(result).toEqual([]);
+    });
+
+    it('should throw on database error', async () => {
+      mockSupabaseClient.setMockResponse(null, { message: 'DB error' });
+
+      await expect(habitLogsDB.getAllUserLogs('user-1', '2026-02-01', '2026-02-09'))
+        .rejects.toEqual({ message: 'DB error' });
+    });
+  });
+
   describe('date string parsing (YYYY-MM-DD → local Date)', () => {
     // The production code parses date strings like:
     //   const [y, m, d] = dateStr.split('-').map(Number);

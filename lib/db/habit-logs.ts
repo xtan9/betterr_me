@@ -599,6 +599,26 @@ export class HabitLogsDB {
   }
 
   /**
+   * Bulk fetch all logs (completed and uncompleted) for a user across all habits
+   * in a date range (1 query). Used by the dashboard to avoid N+1 per-habit queries.
+   */
+  async getAllUserLogs(
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<Pick<HabitLog, 'habit_id' | 'logged_date' | 'completed'>[]> {
+    const { data, error } = await this.supabase
+      .from('habit_logs')
+      .select('habit_id, logged_date, completed')
+      .eq('user_id', userId)
+      .gte('logged_date', startDate)
+      .lte('logged_date', endDate);
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  /**
    * Get logs for multiple habits on a specific date (for dashboard)
    */
   async getLogsForHabitsOnDate(

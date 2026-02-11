@@ -2,7 +2,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { getLocalDateString } from "@/lib/utils";
 import { NextIntlClientProvider } from "next-intl";
+import React from "react";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
+
+// Mock next/dynamic to eagerly resolve lazy components in tests
+vi.mock("next/dynamic", () => ({
+  __esModule: true,
+  default: (importFn: () => Promise<any>, options?: any) => {
+    const LazyComponent = React.lazy(importFn);
+    const DynamicMock = (props: any) =>
+      React.createElement(
+        React.Suspense,
+        { fallback: options?.loading?.() ?? null },
+        React.createElement(LazyComponent, props)
+      );
+    DynamicMock.displayName = "DynamicMock";
+    return DynamicMock;
+  },
+}));
 
 // Mock next/navigation
 const mockPush = vi.fn();
@@ -55,6 +72,10 @@ const messages = {
       noTasks: "No tasks for today",
       createFirst: "Add a task",
       allComplete: "All tasks done!",
+      comingUp: "Coming Up Tomorrow",
+      headStart: "Get a Head Start",
+      moreTomorrow: "+{count} more tomorrow",
+      viewAll: "View all tasks",
     },
     motivation: {
       firstDay: "Welcome! Your journey starts today.",
@@ -77,6 +98,16 @@ const messages = {
     error: {
       title: "Something went wrong",
       retry: "Try again",
+    },
+    absence: {
+      recoveryTitle: "{name} — missed {days} day(s)",
+      lapseTitle: "{name} — {days} days since last check-in",
+      hiatusTitle: "{name} — it's been {days} days",
+      previousStreak: "You had a {days}-day streak before",
+      markComplete: "Complete today",
+      completed: "{name} — welcome back!",
+      resume: "Resume today",
+      changeFrequency: "Change frequency",
     },
   },
   habits: {
@@ -119,6 +150,8 @@ const mockDashboardData = {
       updated_at: "2024-01-01T00:00:00Z",
       completed_today: true,
       monthly_completion_rate: 80,
+      missed_scheduled_days: 0,
+      previous_streak: 0,
     },
     {
       id: "2",
@@ -135,9 +168,12 @@ const mockDashboardData = {
       updated_at: "2024-01-01T00:00:00Z",
       completed_today: false,
       monthly_completion_rate: 40,
+      missed_scheduled_days: 0,
+      previous_streak: 0,
     },
   ],
   tasks_today: [],
+  tasks_tomorrow: [],
   stats: {
     total_habits: 2,
     completed_today: 1,
@@ -200,6 +236,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -221,7 +258,7 @@ describe("DashboardContent", () => {
     expect(screen.getByText(/Add a Task/i)).toBeInTheDocument();
   });
 
-  it("shows full dashboard when user has tasks but no habits", () => {
+  it("shows full dashboard when user has tasks but no habits", async () => {
     mockUseSWR.mockReturnValue({
       data: {
         habits: [],
@@ -238,6 +275,7 @@ describe("DashboardContent", () => {
             updated_at: "2024-01-01T00:00:00Z",
           },
         ],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -258,11 +296,11 @@ describe("DashboardContent", () => {
     expect(
       screen.queryByText(/Welcome to BetterR.Me!/i)
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
-    expect(screen.getByText("Buy groceries")).toBeInTheDocument();
+    expect(await screen.findByText("Today's Tasks")).toBeInTheDocument();
+    expect(await screen.findByText("Buy groceries")).toBeInTheDocument();
   });
 
-  it("hides DailySnapshot and MotivationMessage when user has only tasks", () => {
+  it("hides DailySnapshot and MotivationMessage when user has only tasks", async () => {
     mockUseSWR.mockReturnValue({
       data: {
         habits: [],
@@ -279,6 +317,7 @@ describe("DashboardContent", () => {
             updated_at: "2024-01-01T00:00:00Z",
           },
         ],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -295,17 +334,18 @@ describe("DashboardContent", () => {
 
     renderWithProviders(<DashboardContent userName="Test User" />);
 
+    // Wait for dynamic components to load, then verify
+    expect(await screen.findByText("Today's Tasks")).toBeInTheDocument();
     // Habit-centric widgets should not be shown
     expect(screen.queryByText("Today's Snapshot")).not.toBeInTheDocument();
-    // Tasks section should still be visible
-    expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
   });
 
-  it("shows full dashboard for user with future tasks but none today", () => {
+  it("shows full dashboard for user with future tasks but none today", async () => {
     mockUseSWR.mockReturnValue({
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -326,7 +366,7 @@ describe("DashboardContent", () => {
     expect(
       screen.queryByText(/Welcome to BetterR.Me!/i)
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
+    expect(await screen.findByText("Today's Tasks")).toBeInTheDocument();
   });
 
   it("navigates to create habit page from empty state", () => {
@@ -334,6 +374,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -359,6 +400,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -392,12 +434,12 @@ describe("DashboardContent", () => {
     // Check greeting
     expect(screen.getByText(/Test User/i)).toBeInTheDocument();
 
-    // Check DailySnapshot
-    expect(screen.getByText("Today's Snapshot")).toBeInTheDocument();
+    // Check DailySnapshot (lazy-loaded)
+    expect(await screen.findByText("Today's Snapshot")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument(); // total_habits
 
-    // Check HabitChecklist
-    expect(screen.getByText("Today's Habits")).toBeInTheDocument();
+    // Check HabitChecklist (lazy-loaded)
+    expect(await screen.findByText("Today's Habits")).toBeInTheDocument();
     expect(screen.getByText("Morning Meditation")).toBeInTheDocument();
     expect(screen.getByText("Daily Exercise")).toBeInTheDocument();
   });
@@ -412,7 +454,7 @@ describe("DashboardContent", () => {
 
     renderWithProviders(<DashboardContent userName="Test User" />);
 
-    const addButton = screen.getByText("Add Habit");
+    const addButton = await screen.findByText("Add Habit");
     addButton.click();
 
     expect(mockPush).toHaveBeenCalledWith("/habits/new");
@@ -433,7 +475,8 @@ describe("DashboardContent", () => {
 
     renderWithProviders(<DashboardContent userName="Test User" />);
 
-    // Find checkboxes (habit toggles) and click one
+    // Wait for lazy-loaded HabitChecklist to render, then find checkboxes
+    await screen.findByText("Today's Habits");
     const checkboxes = screen.getAllByRole("checkbox");
     checkboxes[0]?.click();
 
@@ -447,6 +490,104 @@ describe("DashboardContent", () => {
       expect(body.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(body.date).toBe(getLocalDateString());
     });
+
+    global.fetch = originalFetch;
+  });
+
+  it("renders up to 3 absence cards sorted by missed_scheduled_days descending", async () => {
+    const baseFields = {
+      user_id: "user-1",
+      description: null,
+      category: "health" as const,
+      frequency: { type: "daily" as const },
+      status: "active" as const,
+      current_streak: 0,
+      best_streak: 0,
+      paused_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      monthly_completion_rate: 50,
+    };
+
+    const habitsWithAbsence = [
+      { ...baseFields, id: "a", name: "A", missed_scheduled_days: 2, previous_streak: 0, completed_today: false },
+      { ...baseFields, id: "b", name: "B", missed_scheduled_days: 8, previous_streak: 3, completed_today: false },
+      { ...baseFields, id: "c", name: "C", missed_scheduled_days: 0, previous_streak: 0, completed_today: false },
+      { ...baseFields, id: "d", name: "D", missed_scheduled_days: 5, previous_streak: 1, completed_today: false },
+      { ...baseFields, id: "e", name: "E", missed_scheduled_days: 1, previous_streak: 0, completed_today: true },
+    ];
+
+    mockUseSWR.mockReturnValue({
+      data: {
+        habits: habitsWithAbsence,
+        tasks_today: [],
+        tasks_tomorrow: [],
+        stats: {
+          total_habits: 5,
+          completed_today: 1,
+          current_best_streak: 0,
+          total_tasks: 0,
+          tasks_due_today: 0,
+          tasks_completed_today: 0,
+        },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="User" />);
+
+    // B (8 days hiatus), D (5 days lapse), A (2 days recovery) shown
+    // C (0 missed) and E (completed today) excluded; max 3 cards
+    await waitFor(() => {
+      expect(screen.getByText(/B — it's been 8 days/)).toBeInTheDocument();
+      expect(screen.getByText(/D — 5 days since last check-in/)).toBeInTheDocument();
+      expect(screen.getByText(/A — missed 2 day/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/C —/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/E —/)).not.toBeInTheDocument();
+  });
+
+  it("does not show absence cards when no habits have missed days", async () => {
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    expect(screen.queryByText(/missed|since last check-in|it's been/)).not.toBeInTheDocument();
+  });
+
+  it("does not call mutate when toggle API returns non-ok response", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => ({ error: "Server error" }) });
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn();
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    // mutate should NOT be called since the toggle failed
+    expect(mockMutate).not.toHaveBeenCalled();
 
     global.fetch = originalFetch;
   });

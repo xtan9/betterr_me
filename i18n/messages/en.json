@@ -138,7 +138,11 @@
       "allDay": "All day",
       "noTasks": "No tasks for today",
       "createFirst": "Add a task",
-      "allComplete": "All tasks done!"
+      "allComplete": "All tasks done!",
+      "comingUp": "Coming Up Tomorrow",
+      "headStart": "Get a Head Start",
+      "moreTomorrow": "+{count} more tomorrow",
+      "viewAll": "View all tasks"
     },
     "motivation": {
       "firstDay": "Welcome! Your journey to becoming better starts today. 🌟",
@@ -148,6 +152,16 @@
       "halfway": "Halfway there! Keep the momentum going. 🚀",
       "gettingStarted": "Every habit completed brings you closer to your best self. ✨",
       "noHabits": "Ready to start building better habits? Add your first one! 🌱"
+    },
+    "absence": {
+      "recoveryTitle": "{name} — missed {days, plural, one {# day} other {# days}}",
+      "lapseTitle": "{name} — {days, plural, one {# day} other {# days}} since last check-in",
+      "hiatusTitle": "{name} — it's been {days, plural, one {# day} other {# days}}",
+      "previousStreak": "You had a {days}-day streak before",
+      "markComplete": "Complete today",
+      "completed": "{name} — welcome back!",
+      "resume": "Resume today",
+      "changeFrequency": "Change frequency"
     }
   },
   "habits": {
@@ -400,7 +414,9 @@
       "create": "Create Task",
       "save": "Save Changes",
       "creating": "Creating...",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "intentionLabel": "Why This Matters",
+      "intentionPlaceholder": "Why does this matter to you?"
     },
     "categories": {
       "work": "Work",
@@ -428,7 +444,8 @@
       "priority": "Priority",
       "category": "Category",
       "noDueDate": "No due date",
-      "notFound": "Task not found"
+      "notFound": "Task not found",
+      "yourWhy": "Your Why"
     },
     "edit": {
       "title": "Edit Task",
