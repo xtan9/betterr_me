@@ -91,7 +91,8 @@ export async function GET(request: NextRequest) {
           thirtyDaysAgoStr,
         );
         return { ...habit, missed_scheduled_days, previous_streak };
-      } catch {
+      } catch (err) {
+        console.error('computeMissedDays failed for habit', habit.id, err);
         return { ...habit, missed_scheduled_days: 0, previous_streak: 0 };
       }
     });
