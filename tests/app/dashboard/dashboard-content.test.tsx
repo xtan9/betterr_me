@@ -37,6 +37,12 @@ vi.mock("swr", () => ({
   default: (...args: unknown[]) => mockUseSWR(...args),
 }));
 
+// Mock sonner
+const mockToastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { error: (...args: unknown[]) => mockToastError(...args) },
+}));
+
 const messages = {
   dashboard: {
     greeting: {
@@ -98,6 +104,8 @@ const messages = {
     error: {
       title: "Something went wrong",
       retry: "Try again",
+      toggleHabitFailed: "Failed to update habit. Please try again.",
+      toggleTaskFailed: "Failed to update task. Please try again.",
     },
     absence: {
       recoveryTitle: "{name} — missed {days} day(s)",
@@ -121,6 +129,16 @@ const messages = {
       learning: "Learning",
       productivity: "Productivity",
       other: "Other",
+    },
+    milestone: {
+      celebration: "{habit} reached {count} days!",
+      celebration7: "One week strong!",
+      celebration14: "Two weeks in!",
+      celebration30: "A whole month!",
+      celebration50: "50 days!",
+      celebration100: "Triple digits!",
+      celebration200: "200 days!",
+      celebration365: "One full year!",
     },
   },
 };
@@ -172,6 +190,7 @@ const mockDashboardData = {
       previous_streak: 0,
     },
   ],
+  milestones_today: [],
   tasks_today: [],
   tasks_tomorrow: [],
   stats: {
@@ -561,6 +580,73 @@ describe("DashboardContent", () => {
 
     await screen.findByText("Today's Habits");
     expect(screen.queryByText(/missed|since last check-in|it's been/)).not.toBeInTheDocument();
+  });
+
+  it("renders milestone cards when milestones_today is present", async () => {
+    mockUseSWR.mockReturnValue({
+      data: {
+        ...mockDashboardData,
+        milestones_today: [
+          {
+            id: "m1",
+            habit_id: "1",
+            user_id: "user-1",
+            milestone: 7,
+            achieved_at: "2026-02-09T10:00:00Z",
+            created_at: "2026-02-09T10:00:00Z",
+          },
+        ],
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Morning Meditation reached 7 days!/)).toBeInTheDocument();
+      expect(screen.getByText("One week strong!")).toBeInTheDocument();
+    });
+  });
+
+  it("does not render milestone section when milestones_today is empty", async () => {
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    expect(screen.queryByText(/reached.*days!/)).not.toBeInTheDocument();
+  });
+
+  it("shows toast error when habit toggle fails", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => ({ error: "Server error" }) });
+    global.fetch = mockFetch;
+
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("Failed to update habit. Please try again.");
+    });
+
+    global.fetch = originalFetch;
   });
 
   it("does not call mutate when toggle API returns non-ok response", async () => {

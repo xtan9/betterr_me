@@ -106,7 +106,9 @@
     },
     "error": {
       "title": "Something went wrong",
-      "retry": "Try again"
+      "retry": "Try again",
+      "toggleHabitFailed": "Failed to update habit. Please try again.",
+      "toggleTaskFailed": "Failed to update task. Please try again."
     },
     "snapshot": {
       "title": "Today's Snapshot",
@@ -339,6 +341,18 @@
     },
     "loading": {
       "title": "Loading habits..."
+    },
+    "milestone": {
+      "celebration": "Incredible! {habit} just hit {count} days!",
+      "celebration7": "One week strong!",
+      "celebration14": "Two weeks and counting!",
+      "celebration30": "A full month! You're building something real.",
+      "celebration50": "50 days. Half the people who start never get here.",
+      "celebration100": "Triple digits. Legendary.",
+      "celebration200": "200 days. This isn't a habit anymore — it's who you are.",
+      "celebration365": "One full year. Unbelievable commitment.",
+      "nextMilestone": "{days} more days to your {milestone}-day milestone!",
+      "noNextMilestone": "You've passed every milestone. Keep going!"
     }
   },
   "auth": {
