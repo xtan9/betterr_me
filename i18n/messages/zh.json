@@ -145,7 +145,8 @@
         "howWasIt": "感觉如何？",
         "easy": "简单",
         "good": "还行",
-        "hard": "困难"
+        "hard": "困难",
+        "saveError": "保存反思失败"
       },
       "comingUp": "明日待办",
       "headStart": "提前准备",

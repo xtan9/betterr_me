@@ -145,7 +145,8 @@
         "howWasIt": "How was it?",
         "easy": "Easy",
         "good": "Good",
-        "hard": "Hard"
+        "hard": "Hard",
+        "saveError": "Failed to save reflection"
       },
       "comingUp": "Coming Up Tomorrow",
       "headStart": "Get a Head Start",
