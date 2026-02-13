@@ -28,9 +28,9 @@ function ReflectionStrip({ onReflect }: ReflectionStripProps) {
       <div className="flex gap-1">
         {(
           [
-            { difficulty: 1 as const, emoji: "⚡", label: "easy" },
-            { difficulty: 2 as const, emoji: "👌", label: "good" },
-            { difficulty: 3 as const, emoji: "💪", label: "hard" },
+            { difficulty: 1, emoji: "⚡", label: "easy" },
+            { difficulty: 2, emoji: "👌", label: "good" },
+            { difficulty: 3, emoji: "💪", label: "hard" },
           ] as const
         ).map(({ difficulty, emoji, label }) => (
           <button
@@ -219,7 +219,7 @@ export function TasksToday({
     return [reflectingTask, ...tasks];
   }, [tasks, reflectingTask, reflectingTaskId]);
 
-  // Sort tasks: due time first, then priority, completed last
+  // Sort tasks: completed last, then by due time, then by priority
   const sortedTasks = [...visibleTasks].sort((a, b) => {
     // Completed tasks go last
     if (a.is_completed !== b.is_completed) {
