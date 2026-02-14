@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { TasksToday } from "@/components/dashboard/tasks-today";
 import type { Task } from "@/lib/db/types";
@@ -16,6 +16,12 @@ const messages = {
       noTasks: "No tasks for today",
       createFirst: "Add a task",
       allComplete: "All tasks done!",
+      reflection: {
+        howWasIt: "How was it?",
+        easy: "Easy",
+        good: "Good",
+        hard: "Hard",
+      },
       comingUp: "Coming Up Tomorrow",
       headStart: "Get a Head Start",
       moreTomorrow: "+{count} more tomorrow",
@@ -46,6 +52,7 @@ const mockTasks: Task[] = [
     category: null,
     due_date: today,
     due_time: "17:00:00",
+    completion_difficulty: null,
     completed_at: null,
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
@@ -61,6 +68,7 @@ const mockTasks: Task[] = [
     category: null,
     due_date: today,
     due_time: "10:00:00",
+    completion_difficulty: null,
     completed_at: "2024-01-01T10:00:00Z",
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
@@ -76,6 +84,7 @@ const mockTasks: Task[] = [
     category: null,
     due_date: today,
     due_time: null,
+    completion_difficulty: null,
     completed_at: null,
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
@@ -346,6 +355,185 @@ describe("TasksToday", () => {
         b.textContent === "Read documentation"
     );
     expect(taskButtons).toHaveLength(3);
+  });
+
+  describe("reflection strip", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      global.fetch = vi.fn().mockResolvedValue({ ok: true });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it("shows reflection strip when P3 task is completed", async () => {
+      const onToggle = vi.fn().mockResolvedValue(undefined);
+      const onCreateTask = vi.fn();
+
+      // Only the P3 task, uncompleted
+      const p3Task: Task[] = [mockTasks[0]]; // priority 3
+
+      renderWithIntl(
+        <TasksToday
+          tasks={p3Task}
+          onToggle={onToggle}
+          onCreateTask={onCreateTask}
+        />
+      );
+
+      const checkbox = screen.getByRole("checkbox");
+      await act(async () => {
+        fireEvent.click(checkbox);
+      });
+
+      expect(screen.getByText("How was it?")).toBeInTheDocument();
+      expect(screen.getByTitle("Easy")).toBeInTheDocument();
+      expect(screen.getByTitle("Good")).toBeInTheDocument();
+      expect(screen.getByTitle("Hard")).toBeInTheDocument();
+    });
+
+    it("does not show reflection strip for low-priority tasks", async () => {
+      const onToggle = vi.fn().mockResolvedValue(undefined);
+      const onCreateTask = vi.fn();
+
+      // Only the P1 task
+      const p1Task: Task[] = [mockTasks[2]]; // priority 1
+
+      renderWithIntl(
+        <TasksToday
+          tasks={p1Task}
+          onToggle={onToggle}
+          onCreateTask={onCreateTask}
+        />
+      );
+
+      const checkbox = screen.getByRole("checkbox");
+      await act(async () => {
+        fireEvent.click(checkbox);
+      });
+
+      expect(screen.queryByText("How was it?")).not.toBeInTheDocument();
+    });
+
+    it("saves completion_difficulty when emoji is clicked", async () => {
+      const onToggle = vi.fn().mockResolvedValue(undefined);
+      const onCreateTask = vi.fn();
+      const p3Task: Task[] = [mockTasks[0]];
+
+      renderWithIntl(
+        <TasksToday
+          tasks={p3Task}
+          onToggle={onToggle}
+          onCreateTask={onCreateTask}
+        />
+      );
+
+      // Toggle the task to trigger reflection
+      const checkbox = screen.getByRole("checkbox");
+      await act(async () => {
+        fireEvent.click(checkbox);
+      });
+
+      // Click the "hard" emoji
+      const hardButton = screen.getByTitle("Hard");
+      await act(async () => {
+        fireEvent.click(hardButton);
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/tasks/1",
+        expect.objectContaining({
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ completion_difficulty: 3 }),
+        })
+      );
+    });
+
+    it("auto-dismisses reflection strip after 3 seconds", async () => {
+      const onToggle = vi.fn().mockResolvedValue(undefined);
+      const onCreateTask = vi.fn();
+      const p3Task: Task[] = [mockTasks[0]];
+
+      renderWithIntl(
+        <TasksToday
+          tasks={p3Task}
+          onToggle={onToggle}
+          onCreateTask={onCreateTask}
+        />
+      );
+
+      const checkbox = screen.getByRole("checkbox");
+      await act(async () => {
+        fireEvent.click(checkbox);
+      });
+
+      expect(screen.getByText("How was it?")).toBeInTheDocument();
+
+      // Advance past the 3s auto-dismiss
+      await act(async () => {
+        vi.advanceTimersByTime(3100);
+      });
+
+      expect(screen.queryByText("How was it?")).not.toBeInTheDocument();
+    });
+
+    it("dismisses reflection strip immediately when emoji is clicked", async () => {
+      const onToggle = vi.fn().mockResolvedValue(undefined);
+      const onCreateTask = vi.fn();
+      const p3Task: Task[] = [mockTasks[0]];
+
+      renderWithIntl(
+        <TasksToday
+          tasks={p3Task}
+          onToggle={onToggle}
+          onCreateTask={onCreateTask}
+        />
+      );
+
+      const checkbox = screen.getByRole("checkbox");
+      await act(async () => {
+        fireEvent.click(checkbox);
+      });
+
+      expect(screen.getByText("How was it?")).toBeInTheDocument();
+
+      const easyButton = screen.getByTitle("Easy");
+      await act(async () => {
+        fireEvent.click(easyButton);
+      });
+
+      expect(screen.queryByText("How was it?")).not.toBeInTheDocument();
+    });
+
+    it("does not show reflection when uncompleting a task", async () => {
+      const onToggle = vi.fn().mockResolvedValue(undefined);
+      const onCreateTask = vi.fn();
+
+      // P3 task that is already completed
+      const completedP3: Task[] = [{
+        ...mockTasks[0],
+        is_completed: true,
+        completed_at: "2024-01-01T17:00:00Z",
+      }];
+
+      renderWithIntl(
+        <TasksToday
+          tasks={completedP3}
+          onToggle={onToggle}
+          onCreateTask={onCreateTask}
+        />
+      );
+
+      const checkbox = screen.getByRole("checkbox");
+      await act(async () => {
+        fireEvent.click(checkbox);
+      });
+
+      expect(screen.queryByText("How was it?")).not.toBeInTheDocument();
+    });
   });
 });
 

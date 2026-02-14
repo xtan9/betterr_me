@@ -141,6 +141,12 @@
       "noTasks": "No tasks for today",
       "createFirst": "Add a task",
       "allComplete": "All tasks done!",
+      "reflection": {
+        "howWasIt": "How was it?",
+        "easy": "Easy",
+        "good": "Good",
+        "hard": "Hard"
+      },
       "comingUp": "Coming Up Tomorrow",
       "headStart": "Get a Head Start",
       "moreTomorrow": "+{count} more tomorrow",
@@ -459,6 +465,11 @@
       "category": "Category",
       "noDueDate": "No due date",
       "notFound": "Task not found",
+      "reflection": {
+        "easy": "You rated this: Easy ⚡",
+        "good": "You rated this: Good 👌",
+        "hard": "You rated this: Hard 💪"
+      },
       "yourWhy": "Your Why"
     },
     "edit": {

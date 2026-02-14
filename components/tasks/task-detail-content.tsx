@@ -228,6 +228,20 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
         </div>
       )}
 
+      {/* Reflection badge */}
+      {task.completion_difficulty && (
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
+          <span className="text-sm">
+            {task.completion_difficulty === 1 && "⚡"}
+            {task.completion_difficulty === 2 && "👌"}
+            {task.completion_difficulty === 3 && "💪"}
+          </span>
+          <span className="text-sm text-muted-foreground">
+            {t(`detail.reflection.${task.completion_difficulty === 1 ? "easy" : task.completion_difficulty === 2 ? "good" : "hard"}`)}
+          </span>
+        </div>
+      )}
+
       {/* Details grid */}
       <div className="grid grid-cols-2 gap-4">
         {/* Category */}
