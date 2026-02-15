@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Habit, HabitFrequency } from "./types";
+import type { Habit } from "./types";
 import { getLocalDateString } from "@/lib/utils";
+import { shouldTrackOnDate } from "@/lib/habits/format";
+import { MILESTONE_THRESHOLDS } from "@/lib/habits/milestones";
 
 export interface WeeklyInsight {
   type:
@@ -14,8 +16,6 @@ export interface WeeklyInsight {
   params: Record<string, string | number>;
   priority: number; // Higher = more relevant
 }
-
-const MILESTONE_THRESHOLDS = [7, 14, 30, 50, 100, 200, 365];
 
 const DAY_NAMES = [
   "sunday",
@@ -34,24 +34,6 @@ function getWeekStart(date: Date, weekStartDay: number): Date {
   const daysToSubtract = (currentDayOfWeek - weekStartDay + 7) % 7;
   result.setDate(result.getDate() - daysToSubtract);
   return result;
-}
-
-function shouldTrackOnDate(frequency: HabitFrequency, date: Date): boolean {
-  const dayOfWeek = date.getDay();
-  switch (frequency.type) {
-    case "daily":
-      return true;
-    case "weekdays":
-      return dayOfWeek >= 1 && dayOfWeek <= 5;
-    case "weekly":
-      return dayOfWeek === 1;
-    case "times_per_week":
-      return true;
-    case "custom":
-      return frequency.days.includes(dayOfWeek);
-    default:
-      return false;
-  }
 }
 
 export class InsightsDB {
