@@ -9,6 +9,10 @@ on:
     # Full cross-browser matrix weekly on Sundays at 06:00 UTC
     - cron: '0 6 * * 0'
 
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-secrets:
     runs-on: ubuntu-latest
