@@ -51,8 +51,16 @@ export default async function DashboardPage() {
     (t) => t.is_completed
   ).length;
 
+  // Server-side render doesn't have log data to compute absence;
+  // SWR will revalidate with the real values from the API route.
+  const habitsWithAbsence = habitsWithStatus.map(h => ({
+    ...h,
+    missed_scheduled_days: 0,
+    previous_streak: 0,
+  }));
+
   const initialData: DashboardData = {
-    habits: habitsWithStatus,
+    habits: habitsWithAbsence,
     tasks_today: todayTasks,
     tasks_tomorrow: tasksTomorrow,
     milestones_today: milestonesToday,

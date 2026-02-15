@@ -13,7 +13,7 @@ import { computeMissedDays } from '@/lib/habits/absence';
  * - date: string (YYYY-MM-DD) - defaults to today
  *
  * Response:
- * - habits: HabitWithTodayStatus[] - active habits with completion status
+ * - habits: HabitWithAbsence[] - active habits with completion + absence data
  * - tasks_today: Task[] - tasks due today or overdue
  * - tasks_tomorrow: Task[] - incomplete tasks due tomorrow
  * - stats: { total_habits, completed_today, current_best_streak, total_tasks, tasks_due_today, tasks_completed_today }

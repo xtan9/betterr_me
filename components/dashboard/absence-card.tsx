@@ -6,7 +6,7 @@ import { AlertCircle, Clock, Heart, Check } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { HabitWithTodayStatus } from "@/lib/db/types";
+import type { HabitWithAbsence } from "@/lib/db/types";
 
 type AbsenceVariant = "recovery" | "lapse" | "hiatus";
 
@@ -41,7 +41,7 @@ const variantConfig = {
 };
 
 interface AbsenceCardProps {
-  habit: HabitWithTodayStatus;
+  habit: HabitWithAbsence;
   onToggle: (habitId: string) => Promise<void>;
   onNavigate: (path: string) => void;
 }
