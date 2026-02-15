@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
@@ -12,6 +13,7 @@ const DailySnapshot = dynamic(() => import("./daily-snapshot").then(m => ({ defa
 const HabitChecklist = dynamic(() => import("./habit-checklist").then(m => ({ default: m.HabitChecklist })));
 const TasksToday = dynamic(() => import("./tasks-today").then(m => ({ default: m.TasksToday })));
 import { MotivationMessage } from "./motivation-message";
+import { WeeklyInsightCard, type WeeklyInsight } from "./weekly-insight-card";
 import { MilestoneCards } from "@/components/habits/milestone-card";
 import { AbsenceCard } from "./absence-card";
 import { toast } from "sonner";
@@ -24,6 +26,16 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 interface DashboardContentProps {
   userName: string;
   initialData?: DashboardData;
+}
+
+function getWeekKey(weekStartDay: number): string {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const dayOfWeek = now.getDay();
+  const daysToSubtract = (dayOfWeek - weekStartDay + 7) % 7;
+  const weekStart = new Date(now);
+  weekStart.setDate(weekStart.getDate() - daysToSubtract);
+  return getLocalDateString(weekStart);
 }
 
 export function DashboardContent({ userName, initialData }: DashboardContentProps) {
@@ -42,6 +54,31 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
       keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
     }
   );
+
+  // Weekly insight — only fetch on the user's week start day
+  const dayOfWeek = new Date().getDay();
+  // Default to Monday (1) if no profile data yet; real check uses profile pref
+  const weekStartDay = 1;
+  const isWeekStartDay = dayOfWeek === weekStartDay;
+  const weekKey = getWeekKey(weekStartDay);
+  const dismissKey = `insight-dismissed-${weekKey}`;
+
+  const [insightDismissed, setInsightDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(dismissKey) === "true";
+  });
+
+  const { data: insightsData } = useSWR<{ insights: WeeklyInsight[] }>(
+    isWeekStartDay && !insightDismissed ? "/api/insights/weekly" : null,
+    fetcher
+  );
+
+  const handleDismissInsight = useCallback(() => {
+    setInsightDismissed(true);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(dismissKey, "true");
+    }
+  }, [dismissKey]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -187,6 +224,14 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
         </h1>
         <p className="text-muted-foreground">{t("welcome")}</p>
       </div>
+
+      {/* Weekly Insight — show on week start day if not dismissed */}
+      {insightsData?.insights && insightsData.insights.length > 0 && !insightDismissed && (
+        <WeeklyInsightCard
+          insights={insightsData.insights}
+          onDismiss={handleDismissInsight}
+        />
+      )}
 
       {/* Motivation Message — only show when user has habits */}
       {data.stats.total_habits > 0 && (
