@@ -32,10 +32,20 @@ export default defineConfig({
       testMatch: /.*\.setup\.ts/,
     },
 
+    // Visual regression — runs before other tests to avoid data pollution
+    // from parallel habit-creation tests that change page layout
+    {
+      name: 'visual-regression',
+      dependencies: ['setup'],
+      testMatch: /visual-regression\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
+    },
+
     // Desktop browsers
     {
       name: 'chromium',
-      dependencies: ['setup'],
+      dependencies: ['setup', 'visual-regression'],
+      testIgnore: /visual-regression\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
     },
     {
