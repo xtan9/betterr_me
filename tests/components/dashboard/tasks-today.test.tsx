@@ -337,6 +337,30 @@ describe("TasksToday", () => {
     expect(taskRow?.parentElement?.querySelector("p.italic")).toBeNull();
   });
 
+  it("applies fallback color class for out-of-range priority in TaskRow", () => {
+    const outOfRangeTask: Task = {
+      ...mockTasks[0],
+      id: "oob-1",
+      title: "Out of range priority task",
+      priority: 99 as any,
+    };
+
+    renderWithIntl(
+      <TasksToday
+        tasks={[outOfRangeTask]}
+        onToggle={vi.fn()}
+        onCreateTask={vi.fn()}
+      />,
+    );
+
+    // Find the Circle icon next to the task title
+    const taskTitle = screen.getByText("Out of range priority task");
+    const taskRow = taskTitle.closest(".flex.items-center.gap-2");
+    const circleIcon = taskRow?.querySelector("svg");
+    expect(circleIcon).toBeInTheDocument();
+    expect(circleIcon?.classList.contains("text-slate-400")).toBe(true);
+  });
+
   it("renders task titles as buttons for accessibility", () => {
     const onToggle = vi.fn();
     const onCreateTask = vi.fn();
@@ -750,6 +774,32 @@ describe("TasksToday — Coming Up section", () => {
 
     expect(screen.getByText("Get a Head Start")).toBeInTheDocument();
     expect(screen.queryByText("Coming Up Tomorrow")).not.toBeInTheDocument();
+  });
+
+  it("applies fallback color class for out-of-range priority in Coming Up section", () => {
+    const outOfRangeTomorrowTask: Task[] = [
+      {
+        ...mockTomorrowTasks[0],
+        id: "oob-t1",
+        title: "Tomorrow out of range",
+        priority: 99 as any,
+      },
+    ];
+
+    renderWithIntl(
+      <TasksToday
+        tasks={mockTasks}
+        tasksTomorrow={outOfRangeTomorrowTask}
+        onToggle={vi.fn()}
+        onCreateTask={vi.fn()}
+      />,
+    );
+
+    const tomorrowTitle = screen.getByText("Tomorrow out of range");
+    const tomorrowRow = tomorrowTitle.closest(".flex.items-center.gap-2");
+    const circleIcon = tomorrowRow?.querySelector("svg");
+    expect(circleIcon).toBeInTheDocument();
+    expect(circleIcon?.classList.contains("text-slate-400")).toBe(true);
   });
 
   it("applies reduced opacity when today tasks are not all complete", () => {
