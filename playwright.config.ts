@@ -33,11 +33,14 @@ export default defineConfig({
     },
 
     // Visual regression — runs before other tests to avoid data pollution
-    // from parallel habit-creation tests that change page layout
+    // from parallel habit-creation tests that change page layout.
+    // snapshotPathTemplate uses 'chromium' so baselines stay compatible
+    // with files generated before the project split.
     {
       name: 'visual-regression',
       dependencies: ['setup'],
       testMatch: /visual-regression\.spec\.ts/,
+      snapshotPathTemplate: '{testDir}/{testFileDir}/{testFileName}-snapshots/{arg}-chromium-{platform}{ext}',
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
     },
 
