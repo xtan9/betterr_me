@@ -127,6 +127,89 @@ describe('PATCH /api/tasks/[id]', () => {
     expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123', { intention: null });
   });
 
+  it('should update completion_difficulty with valid value', async () => {
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+      id: 'task-1',
+      completion_difficulty: 2,
+    } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ completion_difficulty: 2 }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123', {
+      completion_difficulty: 2,
+    });
+  });
+
+  it('should accept null to clear completion_difficulty', async () => {
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+      id: 'task-1',
+      completion_difficulty: null,
+    } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ completion_difficulty: null }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123', {
+      completion_difficulty: null,
+    });
+  });
+
+  it('should return 400 if completion_difficulty is out of range', async () => {
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ completion_difficulty: 5 }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toBe('completion_difficulty must be 1, 2, 3, or null');
+  });
+
+  it('should return 400 if completion_difficulty is 0', async () => {
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ completion_difficulty: 0 }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('should return 400 if completion_difficulty is a non-numeric string', async () => {
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ completion_difficulty: 'abc' }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
   it('should return 400 if title is empty', async () => {
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
       method: 'PATCH',

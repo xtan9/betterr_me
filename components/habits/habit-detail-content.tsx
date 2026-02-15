@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { StreakCounter } from "@/components/habits/streak-counter";
+import { NextMilestone } from "@/components/habits/next-milestone";
 import dynamic from "next/dynamic";
 
 const Heatmap30Day = dynamic(() => import("@/components/habits/heatmap").then(m => ({ default: m.Heatmap30Day })));
@@ -156,7 +157,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       });
       mutateLogs();
       mutateHabit();
-    } catch {
+    } catch (err) {
+      console.error("Failed to toggle habit date:", err);
       toast.error(t("toast.updateError"));
     }
   };
@@ -175,7 +177,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       if (!response.ok) throw new Error("Failed to update");
       mutateHabit();
       toast.success(isPausing ? t("toast.pauseSuccess") : t("toast.resumeSuccess"));
-    } catch {
+    } catch (err) {
+      console.error("Failed to update habit status:", err);
       toast.error(isPausing ? t("toast.pauseError") : t("toast.resumeError"));
     }
   };
@@ -190,7 +193,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       if (!response.ok) throw new Error("Failed to archive");
       toast.success(t("toast.archiveSuccess"));
       router.push("/habits");
-    } catch {
+    } catch (err) {
+      console.error("Failed to archive habit:", err);
       toast.error(t("toast.archiveError"));
     }
   };
@@ -205,7 +209,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       if (!response.ok) throw new Error("Failed to delete");
       toast.success(t("toast.deleteSuccess"));
       router.push("/habits");
-    } catch {
+    } catch (err) {
+      console.error("Failed to delete habit:", err);
       toast.error(t("toast.deleteError"));
     }
   };
@@ -278,6 +283,9 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
         currentStreak={habit.current_streak}
         bestStreak={habit.best_streak}
       />
+
+      {/* Next Milestone */}
+      <NextMilestone currentStreak={habit.current_streak} />
 
       {/* Completion Stats */}
       <div className="space-y-4">

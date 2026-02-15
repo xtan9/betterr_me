@@ -72,7 +72,10 @@ const PRIORITY_COLORS: Record<number, string> = {
 
 function TaskDetailSkeleton() {
   return (
-    <div className="max-w-3xl mx-auto space-y-6" data-testid="task-detail-skeleton">
+    <div
+      className="max-w-3xl mx-auto space-y-6"
+      data-testid="task-detail-skeleton"
+    >
       <div className="flex items-center justify-between">
         <Skeleton className="h-9 w-24" />
         <Skeleton className="h-9 w-20" />
@@ -99,10 +102,12 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   const priorityT = useTranslations("tasks.priorities");
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const { data: task, error, isLoading, mutate } = useSWR<Task>(
-    `/api/tasks/${taskId}`,
-    fetcher
-  );
+  const {
+    data: task,
+    error,
+    isLoading,
+    mutate,
+  } = useSWR<Task>(`/api/tasks/${taskId}`, fetcher);
 
   const handleToggle = async () => {
     try {
@@ -157,8 +162,12 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
     );
   }
 
-  const CategoryIcon = task.category ? CATEGORY_ICONS[task.category] : MoreHorizontal;
-  const categoryColor = task.category ? CATEGORY_COLORS[task.category] : "bg-slate-500";
+  const CategoryIcon = task.category
+    ? CATEGORY_ICONS[task.category]
+    : MoreHorizontal;
+  const categoryColor = task.category
+    ? CATEGORY_COLORS[task.category]
+    : "bg-slate-500";
   const priorityColor = PRIORITY_COLORS[task.priority] ?? "text-slate-400";
 
   return (
@@ -202,9 +211,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
             ) : (
               <>
                 <Circle className="size-4 text-muted-foreground" />
-                <Badge variant="secondary">
-                  {t("detail.pending")}
-                </Badge>
+                <Badge variant="secondary">{t("detail.pending")}</Badge>
               </>
             )}
           </Button>
@@ -228,15 +235,33 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
         </div>
       )}
 
+      {/* Reflection badge */}
+      {task.completion_difficulty && (
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
+          <span className="text-sm">
+            {{ 1: "⚡", 2: "👌", 3: "💪" }[task.completion_difficulty]}
+          </span>
+          <span className="text-sm text-muted-foreground">
+            {t(
+              `detail.reflection.${{ 1: "easy", 2: "good", 3: "hard" }[task.completion_difficulty]}`,
+            )}
+          </span>
+        </div>
+      )}
+
       {/* Details grid */}
       <div className="grid grid-cols-2 gap-4">
         {/* Category */}
         <div className="flex items-center gap-3 p-4 rounded-lg border">
           <Tag className="size-5 text-muted-foreground" />
           <div>
-            <p className="text-sm text-muted-foreground">{t("detail.category")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("detail.category")}
+            </p>
             <div className="flex items-center gap-2 mt-1">
-              <CategoryIcon className={cn("size-4 text-white rounded p-0.5", categoryColor)} />
+              <CategoryIcon
+                className={cn("size-4 text-white rounded p-0.5", categoryColor)}
+              />
               <span className="font-medium">
                 {task.category ? categoryT(task.category) : "—"}
               </span>
@@ -248,7 +273,9 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
         <div className="flex items-center gap-3 p-4 rounded-lg border">
           <Flag className={cn("size-5", priorityColor)} />
           <div>
-            <p className="text-sm text-muted-foreground">{t("detail.priority")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("detail.priority")}
+            </p>
             <span className={cn("font-medium", priorityColor)}>
               {priorityT(String(task.priority))}
             </span>
@@ -259,7 +286,9 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
         <div className="flex items-center gap-3 p-4 rounded-lg border">
           <Calendar className="size-5 text-muted-foreground" />
           <div>
-            <p className="text-sm text-muted-foreground">{t("detail.dueDate")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("detail.dueDate")}
+            </p>
             <span className="font-medium">
               {task.due_date || t("detail.noDueDate")}
             </span>
@@ -270,7 +299,9 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
         <div className="flex items-center gap-3 p-4 rounded-lg border">
           <Clock className="size-5 text-muted-foreground" />
           <div>
-            <p className="text-sm text-muted-foreground">{t("detail.dueTime")}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("detail.dueTime")}
+            </p>
             <span className="font-medium">
               {task.due_time ? task.due_time.slice(0, 5) : "—"}
             </span>
