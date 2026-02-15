@@ -144,9 +144,16 @@ export type HabitLogUpdate = Partial<Pick<HabitLog, 'completed'>>;
 export interface HabitWithTodayStatus extends Habit {
   completed_today: boolean;
   monthly_completion_rate: number; // 0-100, percentage of days completed this month
+}
+
+/** Absence enrichment data — only meaningful in the dashboard context. */
+export interface AbsenceData {
   missed_scheduled_days: number; // consecutive scheduled-but-missed days before today
   previous_streak: number; // streak length before the current absence gap
 }
+
+/** Habit with absence enrichment, used only in dashboard responses. */
+export type HabitWithAbsence = HabitWithTodayStatus & AbsenceData;
 
 export interface HabitWithLogs extends Habit {
   logs: HabitLog[];
@@ -172,7 +179,7 @@ export interface HabitMilestone {
 // =============================================================================
 
 export interface DashboardData {
-  habits: HabitWithTodayStatus[];
+  habits: HabitWithAbsence[];
   tasks_today: Task[];
   tasks_tomorrow: Task[];
   milestones_today: HabitMilestone[];

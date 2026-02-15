@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
-import type { DashboardData, HabitMilestone } from '@/lib/db/types';
+import type { DashboardData, HabitLog, HabitMilestone } from '@/lib/db/types';
 import { getLocalDateString, getNextDateString } from '@/lib/utils';
 import { computeMissedDays } from '@/lib/habits/absence';
 
@@ -13,7 +13,7 @@ import { computeMissedDays } from '@/lib/habits/absence';
  * - date: string (YYYY-MM-DD) - defaults to today
  *
  * Response:
- * - habits: HabitWithTodayStatus[] - active habits with completion status
+ * - habits: HabitWithAbsence[] - active habits with completion + absence data
  * - tasks_today: Task[] - tasks due today or overdue
  * - tasks_tomorrow: Task[] - incomplete tasks due tomorrow
  * - stats: { total_habits, completed_today, current_best_streak, total_tasks, tasks_due_today, tasks_completed_today }
@@ -55,8 +55,8 @@ export async function GET(request: NextRequest) {
       String(thirtyDaysAgo.getDate()).padStart(2, '0'),
     ].join('-');
 
-    // Fetch data in parallel (including bulk logs for absence computation)
-    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow, allLogs, milestonesToday] = await Promise.all([
+    // Core queries — failure here returns 500
+    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow] = await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
       tasksDB.getTodayTasks(user.id),
       // Get all tasks for today to calculate completed count
@@ -65,8 +65,15 @@ export async function GET(request: NextRequest) {
       tasksDB.getUserTasks(user.id),
       // Get incomplete tasks for tomorrow
       tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
+    ]);
+
+    // Supplementary queries — failure falls back gracefully
+    const [allLogs, milestonesToday] = await Promise.all([
       // Bulk fetch 30-day logs for all habits (1 query, avoids N+1)
-      habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date),
+      habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date).catch((err) => {
+        console.error('Failed to fetch habit logs for absence:', err);
+        return [] as Pick<HabitLog, 'habit_id' | 'logged_date' | 'completed'>[];
+      }),
       // Get milestones achieved today
       milestonesDB.getTodaysMilestones(user.id, date).catch((err) => {
         console.error('Failed to fetch milestones:', err);

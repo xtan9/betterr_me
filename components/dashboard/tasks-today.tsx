@@ -75,7 +75,7 @@ function TaskRow({
     3: "text-red-500", // high/urgent
   };
 
-  const priorityColor = priorityColors[task.priority];
+  const priorityColor = priorityColors[task.priority] ?? "text-slate-400";
 
   // Format due time to 12-hour format
   const formatTime = (time: string) => {
@@ -317,12 +317,12 @@ export function TasksToday({
                   <Circle
                     className={cn(
                       "size-2 fill-current",
-                      {
+                      ({
                         0: "text-slate-400",
                         1: "text-green-500",
                         2: "text-yellow-500",
                         3: "text-red-500",
-                      }[task.priority],
+                      } as Record<number, string>)[task.priority] ?? "text-slate-400",
                     )}
                   />
                   <span>{task.title}</span>

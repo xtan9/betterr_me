@@ -17,7 +17,7 @@ function getWeekStart(date: Date, weekStartDay: number = 0): Date {
 }
 
 /**
- * Get a week identifier string for grouping (YYYY-WW format based on week start)
+ * Get a week identifier string for grouping (YYYY-MM-DD of the week start date)
  */
 function getWeekKey(date: Date, weekStartDay: number = 0): string {
   const weekStart = getWeekStart(date, weekStartDay);
