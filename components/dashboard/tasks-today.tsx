@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Plus, Circle, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -25,17 +26,20 @@ function ReflectionStrip({ onReflect }: ReflectionStripProps) {
     <div className="flex items-center gap-2 mt-1 animate-in fade-in slide-in-from-left-2 duration-300">
       <span className="text-xs text-muted-foreground">{t("howWasIt")}</span>
       <div className="flex gap-1">
-        {([
-          { difficulty: 1 as const, emoji: "⚡", label: "easy" },
-          { difficulty: 2 as const, emoji: "👌", label: "good" },
-          { difficulty: 3 as const, emoji: "💪", label: "hard" },
-        ] as const).map(({ difficulty, emoji, label }) => (
+        {(
+          [
+            { difficulty: 1, emoji: "⚡", label: "easy" },
+            { difficulty: 2, emoji: "👌", label: "good" },
+            { difficulty: 3, emoji: "💪", label: "hard" },
+          ] as const
+        ).map(({ difficulty, emoji, label }) => (
           <button
             key={difficulty}
             type="button"
             onClick={() => onReflect(difficulty)}
             className="text-sm px-2 py-0.5 rounded-md hover:bg-muted transition-colors"
             title={t(label)}
+            aria-label={t(label)}
           >
             {emoji}
           </button>
@@ -54,7 +58,14 @@ interface TaskRowProps {
   onReflect?: (difficulty: 1 | 2 | 3) => void;
 }
 
-function TaskRow({ task, onToggle, onClick, isToggling, isReflecting, onReflect }: TaskRowProps) {
+function TaskRow({
+  task,
+  onToggle,
+  onClick,
+  isToggling,
+  isReflecting,
+  onReflect,
+}: TaskRowProps) {
   const t = useTranslations("dashboard.tasks");
 
   const priorityColors = {
@@ -98,7 +109,7 @@ function TaskRow({ task, onToggle, onClick, isToggling, isReflecting, onReflect 
             type="button"
             className={cn(
               "font-medium text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md",
-              task.is_completed && "line-through text-muted-foreground"
+              task.is_completed && "line-through text-muted-foreground",
             )}
             onClick={() => onClick?.(task.id)}
           >
@@ -148,53 +159,67 @@ export function TasksToday({
   const [reflectingTask, setReflectingTask] = useState<Task | null>(null);
   const reflectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleToggleWithReflection = useCallback(async (taskId: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    const isCompleting = task && !task.is_completed;
-    const qualifies = task && qualifiesForReflection(task);
+  useEffect(() => {
+    return () => {
+      if (reflectionTimerRef.current) clearTimeout(reflectionTimerRef.current);
+    };
+  }, []);
 
-    if (isCompleting && qualifies) {
-      setReflectingTask({ ...task, is_completed: true });
-      setReflectingTaskId(taskId);
-    }
+  const handleToggleWithReflection = useCallback(
+    async (taskId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      const isCompleting = task && !task.is_completed;
+      const qualifies = task && qualifiesForReflection(task);
 
-    await onToggle(taskId);
+      if (isCompleting && qualifies) {
+        setReflectingTask({ ...task, is_completed: true });
+        setReflectingTaskId(taskId);
+      }
 
-    if (isCompleting && qualifies) {
-      reflectionTimerRef.current = setTimeout(() => {
+      await onToggle(taskId);
+
+      if (isCompleting && qualifies) {
+        reflectionTimerRef.current = setTimeout(() => {
+          setReflectingTaskId(null);
+          setReflectingTask(null);
+        }, 3000);
+      }
+    },
+    [tasks, onToggle],
+  );
+
+  const handleReflection = useCallback(
+    async (difficulty: 1 | 2 | 3) => {
+      if (!reflectingTaskId) return;
+      if (reflectionTimerRef.current) {
+        clearTimeout(reflectionTimerRef.current);
+      }
+      try {
+        const res = await fetch(`/api/tasks/${reflectingTaskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ completion_difficulty: difficulty }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         setReflectingTaskId(null);
         setReflectingTask(null);
-      }, 3000);
-    }
-  }, [tasks, onToggle]);
-
-  const handleReflection = useCallback(async (difficulty: 1 | 2 | 3) => {
-    if (!reflectingTaskId) return;
-    if (reflectionTimerRef.current) {
-      clearTimeout(reflectionTimerRef.current);
-    }
-    try {
-      await fetch(`/api/tasks/${reflectingTaskId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ completion_difficulty: difficulty }),
-      });
-    } catch (err) {
-      console.error("Failed to save reflection:", err);
-    }
-    setReflectingTaskId(null);
-    setReflectingTask(null);
-  }, [reflectingTaskId]);
+      } catch (err) {
+        console.error("Failed to save reflection:", err);
+        toast.error(t("reflection.saveError"));
+      }
+    },
+    [reflectingTaskId, t],
+  );
 
   // Re-inject the reflecting task if SWR revalidation removed it
   const visibleTasks = useMemo(() => {
     if (!reflectingTask || !reflectingTaskId) return tasks;
-    const hasTask = tasks.some(t => t.id === reflectingTaskId);
+    const hasTask = tasks.some((t) => t.id === reflectingTaskId);
     if (hasTask) return tasks;
     return [reflectingTask, ...tasks];
   }, [tasks, reflectingTask, reflectingTaskId]);
 
-  // Sort tasks: due time first, then priority, completed last
+  // Sort tasks: completed last, then by due time, then by priority
   const sortedTasks = [...visibleTasks].sort((a, b) => {
     // Completed tasks go last
     if (a.is_completed !== b.is_completed) {
@@ -257,7 +282,9 @@ export function TasksToday({
                   onClick={onTaskClick}
                   isToggling={isLoading}
                   isReflecting={reflectingTaskId === task.id}
-                  onReflect={reflectingTaskId === task.id ? handleReflection : undefined}
+                  onReflect={
+                    reflectingTaskId === task.id ? handleReflection : undefined
+                  }
                 />
               ))}
             </div>
@@ -276,10 +303,7 @@ export function TasksToday({
         {/* Coming Up — tomorrow tasks */}
         {visibleTomorrow.length > 0 && (
           <div
-            className={cn(
-              "mt-4 pt-4 border-t",
-              !todayClear && "opacity-50"
-            )}
+            className={cn("mt-4 pt-4 border-t", !todayClear && "opacity-50")}
           >
             <p className="text-sm font-medium text-muted-foreground mb-2">
               {todayClear ? t("headStart") : t("comingUp")}
@@ -298,7 +322,7 @@ export function TasksToday({
                         1: "text-green-500",
                         2: "text-yellow-500",
                         3: "text-red-500",
-                      }[task.priority]
+                      }[task.priority],
                     )}
                   />
                   <span>{task.title}</span>

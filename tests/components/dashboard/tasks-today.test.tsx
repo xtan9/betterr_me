@@ -34,7 +34,7 @@ function renderWithIntl(component: React.ReactElement) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       {component}
-    </NextIntlClientProvider>
+    </NextIntlClientProvider>,
   );
 }
 
@@ -101,7 +101,7 @@ describe("TasksToday", () => {
         tasks={mockTasks}
         onToggle={onToggle}
         onCreateTask={onCreateTask}
-      />
+      />,
     );
 
     expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
@@ -119,7 +119,7 @@ describe("TasksToday", () => {
         tasks={mockTasks}
         onToggle={onToggle}
         onCreateTask={onCreateTask}
-      />
+      />,
     );
 
     expect(screen.getByText(/Due 5:00 PM/i)).toBeInTheDocument();
@@ -135,7 +135,7 @@ describe("TasksToday", () => {
         tasks={mockTasks}
         onToggle={onToggle}
         onCreateTask={onCreateTask}
-      />
+      />,
     );
 
     expect(screen.getByText("All day")).toBeInTheDocument();
@@ -150,7 +150,7 @@ describe("TasksToday", () => {
         tasks={mockTasks}
         onToggle={onToggle}
         onCreateTask={onCreateTask}
-      />
+      />,
     );
 
     const checkboxes = screen.getAllByRole("checkbox");
@@ -168,7 +168,7 @@ describe("TasksToday", () => {
         tasks={mockTasks}
         onToggle={onToggle}
         onCreateTask={onCreateTask}
-      />
+      />,
     );
 
     expect(screen.getByText(/1 of 3 completed/)).toBeInTheDocument();
@@ -187,7 +187,7 @@ describe("TasksToday", () => {
         tasks={allCompleted}
         onToggle={onToggle}
         onCreateTask={onCreateTask}
-      />
+      />,
     );
 
     expect(screen.getByText(/All tasks done!/)).toBeInTheDocument();
@@ -198,7 +198,7 @@ describe("TasksToday", () => {
     const onCreateTask = vi.fn();
 
     renderWithIntl(
-      <TasksToday tasks={[]} onToggle={onToggle} onCreateTask={onCreateTask} />
+      <TasksToday tasks={[]} onToggle={onToggle} onCreateTask={onCreateTask} />,
     );
 
     expect(screen.getByText("No tasks for today")).toBeInTheDocument();
@@ -214,7 +214,7 @@ describe("TasksToday", () => {
         tasks={mockTasks}
         onToggle={onToggle}
         onCreateTask={onCreateTask}
-      />
+      />,
     );
 
     const addButton = screen.getByText("Add Task");
@@ -233,7 +233,7 @@ describe("TasksToday", () => {
         onToggle={onToggle}
         onCreateTask={onCreateTask}
         isLoading={true}
-      />
+      />,
     );
 
     const checkboxes = screen.getAllByRole("checkbox");
@@ -253,7 +253,7 @@ describe("TasksToday", () => {
         onToggle={onToggle}
         onTaskClick={onTaskClick}
         onCreateTask={onCreateTask}
-      />
+      />,
     );
 
     const taskTitle = screen.getByText("Finish proposal");
@@ -275,10 +275,12 @@ describe("TasksToday", () => {
         tasks={tasksWithIntention}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
-    expect(screen.getByText("Career growth depends on this")).toBeInTheDocument();
+    expect(
+      screen.getByText("Career growth depends on this"),
+    ).toBeInTheDocument();
   });
 
   it("does not show intention subtitle for non-P3 tasks", () => {
@@ -295,7 +297,7 @@ describe("TasksToday", () => {
         tasks={nonP3WithIntention}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.queryByText("Should not appear")).not.toBeInTheDocument();
@@ -314,7 +316,7 @@ describe("TasksToday", () => {
         tasks={tasksWithEmptyIntention}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     const taskRow = screen.getByText("Finish proposal").closest("div");
@@ -327,7 +329,7 @@ describe("TasksToday", () => {
         tasks={[mockTasks[0]]}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     // Task 0 is P3 but has null intention - no subtitle should appear
@@ -344,7 +346,7 @@ describe("TasksToday", () => {
         tasks={mockTasks}
         onToggle={onToggle}
         onCreateTask={onCreateTask}
-      />
+      />,
     );
 
     const buttons = screen.getAllByRole("button");
@@ -352,7 +354,7 @@ describe("TasksToday", () => {
       (b) =>
         b.textContent === "Finish proposal" ||
         b.textContent === "Team standup" ||
-        b.textContent === "Read documentation"
+        b.textContent === "Read documentation",
     );
     expect(taskButtons).toHaveLength(3);
   });
@@ -380,7 +382,7 @@ describe("TasksToday", () => {
           tasks={p3Task}
           onToggle={onToggle}
           onCreateTask={onCreateTask}
-        />
+        />,
       );
 
       const checkbox = screen.getByRole("checkbox");
@@ -406,7 +408,7 @@ describe("TasksToday", () => {
           tasks={p1Task}
           onToggle={onToggle}
           onCreateTask={onCreateTask}
-        />
+        />,
       );
 
       const checkbox = screen.getByRole("checkbox");
@@ -427,7 +429,7 @@ describe("TasksToday", () => {
           tasks={p3Task}
           onToggle={onToggle}
           onCreateTask={onCreateTask}
-        />
+        />,
       );
 
       // Toggle the task to trigger reflection
@@ -448,7 +450,7 @@ describe("TasksToday", () => {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ completion_difficulty: 3 }),
-        })
+        }),
       );
     });
 
@@ -462,7 +464,7 @@ describe("TasksToday", () => {
           tasks={p3Task}
           onToggle={onToggle}
           onCreateTask={onCreateTask}
-        />
+        />,
       );
 
       const checkbox = screen.getByRole("checkbox");
@@ -490,7 +492,7 @@ describe("TasksToday", () => {
           tasks={p3Task}
           onToggle={onToggle}
           onCreateTask={onCreateTask}
-        />
+        />,
       );
 
       const checkbox = screen.getByRole("checkbox");
@@ -508,23 +510,89 @@ describe("TasksToday", () => {
       expect(screen.queryByText("How was it?")).not.toBeInTheDocument();
     });
 
+    it("shows reflection strip for non-P3 task with intention", async () => {
+      const onToggle = vi.fn().mockResolvedValue(undefined);
+      const onCreateTask = vi.fn();
+
+      const p1WithIntention: Task[] = [
+        {
+          ...mockTasks[2], // priority 1
+          intention: "Because it matters",
+        },
+      ];
+
+      renderWithIntl(
+        <TasksToday
+          tasks={p1WithIntention}
+          onToggle={onToggle}
+          onCreateTask={onCreateTask}
+        />,
+      );
+
+      const checkbox = screen.getByRole("checkbox");
+      await act(async () => {
+        fireEvent.click(checkbox);
+      });
+
+      expect(screen.getByText("How was it?")).toBeInTheDocument();
+    });
+
+    it("keeps reflecting task visible after SWR revalidation removes it", async () => {
+      const onToggle = vi.fn().mockResolvedValue(undefined);
+      const onCreateTask = vi.fn();
+      const p3Task: Task[] = [mockTasks[0]];
+
+      const { rerender } = renderWithIntl(
+        <TasksToday
+          tasks={p3Task}
+          onToggle={onToggle}
+          onCreateTask={onCreateTask}
+        />,
+      );
+
+      // Complete the task to trigger reflection
+      const checkbox = screen.getByRole("checkbox");
+      await act(async () => {
+        fireEvent.click(checkbox);
+      });
+
+      expect(screen.getByText("How was it?")).toBeInTheDocument();
+
+      // Simulate SWR revalidation that removes the task from the list
+      rerender(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <TasksToday
+            tasks={[]}
+            onToggle={onToggle}
+            onCreateTask={onCreateTask}
+          />
+        </NextIntlClientProvider>,
+      );
+
+      // Task and reflection strip should still be visible
+      expect(screen.getByText("Finish proposal")).toBeInTheDocument();
+      expect(screen.getByText("How was it?")).toBeInTheDocument();
+    });
+
     it("does not show reflection when uncompleting a task", async () => {
       const onToggle = vi.fn().mockResolvedValue(undefined);
       const onCreateTask = vi.fn();
 
       // P3 task that is already completed
-      const completedP3: Task[] = [{
-        ...mockTasks[0],
-        is_completed: true,
-        completed_at: "2024-01-01T17:00:00Z",
-      }];
+      const completedP3: Task[] = [
+        {
+          ...mockTasks[0],
+          is_completed: true,
+          completed_at: "2024-01-01T17:00:00Z",
+        },
+      ];
 
       renderWithIntl(
         <TasksToday
           tasks={completedP3}
           onToggle={onToggle}
           onCreateTask={onCreateTask}
-        />
+        />,
       );
 
       const checkbox = screen.getByRole("checkbox");
@@ -580,7 +648,7 @@ describe("TasksToday — Coming Up section", () => {
         tasksTomorrow={mockTomorrowTasks}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByText("Coming Up Tomorrow")).toBeInTheDocument();
@@ -595,7 +663,7 @@ describe("TasksToday — Coming Up section", () => {
         tasksTomorrow={[]}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.queryByText("Coming Up Tomorrow")).not.toBeInTheDocument();
@@ -610,7 +678,7 @@ describe("TasksToday — Coming Up section", () => {
         tasksTomorrow={mockTomorrowTasks}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByText("Get a Head Start")).toBeInTheDocument();
@@ -640,7 +708,7 @@ describe("TasksToday — Coming Up section", () => {
         tasksTomorrow={manyTomorrowTasks}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     // Only first 3 shown
@@ -662,7 +730,7 @@ describe("TasksToday — Coming Up section", () => {
         tasksTomorrow={mockTomorrowTasks}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     const viewAllLink = screen.getByText("View all tasks").closest("a");
@@ -677,7 +745,7 @@ describe("TasksToday — Coming Up section", () => {
         tasksTomorrow={mockTomorrowTasks}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     expect(screen.getByText("Get a Head Start")).toBeInTheDocument();
@@ -691,7 +759,7 @@ describe("TasksToday — Coming Up section", () => {
         tasksTomorrow={mockTomorrowTasks}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     const comingUpSection = container.querySelector(".opacity-50");
@@ -707,7 +775,7 @@ describe("TasksToday — Coming Up section", () => {
         tasksTomorrow={mockTomorrowTasks}
         onToggle={vi.fn()}
         onCreateTask={vi.fn()}
-      />
+      />,
     );
 
     const comingUpSection = container.querySelector(".opacity-50");
