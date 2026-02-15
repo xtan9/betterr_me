@@ -12,6 +12,9 @@ const DailySnapshot = dynamic(() => import("./daily-snapshot").then(m => ({ defa
 const HabitChecklist = dynamic(() => import("./habit-checklist").then(m => ({ default: m.HabitChecklist })));
 const TasksToday = dynamic(() => import("./tasks-today").then(m => ({ default: m.TasksToday })));
 import { MotivationMessage } from "./motivation-message";
+import { MilestoneCards } from "@/components/habits/milestone-card";
+import { AbsenceCard } from "./absence-card";
+import { toast } from "sonner";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
 import type { DashboardData } from "@/lib/db/types";
@@ -49,25 +52,33 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
 
   const handleToggleHabit = async (habitId: string) => {
     try {
-      await fetch(`/api/habits/${habitId}/toggle`, {
+      const response = await fetch(`/api/habits/${habitId}/toggle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: today }),
       });
+      if (!response.ok) {
+        throw new Error(`Failed to toggle habit ${habitId}: ${response.status}`);
+      }
       mutate(); // Revalidate dashboard data
     } catch (err) {
       console.error("Failed to toggle habit:", err);
+      toast.error(t("error.toggleHabitFailed"));
     }
   };
 
   const handleToggleTask = async (taskId: string) => {
     try {
-      await fetch(`/api/tasks/${taskId}/toggle`, {
+      const response = await fetch(`/api/tasks/${taskId}/toggle`, {
         method: "POST",
       });
+      if (!response.ok) {
+        throw new Error(`Failed to toggle task ${taskId}: ${response.status}`);
+      }
       mutate(); // Revalidate dashboard data
     } catch (err) {
       console.error("Failed to toggle task:", err);
+      toast.error(t("error.toggleTaskFailed"));
     }
   };
 
@@ -162,6 +173,11 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
     return top;
   }, null);
 
+  const absenceHabits = data.habits
+    .filter(h => h.missed_scheduled_days > 0 && !h.completed_today)
+    .sort((a, b) => b.missed_scheduled_days - a.missed_scheduled_days)
+    .slice(0, 3);
+
   return (
     <div className="space-y-8">
       {/* Greeting */}
@@ -177,9 +193,28 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
         <MotivationMessage stats={data.stats} topStreakHabit={topStreakHabit} />
       )}
 
+      {/* Absence Recovery Cards — habits with missed scheduled days */}
+      {absenceHabits.length > 0 && (
+        <div className="space-y-3">
+          {absenceHabits.map(habit => (
+            <AbsenceCard
+              key={habit.id}
+              habit={habit}
+              onToggle={handleToggleHabit}
+              onNavigate={router.push}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Daily Snapshot — only show when user has habits */}
       {data.stats.total_habits > 0 && (
         <DailySnapshot stats={data.stats} />
+      )}
+
+      {/* Milestone celebrations */}
+      {data.milestones_today && data.milestones_today.length > 0 && (
+        <MilestoneCards milestones={data.milestones_today} habits={data.habits} />
       )}
 
       {/* Main content grid */}
@@ -194,6 +229,7 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
         {/* Tasks Today */}
         <TasksToday
           tasks={data.tasks_today}
+          tasksTomorrow={data.tasks_tomorrow}
           onToggle={handleToggleTask}
           onTaskClick={handleTaskClick}
           onCreateTask={handleCreateTask}

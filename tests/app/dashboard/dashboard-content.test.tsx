@@ -37,6 +37,12 @@ vi.mock("swr", () => ({
   default: (...args: unknown[]) => mockUseSWR(...args),
 }));
 
+// Mock sonner
+const mockToastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { error: (...args: unknown[]) => mockToastError(...args) },
+}));
+
 const messages = {
   dashboard: {
     greeting: {
@@ -72,6 +78,10 @@ const messages = {
       noTasks: "No tasks for today",
       createFirst: "Add a task",
       allComplete: "All tasks done!",
+      comingUp: "Coming Up Tomorrow",
+      headStart: "Get a Head Start",
+      moreTomorrow: "+{count} more tomorrow",
+      viewAll: "View all tasks",
     },
     motivation: {
       firstDay: "Welcome! Your journey starts today.",
@@ -94,6 +104,18 @@ const messages = {
     error: {
       title: "Something went wrong",
       retry: "Try again",
+      toggleHabitFailed: "Failed to update habit. Please try again.",
+      toggleTaskFailed: "Failed to update task. Please try again.",
+    },
+    absence: {
+      recoveryTitle: "{name} — missed {days} day(s)",
+      lapseTitle: "{name} — {days} days since last check-in",
+      hiatusTitle: "{name} — it's been {days} days",
+      previousStreak: "You had a {days}-day streak before",
+      markComplete: "Complete today",
+      completed: "{name} — welcome back!",
+      resume: "Resume today",
+      changeFrequency: "Change frequency",
     },
   },
   habits: {
@@ -107,6 +129,16 @@ const messages = {
       learning: "Learning",
       productivity: "Productivity",
       other: "Other",
+    },
+    milestone: {
+      celebration: "{habit} reached {count} days!",
+      celebration7: "One week strong!",
+      celebration14: "Two weeks in!",
+      celebration30: "A whole month!",
+      celebration50: "50 days!",
+      celebration100: "Triple digits!",
+      celebration200: "200 days!",
+      celebration365: "One full year!",
     },
   },
 };
@@ -136,6 +168,8 @@ const mockDashboardData = {
       updated_at: "2024-01-01T00:00:00Z",
       completed_today: true,
       monthly_completion_rate: 80,
+      missed_scheduled_days: 0,
+      previous_streak: 0,
     },
     {
       id: "2",
@@ -152,9 +186,13 @@ const mockDashboardData = {
       updated_at: "2024-01-01T00:00:00Z",
       completed_today: false,
       monthly_completion_rate: 40,
+      missed_scheduled_days: 0,
+      previous_streak: 0,
     },
   ],
+  milestones_today: [],
   tasks_today: [],
+  tasks_tomorrow: [],
   stats: {
     total_habits: 2,
     completed_today: 1,
@@ -217,6 +255,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -255,6 +294,7 @@ describe("DashboardContent", () => {
             updated_at: "2024-01-01T00:00:00Z",
           },
         ],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -296,6 +336,7 @@ describe("DashboardContent", () => {
             updated_at: "2024-01-01T00:00:00Z",
           },
         ],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -323,6 +364,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -351,6 +393,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -376,6 +419,7 @@ describe("DashboardContent", () => {
       data: {
         habits: [],
         tasks_today: [],
+        tasks_tomorrow: [],
         stats: {
           total_habits: 0,
           completed_today: 0,
@@ -465,6 +509,171 @@ describe("DashboardContent", () => {
       expect(body.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(body.date).toBe(getLocalDateString());
     });
+
+    global.fetch = originalFetch;
+  });
+
+  it("renders up to 3 absence cards sorted by missed_scheduled_days descending", async () => {
+    const baseFields = {
+      user_id: "user-1",
+      description: null,
+      category: "health" as const,
+      frequency: { type: "daily" as const },
+      status: "active" as const,
+      current_streak: 0,
+      best_streak: 0,
+      paused_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      monthly_completion_rate: 50,
+    };
+
+    const habitsWithAbsence = [
+      { ...baseFields, id: "a", name: "A", missed_scheduled_days: 2, previous_streak: 0, completed_today: false },
+      { ...baseFields, id: "b", name: "B", missed_scheduled_days: 8, previous_streak: 3, completed_today: false },
+      { ...baseFields, id: "c", name: "C", missed_scheduled_days: 0, previous_streak: 0, completed_today: false },
+      { ...baseFields, id: "d", name: "D", missed_scheduled_days: 5, previous_streak: 1, completed_today: false },
+      { ...baseFields, id: "e", name: "E", missed_scheduled_days: 1, previous_streak: 0, completed_today: true },
+    ];
+
+    mockUseSWR.mockReturnValue({
+      data: {
+        habits: habitsWithAbsence,
+        tasks_today: [],
+        tasks_tomorrow: [],
+        stats: {
+          total_habits: 5,
+          completed_today: 1,
+          current_best_streak: 0,
+          total_tasks: 0,
+          tasks_due_today: 0,
+          tasks_completed_today: 0,
+        },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="User" />);
+
+    // B (8 days hiatus), D (5 days lapse), A (2 days recovery) shown
+    // C (0 missed) and E (completed today) excluded; max 3 cards
+    await waitFor(() => {
+      expect(screen.getByText(/B — it's been 8 days/)).toBeInTheDocument();
+      expect(screen.getByText(/D — 5 days since last check-in/)).toBeInTheDocument();
+      expect(screen.getByText(/A — missed 2 day/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/C —/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/E —/)).not.toBeInTheDocument();
+  });
+
+  it("does not show absence cards when no habits have missed days", async () => {
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    expect(screen.queryByText(/missed|since last check-in|it's been/)).not.toBeInTheDocument();
+  });
+
+  it("renders milestone cards when milestones_today is present", async () => {
+    mockUseSWR.mockReturnValue({
+      data: {
+        ...mockDashboardData,
+        milestones_today: [
+          {
+            id: "m1",
+            habit_id: "1",
+            user_id: "user-1",
+            milestone: 7,
+            achieved_at: "2026-02-09T10:00:00Z",
+            created_at: "2026-02-09T10:00:00Z",
+          },
+        ],
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Morning Meditation reached 7 days!/)).toBeInTheDocument();
+      expect(screen.getByText("One week strong!")).toBeInTheDocument();
+    });
+  });
+
+  it("does not render milestone section when milestones_today is empty", async () => {
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    expect(screen.queryByText(/reached.*days!/)).not.toBeInTheDocument();
+  });
+
+  it("shows toast error when habit toggle fails", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => ({ error: "Server error" }) });
+    global.fetch = mockFetch;
+
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("Failed to update habit. Please try again.");
+    });
+
+    global.fetch = originalFetch;
+  });
+
+  it("does not call mutate when toggle API returns non-ok response", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => ({ error: "Server error" }) });
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn();
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalled();
+    });
+
+    // mutate should NOT be called since the toggle failed
+    expect(mockMutate).not.toHaveBeenCalled();
 
     global.fetch = originalFetch;
   });
