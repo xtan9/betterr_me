@@ -44,15 +44,17 @@ export interface Task {
   due_date: string | null; // DATE (YYYY-MM-DD)
   due_time: string | null; // TIME (HH:MM:SS)
   intention: string | null;
+  completion_difficulty: 1 | 2 | 3 | null;
   completed_at: string | null; // TIMESTAMPTZ
   created_at: string;
   updated_at: string;
 }
 
-export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'intention'> & {
+export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'intention' | 'completion_difficulty'> & {
   id?: string;
   category?: TaskCategory | null;
   intention?: string | null;
+  completion_difficulty?: 1 | 2 | 3 | null;
 };
 
 export type TaskUpdate = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
@@ -142,10 +144,27 @@ export type HabitLogUpdate = Partial<Pick<HabitLog, 'completed'>>;
 export interface HabitWithTodayStatus extends Habit {
   completed_today: boolean;
   monthly_completion_rate: number; // 0-100, percentage of days completed this month
+  missed_scheduled_days: number; // consecutive scheduled-but-missed days before today
+  previous_streak: number; // streak length before the current absence gap
 }
 
 export interface HabitWithLogs extends Habit {
   logs: HabitLog[];
+}
+
+// =============================================================================
+// HABIT MILESTONES
+// =============================================================================
+
+import type { MilestoneThreshold } from '@/lib/habits/milestones';
+
+export interface HabitMilestone {
+  id: string; // UUID
+  habit_id: string; // UUID
+  user_id: string; // UUID
+  milestone: MilestoneThreshold;
+  achieved_at: string; // TIMESTAMPTZ
+  created_at: string;
 }
 
 // =============================================================================
@@ -155,6 +174,8 @@ export interface HabitWithLogs extends Habit {
 export interface DashboardData {
   habits: HabitWithTodayStatus[];
   tasks_today: Task[];
+  tasks_tomorrow: Task[];
+  milestones_today: HabitMilestone[];
   stats: {
     total_habits: number;
     completed_today: number;

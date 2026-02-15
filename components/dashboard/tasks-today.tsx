@@ -1,21 +1,71 @@
 "use client";
 
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Circle } from "lucide-react";
+import { toast } from "sonner";
+import { Plus, Circle, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { Task } from "@/lib/db/types";
 
+function qualifiesForReflection(task: Task): boolean {
+  return task.priority === 3 || !!task.intention;
+}
+
+interface ReflectionStripProps {
+  onReflect: (difficulty: 1 | 2 | 3) => void;
+}
+
+function ReflectionStrip({ onReflect }: ReflectionStripProps) {
+  const t = useTranslations("dashboard.tasks.reflection");
+
+  return (
+    <div className="flex items-center gap-2 mt-1 animate-in fade-in slide-in-from-left-2 duration-300">
+      <span className="text-xs text-muted-foreground">{t("howWasIt")}</span>
+      <div className="flex gap-1">
+        {(
+          [
+            { difficulty: 1, emoji: "⚡", label: "easy" },
+            { difficulty: 2, emoji: "👌", label: "good" },
+            { difficulty: 3, emoji: "💪", label: "hard" },
+          ] as const
+        ).map(({ difficulty, emoji, label }) => (
+          <button
+            key={difficulty}
+            type="button"
+            onClick={() => onReflect(difficulty)}
+            className="text-sm px-2 py-0.5 rounded-md hover:bg-muted transition-colors"
+            title={t(label)}
+            aria-label={t(label)}
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface TaskRowProps {
   task: Task;
   onToggle: (taskId: string) => Promise<void>;
   onClick?: (taskId: string) => void;
   isToggling?: boolean;
+  isReflecting?: boolean;
+  onReflect?: (difficulty: 1 | 2 | 3) => void;
 }
 
-function TaskRow({ task, onToggle, onClick, isToggling }: TaskRowProps) {
+function TaskRow({
+  task,
+  onToggle,
+  onClick,
+  isToggling,
+  isReflecting,
+  onReflect,
+}: TaskRowProps) {
   const t = useTranslations("dashboard.tasks");
 
   const priorityColors = {
@@ -38,7 +88,9 @@ function TaskRow({ task, onToggle, onClick, isToggling }: TaskRowProps) {
 
   const handleCheckboxChange = () => {
     if (!isToggling) {
-      onToggle(task.id);
+      onToggle(task.id).catch((err) => {
+        console.error("Failed to toggle task:", err);
+      });
     }
   };
 
@@ -57,23 +109,29 @@ function TaskRow({ task, onToggle, onClick, isToggling }: TaskRowProps) {
             type="button"
             className={cn(
               "font-medium text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md",
-              task.is_completed && "line-through text-muted-foreground"
+              task.is_completed && "line-through text-muted-foreground",
             )}
             onClick={() => onClick?.(task.id)}
           >
             {task.title}
           </button>
         </div>
-        {task.priority === 3 && task.intention && (
-          <p className="text-xs text-muted-foreground italic mt-0.5">
-            {task.intention}
-          </p>
+        {isReflecting && onReflect ? (
+          <ReflectionStrip onReflect={onReflect} />
+        ) : (
+          <>
+            {task.priority === 3 && task.intention && (
+              <p className="text-xs text-muted-foreground italic mt-0.5">
+                {task.intention}
+              </p>
+            )}
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {task.due_time
+                ? t("dueAt", { time: formatTime(task.due_time) })
+                : t("allDay")}
+            </div>
+          </>
         )}
-        <div className="text-xs text-muted-foreground mt-0.5">
-          {task.due_time
-            ? t("dueAt", { time: formatTime(task.due_time) })
-            : t("allDay")}
-        </div>
       </div>
     </div>
   );
@@ -81,6 +139,7 @@ function TaskRow({ task, onToggle, onClick, isToggling }: TaskRowProps) {
 
 interface TasksTodayProps {
   tasks: Task[];
+  tasksTomorrow?: Task[];
   onToggle: (taskId: string) => Promise<void>;
   onTaskClick?: (taskId: string) => void;
   onCreateTask: () => void;
@@ -89,15 +148,79 @@ interface TasksTodayProps {
 
 export function TasksToday({
   tasks,
+  tasksTomorrow = [],
   onToggle,
   onTaskClick,
   onCreateTask,
   isLoading,
 }: TasksTodayProps) {
   const t = useTranslations("dashboard.tasks");
+  const [reflectingTaskId, setReflectingTaskId] = useState<string | null>(null);
+  const [reflectingTask, setReflectingTask] = useState<Task | null>(null);
+  const reflectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sort tasks: due time first, then priority, completed last
-  const sortedTasks = [...tasks].sort((a, b) => {
+  useEffect(() => {
+    return () => {
+      if (reflectionTimerRef.current) clearTimeout(reflectionTimerRef.current);
+    };
+  }, []);
+
+  const handleToggleWithReflection = useCallback(
+    async (taskId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      const isCompleting = task && !task.is_completed;
+      const qualifies = task && qualifiesForReflection(task);
+
+      if (isCompleting && qualifies) {
+        setReflectingTask({ ...task, is_completed: true });
+        setReflectingTaskId(taskId);
+      }
+
+      await onToggle(taskId);
+
+      if (isCompleting && qualifies) {
+        reflectionTimerRef.current = setTimeout(() => {
+          setReflectingTaskId(null);
+          setReflectingTask(null);
+        }, 3000);
+      }
+    },
+    [tasks, onToggle],
+  );
+
+  const handleReflection = useCallback(
+    async (difficulty: 1 | 2 | 3) => {
+      if (!reflectingTaskId) return;
+      if (reflectionTimerRef.current) {
+        clearTimeout(reflectionTimerRef.current);
+      }
+      try {
+        const res = await fetch(`/api/tasks/${reflectingTaskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ completion_difficulty: difficulty }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setReflectingTaskId(null);
+        setReflectingTask(null);
+      } catch (err) {
+        console.error("Failed to save reflection:", err);
+        toast.error(t("reflection.saveError"));
+      }
+    },
+    [reflectingTaskId, t],
+  );
+
+  // Re-inject the reflecting task if SWR revalidation removed it
+  const visibleTasks = useMemo(() => {
+    if (!reflectingTask || !reflectingTaskId) return tasks;
+    const hasTask = tasks.some((t) => t.id === reflectingTaskId);
+    if (hasTask) return tasks;
+    return [reflectingTask, ...tasks];
+  }, [tasks, reflectingTask, reflectingTaskId]);
+
+  // Sort tasks: completed last, then by due time, then by priority
+  const sortedTasks = [...visibleTasks].sort((a, b) => {
     // Completed tasks go last
     if (a.is_completed !== b.is_completed) {
       return a.is_completed ? 1 : -1;
@@ -117,9 +240,16 @@ export function TasksToday({
     return b.priority - a.priority;
   });
 
-  const completedCount = tasks.filter((t) => t.is_completed).length;
-  const totalCount = tasks.length;
+  const completedCount = visibleTasks.filter((t) => t.is_completed).length;
+  const totalCount = visibleTasks.length;
   const allComplete = totalCount > 0 && completedCount === totalCount;
+  // For Coming Up section: treat "no today tasks" the same as "all complete"
+  const todayClear = totalCount === 0 || allComplete;
+
+  // Show up to 3 tomorrow tasks; auto-expand to full opacity when all today tasks complete
+  const maxTomorrowPreview = 3;
+  const visibleTomorrow = tasksTomorrow.slice(0, maxTomorrowPreview);
+  const extraTomorrow = tasksTomorrow.length - maxTomorrowPreview;
 
   return (
     <Card>
@@ -148,9 +278,13 @@ export function TasksToday({
                 <TaskRow
                   key={task.id}
                   task={task}
-                  onToggle={onToggle}
+                  onToggle={handleToggleWithReflection}
                   onClick={onTaskClick}
                   isToggling={isLoading}
+                  isReflecting={reflectingTaskId === task.id}
+                  onReflect={
+                    reflectingTaskId === task.id ? handleReflection : undefined
+                  }
                 />
               ))}
             </div>
@@ -164,6 +298,54 @@ export function TasksToday({
               )}
             </div>
           </>
+        )}
+
+        {/* Coming Up — tomorrow tasks */}
+        {visibleTomorrow.length > 0 && (
+          <div
+            className={cn("mt-4 pt-4 border-t", !todayClear && "opacity-50")}
+          >
+            <p className="text-sm font-medium text-muted-foreground mb-2">
+              {todayClear ? t("headStart") : t("comingUp")}
+            </p>
+            <div className="space-y-1">
+              {visibleTomorrow.map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-muted-foreground"
+                >
+                  <Circle
+                    className={cn(
+                      "size-2 fill-current",
+                      {
+                        0: "text-slate-400",
+                        1: "text-green-500",
+                        2: "text-yellow-500",
+                        3: "text-red-500",
+                      }[task.priority],
+                    )}
+                  />
+                  <span>{task.title}</span>
+                </div>
+              ))}
+            </div>
+            {extraTomorrow > 0 && (
+              <Link
+                href="/tasks"
+                className="flex items-center justify-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {t("moreTomorrow", { count: extraTomorrow })}
+                <ChevronRight className="size-3" />
+              </Link>
+            )}
+            <Link
+              href="/tasks"
+              className="flex items-center justify-center gap-1 mt-2 text-xs text-primary hover:underline"
+            >
+              {t("viewAll")}
+              <ChevronRight className="size-3" />
+            </Link>
+          </div>
         )}
       </CardContent>
     </Card>
