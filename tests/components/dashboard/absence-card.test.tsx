@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { AbsenceCard } from "@/components/dashboard/absence-card";
-import type { HabitWithTodayStatus } from "@/lib/db/types";
+import type { HabitWithAbsence } from "@/lib/db/types";
 
 const messages = {
   dashboard: {
@@ -27,7 +27,7 @@ function renderWithIntl(component: React.ReactElement) {
   );
 }
 
-function makeHabit(overrides: Partial<HabitWithTodayStatus> = {}): HabitWithTodayStatus {
+function makeHabit(overrides: Partial<HabitWithAbsence> = {}): HabitWithAbsence {
   return {
     id: "h1",
     user_id: "user-1",
