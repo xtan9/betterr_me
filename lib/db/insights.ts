@@ -1,17 +1,31 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Habit, HabitFrequency } from './types';
-import { getLocalDateString } from '@/lib/utils';
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Habit, HabitFrequency } from "./types";
+import { getLocalDateString } from "@/lib/utils";
 
 export interface WeeklyInsight {
-  type: 'best_week' | 'worst_day' | 'best_habit' | 'streak_proximity' | 'improvement' | 'decline';
-  message: string;        // i18n key
+  type:
+    | "best_week"
+    | "worst_day"
+    | "best_habit"
+    | "streak_proximity"
+    | "improvement"
+    | "decline";
+  message: string; // i18n key
   params: Record<string, string | number>;
-  priority: number;       // Higher = more relevant
+  priority: number; // Higher = more relevant
 }
 
 const MILESTONE_THRESHOLDS = [7, 14, 30, 50, 100, 200, 365];
 
-const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const DAY_NAMES = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
 
 function getWeekStart(date: Date, weekStartDay: number): Date {
   const result = new Date(date);
@@ -25,15 +39,15 @@ function getWeekStart(date: Date, weekStartDay: number): Date {
 function shouldTrackOnDate(frequency: HabitFrequency, date: Date): boolean {
   const dayOfWeek = date.getDay();
   switch (frequency.type) {
-    case 'daily':
+    case "daily":
       return true;
-    case 'weekdays':
+    case "weekdays":
       return dayOfWeek >= 1 && dayOfWeek <= 5;
-    case 'weekly':
+    case "weekly":
       return dayOfWeek === 1;
-    case 'times_per_week':
+    case "times_per_week":
       return true;
-    case 'custom':
+    case "custom":
       return frequency.days.includes(dayOfWeek);
     default:
       return false;
@@ -45,20 +59,21 @@ export class InsightsDB {
 
   async getWeeklyInsights(
     userId: string,
-    weekStartDay: number
+    weekStartDay: number,
+    dateStr?: string,
   ): Promise<WeeklyInsight[]> {
     // Get active habits
     const { data: habits, error: habitsError } = await this.supabase
-      .from('habits')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'active');
+      .from("habits")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "active");
 
     if (habitsError) throw habitsError;
     if (!habits || habits.length === 0) return [];
 
     // Calculate date ranges: previous week and the week before
-    const today = new Date();
+    const today = dateStr ? new Date(dateStr + "T00:00:00") : new Date();
     today.setHours(0, 0, 0, 0);
     const thisWeekStart = getWeekStart(today, weekStartDay);
     const prevWeekStart = new Date(thisWeekStart);
@@ -71,12 +86,12 @@ export class InsightsDB {
 
     // Fetch logs for the 2-week window
     const { data: logs, error: logsError } = await this.supabase
-      .from('habit_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('completed', true)
-      .gte('logged_date', getLocalDateString(twoWeeksAgoStart))
-      .lte('logged_date', getLocalDateString(prevWeekEnd));
+      .from("habit_logs")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("completed", true)
+      .gte("logged_date", getLocalDateString(twoWeeksAgoStart))
+      .lte("logged_date", getLocalDateString(prevWeekEnd));
 
     if (logsError) throw logsError;
 
@@ -84,24 +99,37 @@ export class InsightsDB {
 
     // Build sets: per-habit and per-day completion
     const prevWeekLogs = completedLogs.filter(
-      log => log.logged_date >= getLocalDateString(prevWeekStart) &&
-             log.logged_date <= getLocalDateString(prevWeekEnd)
+      (log) =>
+        log.logged_date >= getLocalDateString(prevWeekStart) &&
+        log.logged_date <= getLocalDateString(prevWeekEnd),
     );
     const twoWeeksAgoLogs = completedLogs.filter(
-      log => log.logged_date >= getLocalDateString(twoWeeksAgoStart) &&
-             log.logged_date < getLocalDateString(prevWeekStart)
+      (log) =>
+        log.logged_date >= getLocalDateString(twoWeeksAgoStart) &&
+        log.logged_date < getLocalDateString(prevWeekStart),
     );
 
     // Compute per-habit completion rates for previous week
     const prevWeekHabitRates = this.computePerHabitRates(
-      habits, prevWeekLogs, prevWeekStart, prevWeekEnd
+      habits,
+      prevWeekLogs,
+      prevWeekStart,
+      prevWeekEnd,
     );
     const twoWeeksAgoHabitRates = this.computePerHabitRates(
-      habits, twoWeeksAgoLogs, twoWeeksAgoStart, new Date(prevWeekStart.getTime() - 86400000)
+      habits,
+      twoWeeksAgoLogs,
+      twoWeeksAgoStart,
+      new Date(prevWeekStart.getTime() - 86400000),
     );
 
     // Compute per-day-of-week completion rates for previous week
-    const dayRates = this.computePerDayRates(habits, prevWeekLogs, prevWeekStart, prevWeekEnd);
+    const dayRates = this.computePerDayRates(
+      habits,
+      prevWeekLogs,
+      prevWeekStart,
+      prevWeekEnd,
+    );
 
     // Compute overall rates
     const prevWeekOverall = this.computeOverallRate(prevWeekHabitRates);
@@ -117,9 +145,13 @@ export class InsightsDB {
         const daysToMilestone = milestone - streak;
         if (daysToMilestone > 0 && daysToMilestone <= 3) {
           candidates.push({
-            type: 'streak_proximity',
-            message: 'streakProximity',
-            params: { habit: (habit as Habit).name, days: daysToMilestone, milestone },
+            type: "streak_proximity",
+            message: "streakProximity",
+            params: {
+              habit: (habit as Habit).name,
+              days: daysToMilestone,
+              milestone,
+            },
             priority: 100,
           });
           break; // Only closest milestone per habit
@@ -129,27 +161,32 @@ export class InsightsDB {
 
     // best_habit (Priority 80)
     let bestHabitRate = 0;
-    let bestHabitName = '';
+    let bestHabitName = "";
     for (const [habitId, rate] of prevWeekHabitRates) {
       if (rate >= 80 && rate > bestHabitRate) {
         bestHabitRate = rate;
-        bestHabitName = (habits.find(h => h.id === habitId) as Habit)?.name || '';
+        bestHabitName =
+          (habits.find((h) => h.id === habitId) as Habit)?.name || "";
       }
     }
     if (bestHabitRate >= 80 && bestHabitName) {
       candidates.push({
-        type: 'best_habit',
-        message: 'bestHabit',
+        type: "best_habit",
+        message: "bestHabit",
         params: { habit: bestHabitName, percent: bestHabitRate },
         priority: 80,
       });
     }
 
     // best_week (Priority 80)
-    if (prevWeekOverall > twoWeeksAgoOverall && twoWeeksAgoOverall > 0 && prevWeekOverall >= 80) {
+    if (
+      prevWeekOverall > twoWeeksAgoOverall &&
+      twoWeeksAgoOverall > 0 &&
+      prevWeekOverall >= 80
+    ) {
       candidates.push({
-        type: 'best_week',
-        message: 'bestWeek',
+        type: "best_week",
+        message: "bestWeek",
         params: { percent: prevWeekOverall },
         priority: 80,
       });
@@ -157,7 +194,7 @@ export class InsightsDB {
 
     // worst_day (Priority 60)
     let worstDayRate = 100;
-    let worstDayName = '';
+    let worstDayName = "";
     for (const [day, rate] of dayRates) {
       if (rate <= 50 && rate < worstDayRate) {
         worstDayRate = rate;
@@ -166,8 +203,8 @@ export class InsightsDB {
     }
     if (worstDayRate <= 50 && worstDayName) {
       candidates.push({
-        type: 'worst_day',
-        message: 'worstDay',
+        type: "worst_day",
+        message: "worstDay",
         params: { day: worstDayName },
         priority: 60,
       });
@@ -178,8 +215,8 @@ export class InsightsDB {
       const change = twoWeeksAgoOverall - prevWeekOverall;
       if (change > 15) {
         candidates.push({
-          type: 'decline',
-          message: 'decline',
+          type: "decline",
+          message: "decline",
           params: { percent: prevWeekOverall, lastPercent: twoWeeksAgoOverall },
           priority: 60,
         });
@@ -191,8 +228,8 @@ export class InsightsDB {
       const change = prevWeekOverall - twoWeeksAgoOverall;
       if (change > 10) {
         candidates.push({
-          type: 'improvement',
-          message: 'improvement',
+          type: "improvement",
+          message: "improvement",
           params: { change },
           priority: 40,
         });
@@ -208,7 +245,7 @@ export class InsightsDB {
     habits: Habit[],
     logs: Array<{ habit_id: string; logged_date: string }>,
     weekStart: Date,
-    weekEnd: Date
+    weekEnd: Date,
   ): Map<string, number> {
     const rates = new Map<string, number>();
     const logsByHabit = new Map<string, Set<string>>();
@@ -247,11 +284,11 @@ export class InsightsDB {
     habits: Habit[],
     logs: Array<{ habit_id: string; logged_date: string }>,
     weekStart: Date,
-    weekEnd: Date
+    weekEnd: Date,
   ): Map<number, number> {
     const dayScheduled = new Map<number, number>();
     const dayCompleted = new Map<number, number>();
-    const logSet = new Set(logs.map(l => `${l.habit_id}:${l.logged_date}`));
+    const logSet = new Set(logs.map((l) => `${l.habit_id}:${l.logged_date}`));
 
     const checkDate = new Date(weekStart);
     while (checkDate <= weekEnd) {
@@ -272,7 +309,10 @@ export class InsightsDB {
     const rates = new Map<number, number>();
     for (const [day, scheduled] of dayScheduled) {
       const completed = dayCompleted.get(day) || 0;
-      rates.set(day, scheduled > 0 ? Math.round((completed / scheduled) * 100) : 0);
+      rates.set(
+        day,
+        scheduled > 0 ? Math.round((completed / scheduled) * 100) : 0,
+      );
     }
 
     return rates;
