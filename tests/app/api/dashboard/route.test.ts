@@ -229,20 +229,38 @@ describe('GET /api/dashboard', () => {
     expect(data.error).toContain('Invalid date format');
   });
 
-  it('should return 500 when getAllUserLogs throws', async () => {
-    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+  it('should return dashboard data even when getAllUserLogs fails', async () => {
+    const habits = [
+      {
+        id: 'h1', name: 'Run', current_streak: 3, completed_today: true,
+        monthly_completion_rate: 80, frequency: { type: 'daily' },
+        created_at: '2026-02-15T00:00:00Z', // Same day as query date
+      },
+    ];
+
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
     vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
     vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
     vi.mocked(mockHabitLogsDB.getAllUserLogs).mockRejectedValue(
-      new Error('Database connection failed')
+      new Error('DB timeout')
     );
+    vi.mocked(mockMilestonesDB.getTodaysMilestones).mockResolvedValue([]);
 
-    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-09');
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-15');
     const response = await GET(request);
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.error).toBe('Failed to fetch dashboard data');
+    expect(data.habits).toHaveLength(1);
+    expect(data.habits[0].name).toBe('Run');
+    // Absence fields should be present (graceful fallback with empty logs)
+    expect(data.habits[0]).toHaveProperty('missed_scheduled_days');
+    expect(typeof data.habits[0].missed_scheduled_days).toBe('number');
+    expect(data.habits[0]).toHaveProperty('previous_streak');
+    expect(typeof data.habits[0].previous_streak).toBe('number');
+    expect(data.stats).toBeDefined();
+    expect(data.stats.total_habits).toBe(1);
+    expect(data.stats.completed_today).toBe(1);
   });
 
   it('should pass client date to getTodaysMilestones', async () => {
