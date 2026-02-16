@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, ClipboardList, ListChecks } from "lucide-react";
+import { Home, ClipboardList, ListChecks, PanelLeftClose, PanelLeft } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -15,6 +15,12 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 const navItems = [
   {
@@ -43,18 +49,45 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
-  // pinned and onTogglePin used by pin toggle button (added in next task)
-  void pinned;
-  void onTogglePin;
   const pathname = usePathname();
   const t = useTranslations("common.nav");
+  const tSidebar = useTranslations("common.sidebar");
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="offcanvas">
       <SidebarHeader>
-        <span className="font-display font-bold text-lg text-primary px-2 py-1">
-          BetterR.me
-        </span>
+        <div className="flex items-center justify-between px-2 py-1">
+          <span className="font-display font-bold text-lg text-primary">
+            BetterR.me
+          </span>
+          {onTogglePin && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={onTogglePin}
+                    aria-pressed={pinned}
+                    aria-label={
+                      pinned
+                        ? tSidebar("unpinLabel")
+                        : tSidebar("pinLabel")
+                    }
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                  >
+                    {pinned ? (
+                      <PanelLeftClose className="size-4" />
+                    ) : (
+                      <PanelLeft className="size-4" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  {pinned ? tSidebar("unpin") : tSidebar("pin")}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

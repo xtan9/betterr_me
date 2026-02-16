@@ -11,6 +11,12 @@
       "learnMore": "了解更多",
       "profile": "個人資料"
     },
+    "sidebar": {
+      "pin": "釘選",
+      "unpin": "取消釘選",
+      "pinLabel": "釘選側邊欄導航。目前未釘選。",
+      "unpinLabel": "取消釘選側邊欄導航。目前已釘選。"
+    },
     "footer": {
       "product": "產品",
       "features": "功能",

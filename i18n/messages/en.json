@@ -11,6 +11,12 @@
       "learnMore": "Learn More",
       "profile": "Profile"
     },
+    "sidebar": {
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "pinLabel": "Pin sidebar navigation. Currently unpinned.",
+      "unpinLabel": "Unpin sidebar navigation. Currently pinned."
+    },
     "footer": {
       "product": "Product",
       "features": "Features",
