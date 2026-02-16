@@ -4,16 +4,7 @@ import type { Task, TaskInsert, TaskUpdate, TaskFilters } from './types';
 import { getLocalDateString } from '@/lib/utils';
 
 export class TasksDB {
-  private supabase: SupabaseClient;
-
-  /**
-   * @param supabase - Optional Supabase client. Omit for client-side usage
-   *   (uses browser client). Pass a server client in API routes:
-   *   `new TasksDB(await createClient())` from `@/lib/supabase/server`.
-   */
-  constructor(supabase?: SupabaseClient) {
-    this.supabase = supabase || createClient();
-  }
+  constructor(private supabase: SupabaseClient) {}
 
   /**
    * Get all tasks for a user with optional filtering
@@ -188,4 +179,4 @@ export class TasksDB {
 }
 
 /** Client-side singleton. Do NOT use in API routes — create a new instance with the server client instead. */
-export const tasksDB = new TasksDB();
+export const tasksDB = new TasksDB(createClient());

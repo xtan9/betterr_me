@@ -6,16 +6,7 @@ import { getLocalDateString } from '@/lib/utils';
 import { shouldTrackOnDate } from '@/lib/habits/format';
 
 export class HabitsDB {
-  private supabase: SupabaseClient;
-
-  /**
-   * @param supabase - Optional Supabase client. Omit for client-side usage
-   *   (uses browser client). Pass a server client in API routes:
-   *   `new HabitsDB(await createClient())` from `@/lib/supabase/server`.
-   */
-  constructor(supabase?: SupabaseClient) {
-    this.supabase = supabase || createClient();
-  }
+  constructor(private supabase: SupabaseClient) {}
 
   /**
    * Get all habits for a user with optional filtering
@@ -285,4 +276,4 @@ export class HabitsDB {
 }
 
 /** Client-side singleton. Do NOT use in API routes — create a new instance with the server client instead. */
-export const habitsDB = new HabitsDB();
+export const habitsDB = new HabitsDB(createClient());
