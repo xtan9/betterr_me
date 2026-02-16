@@ -1,9 +1,9 @@
-import { AppLayout } from "@/components/layouts/app-layout";
+import { SidebarShell } from "@/components/layouts/sidebar-shell";
 
-export default function HabitsLayout({
+export default async function HabitsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <AppLayout>{children}</AppLayout>;
+  return <SidebarShell>{children}</SidebarShell>;
 }
