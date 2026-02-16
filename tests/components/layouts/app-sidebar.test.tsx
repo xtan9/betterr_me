@@ -29,13 +29,8 @@ vi.mock("@/components/ui/sidebar", () => ({
   ),
   SidebarMenu: ({ children }: any) => <ul>{children}</ul>,
   SidebarMenuItem: ({ children }: any) => <li>{children}</li>,
-  SidebarMenuButton: ({
-    children,
-    isActive,
-    asChild,
-    tooltip,
-    ...props
-  }: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  SidebarMenuButton: ({ children, isActive, asChild, tooltip, ...props }: any) => {
     if (asChild) {
       const child = React.Children.only(children);
       return React.cloneElement(child, {
