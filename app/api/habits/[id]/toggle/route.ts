@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
-import { invalidateStatsCache } from '@/lib/cache';
 import { getLocalDateString } from '@/lib/utils';
 import { isMilestoneStreak } from '@/lib/habits/milestones';
 
@@ -47,9 +46,6 @@ export async function POST(
     // Toggle the log
     const habitLogsDB = new HabitLogsDB(supabase);
     const result = await habitLogsDB.toggleLog(habitId, user.id, date);
-
-    // Invalidate stats cache since completion status changed
-    invalidateStatsCache(habitId, user.id);
 
     // Record milestone if streak hits a threshold (best-effort, non-fatal)
     if (result.log.completed && isMilestoneStreak(result.currentStreak)) {

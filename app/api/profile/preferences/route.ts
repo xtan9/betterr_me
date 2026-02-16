@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ProfilesDB } from '@/lib/db';
-import { invalidateUserStatsCache } from '@/lib/cache';
 import { validateRequestBody } from '@/lib/validations/api';
 import { preferencesSchema } from '@/lib/validations/preferences';
 
@@ -28,12 +27,6 @@ export async function PATCH(request: NextRequest) {
 
     const profilesDB = new ProfilesDB(supabase);
     const profile = await profilesDB.updatePreferences(user.id, validation.data);
-
-    // Invalidate all stats cache when week_start_day changes,
-    // since it affects how weekly stats are calculated
-    if (validation.data.week_start_day !== undefined) {
-      invalidateUserStatsCache(user.id);
-    }
 
     return NextResponse.json({ profile });
   } catch (error: unknown) {
