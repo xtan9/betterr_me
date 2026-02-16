@@ -58,6 +58,9 @@ Recent decisions affecting current work:
 - [Plan 02-01]: ensureProfile uses 'no-email-{userId}' fallback for emailless users (avoids UNIQUE violation)
 - [Plan 02-01]: getActiveHabitCount counts active + paused (archived excluded from limit)
 - [Plan 02-01]: getSafeRedirectPath uses exact + prefix match allowlist pattern
+- [Plan 02-02]: Habit/task schema fields (category, priority, due_date, due_time) made optional to match existing API contract
+- [Plan 02-02]: Added .trim() to Zod name/title schemas for whitespace-only rejection parity with old validators
+- [Plan 02-02]: Profile preferences uses type assertion since generic z.record() doesn't overlap concrete ProfilePreferences
 - [Plan 02-03]: handle_new_user uses COALESCE with 'no-email-{id}' fallback consistent with ensureProfile
 - [Plan 02-03]: EXCEPTION WHEN OTHERS in trigger logs warning but never blocks signup — ensureProfile provides defense-in-depth
 
