@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** Every existing feature works correctly, safely, and is covered by tests
-**Current focus:** Phase 3: Code Quality
+**Current focus:** Phase 4: Performance
 
 ## Current Position
 
-Phase: 3 of 5 (Code Quality) -- COMPLETE
-Plan: 2 of 2 in current phase -- COMPLETE
-Status: Phase 03 complete, Phase 04 next
-Last activity: 2026-02-16 — Plan 03-02 (cache removal, _warnings, logger conversion) complete
+Phase: 4 of 5 (Performance)
+Plan: 1 of 2 in current phase -- COMPLETE
+Status: Plan 04-01 complete, Plan 04-02 next
+Last activity: 2026-02-16 — Plan 04-01 (dashboard count query optimization) complete
 
-Progress: [███████░░░] 70%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 8
 - Average duration: 5min
-- Total execution time: 0.57 hours
+- Total execution time: 0.63 hours
 
 **By Phase:**
 
@@ -30,9 +30,10 @@ Progress: [███████░░░] 70%
 | 01-frequency-correctness | 2 | 8min | 4min |
 | 02-security-and-validation | 3 | 12min | 4min |
 | 03-code-quality | 2 | 14min | 7min |
+| 04-performance | 1 | 4min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (4min), 02-02 (4min), 02-03 (4min), 03-01 (5min), 03-02 (9min)
+- Last 5 plans: 02-02 (4min), 02-03 (4min), 03-01 (5min), 03-02 (9min), 04-01 (4min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -70,6 +71,8 @@ Recent decisions affecting current work:
 - [Plan 03-02]: HTTP Cache-Control preserved on stats route; only server-side TTLCache removed (useless on serverless)
 - [Plan 03-02]: _warnings convention uses underscore prefix for metadata, only present when non-empty
 - [Plan 03-02]: computeMissedDays fallback uses zeros (mathematical identity) since no cached prior value exists
+- [Plan 04-01]: getTaskCount mirrors getUserTasks filter logic but uses HEAD-only COUNT query
+- [Plan 04-01]: tasks_completed_today uses both due_date AND is_completed:true filters (not just date filter)
 
 ### Pending Todos
 
@@ -84,5 +87,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 03-02-PLAN.md (Phase 03 complete)
-Resume file: .planning/phases/03-code-quality/03-02-SUMMARY.md
+Stopped at: Completed 04-01-PLAN.md
+Resume file: .planning/phases/04-performance/04-01-SUMMARY.md
