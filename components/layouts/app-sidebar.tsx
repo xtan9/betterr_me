@@ -37,7 +37,15 @@ const navItems = [
   },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  pinned?: boolean;
+  onTogglePin?: () => void;
+}
+
+export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
+  // pinned and onTogglePin used by pin toggle button (added in next task)
+  void pinned;
+  void onTogglePin;
   const pathname = usePathname();
   const t = useTranslations("common.nav");
 

@@ -138,3 +138,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Sidebar hover-overlay mode: when unpinned, sidebar overlays content on hover */
+[data-sidebar-hover="true"] .peer[data-state="collapsed"][data-collapsible="offcanvas"] > div:last-child {
+  left: 0;
+  z-index: 30;
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
+  transition: left 150ms ease-in-out;
+}
+
+.dark [data-sidebar-hover="true"] .peer[data-state="collapsed"][data-collapsible="offcanvas"] > div:last-child {
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.3);
+}
