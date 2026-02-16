@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeSwitcher } from '@/components/theme-switcher';
@@ -21,12 +21,6 @@ describe('ThemeSwitcher', () => {
     vi.clearAllMocks();
     mockTheme = 'system';
     mockResolvedTheme = 'light';
-    // Mock document.documentElement
-    document.documentElement.className = '';
-  });
-
-  afterEach(() => {
-    document.documentElement.className = '';
   });
 
   it('renders theme switcher button after mounting', async () => {
@@ -145,28 +139,18 @@ describe('ThemeSwitcher', () => {
     });
   });
 
-  it('adds dark class to document when resolved theme is dark', async () => {
+  it('does not manually manipulate document classes', async () => {
+    document.documentElement.className = '';
     mockResolvedTheme = 'dark';
-    document.documentElement.className = 'light';
-
     render(<ThemeSwitcher />);
 
     await waitFor(() => {
-      expect(document.documentElement.classList.contains('dark')).toBe(true);
-      expect(document.documentElement.classList.contains('light')).toBe(false);
+      expect(screen.getByRole('button')).toBeInTheDocument();
     });
-  });
 
-  it('adds light class to document when resolved theme is light', async () => {
-    mockResolvedTheme = 'light';
-    document.documentElement.className = 'dark';
-
-    render(<ThemeSwitcher />);
-
-    await waitFor(() => {
-      expect(document.documentElement.classList.contains('light')).toBe(true);
-      expect(document.documentElement.classList.contains('dark')).toBe(false);
-    });
+    // After mount, document.documentElement should remain untouched
+    // (next-themes ThemeProvider handles class toggling, not the component)
+    expect(document.documentElement.className).toBe('');
   });
 
   it('renders button with correct aria attributes', async () => {

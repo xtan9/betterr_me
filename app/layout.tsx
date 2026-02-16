@@ -55,6 +55,7 @@ export default async function RootLayout({
             defaultTheme="system"
             enableSystem
             storageKey="betterr-theme"
+            disableTransitionOnChange
           >
             {children}
             <Toaster />
