@@ -1,6 +1,6 @@
 import React from "react";
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { AppSidebar } from "@/components/layouts/app-sidebar";
 
 // Mock next/navigation
@@ -49,20 +49,39 @@ vi.mock("@/components/ui/sidebar", () => ({
   ),
 }));
 
+// Mock shadcn tooltip components
+vi.mock("@/components/ui/tooltip", () => ({
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children, asChild }: any) => {
+    if (asChild) return <>{children}</>;
+    return <>{children}</>;
+  },
+  TooltipContent: ({ children }: any) => (
+    <span data-testid="tooltip-content">{children}</span>
+  ),
+  TooltipProvider: ({ children }: any) => <>{children}</>,
+}));
+
+const defaultProps = {
+  pinned: true,
+  onTogglePin: vi.fn(),
+};
+
 describe("AppSidebar", () => {
   beforeEach(() => {
     mockPathname.mockReturnValue("/dashboard");
+    defaultProps.onTogglePin = vi.fn();
   });
 
   it("renders all 3 nav items as links", () => {
-    render(<AppSidebar />);
+    render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
     expect(links).toHaveLength(3);
   });
 
   it("renders correct hrefs for all nav items", () => {
-    render(<AppSidebar />);
+    render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
     expect(links[0]).toHaveAttribute("href", "/dashboard");
@@ -71,7 +90,7 @@ describe("AppSidebar", () => {
   });
 
   it("renders i18n translation keys as labels", () => {
-    render(<AppSidebar />);
+    render(<AppSidebar {...defaultProps} />);
 
     expect(screen.getByText("dashboard")).toBeInTheDocument();
     expect(screen.getByText("habits")).toBeInTheDocument();
@@ -80,7 +99,7 @@ describe("AppSidebar", () => {
 
   it("highlights dashboard link when pathname is /dashboard", () => {
     mockPathname.mockReturnValue("/dashboard");
-    render(<AppSidebar />);
+    render(<AppSidebar {...defaultProps} />);
 
     const activeLink = screen.getByRole("link", { current: "page" });
     expect(activeLink).toHaveAttribute("href", "/dashboard");
@@ -88,7 +107,7 @@ describe("AppSidebar", () => {
 
   it("highlights dashboard link when pathname is /dashboard/settings", () => {
     mockPathname.mockReturnValue("/dashboard/settings");
-    render(<AppSidebar />);
+    render(<AppSidebar {...defaultProps} />);
 
     const activeLink = screen.getByRole("link", { current: "page" });
     expect(activeLink).toHaveAttribute("href", "/dashboard");
@@ -96,7 +115,7 @@ describe("AppSidebar", () => {
 
   it("highlights habits link for nested habits routes", () => {
     mockPathname.mockReturnValue("/habits/abc-123");
-    render(<AppSidebar />);
+    render(<AppSidebar {...defaultProps} />);
 
     const activeLink = screen.getByRole("link", { current: "page" });
     expect(activeLink).toHaveAttribute("href", "/habits");
@@ -104,7 +123,7 @@ describe("AppSidebar", () => {
 
   it("highlights tasks link when on tasks page", () => {
     mockPathname.mockReturnValue("/tasks");
-    render(<AppSidebar />);
+    render(<AppSidebar {...defaultProps} />);
 
     const activeLink = screen.getByRole("link", { current: "page" });
     expect(activeLink).toHaveAttribute("href", "/tasks");
@@ -112,7 +131,7 @@ describe("AppSidebar", () => {
 
   it("has only one active nav item at a time", () => {
     mockPathname.mockReturnValue("/dashboard");
-    render(<AppSidebar />);
+    render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
     const activeLinks = links.filter(
@@ -122,7 +141,7 @@ describe("AppSidebar", () => {
   });
 
   it("renders brand text in sidebar header", () => {
-    render(<AppSidebar />);
+    render(<AppSidebar {...defaultProps} />);
 
     expect(screen.getByText("BetterR.me")).toBeInTheDocument();
     expect(screen.getByTestId("sidebar-header")).toContainElement(
@@ -131,9 +150,63 @@ describe("AppSidebar", () => {
   });
 
   it("renders as a nav element for accessibility", () => {
-    render(<AppSidebar />);
+    render(<AppSidebar {...defaultProps} />);
 
     expect(screen.getByTestId("sidebar")).toBeInTheDocument();
     expect(screen.getByTestId("sidebar").tagName).toBe("NAV");
+  });
+
+  describe("pin toggle button", () => {
+    it("renders pin toggle button in sidebar header", () => {
+      render(<AppSidebar {...defaultProps} />);
+
+      const pinButton = screen.getByRole("button", { pressed: true });
+      expect(pinButton).toBeInTheDocument();
+      expect(screen.getByTestId("sidebar-header")).toContainElement(pinButton);
+    });
+
+    it("shows aria-pressed=true when pinned", () => {
+      render(<AppSidebar {...defaultProps} pinned={true} />);
+
+      const pinButton = screen.getByRole("button", { pressed: true });
+      expect(pinButton).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("shows aria-pressed=false when unpinned", () => {
+      render(<AppSidebar {...defaultProps} pinned={false} />);
+
+      const pinButton = screen.getByRole("button", { pressed: false });
+      expect(pinButton).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("calls onTogglePin when pin button is clicked", () => {
+      const onTogglePin = vi.fn();
+      render(<AppSidebar pinned={true} onTogglePin={onTogglePin} />);
+
+      const pinButton = screen.getByRole("button", { pressed: true });
+      fireEvent.click(pinButton);
+
+      expect(onTogglePin).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows unpin label when pinned", () => {
+      render(<AppSidebar {...defaultProps} pinned={true} />);
+
+      const pinButton = screen.getByRole("button", { pressed: true });
+      expect(pinButton).toHaveAttribute("aria-label", "unpinLabel");
+
+      const tooltipContent = screen.getByTestId("tooltip-content");
+      expect(tooltipContent).toHaveTextContent("unpin");
+    });
+
+    it("shows pin label when unpinned", () => {
+      render(<AppSidebar {...defaultProps} pinned={false} />);
+
+      const pinButton = screen.getByRole("button", { pressed: false });
+      expect(pinButton).toHaveAttribute("aria-label", "pinLabel");
+
+      const tooltipContent = screen.getByTestId("tooltip-content");
+      expect(tooltipContent).toHaveTextContent("pin");
+    });
   });
 });
