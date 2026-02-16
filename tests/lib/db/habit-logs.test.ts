@@ -319,6 +319,27 @@ describe("HabitLogsDB", () => {
         expect(stats.thisWeek.percent).toBe(67); // 2/3 * 100 rounded
       });
 
+      it("should return 100% when target exactly met (3/3 completions)", async () => {
+        // Regression: times_per_week with count=3, exactly 3 completions = 100%
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: weekDate(0), completed: true },
+          { ...mockLog, logged_date: weekDate(1), completed: true },
+          { ...mockLog, logged_date: weekDate(2), completed: true },
+        ]);
+
+        const stats = await habitLogsDB.getDetailedHabitStats(
+          mockHabitId,
+          mockUserId,
+          timesPerWeekFrequency,
+          createdAt,
+          0,
+        );
+
+        expect(stats.thisWeek.completed).toBe(3);
+        expect(stats.thisWeek.total).toBe(3);
+        expect(stats.thisWeek.percent).toBe(100); // 3/3 = 100%
+      });
+
       it("should cap percent at 100 when target exceeded", async () => {
         // 4 completions this week for a 3x/week habit
         mockSupabaseClient.setMockResponse([
@@ -469,6 +490,25 @@ describe("HabitLogsDB", () => {
         expect(stats.thisWeek.completed).toBe(1);
         expect(stats.thisWeek.total).toBe(1); // target is 1 for weekly
         expect(stats.thisWeek.percent).toBe(100); // 1/1 = 100%
+      });
+
+      it("should treat any single completion as 100% (regression)", async () => {
+        // Regression: weekly habit, 1 completion on any day of the week = 100% satisfied
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: wkDate(5), completed: true },
+        ]);
+
+        const stats = await habitLogsDB.getDetailedHabitStats(
+          mockHabitId,
+          mockUserId,
+          weeklyFrequency,
+          createdAt,
+          0,
+        );
+
+        expect(stats.thisWeek.completed).toBe(1);
+        expect(stats.thisWeek.total).toBe(1);
+        expect(stats.thisWeek.percent).toBe(100);
       });
     });
 
