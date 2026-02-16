@@ -63,11 +63,11 @@ Plans:
   3. Theme switching between light and dark mode works correctly without any manual DOM class manipulation in theme-switcher.tsx
   4. Instantiating HabitLogsDB without a Supabase client argument produces a TypeScript compilation error
   5. When computeMissedDays encounters an error, the dashboard response includes a _warnings array and the error is logged
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md — Create logger module, fix theme-switcher DOM workaround, harden DB constructors
+- [ ] 03-02-PLAN.md — Remove cache module, add _warnings to dashboard, convert all server-side console calls to logger
 
 ### Phase 4: Performance
 **Goal**: Dashboard and stats queries are optimized to avoid unnecessary data fetching
@@ -104,6 +104,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Frequency Correctness | 2/2 | Complete | 2026-02-16 |
 | 2. Security and Validation | 0/3 | Not started | - |
-| 3. Code Quality | 0/TBD | Not started | - |
+| 3. Code Quality | 0/2 | Not started | - |
 | 4. Performance | 0/TBD | Not started | - |
 | 5. Test Coverage | 0/TBD | Not started | - |
