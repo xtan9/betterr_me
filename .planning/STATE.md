@@ -10,27 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 ## Current Position
 
 Phase: 2 of 5 (Security and Validation)
-Plan: 0 of TBD in current phase
-Status: Phase 01 verified and complete, Phase 02 not yet planned
-Last activity: 2026-02-16 — Phase 01 verification passed (5/5 criteria)
+Plan: 1 of 3 in current phase
+Status: Plan 02-01 complete, Plan 02-02 next
+Last activity: 2026-02-16 — Plan 02-01 (shared validation infrastructure) complete
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 27%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
+- Total plans completed: 3
 - Average duration: 4min
-- Total execution time: 0.13 hours
+- Total execution time: 0.20 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-frequency-correctness | 2 | 8min | 4min |
+| 02-security-and-validation | 1 | 4min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (4min), 01-02 (4min)
+- Last 5 plans: 01-01 (4min), 01-02 (4min), 02-01 (4min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -53,6 +54,10 @@ Recent decisions affecting current work:
 - [Plan 01-02]: WeeklyInsight uses intersection type (base & union) for discriminated union
 - [Plan 01-02]: dashboard-content.tsx also needed updating (imported WeeklyInsight from component)
 - [Plan 01-02]: No cast needed for next-intl t() call with union params
+- [Plan 02-01]: Update schemas use .partial().extend() pattern for PATCH route validation
+- [Plan 02-01]: ensureProfile uses 'no-email-{userId}' fallback for emailless users (avoids UNIQUE violation)
+- [Plan 02-01]: getActiveHabitCount counts active + paused (archived excluded from limit)
+- [Plan 02-01]: getSafeRedirectPath uses exact + prefix match allowlist pattern
 
 ### Pending Todos
 
@@ -66,5 +71,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Phase 01 verified and complete
-Resume file: /gsd:discuss-phase 2 (or /gsd:plan-phase 2)
+Stopped at: Completed 02-01-PLAN.md
+Resume file: /gsd:execute-phase 02 (plan 02-02 next)
