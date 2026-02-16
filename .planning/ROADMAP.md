@@ -46,11 +46,12 @@ Plans:
   3. A user signing up via OAuth without an email address does not crash profile auto-creation
   4. Attempting to create a 21st habit returns a 400 error with a clear message about the 20-habit limit
   5. Auth callback with an external or unexpected redirect path falls back to a safe default route
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md — Create shared infrastructure: validation helper, update schemas, ensureProfile, redirect allowlist, constants
+- [ ] 02-02-PLAN.md — Wire Zod validation into all 6 API routes, add ensureProfile and habit limit, update tests
+- [ ] 02-03-PLAN.md — Harden auth redirect paths and fix handle_new_user trigger
 
 ### Phase 3: Code Quality
 **Goal**: Dead code and fragile patterns are removed so the codebase is maintainable and debuggable
@@ -102,7 +103,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Frequency Correctness | 2/2 | Complete | 2026-02-16 |
-| 2. Security and Validation | 0/TBD | Not started | - |
+| 2. Security and Validation | 0/3 | Not started | - |
 | 3. Code Quality | 0/TBD | Not started | - |
 | 4. Performance | 0/TBD | Not started | - |
 | 5. Test Coverage | 0/TBD | Not started | - |
