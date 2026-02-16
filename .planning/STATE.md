@@ -5,33 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 2: Sidebar Shell & Navigation Switch
+**Current focus:** Phase 2: Sidebar Shell & Navigation Switch -- COMPLETE
 
 ## Current Position
 
-Phase: 2 of 9 (Sidebar Shell & Navigation Switch)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-16 -- Completed 02-01-PLAN.md (Sidebar shell & navigation switch)
+Phase: 2 of 9 (Sidebar Shell & Navigation Switch) -- COMPLETE
+Plan: 2 of 2 in current phase (all plans complete)
+Status: Phase Complete
+Last activity: 2026-02-16 -- Completed 02-02-PLAN.md (AppSidebar test coverage & suite verification)
 
-Progress: [###.......] 17%
+Progress: [###.......] 22%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 3.7min
-- Total execution time: 0.18 hours
+- Total plans completed: 4
+- Average duration: 3.5min
+- Total execution time: 0.23 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 2 | 7min | 3.5min |
-| 02 | 1 | 4min | 4min |
+| 02 | 2 | 7min | 3.5min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 4min, 4min
+- Last 5 plans: 3min, 4min, 4min, 3min
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -58,6 +58,8 @@ Recent decisions affecting current work:
 - [02-01]: SidebarShell is async server component reading sidebar_state cookie for defaultOpen
 - [02-01]: Dashboard active state includes /dashboard/settings path
 - [02-01]: Empty SidebarFooter placeholder for Phase 7 (user profile, theme/language)
+- [02-02]: Mock shadcn sidebar components with simplified HTML elements for unit testing (avoids jsdom context issues)
+- [02-02]: SidebarMenuButton mock preserves isActive->aria-current propagation via React.cloneElement for asChild pattern
 
 ### Pending Todos
 
@@ -72,5 +74,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 02-01-PLAN.md (Sidebar shell & navigation switch)
-Resume file: .planning/phases/02-sidebar-shell-navigation-switch/02-01-SUMMARY.md
+Stopped at: Completed 02-02-PLAN.md (AppSidebar test coverage & suite verification) -- Phase 02 complete
+Resume file: .planning/phases/02-sidebar-shell-navigation-switch/02-02-SUMMARY.md
