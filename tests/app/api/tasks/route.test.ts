@@ -2,11 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, POST } from '@/app/api/tasks/route';
 import { NextRequest } from 'next/server';
 
+const { mockEnsureProfile } = vi.hoisted(() => ({
+  mockEnsureProfile: vi.fn(),
+}));
+
 // Mock dependencies
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => ({
     auth: {
-      getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })),
+      getUser: vi.fn(() => ({ data: { user: { id: 'user-123', email: 'test@example.com' } } })),
     },
   })),
 }));
@@ -20,6 +24,10 @@ vi.mock('@/lib/db', () => ({
   TasksDB: class {
     constructor() { return mockTasksDB; }
   },
+}));
+
+vi.mock('@/lib/db/ensure-profile', () => ({
+  ensureProfile: mockEnsureProfile,
 }));
 
 import { createClient } from '@/lib/supabase/server';
@@ -74,8 +82,9 @@ describe('POST /api/tasks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
+      auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123', email: 'test@example.com' } } })) },
     } as any);
+    mockEnsureProfile.mockResolvedValue(undefined);
   });
 
   it('should create a new task', async () => {
@@ -110,7 +119,7 @@ describe('POST /api/tasks', () => {
     const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(data.error).toBe('Title is required');
+    expect(data.error).toBe('Validation failed');
   });
 
   it('should return 400 if priority is invalid', async () => {
@@ -123,7 +132,7 @@ describe('POST /api/tasks', () => {
     const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(data.error).toBe('Priority must be 0-3');
+    expect(data.error).toBe('Validation failed');
   });
 
   it('should pass intention to task data', async () => {
@@ -183,5 +192,18 @@ describe('POST /api/tasks', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(401);
+  });
+
+  it('should call ensureProfile before creating task', async () => {
+    vi.mocked(mockTasksDB.createTask).mockResolvedValue({ id: 'task-1' } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Task' }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    expect(mockEnsureProfile).toHaveBeenCalled();
   });
 });

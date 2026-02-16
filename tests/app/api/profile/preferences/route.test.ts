@@ -64,7 +64,7 @@ describe('PATCH /api/profile/preferences', () => {
     const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(data.error).toContain('Theme');
+    expect(data.error).toBe('Validation failed');
   });
 
   it('should validate week_start_day', async () => {

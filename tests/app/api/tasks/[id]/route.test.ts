@@ -181,7 +181,7 @@ describe('PATCH /api/tasks/[id]', () => {
 
     expect(response.status).toBe(400);
     const data = await response.json();
-    expect(data.error).toBe('completion_difficulty must be 1, 2, 3, or null');
+    expect(data.error).toBe('Validation failed');
   });
 
   it('should return 400 if completion_difficulty is 0', async () => {

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ProfilesDB } from '@/lib/db';
 import { invalidateUserStatsCache } from '@/lib/cache';
-import type { Profile } from '@/lib/db/types';
+import { validateRequestBody } from '@/lib/validations/api';
+import { preferencesSchema } from '@/lib/validations/preferences';
 
 /**
  * PATCH /api/profile/preferences
@@ -19,62 +20,18 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const profilesDB = new ProfilesDB(supabase);
     const body = await request.json();
 
-    // Validate preferences object
-    if (!body || typeof body !== 'object') {
-      return NextResponse.json(
-        { error: 'Preferences must be an object' },
-        { status: 400 }
-      );
-    }
+    // Validate with Zod schema
+    const validation = validateRequestBody(body, preferencesSchema);
+    if (!validation.success) return validation.response;
 
-    const updates: Partial<Profile['preferences']> = {};
-
-    if (body.date_format !== undefined) {
-      if (typeof body.date_format !== 'string') {
-        return NextResponse.json(
-          { error: 'Date format must be a string' },
-          { status: 400 }
-        );
-      }
-      updates.date_format = body.date_format;
-    }
-
-    if (body.week_start_day !== undefined) {
-      const day = parseInt(body.week_start_day);
-      if (isNaN(day) || day < 0 || day > 6) {
-        return NextResponse.json(
-          { error: 'Week start day must be 0-6' },
-          { status: 400 }
-        );
-      }
-      updates.week_start_day = day;
-    }
-
-    if (body.theme !== undefined) {
-      if (!['system', 'light', 'dark'].includes(body.theme)) {
-        return NextResponse.json(
-          { error: 'Theme must be system, light, or dark' },
-          { status: 400 }
-        );
-      }
-      updates.theme = body.theme;
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json(
-        { error: 'No valid preference updates provided' },
-        { status: 400 }
-      );
-    }
-
-    const profile = await profilesDB.updatePreferences(user.id, updates);
+    const profilesDB = new ProfilesDB(supabase);
+    const profile = await profilesDB.updatePreferences(user.id, validation.data);
 
     // Invalidate all stats cache when week_start_day changes,
     // since it affects how weekly stats are calculated
-    if (updates.week_start_day !== undefined) {
+    if (validation.data.week_start_day !== undefined) {
       invalidateUserStatsCache(user.id);
     }
 

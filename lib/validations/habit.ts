@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 export const habitFormSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
+  name: z.string().trim().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
   description: z.string().max(500).optional().nullable(),
-  category: z.enum(["health", "wellness", "learning", "productivity", "other"]).nullable(),
+  category: z.enum(["health", "wellness", "learning", "productivity", "other"]).nullable().optional(),
   frequency: z.discriminatedUnion("type", [
     z.object({ type: z.literal("daily") }),
     z.object({ type: z.literal("weekdays") }),
