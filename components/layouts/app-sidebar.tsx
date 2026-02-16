@@ -56,17 +56,15 @@ export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center justify-between px-2 py-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-display font-bold text-sm">
-              B
-            </span>
-            <span className="font-display font-bold text-lg text-primary truncate group-data-[collapsible=icon]:hidden">
-              BetterR.me
-            </span>
+        <div className="flex h-8 items-center gap-2">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <span className="font-display font-bold text-sm">B</span>
           </div>
+          <span className="font-display font-semibold text-sm text-sidebar-foreground truncate group-data-[collapsible=icon]:hidden">
+            BetterR.me
+          </span>
           {onTogglePin && (
-            <div className="group-data-[collapsible=icon]:hidden">
+            <div className="ml-auto group-data-[collapsible=icon]:hidden">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -78,7 +76,7 @@ export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
                           ? tSidebar("unpinLabel")
                           : tSidebar("pinLabel")
                       }
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                      className="inline-flex size-8 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
                     >
                       {pinned ? (
                         <PanelLeftClose className="size-4" />
