@@ -13,7 +13,8 @@ const DailySnapshot = dynamic(() => import("./daily-snapshot").then(m => ({ defa
 const HabitChecklist = dynamic(() => import("./habit-checklist").then(m => ({ default: m.HabitChecklist })));
 const TasksToday = dynamic(() => import("./tasks-today").then(m => ({ default: m.TasksToday })));
 import { MotivationMessage } from "./motivation-message";
-import { WeeklyInsightCard, type WeeklyInsight } from "./weekly-insight-card";
+import { WeeklyInsightCard } from "./weekly-insight-card";
+import type { WeeklyInsight } from "@/lib/db/insights";
 import { MilestoneCards } from "@/components/habits/milestone-card";
 import { AbsenceCard } from "./absence-card";
 import { toast } from "sonner";

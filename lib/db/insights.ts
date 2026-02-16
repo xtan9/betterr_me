@@ -4,18 +4,26 @@ import { getLocalDateString } from "@/lib/utils";
 import { shouldTrackOnDate } from "@/lib/habits/format";
 import { MILESTONE_THRESHOLDS } from "@/lib/habits/milestones";
 
-export interface WeeklyInsight {
-  type:
-    | "best_week"
-    | "worst_day"
-    | "best_habit"
-    | "streak_proximity"
-    | "improvement"
-    | "decline";
+type WeeklyInsightBase = {
   message: string; // i18n key
-  params: Record<string, string | number>;
   priority: number; // Higher = more relevant
-}
+};
+
+export type WeeklyInsight = WeeklyInsightBase &
+  (
+    | { type: "best_week"; params: { percent: number } }
+    | { type: "worst_day"; params: { day: string } }
+    | { type: "best_habit"; params: { habit: string; percent: number } }
+    | {
+        type: "streak_proximity";
+        params: { habit: string; days: number; milestone: number };
+      }
+    | { type: "improvement"; params: { change: number } }
+    | {
+        type: "decline";
+        params: { percent: number; lastPercent: number };
+      }
+  );
 
 const DAY_NAMES = [
   "sunday",
