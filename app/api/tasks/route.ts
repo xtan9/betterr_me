@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { TasksDB } from '@/lib/db';
+import { validateRequestBody } from '@/lib/validations/api';
+import { taskFormSchema } from '@/lib/validations/task';
+import { ensureProfile } from '@/lib/db/ensure-profile';
 import type { TaskInsert, TaskFilters } from '@/lib/db/types';
 
 /**
  * GET /api/tasks
  * Get tasks for the authenticated user with optional filters and views
- * 
+ *
  * Query parameters:
  * - view: 'today' | 'upcoming' | 'overdue' (special views)
  * - days: number (for upcoming view, default 7)
@@ -98,39 +101,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const tasksDB = new TasksDB(supabase);
     const body = await request.json();
 
-    // Validate required fields
-    if (!body.title || typeof body.title !== 'string') {
-      return NextResponse.json(
-        { error: 'Title is required' },
-        { status: 400 }
-      );
-    }
+    // Validate with Zod schema
+    const validation = validateRequestBody(body, taskFormSchema);
+    if (!validation.success) return validation.response;
 
-    // Validate priority if provided
-    if (body.priority !== undefined) {
-      const priority = parseInt(body.priority);
-      if (isNaN(priority) || priority < 0 || priority > 3) {
-        return NextResponse.json(
-          { error: 'Priority must be 0-3' },
-          { status: 400 }
-        );
-      }
-      body.priority = priority;
-    }
+    // Ensure user profile exists (required by FK constraint on tasks.user_id)
+    await ensureProfile(supabase, user);
 
+    const tasksDB = new TasksDB(supabase);
     const taskData: TaskInsert = {
       user_id: user.id,
-      title: body.title.trim(),
-      description: body.description?.trim() || null,
-      intention: body.intention?.trim() || null,
-      is_completed: body.is_completed ?? false,
-      priority: body.priority ?? 0,
-      category: body.category || null,
-      due_date: body.due_date || null,
-      due_time: body.due_time || null,
+      title: validation.data.title.trim(),
+      description: validation.data.description?.trim() || null,
+      intention: validation.data.intention?.trim() || null,
+      is_completed: false,
+      priority: validation.data.priority ?? 0,
+      category: validation.data.category || null,
+      due_date: validation.data.due_date || null,
+      due_time: validation.data.due_time || null,
     };
 
     const task = await tasksDB.createTask(taskData);

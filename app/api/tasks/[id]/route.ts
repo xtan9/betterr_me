@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { TasksDB } from '@/lib/db';
+import { validateRequestBody } from '@/lib/validations/api';
+import { taskUpdateSchema } from '@/lib/validations/task';
 import type { TaskUpdate } from '@/lib/db/types';
 
 /**
@@ -58,78 +60,50 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const tasksDB = new TasksDB(supabase);
     const body = await request.json();
 
-    // Build update object
+    // Validate with Zod schema
+    const validation = validateRequestBody(body, taskUpdateSchema);
+    if (!validation.success) return validation.response;
+
+    // Build update object from validated data
     const updates: TaskUpdate = {};
 
-    if (body.title !== undefined) {
-      if (typeof body.title !== 'string' || !body.title.trim()) {
-        return NextResponse.json(
-          { error: 'Title cannot be empty' },
-          { status: 400 }
-        );
-      }
-      updates.title = body.title.trim();
+    if (validation.data.title !== undefined) {
+      updates.title = validation.data.title.trim();
     }
 
-    if (body.description !== undefined) {
-      updates.description = body.description?.trim() || null;
+    if (validation.data.description !== undefined) {
+      updates.description = validation.data.description?.trim() || null;
     }
 
-    if (body.intention !== undefined) {
-      updates.intention = body.intention?.trim() || null;
+    if (validation.data.intention !== undefined) {
+      updates.intention = validation.data.intention?.trim() || null;
     }
 
-    if (body.is_completed !== undefined) {
-      updates.is_completed = Boolean(body.is_completed);
+    if (validation.data.is_completed !== undefined) {
+      updates.is_completed = validation.data.is_completed;
       // Set completed_at timestamp
-      updates.completed_at = body.is_completed ? new Date().toISOString() : null;
+      updates.completed_at = validation.data.is_completed ? new Date().toISOString() : null;
     }
 
-    if (body.priority !== undefined) {
-      const priority = parseInt(body.priority);
-      if (isNaN(priority) || priority < 0 || priority > 3) {
-        return NextResponse.json(
-          { error: 'Priority must be 0-3' },
-          { status: 400 }
-        );
-      }
-      updates.priority = priority as 0 | 1 | 2 | 3;
+    if (validation.data.priority !== undefined) {
+      updates.priority = validation.data.priority;
     }
 
-    if (body.due_date !== undefined) {
-      updates.due_date = body.due_date || null;
+    if (validation.data.due_date !== undefined) {
+      updates.due_date = validation.data.due_date || null;
     }
 
-    if (body.due_time !== undefined) {
-      updates.due_time = body.due_time || null;
+    if (validation.data.due_time !== undefined) {
+      updates.due_time = validation.data.due_time || null;
     }
 
-    if (body.completion_difficulty !== undefined) {
-      const diff = body.completion_difficulty;
-      if (diff !== null) {
-        const parsed = parseInt(diff);
-        if (isNaN(parsed) || parsed < 1 || parsed > 3) {
-          return NextResponse.json(
-            { error: 'completion_difficulty must be 1, 2, 3, or null' },
-            { status: 400 }
-          );
-        }
-        updates.completion_difficulty = parsed as 1 | 2 | 3;
-      } else {
-        updates.completion_difficulty = null;
-      }
+    if (validation.data.completion_difficulty !== undefined) {
+      updates.completion_difficulty = validation.data.completion_difficulty;
     }
 
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json(
-        { error: 'No valid updates provided' },
-        { status: 400 }
-      );
-    }
-
+    const tasksDB = new TasksDB(supabase);
     const task = await tasksDB.updateTask(id, user.id, updates);
     return NextResponse.json({ task });
   } catch (error: unknown) {
