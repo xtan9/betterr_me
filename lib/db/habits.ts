@@ -197,7 +197,8 @@ export class HabitsDB {
       const key = JSON.stringify(frequency);
       if (scheduledDaysCache.has(key)) return scheduledDaysCache.get(key)!;
 
-      if (frequency.type === 'times_per_week') {
+      if (frequency.type === 'times_per_week' || frequency.type === 'weekly') {
+        const targetPerWeek = frequency.type === 'times_per_week' ? frequency.count : 1;
         // Count full weeks from month start to today, multiply by target
         const [y, m, d] = today.split('-').map(Number);
         const start = new Date(y, m - 1, 1);
@@ -209,7 +210,7 @@ export class HabitsDB {
           cursor.setDate(cursor.getDate() + 1);
         }
         // At minimum 1 partial week if we have any days
-        const scheduled = Math.max(weeks, 1) * frequency.count;
+        const scheduled = Math.max(weeks, 1) * targetPerWeek;
         scheduledDaysCache.set(key, scheduled);
         return scheduled;
       }

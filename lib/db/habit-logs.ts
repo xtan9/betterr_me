@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HabitLog, HabitLogInsert, HabitFrequency } from './types';
 import { HabitsDB } from './habits';
 import { getLocalDateString } from '@/lib/utils';
+import { shouldTrackOnDate } from '@/lib/habits/format';
 
 /**
  * Get the start of a week for a given date based on week start preference
@@ -185,9 +186,12 @@ export class HabitLogsDB {
       logs.filter(log => log.completed).map(log => log.logged_date)
     );
 
-    // Special handling for times_per_week: count consecutive successful weeks
+    // Special handling for times_per_week and weekly: count consecutive successful weeks
     if (frequency.type === 'times_per_week') {
       return this.calculateWeeklyStreak(completedDates, frequency.count, weekStartDay, today, previousBestStreak);
+    }
+    if (frequency.type === 'weekly') {
+      return this.calculateWeeklyStreak(completedDates, 1, weekStartDay, today, previousBestStreak);
     }
 
     // Calculate streak based on frequency type (daily/weekdays/weekly/custom)
@@ -198,7 +202,7 @@ export class HabitLogsDB {
     while (true) {
       const dateStr = getLocalDateString(checkDate);
 
-      if (this.shouldTrackOnDate(frequency, checkDate)) {
+      if (shouldTrackOnDate(frequency, checkDate)) {
         if (completedDates.has(dateStr)) {
           currentStreak++;
         } else {
@@ -290,37 +294,6 @@ export class HabitLogsDB {
   }
 
   /**
-   * Check if a habit should be tracked on a given date based on frequency
-   */
-  private shouldTrackOnDate(frequency: HabitFrequency, date: Date): boolean {
-    const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, etc.
-
-    switch (frequency.type) {
-      case 'daily':
-        return true;
-
-      case 'weekdays':
-        // Monday (1) through Friday (5)
-        return dayOfWeek >= 1 && dayOfWeek <= 5;
-
-      case 'weekly':
-        // Track on the same day each week (use Monday as default)
-        return dayOfWeek === 1;
-
-      case 'times_per_week':
-        // For times_per_week, we track daily but evaluate weekly
-        // This is a simplification - full implementation would check weekly completion
-        return true;
-
-      case 'custom':
-        return frequency.days.includes(dayOfWeek);
-
-      default:
-        return false;
-    }
-  }
-
-  /**
    * Delete a log
    */
   async deleteLog(habitId: string, userId: string, date: string): Promise<void> {
@@ -398,8 +371,9 @@ export class HabitLogsDB {
     const todayStr = formatDate(today);
     const createdStr = formatDate(habitCreatedAt);
 
-    // Special handling for times_per_week: needs individual dates for weekly grouping
-    if (frequency.type === 'times_per_week') {
+    // Special handling for times_per_week and weekly: needs individual dates for weekly grouping
+    if (frequency.type === 'times_per_week' || frequency.type === 'weekly') {
+      const targetPerWeek = frequency.type === 'times_per_week' ? frequency.count : 1;
       const { data: completedLogs, error } = await this.supabase
         .from('habit_logs')
         .select('logged_date')
@@ -411,7 +385,7 @@ export class HabitLogsDB {
 
       if (error) throw error;
       const completedDates = new Set((completedLogs || []).map(log => log.logged_date));
-      return this.getTimesPerWeekStats(completedDates, frequency.count, weekStartDay, today, startOfWeek, startOfMonth, habitCreatedAt);
+      return this.getTimesPerWeekStats(completedDates, targetPerWeek, weekStartDay, today, startOfWeek, startOfMonth, habitCreatedAt);
     }
 
     // Helper to count scheduled and completed days in a range
@@ -421,7 +395,7 @@ export class HabitLogsDB {
       const currentDate = new Date(start);
 
       while (currentDate <= end) {
-        if (currentDate >= habitCreatedAt && this.shouldTrackOnDate(frequency, currentDate)) {
+        if (currentDate >= habitCreatedAt && shouldTrackOnDate(frequency, currentDate)) {
           total++;
           const dateStr = getLocalDateString(currentDate);
           if (completedDates.has(dateStr)) {
