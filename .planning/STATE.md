@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 3: Sidebar Collapse & Persistence (COMPLETE)
+**Current focus:** Phase 3: Sidebar Collapse & Persistence (COMPLETE - including gap closure)
 
 ## Current Position
 
 Phase: 3 of 9 (Sidebar Collapse & Persistence)
-Plan: 2 of 2 in current phase (PHASE COMPLETE)
+Plan: 3 of 3 in current phase (PHASE COMPLETE)
 Status: Phase Complete
-Last activity: 2026-02-16 -- Completed 03-02-PLAN.md (AppSidebar pin toggle test coverage)
+Last activity: 2026-02-16 -- Completed 03-03-PLAN.md (gap closure: icon rail mode)
 
-Progress: [####......] 38%
+Progress: [####......] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 3.2min
-- Total execution time: 0.31 hours
+- Total plans completed: 7
+- Average duration: 3min
+- Total execution time: 0.34 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [####......] 38%
 |-------|-------|-------|----------|
 | 01 | 2 | 7min | 3.5min |
 | 02 | 2 | 7min | 3.5min |
-| 03 | 2 | 6min | 3min |
+| 03 | 3 | 8min | 2.7min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 4min, 3min, 4min, 2min
-- Trend: Consistent (faster on test-only plans)
+- Last 5 plans: 4min, 3min, 4min, 2min, 2min
+- Trend: Consistent (faster on focused single-task plans)
 
 *Updated after each plan completion*
 
@@ -68,6 +68,9 @@ Recent decisions affecting current work:
 - [03-02]: Tooltip mock pattern: passthrough components with data-testid for content assertions
 - [03-02]: Pin button identified via getByRole("button", { pressed }) since nav items are links not buttons
 - [03-02]: DefaultProps pattern with vi.fn() reset in beforeEach for clean mock state
+- [03-03]: Icon rail via shadcn collapsible=icon replaces fully-hidden offcanvas mode (matches Chameleon design)
+- [03-03]: CSS overlay locks gap div to icon width during hover expansion to prevent content shift
+- [03-03]: Invisible hover trigger zone removed since icon rail itself is the hover target
 
 ### Pending Todos
 
@@ -82,5 +85,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 03-02-PLAN.md (AppSidebar pin toggle test coverage) -- Phase 3 complete
-Resume file: .planning/phases/03-sidebar-collapse-persistence/03-02-SUMMARY.md
+Stopped at: Completed 03-03-PLAN.md (gap closure: icon rail mode) -- Phase 3 fully complete
+Resume file: .planning/phases/03-sidebar-collapse-persistence/03-03-SUMMARY.md
