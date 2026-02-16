@@ -15,3 +15,15 @@ export const taskFormSchema = z.object({
 });
 
 export type TaskFormValues = z.infer<typeof taskFormSchema>;
+
+export const taskUpdateSchema = taskFormSchema
+  .partial()
+  .extend({
+    is_completed: z.boolean().optional(),
+    completed_at: z.string().nullable().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided",
+  });
+
+export type TaskUpdateValues = z.infer<typeof taskUpdateSchema>;

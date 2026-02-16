@@ -14,3 +14,14 @@ export const habitFormSchema = z.object({
 });
 
 export type HabitFormValues = z.infer<typeof habitFormSchema>;
+
+export const habitUpdateSchema = habitFormSchema
+  .partial()
+  .extend({
+    status: z.enum(["active", "paused", "archived"]).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided",
+  });
+
+export type HabitUpdateValues = z.infer<typeof habitUpdateSchema>;
