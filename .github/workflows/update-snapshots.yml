@@ -8,6 +8,10 @@ on:
         required: true
         default: 'main'
 
+concurrency:
+  group: e2e-${{ inputs.branch }}
+  cancel-in-progress: false
+
 jobs:
   update-snapshots:
     runs-on: ubuntu-latest
