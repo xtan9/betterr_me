@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** Every existing feature works correctly, safely, and is covered by tests
-**Current focus:** Phase 4: Performance -- COMPLETE
+**Current focus:** Phase 5: Test Coverage -- IN PROGRESS
 
 ## Current Position
 
-Phase: 4 of 5 (Performance) -- COMPLETE
-Plan: 2 of 2 in current phase -- COMPLETE
-Status: Phase 04 complete, Phase 05 next
-Last activity: 2026-02-16 — Plan 04-02 (adaptive streak lookback) complete
+Phase: 5 of 5 (Test Coverage) -- IN PROGRESS
+Plan: 1 of 2 in current phase -- COMPLETE
+Status: Plan 05-01 complete, Plan 05-02 next
+Last activity: 2026-02-16 — Plan 05-01 (API route test coverage) complete
 
-Progress: [█████████░] 90%
+Progress: [█████████▌] 95%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 5min
-- Total execution time: 0.71 hours
+- Total execution time: 0.76 hours
 
 **By Phase:**
 
@@ -31,9 +31,10 @@ Progress: [█████████░] 90%
 | 02-security-and-validation | 3 | 12min | 4min |
 | 03-code-quality | 2 | 14min | 7min |
 | 04-performance | 2 | 9min | 4.5min |
+| 05-test-coverage | 1 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (4min), 03-01 (5min), 03-02 (9min), 04-01 (4min), 04-02 (5min)
+- Last 5 plans: 03-01 (5min), 03-02 (9min), 04-01 (4min), 04-02 (5min), 05-01 (3min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -76,6 +77,7 @@ Recent decisions affecting current work:
 - [Plan 04-02]: Adaptive window starts at 30 days, doubles on boundary hit, caps at 365
 - [Plan 04-02]: calculateWeeklyStreak left untouched; only the data-fetch layer around it changes
 - [Plan 04-02]: Boundary detection: daily uses checkDate < startDate; weekly uses currentStreak < weeksInWindow
+- [Plan 05-01]: Habit count limit test uses toBeDefined() instead of toContain('You have 20/20 habits') to avoid locking error message text
 
 ### Pending Todos
 
@@ -90,5 +92,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 04-02-PLAN.md (Phase 04 complete)
-Resume file: .planning/phases/04-performance/04-02-SUMMARY.md
+Stopped at: Completed 05-01-PLAN.md
+Resume file: .planning/phases/05-test-coverage/05-01-SUMMARY.md
