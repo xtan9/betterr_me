@@ -48,11 +48,11 @@ Plans:
   2. Current page is visually highlighted with an active state indicator in the sidebar
   3. On mobile viewports (<768px), sidebar appears as a sheet/drawer from the left (no bottom tab bar exists)
   4. Old top navigation bar and mobile bottom navigation are fully removed (no dual-nav state)
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md -- Install shadcn sidebar, create AppSidebar + SidebarShell, replace layouts, delete old nav
+- [ ] 02-02-PLAN.md -- Delete old nav test, create AppSidebar test, verify build/lint/tests pass
 
 ### Phase 3: Sidebar Collapse & Persistence
 **Goal**: Users can control their screen real estate by collapsing the sidebar to icon-only mode, with their preference remembered across sessions
