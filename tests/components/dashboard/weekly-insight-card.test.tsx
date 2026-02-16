@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { WeeklyInsightCard, type WeeklyInsight } from "@/components/dashboard/weekly-insight-card";
+import { WeeklyInsightCard } from "@/components/dashboard/weekly-insight-card";
+import type { WeeklyInsight } from "@/lib/db/insights";
 
 const messages = {
   dashboard: {
