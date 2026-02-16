@@ -1,0 +1,119 @@
+# Requirements: BetterR.Me Codebase Hardening
+
+**Defined:** 2026-02-15
+**Core Value:** Every existing feature works correctly, safely, and is covered by tests
+
+## v1 Requirements
+
+Requirements for this hardening milestone. Each maps to roadmap phases.
+
+### Security & Validation
+
+- [ ] **SECV-01**: All API POST/PATCH handlers validate input using Zod `.safeParse()` instead of hand-rolled validators
+- [ ] **SECV-02**: API routes enforce server-side length limits (name: 100, description: 500) via Zod schemas
+- [ ] **SECV-03**: Profile auto-creation uses `user.email ?? ''` with guard instead of `user.email!` non-null assertion
+- [ ] **SECV-04**: Shared `ensureProfile(supabase, user)` helper exists and is used by all routes that write user data
+- [ ] **SECV-05**: Supabase `handle_new_user()` trigger has exception handling to prevent signup blocking
+- [ ] **SECV-06**: Auth callback redirect has allowlist of valid paths for defense-in-depth
+- [ ] **SECV-07**: PATCH routes use `.partial()` Zod schemas to correctly validate partial updates
+- [ ] **SECV-08**: Habit count limit of 20 per user is enforced in POST /api/habits
+
+### Correctness
+
+- [x] **CORR-01**: `shouldTrackOnDate()` correctly handles `times_per_week` frequency — stats use weekly-group evaluation instead of daily tracking
+- [x] **CORR-02**: `shouldTrackOnDate()` treats `weekly` as "any completion that week counts" instead of hardcoded Monday (per PRD V1.2 §6.2)
+- [x] **CORR-05**: Duplicate `shouldTrackOnDate` in `lib/db/habit-logs.ts` is removed — single source in `lib/habits/format.ts`
+- [x] **CORR-06**: 2 pre-existing test failures in `habit-logs.test.ts` are fixed (issue #98)
+- [x] **CORR-07**: `WeeklyInsight` type uses discriminated union for type-safe `params` access
+- [x] **CORR-08**: All 8 tests asserting incorrect frequency behavior are updated to assert correct behavior
+
+### Code Quality
+
+- [ ] **QUAL-01**: Debug `console.log` removed from `components/theme-switcher.tsx` (lines 39-41)
+- [ ] **QUAL-02**: Debug `console.log('callback')` removed from `app/auth/callback/route.ts`
+- [ ] **QUAL-03**: In-memory `statsCache` (`lib/cache.ts`) removed along with all imports and invalidation calls
+- [ ] **QUAL-04**: Theme-switcher manual DOM class manipulation removed — relies on next-themes only
+- [ ] **QUAL-05**: `HabitLogsDB` constructor requires Supabase client parameter (no silent browser fallback)
+- [ ] **QUAL-06**: `computeMissedDays` catch block in dashboard logs errors instead of silently swallowing
+
+### Performance
+
+- [ ] **PERF-01**: Dashboard uses `COUNT(*)` query for task count instead of fetching all task rows
+- [ ] **PERF-02**: Streak calculation caps lookback window for short streaks instead of always fetching 365 days
+
+### Test Coverage
+
+- [ ] **TEST-01**: Unit tests exist for `GET /api/habits/[id]/logs` route (date range, auth, pagination, errors)
+- [ ] **TEST-02**: Unit tests verify Zod validation rejection in API routes (invalid input, oversized strings)
+- [ ] **TEST-03**: Unit tests verify habit count limit enforcement
+- [ ] **TEST-04**: All frequency-related tests updated to assert correct behavior after CORR-01/CORR-02 fixes
+
+## v2 Requirements
+
+Deferred to future milestones. Tracked but not in current roadmap.
+
+### Infrastructure
+
+- **INFR-01**: Replace `console.error` logging with structured logging framework
+- **INFR-02**: Add error monitoring/alerting (Sentry or equivalent)
+- **INFR-03**: Add API rate limiting
+
+### Architecture
+
+- **ARCH-01**: Extract `withAuth()` middleware wrapper for API routes
+- **ARCH-02**: Replace string-based error detection with typed error classes in DB layer
+- **ARCH-03**: Add API versioning
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Redis/Upstash cache | Removing in-memory cache is sufficient; HTTP Cache-Control handles client caching |
+| DB layer rewrite | Only targeted fixes to constructor patterns; full rewrite is separate work |
+| Dependency upgrades | Stability milestone, not upgrade milestone |
+| New features | Address after hardening is complete |
+| E2E tests for logic bugs | Unit tests are the right level for frequency/validation logic |
+| Weekly day picker UI | PRD defines weekly as "any day counts" — no specific day needed |
+| Mobile app | Web-only |
+
+## Traceability
+
+Which phases cover which requirements. Updated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SECV-01 | Phase 2 | Pending |
+| SECV-02 | Phase 2 | Pending |
+| SECV-03 | Phase 2 | Pending |
+| SECV-04 | Phase 2 | Pending |
+| SECV-05 | Phase 2 | Pending |
+| SECV-06 | Phase 2 | Pending |
+| SECV-07 | Phase 2 | Pending |
+| SECV-08 | Phase 2 | Pending |
+| CORR-01 | Phase 1 | Done |
+| CORR-02 | Phase 1 | Done |
+| CORR-05 | Phase 1 | Done |
+| CORR-06 | Phase 1 | Done |
+| CORR-07 | Phase 1 | Done |
+| CORR-08 | Phase 1 | Done |
+| QUAL-01 | Phase 3 | Pending |
+| QUAL-02 | Phase 3 | Pending |
+| QUAL-03 | Phase 3 | Pending |
+| QUAL-04 | Phase 3 | Pending |
+| QUAL-05 | Phase 3 | Pending |
+| QUAL-06 | Phase 3 | Pending |
+| PERF-01 | Phase 4 | Pending |
+| PERF-02 | Phase 4 | Pending |
+| TEST-01 | Phase 5 | Pending |
+| TEST-02 | Phase 5 | Pending |
+| TEST-03 | Phase 5 | Pending |
+| TEST-04 | Phase 5 | Pending |
+
+**Coverage:**
+- v1 requirements: 26 total
+- Mapped to phases: 26
+- Unmapped: 0
+
+---
+*Requirements defined: 2026-02-15*
+*Last updated: 2026-02-15 after roadmap creation*
