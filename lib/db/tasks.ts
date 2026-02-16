@@ -40,6 +40,37 @@ export class TasksDB {
   }
 
   /**
+   * Count tasks for a user with optional filtering (HEAD-only, no row data transferred)
+   */
+  async getTaskCount(userId: string, filters?: TaskFilters): Promise<number> {
+    let query = this.supabase
+      .from('tasks')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (filters) {
+      if (filters.is_completed !== undefined) {
+        query = query.eq('is_completed', filters.is_completed);
+      }
+      if (filters.priority !== undefined) {
+        query = query.eq('priority', filters.priority);
+      }
+      if (filters.due_date) {
+        query = query.eq('due_date', filters.due_date);
+      }
+      if (filters.has_due_date !== undefined) {
+        query = filters.has_due_date
+          ? query.not('due_date', 'is', null)
+          : query.is('due_date', null);
+      }
+    }
+
+    const { count, error } = await query;
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  /**
    * Get a single task by ID
    */
   async getTask(taskId: string, userId: string): Promise<Task | null> {

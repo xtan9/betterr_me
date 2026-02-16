@@ -57,14 +57,14 @@ export async function GET(request: NextRequest) {
     ].join('-');
 
     // Core queries — failure here returns 500
-    const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow] = await Promise.all([
+    const [habitsWithStatus, todayTasks, tasksCompletedTodayCount, totalTaskCount, tasksTomorrow] = await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
       tasksDB.getTodayTasks(user.id),
-      // Get all tasks for today to calculate completed count
-      tasksDB.getUserTasks(user.id, { due_date: date }),
-      // Get all tasks to determine if user has any tasks at all
-      tasksDB.getUserTasks(user.id),
-      // Get incomplete tasks for tomorrow
+      // Count completed tasks for today (HEAD-only, no row data)
+      tasksDB.getTaskCount(user.id, { due_date: date, is_completed: true }),
+      // Count all tasks (HEAD-only, no row data)
+      tasksDB.getTaskCount(user.id),
+      // Get incomplete tasks for tomorrow (rows needed for rendering)
       tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
     ]);
 
@@ -120,8 +120,6 @@ export async function GET(request: NextRequest) {
       (max, h) => Math.max(max, h.current_streak),
       0
     );
-    const tasksCompletedToday = allTodayTasks.filter(t => t.is_completed).length;
-
     const dashboardData: DashboardData = {
       habits: enrichedHabits,
       tasks_today: todayTasks,
@@ -131,9 +129,9 @@ export async function GET(request: NextRequest) {
         total_habits: enrichedHabits.length,
         completed_today: completedHabitsToday,
         current_best_streak: bestStreak,
-        total_tasks: allTasks.length,
+        total_tasks: totalTaskCount,
         tasks_due_today: todayTasks.length,
-        tasks_completed_today: tasksCompletedToday,
+        tasks_completed_today: tasksCompletedTodayCount,
       },
       ...(warnings.length > 0 && { _warnings: warnings }),
     };
