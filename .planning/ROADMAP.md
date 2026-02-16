@@ -76,10 +76,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. The dashboard API route uses a COUNT(*) query for task count, not getUserTasks() that fetches all rows
   2. Streak calculation for a habit with a 5-day streak does not query 365 days of logs — lookback is capped relative to current streak length
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md — Replace getUserTasks count calls with getTaskCount HEAD queries in dashboard route and SSR page
+- [ ] 04-02-PLAN.md — Refactor calculateStreak to use adaptive lookback window (30->60->120->240->365)
 
 ### Phase 5: Test Coverage
 **Goal**: All fixes from prior phases are validated by tests, and previously untested API routes have coverage
@@ -105,5 +106,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Frequency Correctness | 2/2 | Complete | 2026-02-16 |
 | 2. Security and Validation | 0/3 | Not started | - |
 | 3. Code Quality | 0/2 | Not started | - |
-| 4. Performance | 0/TBD | Not started | - |
+| 4. Performance | 0/2 | Not started | - |
 | 5. Test Coverage | 0/TBD | Not started | - |
