@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** Every existing feature works correctly, safely, and is covered by tests
-**Current focus:** Phase 2: Security and Validation
+**Current focus:** Phase 3: Code Quality
 
 ## Current Position
 
-Phase: 2 of 5 (Security and Validation) -- COMPLETE
-Plan: 3 of 3 in current phase
-Status: Phase 02 complete, Phase 03 next
-Last activity: 2026-02-16 — Plan 02-03 (auth route hardening) complete
+Phase: 3 of 5 (Code Quality)
+Plan: 1 of 2 in current phase -- COMPLETE
+Status: Plan 03-01 complete, Plan 03-02 next
+Last activity: 2026-02-16 — Plan 03-01 (logger, theme-switcher, DB constructors) complete
 
-Progress: [████░░░░░░] 45%
+Progress: [██████░░░░] 55%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 4min
-- Total execution time: 0.33 hours
+- Total execution time: 0.42 hours
 
 **By Phase:**
 
@@ -29,9 +29,10 @@ Progress: [████░░░░░░] 45%
 |-------|-------|-------|----------|
 | 01-frequency-correctness | 2 | 8min | 4min |
 | 02-security-and-validation | 3 | 12min | 4min |
+| 03-code-quality | 1 | 5min | 5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (4min), 01-02 (4min), 02-01 (4min), 02-02 (4min), 02-03 (4min)
+- Last 5 plans: 01-02 (4min), 02-01 (4min), 02-02 (4min), 02-03 (4min), 03-01 (5min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -63,6 +64,9 @@ Recent decisions affecting current work:
 - [Plan 02-02]: Profile preferences uses type assertion since generic z.record() doesn't overlap concrete ProfilePreferences
 - [Plan 02-03]: handle_new_user uses COALESCE with 'no-email-{id}' fallback consistent with ensureProfile
 - [Plan 02-03]: EXCEPTION WHEN OTHERS in trigger logs warning but never blocks signup — ensureProfile provides defense-in-depth
+- [Plan 03-01]: Logger uses (message, error?, context?) signature to match future Sentry.captureException API
+- [Plan 03-01]: All four DB classes hardened (not just HabitLogsDB) for consistency
+- [Plan 03-01]: Singleton exports pass createClient() explicitly instead of relying on optional fallback
 
 ### Pending Todos
 
@@ -70,11 +74,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 3]: QUAL-04 (theme-switcher) may need investigation of next-themes root cause before removing manual DOM workaround
+- [Phase 3]: RESOLVED -- theme-switcher manual DOM workaround removed; next-themes handles it natively
 - [Phase 2]: No migration needed for weekly frequency (PRD says any day counts, no day field)
+- [Phase 3]: Vitest picks up .worktrees/ test files causing spurious failures (pre-existing, not blocking)
 
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-code-quality/03-CONTEXT.md
+Stopped at: Completed 03-01-PLAN.md
+Resume file: .planning/phases/03-code-quality/03-01-SUMMARY.md
