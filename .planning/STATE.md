@@ -9,29 +9,29 @@ See: .planning/PROJECT.md (updated 2026-02-15)
 
 ## Current Position
 
-Phase: 2 of 5 (Security and Validation)
-Plan: 1 of 3 in current phase
-Status: Plan 02-01 complete, Plan 02-02 next
-Last activity: 2026-02-16 — Plan 02-01 (shared validation infrastructure) complete
+Phase: 2 of 5 (Security and Validation) -- COMPLETE
+Plan: 3 of 3 in current phase
+Status: Phase 02 complete, Phase 03 next
+Last activity: 2026-02-16 — Plan 02-03 (auth route hardening) complete
 
-Progress: [███░░░░░░░] 27%
+Progress: [████░░░░░░] 45%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
+- Total plans completed: 5
 - Average duration: 4min
-- Total execution time: 0.20 hours
+- Total execution time: 0.33 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-frequency-correctness | 2 | 8min | 4min |
-| 02-security-and-validation | 1 | 4min | 4min |
+| 02-security-and-validation | 3 | 12min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (4min), 01-02 (4min), 02-01 (4min)
+- Last 5 plans: 01-01 (4min), 01-02 (4min), 02-01 (4min), 02-02 (4min), 02-03 (4min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -58,6 +58,8 @@ Recent decisions affecting current work:
 - [Plan 02-01]: ensureProfile uses 'no-email-{userId}' fallback for emailless users (avoids UNIQUE violation)
 - [Plan 02-01]: getActiveHabitCount counts active + paused (archived excluded from limit)
 - [Plan 02-01]: getSafeRedirectPath uses exact + prefix match allowlist pattern
+- [Plan 02-03]: handle_new_user uses COALESCE with 'no-email-{id}' fallback consistent with ensureProfile
+- [Plan 02-03]: EXCEPTION WHEN OTHERS in trigger logs warning but never blocks signup — ensureProfile provides defense-in-depth
 
 ### Pending Todos
 
@@ -71,5 +73,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 02-01-PLAN.md
-Resume file: /gsd:execute-phase 02 (plan 02-02 next)
+Stopped at: Completed 02-03-PLAN.md (Phase 02 complete)
+Resume file: /gsd:execute-phase 03 (Phase 03 next)
