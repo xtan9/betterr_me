@@ -91,10 +91,11 @@ Plans:
   2. Unit tests verify that API routes reject invalid input (wrong types, missing required fields, oversized strings) with appropriate Zod error responses
   3. A unit test confirms that creating a 21st habit is rejected by the API
   4. All frequency-related tests assert correct behavior (times_per_week uses weekly-group evaluation, weekly uses user-chosen day)
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md — Test GET /api/habits/[id]/logs route and fix habit count limit test assertion
+- [ ] 05-02-PLAN.md — Create habit schema validation tests and add frequency regression tests
 
 ## Progress
 
@@ -107,4 +108,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Security and Validation | 0/3 | Not started | - |
 | 3. Code Quality | 0/2 | Not started | - |
 | 4. Performance | 0/2 | Not started | - |
-| 5. Test Coverage | 0/TBD | Not started | - |
+| 5. Test Coverage | 0/2 | Not started | - |
