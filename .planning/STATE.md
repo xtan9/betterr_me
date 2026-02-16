@@ -76,5 +76,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 02-03-PLAN.md (Phase 02 complete)
-Resume file: /gsd:execute-phase 03 (Phase 03 next)
+Stopped at: Phase 3 context gathered
+Resume file: .planning/phases/03-code-quality/03-CONTEXT.md
