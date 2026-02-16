@@ -163,63 +163,85 @@ export class HabitLogsDB {
     previousBestStreak: number = 0,
     weekStartDay: number = 0
   ): Promise<{ currentStreak: number; bestStreak: number }> {
-    // Get all logs for the past 365 days (max streak calculation window)
+    const INITIAL_WINDOW = 30;
+    const MAX_WINDOW = 365;
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - 365);
 
-    const logs = await this.getLogsByDateRange(
-      habitId,
-      userId,
-      getLocalDateString(startDate),
-      getLocalDateString(today)
-    );
+    let windowDays = INITIAL_WINDOW;
 
-    // Create a set of completed dates for quick lookup
-    const completedDates = new Set(
-      logs.filter(log => log.completed).map(log => log.logged_date)
-    );
-
-    // Special handling for times_per_week and weekly: count consecutive successful weeks
-    if (frequency.type === 'times_per_week') {
-      return this.calculateWeeklyStreak(completedDates, frequency.count, weekStartDay, today, previousBestStreak);
-    }
-    if (frequency.type === 'weekly') {
-      return this.calculateWeeklyStreak(completedDates, 1, weekStartDay, today, previousBestStreak);
-    }
-
-    // Calculate streak based on frequency type (daily/weekdays/weekly/custom)
-    let currentStreak = 0;
-    const checkDate = new Date(today);
-
-    // Walk backwards from today counting consecutive completions
     while (true) {
-      const dateStr = getLocalDateString(checkDate);
+      const startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - windowDays);
 
-      if (shouldTrackOnDate(frequency, checkDate)) {
-        if (completedDates.has(dateStr)) {
-          currentStreak++;
-        } else {
-          // Allow today to be incomplete without breaking streak
-          if (dateStr !== getLocalDateString(today)) {
-            break;
+      const logs = await this.getLogsByDateRange(
+        habitId,
+        userId,
+        getLocalDateString(startDate),
+        getLocalDateString(today)
+      );
+
+      const completedDates = new Set(
+        logs.filter(log => log.completed).map(log => log.logged_date)
+      );
+
+      // Weekly-type frequencies: delegate to existing weekly streak calculator
+      if (frequency.type === 'times_per_week') {
+        const result = this.calculateWeeklyStreak(completedDates, frequency.count, weekStartDay, today, previousBestStreak);
+        const weeksInWindow = Math.floor(windowDays / 7);
+        if (result.currentStreak < weeksInWindow || windowDays >= MAX_WINDOW) {
+          return result;
+        }
+        windowDays = Math.min(windowDays * 2, MAX_WINDOW);
+        continue;
+      }
+      if (frequency.type === 'weekly') {
+        const result = this.calculateWeeklyStreak(completedDates, 1, weekStartDay, today, previousBestStreak);
+        const weeksInWindow = Math.floor(windowDays / 7);
+        if (result.currentStreak < weeksInWindow || windowDays >= MAX_WINDOW) {
+          return result;
+        }
+        windowDays = Math.min(windowDays * 2, MAX_WINDOW);
+        continue;
+      }
+
+      // Daily/weekdays/custom: walk backward counting consecutive completions
+      let currentStreak = 0;
+      const checkDate = new Date(today);
+      let hitBoundary = false;
+
+      while (true) {
+        const dateStr = getLocalDateString(checkDate);
+
+        // Check if we've walked past the start of our query window
+        if (checkDate < startDate) {
+          hitBoundary = true;
+          break;
+        }
+
+        if (shouldTrackOnDate(frequency, checkDate)) {
+          if (completedDates.has(dateStr)) {
+            currentStreak++;
+          } else {
+            // Allow today to be incomplete without breaking streak
+            if (dateStr !== getLocalDateString(today)) {
+              break; // Streak broken -- definitive result
+            }
           }
         }
+
+        checkDate.setDate(checkDate.getDate() - 1);
       }
 
-      // Move to previous day
-      checkDate.setDate(checkDate.getDate() - 1);
-
-      // Safety limit
-      if (today.getTime() - checkDate.getTime() > 365 * 24 * 60 * 60 * 1000) {
-        break;
+      if (!hitBoundary || windowDays >= MAX_WINDOW) {
+        const bestStreak = Math.max(currentStreak, previousBestStreak);
+        return { currentStreak, bestStreak };
       }
+
+      // Streak extends to window boundary -- expand and retry
+      windowDays = Math.min(windowDays * 2, MAX_WINDOW);
     }
-
-    const bestStreak = Math.max(currentStreak, previousBestStreak);
-
-    return { currentStreak, bestStreak };
   }
 
   /**
