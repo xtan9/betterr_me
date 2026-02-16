@@ -244,6 +244,22 @@ export class HabitsDB {
   }
 
   /**
+   * Get the count of active (non-deleted) habits for a user.
+   * Both 'active' and 'paused' habits count toward the limit.
+   * Archived habits (soft-deleted) do NOT count.
+   */
+  async getActiveHabitCount(userId: string): Promise<number> {
+    const { count, error } = await this.supabase
+      .from('habits')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .in('status', ['active', 'paused']);
+
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  /**
    * Get habit count by status for stats
    */
   async getHabitCountsByStatus(userId: string): Promise<Record<string, number>> {
