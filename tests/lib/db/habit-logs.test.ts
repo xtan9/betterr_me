@@ -430,6 +430,70 @@ describe("HabitLogsDB", () => {
     });
   });
 
+  describe("weekly frequency handling", () => {
+    const weeklyFrequency = { type: "weekly" as const };
+    const createdAt = "2026-01-01T00:00:00Z";
+
+    // Reuse the same dynamic date helpers as times_per_week tests
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const daysFromSunday = (now.getDay() - 0 + 7) % 7; // weekStartDay = 0 (Sunday)
+    const wkStart = new Date(now);
+    wkStart.setDate(wkStart.getDate() - daysFromSunday);
+    const wkDate = (offset: number): string => {
+      const d = new Date(wkStart);
+      d.setDate(d.getDate() + offset);
+      return getLocalDateString(d);
+    };
+    const prevWkDate = (weeksAgo: number, dayOffset: number): string => {
+      const d = new Date(wkStart);
+      d.setDate(d.getDate() - weeksAgo * 7 + dayOffset);
+      return getLocalDateString(d);
+    };
+
+    describe("getDetailedHabitStats", () => {
+      it("should use week-level evaluation (1 completion = 100% for that week)", async () => {
+        // 1 completion this week for a weekly habit
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: wkDate(2), completed: true },
+        ]);
+
+        const stats = await habitLogsDB.getDetailedHabitStats(
+          mockHabitId,
+          mockUserId,
+          weeklyFrequency,
+          createdAt,
+          0,
+        );
+
+        expect(stats.thisWeek.completed).toBe(1);
+        expect(stats.thisWeek.total).toBe(1); // target is 1 for weekly
+        expect(stats.thisWeek.percent).toBe(100); // 1/1 = 100%
+      });
+    });
+
+    describe("calculateStreak", () => {
+      it("should count consecutive successful weeks for weekly habits", async () => {
+        // 2 consecutive weeks with at least 1 completion each
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: prevWkDate(1, 3), completed: true },
+          { ...mockLog, logged_date: wkDate(1), completed: true },
+        ]);
+
+        const result = await habitLogsDB.calculateStreak(
+          mockHabitId,
+          mockUserId,
+          weeklyFrequency,
+          0,
+          0,
+        );
+
+        expect(result.currentStreak).toBeGreaterThanOrEqual(1);
+        expect(result.bestStreak).toBeGreaterThanOrEqual(result.currentStreak);
+      });
+    });
+  });
+
   describe("getAllUserLogs", () => {
     it("should return logs for user in date range", async () => {
       const mockLogs = [

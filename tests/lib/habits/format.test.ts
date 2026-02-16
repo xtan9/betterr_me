@@ -114,10 +114,10 @@ describe('shouldTrackOnDate', () => {
     expect(shouldTrackOnDate({ type: 'weekdays' }, sunday)).toBe(false);
   });
 
-  it('weekly tracks only Monday', () => {
+  it('weekly tracks every day (any day that week counts)', () => {
     expect(shouldTrackOnDate({ type: 'weekly' }, monday)).toBe(true);
-    expect(shouldTrackOnDate({ type: 'weekly' }, tuesday)).toBe(false);
-    expect(shouldTrackOnDate({ type: 'weekly' }, sunday)).toBe(false);
+    expect(shouldTrackOnDate({ type: 'weekly' }, tuesday)).toBe(true);
+    expect(shouldTrackOnDate({ type: 'weekly' }, sunday)).toBe(true);
   });
 
   it('times_per_week tracks every day (count enforced elsewhere)', () => {

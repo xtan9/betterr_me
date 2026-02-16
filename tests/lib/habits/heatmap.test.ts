@@ -116,14 +116,14 @@ describe('buildHeatmapData', () => {
     expect(todayCell?.status).toBe('missed');
   });
 
-  it('handles weekly frequency: only Monday is scheduled', () => {
+  it('handles weekly frequency: all days are scheduled (any day counts)', () => {
     const weeklyFrequency: HabitFrequency = { type: 'weekly' };
     const cells = buildHeatmapData([], weeklyFrequency);
-    // 2026-02-02 is Monday → scheduled (missed), 2026-02-03 is Tuesday → not_scheduled
+    // 2026-02-02 is Monday → scheduled (missed), 2026-02-03 is Tuesday → also scheduled (missed)
     const mondayCell = cells.find(c => c.date === '2026-02-02');
     expect(mondayCell?.status).toBe('missed');
     const tuesdayCell = cells.find(c => c.date === '2026-02-03');
-    expect(tuesdayCell?.status).toBe('not_scheduled');
+    expect(tuesdayCell?.status).toBe('missed'); // Was 'not_scheduled', now 'missed' because weekly tracks all days
   });
 
   it('handles times_per_week frequency: all days are scheduled', () => {
