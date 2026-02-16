@@ -4,6 +4,7 @@ import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
 import type { DashboardData, HabitLog, HabitMilestone } from '@/lib/db/types';
 import { getLocalDateString, getNextDateString } from '@/lib/utils';
 import { computeMissedDays } from '@/lib/habits/absence';
+import { log } from '@/lib/logger';
 
 /**
  * GET /api/dashboard
@@ -71,12 +72,12 @@ export async function GET(request: NextRequest) {
     const [allLogs, milestonesToday] = await Promise.all([
       // Bulk fetch 30-day logs for all habits (1 query, avoids N+1)
       habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date).catch((err) => {
-        console.error('Failed to fetch habit logs for absence:', err);
+        log.error('Failed to fetch habit logs for absence', err, { userId: user.id, date });
         return [] as Pick<HabitLog, 'habit_id' | 'logged_date' | 'completed'>[];
       }),
       // Get milestones achieved today
       milestonesDB.getTodaysMilestones(user.id, date).catch((err) => {
-        console.error('Failed to fetch milestones:', err);
+        log.error('Failed to fetch milestones', err, { userId: user.id, date });
         return [] as HabitMilestone[];
       }),
     ]);
@@ -93,6 +94,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Enrich habits with absence data
+    const warnings: string[] = [];
     const enrichedHabits = habitsWithStatus.map(habit => {
       try {
         const completedDates = logsByHabit.get(habit.id) || new Set<string>();
@@ -105,7 +107,9 @@ export async function GET(request: NextRequest) {
         );
         return { ...habit, missed_scheduled_days, previous_streak };
       } catch (err) {
-        console.error('computeMissedDays failed for habit', habit.id, err);
+        log.error('computeMissedDays failed', err, { userId: user.id, habitId: habit.id, date, dateRange: `${thirtyDaysAgoStr} to ${date}` });
+        warnings.push(`Absence data unavailable for habit ${habit.id}`);
+        // Zeros as fallback: no prior cached value available (see RESEARCH.md Pitfall 5)
         return { ...habit, missed_scheduled_days: 0, previous_streak: 0 };
       }
     });
@@ -131,11 +135,12 @@ export async function GET(request: NextRequest) {
         tasks_due_today: todayTasks.length,
         tasks_completed_today: tasksCompletedToday,
       },
+      ...(warnings.length > 0 && { _warnings: warnings }),
     };
 
     return NextResponse.json(dashboardData);
   } catch (error) {
-    console.error('GET /api/dashboard error:', error);
+    log.error('GET /api/dashboard error', error);
     return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 });
   }
 }
