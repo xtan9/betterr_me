@@ -33,11 +33,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Dark mode CSS custom properties use elevation-based surface colors (lighter surfaces for higher elements)
   3. Design tokens (background gray, card radius, sidebar width, font sizes, spacing scale) are documented with values extracted from Chameleon's live dashboard
   4. Sidebar CSS variables in globals.css use raw HSL values (no hsl() wrappers), matching the pattern used by other shadcn tokens
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md -- Clean up globals.css and define complete design token system (light + dark)
+- [ ] 01-02-PLAN.md -- Register tokens in tailwind.config.ts, audit hardcoded colors, create token reference
 
 ### Phase 2: Sidebar Shell & Navigation Switch
 **Goal**: Users navigate the app via a persistent left sidebar instead of the top navigation bar, with mobile users getting a sheet/drawer from the left edge
@@ -163,7 +163,7 @@ Note: Phase 4 depends on Phase 2 (not Phase 3). Phases 4 and 3 can execute in pa
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Design Token Extraction & CSS Foundation | 0/2 | Not started | - |
+| 1. Design Token Extraction & CSS Foundation | 0/2 | Planned | - |
 | 2. Sidebar Shell & Navigation Switch | 0/2 | Not started | - |
 | 3. Sidebar Collapse & Persistence | 0/1 | Not started | - |
 | 4. Page Header & Content Layout | 0/1 | Not started | - |
