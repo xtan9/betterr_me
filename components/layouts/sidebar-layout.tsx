@@ -59,14 +59,6 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
       >
         <AppSidebar pinned={pinned} onTogglePin={handleTogglePin} />
       </div>
-      {/* Hover trigger zone -- visible only when unpinned and not currently hovering */}
-      {!pinned && !hoverOpen && (
-        <div
-          className="fixed inset-y-0 left-0 z-20 hidden w-[22px] md:block"
-          onMouseEnter={handleMouseEnter}
-          aria-hidden="true"
-        />
-      )}
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 md:hidden">
           <SidebarTrigger className="-ml-1" />

@@ -139,14 +139,19 @@
   }
 }
 
-/* Sidebar hover-overlay mode: when unpinned, sidebar overlays content on hover */
-[data-sidebar-hover="true"] .peer[data-state="collapsed"][data-collapsible="offcanvas"] > div:last-child {
-  left: 0;
-  z-index: 30;
-  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
-  transition: left 150ms ease-in-out;
+/* Sidebar hover-overlay mode: when unpinned, hovering icon rail expands sidebar as overlay */
+/* Keep the gap div at icon width so content doesn't shift */
+[data-sidebar-hover="true"] .peer[data-state="expanded"] > div:first-child {
+  width: var(--sidebar-width-icon) !important;
+  transition: none !important;
 }
 
-.dark [data-sidebar-hover="true"] .peer[data-state="collapsed"][data-collapsible="offcanvas"] > div:last-child {
+/* Add overlay shadow/z-index to the expanded sidebar in hover mode */
+[data-sidebar-hover="true"] .peer[data-state="expanded"] > div:last-child {
+  z-index: 30;
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
+}
+
+.dark [data-sidebar-hover="true"] .peer[data-state="expanded"] > div:last-child {
   box-shadow: 4px 0 16px rgba(0, 0, 0, 0.3);
 }

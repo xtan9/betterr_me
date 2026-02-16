@@ -54,7 +54,7 @@ export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
   const tSidebar = useTranslations("common.sidebar");
 
   return (
-    <Sidebar collapsible="offcanvas">
+    <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center justify-between px-2 py-1">
           <span className="font-display font-bold text-lg text-primary">
