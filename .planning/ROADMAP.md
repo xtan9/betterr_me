@@ -64,10 +64,11 @@ Plans:
   3. When sidebar is unpinned, it auto-hides and reveals on hover over the left edge
   4. Sidebar collapse state persists across page reloads (cookie-based, no flash of wrong state)
   5. User can toggle sidebar visibility with keyboard shortcut Cmd/Ctrl+B
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 03-01: TBD
+- [ ] 03-01-PLAN.md -- SidebarLayout client component, SidebarShell refactor, AppSidebar pin toggle, CSS overlay, i18n
+- [ ] 03-02-PLAN.md -- AppSidebar test coverage for pin toggle, build/lint/test verification
 
 ### Phase 4: Page Header & Content Layout
 **Goal**: Every page has a consistent, spacious layout structure with standardized header, generous whitespace, and pixel-perfect typography matching Chameleon's dashboard
