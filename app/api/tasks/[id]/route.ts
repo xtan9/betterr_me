@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { TasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
+import { log } from '@/lib/logger';
 import { taskUpdateSchema } from '@/lib/validations/task';
 import type { TaskUpdate } from '@/lib/db/types';
 
@@ -33,7 +34,7 @@ export async function GET(
 
     return NextResponse.json({ task });
   } catch (error) {
-    console.error('GET /api/tasks/[id] error:', error);
+    log.error('GET /api/tasks/[id] error', error);
     return NextResponse.json(
       { error: 'Failed to fetch task' },
       { status: 500 }
@@ -107,7 +108,7 @@ export async function PATCH(
     const task = await tasksDB.updateTask(id, user.id, updates);
     return NextResponse.json({ task });
   } catch (error: unknown) {
-    console.error('PATCH /api/tasks/[id] error:', error);
+    log.error('PATCH /api/tasks/[id] error', error);
 
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('not found')) {
@@ -144,7 +145,7 @@ export async function DELETE(
     await tasksDB.deleteTask(id, user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('DELETE /api/tasks/[id] error:', error);
+    log.error('DELETE /api/tasks/[id] error', error);
     return NextResponse.json(
       { error: 'Failed to delete task' },
       { status: 500 }

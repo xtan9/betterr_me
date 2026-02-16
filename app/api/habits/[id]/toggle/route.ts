@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
 import { getLocalDateString } from '@/lib/utils';
+import { log } from '@/lib/logger';
 import { isMilestoneStreak } from '@/lib/habits/milestones';
 
 /**
@@ -53,7 +54,7 @@ export async function POST(
         const milestonesDB = new HabitMilestonesDB(supabase);
         await milestonesDB.recordMilestone(habitId, user.id, result.currentStreak);
       } catch (err) {
-        console.error(`Failed to record milestone ${result.currentStreak} for habit ${habitId}:`, err);
+        log.error('Milestone check failed', err, { habitId });
       }
     }
 
@@ -64,7 +65,7 @@ export async function POST(
       completed: result.log.completed,
     });
   } catch (error: unknown) {
-    console.error('POST /api/habits/[id]/toggle error:', error);
+    log.error('POST /api/habits/[id]/toggle error', error);
 
     const message = error instanceof Error ? error.message : String(error);
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
+import { log } from '@/lib/logger';
 import { habitFormSchema } from '@/lib/validations/habit';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import { MAX_HABITS_PER_USER } from '@/lib/constants';
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
     const habits = await habitsDB.getUserHabits(user.id, filters);
     return NextResponse.json({ habits });
   } catch (error) {
-    console.error('GET /api/habits error:', error);
+    log.error('GET /api/habits error', error);
     return NextResponse.json({ error: 'Failed to fetch habits' }, { status: 500 });
   }
 }
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
     const habit = await habitsDB.createHabit(habitData);
     return NextResponse.json({ habit }, { status: 201 });
   } catch (error) {
-    console.error('POST /api/habits error:', error);
+    log.error('POST /api/habits error', error);
     const message = error instanceof Error ? error.message : 'Failed to create habit';
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB, HabitLogsDB, ProfilesDB } from '@/lib/db';
+import { log } from '@/lib/logger';
 
 // Cache TTL for HTTP headers (5 minutes in seconds)
 const CACHE_MAX_AGE = 300;
@@ -62,7 +63,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('GET /api/habits/[id]/stats error:', error);
+    log.error('GET /api/habits/[id]/stats error', error);
     return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
   }
 }

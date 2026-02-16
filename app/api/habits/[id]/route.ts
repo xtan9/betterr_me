@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
+import { log } from '@/lib/logger';
 import { habitUpdateSchema } from '@/lib/validations/habit';
 import type { HabitUpdate } from '@/lib/db/types';
 
@@ -33,7 +34,7 @@ export async function GET(
 
     return NextResponse.json({ habit });
   } catch (error) {
-    console.error('GET /api/habits/[id] error:', error);
+    log.error('GET /api/habits/[id] error', error);
     return NextResponse.json({ error: 'Failed to fetch habit' }, { status: 500 });
   }
 }
@@ -98,7 +99,7 @@ export async function PATCH(
 
     return NextResponse.json({ habit });
   } catch (error: unknown) {
-    console.error('PATCH /api/habits/[id] error:', error);
+    log.error('PATCH /api/habits/[id] error', error);
 
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('not found')) {
@@ -145,7 +146,7 @@ export async function DELETE(
     await habitsDB.deleteHabit(id, user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('DELETE /api/habits/[id] error:', error);
+    log.error('DELETE /api/habits/[id] error', error);
     return NextResponse.json({ error: 'Failed to delete habit' }, { status: 500 });
   }
 }

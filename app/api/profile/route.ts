@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ProfilesDB } from "@/lib/db";
 import { validateRequestBody } from "@/lib/validations/api";
+import { log } from "@/lib/logger";
 import { profileUpdateSchema } from "@/lib/validations/profile";
 import type { ProfileUpdate } from "@/lib/db/types";
 
@@ -29,7 +30,7 @@ export async function GET() {
 
     return NextResponse.json({ profile });
   } catch (error) {
-    console.error("GET /api/profile error:", error);
+    log.error("GET /api/profile error", error);
     return NextResponse.json(
       { error: "Failed to fetch profile" },
       { status: 500 }
@@ -77,7 +78,7 @@ export async function PATCH(request: NextRequest) {
     const profile = await profilesDB.updateProfile(user.id, updates);
     return NextResponse.json({ profile });
   } catch (error: unknown) {
-    console.error("PATCH /api/profile error:", error);
+    log.error("PATCH /api/profile error", error);
 
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("not found")) {

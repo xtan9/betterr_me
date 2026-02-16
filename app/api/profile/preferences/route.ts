@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ProfilesDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
+import { log } from '@/lib/logger';
 import { preferencesSchema } from '@/lib/validations/preferences';
 
 /**
@@ -30,7 +31,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ profile });
   } catch (error: unknown) {
-    console.error('PATCH /api/profile/preferences error:', error);
+    log.error('PATCH /api/profile/preferences error', error);
 
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('not found')) {

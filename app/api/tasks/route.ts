@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { TasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
+import { log } from '@/lib/logger';
 import { taskFormSchema } from '@/lib/validations/task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import type { TaskInsert, TaskFilters } from '@/lib/db/types';
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest) {
     const tasks = await tasksDB.getUserTasks(user.id, filters);
     return NextResponse.json({ tasks });
   } catch (error) {
-    console.error('GET /api/tasks error:', error);
+    log.error('GET /api/tasks error', error);
     return NextResponse.json(
       { error: 'Failed to fetch tasks' },
       { status: 500 }
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
     const task = await tasksDB.createTask(taskData);
     return NextResponse.json({ task }, { status: 201 });
   } catch (error) {
-    console.error('POST /api/tasks error:', error);
+    log.error('POST /api/tasks error', error);
     return NextResponse.json(
       { error: 'Failed to create task' },
       { status: 500 }

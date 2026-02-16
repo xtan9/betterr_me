@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { ZodSchema } from "zod";
+import { log } from "@/lib/logger";
 
 export interface ValidationSuccess<T> {
   success: true;
@@ -28,7 +29,7 @@ export function validateRequestBody<T>(
   }
 
   const fieldErrors = result.error.flatten().fieldErrors;
-  console.warn("Validation failed:", JSON.stringify(fieldErrors));
+  log.warn("Validation failed", { errors: fieldErrors });
 
   return {
     success: false,

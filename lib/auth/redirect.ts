@@ -3,6 +3,8 @@
  * Prevents open-redirect vulnerabilities by checking paths against an allowlist.
  */
 
+import { log } from '@/lib/logger';
+
 const ALLOWED_REDIRECT_PATHS = [
   "/",
   "/dashboard",
@@ -46,6 +48,6 @@ export function getSafeRedirectPath(next: string | null): string {
   }
 
   // No match — block the redirect
-  console.warn("Blocked redirect to disallowed path:", next);
+  log.warn("Blocked redirect to disallowed path", { path: next });
   return "/";
 }
