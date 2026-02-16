@@ -57,35 +57,42 @@ export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="flex items-center justify-between px-2 py-1">
-          <span className="font-display font-bold text-lg text-primary">
-            BetterR.me
-          </span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-display font-bold text-sm">
+              B
+            </span>
+            <span className="font-display font-bold text-lg text-primary truncate group-data-[collapsible=icon]:hidden">
+              BetterR.me
+            </span>
+          </div>
           {onTogglePin && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={onTogglePin}
-                    aria-pressed={pinned}
-                    aria-label={
-                      pinned
-                        ? tSidebar("unpinLabel")
-                        : tSidebar("pinLabel")
-                    }
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                  >
-                    {pinned ? (
-                      <PanelLeftClose className="size-4" />
-                    ) : (
-                      <PanelLeft className="size-4" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  {pinned ? tSidebar("unpin") : tSidebar("pin")}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <div className="group-data-[collapsible=icon]:hidden">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={onTogglePin}
+                      aria-pressed={pinned}
+                      aria-label={
+                        pinned
+                          ? tSidebar("unpinLabel")
+                          : tSidebar("pinLabel")
+                      }
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                    >
+                      {pinned ? (
+                        <PanelLeftClose className="size-4" />
+                      ) : (
+                        <PanelLeft className="size-4" />
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    {pinned ? tSidebar("unpin") : tSidebar("pin")}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           )}
         </div>
       </SidebarHeader>
