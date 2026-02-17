@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 7: Sidebar Enrichment (2 of 3 plans done)
+**Current focus:** Phase 7: Sidebar Enrichment (3 of 3 plans done -- COMPLETE)
 
 ## Current Position
 
 Phase: 7 of 9 (Sidebar Enrichment)
-Plan: 2 of 3 in current phase
-Status: In Progress
-Last activity: 2026-02-17 -- Completed 07-02-PLAN.md (SidebarUserFooter with account dropdown)
+Plan: 3 of 3 in current phase (COMPLETE)
+Status: Phase Complete
+Last activity: 2026-02-17 -- Completed 07-03-PLAN.md (Sidebar notification badges)
 
-Progress: [#########.] 89%
+Progress: [##########] 94%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
-- Average duration: 3.6min
-- Total execution time: 0.98 hours
+- Total plans completed: 17
+- Average duration: 3.5min
+- Total execution time: 1.03 hours
 
 **By Phase:**
 
@@ -33,11 +33,11 @@ Progress: [#########.] 89%
 | 04 | 1 | 7min | 7min |
 | 05 | 2 | 6min | 3min |
 | 06 | 4 | 17min | 4.3min |
-| 07 | 2 | 9min | 4.5min |
+| 07 | 3 | 12min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 5min, 7min, 3min, 6min
-- Trend: Consistent 2-7min pace, sidebar enrichment work on track
+- Last 5 plans: 5min, 7min, 3min, 6min, 3min
+- Trend: Consistent 3-7min pace, Phase 7 sidebar enrichment complete
 
 *Updated after each plan completion*
 
@@ -103,6 +103,9 @@ Recent decisions affecting current work:
 - [07-02]: SidebarUserFooter mocked in AppSidebar tests for isolation -- each component tested independently
 - [07-02]: Hydration guard (mounted state) wraps theme radio group to prevent SSR/client mismatch
 - [07-02]: Language change uses startTransition wrapper to satisfy react-hooks/immutability lint rule for document.cookie
+- [07-03]: Badge counts keyed by nav item labelKey (habits/tasks) -- extensible to future nav items
+- [07-03]: formatBadge helper caps display at 9+ to prevent badge overflow in narrow sidebar
+- [07-03]: SWR config: 5-min refresh + 1-min dedup + revalidateOnFocus:false -- badges are informational, not critical
 
 ### Pending Todos
 
@@ -117,5 +120,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 07-02-PLAN.md (SidebarUserFooter with account dropdown)
-Resume file: .planning/phases/07-sidebar-enrichment/07-02-SUMMARY.md
+Stopped at: Completed 07-03-PLAN.md (Sidebar notification badges) -- Phase 7 complete
+Resume file: .planning/phases/07-sidebar-enrichment/07-03-SUMMARY.md
