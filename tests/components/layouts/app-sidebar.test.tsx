@@ -24,6 +24,10 @@ vi.mock("@/components/ui/sidebar", () => ({
   SidebarContent: ({ children }: any) => <div>{children}</div>,
   SidebarGroup: ({ children }: any) => <div>{children}</div>,
   SidebarGroupContent: ({ children }: any) => <div>{children}</div>,
+  SidebarGroupLabel: ({ children, asChild }: any) => {
+    if (asChild) return <>{children}</>;
+    return <span data-testid="sidebar-group-label">{children}</span>;
+  },
   SidebarHeader: ({ children }: any) => (
     <div data-testid="sidebar-header">{children}</div>
   ),
@@ -44,9 +48,22 @@ vi.mock("@/components/ui/sidebar", () => ({
       </button>
     );
   },
+  SidebarMenuBadge: ({ children }: any) => (
+    <span data-testid="sidebar-menu-badge">{children}</span>
+  ),
   SidebarFooter: ({ children }: any) => (
     <div data-testid="sidebar-footer">{children}</div>
   ),
+}));
+
+// Mock shadcn collapsible components
+vi.mock("@/components/ui/collapsible", () => ({
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, asChild }: any) => {
+    if (asChild) return <>{children}</>;
+    return <button>{children}</button>;
+  },
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
 }));
 
 // Mock shadcn tooltip components
@@ -73,11 +90,11 @@ describe("AppSidebar", () => {
     defaultProps.onTogglePin = vi.fn();
   });
 
-  it("renders all 3 nav items as links", () => {
+  it("renders all 4 nav items as links", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(3);
+    expect(links).toHaveLength(4);
   });
 
   it("renders correct hrefs for all nav items", () => {
@@ -87,6 +104,7 @@ describe("AppSidebar", () => {
     expect(links[0]).toHaveAttribute("href", "/dashboard");
     expect(links[1]).toHaveAttribute("href", "/habits");
     expect(links[2]).toHaveAttribute("href", "/tasks");
+    expect(links[3]).toHaveAttribute("href", "/dashboard/settings");
   });
 
   it("renders i18n translation keys as labels", () => {
@@ -95,6 +113,14 @@ describe("AppSidebar", () => {
     expect(screen.getByText("dashboard")).toBeInTheDocument();
     expect(screen.getByText("habits")).toBeInTheDocument();
     expect(screen.getByText("tasks")).toBeInTheDocument();
+    expect(screen.getByText("settings")).toBeInTheDocument();
+  });
+
+  it("renders sidebar group labels", () => {
+    render(<AppSidebar {...defaultProps} />);
+
+    expect(screen.getByText("mainGroup")).toBeInTheDocument();
+    expect(screen.getByText("accountGroup")).toBeInTheDocument();
   });
 
   it("highlights dashboard link when pathname is /dashboard", () => {
@@ -105,12 +131,20 @@ describe("AppSidebar", () => {
     expect(activeLink).toHaveAttribute("href", "/dashboard");
   });
 
-  it("highlights dashboard link when pathname is /dashboard/settings", () => {
+  it("highlights settings link when pathname is /dashboard/settings", () => {
     mockPathname.mockReturnValue("/dashboard/settings");
     render(<AppSidebar {...defaultProps} />);
 
     const activeLink = screen.getByRole("link", { current: "page" });
-    expect(activeLink).toHaveAttribute("href", "/dashboard");
+    expect(activeLink).toHaveAttribute("href", "/dashboard/settings");
+  });
+
+  it("does not highlight dashboard when on /dashboard/settings", () => {
+    mockPathname.mockReturnValue("/dashboard/settings");
+    render(<AppSidebar {...defaultProps} />);
+
+    const dashboardLink = screen.getByRole("link", { name: /dashboard/i });
+    expect(dashboardLink).not.toHaveAttribute("aria-current", "page");
   });
 
   it("highlights habits link for nested habits routes", () => {

@@ -14,7 +14,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarMenuBadge,
+  SidebarMenuBadge, // eslint-disable-line @typescript-eslint/no-unused-vars -- pre-imported for 07-03
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import {
