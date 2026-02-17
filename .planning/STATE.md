@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 6: Habits/Tasks/Remaining Pages Migration (1 of 4 plans done)
+**Current focus:** Phase 6: Habits/Tasks/Remaining Pages Migration (2 of 4 plans done)
 
 ## Current Position
 
 Phase: 6 of 9 (Habits/Tasks/Remaining Pages Migration)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In Progress
-Last activity: 2026-02-17 -- Completed 06-01-PLAN.md (shared components: PageBreadcrumbs, form hideChrome/id props)
+Last activity: 2026-02-17 -- Completed 06-04-PLAN.md (auth pages branding: AuthBranding component on all 6 auth pages)
 
-Progress: [######....] 69%
+Progress: [#######...] 75%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
-- Average duration: 3.4min
-- Total execution time: 0.61 hours
+- Total plans completed: 12
+- Average duration: 3.3min
+- Total execution time: 0.64 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [######....] 69%
 | 03 | 3 | 8min | 2.7min |
 | 04 | 1 | 7min | 7min |
 | 05 | 2 | 6min | 3min |
-| 06 | 1 | 3min | 3min |
+| 06 | 2 | 5min | 2.5min |
 
 **Recent Trend:**
-- Last 5 plans: 2min, 7min, 3min, 3min, 3min
-- Trend: Consistent 3min pace for straightforward component work
+- Last 5 plans: 7min, 3min, 3min, 3min, 2min
+- Trend: Consistent 2-3min pace for straightforward component work
 
 *Updated after each plan completion*
 
@@ -88,6 +88,8 @@ Recent decisions affecting current work:
 - [06-01]: PageBreadcrumbs uses text-xs sm:text-sm for visual subordination to page title
 - [06-01]: Mobile breadcrumb truncation at max-w-[200px] with full display on sm+
 - [06-01]: Emerald-500 submit buttons migrated to default Button primary styling (design token inheritance)
+- [06-04]: AuthBranding uses same brand mark pattern as AppSidebar (B initial in rounded-md bg-primary square)
+- [06-04]: Auth pages keep white bg-background (no bg-page gray), distinct from app interior
 
 ### Pending Todos
 
@@ -102,5 +104,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 06-01-PLAN.md
-Resume file: .planning/phases/06-habits-tasks-remaining-pages-migration/06-01-SUMMARY.md
+Stopped at: Completed 06-04-PLAN.md
+Resume file: .planning/phases/06-habits-tasks-remaining-pages-migration/06-04-SUMMARY.md
