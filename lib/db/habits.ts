@@ -6,16 +6,7 @@ import { getLocalDateString } from '@/lib/utils';
 import { shouldTrackOnDate } from '@/lib/habits/format';
 
 export class HabitsDB {
-  private supabase: SupabaseClient;
-
-  /**
-   * @param supabase - Optional Supabase client. Omit for client-side usage
-   *   (uses browser client). Pass a server client in API routes:
-   *   `new HabitsDB(await createClient())` from `@/lib/supabase/server`.
-   */
-  constructor(supabase?: SupabaseClient) {
-    this.supabase = supabase || createClient();
-  }
+  constructor(private supabase: SupabaseClient) {}
 
   /**
    * Get all habits for a user with optional filtering
@@ -197,7 +188,8 @@ export class HabitsDB {
       const key = JSON.stringify(frequency);
       if (scheduledDaysCache.has(key)) return scheduledDaysCache.get(key)!;
 
-      if (frequency.type === 'times_per_week') {
+      if (frequency.type === 'times_per_week' || frequency.type === 'weekly') {
+        const targetPerWeek = frequency.type === 'times_per_week' ? frequency.count : 1;
         // Count full weeks from month start to today, multiply by target
         const [y, m, d] = today.split('-').map(Number);
         const start = new Date(y, m - 1, 1);
@@ -209,7 +201,7 @@ export class HabitsDB {
           cursor.setDate(cursor.getDate() + 1);
         }
         // At minimum 1 partial week if we have any days
-        const scheduled = Math.max(weeks, 1) * frequency.count;
+        const scheduled = Math.max(weeks, 1) * targetPerWeek;
         scheduledDaysCache.set(key, scheduled);
         return scheduled;
       }
@@ -243,6 +235,22 @@ export class HabitsDB {
   }
 
   /**
+   * Get the count of active (non-deleted) habits for a user.
+   * Both 'active' and 'paused' habits count toward the limit.
+   * Archived habits (soft-deleted) do NOT count.
+   */
+  async getActiveHabitCount(userId: string): Promise<number> {
+    const { count, error } = await this.supabase
+      .from('habits')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .in('status', ['active', 'paused']);
+
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  /**
    * Get habit count by status for stats
    */
   async getHabitCountsByStatus(userId: string): Promise<Record<string, number>> {
@@ -268,4 +276,4 @@ export class HabitsDB {
 }
 
 /** Client-side singleton. Do NOT use in API routes — create a new instance with the server client instead. */
-export const habitsDB = new HabitsDB();
+export const habitsDB = new HabitsDB(createClient());

@@ -84,7 +84,7 @@ export function shouldTrackOnDate(frequency: HabitFrequency, date: Date): boolea
     case "weekdays":
       return dayOfWeek >= 1 && dayOfWeek <= 5;
     case "weekly":
-      return dayOfWeek === 1;
+      return true;
     case "times_per_week":
       return true;
     case "custom":

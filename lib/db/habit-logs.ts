@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HabitLog, HabitLogInsert, HabitFrequency } from './types';
 import { HabitsDB } from './habits';
 import { getLocalDateString } from '@/lib/utils';
+import { shouldTrackOnDate } from '@/lib/habits/format';
 
 /**
  * Get the start of a week for a given date based on week start preference
@@ -28,14 +29,9 @@ export class HabitLogsDB {
   private supabase: SupabaseClient;
   private habitsDB: HabitsDB;
 
-  /**
-   * @param supabase - Optional Supabase client. Omit for client-side usage
-   *   (uses browser client). Pass a server client in API routes:
-   *   `new HabitLogsDB(await createClient())` from `@/lib/supabase/server`.
-   */
-  constructor(supabase?: SupabaseClient) {
-    this.supabase = supabase || createClient();
-    this.habitsDB = new HabitsDB(this.supabase);
+  constructor(supabase: SupabaseClient) {
+    this.supabase = supabase;
+    this.habitsDB = new HabitsDB(supabase);
   }
 
   /**
@@ -167,60 +163,85 @@ export class HabitLogsDB {
     previousBestStreak: number = 0,
     weekStartDay: number = 0
   ): Promise<{ currentStreak: number; bestStreak: number }> {
-    // Get all logs for the past 365 days (max streak calculation window)
+    const INITIAL_WINDOW = 30;
+    const MAX_WINDOW = 365;
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - 365);
 
-    const logs = await this.getLogsByDateRange(
-      habitId,
-      userId,
-      getLocalDateString(startDate),
-      getLocalDateString(today)
-    );
+    let windowDays = INITIAL_WINDOW;
 
-    // Create a set of completed dates for quick lookup
-    const completedDates = new Set(
-      logs.filter(log => log.completed).map(log => log.logged_date)
-    );
-
-    // Special handling for times_per_week: count consecutive successful weeks
-    if (frequency.type === 'times_per_week') {
-      return this.calculateWeeklyStreak(completedDates, frequency.count, weekStartDay, today, previousBestStreak);
-    }
-
-    // Calculate streak based on frequency type (daily/weekdays/weekly/custom)
-    let currentStreak = 0;
-    const checkDate = new Date(today);
-
-    // Walk backwards from today counting consecutive completions
     while (true) {
-      const dateStr = getLocalDateString(checkDate);
+      const startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - windowDays);
 
-      if (this.shouldTrackOnDate(frequency, checkDate)) {
-        if (completedDates.has(dateStr)) {
-          currentStreak++;
-        } else {
-          // Allow today to be incomplete without breaking streak
-          if (dateStr !== getLocalDateString(today)) {
-            break;
+      const logs = await this.getLogsByDateRange(
+        habitId,
+        userId,
+        getLocalDateString(startDate),
+        getLocalDateString(today)
+      );
+
+      const completedDates = new Set(
+        logs.filter(log => log.completed).map(log => log.logged_date)
+      );
+
+      // Weekly-type frequencies: delegate to existing weekly streak calculator
+      if (frequency.type === 'times_per_week') {
+        const result = this.calculateWeeklyStreak(completedDates, frequency.count, weekStartDay, today, previousBestStreak);
+        const weeksInWindow = Math.floor(windowDays / 7);
+        if (result.currentStreak < weeksInWindow || windowDays >= MAX_WINDOW) {
+          return result;
+        }
+        windowDays = Math.min(windowDays * 2, MAX_WINDOW);
+        continue;
+      }
+      if (frequency.type === 'weekly') {
+        const result = this.calculateWeeklyStreak(completedDates, 1, weekStartDay, today, previousBestStreak);
+        const weeksInWindow = Math.floor(windowDays / 7);
+        if (result.currentStreak < weeksInWindow || windowDays >= MAX_WINDOW) {
+          return result;
+        }
+        windowDays = Math.min(windowDays * 2, MAX_WINDOW);
+        continue;
+      }
+
+      // Daily/weekdays/custom: walk backward counting consecutive completions
+      let currentStreak = 0;
+      const checkDate = new Date(today);
+      let hitBoundary = false;
+
+      while (true) {
+        const dateStr = getLocalDateString(checkDate);
+
+        // Check if we've walked past the start of our query window
+        if (checkDate < startDate) {
+          hitBoundary = true;
+          break;
+        }
+
+        if (shouldTrackOnDate(frequency, checkDate)) {
+          if (completedDates.has(dateStr)) {
+            currentStreak++;
+          } else {
+            // Allow today to be incomplete without breaking streak
+            if (dateStr !== getLocalDateString(today)) {
+              break; // Streak broken -- definitive result
+            }
           }
         }
+
+        checkDate.setDate(checkDate.getDate() - 1);
       }
 
-      // Move to previous day
-      checkDate.setDate(checkDate.getDate() - 1);
-
-      // Safety limit
-      if (today.getTime() - checkDate.getTime() > 365 * 24 * 60 * 60 * 1000) {
-        break;
+      if (!hitBoundary || windowDays >= MAX_WINDOW) {
+        const bestStreak = Math.max(currentStreak, previousBestStreak);
+        return { currentStreak, bestStreak };
       }
+
+      // Streak extends to window boundary -- expand and retry
+      windowDays = Math.min(windowDays * 2, MAX_WINDOW);
     }
-
-    const bestStreak = Math.max(currentStreak, previousBestStreak);
-
-    return { currentStreak, bestStreak };
   }
 
   /**
@@ -287,37 +308,6 @@ export class HabitLogsDB {
 
     const bestStreak = Math.max(currentStreak, previousBestStreak);
     return { currentStreak, bestStreak };
-  }
-
-  /**
-   * Check if a habit should be tracked on a given date based on frequency
-   */
-  private shouldTrackOnDate(frequency: HabitFrequency, date: Date): boolean {
-    const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, etc.
-
-    switch (frequency.type) {
-      case 'daily':
-        return true;
-
-      case 'weekdays':
-        // Monday (1) through Friday (5)
-        return dayOfWeek >= 1 && dayOfWeek <= 5;
-
-      case 'weekly':
-        // Track on the same day each week (use Monday as default)
-        return dayOfWeek === 1;
-
-      case 'times_per_week':
-        // For times_per_week, we track daily but evaluate weekly
-        // This is a simplification - full implementation would check weekly completion
-        return true;
-
-      case 'custom':
-        return frequency.days.includes(dayOfWeek);
-
-      default:
-        return false;
-    }
   }
 
   /**
@@ -398,8 +388,9 @@ export class HabitLogsDB {
     const todayStr = formatDate(today);
     const createdStr = formatDate(habitCreatedAt);
 
-    // Special handling for times_per_week: needs individual dates for weekly grouping
-    if (frequency.type === 'times_per_week') {
+    // Special handling for times_per_week and weekly: needs individual dates for weekly grouping
+    if (frequency.type === 'times_per_week' || frequency.type === 'weekly') {
+      const targetPerWeek = frequency.type === 'times_per_week' ? frequency.count : 1;
       const { data: completedLogs, error } = await this.supabase
         .from('habit_logs')
         .select('logged_date')
@@ -411,7 +402,7 @@ export class HabitLogsDB {
 
       if (error) throw error;
       const completedDates = new Set((completedLogs || []).map(log => log.logged_date));
-      return this.getTimesPerWeekStats(completedDates, frequency.count, weekStartDay, today, startOfWeek, startOfMonth, habitCreatedAt);
+      return this.getTimesPerWeekStats(completedDates, targetPerWeek, weekStartDay, today, startOfWeek, startOfMonth, habitCreatedAt);
     }
 
     // Helper to count scheduled and completed days in a range
@@ -421,7 +412,7 @@ export class HabitLogsDB {
       const currentDate = new Date(start);
 
       while (currentDate <= end) {
-        if (currentDate >= habitCreatedAt && this.shouldTrackOnDate(frequency, currentDate)) {
+        if (currentDate >= habitCreatedAt && shouldTrackOnDate(frequency, currentDate)) {
           total++;
           const dateStr = getLocalDateString(currentDate);
           if (completedDates.has(dateStr)) {
@@ -647,4 +638,4 @@ export class HabitLogsDB {
 }
 
 /** Client-side singleton. Do NOT use in API routes — create a new instance with the server client instead. */
-export const habitLogsDB = new HabitLogsDB();
+export const habitLogsDB = new HabitLogsDB(createClient());

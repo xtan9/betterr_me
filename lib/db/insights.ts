@@ -247,6 +247,16 @@ export class InsightsDB {
     }
 
     for (const habit of habits) {
+      // Week-level evaluation for weekly and times_per_week
+      if (habit.frequency.type === 'weekly' || habit.frequency.type === 'times_per_week') {
+        const targetPerWeek = habit.frequency.type === 'times_per_week' ? habit.frequency.count : 1;
+        const habitLogs = logsByHabit.get(habit.id) || new Set<string>();
+        const completions = habitLogs.size;
+        const rate = completions >= targetPerWeek ? 100 : Math.round((completions / targetPerWeek) * 100);
+        rates.set(habit.id, rate);
+        continue;
+      }
+
       const habitLogs = logsByHabit.get(habit.id) || new Set<string>();
       let scheduled = 0;
       let completed = 0;
@@ -286,6 +296,10 @@ export class InsightsDB {
       const dateStr = getLocalDateString(checkDate);
 
       for (const habit of habits) {
+        // Per-day rates not meaningful for week-level habits
+        if (habit.frequency.type === 'weekly' || habit.frequency.type === 'times_per_week') {
+          continue;
+        }
         if (shouldTrackOnDate(habit.frequency, checkDate)) {
           dayScheduled.set(dayOfWeek, (dayScheduled.get(dayOfWeek) || 0) + 1);
           if (logSet.has(`${habit.id}:${dateStr}`)) {

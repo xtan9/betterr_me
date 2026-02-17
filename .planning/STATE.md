@@ -2,69 +2,40 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-15)
+See: .planning/PROJECT.md (updated 2026-02-16)
 
-**Core value:** Every existing feature works correctly, safely, and is covered by tests
-**Current focus:** Phase 1: Frequency Correctness -- COMPLETE
+**Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 1 of 5 (Frequency Correctness)
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase 01 complete, ready for Phase 02
-Last activity: 2026-02-16 — Plan 01-02 executed (WeeklyInsight discriminated union type)
-
-Progress: [██░░░░░░░░] 20%
+Milestone: v1.0 Codebase Hardening — COMPLETE (2026-02-16)
+Status: Between milestones — ready for /gsd:new-milestone
+Last activity: 2026-02-16 — v1.0 milestone completed and archived
 
 ## Performance Metrics
 
-**Velocity:**
-- Total plans completed: 2
-- Average duration: 4min
-- Total execution time: 0.13 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 01-frequency-correctness | 2 | 8min | 4min |
-
-**Recent Trend:**
-- Last 5 plans: 01-01 (4min), 01-02 (4min)
-- Trend: Consistent
-
-*Updated after each plan completion*
+**v1.0 Velocity:**
+- Total plans completed: 11
+- Average duration: 5min
+- Total execution time: 0.83 hours
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [Roadmap]: Correctness before security — frequency bugs have highest user-visible impact (wrong completion rates)
-- [Roadmap]: CORR-01 through CORR-08 must be done atomically — they share shouldTrackOnDate and 8 tests that assert incorrect behavior
-- [Phase 1]: Weekly frequency = "any day that week counts" per PRD V1.2 §6.2 — no day picker, no schema migration
-- [Phase 1]: CORR-03 and CORR-04 removed (day picker not needed). Requirements reduced from 28 to 26.
-- [Plan 01-01]: shouldTrackOnDate for weekly returns true for all days (consistent with times_per_week)
-- [Plan 01-01]: Callers handle week-level evaluation individually (stats, insights, getScheduledDays)
-- [Plan 01-01]: computeMissedDays keeps day-level granularity for weekly habits (useful for absence indicators)
-- [Plan 01-01]: Heatmap shows all days as trackable for weekly (shows which day user completed)
-- [Plan 01-02]: WeeklyInsight uses intersection type (base & union) for discriminated union
-- [Plan 01-02]: dashboard-content.tsx also needed updating (imported WeeklyInsight from component)
-- [Plan 01-02]: No cast needed for next-intl t() call with union params
+See PROJECT.md Key Decisions table for full log with outcomes.
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-- [Phase 3]: QUAL-04 (theme-switcher) may need investigation of next-themes root cause before removing manual DOM workaround
-- [Phase 2]: No migration needed for weekly frequency (PRD says any day counts, no day field)
+- Vitest picks up .worktrees/ test files causing spurious failures (pre-existing, not blocking)
 
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 01-02-PLAN.md (Phase 01 complete)
-Resume file: Next phase (Phase 02)
+Stopped at: v1.0 milestone complete
+Resume: /gsd:new-milestone

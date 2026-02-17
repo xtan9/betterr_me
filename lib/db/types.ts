@@ -191,4 +191,6 @@ export interface DashboardData {
     tasks_due_today: number;
     tasks_completed_today: number;
   };
+  /** Non-fatal warnings about degraded data (omitted when empty) */
+  _warnings?: string[];
 }

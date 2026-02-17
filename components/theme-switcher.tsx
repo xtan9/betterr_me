@@ -20,27 +20,8 @@ const ThemeSwitcher = () => {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- standard hydration guard pattern
   useEffect(() => { setMounted(true); }, []);
 
-  useEffect(() => {
-    if (mounted && resolvedTheme) {
-      // Force update HTML class if it doesn't match
-      const currentClass = document.documentElement.className;
-      const shouldHaveDark = resolvedTheme === 'dark';
-      const hasDark = currentClass.includes('dark');
-      
-      if (shouldHaveDark && !hasDark) {
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('light');
-      } else if (!shouldHaveDark && hasDark) {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.classList.add('light');
-      }
-      
-      // Debug logging
-      console.log("Theme:", theme);
-      console.log("Resolved theme:", resolvedTheme);
-      console.log("HTML class:", document.documentElement.className);
-    }
-  }, [mounted, theme, resolvedTheme]);
+  // next-themes ThemeProvider with attribute='class' handles adding/removing
+  // the dark class on <html> via an injected blocking script.
 
   if (!mounted) {
     return null;

@@ -4,16 +4,7 @@ import type { Task, TaskInsert, TaskUpdate, TaskFilters } from './types';
 import { getLocalDateString } from '@/lib/utils';
 
 export class TasksDB {
-  private supabase: SupabaseClient;
-
-  /**
-   * @param supabase - Optional Supabase client. Omit for client-side usage
-   *   (uses browser client). Pass a server client in API routes:
-   *   `new TasksDB(await createClient())` from `@/lib/supabase/server`.
-   */
-  constructor(supabase?: SupabaseClient) {
-    this.supabase = supabase || createClient();
-  }
+  constructor(private supabase: SupabaseClient) {}
 
   /**
    * Get all tasks for a user with optional filtering
@@ -46,6 +37,37 @@ export class TasksDB {
 
     if (error) throw error;
     return data || [];
+  }
+
+  /**
+   * Count tasks for a user with optional filtering (HEAD-only, no row data transferred)
+   */
+  async getTaskCount(userId: string, filters?: TaskFilters): Promise<number> {
+    let query = this.supabase
+      .from('tasks')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (filters) {
+      if (filters.is_completed !== undefined) {
+        query = query.eq('is_completed', filters.is_completed);
+      }
+      if (filters.priority !== undefined) {
+        query = query.eq('priority', filters.priority);
+      }
+      if (filters.due_date) {
+        query = query.eq('due_date', filters.due_date);
+      }
+      if (filters.has_due_date !== undefined) {
+        query = filters.has_due_date
+          ? query.not('due_date', 'is', null)
+          : query.is('due_date', null);
+      }
+    }
+
+    const { count, error } = await query;
+    if (error) throw error;
+    return count ?? 0;
   }
 
   /**
@@ -188,4 +210,4 @@ export class TasksDB {
 }
 
 /** Client-side singleton. Do NOT use in API routes — create a new instance with the server client instead. */
-export const tasksDB = new TasksDB();
+export const tasksDB = new TasksDB(createClient());

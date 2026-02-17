@@ -113,31 +113,37 @@ describe('computeMissedDays', () => {
     expect(result.previous_streak).toBe(1);
   });
 
-  it('handles weekly frequency (Monday only)', () => {
+  it('handles weekly frequency (any day counts)', () => {
     const weekly: HabitFrequency = { type: 'weekly' };
-    // Today is 2026-02-09 (Mon). Yesterday is Sun (not tracked).
-    // Last Mon was Feb 2 — walk back from Feb 8...
-    // Feb 8 (Sun) - not tracked
-    // Feb 7 (Sat) - not tracked
-    // ...
-    // Feb 2 (Mon) - tracked, completed → missed = 0, previous_streak = 1
+    // Today is 2026-02-09 (Mon). Walking back from yesterday:
+    // Feb 8 (Sun) - tracked (shouldTrackOnDate returns true), not completed -> missed
+    // Feb 7 (Sat) - tracked, not completed -> missed
+    // Feb 6 (Fri) - tracked, not completed -> missed
+    // Feb 5 (Thu) - tracked, not completed -> missed
+    // Feb 4 (Wed) - tracked, not completed -> missed
+    // Feb 3 (Tue) - tracked, not completed -> missed
+    // Feb 2 (Mon) - tracked, completed -> previous_streak starts
     const completed = new Set(['2026-02-02']);
     const result = computeMissedDays(weekly, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_days).toBe(6); // 6 days missed (Feb 3-8)
     expect(result.previous_streak).toBe(1);
   });
 
-  it('counts missed weeks for weekly frequency', () => {
+  it('counts missed days for weekly frequency (day-level granularity)', () => {
     const weekly: HabitFrequency = { type: 'weekly' };
-    // Today is 2026-02-09 (Mon). Last Mon Feb 2 NOT completed.
-    // Mon Jan 26 was completed.
-    // Missed: Feb 2 = 1 missed scheduled day
+    // Today is 2026-02-09 (Mon). Walking back from Feb 8:
+    // Feb 8 (Sun) not completed -> missed
+    // Feb 7 (Sat) not completed -> missed
+    // ... all the way down to Jan 27 (Tue) not completed
+    // That's 13 consecutive missed days (Feb 8 down to Jan 27)
+    // Jan 26 (Mon) completed -> previous_streak = 1
+    // Jan 25 (Sun) not completed -> break (previous_streak stops)
     const completed = new Set(['2026-01-26', '2026-01-19']);
     const result = computeMissedDays(weekly, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(1);
-    expect(result.previous_streak).toBe(2);
+    expect(result.missed_scheduled_days).toBe(13); // 13 consecutive days missed (Jan 27 - Feb 8)
+    expect(result.previous_streak).toBe(1); // Only Jan 26 before the gap at Jan 25
   });
 
   it('treats every day as scheduled for times_per_week frequency', () => {

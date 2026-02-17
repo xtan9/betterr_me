@@ -11,3 +11,14 @@ export const profileFormSchema = z.object({
 });
 
 export type ProfileFormValues = z.infer<typeof profileFormSchema>;
+
+export const profileUpdateSchema = profileFormSchema
+  .partial()
+  .extend({
+    preferences: z.record(z.unknown()).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided",
+  });
+
+export type ProfileUpdateValues = z.infer<typeof profileUpdateSchema>;

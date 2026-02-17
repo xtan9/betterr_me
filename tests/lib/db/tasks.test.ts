@@ -66,6 +66,51 @@ describe('TasksDB', () => {
     });
   });
 
+  describe('getTaskCount', () => {
+    it('should count all tasks for a user', async () => {
+      mockSupabaseClient.setMockResponse(null, null, 5);
+
+      const count = await tasksDB.getTaskCount(mockUserId);
+
+      expect(count).toBe(5);
+      expect(mockSupabaseClient.from).toHaveBeenCalledWith('tasks');
+      expect(mockSupabaseClient.select).toHaveBeenCalledWith('*', { count: 'exact', head: true });
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
+    });
+
+    it('should count with is_completed filter', async () => {
+      mockSupabaseClient.setMockResponse(null, null, 3);
+
+      const count = await tasksDB.getTaskCount(mockUserId, { is_completed: true });
+
+      expect(count).toBe(3);
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('is_completed', true);
+    });
+
+    it('should count with due_date filter', async () => {
+      mockSupabaseClient.setMockResponse(null, null, 2);
+
+      const count = await tasksDB.getTaskCount(mockUserId, { due_date: '2026-01-31' });
+
+      expect(count).toBe(2);
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('due_date', '2026-01-31');
+    });
+
+    it('should return 0 when count is null', async () => {
+      mockSupabaseClient.setMockResponse(null, null, null);
+
+      const count = await tasksDB.getTaskCount(mockUserId);
+
+      expect(count).toBe(0);
+    });
+
+    it('should handle database errors', async () => {
+      mockSupabaseClient.setMockResponse(null, { message: 'DB error' });
+
+      await expect(tasksDB.getTaskCount(mockUserId)).rejects.toEqual({ message: 'DB error' });
+    });
+  });
+
   describe('getTask', () => {
     it('should fetch a single task by ID', async () => {
       mockSupabaseClient.setMockResponse(mockTask);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitLogsDB } from '@/lib/db';
 import { getLocalDateString } from '@/lib/utils';
+import { log } from '@/lib/logger';
 
 /**
  * GET /api/habits/[id]/logs
@@ -73,7 +74,7 @@ export async function GET(
       count: logs.length,
     });
   } catch (error) {
-    console.error('GET /api/habits/[id]/logs error:', error);
+    log.error('GET /api/habits/[id]/logs error', error);
     return NextResponse.json({ error: 'Failed to fetch logs' }, { status: 500 });
   }
 }

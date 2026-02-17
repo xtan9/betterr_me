@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ProfilesDB, InsightsDB } from "@/lib/db";
+import { log } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (authError) {
-      console.error("GET /api/insights/weekly auth error:", authError);
+      log.error("Auth error in weekly insights", authError);
       return NextResponse.json(
         { error: "Authentication service error" },
         { status: 500 },
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ insights });
   } catch (error) {
-    console.error("GET /api/insights/weekly error:", error);
+    log.error("GET /api/insights/weekly error", error);
     return NextResponse.json(
       { error: "Failed to fetch weekly insights" },
       { status: 500 },

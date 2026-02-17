@@ -319,6 +319,27 @@ describe("HabitLogsDB", () => {
         expect(stats.thisWeek.percent).toBe(67); // 2/3 * 100 rounded
       });
 
+      it("should return 100% when target exactly met (3/3 completions)", async () => {
+        // Regression: times_per_week with count=3, exactly 3 completions = 100%
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: weekDate(0), completed: true },
+          { ...mockLog, logged_date: weekDate(1), completed: true },
+          { ...mockLog, logged_date: weekDate(2), completed: true },
+        ]);
+
+        const stats = await habitLogsDB.getDetailedHabitStats(
+          mockHabitId,
+          mockUserId,
+          timesPerWeekFrequency,
+          createdAt,
+          0,
+        );
+
+        expect(stats.thisWeek.completed).toBe(3);
+        expect(stats.thisWeek.total).toBe(3);
+        expect(stats.thisWeek.percent).toBe(100); // 3/3 = 100%
+      });
+
       it("should cap percent at 100 when target exceeded", async () => {
         // 4 completions this week for a 3x/week habit
         mockSupabaseClient.setMockResponse([
@@ -430,6 +451,89 @@ describe("HabitLogsDB", () => {
     });
   });
 
+  describe("weekly frequency handling", () => {
+    const weeklyFrequency = { type: "weekly" as const };
+    const createdAt = "2026-01-01T00:00:00Z";
+
+    // Reuse the same dynamic date helpers as times_per_week tests
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const daysFromSunday = (now.getDay() - 0 + 7) % 7; // weekStartDay = 0 (Sunday)
+    const wkStart = new Date(now);
+    wkStart.setDate(wkStart.getDate() - daysFromSunday);
+    const wkDate = (offset: number): string => {
+      const d = new Date(wkStart);
+      d.setDate(d.getDate() + offset);
+      return getLocalDateString(d);
+    };
+    const prevWkDate = (weeksAgo: number, dayOffset: number): string => {
+      const d = new Date(wkStart);
+      d.setDate(d.getDate() - weeksAgo * 7 + dayOffset);
+      return getLocalDateString(d);
+    };
+
+    describe("getDetailedHabitStats", () => {
+      it("should use week-level evaluation (1 completion = 100% for that week)", async () => {
+        // 1 completion this week for a weekly habit
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: wkDate(2), completed: true },
+        ]);
+
+        const stats = await habitLogsDB.getDetailedHabitStats(
+          mockHabitId,
+          mockUserId,
+          weeklyFrequency,
+          createdAt,
+          0,
+        );
+
+        expect(stats.thisWeek.completed).toBe(1);
+        expect(stats.thisWeek.total).toBe(1); // target is 1 for weekly
+        expect(stats.thisWeek.percent).toBe(100); // 1/1 = 100%
+      });
+
+      it("should treat any single completion as 100% (regression)", async () => {
+        // Regression: weekly habit, 1 completion on any day of the week = 100% satisfied
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: wkDate(5), completed: true },
+        ]);
+
+        const stats = await habitLogsDB.getDetailedHabitStats(
+          mockHabitId,
+          mockUserId,
+          weeklyFrequency,
+          createdAt,
+          0,
+        );
+
+        expect(stats.thisWeek.completed).toBe(1);
+        expect(stats.thisWeek.total).toBe(1);
+        expect(stats.thisWeek.percent).toBe(100);
+      });
+    });
+
+    describe("calculateStreak", () => {
+      it("should count consecutive successful weeks for weekly habits", async () => {
+        // 2 consecutive weeks with at least 1 completion each
+        mockSupabaseClient.setMockResponse([
+          { ...mockLog, logged_date: prevWkDate(1, 3), completed: true },
+          { ...mockLog, logged_date: wkDate(1), completed: true },
+        ]);
+
+        const result = await habitLogsDB.calculateStreak(
+          mockHabitId,
+          mockUserId,
+          weeklyFrequency,
+          0,
+          0,
+        );
+
+        expect(result.currentStreak).toBeGreaterThanOrEqual(1);
+        expect(result.bestStreak).toBeGreaterThanOrEqual(result.currentStreak);
+      });
+    });
+  });
+
   describe("getAllUserLogs", () => {
     it("should return logs for user in date range", async () => {
       const mockLogs = [
@@ -507,6 +611,165 @@ describe("HabitLogsDB", () => {
       expect(localDate.getDate()).toBe(1);
       expect(localDate.getMonth()).toBe(0); // January
       expect(getLocalDateString(localDate)).toBe("2026-01-01");
+    });
+  });
+
+  describe("calculateStreak adaptive lookback", () => {
+    it("should query only ~30 days for a short streak (not 365)", async () => {
+      // Spy on getLogsByDateRange to track date ranges
+      const spy = vi.spyOn(habitLogsDB, "getLogsByDateRange");
+
+      // Return logs for a 5-day streak (no boundary hit)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const logs = [];
+      for (let i = 0; i < 5; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        logs.push({
+          id: `log-${i}`,
+          habit_id: "h1",
+          user_id: "u1",
+          logged_date: getLocalDateString(d),
+          completed: true,
+          created_at: "",
+          updated_at: "",
+        });
+      }
+      spy.mockResolvedValueOnce(logs as HabitLog[]);
+
+      const result = await habitLogsDB.calculateStreak(
+        "h1",
+        "u1",
+        { type: "daily" },
+        0,
+      );
+
+      expect(result.currentStreak).toBe(5);
+      // Should have been called exactly once (30-day window sufficient)
+      expect(spy).toHaveBeenCalledTimes(1);
+      // Verify the date range is ~30 days, not 365
+      const [, , startDate] = spy.mock.calls[0];
+      const start = new Date(startDate);
+      const diffDays = Math.round(
+        (today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      expect(diffDays).toBe(30);
+
+      spy.mockRestore();
+    });
+
+    it("should expand window when streak reaches boundary", async () => {
+      const spy = vi.spyOn(habitLogsDB, "getLogsByDateRange");
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // First call (30-day window): return 30 consecutive completed days
+      // This fills the entire window, triggering expansion
+      const logs30 = [];
+      for (let i = 0; i < 31; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        logs30.push({
+          id: `log-${i}`,
+          habit_id: "h1",
+          user_id: "u1",
+          logged_date: getLocalDateString(d),
+          completed: true,
+          created_at: "",
+          updated_at: "",
+        });
+      }
+
+      // Second call (60-day window): return 35 days then a gap
+      // Streak = 35, window = 60, so streak < 60 => definitive
+      const logs60 = [];
+      for (let i = 0; i < 35; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        logs60.push({
+          id: `log-${i}`,
+          habit_id: "h1",
+          user_id: "u1",
+          logged_date: getLocalDateString(d),
+          completed: true,
+          created_at: "",
+          updated_at: "",
+        });
+      }
+
+      spy.mockResolvedValueOnce(logs30 as HabitLog[]);
+      spy.mockResolvedValueOnce(logs60 as HabitLog[]);
+
+      const result = await habitLogsDB.calculateStreak(
+        "h1",
+        "u1",
+        { type: "daily" },
+        0,
+      );
+
+      expect(result.currentStreak).toBe(35);
+      // Should have been called twice (30-day window was insufficient)
+      expect(spy).toHaveBeenCalledTimes(2);
+
+      // Verify second call used 60-day window
+      const [, , startDate60] = spy.mock.calls[1];
+      const start60 = new Date(startDate60);
+      const diffDays60 = Math.round(
+        (today.getTime() - start60.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      expect(diffDays60).toBe(60);
+
+      spy.mockRestore();
+    });
+
+    it("should cap at 365 days maximum", async () => {
+      const spy = vi.spyOn(habitLogsDB, "getLogsByDateRange");
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Return all-completed logs for every window size to force maximum expansion
+      // 30 -> 60 -> 120 -> 240 -> 365 = 5 calls
+      for (let w = 0; w < 5; w++) {
+        const windowSize = Math.min(30 * Math.pow(2, w), 365);
+        const logs = [];
+        for (let i = 0; i <= windowSize; i++) {
+          const d = new Date(today);
+          d.setDate(d.getDate() - i);
+          logs.push({
+            id: `log-${w}-${i}`,
+            habit_id: "h1",
+            user_id: "u1",
+            logged_date: getLocalDateString(d),
+            completed: true,
+            created_at: "",
+            updated_at: "",
+          });
+        }
+        spy.mockResolvedValueOnce(logs as HabitLog[]);
+      }
+
+      const result = await habitLogsDB.calculateStreak(
+        "h1",
+        "u1",
+        { type: "daily" },
+        0,
+      );
+
+      // With all days completed up to 365, streak should be 365 or close
+      expect(result.currentStreak).toBeGreaterThan(200);
+      // The last call should use a 365-day window
+      const lastCall = spy.mock.calls[spy.mock.calls.length - 1];
+      const [, , lastStartDate] = lastCall;
+      const lastStart = new Date(lastStartDate);
+      const diffDays = Math.round(
+        (today.getTime() - lastStart.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      expect(diffDays).toBe(365);
+
+      spy.mockRestore();
     });
   });
 });
