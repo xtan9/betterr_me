@@ -30,10 +30,10 @@
   1. User in any timezone sees only today's tasks in the "Today's Tasks" section, with no duplication into the "Coming Up Tomorrow" section
   2. User who completes a task sees it still counted in the dashboard task total (e.g., completing 1 of 2 tasks shows "1 of 2 completed", not "0 of 1")
   3. User whose local date differs from UTC server date sees tasks filtered by their local date, not the server's date
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 06-01: TBD
+- [ ] 06-01-PLAN.md — Fix getTodayTasks date handling, include completed tasks, update tests
 
 ## Progress
 
@@ -42,4 +42,4 @@ Phase 6
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. Dashboard Task Data Flow | v1.1 | 0/TBD | Not started | - |
+| 6. Dashboard Task Data Flow | v1.1 | 0/1 | Not started | - |
