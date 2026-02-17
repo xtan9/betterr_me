@@ -91,10 +91,11 @@ Plans:
   1. Dashboard displays white cards floating on the gray page background with visible depth separation
   2. Stat cards, habit checklist, and task summary render correctly within the new content layout
   3. Dashboard responsive grid works at 768px, 1024px, and 1280px with sidebar both expanded and collapsed
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md -- Migrate dashboard-content greeting/grid/skeleton, daily-snapshot stat cards, motivation-message card wrapping
+- [ ] 05-02-PLAN.md -- Migrate habit-checklist celebration, absence-card, weekly-insight, milestone-card, tasks-today, habit-row tokens and tests
 
 ### Phase 6: Habits, Tasks & Remaining Pages Migration
 **Goal**: All pages in the app (habits, tasks, profile, auth) use the new card-on-gray layout with consistent page headers, and nested views show breadcrumb navigation
@@ -168,7 +169,7 @@ Note: Phase 4 depends on Phase 2 (not Phase 3). Phases 4 and 3 can execute in pa
 | 2. Sidebar Shell & Navigation Switch | 0/2 | Not started | - |
 | 3. Sidebar Collapse & Persistence | 0/1 | Not started | - |
 | 4. Page Header & Content Layout | 0/1 | Complete    | 2026-02-17 |
-| 5. Dashboard Page Migration | 0/1 | Not started | - |
+| 5. Dashboard Page Migration | 0/2 | Not started | - |
 | 6. Habits, Tasks & Remaining Pages Migration | 0/2 | Not started | - |
 | 7. Sidebar Enrichment | 0/1 | Not started | - |
 | 8. Visual Polish | 0/1 | Not started | - |
