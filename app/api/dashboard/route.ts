@@ -57,16 +57,17 @@ export async function GET(request: NextRequest) {
     ].join('-');
 
     // Core queries — failure here returns 500
-    const [habitsWithStatus, todayTasks, tasksCompletedTodayCount, totalTaskCount, tasksTomorrow] = await Promise.all([
+    const [habitsWithStatus, todayTasks, totalTaskCount, tasksTomorrow] = await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
-      tasksDB.getTodayTasks(user.id),
-      // Count completed tasks for today (HEAD-only, no row data)
-      tasksDB.getTaskCount(user.id, { due_date: date, is_completed: true }),
+      tasksDB.getTodayTasks(user.id, date),
       // Count all tasks (HEAD-only, no row data)
       tasksDB.getTaskCount(user.id),
       // Get incomplete tasks for tomorrow (rows needed for rendering)
       tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
     ]);
+
+    // Derive completed count from todayTasks (no separate DB call needed)
+    const tasksCompletedToday = todayTasks.filter(t => t.is_completed).length;
 
     // Supplementary queries — failure falls back gracefully
     let logsFetchFailed = false;
@@ -136,7 +137,7 @@ export async function GET(request: NextRequest) {
         current_best_streak: bestStreak,
         total_tasks: totalTaskCount,
         tasks_due_today: todayTasks.length,
-        tasks_completed_today: tasksCompletedTodayCount,
+        tasks_completed_today: tasksCompletedToday,
       },
       ...(warnings.length > 0 && { _warnings: warnings }),
     };

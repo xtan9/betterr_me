@@ -150,17 +150,16 @@ export class TasksDB {
   }
 
   /**
-   * Get today's tasks (due today or overdue)
+   * Get today's tasks (due today or overdue), both completed and incomplete.
+   * @param userId - The user's ID
+   * @param date - Client-local date string (YYYY-MM-DD) to avoid timezone mismatch
    */
-  async getTodayTasks(userId: string): Promise<Task[]> {
-    const today = getLocalDateString();
-
+  async getTodayTasks(userId: string, date: string): Promise<Task[]> {
     const { data, error } = await this.supabase
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
-      .eq('is_completed', false)
-      .lte('due_date', today)
+      .lte('due_date', date)
       .not('due_date', 'is', null)
       .order('due_date', { ascending: true });
 

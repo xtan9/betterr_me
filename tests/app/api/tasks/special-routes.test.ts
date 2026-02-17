@@ -81,7 +81,7 @@ describe('GET /api/tasks?view=today', () => {
 
     expect(response.status).toBe(200);
     expect(data.tasks).toEqual(mockTasks);
-    expect(mockTasksDB.getTodayTasks).toHaveBeenCalledWith('user-123');
+    expect(mockTasksDB.getTodayTasks).toHaveBeenCalledWith('user-123', expect.any(String));
   });
 });
 

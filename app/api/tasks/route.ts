@@ -5,6 +5,7 @@ import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { taskFormSchema } from '@/lib/validations/task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
+import { getLocalDateString } from '@/lib/utils';
 import type { TaskInsert, TaskFilters } from '@/lib/db/types';
 
 /**
@@ -36,7 +37,8 @@ export async function GET(request: NextRequest) {
 
     // Handle special views
     if (view === 'today') {
-      const tasks = await tasksDB.getTodayTasks(user.id);
+      const date = searchParams.get('date') || getLocalDateString();
+      const tasks = await tasksDB.getTodayTasks(user.id, date);
       return NextResponse.json({ tasks });
     }
 
