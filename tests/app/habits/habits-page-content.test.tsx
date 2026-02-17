@@ -257,7 +257,7 @@ describe("HabitsPageContent", () => {
         expect.objectContaining({
           optimisticData: expect.any(Function),
           rollbackOnError: true,
-          revalidate: true,
+          revalidate: false,
         }),
       );
     });

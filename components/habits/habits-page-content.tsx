@@ -75,7 +75,7 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
             );
           },
           rollbackOnError: true,
-          revalidate: true,
+          revalidate: false,
         },
       );
     } catch (err) {

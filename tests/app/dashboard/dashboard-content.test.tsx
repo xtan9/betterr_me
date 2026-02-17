@@ -779,9 +779,74 @@ describe("DashboardContent", () => {
       expect.objectContaining({
         optimisticData: expect.any(Function),
         rollbackOnError: true,
-        revalidate: true,
+        revalidate: false,
       }),
     );
+
+    global.fetch = originalFetch;
+  });
+
+  it("calls mutate with optimistic data and revalidate false when task toggled", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: () => ({}) });
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn().mockImplementation(async (fn) => {
+      if (typeof fn === "function") await fn();
+    });
+
+    const dataWithTasks = {
+      ...mockDashboardData,
+      tasks_today: [
+        {
+          id: "t1",
+          user_id: "user-1",
+          title: "Buy groceries",
+          is_completed: false,
+          completed_at: null,
+          priority: 2,
+          due_date: "2026-02-17",
+          due_time: null,
+          created_at: "2024-01-01T00:00:00Z",
+          updated_at: "2024-01-01T00:00:00Z",
+        },
+      ],
+      stats: {
+        ...mockDashboardData.stats,
+        total_tasks: 1,
+        tasks_due_today: 1,
+        tasks_completed_today: 0,
+      },
+    };
+
+    mockUseSWR.mockReturnValue({
+      data: dataWithTasks,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Tasks");
+    const checkboxes = screen.getAllByRole("checkbox");
+    // Task checkbox comes after habit checkboxes
+    const taskCheckbox = checkboxes[checkboxes.length - 1];
+    taskCheckbox?.click();
+
+    await waitFor(() => {
+      // Find the mutate call that includes task-specific optimistic options
+      const taskMutateCall = mockMutate.mock.calls.find(
+        (call: unknown[]) =>
+          call.length === 2 &&
+          typeof call[1] === "object" &&
+          call[1] !== null &&
+          (call[1] as Record<string, unknown>).revalidate === false &&
+          (call[1] as Record<string, unknown>).rollbackOnError === true &&
+          typeof (call[1] as Record<string, unknown>).optimisticData === "function",
+      );
+      expect(taskMutateCall).toBeDefined();
+    });
 
     global.fetch = originalFetch;
   });

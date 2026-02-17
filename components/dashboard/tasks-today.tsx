@@ -144,6 +144,7 @@ interface TasksTodayProps {
   onTaskClick?: (taskId: string) => void;
   onCreateTask: () => void;
   isLoading?: boolean;
+  togglingTaskIds?: Set<string>;
 }
 
 export function TasksToday({
@@ -153,6 +154,7 @@ export function TasksToday({
   onTaskClick,
   onCreateTask,
   isLoading,
+  togglingTaskIds,
 }: TasksTodayProps) {
   const t = useTranslations("dashboard.tasks");
   const [reflectingTaskId, setReflectingTaskId] = useState<string | null>(null);
@@ -280,7 +282,7 @@ export function TasksToday({
                   task={task}
                   onToggle={handleToggleWithReflection}
                   onClick={onTaskClick}
-                  isToggling={isLoading}
+                  isToggling={isLoading || togglingTaskIds?.has(task.id)}
                   isReflecting={reflectingTaskId === task.id}
                   onReflect={
                     reflectingTaskId === task.id ? handleReflection : undefined
