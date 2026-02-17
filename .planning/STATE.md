@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 7: Sidebar Enrichment (3 of 3 plans done -- COMPLETE)
+**Current focus:** Phase 8: Visual Polish (1 of 2 plans done)
 
 ## Current Position
 
-Phase: 7 of 9 (Sidebar Enrichment)
-Plan: 3 of 3 in current phase (COMPLETE)
-Status: Phase Complete
-Last activity: 2026-02-17 -- Completed 07-03-PLAN.md (Sidebar notification badges)
+Phase: 8 of 9 (Visual Polish)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-02-17 -- Completed 08-01-PLAN.md (Dark mode accent desaturation)
 
-Progress: [##########] 94%
+Progress: [##########] 95%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17
-- Average duration: 3.5min
-- Total execution time: 1.03 hours
+- Total plans completed: 18
+- Average duration: 3.6min
+- Total execution time: 1.1 hours
 
 **By Phase:**
 
@@ -34,10 +34,11 @@ Progress: [##########] 94%
 | 05 | 2 | 6min | 3min |
 | 06 | 4 | 17min | 4.3min |
 | 07 | 3 | 12min | 4min |
+| 08 | 1 | 4min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 5min, 7min, 3min, 6min, 3min
-- Trend: Consistent 3-7min pace, Phase 7 sidebar enrichment complete
+- Last 5 plans: 7min, 3min, 6min, 3min, 4min
+- Trend: Consistent 3-7min pace, Phase 8 visual polish started
 
 *Updated after each plan completion*
 
@@ -106,6 +107,9 @@ Recent decisions affecting current work:
 - [07-03]: Badge counts keyed by nav item labelKey (habits/tasks) -- extensible to future nav items
 - [07-03]: formatBadge helper caps display at 9+ to prevent badge overflow in narrow sidebar
 - [07-03]: SWR config: 5-min refresh + 1-min dedup + revalidateOnFocus:false -- badges are informational, not critical
+- [08-01]: Dark mode primary desaturated from S=60%/L=50% to S=45%/L=55% for visible distinction from light mode
+- [08-01]: Hero text gradients replaced with solid text-primary -- gradients bypass CSS custom property system
+- [08-01]: All 14 component files migrated from hardcoded emerald/teal to design tokens -- zero remaining outliers
 
 ### Pending Todos
 
@@ -120,5 +124,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 07-03-PLAN.md (Sidebar notification badges) -- Phase 7 complete
-Resume file: .planning/phases/07-sidebar-enrichment/07-03-SUMMARY.md
+Stopped at: Completed 08-01-PLAN.md (Dark mode accent desaturation)
+Resume file: .planning/phases/08-visual-polish/08-01-SUMMARY.md
