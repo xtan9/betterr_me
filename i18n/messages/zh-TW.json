@@ -15,7 +15,9 @@
       "pin": "釘選",
       "unpin": "取消釘選",
       "pinLabel": "釘選側邊欄導航。目前未釘選。",
-      "unpinLabel": "取消釘選側邊欄導航。目前已釘選。"
+      "unpinLabel": "取消釘選側邊欄導航。目前已釘選。",
+      "mainGroup": "主要",
+      "accountGroup": "帳戶"
     },
     "footer": {
       "product": "產品",

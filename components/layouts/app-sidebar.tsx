@@ -3,18 +3,25 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, ClipboardList, ListChecks, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Home, ClipboardList, ListChecks, Settings, ChevronDown, PanelLeftClose, PanelLeft } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuBadge,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 import {
   Tooltip,
   TooltipTrigger,
@@ -22,12 +29,12 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 
-const navItems = [
+const mainNavItems = [
   {
     href: "/dashboard",
     icon: Home,
     labelKey: "dashboard",
-    match: (p: string) => p === "/dashboard" || p === "/dashboard/settings",
+    match: (p: string) => p === "/dashboard",
   },
   {
     href: "/habits",
@@ -40,6 +47,15 @@ const navItems = [
     icon: ListChecks,
     labelKey: "tasks",
     match: (p: string) => p.startsWith("/tasks"),
+  },
+];
+
+const accountNavItems = [
+  {
+    href: "/dashboard/settings",
+    icon: Settings,
+    labelKey: "settings",
+    match: (p: string) => p === "/dashboard/settings",
   },
 ];
 
@@ -95,26 +111,66 @@ export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={item.match(pathname)}
-                    tooltip={t(item.labelKey)}
-                  >
-                    <Link href={item.href}>
-                      <item.icon />
-                      <span>{t(item.labelKey)}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <Collapsible defaultOpen className="group/collapsible">
+          <SidebarGroup>
+            <SidebarGroupLabel asChild>
+              <CollapsibleTrigger className="flex w-full items-center">
+                {tSidebar("mainGroup")}
+                <ChevronDown className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+              </CollapsibleTrigger>
+            </SidebarGroupLabel>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {mainNavItems.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={item.match(pathname)}
+                        tooltip={t(item.labelKey)}
+                      >
+                        <Link href={item.href}>
+                          <item.icon />
+                          <span>{t(item.labelKey)}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </SidebarGroup>
+        </Collapsible>
+        <Collapsible defaultOpen className="group/collapsible">
+          <SidebarGroup>
+            <SidebarGroupLabel asChild>
+              <CollapsibleTrigger className="flex w-full items-center">
+                {tSidebar("accountGroup")}
+                <ChevronDown className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+              </CollapsibleTrigger>
+            </SidebarGroupLabel>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {accountNavItems.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={item.match(pathname)}
+                        tooltip={t(item.labelKey)}
+                      >
+                        <Link href={item.href}>
+                          <item.icon />
+                          <span>{t(item.labelKey)}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </SidebarGroup>
+        </Collapsible>
       </SidebarContent>
       <SidebarFooter />
     </Sidebar>

@@ -15,7 +15,9 @@
       "pin": "Pin",
       "unpin": "Unpin",
       "pinLabel": "Pin sidebar navigation. Currently unpinned.",
-      "unpinLabel": "Unpin sidebar navigation. Currently pinned."
+      "unpinLabel": "Unpin sidebar navigation. Currently pinned.",
+      "mainGroup": "Main",
+      "accountGroup": "Account"
     },
     "footer": {
       "product": "Product",
