@@ -41,16 +41,13 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ Dashboard uses COUNT(*) for task count — v1.0
 - ✓ Adaptive streak lookback (30→365 days) — v1.0
 - ✓ 71 tests backfilled (logs route, Zod schemas, frequency regressions) — v1.0
+- ✓ getTodayTasks uses client-sent date parameter (not server-local time) — v1.1
+- ✓ Dashboard completed tasks included in "X of Y" count — v1.1
+- ✓ No timezone-based task duplication between Today and Tomorrow sections — v1.1
 
 ### Active
 
-#### Current Milestone: v1.1 Dashboard Task Fixes
-
-**Goal:** Fix timezone-dependent task duplication and incorrect completion count on dashboard
-
-**Target fixes:**
-- getTodayTasks() uses server time (UTC) instead of client-sent date, causing tasks to appear in both "today" and "tomorrow" sections when Vercel UTC date differs from user's local date
-- Completed tasks vanish from dashboard count instead of being tracked (shows "0 of 1" instead of "1 of 2")
+(None — planning next milestone)
 
 ### Out of Scope
 
@@ -61,8 +58,9 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 ## Context
 
 - **Codebase:** ~170 files, Next.js 16 App Router, Supabase backend, deployed to Vercel
-- **Test suite:** 992 tests (Vitest + Playwright), 50% coverage threshold
+- **Test suite:** 992+ tests (Vitest + Playwright), 50% coverage threshold
 - **Shipped:** v1.0 Codebase Hardening (2026-02-16) — 5 phases, 11 plans, 26 requirements
+- **Shipped:** v1.1 Dashboard Task Fixes (2026-02-17) — 1 phase, 1 plan, 3 requirements
 - **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit)
 - **Known pre-existing:** Vitest picks up .worktrees/ test files (spurious, not blocking)
 
@@ -83,6 +81,8 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | Logger with (msg, error?, context?) signature | Matches future Sentry.captureException API | ✓ Good — one-file swap when Sentry added |
 | Adaptive streak lookback (30→365) | Short streaks (majority) need only ~30 days | ✓ Good — reduces data transfer for common case |
 | Habit count limit test unlocked from message text | Flexible assertion prevents brittle tests | ✓ Good — asserts 400 + error presence only |
+| getTodayTasks accepts client date param | Server-local time wrong on Vercel (UTC ≠ user timezone) | ✓ Good — all 3 call sites pass client date, no duplication |
+| Include completed tasks in getTodayTasks | Removing completed tasks breaks "X of Y" dashboard count | ✓ Good — single array for both total and completed count |
 
 ---
-*Last updated: 2026-02-16 after v1.1 milestone start*
+*Last updated: 2026-02-17 after v1.1 milestone*
