@@ -8,6 +8,9 @@ import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
+import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import { HabitForm } from "@/components/habits/habit-form";
 import type { Habit } from "@/lib/db/types";
 import type { HabitFormValues } from "@/lib/validations/habit";
@@ -25,34 +28,37 @@ const fetcher = async (url: string) => {
 
 function EditHabitSkeleton() {
   return (
-    <div className="max-w-2xl mx-auto space-y-6" data-testid="edit-habit-skeleton">
-      <Skeleton className="h-8 w-32" />
-      <div className="space-y-4">
-        <div>
-          <Skeleton className="h-4 w-24 mb-2" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-        <div>
-          <Skeleton className="h-4 w-24 mb-2" />
-          <Skeleton className="h-24 w-full" />
-        </div>
-        <div>
-          <Skeleton className="h-4 w-24 mb-2" />
-          <div className="flex gap-2">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-10 flex-1" />
-            ))}
-          </div>
-        </div>
-        <div>
-          <Skeleton className="h-4 w-24 mb-2" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-        <div className="flex justify-end gap-3 pt-2">
-          <Skeleton className="h-10 w-20" />
-          <Skeleton className="h-10 w-28" />
-        </div>
+    <div className="space-y-6" data-testid="edit-habit-skeleton">
+      {/* Breadcrumb + Header skeleton */}
+      <div>
+        <Skeleton className="h-4 w-40 mb-2" />
+        <PageHeaderSkeleton hasActions />
       </div>
+      {/* Card-wrapped form skeleton */}
+      <Card className="max-w-2xl">
+        <CardContent className="pt-6 space-y-4">
+          <div>
+            <Skeleton className="h-4 w-24 mb-2" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div>
+            <Skeleton className="h-4 w-24 mb-2" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+          <div>
+            <Skeleton className="h-4 w-24 mb-2" />
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-10 flex-1" />
+              ))}
+            </div>
+          </div>
+          <div>
+            <Skeleton className="h-4 w-24 mb-2" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -60,6 +66,7 @@ function EditHabitSkeleton() {
 export function EditHabitContent({ habitId }: EditHabitContentProps) {
   const router = useRouter();
   const t = useTranslations("habits");
+  const tForm = useTranslations("habits.form");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: habit, error, isLoading, mutate } = useSWR<Habit>(
@@ -102,7 +109,7 @@ export function EditHabitContent({ habitId }: EditHabitContentProps) {
 
   if (error || !habit) {
     return (
-      <div className="max-w-2xl mx-auto text-center py-12">
+      <div className="text-center py-12">
         <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
         <h2 className="text-lg font-semibold mb-2">{t("error.title")}</h2>
         <Button onClick={() => mutate()} variant="outline">
@@ -113,14 +120,36 @@ export function EditHabitContent({ habitId }: EditHabitContentProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <HabitForm
-        mode="edit"
-        initialData={habit}
-        onSubmit={handleSubmit}
-        onCancel={handleCancel}
-        isLoading={isSubmitting}
-      />
+    <div className="space-y-6">
+      <div>
+        <PageBreadcrumbs section="habits" itemName={habit.name} />
+        <PageHeader
+          title={tForm("editTitle")}
+          actions={
+            <>
+              <Button variant="ghost" onClick={handleCancel} disabled={isSubmitting}>
+                {tForm("cancel")}
+              </Button>
+              <Button type="submit" form="habit-form" disabled={isSubmitting}>
+                {isSubmitting ? tForm("saving") : tForm("save")}
+              </Button>
+            </>
+          }
+        />
+      </div>
+      <Card className="max-w-2xl">
+        <CardContent className="pt-6">
+          <HabitForm
+            id="habit-form"
+            mode="edit"
+            initialData={habit}
+            onSubmit={handleSubmit}
+            onCancel={handleCancel}
+            isLoading={isSubmitting}
+            hideChrome
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }
