@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 6: Habits/Tasks/Remaining Pages Migration (3 of 4 plans done)
+**Current focus:** Phase 6: Habits/Tasks/Remaining Pages Migration (4 of 4 plans done)
 
 ## Current Position
 
 Phase: 6 of 9 (Habits/Tasks/Remaining Pages Migration)
-Plan: 3 of 4 in current phase
-Status: In Progress
-Last activity: 2026-02-17 -- Completed 06-04-PLAN.md (auth pages branding: AuthBranding component on all 6 auth pages)
+Plan: 4 of 4 in current phase
+Status: Complete
+Last activity: 2026-02-17 -- Completed 06-03-PLAN.md (tasks and settings pages migration to PageHeader/breadcrumbs/Card)
 
 Progress: [########..] 81%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
-- Average duration: 3.4min
-- Total execution time: 0.72 hours
+- Total plans completed: 14
+- Average duration: 3.6min
+- Total execution time: 0.83 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [########..] 81%
 | 03 | 3 | 8min | 2.7min |
 | 04 | 1 | 7min | 7min |
 | 05 | 2 | 6min | 3min |
-| 06 | 3 | 10min | 3.3min |
+| 06 | 4 | 17min | 4.3min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 3min, 3min, 2min, 5min
-- Trend: Consistent 2-5min pace for component migration work
+- Last 5 plans: 3min, 3min, 2min, 5min, 7min
+- Trend: Consistent 2-7min pace for component migration work
 
 *Updated after each plan completion*
 
@@ -91,6 +91,9 @@ Recent decisions affecting current work:
 - [06-02]: Habit detail: habit name in both breadcrumb and PageHeader h1 (breadcrumb for nav, h1 for identity)
 - [06-02]: Active status badge migrated from bg-emerald-500 to bg-primary (design token inheritance)
 - [06-02]: HTML form attribute on external submit buttons works in jsdom -- no test workaround needed
+- [06-03]: Task detail Card uses max-w-3xl; create/edit forms use max-w-2xl (preserving existing widths)
+- [06-03]: Back button replaced with breadcrumb navigation for consistent hierarchy across all nested views
+- [06-03]: Settings page keeps multi-card layout with no container Card (locked decision, only header migrated)
 - [06-04]: AuthBranding uses same brand mark pattern as AppSidebar (B initial in rounded-md bg-primary square)
 - [06-04]: Auth pages keep white bg-background (no bg-page gray), distinct from app interior
 
@@ -107,5 +110,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 06-04-PLAN.md
-Resume file: .planning/phases/06-habits-tasks-remaining-pages-migration/06-04-SUMMARY.md
+Stopped at: Completed 06-03-PLAN.md (all 4 plans in Phase 6 now complete)
+Resume file: .planning/phases/06-habits-tasks-remaining-pages-migration/06-03-SUMMARY.md
