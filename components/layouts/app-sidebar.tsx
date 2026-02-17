@@ -28,6 +28,7 @@ import {
   TooltipContent,
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import { SidebarUserFooter } from "@/components/layouts/sidebar-user-footer";
 
 const mainNavItems = [
   {
@@ -172,7 +173,9 @@ export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
           </SidebarGroup>
         </Collapsible>
       </SidebarContent>
-      <SidebarFooter />
+      <SidebarFooter>
+        <SidebarUserFooter />
+      </SidebarFooter>
     </Sidebar>
   );
 }

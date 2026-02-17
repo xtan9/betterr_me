@@ -17,7 +17,14 @@
       "pinLabel": "釘選側邊欄導航。目前未釘選。",
       "unpinLabel": "取消釘選側邊欄導航。目前已釘選。",
       "mainGroup": "主要",
-      "accountGroup": "帳戶"
+      "accountGroup": "帳戶",
+      "myAccount": "我的帳戶",
+      "logOut": "登出",
+      "theme": "主題",
+      "language": "語言",
+      "themeLight": "淺色",
+      "themeDark": "深色",
+      "themeSystem": "跟隨系統"
     },
     "footer": {
       "product": "產品",

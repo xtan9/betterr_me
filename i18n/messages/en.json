@@ -17,7 +17,14 @@
       "pinLabel": "Pin sidebar navigation. Currently unpinned.",
       "unpinLabel": "Unpin sidebar navigation. Currently pinned.",
       "mainGroup": "Main",
-      "accountGroup": "Account"
+      "accountGroup": "Account",
+      "myAccount": "My Account",
+      "logOut": "Log out",
+      "theme": "Theme",
+      "language": "Language",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "themeSystem": "System"
     },
     "footer": {
       "product": "Product",

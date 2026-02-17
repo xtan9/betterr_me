@@ -17,7 +17,14 @@
       "pinLabel": "固定侧边栏导航。当前未固定。",
       "unpinLabel": "取消固定侧边栏导航。当前已固定。",
       "mainGroup": "主要",
-      "accountGroup": "账户"
+      "accountGroup": "账户",
+      "myAccount": "我的账户",
+      "logOut": "退出登录",
+      "theme": "主题",
+      "language": "语言",
+      "themeLight": "浅色",
+      "themeDark": "深色",
+      "themeSystem": "跟随系统"
     },
     "footer": {
       "product": "产品",
