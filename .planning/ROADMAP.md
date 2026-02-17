@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Page Header & Content Layout** - Build PageHeader component, apply pixel-perfect spacing/typography, add max-width centering (completed 2026-02-17)
 - [ ] **Phase 5: Dashboard Page Migration** - Migrate dashboard to card-on-gray layout with new PageHeader, stat cards, and responsive grid adjustments
 - [x] **Phase 6: Habits, Tasks & Remaining Pages Migration** - Migrate habits, tasks, profile, and auth pages; add breadcrumb navigation for nested views (completed 2026-02-17)
-- [ ] **Phase 7: Sidebar Enrichment** - User profile footer, collapsible section groups, notification badges, theme/language switchers in sidebar
+- [x] **Phase 7: Sidebar Enrichment** - User profile footer, collapsible section groups, notification badges, theme/language switchers in sidebar (completed 2026-02-17)
 - [ ] **Phase 8: Visual Polish** - Dark mode accent desaturation, hover/focus micro-interactions across cards and buttons
 - [ ] **Phase 9: Test Stabilization & Baseline Regeneration** - All tests passing, visual regression baselines regenerated, locale and accessibility verification
 
@@ -124,7 +124,7 @@ Plans:
   2. Sidebar nav items are organized into collapsible section groups (Main: Dashboard/Habits/Tasks, Account: Settings)
   3. Sidebar items display notification badges showing live data (e.g., tasks due count, incomplete habits count)
   4. Theme switcher and language switcher are accessible from the sidebar (removed from any top header area)
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 07-01-PLAN.md -- Collapsible section groups (Main/Account) with Settings nav item
@@ -175,6 +175,6 @@ Note: Phase 4 depends on Phase 2 (not Phase 3). Phases 4 and 3 can execute in pa
 | 4. Page Header & Content Layout | 0/1 | Complete    | 2026-02-17 |
 | 5. Dashboard Page Migration | 0/2 | Not started | - |
 | 6. Habits, Tasks & Remaining Pages Migration | 0/2 | Complete    | 2026-02-17 |
-| 7. Sidebar Enrichment | 0/3 | Not started | - |
+| 7. Sidebar Enrichment | 0/3 | Complete    | 2026-02-17 |
 | 8. Visual Polish | 0/1 | Not started | - |
 | 9. Test Stabilization & Baseline Regeneration | 0/2 | Not started | - |
