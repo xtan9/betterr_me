@@ -157,14 +157,16 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
     (data.stats.total_habits === 0 && data.stats.total_tasks === 0)
   ) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Greeting */}
-        <div className="space-y-2">
-          <h1 className="font-display text-3xl font-bold tracking-tight">
-            {getGreeting()}, {userName}! 👋
-          </h1>
-          <p className="text-muted-foreground">{t("welcome")}</p>
-        </div>
+        <Card>
+          <CardContent className="py-5">
+            <h1 className="text-page-title tracking-tight">
+              {getGreeting()}, {userName}! 👋
+            </h1>
+            <p className="mt-1 text-muted-foreground">{t("welcome")}</p>
+          </CardContent>
+        </Card>
 
         {/* Empty state card */}
         <Card className="border-dashed">
@@ -216,14 +218,16 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
     .slice(0, 3);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Greeting */}
-      <div className="space-y-2">
-        <h1 className="font-display text-3xl font-bold tracking-tight">
-          {getGreeting()}, {userName}! 👋
-        </h1>
-        <p className="text-muted-foreground">{t("welcome")}</p>
-      </div>
+      <Card>
+        <CardContent className="py-5">
+          <h1 className="text-page-title tracking-tight">
+            {getGreeting()}, {userName}! 👋
+          </h1>
+          <p className="mt-1 text-muted-foreground">{t("welcome")}</p>
+        </CardContent>
+      </Card>
 
       {/* Weekly Insight — show on week start day if not dismissed */}
       {insightsData?.insights && insightsData.insights.length > 0 && !insightDismissed && (
@@ -263,7 +267,7 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
       )}
 
       {/* Main content grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-card-gap xl:grid-cols-2">
         {/* Habits Checklist */}
         <HabitChecklist
           habits={data.habits}
@@ -287,20 +291,26 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
 // Loading skeleton component (DASH-007)
 function DashboardSkeleton() {
   return (
-    <div className="space-y-8" data-testid="dashboard-skeleton">
+    <div className="space-y-6" data-testid="dashboard-skeleton">
       {/* Greeting skeleton */}
-      <div className="space-y-2">
-        <Skeleton className="h-9 w-full max-w-64" />
-        <Skeleton className="h-5 w-full max-w-96" />
-      </div>
+      <Card>
+        <CardContent className="py-5">
+          <Skeleton className="h-9 w-full max-w-64" />
+          <Skeleton className="mt-2 h-5 w-full max-w-96" />
+        </CardContent>
+      </Card>
 
       {/* Motivation skeleton */}
-      <Skeleton className="h-16 w-full rounded-lg" />
+      <Card>
+        <CardContent className="py-4">
+          <Skeleton className="h-16 w-full rounded-lg" />
+        </CardContent>
+      </Card>
 
       {/* Stats skeleton */}
       <div className="space-y-4">
         <Skeleton className="h-6 w-40" />
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-card-gap">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
@@ -308,7 +318,7 @@ function DashboardSkeleton() {
       </div>
 
       {/* Content grid skeleton */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-card-gap xl:grid-cols-2">
         <Card>
           <div className="p-6 space-y-4">
             <div className="flex justify-between">
