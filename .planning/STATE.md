@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 4: Page Header & Content Layout (plan 01 complete, phase complete)
+**Current focus:** Phase 5: Dashboard Page Migration (plan 01 of 02 complete)
 
 ## Current Position
 
-Phase: 4 of 9 (Page Header & Content Layout)
-Plan: 1 of 1 in current phase (PHASE COMPLETE)
-Status: Phase Complete
-Last activity: 2026-02-17 -- Completed 04-01-PLAN.md (design tokens, PageHeader, content wrapper)
+Phase: 5 of 9 (Dashboard Page Migration)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-02-17 -- Completed 05-01-PLAN.md (dashboard greeting, stat cards, motivation card migration)
 
-Progress: [#####.....] 50%
+Progress: [######....] 56%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 3.5min
-- Total execution time: 0.46 hours
+- Total plans completed: 9
+- Average duration: 3.4min
+- Total execution time: 0.51 hours
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [#####.....] 50%
 | 02 | 2 | 7min | 3.5min |
 | 03 | 3 | 8min | 2.7min |
 | 04 | 1 | 7min | 7min |
+| 05 | 1 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 4min, 2min, 2min, 7min
-- Trend: Phase 04 slightly longer due to 3 tasks with build+lint+test verification
+- Last 5 plans: 4min, 2min, 2min, 7min, 3min
+- Trend: Phase 05 plan 01 quick -- 2 tasks, straightforward token/Card migrations
 
 *Updated after each plan completion*
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - [04-01]: PageHeader uses props-based API (title, subtitle, actions, className) for consistency enforcement
 - [04-01]: Content wrapper inlined in SidebarLayout (not separate ContentLayout) -- all authenticated pages use same wrapper
 - [04-01]: max-w-content token (1400px) for ultra-wide screen centering via CSS variable
+- [05-01]: Motivation message uses standard Card (bg-card/border/shadow) instead of bg-primary/5 accent background
+- [05-01]: Blue/orange stat icon colors preserved as semantic accents; only emerald/green migrated to text-primary
+- [05-01]: StatCard uses gap-0 py-0 overrides to suppress shadcn Card default spacing for compact layout
 
 ### Pending Todos
 
@@ -91,5 +95,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 04-01-PLAN.md (Phase 4 complete)
-Resume file: .planning/phases/04-page-header-content-layout/04-01-SUMMARY.md
+Stopped at: Completed 05-01-PLAN.md
+Resume file: .planning/phases/05-dashboard-page-migration/05-01-SUMMARY.md
