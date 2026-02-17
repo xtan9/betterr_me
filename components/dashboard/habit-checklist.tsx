@@ -68,14 +68,14 @@ export function HabitChecklist({
             </div>
             <div className="mt-4 pt-4 border-t">
               {allComplete ? (
-                <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800/30 p-6 text-center">
-                  <div className="inline-flex items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50 p-3 mb-3">
-                    <PartyPopper className="size-6 text-emerald-600 dark:text-emerald-400" />
+                <div className="rounded-xl bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20 border border-primary/20 dark:border-primary/30 p-6 text-center">
+                  <div className="inline-flex items-center justify-center rounded-full bg-primary/10 p-3 mb-3">
+                    <PartyPopper className="size-6 text-primary" />
                   </div>
-                  <p className="font-display text-lg font-bold text-emerald-900 dark:text-emerald-100">
+                  <p className="font-display text-section-heading font-bold text-foreground">
                     {t("perfectDay")}
                   </p>
-                  <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
+                  <p className="text-sm text-primary mt-1">
                     {t("allCompletedDesc", { count: totalCount })}
                   </p>
                 </div>
