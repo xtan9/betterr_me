@@ -268,6 +268,13 @@ describe('TasksDB', () => {
       expect(mockSupabaseClient.lte).toHaveBeenCalledWith('due_date', '2026-06-15');
     });
 
+    it('should handle database errors', async () => {
+      mockSupabaseClient.setMockResponse(null, { message: 'DB error' });
+
+      await expect(tasksDB.getTodayTasks(mockUserId, '2026-01-31'))
+        .rejects.toEqual({ message: 'DB error' });
+    });
+
     it('should return both completed and incomplete tasks', async () => {
       const completedTask: Task = {
         ...mockTask,
@@ -294,10 +301,19 @@ describe('TasksDB', () => {
     it('should fetch upcoming tasks within 7 days', async () => {
       mockSupabaseClient.setMockResponse([mockTask]);
 
-      const tasks = await tasksDB.getUpcomingTasks(mockUserId, 7);
+      const tasks = await tasksDB.getUpcomingTasks(mockUserId, '2026-01-31', 7);
 
       expect(tasks).toEqual([mockTask]);
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('is_completed', false);
+      expect(mockSupabaseClient.gt).toHaveBeenCalledWith('due_date', '2026-01-31');
+    });
+
+    it('should use the provided date parameter', async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await tasksDB.getUpcomingTasks(mockUserId, '2026-06-15', 7);
+
+      expect(mockSupabaseClient.gt).toHaveBeenCalledWith('due_date', '2026-06-15');
     });
   });
 
@@ -310,10 +326,19 @@ describe('TasksDB', () => {
 
       mockSupabaseClient.setMockResponse([overdueTask]);
 
-      const tasks = await tasksDB.getOverdueTasks(mockUserId);
+      const tasks = await tasksDB.getOverdueTasks(mockUserId, '2026-01-31');
 
       expect(tasks).toEqual([overdueTask]);
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('is_completed', false);
+      expect(mockSupabaseClient.lt).toHaveBeenCalledWith('due_date', '2026-01-31');
+    });
+
+    it('should use the provided date parameter', async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await tasksDB.getOverdueTasks(mockUserId, '2026-06-15');
+
+      expect(mockSupabaseClient.lt).toHaveBeenCalledWith('due_date', '2026-06-15');
     });
   });
 });
