@@ -78,10 +78,10 @@ Plans:
   1. Every authenticated page displays a consistent page header with title, optional subtitle, and primary action button area
   2. Typography hierarchy (font sizes, weights), padding, margins, border radius, and spacing match Chameleon's dashboard CSS values
   3. Content area has a max-width with horizontal centering on ultra-wide screens (1920px+)
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md -- Correct design tokens, create PageHeader component, update SidebarLayout content wrapper
 
 ### Phase 5: Dashboard Page Migration
 **Goal**: The dashboard page fully embodies the new card-on-gray aesthetic with floating white cards on a gray background, spacious stat cards, and the habit checklist working within the new layout
