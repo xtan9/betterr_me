@@ -107,11 +107,13 @@ Plans:
   3. Profile and auth pages (login, signup, password reset) use the updated visual system
   4. Detail and edit views show breadcrumb navigation in the page header (e.g., Habits > Edit "Running")
   5. All pages render correctly at 768px, 1024px, and 1280px with sidebar expanded and collapsed
-**Plans**: TBD
+**Plans:** 4 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 06-01-PLAN.md -- Create PageBreadcrumbs component, add hideChrome/id props to HabitForm and TaskForm, add i18n strings
+- [ ] 06-02-PLAN.md -- Migrate habits pages (list, detail, create, edit) to PageHeader, breadcrumbs, and Card layout
+- [ ] 06-03-PLAN.md -- Migrate tasks pages (list, detail, create, edit) and settings to PageHeader, breadcrumbs, and Card layout
+- [ ] 06-04-PLAN.md -- Add AuthBranding to all 6 auth pages (login, sign-up, forgot-password, update-password, sign-up-success, error)
 
 ### Phase 7: Sidebar Enrichment
 **Goal**: The sidebar becomes a complete navigation and account hub with user profile, organized sections, live notification badges, and relocated theme/language controls
