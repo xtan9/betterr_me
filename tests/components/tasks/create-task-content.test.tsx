@@ -43,6 +43,8 @@ const allTranslations: Record<string, Record<string, string>> = {
     'titlePlaceholder': 'What do you need to do?',
     'descriptionLabel': 'Description',
     'descriptionPlaceholder': 'Add some details...',
+    'intentionLabel': 'Your Why',
+    'intentionPlaceholder': 'Why is this task important to you?',
     'categoryLabel': 'Category',
     'priorityLabel': 'Priority',
     'dueDateLabel': 'Due Date',
@@ -52,6 +54,9 @@ const allTranslations: Record<string, Record<string, string>> = {
     'save': 'Save Changes',
     'creating': 'Creating...',
     'saving': 'Saving...',
+  },
+  'tasks.breadcrumb': {
+    'newTask': 'New Task',
   },
   'tasks.categories': {
     'work': 'Work',
@@ -64,6 +69,11 @@ const allTranslations: Record<string, Record<string, string>> = {
     '1': 'Low',
     '2': 'Medium',
     '3': 'High',
+  },
+  'common.nav': {
+    'tasks': 'Tasks',
+    'habits': 'Habits',
+    'settings': 'Settings',
   },
 };
 
