@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 4: Page Header & Content Layout (context gathered)
+**Current focus:** Phase 4: Page Header & Content Layout (plan 01 complete, phase complete)
 
 ## Current Position
 
-Phase: 3 of 9 (Sidebar Collapse & Persistence)
-Plan: 3 of 3 in current phase (PHASE COMPLETE)
+Phase: 4 of 9 (Page Header & Content Layout)
+Plan: 1 of 1 in current phase (PHASE COMPLETE)
 Status: Phase Complete
-Last activity: 2026-02-16 -- Completed 03-03-PLAN.md (gap closure: icon rail mode)
+Last activity: 2026-02-17 -- Completed 04-01-PLAN.md (design tokens, PageHeader, content wrapper)
 
-Progress: [####......] 40%
+Progress: [#####.....] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 3min
-- Total execution time: 0.34 hours
+- Total plans completed: 8
+- Average duration: 3.5min
+- Total execution time: 0.46 hours
 
 **By Phase:**
 
@@ -30,10 +30,11 @@ Progress: [####......] 40%
 | 01 | 2 | 7min | 3.5min |
 | 02 | 2 | 7min | 3.5min |
 | 03 | 3 | 8min | 2.7min |
+| 04 | 1 | 7min | 7min |
 
 **Recent Trend:**
-- Last 5 plans: 4min, 3min, 4min, 2min, 2min
-- Trend: Consistent (faster on focused single-task plans)
+- Last 5 plans: 3min, 4min, 2min, 2min, 7min
+- Trend: Phase 04 slightly longer due to 3 tasks with build+lint+test verification
 
 *Updated after each plan completion*
 
@@ -71,6 +72,11 @@ Recent decisions affecting current work:
 - [03-03]: Icon rail via shadcn collapsible=icon replaces fully-hidden offcanvas mode (matches Chameleon design)
 - [03-03]: CSS overlay locks gap div to icon width during hover expansion to prevent content shift
 - [03-03]: Invisible hover trigger zone removed since icon rail itself is the hover target
+- [04-01]: Page title corrected from 28px to 24px based on Playwright-verified Chameleon measurements
+- [04-01]: Card gap corrected from 24px to 16px -- Chameleon's generous feel comes from container/card padding, not gaps
+- [04-01]: PageHeader uses props-based API (title, subtitle, actions, className) for consistency enforcement
+- [04-01]: Content wrapper inlined in SidebarLayout (not separate ContentLayout) -- all authenticated pages use same wrapper
+- [04-01]: max-w-content token (1400px) for ultra-wide screen centering via CSS variable
 
 ### Pending Todos
 
@@ -84,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-16
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-page-header-content-layout/04-CONTEXT.md
+Last session: 2026-02-17
+Stopped at: Completed 04-01-PLAN.md (Phase 4 complete)
+Resume file: .planning/phases/04-page-header-content-layout/04-01-SUMMARY.md
