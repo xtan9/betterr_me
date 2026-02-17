@@ -94,9 +94,9 @@
     --popover-foreground: 0 0% 95%;
 
     /* === Accent === */
-    --primary: 160 60% 50%;
+    --primary: 160 45% 55%; /* desaturated for eye comfort (light: 157 63% 45%) */
     --primary-foreground: 0 0% 9%;
-    --ring: 160 60% 50%;
+    --ring: 160 45% 55%;
 
     /* === Neutral semantic === */
     --secondary: 240 15% 20%;
@@ -117,12 +117,12 @@
     /* === Sidebar (darker than content) === */
     --sidebar-background: 240 28% 12%;
     --sidebar-foreground: 240 5% 85%;
-    --sidebar-primary: 160 60% 50%;
+    --sidebar-primary: 160 45% 55%;
     --sidebar-primary-foreground: 0 0% 9%;
     --sidebar-accent: 240 15% 18%;
     --sidebar-accent-foreground: 240 5% 85%;
     --sidebar-border: 240 15% 20%;
-    --sidebar-ring: 160 60% 50%;
+    --sidebar-ring: 160 45% 55%;
 
     /* === Highlight === */
     --highlight: 160 30% 20%;
