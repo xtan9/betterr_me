@@ -250,14 +250,50 @@ describe('TasksDB', () => {
   });
 
   describe('getTodayTasks', () => {
-    it('should fetch today and overdue tasks', async () => {
+    it('should fetch today and overdue tasks using the provided date', async () => {
       mockSupabaseClient.setMockResponse([mockTask]);
 
-      const tasks = await tasksDB.getTodayTasks(mockUserId);
+      const tasks = await tasksDB.getTodayTasks(mockUserId, '2026-01-31');
 
       expect(tasks).toEqual([mockTask]);
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('is_completed', false);
-      expect(mockSupabaseClient.lte).toHaveBeenCalled(); // due_date <= today
+      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('due_date', '2026-01-31');
+      expect(mockSupabaseClient.eq).not.toHaveBeenCalledWith('is_completed', false);
+    });
+
+    it('should use the provided date parameter instead of server time', async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await tasksDB.getTodayTasks(mockUserId, '2026-06-15');
+
+      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('due_date', '2026-06-15');
+    });
+
+    it('should handle database errors', async () => {
+      mockSupabaseClient.setMockResponse(null, { message: 'DB error' });
+
+      await expect(tasksDB.getTodayTasks(mockUserId, '2026-01-31'))
+        .rejects.toEqual({ message: 'DB error' });
+    });
+
+    it('should return both completed and incomplete tasks', async () => {
+      const completedTask: Task = {
+        ...mockTask,
+        id: 'task-completed',
+        is_completed: true,
+        completed_at: '2026-01-31T12:00:00Z',
+      };
+      const incompleteTask: Task = {
+        ...mockTask,
+        id: 'task-incomplete',
+        is_completed: false,
+      };
+      mockSupabaseClient.setMockResponse([completedTask, incompleteTask]);
+
+      const tasks = await tasksDB.getTodayTasks(mockUserId, '2026-01-31');
+
+      expect(tasks).toHaveLength(2);
+      expect(tasks).toContainEqual(completedTask);
+      expect(tasks).toContainEqual(incompleteTask);
     });
   });
 
@@ -265,10 +301,19 @@ describe('TasksDB', () => {
     it('should fetch upcoming tasks within 7 days', async () => {
       mockSupabaseClient.setMockResponse([mockTask]);
 
-      const tasks = await tasksDB.getUpcomingTasks(mockUserId, 7);
+      const tasks = await tasksDB.getUpcomingTasks(mockUserId, '2026-01-31', 7);
 
       expect(tasks).toEqual([mockTask]);
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('is_completed', false);
+      expect(mockSupabaseClient.gt).toHaveBeenCalledWith('due_date', '2026-01-31');
+    });
+
+    it('should use the provided date parameter', async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await tasksDB.getUpcomingTasks(mockUserId, '2026-06-15', 7);
+
+      expect(mockSupabaseClient.gt).toHaveBeenCalledWith('due_date', '2026-06-15');
     });
   });
 
@@ -281,10 +326,19 @@ describe('TasksDB', () => {
 
       mockSupabaseClient.setMockResponse([overdueTask]);
 
-      const tasks = await tasksDB.getOverdueTasks(mockUserId);
+      const tasks = await tasksDB.getOverdueTasks(mockUserId, '2026-01-31');
 
       expect(tasks).toEqual([overdueTask]);
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('is_completed', false);
+      expect(mockSupabaseClient.lt).toHaveBeenCalledWith('due_date', '2026-01-31');
+    });
+
+    it('should use the provided date parameter', async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await tasksDB.getOverdueTasks(mockUserId, '2026-06-15');
+
+      expect(mockSupabaseClient.lt).toHaveBeenCalledWith('due_date', '2026-06-15');
     });
   });
 });

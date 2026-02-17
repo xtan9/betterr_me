@@ -15,3 +15,18 @@
 
 ---
 
+
+## v1.1 Dashboard Task Fixes (Shipped: 2026-02-17)
+
+**Phases completed:** 1 phase, 1 plan, 2 tasks
+
+**Key accomplishments:**
+- Fixed `getTodayTasks` to accept client-sent date parameter instead of server-local time
+- Removed `is_completed` filter — completed tasks now appear in dashboard "X of Y" counts
+- Eliminated timezone-based task duplication between "Today" and "Tomorrow" sections
+- Updated all 3 call sites (dashboard API, dashboard SSR page, tasks API) and added tests
+
+**Stats:** 19 files changed (source), +541/-30 lines, 10 commits, 1 day
+
+---
+

@@ -27,12 +27,10 @@ export default async function DashboardPage() {
   // Server-side date — may differ from client timezone; SWR will revalidate with correct client date
   const tomorrowStr = getNextDateString(date);
 
-  const [habitsWithStatus, todayTasks, tasksCompletedTodayCount, totalTaskCount, tasksTomorrow, milestonesToday] =
+  const [habitsWithStatus, todayTasks, totalTaskCount, tasksTomorrow, milestonesToday] =
     await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
-      tasksDB.getTodayTasks(user.id),
-      // Count completed tasks for today (HEAD-only, no row data)
-      tasksDB.getTaskCount(user.id, { due_date: date, is_completed: true }),
+      tasksDB.getTodayTasks(user.id, date),
       // Count all tasks (HEAD-only, no row data)
       tasksDB.getTaskCount(user.id),
       // Get incomplete tasks for tomorrow (rows needed for rendering)
@@ -42,6 +40,9 @@ export default async function DashboardPage() {
         return [] as HabitMilestone[];
       }),
     ]);
+
+  // Derive completed count from todayTasks (no separate DB call needed)
+  const tasksCompletedTodayCount = todayTasks.filter(t => t.is_completed).length;
 
   const completedHabitsToday = habitsWithStatus.filter(
     (h) => h.completed_today

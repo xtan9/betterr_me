@@ -5,6 +5,7 @@ import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { taskFormSchema } from '@/lib/validations/task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
+import { getLocalDateString } from '@/lib/utils';
 import type { TaskInsert, TaskFilters } from '@/lib/db/types';
 
 /**
@@ -34,9 +35,18 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const view = searchParams.get('view');
 
+    // Read and validate date for view-based queries
+    const date = searchParams.get('date') || getLocalDateString();
+    if (view && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return NextResponse.json(
+        { error: 'Invalid date format. Use YYYY-MM-DD' },
+        { status: 400 }
+      );
+    }
+
     // Handle special views
     if (view === 'today') {
-      const tasks = await tasksDB.getTodayTasks(user.id);
+      const tasks = await tasksDB.getTodayTasks(user.id, date);
       return NextResponse.json({ tasks });
     }
 
@@ -48,12 +58,12 @@ export async function GET(request: NextRequest) {
           { status: 400 }
         );
       }
-      const tasks = await tasksDB.getUpcomingTasks(user.id, days);
+      const tasks = await tasksDB.getUpcomingTasks(user.id, date, days);
       return NextResponse.json({ tasks });
     }
 
     if (view === 'overdue') {
-      const tasks = await tasksDB.getOverdueTasks(user.id);
+      const tasks = await tasksDB.getOverdueTasks(user.id, date);
       return NextResponse.json({ tasks });
     }
 
