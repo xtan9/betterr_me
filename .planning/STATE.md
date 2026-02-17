@@ -97,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-17
-Stopped at: Completed 05-02-PLAN.md (Phase 5 complete)
-Resume file: .planning/phases/05-dashboard-page-migration/05-02-SUMMARY.md
+Last session: 2026-02-16
+Stopped at: Phase 6 context gathered
+Resume file: .planning/phases/06-habits-tasks-remaining-pages-migration/06-CONTEXT.md
