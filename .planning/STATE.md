@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 6: Habits/Tasks/Remaining Pages Migration (2 of 4 plans done)
+**Current focus:** Phase 6: Habits/Tasks/Remaining Pages Migration (3 of 4 plans done)
 
 ## Current Position
 
 Phase: 6 of 9 (Habits/Tasks/Remaining Pages Migration)
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In Progress
 Last activity: 2026-02-17 -- Completed 06-04-PLAN.md (auth pages branding: AuthBranding component on all 6 auth pages)
 
-Progress: [#######...] 75%
+Progress: [########..] 81%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
-- Average duration: 3.3min
-- Total execution time: 0.64 hours
+- Total plans completed: 13
+- Average duration: 3.4min
+- Total execution time: 0.72 hours
 
 **By Phase:**
 
@@ -32,11 +32,11 @@ Progress: [#######...] 75%
 | 03 | 3 | 8min | 2.7min |
 | 04 | 1 | 7min | 7min |
 | 05 | 2 | 6min | 3min |
-| 06 | 2 | 5min | 2.5min |
+| 06 | 3 | 10min | 3.3min |
 
 **Recent Trend:**
-- Last 5 plans: 7min, 3min, 3min, 3min, 2min
-- Trend: Consistent 2-3min pace for straightforward component work
+- Last 5 plans: 3min, 3min, 3min, 2min, 5min
+- Trend: Consistent 2-5min pace for component migration work
 
 *Updated after each plan completion*
 
@@ -88,6 +88,9 @@ Recent decisions affecting current work:
 - [06-01]: PageBreadcrumbs uses text-xs sm:text-sm for visual subordination to page title
 - [06-01]: Mobile breadcrumb truncation at max-w-[200px] with full display on sm+
 - [06-01]: Emerald-500 submit buttons migrated to default Button primary styling (design token inheritance)
+- [06-02]: Habit detail: habit name in both breadcrumb and PageHeader h1 (breadcrumb for nav, h1 for identity)
+- [06-02]: Active status badge migrated from bg-emerald-500 to bg-primary (design token inheritance)
+- [06-02]: HTML form attribute on external submit buttons works in jsdom -- no test workaround needed
 - [06-04]: AuthBranding uses same brand mark pattern as AppSidebar (B initial in rounded-md bg-primary square)
 - [06-04]: Auth pages keep white bg-background (no bg-page gray), distinct from app interior
 
