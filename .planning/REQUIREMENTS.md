@@ -13,7 +13,7 @@
 
 ## Future Requirements
 
-(None — bugfix milestone)
+(None -- bugfix milestone)
 
 ## Out of Scope
 
@@ -27,15 +27,15 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TASK-01 | — | Pending |
-| TASK-02 | — | Pending |
-| TASK-03 | — | Pending |
+| TASK-01 | Phase 6 | Pending |
+| TASK-02 | Phase 6 | Pending |
+| TASK-03 | Phase 6 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 3 total
-- Mapped to phases: 0
-- Unmapped: 3 ⚠️
+- Mapped to phases: 3
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-16*
-*Last updated: 2026-02-16 after initial definition*
+*Last updated: 2026-02-16 after roadmap creation*
