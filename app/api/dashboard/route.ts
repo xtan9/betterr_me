@@ -69,10 +69,12 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Supplementary queries — failure falls back gracefully
+    let logsFetchFailed = false;
     const [allLogs, milestonesToday] = await Promise.all([
       // Bulk fetch 30-day logs for all habits (1 query, avoids N+1)
       habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date).catch((err) => {
         log.error('Failed to fetch habit logs for absence', err, { userId: user.id, date });
+        logsFetchFailed = true;
         return [] as Pick<HabitLog, 'habit_id' | 'logged_date' | 'completed'>[];
       }),
       // Get milestones achieved today
@@ -95,6 +97,9 @@ export async function GET(request: NextRequest) {
 
     // Enrich habits with absence data
     const warnings: string[] = [];
+    if (logsFetchFailed) {
+      warnings.push('Absence data may be inaccurate — habit logs temporarily unavailable');
+    }
     const enrichedHabits = habitsWithStatus.map(habit => {
       try {
         const completedDates = logsByHabit.get(habit.id) || new Set<string>();

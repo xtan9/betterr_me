@@ -286,6 +286,32 @@ describe('GET /api/dashboard', () => {
     expect(data.stats).toBeDefined();
   });
 
+  it('should include _warnings when getAllUserLogs fails', async () => {
+    const habits = [
+      {
+        id: 'h1', name: 'Run', current_streak: 3, completed_today: true,
+        monthly_completion_rate: 80, frequency: { type: 'daily' },
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ];
+
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockHabitLogsDB.getAllUserLogs).mockRejectedValue(new Error('DB timeout'));
+    vi.mocked(mockMilestonesDB.getTodaysMilestones).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-15');
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // Critical: _warnings must be present when logs fetch fails
+    expect(data._warnings).toBeDefined();
+    expect(data._warnings.length).toBeGreaterThan(0);
+    expect(data._warnings[0]).toContain('Absence');
+  });
+
   it('should return 401 if not authenticated', async () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
