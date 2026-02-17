@@ -37,7 +37,7 @@ function ReflectionStrip({ onReflect }: ReflectionStripProps) {
             key={difficulty}
             type="button"
             onClick={() => onReflect(difficulty)}
-            className="text-sm px-2 py-0.5 rounded-md hover:bg-muted transition-colors"
+            className="text-sm px-2 py-0.5 rounded-md hover:bg-muted transition-colors duration-150 motion-reduce:transition-none"
             title={t(label)}
             aria-label={t(label)}
           >
@@ -95,7 +95,7 @@ function TaskRow({
   };
 
   return (
-    <div className="flex items-start gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-accent">
+    <div className="flex items-start gap-3 rounded-lg px-3 py-2 transition-colors duration-150 hover:bg-accent motion-reduce:transition-none">
       <Checkbox
         checked={task.is_completed}
         onCheckedChange={handleCheckboxChange}
@@ -332,7 +332,7 @@ export function TasksToday({
             {extraTomorrow > 0 && (
               <Link
                 href="/tasks"
-                className="flex items-center justify-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center justify-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors duration-150 motion-reduce:transition-none"
               >
                 {t("moreTomorrow", { count: extraTomorrow })}
                 <ChevronRight className="size-3" />

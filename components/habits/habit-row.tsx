@@ -30,7 +30,7 @@ export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-accent">
+    <div className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors duration-150 hover:bg-accent motion-reduce:transition-none">
       <Checkbox
         checked={habit.completed_today}
         onCheckedChange={handleCheckboxChange}
@@ -40,7 +40,7 @@ export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps
       />
       <button
         type="button"
-        className="flex-1 text-left min-w-0"
+        className="flex-1 text-left min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
         onClick={() => onClick(habit.id)}
       >
         <span className="font-medium truncate block">{habit.name}</span>
