@@ -66,6 +66,11 @@ vi.mock("@/components/ui/collapsible", () => ({
   CollapsibleContent: ({ children }: any) => <div>{children}</div>,
 }));
 
+// Mock SidebarUserFooter (tested separately)
+vi.mock("@/components/layouts/sidebar-user-footer", () => ({
+  SidebarUserFooter: () => <div data-testid="sidebar-user-footer">User Footer</div>,
+}));
+
 // Mock shadcn tooltip components
 vi.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: any) => <>{children}</>,
