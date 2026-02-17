@@ -5,13 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-16)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Planning next milestone
+**Current focus:** v1.1 Dashboard Task Fixes
 
 ## Current Position
 
-Milestone: v1.0 Codebase Hardening — COMPLETE (2026-02-16)
-Status: Between milestones — ready for /gsd:new-milestone
-Last activity: 2026-02-16 — v1.0 milestone completed and archived
+Milestone: v1.1 Dashboard Task Fixes
+Phase: Not started (defining requirements)
+Status: Defining requirements
+Last activity: 2026-02-16 — Milestone v1.1 started
 
 ## Performance Metrics
 
@@ -37,5 +38,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: v1.0 milestone complete
-Resume: /gsd:new-milestone
+Stopped at: v1.1 milestone started
+Resume: Define requirements → create roadmap

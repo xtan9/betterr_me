@@ -44,7 +44,13 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ### Active
 
-(No active requirements — next milestone not yet planned)
+#### Current Milestone: v1.1 Dashboard Task Fixes
+
+**Goal:** Fix timezone-dependent task duplication and incorrect completion count on dashboard
+
+**Target fixes:**
+- getTodayTasks() uses server time (UTC) instead of client-sent date, causing tasks to appear in both "today" and "tomorrow" sections when Vercel UTC date differs from user's local date
+- Completed tasks vanish from dashboard count instead of being tracked (shows "0 of 1" instead of "1 of 2")
 
 ### Out of Scope
 
@@ -79,4 +85,4 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | Habit count limit test unlocked from message text | Flexible assertion prevents brittle tests | ✓ Good — asserts 400 + error presence only |
 
 ---
-*Last updated: 2026-02-16 after v1.0 milestone*
+*Last updated: 2026-02-16 after v1.1 milestone start*
