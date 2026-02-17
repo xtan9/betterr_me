@@ -26,8 +26,8 @@ test.describe('Task Detail Page', () => {
     await page.goto(`/tasks/${taskId}`);
     await page.waitForLoadState('networkidle');
 
-    // Should display the task title
-    await expect(page.getByText(SEED_TASK_TITLE)).toBeVisible({ timeout: 10000 });
+    // Should display the task title in the page heading
+    await expect(page.getByRole('heading', { name: SEED_TASK_TITLE })).toBeVisible({ timeout: 10000 });
 
     // Should display category, priority, due date, due time sections
     await expect(page.getByText(/category/i).first()).toBeVisible();
@@ -40,7 +40,7 @@ test.describe('Task Detail Page', () => {
 
     // Page main content should appear (AppLayout wraps in <main>)
     await expect(page.locator('main')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(SEED_TASK_TITLE)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: SEED_TASK_TITLE })).toBeVisible({ timeout: 10000 });
   });
 
   test('should toggle task completion status', async ({ page }) => {
@@ -49,7 +49,7 @@ test.describe('Task Detail Page', () => {
     await page.waitForLoadState('networkidle');
 
     // Wait for the task title to be visible
-    await expect(page.getByText(SEED_TASK_TITLE)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: SEED_TASK_TITLE })).toBeVisible({ timeout: 10000 });
 
     // Check if the "Pending" badge is visible (task starts as not completed)
     const pendingBadge = page.getByText(/pending/i);
@@ -78,7 +78,7 @@ test.describe('Task Detail Page', () => {
     await page.goto(`/tasks/${taskId}`);
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByText(SEED_TASK_TITLE)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: SEED_TASK_TITLE })).toBeVisible({ timeout: 10000 });
 
     // Click the Edit button
     const editButton = page.getByRole('button', { name: /edit/i });
@@ -94,12 +94,12 @@ test.describe('Task Detail Page', () => {
     await page.goto(`/tasks/${taskId}`);
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByText(SEED_TASK_TITLE)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: SEED_TASK_TITLE })).toBeVisible({ timeout: 10000 });
 
-    // Click the Back button
-    const backButton = page.getByRole('button', { name: /back/i });
-    await expect(backButton).toBeVisible();
-    await backButton.click();
+    // Click the Tasks breadcrumb link to navigate back (breadcrumbs replaced Back button)
+    const tasksBreadcrumb = page.getByLabel('breadcrumb').getByRole('link', { name: /tasks/i });
+    await expect(tasksBreadcrumb).toBeVisible();
+    await tasksBreadcrumb.click();
 
     // Should navigate to tasks list
     await expect(page).toHaveURL(/\/tasks$/, { timeout: 10000 });
@@ -161,7 +161,7 @@ test.describe('Task Edit Page', () => {
     // Navigate to detail page first, then to edit
     await page.goto(`/tasks/${taskId}`);
     await page.waitForLoadState('networkidle');
-    await expect(page.getByText(SEED_TASK_TITLE)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: SEED_TASK_TITLE })).toBeVisible({ timeout: 10000 });
 
     const editButton = page.getByRole('button', { name: /edit/i });
     await editButton.click();
@@ -183,7 +183,7 @@ test.describe('Task Delete Flow', () => {
     await page.goto(`/tasks/${taskId}`);
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByText(SEED_TASK_TITLE)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: SEED_TASK_TITLE })).toBeVisible({ timeout: 10000 });
 
     // Click delete button
     const deleteButton = page.getByRole('button', { name: /delete/i }).first();
@@ -202,6 +202,6 @@ test.describe('Task Delete Flow', () => {
     await expect(dialog).not.toBeVisible({ timeout: 5000 });
 
     // Task should still be visible
-    await expect(page.getByText(SEED_TASK_TITLE)).toBeVisible();
+    await expect(page.getByRole('heading', { name: SEED_TASK_TITLE })).toBeVisible();
   });
 });
