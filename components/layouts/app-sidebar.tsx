@@ -14,7 +14,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarMenuBadge, // eslint-disable-line @typescript-eslint/no-unused-vars -- pre-imported for 07-03
+  SidebarMenuBadge,
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import {
@@ -29,6 +29,7 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import { SidebarUserFooter } from "@/components/layouts/sidebar-user-footer";
+import { useSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 
 const mainNavItems = [
   {
@@ -65,10 +66,18 @@ interface AppSidebarProps {
   onTogglePin?: () => void;
 }
 
+const formatBadge = (count: number) => (count > 9 ? "9+" : String(count));
+
 export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
   const pathname = usePathname();
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
+  const { habitsIncomplete, tasksDue } = useSidebarCounts();
+
+  const badgeCounts: Record<string, number> = {
+    habits: habitsIncomplete,
+    tasks: tasksDue,
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -135,6 +144,11 @@ export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
                           <span>{t(item.labelKey)}</span>
                         </Link>
                       </SidebarMenuButton>
+                      {badgeCounts[item.labelKey] > 0 && (
+                        <SidebarMenuBadge>
+                          {formatBadge(badgeCounts[item.labelKey])}
+                        </SidebarMenuBadge>
+                      )}
                     </SidebarMenuItem>
                   ))}
                 </SidebarMenu>

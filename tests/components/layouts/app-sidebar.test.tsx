@@ -71,6 +71,18 @@ vi.mock("@/components/layouts/sidebar-user-footer", () => ({
   SidebarUserFooter: () => <div data-testid="sidebar-user-footer">User Footer</div>,
 }));
 
+// Mock useSidebarCounts
+const mockUseSidebarCounts = vi.fn(() => ({
+  habitsIncomplete: 0,
+  tasksDue: 0,
+  isLoading: false,
+  error: null,
+  mutate: vi.fn(),
+}));
+vi.mock("@/lib/hooks/use-sidebar-counts", () => ({
+  useSidebarCounts: () => mockUseSidebarCounts(),
+}));
+
 // Mock shadcn tooltip components
 vi.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: any) => <>{children}</>,
@@ -93,6 +105,13 @@ describe("AppSidebar", () => {
   beforeEach(() => {
     mockPathname.mockReturnValue("/dashboard");
     defaultProps.onTogglePin = vi.fn();
+    mockUseSidebarCounts.mockReturnValue({
+      habitsIncomplete: 0,
+      tasksDue: 0,
+      isLoading: false,
+      error: null,
+      mutate: vi.fn(),
+    });
   });
 
   it("renders all 4 nav items as links", () => {
@@ -246,6 +265,81 @@ describe("AppSidebar", () => {
 
       const tooltipContent = screen.getByTestId("tooltip-content");
       expect(tooltipContent).toHaveTextContent("pin");
+    });
+  });
+
+  describe("notification badges", () => {
+    it("shows habits badge when habitsIncomplete > 0", () => {
+      mockUseSidebarCounts.mockReturnValue({
+        habitsIncomplete: 3,
+        tasksDue: 0,
+        isLoading: false,
+        error: null,
+        mutate: vi.fn(),
+      });
+      render(<AppSidebar {...defaultProps} />);
+
+      const badges = screen.getAllByTestId("sidebar-menu-badge");
+      expect(badges).toHaveLength(1);
+      expect(badges[0]).toHaveTextContent("3");
+    });
+
+    it("shows tasks badge when tasksDue > 0", () => {
+      mockUseSidebarCounts.mockReturnValue({
+        habitsIncomplete: 0,
+        tasksDue: 5,
+        isLoading: false,
+        error: null,
+        mutate: vi.fn(),
+      });
+      render(<AppSidebar {...defaultProps} />);
+
+      const badges = screen.getAllByTestId("sidebar-menu-badge");
+      expect(badges).toHaveLength(1);
+      expect(badges[0]).toHaveTextContent("5");
+    });
+
+    it("hides badges when counts are 0", () => {
+      mockUseSidebarCounts.mockReturnValue({
+        habitsIncomplete: 0,
+        tasksDue: 0,
+        isLoading: false,
+        error: null,
+        mutate: vi.fn(),
+      });
+      render(<AppSidebar {...defaultProps} />);
+
+      const badges = screen.queryAllByTestId("sidebar-menu-badge");
+      expect(badges).toHaveLength(0);
+    });
+
+    it("caps badge display at 9+", () => {
+      mockUseSidebarCounts.mockReturnValue({
+        habitsIncomplete: 15,
+        tasksDue: 0,
+        isLoading: false,
+        error: null,
+        mutate: vi.fn(),
+      });
+      render(<AppSidebar {...defaultProps} />);
+
+      const badges = screen.getAllByTestId("sidebar-menu-badge");
+      expect(badges).toHaveLength(1);
+      expect(badges[0]).toHaveTextContent("9+");
+    });
+
+    it("does not show badge for dashboard", () => {
+      mockUseSidebarCounts.mockReturnValue({
+        habitsIncomplete: 3,
+        tasksDue: 5,
+        isLoading: false,
+        error: null,
+        mutate: vi.fn(),
+      });
+      render(<AppSidebar {...defaultProps} />);
+
+      const badges = screen.getAllByTestId("sidebar-menu-badge");
+      expect(badges).toHaveLength(2);
     });
   });
 });
