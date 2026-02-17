@@ -124,10 +124,12 @@ Plans:
   2. Sidebar nav items are organized into collapsible section groups (Main: Dashboard/Habits/Tasks, Account: Settings)
   3. Sidebar items display notification badges showing live data (e.g., tasks due count, incomplete habits count)
   4. Theme switcher and language switcher are accessible from the sidebar (removed from any top header area)
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 07-01: TBD
+- [ ] 07-01-PLAN.md -- Collapsible section groups (Main/Account) with Settings nav item
+- [ ] 07-02-PLAN.md -- User profile footer with account dropdown, theme/language switchers, logout
+- [ ] 07-03-PLAN.md -- Notification badges with /api/sidebar/counts endpoint and SWR hook
 
 ### Phase 8: Visual Polish
 **Goal**: Both light and dark themes feel refined with comfortable accent colors in dark mode and subtle interactive feedback on all clickable elements
@@ -173,6 +175,6 @@ Note: Phase 4 depends on Phase 2 (not Phase 3). Phases 4 and 3 can execute in pa
 | 4. Page Header & Content Layout | 0/1 | Complete    | 2026-02-17 |
 | 5. Dashboard Page Migration | 0/2 | Not started | - |
 | 6. Habits, Tasks & Remaining Pages Migration | 0/2 | Complete    | 2026-02-17 |
-| 7. Sidebar Enrichment | 0/1 | Not started | - |
+| 7. Sidebar Enrichment | 0/3 | Not started | - |
 | 8. Visual Polish | 0/1 | Not started | - |
 | 9. Test Stabilization & Baseline Regeneration | 0/2 | Not started | - |
