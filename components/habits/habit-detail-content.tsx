@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
@@ -19,6 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +29,11 @@ import { StreakCounter } from "@/components/habits/streak-counter";
 import { NextMilestone } from "@/components/habits/next-milestone";
 import dynamic from "next/dynamic";
 
-const Heatmap30Day = dynamic(() => import("@/components/habits/heatmap").then(m => ({ default: m.Heatmap30Day })));
+const Heatmap30Day = dynamic(() =>
+  import("@/components/habits/heatmap").then((m) => ({
+    default: m.Heatmap30Day,
+  })),
+);
 import type { Habit, HabitLog, HabitCategory } from "@/lib/db/types";
 
 interface HabitDetailContentProps {
@@ -65,7 +71,10 @@ const CATEGORY_COLORS: Record<HabitCategory, string> = {
 
 function HabitDetailSkeleton() {
   return (
-    <div className="max-w-3xl mx-auto space-y-6" data-testid="habit-detail-skeleton">
+    <div
+      className="max-w-3xl mx-auto space-y-6"
+      data-testid="habit-detail-skeleton"
+    >
       {/* Header skeleton */}
       <div className="flex items-center justify-between">
         <Skeleton className="h-9 w-32" />
@@ -105,7 +114,10 @@ function HabitDetailSkeleton() {
   );
 }
 
-function formatFrequency(frequency: Habit["frequency"], t: ReturnType<typeof useTranslations>): string {
+function formatFrequency(
+  frequency: Habit["frequency"],
+  t: ReturnType<typeof useTranslations>,
+): string {
   switch (frequency.type) {
     case "daily":
       return t("frequency.daily");
@@ -126,40 +138,102 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
   const router = useRouter();
   const t = useTranslations("habits");
 
-  const { data: habit, error: habitError, isLoading: habitLoading, mutate: mutateHabit } = useSWR<Habit>(
-    `/api/habits/${habitId}`,
-    fetcher
-  );
+  const {
+    data: habit,
+    error: habitError,
+    isLoading: habitLoading,
+    mutate: mutateHabit,
+  } = useSWR<Habit>(`/api/habits/${habitId}`, fetcher);
 
   const { data: logsData, mutate: mutateLogs } = useSWR<{ logs: HabitLog[] }>(
     habit ? `/api/habits/${habitId}/logs?days=30` : null,
-    fetcher
+    fetcher,
   );
 
   const { data: statsData } = useSWR<HabitStats>(
     habit ? `/api/habits/${habitId}/stats` : null,
-    fetcher
+    fetcher,
   );
 
   const logs = logsData?.logs || logsData || [];
-  const stats = statsData || {
-    thisWeek: { completed: 0, total: 0, percent: 0 },
-    thisMonth: { completed: 0, total: 0, percent: 0 },
-    allTime: { completed: 0, total: 0, percent: 0 },
-  };
+  const stats = useMemo(
+    () =>
+      statsData || {
+        thisWeek: { completed: 0, total: 0, percent: 0 },
+        thisMonth: { completed: 0, total: 0, percent: 0 },
+        allTime: { completed: 0, total: 0, percent: 0 },
+      },
+    [statsData],
+  );
+
+  const completionPeriods = useMemo(
+    () => [
+      { key: "thisWeek", label: t("detail.completion.thisWeek"), percent: stats.thisWeek.percent },
+      { key: "thisMonth", label: t("detail.completion.thisMonth"), percent: stats.thisMonth.percent },
+      { key: "allTime", label: t("detail.completion.allTime"), percent: stats.allTime.percent },
+    ],
+    [t, stats],
+  );
+
+  const { isToggling, startToggling, stopToggling } = useTogglingSet();
 
   const handleToggleDate = async (date: string) => {
+    if (isToggling(date)) return;
+
+    startToggling(date);
+
     try {
-      await fetch(`/api/habits/${habitId}/toggle`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date }),
-      });
-      mutateLogs();
+      await mutateLogs(
+        async () => {
+          const response = await fetch(`/api/habits/${habitId}/toggle`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date }),
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to toggle: ${response.status}`);
+          }
+          return undefined;
+        },
+        {
+          optimisticData: (current: { logs: HabitLog[] } | undefined) => {
+            if (!current) return { logs: [] };
+            const logsList = current.logs || [];
+            const existingLog = logsList.find(
+              (l: HabitLog) => l.logged_date === date,
+            );
+            let updatedLogs: HabitLog[];
+            if (existingLog) {
+              updatedLogs = logsList.map((l: HabitLog) =>
+                l.logged_date === date ? { ...l, completed: !l.completed } : l,
+              );
+            } else {
+              const now = new Date().toISOString();
+              updatedLogs = [
+                ...logsList,
+                {
+                  id: `optimistic-${date}`,
+                  habit_id: habitId,
+                  user_id: "optimistic",
+                  logged_date: date,
+                  completed: true,
+                  created_at: now,
+                  updated_at: now,
+                },
+              ];
+            }
+            return { logs: updatedLogs };
+          },
+          rollbackOnError: true,
+          revalidate: true,
+        },
+      );
       mutateHabit();
     } catch (err) {
       console.error("Failed to toggle habit date:", err);
       toast.error(t("toast.updateError"));
+    } finally {
+      stopToggling(date);
     }
   };
 
@@ -176,7 +250,9 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       });
       if (!response.ok) throw new Error("Failed to update");
       mutateHabit();
-      toast.success(isPausing ? t("toast.pauseSuccess") : t("toast.resumeSuccess"));
+      toast.success(
+        isPausing ? t("toast.pauseSuccess") : t("toast.resumeSuccess"),
+      );
     } catch (err) {
       console.error("Failed to update habit status:", err);
       toast.error(isPausing ? t("toast.pauseError") : t("toast.resumeError"));
@@ -231,8 +307,12 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     );
   }
 
-  const CategoryIcon = habit.category ? CATEGORY_ICONS[habit.category] : MoreHorizontal;
-  const categoryColor = habit.category ? CATEGORY_COLORS[habit.category] : "bg-slate-500";
+  const CategoryIcon = habit.category
+    ? CATEGORY_ICONS[habit.category]
+    : MoreHorizontal;
+  const categoryColor = habit.category
+    ? CATEGORY_COLORS[habit.category]
+    : "bg-slate-500";
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -246,7 +326,10 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
           <ArrowLeft className="size-4" />
           {t("detail.backToHabits")}
         </Button>
-        <Button onClick={() => router.push(`/habits/${habitId}/edit`)} className="gap-2">
+        <Button
+          onClick={() => router.push(`/habits/${habitId}/edit`)}
+          className="gap-2"
+        >
           <Edit className="size-4" />
           {t("detail.edit")}
         </Button>
@@ -261,14 +344,16 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
             className={cn(
               habit.status === "active" && "bg-emerald-500",
               habit.status === "paused" && "bg-amber-500",
-              habit.status === "archived" && "bg-slate-500"
+              habit.status === "archived" && "bg-slate-500",
             )}
           >
             {t(`detail.status.${habit.status}`)}
           </Badge>
         </div>
         <div className="flex items-center gap-2 text-muted-foreground mb-2">
-          <CategoryIcon className={cn("size-4 text-white rounded p-0.5", categoryColor)} />
+          <CategoryIcon
+            className={cn("size-4 text-white rounded p-0.5", categoryColor)}
+          />
           <span>{habit.category ? t(`categories.${habit.category}`) : ""}</span>
           <span>•</span>
           <span>{formatFrequency(habit.frequency, t)}</span>
@@ -289,35 +374,21 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
 
       {/* Completion Stats */}
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">{t("detail.completion.title")}</h2>
+        <h2 className="text-lg font-semibold">
+          {t("detail.completion.title")}
+        </h2>
         <div className="space-y-3">
-          <div className="flex items-center gap-4">
-            <span className="w-24 text-sm text-muted-foreground">
-              {t("detail.completion.thisWeek")}
-            </span>
-            <Progress value={stats.thisWeek.percent} className="flex-1" />
-            <span className="w-24 text-sm text-right">
-              {t("detail.completion.percent", { percent: stats.thisWeek.percent })}
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="w-24 text-sm text-muted-foreground">
-              {t("detail.completion.thisMonth")}
-            </span>
-            <Progress value={stats.thisMonth.percent} className="flex-1" />
-            <span className="w-24 text-sm text-right">
-              {t("detail.completion.percent", { percent: stats.thisMonth.percent })}
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="w-24 text-sm text-muted-foreground">
-              {t("detail.completion.allTime")}
-            </span>
-            <Progress value={stats.allTime.percent} className="flex-1" />
-            <span className="w-24 text-sm text-right">
-              {t("detail.completion.percent", { percent: stats.allTime.percent })}
-            </span>
-          </div>
+          {completionPeriods.map(({ key, label, percent }) => (
+            <div key={key} className="flex items-center gap-4">
+              <span className="w-24 text-sm text-muted-foreground">
+                {label}
+              </span>
+              <Progress value={percent} className="flex-1" />
+              <span className="w-24 text-sm text-right">
+                {t("detail.completion.percent", { percent })}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 

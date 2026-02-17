@@ -3,10 +3,12 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
+import { toast } from "sonner";
 import { Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getLocalDateString } from "@/lib/utils";
+import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { HabitList } from "./habit-list";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
@@ -33,19 +35,54 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
       fallbackData: initialHabits,
       revalidateOnFocus: true,
       keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
-    }
+    },
   );
 
+  const {
+    togglingIds: togglingHabitIds,
+    isToggling,
+    startToggling,
+    stopToggling,
+  } = useTogglingSet();
+
   const handleToggleHabit = async (habitId: string) => {
+    if (isToggling(habitId)) return;
+
+    startToggling(habitId);
+
     try {
-      await fetch(`/api/habits/${habitId}/toggle`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: today }),
-      });
-      mutate();
+      await mutate(
+        async () => {
+          const response = await fetch(`/api/habits/${habitId}/toggle`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date: today }),
+          });
+          if (!response.ok) {
+            throw new Error(
+              `Failed to toggle habit ${habitId}: ${response.status}`,
+            );
+          }
+          return undefined;
+        },
+        {
+          optimisticData: (current: HabitWithTodayStatus[] | undefined) => {
+            if (!current) return [];
+            return current.map((h) =>
+              h.id === habitId
+                ? { ...h, completed_today: !h.completed_today }
+                : h,
+            );
+          },
+          rollbackOnError: true,
+          revalidate: true,
+        },
+      );
     } catch (err) {
       console.error("Failed to toggle habit:", err);
+      toast.error(t("error.toggleHabitFailed"));
+    } finally {
+      stopToggling(habitId);
     }
   };
 
@@ -79,7 +116,9 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl font-bold tracking-tight">{t("page.title")}</h1>
+        <h1 className="font-display text-3xl font-bold tracking-tight">
+          {t("page.title")}
+        </h1>
         <Button onClick={handleCreateHabit}>
           <Plus className="size-4 mr-2" />
           {t("page.createButton")}
@@ -91,6 +130,7 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
         habits={data || []}
         onToggle={handleToggleHabit}
         onHabitClick={handleHabitClick}
+        togglingHabitIds={togglingHabitIds}
       />
     </div>
   );

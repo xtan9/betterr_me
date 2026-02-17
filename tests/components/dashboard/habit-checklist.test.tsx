@@ -38,7 +38,7 @@ function renderWithIntl(component: React.ReactElement) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       {component}
-    </NextIntlClientProvider>
+    </NextIntlClientProvider>,
   );
 }
 
@@ -103,7 +103,7 @@ describe("HabitChecklist", () => {
         habits={mockHabits}
         onToggle={onToggle}
         onCreateHabit={onCreateHabit}
-      />
+      />,
     );
 
     expect(screen.getByText("Today's Habits")).toBeInTheDocument();
@@ -121,7 +121,7 @@ describe("HabitChecklist", () => {
         habits={mockHabits}
         onToggle={onToggle}
         onCreateHabit={onCreateHabit}
-      />
+      />,
     );
 
     const checkboxes = screen.getAllByRole("checkbox");
@@ -139,7 +139,7 @@ describe("HabitChecklist", () => {
         habits={mockHabits}
         onToggle={onToggle}
         onCreateHabit={onCreateHabit}
-      />
+      />,
     );
 
     expect(screen.getByText(/1 of 3 completed/)).toBeInTheDocument();
@@ -159,7 +159,7 @@ describe("HabitChecklist", () => {
         habits={allCompleted}
         onToggle={onToggle}
         onCreateHabit={onCreateHabit}
-      />
+      />,
     );
 
     expect(screen.getByText("Perfect day!")).toBeInTheDocument();
@@ -174,7 +174,7 @@ describe("HabitChecklist", () => {
         habits={[]}
         onToggle={onToggle}
         onCreateHabit={onCreateHabit}
-      />
+      />,
     );
 
     expect(screen.getByText("No habits yet")).toBeInTheDocument();
@@ -190,7 +190,7 @@ describe("HabitChecklist", () => {
         habits={mockHabits}
         onToggle={onToggle}
         onCreateHabit={onCreateHabit}
-      />
+      />,
     );
 
     const addButton = screen.getByText("Add Habit");
@@ -199,17 +199,18 @@ describe("HabitChecklist", () => {
     expect(onCreateHabit).toHaveBeenCalled();
   });
 
-  it("disables checkboxes when loading", () => {
+  it("disables checkboxes when toggling", () => {
     const onToggle = vi.fn();
     const onCreateHabit = vi.fn();
+    const togglingIds = new Set(mockHabits.map((h) => h.id));
 
     renderWithIntl(
       <HabitChecklist
         habits={mockHabits}
         onToggle={onToggle}
         onCreateHabit={onCreateHabit}
-        isLoading={true}
-      />
+        togglingHabitIds={togglingIds}
+      />,
     );
 
     const checkboxes = screen.getAllByRole("checkbox");

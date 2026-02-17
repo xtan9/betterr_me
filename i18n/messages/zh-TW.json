@@ -354,7 +354,8 @@
     },
     "error": {
       "title": "載入習慣失敗",
-      "retry": "重試"
+      "retry": "重試",
+      "toggleHabitFailed": "更新習慣失敗，請重試。"
     },
     "loading": {
       "title": "正在載入習慣..."
