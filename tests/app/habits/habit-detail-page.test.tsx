@@ -26,6 +26,13 @@ const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 const messages = {
+  common: {
+    nav: {
+      habits: "Habits",
+      tasks: "Tasks",
+      settings: "Settings",
+    },
+  },
   habits: {
     detail: {
       backToHabits: "Back to Habits",
@@ -209,7 +216,8 @@ describe("HabitDetailContent", () => {
 
     renderWithProviders(<HabitDetailContent habitId="habit-1" />);
 
-    expect(screen.getByText("Morning Meditation")).toBeInTheDocument();
+    // Habit name appears in both breadcrumb and PageHeader h1
+    expect(screen.getByRole("heading", { name: "Morning Meditation" })).toBeInTheDocument();
     expect(screen.getByText("10 minutes of mindfulness")).toBeInTheDocument();
     expect(screen.getByText("23 days")).toBeInTheDocument();
     expect(screen.getByText("45 days")).toBeInTheDocument();
@@ -234,8 +242,7 @@ describe("HabitDetailContent", () => {
     expect(mockPush).toHaveBeenCalledWith("/habits/habit-1/edit");
   });
 
-  it("navigates back when back button clicked", async () => {
-    const user = userEvent.setup();
+  it("shows breadcrumbs with habit name", () => {
     mockUseSWR.mockImplementation((key: unknown) => {
       if (typeof key === "string" && key.includes("/logs")) {
         return { data: mockLogs, error: undefined, isLoading: false, mutate: vi.fn() };
@@ -248,9 +255,9 @@ describe("HabitDetailContent", () => {
 
     renderWithProviders(<HabitDetailContent habitId="habit-1" />);
 
-    await user.click(screen.getByText("Back to Habits"));
-
-    expect(mockPush).toHaveBeenCalledWith("/habits");
+    // Breadcrumb shows "Habits" link and habit name appears in breadcrumb + h1
+    expect(screen.getByRole("link", { name: "Habits" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Morning Meditation" })).toBeInTheDocument();
   });
 
   it("displays status badge for active habit", () => {
