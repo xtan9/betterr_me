@@ -229,6 +229,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
           revalidate: false,
         },
       );
+      mutateHabit();
     } catch (err) {
       console.error("Failed to toggle habit date:", err);
       toast.error(t("toast.updateError"));
