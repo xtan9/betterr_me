@@ -207,6 +207,9 @@
         "sat": "Sat"
       }
     },
+    "breadcrumb": {
+      "newHabit": "New Habit"
+    },
     "form": {
       "createTitle": "Create New Habit",
       "editTitle": "Edit Habit",
@@ -436,6 +439,9 @@
     }
   },
   "tasks": {
+    "breadcrumb": {
+      "newTask": "New Task"
+    },
     "form": {
       "createTitle": "Create New Task",
       "editTitle": "Edit Task",

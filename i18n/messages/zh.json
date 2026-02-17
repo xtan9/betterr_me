@@ -207,6 +207,9 @@
         "sat": "周六"
       }
     },
+    "breadcrumb": {
+      "newHabit": "新习惯"
+    },
     "form": {
       "createTitle": "创建新习惯",
       "editTitle": "编辑习惯",
@@ -436,6 +439,9 @@
     }
   },
   "tasks": {
+    "breadcrumb": {
+      "newTask": "新任务"
+    },
     "form": {
       "createTitle": "创建新任务",
       "editTitle": "编辑任务",
