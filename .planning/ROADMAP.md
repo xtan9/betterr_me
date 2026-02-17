@@ -139,10 +139,11 @@ Plans:
   1. Emerald/teal accent color is visibly desaturated in dark mode compared to light mode, providing eye comfort
   2. Cards and buttons display subtle hover and focus micro-interactions (e.g., shadow lift, opacity shift, border highlight)
   3. Micro-interactions feel consistent across all pages and both themes
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 08-01: TBD
+- [ ] 08-01-PLAN.md -- Dark mode accent desaturation + hardcoded emerald/teal migration to design tokens
+- [ ] 08-02-PLAN.md -- Hover/focus micro-interactions, motion-reduce accessibility, refined card lift effects
 
 ### Phase 9: Test Stabilization & Baseline Regeneration
 **Goal**: The entire test suite (unit, E2E, visual regression, accessibility) passes green with fresh baselines that reflect the new design, confirming zero functional regressions
@@ -176,5 +177,5 @@ Note: Phase 4 depends on Phase 2 (not Phase 3). Phases 4 and 3 can execute in pa
 | 5. Dashboard Page Migration | 0/2 | Not started | - |
 | 6. Habits, Tasks & Remaining Pages Migration | 0/2 | Complete    | 2026-02-17 |
 | 7. Sidebar Enrichment | 0/3 | Complete    | 2026-02-17 |
-| 8. Visual Polish | 0/1 | Not started | - |
+| 8. Visual Polish | 0/2 | Not started | - |
 | 9. Test Stabilization & Baseline Regeneration | 0/2 | Not started | - |
