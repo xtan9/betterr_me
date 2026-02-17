@@ -155,11 +155,11 @@ Plans:
   3. Visual regression baselines are regenerated and all visual regression tests pass against new baselines
   4. Accessibility tests (vitest-axe) pass for all components in the new layout
   5. All three locales (en, zh, zh-TW) render correctly with the sidebar layout in both light and dark mode
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
+- [ ] 09-01-PLAN.md -- Unit test cleanup (remove dead Navbar/ThemeSwitcher tests) + E2E selector updates for sidebar navigation
+- [ ] 09-02-PLAN.md -- Visual regression baseline regeneration + locale verification E2E test + full suite validation
 
 ## Progress
 
