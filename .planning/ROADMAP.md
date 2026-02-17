@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1: Design Token Extraction & CSS Foundation** - Extract Chameleon's CSS values, split background/card tokens, reformat sidebar CSS variables
 - [ ] **Phase 2: Sidebar Shell & Navigation Switch** - Install shadcn/ui Sidebar, build AppSidebar, replace top-nav and bottom-nav with sidebar + mobile sheet
 - [ ] **Phase 3: Sidebar Collapse & Persistence** - Pin/unpin toggle, icon-only collapsed mode, smooth animations, cookie persistence, keyboard shortcut
-- [ ] **Phase 4: Page Header & Content Layout** - Build PageHeader component, apply pixel-perfect spacing/typography, add max-width centering
+- [x] **Phase 4: Page Header & Content Layout** - Build PageHeader component, apply pixel-perfect spacing/typography, add max-width centering (completed 2026-02-17)
 - [ ] **Phase 5: Dashboard Page Migration** - Migrate dashboard to card-on-gray layout with new PageHeader, stat cards, and responsive grid adjustments
 - [ ] **Phase 6: Habits, Tasks & Remaining Pages Migration** - Migrate habits, tasks, profile, and auth pages; add breadcrumb navigation for nested views
 - [ ] **Phase 7: Sidebar Enrichment** - User profile footer, collapsible section groups, notification badges, theme/language switchers in sidebar
@@ -78,7 +78,7 @@ Plans:
   1. Every authenticated page displays a consistent page header with title, optional subtitle, and primary action button area
   2. Typography hierarchy (font sizes, weights), padding, margins, border radius, and spacing match Chameleon's dashboard CSS values
   3. Content area has a max-width with horizontal centering on ultra-wide screens (1920px+)
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 04-01-PLAN.md -- Correct design tokens, create PageHeader component, update SidebarLayout content wrapper
@@ -167,7 +167,7 @@ Note: Phase 4 depends on Phase 2 (not Phase 3). Phases 4 and 3 can execute in pa
 | 1. Design Token Extraction & CSS Foundation | 0/2 | Planned | - |
 | 2. Sidebar Shell & Navigation Switch | 0/2 | Not started | - |
 | 3. Sidebar Collapse & Persistence | 0/1 | Not started | - |
-| 4. Page Header & Content Layout | 0/1 | Not started | - |
+| 4. Page Header & Content Layout | 0/1 | Complete    | 2026-02-17 |
 | 5. Dashboard Page Migration | 0/1 | Not started | - |
 | 6. Habits, Tasks & Remaining Pages Migration | 0/2 | Not started | - |
 | 7. Sidebar Enrichment | 0/1 | Not started | - |
