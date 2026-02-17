@@ -96,11 +96,11 @@ describe('Heatmap30Day', () => {
     expect(cells).toHaveLength(30);
   });
 
-  it('renders a cell with completed status with emerald background', () => {
+  it('renders a cell with completed status with primary background', () => {
     const logs = [makeLog('2026-02-03', true)];
     render(<Heatmap30Day {...defaultProps} logs={logs} />);
     const cell = screen.getByTestId('cell-2026-02-03');
-    expect(cell).toHaveClass('bg-emerald-500');
+    expect(cell).toHaveClass('bg-primary');
   });
 
   it('renders a cell with missed status with slate background', () => {
@@ -122,7 +122,7 @@ describe('Heatmap30Day', () => {
     render(<Heatmap30Day {...defaultProps} />);
     const todayCell = screen.getByTestId('cell-2026-02-04');
     expect(todayCell).toHaveClass('ring-2');
-    expect(todayCell).toHaveClass('ring-emerald-500');
+    expect(todayCell).toHaveClass('ring-primary');
   });
 
   it('calls onToggleDate when clicking an editable cell', () => {

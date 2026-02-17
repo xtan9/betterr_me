@@ -122,7 +122,7 @@ export function FrequencySelector({
               disabled={disabled}
               className={cn(
                 "h-10 text-sm",
-                isActive && "bg-emerald-500 text-white hover:bg-emerald-600 hover:text-white data-[state=on]:bg-emerald-500 data-[state=on]:text-white"
+                isActive && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
               )}
             >
               {label}
@@ -149,7 +149,7 @@ export function FrequencySelector({
                   aria-label={dayLabel}
                   className={cn(
                     "flex-1 text-xs",
-                    isSelected && "bg-emerald-500 text-white hover:bg-emerald-600 hover:text-white data-[state=on]:bg-emerald-500 data-[state=on]:text-white"
+                    isSelected && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                   )}
                 >
                   {dayLabel}

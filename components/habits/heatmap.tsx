@@ -42,7 +42,7 @@ export function Heatmap30Day({
     // Status colors
     let statusClass = "";
     if (cell.status === "completed") {
-      statusClass = "bg-emerald-500";
+      statusClass = "bg-primary";
     } else if (cell.status === "missed") {
       statusClass = "bg-slate-200";
     } else {
@@ -50,7 +50,7 @@ export function Heatmap30Day({
     }
 
     // Today highlight
-    const todayClass = cell.isToday ? "ring-2 ring-emerald-500 ring-offset-1" : "";
+    const todayClass = cell.isToday ? "ring-2 ring-primary ring-offset-1" : "";
 
     // Cursor style
     let cursorClass = "";
@@ -197,7 +197,7 @@ export function Heatmap30Day({
       {/* Legend */}
       <div data-testid="legend" className="flex items-center gap-4 text-xs text-muted-foreground pt-2">
         <div className="flex items-center gap-1.5">
-          <div className="size-3 rounded bg-emerald-500" />
+          <div className="size-3 rounded bg-primary" />
           <span>{t("legend.completed")}</span>
         </div>
         <div className="flex items-center gap-1.5">

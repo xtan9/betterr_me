@@ -55,7 +55,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
             onCheckedChange={handleCheckedChange}
             disabled={isToggling}
             aria-label={`${t("card.markComplete")} ${habit.name}`}
-            className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+            className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
           />
         </div>
 
@@ -84,7 +84,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
           </div>
           <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700" aria-hidden="true">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+              className="h-full rounded-full bg-primary"
               style={{ width: `${habit.monthly_completion_rate}%` }}
             />
           </div>

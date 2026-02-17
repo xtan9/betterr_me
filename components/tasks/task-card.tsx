@@ -107,7 +107,7 @@ export function TaskCard({ task, onToggle, onClick, isToggling }: TaskCardProps)
             onCheckedChange={handleCheckedChange}
             disabled={isToggling}
             aria-label={`${cardT("markComplete")} ${task.title}`}
-            className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+            className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
           />
         </div>
 

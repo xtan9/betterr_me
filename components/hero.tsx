@@ -18,18 +18,18 @@ export default async function Hero() {
 
   return (
     <div className="relative overflow-hidden bg-background">
-      <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-background to-teal-50 opacity-70 dark:from-emerald-950/20 dark:to-teal-950/20" />
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-primary/5 opacity-70 dark:from-primary/5 dark:to-primary/5" />
 
       <div className="relative pt-24 pb-32 sm:pt-32 sm:pb-40">
         <div className="container mx-auto px-4">
           <div className="text-center max-w-4xl mx-auto">
             <h1 className="font-display text-5xl sm:text-6xl font-bold text-foreground mb-8 tracking-tight">
               {homeT("hero.title")}{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500">
+              <span className="text-primary">
                 {homeT("hero.titleHighlight")}
               </span>
               {hasTranslation(homeT, "hero.titleHighlight2") && (
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-cyan-500"> {homeT("hero.titleHighlight2")}</span>
+                <span className="text-primary"> {homeT("hero.titleHighlight2")}</span>
               )}
               {hasTranslation(homeT, "hero.titleSuffix") && (
                 <span className="text-foreground"> {homeT("hero.titleSuffix")}</span>
@@ -43,7 +43,7 @@ export default async function Hero() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
               <Link
                 href="/auth/signup"
-                className="inline-flex items-center px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl"
+                className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl"
               >
                 {navT("getStarted")}
                 <ArrowUpRight className="ml-2 w-5 h-5" />
