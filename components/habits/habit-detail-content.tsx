@@ -179,13 +179,12 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
           if (!response.ok) {
             throw new Error(`Failed to toggle: ${response.status}`);
           }
+          return undefined;
         },
         {
           optimisticData: (current: { logs: HabitLog[] } | undefined) => {
             if (!current) return current!;
-            const logsList = Array.isArray(current)
-              ? current
-              : current.logs || [];
+            const logsList = current.logs || [];
             const existingLog = logsList.find(
               (l: HabitLog) => l.logged_date === date,
             );
@@ -208,7 +207,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
                 },
               ];
             }
-            return Array.isArray(current) ? updatedLogs : { logs: updatedLogs };
+            return { logs: updatedLogs };
           },
           rollbackOnError: true,
           revalidate: true,

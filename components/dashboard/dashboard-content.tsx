@@ -119,6 +119,7 @@ export function DashboardContent({
               `Failed to toggle habit ${habitId}: ${response.status}`,
             );
           }
+          return undefined;
         },
         {
           optimisticData: (current: DashboardData | undefined) => {

@@ -59,6 +59,7 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
               `Failed to toggle habit ${habitId}: ${response.status}`,
             );
           }
+          return undefined;
         },
         {
           optimisticData: (current: HabitWithTodayStatus[] | undefined) => {
