@@ -156,11 +156,24 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
   );
 
   const logs = logsData?.logs || logsData || [];
-  const stats = statsData || {
-    thisWeek: { completed: 0, total: 0, percent: 0 },
-    thisMonth: { completed: 0, total: 0, percent: 0 },
-    allTime: { completed: 0, total: 0, percent: 0 },
-  };
+  const stats = useMemo(
+    () =>
+      statsData || {
+        thisWeek: { completed: 0, total: 0, percent: 0 },
+        thisMonth: { completed: 0, total: 0, percent: 0 },
+        allTime: { completed: 0, total: 0, percent: 0 },
+      },
+    [statsData],
+  );
+
+  const completionPeriods = useMemo(
+    () => [
+      { key: "thisWeek", label: t("detail.completion.thisWeek"), percent: stats.thisWeek.percent },
+      { key: "thisMonth", label: t("detail.completion.thisMonth"), percent: stats.thisMonth.percent },
+      { key: "allTime", label: t("detail.completion.allTime"), percent: stats.allTime.percent },
+    ],
+    [t, stats],
+  );
 
   const { isToggling, startToggling, stopToggling } = useTogglingSet();
 
@@ -293,15 +306,6 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       </div>
     );
   }
-
-  const completionPeriods = useMemo(
-    () => [
-      { key: "thisWeek", label: t("detail.completion.thisWeek"), percent: stats.thisWeek.percent },
-      { key: "thisMonth", label: t("detail.completion.thisMonth"), percent: stats.thisMonth.percent },
-      { key: "allTime", label: t("detail.completion.allTime"), percent: stats.allTime.percent },
-    ],
-    [t, stats],
-  );
 
   const CategoryIcon = habit.category
     ? CATEGORY_ICONS[habit.category]
