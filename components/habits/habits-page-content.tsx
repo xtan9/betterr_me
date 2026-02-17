@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
+import { toast } from "sonner";
 import { Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getLocalDateString } from "@/lib/utils";
+import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { HabitList } from "./habit-list";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
@@ -37,14 +38,17 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
     },
   );
 
-  const [togglingHabitIds, setTogglingHabitIds] = useState<Set<string>>(
-    new Set(),
-  );
+  const {
+    togglingIds: togglingHabitIds,
+    isToggling,
+    startToggling,
+    stopToggling,
+  } = useTogglingSet();
 
   const handleToggleHabit = async (habitId: string) => {
-    if (togglingHabitIds.has(habitId)) return;
+    if (isToggling(habitId)) return;
 
-    setTogglingHabitIds((prev) => new Set(prev).add(habitId));
+    startToggling(habitId);
 
     try {
       await mutate(
@@ -63,7 +67,7 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
         },
         {
           optimisticData: (current: HabitWithTodayStatus[] | undefined) => {
-            if (!current) return current!;
+            if (!current) return [];
             return current.map((h) =>
               h.id === habitId
                 ? { ...h, completed_today: !h.completed_today }
@@ -76,12 +80,9 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
       );
     } catch (err) {
       console.error("Failed to toggle habit:", err);
+      toast.error(t("error.toggleHabitFailed"));
     } finally {
-      setTogglingHabitIds((prev) => {
-        const next = new Set(prev);
-        next.delete(habitId);
-        return next;
-      });
+      stopToggling(habitId);
     }
   };
 

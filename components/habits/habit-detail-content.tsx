@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
@@ -20,6 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -161,12 +162,12 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     allTime: { completed: 0, total: 0, percent: 0 },
   };
 
-  const [togglingDates, setTogglingDates] = useState<Set<string>>(new Set());
+  const { isToggling, startToggling, stopToggling } = useTogglingSet();
 
   const handleToggleDate = async (date: string) => {
-    if (togglingDates.has(date)) return;
+    if (isToggling(date)) return;
 
-    setTogglingDates((prev) => new Set(prev).add(date));
+    startToggling(date);
 
     try {
       await mutateLogs(
@@ -183,7 +184,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
         },
         {
           optimisticData: (current: { logs: HabitLog[] } | undefined) => {
-            if (!current) return current!;
+            if (!current) return { logs: [] };
             const logsList = current.logs || [];
             const existingLog = logsList.find(
               (l: HabitLog) => l.logged_date === date,
@@ -194,16 +195,17 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
                 l.logged_date === date ? { ...l, completed: !l.completed } : l,
               );
             } else {
+              const now = new Date().toISOString();
               updatedLogs = [
                 ...logsList,
                 {
                   id: `optimistic-${date}`,
                   habit_id: habitId,
-                  user_id: "",
+                  user_id: "optimistic",
                   logged_date: date,
                   completed: true,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
+                  created_at: now,
+                  updated_at: now,
                 },
               ];
             }
@@ -218,11 +220,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       console.error("Failed to toggle habit date:", err);
       toast.error(t("toast.updateError"));
     } finally {
-      setTogglingDates((prev) => {
-        const next = new Set(prev);
-        next.delete(date);
-        return next;
-      });
+      stopToggling(date);
     }
   };
 
@@ -296,6 +294,15 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     );
   }
 
+  const completionPeriods = useMemo(
+    () => [
+      { key: "thisWeek", label: t("detail.completion.thisWeek"), percent: stats.thisWeek.percent },
+      { key: "thisMonth", label: t("detail.completion.thisMonth"), percent: stats.thisMonth.percent },
+      { key: "allTime", label: t("detail.completion.allTime"), percent: stats.allTime.percent },
+    ],
+    [t, stats],
+  );
+
   const CategoryIcon = habit.category
     ? CATEGORY_ICONS[habit.category]
     : MoreHorizontal;
@@ -367,39 +374,17 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
           {t("detail.completion.title")}
         </h2>
         <div className="space-y-3">
-          <div className="flex items-center gap-4">
-            <span className="w-24 text-sm text-muted-foreground">
-              {t("detail.completion.thisWeek")}
-            </span>
-            <Progress value={stats.thisWeek.percent} className="flex-1" />
-            <span className="w-24 text-sm text-right">
-              {t("detail.completion.percent", {
-                percent: stats.thisWeek.percent,
-              })}
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="w-24 text-sm text-muted-foreground">
-              {t("detail.completion.thisMonth")}
-            </span>
-            <Progress value={stats.thisMonth.percent} className="flex-1" />
-            <span className="w-24 text-sm text-right">
-              {t("detail.completion.percent", {
-                percent: stats.thisMonth.percent,
-              })}
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="w-24 text-sm text-muted-foreground">
-              {t("detail.completion.allTime")}
-            </span>
-            <Progress value={stats.allTime.percent} className="flex-1" />
-            <span className="w-24 text-sm text-right">
-              {t("detail.completion.percent", {
-                percent: stats.allTime.percent,
-              })}
-            </span>
-          </div>
+          {completionPeriods.map(({ key, label, percent }) => (
+            <div key={key} className="flex items-center gap-4">
+              <span className="w-24 text-sm text-muted-foreground">
+                {label}
+              </span>
+              <Progress value={percent} className="flex-1" />
+              <span className="w-24 text-sm text-right">
+                {t("detail.completion.percent", { percent })}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 

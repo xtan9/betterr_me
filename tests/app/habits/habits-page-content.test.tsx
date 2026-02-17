@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { HabitsPageContent } from "@/components/habits/habits-page-content";
 
@@ -17,6 +17,12 @@ vi.mock("next/navigation", () => ({
 const mockUseSWR = vi.fn();
 vi.mock("swr", () => ({
   default: (...args: unknown[]) => mockUseSWR(...args),
+}));
+
+// Mock sonner
+const mockToastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: { error: (...args: unknown[]) => mockToastError(...args) },
 }));
 
 const messages = {
@@ -54,9 +60,27 @@ const messages = {
     },
     card: {
       streakDays: "{count} days",
+      currentStreak: "Current",
+      bestStreak: "Best",
+      thisMonth: "{percent}%",
       toggle: "Toggle completion",
       completed: "Completed",
       pending: "Pending",
+      markComplete: "Toggle",
+    },
+    categories: {
+      health: "Health",
+      wellness: "Wellness",
+      learning: "Learning",
+      productivity: "Productivity",
+      other: "Other",
+    },
+    frequency: {
+      daily: "Daily",
+      weekdays: "Weekdays",
+      weekly: "Weekly",
+      timesPerWeek: "{count}x per week",
+      custom: "Custom",
     },
     loading: {
       title: "Loading habits...",
@@ -64,6 +88,7 @@ const messages = {
     error: {
       title: "Failed to load habits",
       retry: "Try again",
+      toggleHabitFailed: "Failed to update habit. Please try again.",
     },
   },
 };
@@ -204,5 +229,109 @@ describe("HabitsPageContent", () => {
     habitCard.click();
 
     expect(mockPush).toHaveBeenCalledWith("/habits/1");
+  });
+
+  it("calls mutate with optimistic data when habit toggled", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: () => ({}) });
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn().mockImplementation(async (fn) => {
+      if (typeof fn === "function") await fn();
+    });
+    mockUseSWR.mockReturnValue({
+      data: mockHabits,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<HabitsPageContent />);
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          optimisticData: expect.any(Function),
+          rollbackOnError: true,
+          revalidate: true,
+        }),
+      );
+    });
+
+    global.fetch = originalFetch;
+  });
+
+  it("shows toast error when toggle fails", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => ({ error: "Server error" }),
+    });
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn().mockImplementation(async (fn) => {
+      if (typeof fn === "function") await fn();
+    });
+    mockUseSWR.mockReturnValue({
+      data: mockHabits,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<HabitsPageContent />);
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        "Failed to update habit. Please try again.",
+      );
+    });
+
+    global.fetch = originalFetch;
+  });
+
+  it("passes togglingHabitIds to HabitList for per-habit disable during toggle", async () => {
+    const originalFetch = global.fetch;
+    let resolveToggle: () => void;
+    const togglePromise = new Promise<void>((resolve) => {
+      resolveToggle = resolve;
+    });
+    const mockFetch = vi.fn().mockImplementation(() =>
+      togglePromise.then(() => ({ ok: true, json: () => ({}) })),
+    );
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn().mockImplementation(async (fn) => {
+      if (typeof fn === "function") await fn();
+    });
+    mockUseSWR.mockReturnValue({
+      data: mockHabits,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<HabitsPageContent />);
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ rollbackOnError: true }),
+      );
+    });
+
+    resolveToggle!();
+    global.fetch = originalFetch;
   });
 });

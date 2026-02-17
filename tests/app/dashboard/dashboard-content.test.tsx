@@ -703,6 +703,46 @@ describe("DashboardContent", () => {
     global.fetch = originalFetch;
   });
 
+  it("disables checkbox during in-flight toggle to prevent double-click", async () => {
+    const originalFetch = global.fetch;
+    let resolveToggle: () => void;
+    const togglePromise = new Promise<void>((resolve) => {
+      resolveToggle = resolve;
+    });
+    const mockFetch = vi.fn().mockImplementation(() =>
+      togglePromise.then(() => ({ ok: true, json: () => ({}) })),
+    );
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn().mockImplementation(async (fn) => {
+      if (typeof fn === "function") await fn();
+    });
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    // After click, mutate is called with optimistic options including the togglingHabitIds set
+    await waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ rollbackOnError: true }),
+      );
+    });
+
+    // Resolve the toggle to clean up
+    resolveToggle!();
+    global.fetch = originalFetch;
+  });
+
   it("calls mutate with optimistic data and rollback on error when toggle fails", async () => {
     const originalFetch = global.fetch;
     const mockFetch = vi.fn().mockResolvedValue({

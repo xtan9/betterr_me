@@ -7,7 +7,6 @@ import { HabitCard } from "./habit-card";
 import { HabitEmptyState } from "./habit-empty-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
@@ -15,7 +14,6 @@ interface HabitListProps {
   habits: HabitWithTodayStatus[];
   onToggle: (habitId: string) => Promise<void>;
   onHabitClick: (habitId: string) => void;
-  isLoading?: boolean;
   togglingHabitIds?: Set<string>;
 }
 
@@ -25,7 +23,6 @@ export function HabitList({
   habits,
   onToggle,
   onHabitClick,
-  isLoading = false,
   togglingHabitIds,
 }: HabitListProps) {
   const t = useTranslations("habits.list");
@@ -71,18 +68,6 @@ export function HabitList({
   };
 
   const emptyStateVariant = getEmptyStateVariant();
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-48 rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

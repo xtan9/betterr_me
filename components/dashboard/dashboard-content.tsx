@@ -26,6 +26,7 @@ import { AbsenceCard } from "./absence-card";
 import { toast } from "sonner";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
+import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import type { DashboardData } from "@/lib/db/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -97,14 +98,17 @@ export function DashboardContent({
     return t("greeting.evening");
   };
 
-  const [togglingHabitIds, setTogglingHabitIds] = useState<Set<string>>(
-    new Set(),
-  );
+  const {
+    togglingIds: togglingHabitIds,
+    isToggling,
+    startToggling,
+    stopToggling,
+  } = useTogglingSet();
 
   const handleToggleHabit = async (habitId: string) => {
-    if (togglingHabitIds.has(habitId)) return;
+    if (isToggling(habitId)) return;
 
-    setTogglingHabitIds((prev) => new Set(prev).add(habitId));
+    startToggling(habitId);
 
     try {
       await mutate(
@@ -123,7 +127,21 @@ export function DashboardContent({
         },
         {
           optimisticData: (current: DashboardData | undefined) => {
-            if (!current) return current!;
+            if (!current)
+              return {
+                habits: [],
+                tasks_today: [],
+                tasks_tomorrow: [],
+                milestones_today: [],
+                stats: {
+                  total_habits: 0,
+                  completed_today: 0,
+                  current_best_streak: 0,
+                  total_tasks: 0,
+                  tasks_due_today: 0,
+                  tasks_completed_today: 0,
+                },
+              };
             const habit = current.habits.find((h) => h.id === habitId);
             const wasCompleted = habit?.completed_today ?? false;
             return {
@@ -149,11 +167,7 @@ export function DashboardContent({
       console.error("Failed to toggle habit:", err);
       toast.error(t("error.toggleHabitFailed"));
     } finally {
-      setTogglingHabitIds((prev) => {
-        const next = new Set(prev);
-        next.delete(habitId);
-        return next;
-      });
+      stopToggling(habitId);
     }
   };
 
