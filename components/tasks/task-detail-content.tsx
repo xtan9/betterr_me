@@ -6,7 +6,6 @@ import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   Edit,
   Trash2,
   AlertCircle,
@@ -25,6 +24,9 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
+import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,25 +74,25 @@ const PRIORITY_COLORS: Record<number, string> = {
 
 function TaskDetailSkeleton() {
   return (
-    <div
-      className="max-w-3xl mx-auto space-y-6"
-      data-testid="task-detail-skeleton"
-    >
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-9 w-24" />
-        <Skeleton className="h-9 w-20" />
-      </div>
+    <div className="space-y-6" data-testid="task-detail-skeleton">
       <div>
-        <Skeleton className="h-8 w-64 mb-2" />
-        <Skeleton className="h-5 w-48 mb-2" />
-        <Skeleton className="h-4 w-full max-w-md" />
+        <Skeleton className="h-4 w-32 mb-2" />
+        <PageHeaderSkeleton hasActions />
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <Skeleton className="h-20 rounded-xl" />
-        <Skeleton className="h-20 rounded-xl" />
-        <Skeleton className="h-20 rounded-xl" />
-        <Skeleton className="h-20 rounded-xl" />
-      </div>
+      <Card className="max-w-3xl">
+        <CardContent className="space-y-6 pt-6">
+          <div>
+            <Skeleton className="h-5 w-48 mb-2" />
+            <Skeleton className="h-4 w-full max-w-md" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Skeleton className="h-20 rounded-xl" />
+            <Skeleton className="h-20 rounded-xl" />
+            <Skeleton className="h-20 rounded-xl" />
+            <Skeleton className="h-20 rounded-xl" />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -171,174 +173,172 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   const priorityColor = PRIORITY_COLORS[task.priority] ?? "text-slate-400";
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          onClick={() => router.push("/tasks")}
-          className="gap-2"
-        >
-          <ArrowLeft className="size-4" />
-          {t("detail.back")}
-        </Button>
-        <Button
-          onClick={() => router.push(`/tasks/${taskId}/edit`)}
-          className="gap-2"
-        >
-          <Edit className="size-4" />
-          {t("detail.edit")}
-        </Button>
-      </div>
-
-      {/* Title and status */}
+    <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-3 mb-2">
-          <h1 className="text-2xl font-bold">{task.title}</h1>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleToggle}
-            className="gap-1.5"
-          >
-            {task.is_completed ? (
-              <>
-                <CheckCircle2 className="size-4 text-emerald-500" />
-                <Badge variant="default" className="bg-emerald-500">
-                  {t("detail.completed")}
-                </Badge>
-              </>
-            ) : (
-              <>
-                <Circle className="size-4 text-muted-foreground" />
-                <Badge variant="secondary">{t("detail.pending")}</Badge>
-              </>
-            )}
-          </Button>
-        </div>
-        {task.description && (
-          <p className="text-muted-foreground">{task.description}</p>
-        )}
+        <PageBreadcrumbs section="tasks" itemName={task.title} />
+        <PageHeader
+          title={task.title}
+          actions={
+            <Button
+              onClick={() => router.push(`/tasks/${taskId}/edit`)}
+              className="gap-2"
+            >
+              <Edit className="size-4" />
+              {t("detail.edit")}
+            </Button>
+          }
+        />
       </div>
 
-      {/* Your Why */}
-      {task.intention && (
-        <div className="flex items-start gap-3 p-4 rounded-lg border-l-4 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-950/20">
+      <Card className="max-w-3xl">
+        <CardContent className="space-y-6 pt-6">
+          {/* Status */}
           <div>
-            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-              {t("detail.yourWhy")}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1 italic">
-              {task.intention}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Reflection badge */}
-      {task.completion_difficulty && (
-        <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
-          <span className="text-sm">
-            {{ 1: "⚡", 2: "👌", 3: "💪" }[task.completion_difficulty]}
-          </span>
-          <span className="text-sm text-muted-foreground">
-            {t(
-              `detail.reflection.${{ 1: "easy", 2: "good", 3: "hard" }[task.completion_difficulty]}`,
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggle}
+              className="gap-1.5"
+            >
+              {task.is_completed ? (
+                <>
+                  <CheckCircle2 className="size-4 text-emerald-500" />
+                  <Badge variant="default" className="bg-emerald-500">
+                    {t("detail.completed")}
+                  </Badge>
+                </>
+              ) : (
+                <>
+                  <Circle className="size-4 text-muted-foreground" />
+                  <Badge variant="secondary">{t("detail.pending")}</Badge>
+                </>
+              )}
+            </Button>
+            {task.description && (
+              <p className="text-muted-foreground mt-2">{task.description}</p>
             )}
-          </span>
-        </div>
-      )}
+          </div>
 
-      {/* Details grid */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Category */}
-        <div className="flex items-center gap-3 p-4 rounded-lg border">
-          <Tag className="size-5 text-muted-foreground" />
-          <div>
-            <p className="text-sm text-muted-foreground">
-              {t("detail.category")}
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <CategoryIcon
-                className={cn("size-4 text-white rounded p-0.5", categoryColor)}
-              />
-              <span className="font-medium">
-                {task.category ? categoryT(task.category) : "—"}
+          {/* Your Why */}
+          {task.intention && (
+            <div className="flex items-start gap-3 p-4 rounded-lg border-l-4 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-950/20">
+              <div>
+                <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                  {t("detail.yourWhy")}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1 italic">
+                  {task.intention}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Reflection badge */}
+          {task.completion_difficulty && (
+            <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
+              <span className="text-sm">
+                {{ 1: "⚡", 2: "👌", 3: "💪" }[task.completion_difficulty]}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {t(
+                  `detail.reflection.${{ 1: "easy", 2: "good", 3: "hard" }[task.completion_difficulty]}`,
+                )}
               </span>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Priority */}
-        <div className="flex items-center gap-3 p-4 rounded-lg border">
-          <Flag className={cn("size-5", priorityColor)} />
-          <div>
-            <p className="text-sm text-muted-foreground">
-              {t("detail.priority")}
-            </p>
-            <span className={cn("font-medium", priorityColor)}>
-              {priorityT(String(task.priority))}
-            </span>
-          </div>
-        </div>
+          {/* Details grid */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Category */}
+            <div className="flex items-center gap-3 p-4 rounded-lg border">
+              <Tag className="size-5 text-muted-foreground" />
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  {t("detail.category")}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <CategoryIcon
+                    className={cn("size-4 text-white rounded p-0.5", categoryColor)}
+                  />
+                  <span className="font-medium">
+                    {task.category ? categoryT(task.category) : "---"}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-        {/* Due date */}
-        <div className="flex items-center gap-3 p-4 rounded-lg border">
-          <Calendar className="size-5 text-muted-foreground" />
-          <div>
-            <p className="text-sm text-muted-foreground">
-              {t("detail.dueDate")}
-            </p>
-            <span className="font-medium">
-              {task.due_date || t("detail.noDueDate")}
-            </span>
-          </div>
-        </div>
+            {/* Priority */}
+            <div className="flex items-center gap-3 p-4 rounded-lg border">
+              <Flag className={cn("size-5", priorityColor)} />
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  {t("detail.priority")}
+                </p>
+                <span className={cn("font-medium", priorityColor)}>
+                  {priorityT(String(task.priority))}
+                </span>
+              </div>
+            </div>
 
-        {/* Due time */}
-        <div className="flex items-center gap-3 p-4 rounded-lg border">
-          <Clock className="size-5 text-muted-foreground" />
-          <div>
-            <p className="text-sm text-muted-foreground">
-              {t("detail.dueTime")}
-            </p>
-            <span className="font-medium">
-              {task.due_time ? task.due_time.slice(0, 5) : "—"}
-            </span>
-          </div>
-        </div>
-      </div>
+            {/* Due date */}
+            <div className="flex items-center gap-3 p-4 rounded-lg border">
+              <Calendar className="size-5 text-muted-foreground" />
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  {t("detail.dueDate")}
+                </p>
+                <span className="font-medium">
+                  {task.due_date || t("detail.noDueDate")}
+                </span>
+              </div>
+            </div>
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-3 pt-4 border-t">
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" className="gap-2">
-              <Trash2 className="size-4" />
-              {t("detail.delete")}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("detail.delete")}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("detail.deleteConfirm")}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t("detail.deleteCancel")}</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="bg-destructive text-white hover:bg-destructive/90"
-              >
-                <Trash2 className="size-4 mr-2" />
-                {t("detail.delete")}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+            {/* Due time */}
+            <div className="flex items-center gap-3 p-4 rounded-lg border">
+              <Clock className="size-5 text-muted-foreground" />
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  {t("detail.dueTime")}
+                </p>
+                <span className="font-medium">
+                  {task.due_time ? task.due_time.slice(0, 5) : "---"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-wrap gap-3 pt-4 border-t">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="gap-2">
+                  <Trash2 className="size-4" />
+                  {t("detail.delete")}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{t("detail.delete")}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {t("detail.deleteConfirm")}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{t("detail.deleteCancel")}</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="bg-destructive text-white hover:bg-destructive/90"
+                  >
+                    <Trash2 className="size-4 mr-2" />
+                    {t("detail.delete")}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
 import { TaskList } from "./task-list";
 import type { Task } from "@/lib/db/types";
 
@@ -68,16 +69,15 @@ export function TasksPageContent() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl font-bold tracking-tight">
-          {t("page.title")}
-        </h1>
-        <Button onClick={handleCreateTask}>
-          <Plus className="size-4 mr-2" />
-          {t("page.createButton")}
-        </Button>
-      </div>
+      <PageHeader
+        title={t("page.title")}
+        actions={
+          <Button onClick={handleCreateTask}>
+            <Plus className="size-4 mr-2" />
+            {t("page.createButton")}
+          </Button>
+        }
+      />
 
       {/* Task List */}
       <TaskList
@@ -93,11 +93,7 @@ export function TasksPageContent() {
 function TasksPageSkeleton() {
   return (
     <div className="space-y-6" data-testid="tasks-skeleton">
-      {/* Header skeleton */}
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-9 w-40" />
-        <Skeleton className="h-10 w-32" />
-      </div>
+      <PageHeaderSkeleton hasActions />
 
       {/* Tabs skeleton */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
