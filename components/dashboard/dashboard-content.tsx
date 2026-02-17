@@ -9,9 +9,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import dynamic from "next/dynamic";
 
-const DailySnapshot = dynamic(() => import("./daily-snapshot").then(m => ({ default: m.DailySnapshot })));
-const HabitChecklist = dynamic(() => import("./habit-checklist").then(m => ({ default: m.HabitChecklist })));
-const TasksToday = dynamic(() => import("./tasks-today").then(m => ({ default: m.TasksToday })));
+const DailySnapshot = dynamic(() =>
+  import("./daily-snapshot").then((m) => ({ default: m.DailySnapshot })),
+);
+const HabitChecklist = dynamic(() =>
+  import("./habit-checklist").then((m) => ({ default: m.HabitChecklist })),
+);
+const TasksToday = dynamic(() =>
+  import("./tasks-today").then((m) => ({ default: m.TasksToday })),
+);
 import { MotivationMessage } from "./motivation-message";
 import { WeeklyInsightCard } from "./weekly-insight-card";
 import type { WeeklyInsight } from "@/lib/db/insights";
@@ -39,7 +45,10 @@ function getWeekKey(weekStartDay: number): string {
   return getLocalDateString(weekStart);
 }
 
-export function DashboardContent({ userName, initialData }: DashboardContentProps) {
+export function DashboardContent({
+  userName,
+  initialData,
+}: DashboardContentProps) {
   const t = useTranslations("dashboard");
   const router = useRouter();
 
@@ -53,7 +62,7 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
       revalidateOnFocus: true,
       refreshInterval: 60000, // Refresh every minute
       keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
-    }
+    },
   );
 
   // Weekly insight — only fetch on the user's week start day
@@ -71,7 +80,7 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
 
   const { data: insightsData } = useSWR<{ insights: WeeklyInsight[] }>(
     isWeekStartDay && !insightDismissed ? "/api/insights/weekly" : null,
-    fetcher
+    fetcher,
   );
 
   const handleDismissInsight = useCallback(() => {
@@ -88,20 +97,62 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
     return t("greeting.evening");
   };
 
+  const [togglingHabitIds, setTogglingHabitIds] = useState<Set<string>>(
+    new Set(),
+  );
+
   const handleToggleHabit = async (habitId: string) => {
+    if (togglingHabitIds.has(habitId)) return;
+
+    setTogglingHabitIds((prev) => new Set(prev).add(habitId));
+
     try {
-      const response = await fetch(`/api/habits/${habitId}/toggle`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: today }),
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to toggle habit ${habitId}: ${response.status}`);
-      }
-      mutate(); // Revalidate dashboard data
+      await mutate(
+        async () => {
+          const response = await fetch(`/api/habits/${habitId}/toggle`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ date: today }),
+          });
+          if (!response.ok) {
+            throw new Error(
+              `Failed to toggle habit ${habitId}: ${response.status}`,
+            );
+          }
+        },
+        {
+          optimisticData: (current: DashboardData | undefined) => {
+            if (!current) return current!;
+            const habit = current.habits.find((h) => h.id === habitId);
+            const wasCompleted = habit?.completed_today ?? false;
+            return {
+              ...current,
+              habits: current.habits.map((h) =>
+                h.id === habitId
+                  ? { ...h, completed_today: !h.completed_today }
+                  : h,
+              ),
+              stats: {
+                ...current.stats,
+                completed_today: wasCompleted
+                  ? current.stats.completed_today - 1
+                  : current.stats.completed_today + 1,
+              },
+            };
+          },
+          rollbackOnError: true,
+          revalidate: true,
+        },
+      );
     } catch (err) {
       console.error("Failed to toggle habit:", err);
       toast.error(t("error.toggleHabitFailed"));
+    } finally {
+      setTogglingHabitIds((prev) => {
+        const next = new Set(prev);
+        next.delete(habitId);
+        return next;
+      });
     }
   };
 
@@ -212,7 +263,7 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
   }, null);
 
   const absenceHabits = data.habits
-    .filter(h => h.missed_scheduled_days > 0 && !h.completed_today)
+    .filter((h) => h.missed_scheduled_days > 0 && !h.completed_today)
     .sort((a, b) => b.missed_scheduled_days - a.missed_scheduled_days)
     .slice(0, 3);
 
@@ -227,12 +278,14 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
       </div>
 
       {/* Weekly Insight — show on week start day if not dismissed */}
-      {insightsData?.insights && insightsData.insights.length > 0 && !insightDismissed && (
-        <WeeklyInsightCard
-          insights={insightsData.insights}
-          onDismiss={handleDismissInsight}
-        />
-      )}
+      {insightsData?.insights &&
+        insightsData.insights.length > 0 &&
+        !insightDismissed && (
+          <WeeklyInsightCard
+            insights={insightsData.insights}
+            onDismiss={handleDismissInsight}
+          />
+        )}
 
       {/* Motivation Message — only show when user has habits */}
       {data.stats.total_habits > 0 && (
@@ -242,7 +295,7 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
       {/* Absence Recovery Cards — habits with missed scheduled days */}
       {absenceHabits.length > 0 && (
         <div className="space-y-3">
-          {absenceHabits.map(habit => (
+          {absenceHabits.map((habit) => (
             <AbsenceCard
               key={habit.id}
               habit={habit}
@@ -254,13 +307,14 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
       )}
 
       {/* Daily Snapshot — only show when user has habits */}
-      {data.stats.total_habits > 0 && (
-        <DailySnapshot stats={data.stats} />
-      )}
+      {data.stats.total_habits > 0 && <DailySnapshot stats={data.stats} />}
 
       {/* Milestone celebrations */}
       {data.milestones_today && data.milestones_today.length > 0 && (
-        <MilestoneCards milestones={data.milestones_today} habits={data.habits} />
+        <MilestoneCards
+          milestones={data.milestones_today}
+          habits={data.habits}
+        />
       )}
 
       {/* Main content grid */}
@@ -270,6 +324,7 @@ export function DashboardContent({ userName, initialData }: DashboardContentProp
           habits={data.habits}
           onToggle={handleToggleHabit}
           onCreateHabit={handleCreateHabit}
+          togglingHabitIds={togglingHabitIds}
         />
 
         {/* Tasks Today */}

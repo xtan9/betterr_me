@@ -12,14 +12,14 @@ interface HabitChecklistProps {
   habits: HabitWithTodayStatus[];
   onToggle: (habitId: string) => Promise<void>;
   onCreateHabit: () => void;
-  isLoading?: boolean;
+  togglingHabitIds?: Set<string>;
 }
 
 export function HabitChecklist({
   habits,
   onToggle,
   onCreateHabit,
-  isLoading,
+  togglingHabitIds,
 }: HabitChecklistProps) {
   const t = useTranslations("dashboard.habits");
   const router = useRouter();
@@ -62,7 +62,7 @@ export function HabitChecklist({
                   habit={habit}
                   onToggle={onToggle}
                   onClick={handleHabitClick}
-                  isToggling={isLoading}
+                  isToggling={togglingHabitIds?.has(habit.id)}
                 />
               ))}
             </div>
@@ -81,7 +81,10 @@ export function HabitChecklist({
                 </div>
               ) : (
                 <p className="text-sm text-center text-muted-foreground">
-                  {t("completed", { completed: completedCount, total: totalCount })}
+                  {t("completed", {
+                    completed: completedCount,
+                    total: totalCount,
+                  })}
                   {" • "}
                   {t("moreToGo", { count: remaining })}
                 </p>
