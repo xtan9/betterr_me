@@ -70,7 +70,7 @@ export default {
       fontSize: {
         "page-title": [
           "var(--font-size-page-title)",
-          { lineHeight: "1.2", fontWeight: "700" },
+          { lineHeight: "1.33", fontWeight: "700", letterSpacing: "-0.025em" },
         ],
         "section-heading": [
           "var(--font-size-section-heading)",
@@ -86,7 +86,11 @@ export default {
       spacing: {
         "card-padding": "var(--spacing-card-padding)",
         "page-padding": "var(--spacing-page-padding)",
+        "page-padding-top": "var(--spacing-page-padding-top)",
         "card-gap": "var(--spacing-card-gap)",
+      },
+      maxWidth: {
+        content: "var(--content-max-width)",
       },
       width: {
         sidebar: "var(--sidebar-width)",

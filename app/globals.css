@@ -53,7 +53,7 @@
     --highlight: 155 50% 94%;
 
     /* === Typography scale === */
-    --font-size-page-title: 1.75rem;
+    --font-size-page-title: 1.5rem;
     --font-size-section-heading: 1.125rem;
     --font-size-body: 0.875rem;
     --font-size-caption: 0.8125rem;
@@ -62,7 +62,11 @@
     /* === Spacing === */
     --spacing-card-padding: 1.5rem;
     --spacing-page-padding: 2rem;
-    --spacing-card-gap: 1.5rem;
+    --spacing-page-padding-top: 2.5rem;
+    --spacing-card-gap: 1rem;
+
+    /* === Content layout === */
+    --content-max-width: 1400px;
 
     /* === Layout === */
     --sidebar-width: 200px;
