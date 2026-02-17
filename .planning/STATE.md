@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 9: Test Stabilization & Baseline Regeneration (1 of 2 plans done)
+**Current focus:** Phase 9: Test Stabilization & Baseline Regeneration (2 of 2 plans done -- PROJECT COMPLETE)
 
 ## Current Position
 
 Phase: 9 of 9 (Test Stabilization & Baseline Regeneration)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-17 -- Completed 09-01-PLAN.md (Test stabilization -- orphaned test removal and E2E selector updates)
+Plan: 2 of 2 in current phase
+Status: Complete
+Last activity: 2026-02-17 -- Completed 09-02-PLAN.md (Visual regression baseline regeneration, locale verification, full suite green)
 
-Progress: [##########] 98%
+Progress: [##########] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20
-- Average duration: 3.5min
-- Total execution time: 1.2 hours
+- Total plans completed: 21
+- Average duration: 3.6min
+- Total execution time: 1.3 hours
 
 **By Phase:**
 
@@ -35,11 +35,11 @@ Progress: [##########] 98%
 | 06 | 4 | 17min | 4.3min |
 | 07 | 3 | 12min | 4min |
 | 08 | 2 | 6min | 3min |
-| 09 | 1 | 4min | 4min |
+| 09 | 2 | 11min | 5.5min |
 
 **Recent Trend:**
-- Last 5 plans: 6min, 3min, 4min, 2min, 4min
-- Trend: Consistent 2-6min pace, Phase 9 test stabilization in progress
+- Last 5 plans: 4min, 2min, 4min, 4min, 7min
+- Trend: Final plan slightly longer due to full suite verification and auto-fix of 7 task-detail selectors
 
 *Updated after each plan completion*
 
@@ -118,6 +118,10 @@ Recent decisions affecting current work:
 - [09-01]: Theme toggle E2E test uses page.evaluate() DOM class approach instead of navigating sidebar dropdown UI
 - [09-01]: Tasks nav link assertion uses getByRole instead of CSS selector for resilience across layout changes
 - [09-01]: Mobile nav test opens sidebar sheet trigger (button[data-sidebar="trigger"]) before asserting nav links
+- [09-02]: 6 baselines (not 18): visual-regression project uses single chromium viewport; stale mobile baselines removed
+- [09-02]: Task-detail selectors use getByRole('heading') to avoid strict mode violations from breadcrumb + h1 duplicate text
+- [09-02]: Back button test replaced with breadcrumb navigation test (breadcrumb scoped via getByLabel)
+- [09-02]: Locale E2E testing: set cookie before navigation, verify first 2 nav labels as smoke test
 
 ### Pending Todos
 
@@ -132,5 +136,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 09-01-PLAN.md (Test stabilization -- orphaned test removal and E2E selector updates)
-Resume file: .planning/phases/09-test-stabilization-baseline-regeneration/09-01-SUMMARY.md
+Stopped at: Completed 09-02-PLAN.md (Visual regression baseline regeneration -- PROJECT COMPLETE)
+Resume file: .planning/phases/09-test-stabilization-baseline-regeneration/09-02-SUMMARY.md
