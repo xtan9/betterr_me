@@ -31,6 +31,21 @@ import type { DashboardData } from "@/lib/db/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
+const EMPTY_DASHBOARD: DashboardData = {
+  habits: [],
+  tasks_today: [],
+  tasks_tomorrow: [],
+  milestones_today: [],
+  stats: {
+    total_habits: 0,
+    completed_today: 0,
+    current_best_streak: 0,
+    total_tasks: 0,
+    tasks_due_today: 0,
+    tasks_completed_today: 0,
+  },
+};
+
 interface DashboardContentProps {
   userName: string;
   initialData?: DashboardData;
@@ -134,21 +149,7 @@ export function DashboardContent({
         },
         {
           optimisticData: (current: DashboardData | undefined) => {
-            if (!current)
-              return {
-                habits: [],
-                tasks_today: [],
-                tasks_tomorrow: [],
-                milestones_today: [],
-                stats: {
-                  total_habits: 0,
-                  completed_today: 0,
-                  current_best_streak: 0,
-                  total_tasks: 0,
-                  tasks_due_today: 0,
-                  tasks_completed_today: 0,
-                },
-              };
+            if (!current) return EMPTY_DASHBOARD;
             const habit = current.habits.find((h) => h.id === habitId);
             const wasCompleted = habit?.completed_today ?? false;
             return {
@@ -198,21 +199,7 @@ export function DashboardContent({
         },
         {
           optimisticData: (current: DashboardData | undefined) => {
-            if (!current)
-              return {
-                habits: [],
-                tasks_today: [],
-                tasks_tomorrow: [],
-                milestones_today: [],
-                stats: {
-                  total_habits: 0,
-                  completed_today: 0,
-                  current_best_streak: 0,
-                  total_tasks: 0,
-                  tasks_due_today: 0,
-                  tasks_completed_today: 0,
-                },
-              };
+            if (!current) return EMPTY_DASHBOARD;
             const task = current.tasks_today.find((t) => t.id === taskId);
             const wasCompleted = task?.is_completed ?? false;
             return {

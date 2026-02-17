@@ -802,11 +802,15 @@ describe("DashboardContent", () => {
           id: "t1",
           user_id: "user-1",
           title: "Buy groceries",
+          description: null,
           is_completed: false,
           completed_at: null,
           priority: 2,
+          category: null,
           due_date: "2026-02-17",
           due_time: null,
+          intention: null,
+          completion_difficulty: null,
           created_at: "2024-01-01T00:00:00Z",
           updated_at: "2024-01-01T00:00:00Z",
         },
@@ -846,6 +850,70 @@ describe("DashboardContent", () => {
           typeof (call[1] as Record<string, unknown>).optimisticData === "function",
       );
       expect(taskMutateCall).toBeDefined();
+    });
+
+    global.fetch = originalFetch;
+  });
+
+  it("shows toast error when task toggle fails", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => ({ error: "Server error" }),
+    });
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn().mockImplementation(async (fn) => {
+      if (typeof fn === "function") await fn();
+    });
+
+    const dataWithTasks = {
+      ...mockDashboardData,
+      tasks_today: [
+        {
+          id: "t1",
+          user_id: "user-1",
+          title: "Buy groceries",
+          description: null,
+          is_completed: false,
+          completed_at: null,
+          priority: 2,
+          category: null,
+          due_date: "2026-02-17",
+          due_time: null,
+          intention: null,
+          completion_difficulty: null,
+          created_at: "2024-01-01T00:00:00Z",
+          updated_at: "2024-01-01T00:00:00Z",
+        },
+      ],
+      stats: {
+        ...mockDashboardData.stats,
+        total_tasks: 1,
+        tasks_due_today: 1,
+        tasks_completed_today: 0,
+      },
+    };
+
+    mockUseSWR.mockReturnValue({
+      data: dataWithTasks,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Tasks");
+    const checkboxes = screen.getAllByRole("checkbox");
+    const taskCheckbox = checkboxes[checkboxes.length - 1];
+    taskCheckbox?.click();
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        "Failed to update task. Please try again.",
+      );
     });
 
     global.fetch = originalFetch;

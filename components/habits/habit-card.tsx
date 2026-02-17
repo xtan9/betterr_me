@@ -27,7 +27,9 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
 
   const handleCheckedChange = () => {
     if (!isToggling) {
-      onToggle(habit.id).catch(() => {});
+      onToggle(habit.id).catch((err) => {
+        console.error("Failed to toggle habit:", err);
+      });
     }
   };
 
