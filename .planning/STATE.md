@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 6: Habits/Tasks/Remaining Pages Migration (4 of 4 plans done)
+**Current focus:** Phase 7: Sidebar Enrichment (1 of 3 plans done)
 
 ## Current Position
 
-Phase: 6 of 9 (Habits/Tasks/Remaining Pages Migration)
-Plan: 4 of 4 in current phase
-Status: Complete
-Last activity: 2026-02-17 -- Completed 06-03-PLAN.md (tasks and settings pages migration to PageHeader/breadcrumbs/Card)
+Phase: 7 of 9 (Sidebar Enrichment)
+Plan: 1 of 3 in current phase
+Status: In Progress
+Last activity: 2026-02-17 -- Completed 07-01-PLAN.md (collapsible section groups with Settings nav item)
 
-Progress: [########..] 81%
+Progress: [########..] 85%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
-- Average duration: 3.6min
-- Total execution time: 0.83 hours
+- Total plans completed: 15
+- Average duration: 3.5min
+- Total execution time: 0.88 hours
 
 **By Phase:**
 
@@ -33,10 +33,11 @@ Progress: [########..] 81%
 | 04 | 1 | 7min | 7min |
 | 05 | 2 | 6min | 3min |
 | 06 | 4 | 17min | 4.3min |
+| 07 | 1 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 3min, 2min, 5min, 7min
-- Trend: Consistent 2-7min pace for component migration work
+- Last 5 plans: 3min, 2min, 5min, 7min, 3min
+- Trend: Consistent 2-7min pace, sidebar enrichment work on track
 
 *Updated after each plan completion*
 
@@ -96,6 +97,9 @@ Recent decisions affecting current work:
 - [06-03]: Settings page keeps multi-card layout with no container Card (locked decision, only header migrated)
 - [06-04]: AuthBranding uses same brand mark pattern as AppSidebar (B initial in rounded-md bg-primary square)
 - [06-04]: Auth pages keep white bg-background (no bg-page gray), distinct from app interior
+- [07-01]: Dashboard match function no longer includes /dashboard/settings -- Settings has its own active state
+- [07-01]: SidebarMenuBadge pre-imported but unused, suppressed with eslint-disable comment for 07-03 forward compatibility
+- [07-01]: Collapsible sidebar group pattern: Collapsible > SidebarGroup > SidebarGroupLabel(asChild) > CollapsibleTrigger with ChevronDown
 
 ### Pending Todos
 
@@ -110,5 +114,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 06-03-PLAN.md (all 4 plans in Phase 6 now complete)
-Resume file: .planning/phases/06-habits-tasks-remaining-pages-migration/06-03-SUMMARY.md
+Stopped at: Completed 07-01-PLAN.md (collapsible section groups with Settings nav item)
+Resume file: .planning/phases/07-sidebar-enrichment/07-01-SUMMARY.md
