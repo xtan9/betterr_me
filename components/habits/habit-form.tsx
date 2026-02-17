@@ -27,6 +27,8 @@ interface HabitFormProps {
   onSubmit: (data: HabitFormValues) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
+  hideChrome?: boolean;
+  id?: string;
 }
 
 const CATEGORY_OPTIONS: {
@@ -47,6 +49,8 @@ export function HabitForm({
   onSubmit,
   onCancel,
   isLoading = false,
+  hideChrome = false,
+  id,
 }: HabitFormProps) {
   const t = useTranslations("habits.form");
   const categoryT = useTranslations("habits.categories");
@@ -70,12 +74,14 @@ export function HabitForm({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold">
-        {mode === "create" ? t("createTitle") : t("editTitle")}
-      </h2>
+      {!hideChrome && (
+        <h2 className="text-lg font-semibold">
+          {mode === "create" ? t("createTitle") : t("editTitle")}
+        </h2>
+      )}
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-5">
+        <form id={id} onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-5">
           <FormField
             control={form.control}
             name="name"
@@ -162,29 +168,30 @@ export function HabitForm({
             )}
           />
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onCancel}
-              disabled={isLoading}
-            >
-              {t("cancel")}
-            </Button>
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white"
-            >
-              {isLoading
-                ? mode === "create"
-                  ? t("creating")
-                  : t("saving")
-                : mode === "create"
-                  ? t("create")
-                  : t("save")}
-            </Button>
-          </div>
+          {!hideChrome && (
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onCancel}
+                disabled={isLoading}
+              >
+                {t("cancel")}
+              </Button>
+              <Button
+                type="submit"
+                disabled={isLoading}
+              >
+                {isLoading
+                  ? mode === "create"
+                    ? t("creating")
+                    : t("saving")
+                  : mode === "create"
+                    ? t("create")
+                    : t("save")}
+              </Button>
+            </div>
+          )}
         </form>
       </Form>
     </div>
