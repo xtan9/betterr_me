@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: Habits, Tasks & Remaining Pages Migration** - Migrate habits, tasks, profile, and auth pages; add breadcrumb navigation for nested views (completed 2026-02-17)
 - [x] **Phase 7: Sidebar Enrichment** - User profile footer, collapsible section groups, notification badges, theme/language switchers in sidebar (completed 2026-02-17)
 - [ ] **Phase 8: Visual Polish** - Dark mode accent desaturation, hover/focus micro-interactions across cards and buttons
-- [ ] **Phase 9: Test Stabilization & Baseline Regeneration** - All tests passing, visual regression baselines regenerated, locale and accessibility verification
+- [x] **Phase 9: Test Stabilization & Baseline Regeneration** - All tests passing, visual regression baselines regenerated, locale and accessibility verification (completed 2026-02-17)
 
 ## Phase Details
 
@@ -155,7 +155,7 @@ Plans:
   3. Visual regression baselines are regenerated and all visual regression tests pass against new baselines
   4. Accessibility tests (vitest-axe) pass for all components in the new layout
   5. All three locales (en, zh, zh-TW) render correctly with the sidebar layout in both light and dark mode
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 09-01-PLAN.md -- Unit test cleanup (remove dead Navbar/ThemeSwitcher tests) + E2E selector updates for sidebar navigation
@@ -178,4 +178,4 @@ Note: Phase 4 depends on Phase 2 (not Phase 3). Phases 4 and 3 can execute in pa
 | 6. Habits, Tasks & Remaining Pages Migration | 0/2 | Complete    | 2026-02-17 |
 | 7. Sidebar Enrichment | 0/3 | Complete    | 2026-02-17 |
 | 8. Visual Polish | 0/2 | Not started | - |
-| 9. Test Stabilization & Baseline Regeneration | 0/2 | Not started | - |
+| 9. Test Stabilization & Baseline Regeneration | 0/2 | Complete    | 2026-02-17 |
