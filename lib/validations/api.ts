@@ -28,13 +28,17 @@ export function validateRequestBody<T>(
     return { success: true, data: result.data };
   }
 
-  const fieldErrors = result.error.flatten().fieldErrors;
-  log.warn("Validation failed", { errors: fieldErrors });
+  const { fieldErrors, formErrors } = result.error.flatten();
+  const details = {
+    ...fieldErrors,
+    ...(formErrors.length > 0 && { _errors: formErrors }),
+  };
+  log.warn("Validation failed", { errors: details });
 
   return {
     success: false,
     response: NextResponse.json(
-      { error: "Validation failed", details: fieldErrors },
+      { error: "Validation failed", details },
       { status: 400 }
     ),
   };
