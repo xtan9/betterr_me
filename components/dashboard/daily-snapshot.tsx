@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { TrendingUp, TrendingDown, Target, Flame } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface StatCardProps {
@@ -19,35 +20,37 @@ interface StatCardProps {
 
 function StatCard({ icon, iconBgClass, title, value, subtitle, trend }: StatCardProps) {
   return (
-    <div data-testid="stat-card" className="min-w-0 rounded-xl border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className={cn("rounded-full p-2.5 shrink-0", iconBgClass)} aria-hidden="true">
-          {icon}
+    <Card data-testid="stat-card" className="min-w-0 gap-0 py-0 shadow-sm">
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <div className={cn("rounded-full p-2.5 shrink-0", iconBgClass)} aria-hidden="true">
+            {icon}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm text-muted-foreground">{title}</p>
+            <p className="text-stat mt-0.5">{value}</p>
+            {subtitle && (
+              <p className="text-sm text-muted-foreground">{subtitle}</p>
+            )}
+            {trend && (
+              <div
+                className={cn(
+                  "flex items-center gap-1 text-sm mt-1",
+                  trend.isPositive ? "text-primary" : "text-red-500"
+                )}
+              >
+                {trend.isPositive ? (
+                  <TrendingUp className="size-4" aria-hidden="true" />
+                ) : (
+                  <TrendingDown className="size-4" aria-hidden="true" />
+                )}
+                <span>{trend.label}</span>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="min-w-0">
-          <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
-          <p className="font-display text-3xl font-bold mt-0.5">{value}</p>
-          {subtitle && (
-            <p className="text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
-          )}
-          {trend && (
-            <div
-              className={cn(
-                "flex items-center gap-1 text-sm mt-1",
-                trend.isPositive ? "text-emerald-500" : "text-red-500"
-              )}
-            >
-              {trend.isPositive ? (
-                <TrendingUp className="size-4" aria-hidden="true" />
-              ) : (
-                <TrendingDown className="size-4" aria-hidden="true" />
-              )}
-              <span>{trend.label}</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -92,8 +95,8 @@ export function DailySnapshot({ stats, yesterdayStats }: DailySnapshotProps) {
 
   return (
     <div className="space-y-4">
-      <h2 className="font-display text-lg font-semibold">{t("title")}</h2>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <h2 className="font-display text-section-heading">{t("title")}</h2>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-card-gap">
         <StatCard
           icon={<Target className="size-4 text-blue-600 dark:text-blue-400" />}
           iconBgClass="bg-blue-100 dark:bg-blue-900/30"
@@ -101,8 +104,8 @@ export function DailySnapshot({ stats, yesterdayStats }: DailySnapshotProps) {
           value={stats.total_habits}
         />
         <StatCard
-          icon={<Target className="size-4 text-emerald-600 dark:text-emerald-400" />}
-          iconBgClass="bg-emerald-100 dark:bg-emerald-900/30"
+          icon={<Target className="size-4 text-primary" />}
+          iconBgClass="bg-primary/10"
           title={t("todaysProgress")}
           value={`${stats.completed_today}/${stats.total_habits}`}
           subtitle={t("completionRate", { percent: completionRate })}
