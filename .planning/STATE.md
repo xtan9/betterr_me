@@ -5,22 +5,22 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 8: Visual Polish (1 of 2 plans done)
+**Current focus:** Phase 8: Visual Polish (2 of 2 plans done) -- Phase complete
 
 ## Current Position
 
 Phase: 8 of 9 (Visual Polish)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-17 -- Completed 08-01-PLAN.md (Dark mode accent desaturation)
+Plan: 2 of 2 in current phase
+Status: Phase Complete
+Last activity: 2026-02-17 -- Completed 08-02-PLAN.md (Card hover interactions and motion-reduce)
 
-Progress: [##########] 95%
+Progress: [##########] 97%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18
-- Average duration: 3.6min
+- Total plans completed: 19
+- Average duration: 3.5min
 - Total execution time: 1.1 hours
 
 **By Phase:**
@@ -34,11 +34,11 @@ Progress: [##########] 95%
 | 05 | 2 | 6min | 3min |
 | 06 | 4 | 17min | 4.3min |
 | 07 | 3 | 12min | 4min |
-| 08 | 1 | 4min | 4min |
+| 08 | 2 | 6min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 7min, 3min, 6min, 3min, 4min
-- Trend: Consistent 3-7min pace, Phase 8 visual polish started
+- Last 5 plans: 3min, 6min, 3min, 4min, 2min
+- Trend: Consistent 2-6min pace, Phase 8 visual polish complete
 
 *Updated after each plan completion*
 
@@ -110,6 +110,10 @@ Recent decisions affecting current work:
 - [08-01]: Dark mode primary desaturated from S=60%/L=50% to S=45%/L=55% for visible distinction from light mode
 - [08-01]: Hero text gradients replaced with solid text-primary -- gradients bypass CSS custom property system
 - [08-01]: All 14 component files migrated from hardcoded emerald/teal to design tokens -- zero remaining outliers
+- [08-02]: hover:scale-[1.03] replaced with hover:-translate-y-0.5 -- scale causes layout reflow, translateY is GPU-composited
+- [08-02]: hover:shadow-lg downgraded to hover:shadow-md for subtler premium SaaS aesthetic
+- [08-02]: StatCards remain static (no hover) -- display-only elements should not have interaction feedback
+- [08-02]: motion-reduce:transition-none paired with all transition classes for prefers-reduced-motion accessibility
 
 ### Pending Todos
 
@@ -124,5 +128,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 08-01-PLAN.md (Dark mode accent desaturation)
-Resume file: .planning/phases/08-visual-polish/08-01-SUMMARY.md
+Stopped at: Completed 08-02-PLAN.md (Card hover interactions and motion-reduce) -- Phase 8 complete
+Resume file: .planning/phases/08-visual-polish/08-02-SUMMARY.md
