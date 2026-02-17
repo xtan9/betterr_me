@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: Sidebar Collapse & Persistence** - Pin/unpin toggle, icon-only collapsed mode, smooth animations, cookie persistence, keyboard shortcut
 - [x] **Phase 4: Page Header & Content Layout** - Build PageHeader component, apply pixel-perfect spacing/typography, add max-width centering (completed 2026-02-17)
 - [ ] **Phase 5: Dashboard Page Migration** - Migrate dashboard to card-on-gray layout with new PageHeader, stat cards, and responsive grid adjustments
-- [ ] **Phase 6: Habits, Tasks & Remaining Pages Migration** - Migrate habits, tasks, profile, and auth pages; add breadcrumb navigation for nested views
+- [x] **Phase 6: Habits, Tasks & Remaining Pages Migration** - Migrate habits, tasks, profile, and auth pages; add breadcrumb navigation for nested views (completed 2026-02-17)
 - [ ] **Phase 7: Sidebar Enrichment** - User profile footer, collapsible section groups, notification badges, theme/language switchers in sidebar
 - [ ] **Phase 8: Visual Polish** - Dark mode accent desaturation, hover/focus micro-interactions across cards and buttons
 - [ ] **Phase 9: Test Stabilization & Baseline Regeneration** - All tests passing, visual regression baselines regenerated, locale and accessibility verification
@@ -107,7 +107,7 @@ Plans:
   3. Profile and auth pages (login, signup, password reset) use the updated visual system
   4. Detail and edit views show breadcrumb navigation in the page header (e.g., Habits > Edit "Running")
   5. All pages render correctly at 768px, 1024px, and 1280px with sidebar expanded and collapsed
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 - [ ] 06-01-PLAN.md -- Create PageBreadcrumbs component, add hideChrome/id props to HabitForm and TaskForm, add i18n strings
@@ -172,7 +172,7 @@ Note: Phase 4 depends on Phase 2 (not Phase 3). Phases 4 and 3 can execute in pa
 | 3. Sidebar Collapse & Persistence | 0/1 | Not started | - |
 | 4. Page Header & Content Layout | 0/1 | Complete    | 2026-02-17 |
 | 5. Dashboard Page Migration | 0/2 | Not started | - |
-| 6. Habits, Tasks & Remaining Pages Migration | 0/2 | Not started | - |
+| 6. Habits, Tasks & Remaining Pages Migration | 0/2 | Complete    | 2026-02-17 |
 | 7. Sidebar Enrichment | 0/1 | Not started | - |
 | 8. Visual Polish | 0/1 | Not started | - |
 | 9. Test Stabilization & Baseline Regeneration | 0/2 | Not started | - |
