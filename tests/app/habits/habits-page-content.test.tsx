@@ -256,6 +256,7 @@ describe("HabitsPageContent", () => {
         expect.any(Function),
         expect.objectContaining({
           optimisticData: expect.any(Function),
+          populateCache: false,
           rollbackOnError: true,
           revalidate: false,
         }),

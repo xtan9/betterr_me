@@ -74,6 +74,7 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
                 : h,
             );
           },
+          populateCache: false,
           rollbackOnError: true,
           revalidate: false,
         },

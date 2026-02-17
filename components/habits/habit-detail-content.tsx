@@ -224,6 +224,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
             }
             return { logs: updatedLogs };
           },
+          populateCache: false,
           rollbackOnError: true,
           revalidate: false,
         },

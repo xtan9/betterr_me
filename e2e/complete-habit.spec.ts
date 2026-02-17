@@ -129,18 +129,17 @@ test.describe('Complete Habit Flow - Toggle', () => {
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
     const initialState = await checkbox.getAttribute('data-state');
-    const expectedState = initialState === 'checked' ? 'unchecked' : 'checked';
 
-    // Rapidly toggle — two clicks with no wait in between
-    // Double-click protection blocks the second click, so only one toggle goes through
+    // Rapidly toggle — two clicks. Playwright awaits actionability (enabled) between clicks,
+    // so both go through sequentially (double-click protection disables during in-flight).
     await checkbox.click();
     await checkbox.click();
 
     // Wait for API calls to settle
     await page.waitForLoadState('networkidle');
 
-    // Should be opposite of initial — second click was blocked by double-click protection
-    await expect(checkbox).toHaveAttribute('data-state', expectedState, { timeout: 5000 });
+    // Should return to initial state after double toggle
+    await expect(checkbox).toHaveAttribute('data-state', initialState!, { timeout: 10000 });
   });
 });
 

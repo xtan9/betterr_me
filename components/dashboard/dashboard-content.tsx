@@ -167,6 +167,7 @@ export function DashboardContent({
               },
             };
           },
+          populateCache: false,
           rollbackOnError: true,
           revalidate: false,
         },
@@ -221,6 +222,7 @@ export function DashboardContent({
               },
             };
           },
+          populateCache: false,
           rollbackOnError: true,
           revalidate: false,
         },
