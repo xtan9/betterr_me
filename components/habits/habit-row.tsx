@@ -30,13 +30,13 @@ export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800">
+    <div className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-accent">
       <Checkbox
         checked={habit.completed_today}
         onCheckedChange={handleCheckboxChange}
         disabled={isToggling}
         aria-label={`${t("card.markComplete")} ${habit.name}`}
-        className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+        className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
       />
       <button
         type="button"
