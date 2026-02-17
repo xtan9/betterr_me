@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-15)
 
 **Core value:** The app must feel spacious, clean, and professional -- like a premium SaaS product -- while preserving all existing functionality and the emerald/teal brand identity.
-**Current focus:** Phase 8: Visual Polish (2 of 2 plans done) -- Phase complete
+**Current focus:** Phase 9: Test Stabilization & Baseline Regeneration (1 of 2 plans done)
 
 ## Current Position
 
-Phase: 8 of 9 (Visual Polish)
-Plan: 2 of 2 in current phase
-Status: Phase Complete
-Last activity: 2026-02-17 -- Completed 08-02-PLAN.md (Card hover interactions and motion-reduce)
+Phase: 9 of 9 (Test Stabilization & Baseline Regeneration)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-02-17 -- Completed 09-01-PLAN.md (Test stabilization -- orphaned test removal and E2E selector updates)
 
-Progress: [##########] 97%
+Progress: [##########] 98%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
+- Total plans completed: 20
 - Average duration: 3.5min
-- Total execution time: 1.1 hours
+- Total execution time: 1.2 hours
 
 **By Phase:**
 
@@ -35,10 +35,11 @@ Progress: [##########] 97%
 | 06 | 4 | 17min | 4.3min |
 | 07 | 3 | 12min | 4min |
 | 08 | 2 | 6min | 3min |
+| 09 | 1 | 4min | 4min |
 
 **Recent Trend:**
-- Last 5 plans: 3min, 6min, 3min, 4min, 2min
-- Trend: Consistent 2-6min pace, Phase 8 visual polish complete
+- Last 5 plans: 6min, 3min, 4min, 2min, 4min
+- Trend: Consistent 2-6min pace, Phase 9 test stabilization in progress
 
 *Updated after each plan completion*
 
@@ -114,6 +115,9 @@ Recent decisions affecting current work:
 - [08-02]: hover:shadow-lg downgraded to hover:shadow-md for subtler premium SaaS aesthetic
 - [08-02]: StatCards remain static (no hover) -- display-only elements should not have interaction feedback
 - [08-02]: motion-reduce:transition-none paired with all transition classes for prefers-reduced-motion accessibility
+- [09-01]: Theme toggle E2E test uses page.evaluate() DOM class approach instead of navigating sidebar dropdown UI
+- [09-01]: Tasks nav link assertion uses getByRole instead of CSS selector for resilience across layout changes
+- [09-01]: Mobile nav test opens sidebar sheet trigger (button[data-sidebar="trigger"]) before asserting nav links
 
 ### Pending Todos
 
@@ -128,5 +132,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 08-02-PLAN.md (Card hover interactions and motion-reduce) -- Phase 8 complete
-Resume file: .planning/phases/08-visual-polish/08-02-SUMMARY.md
+Stopped at: Completed 09-01-PLAN.md (Test stabilization -- orphaned test removal and E2E selector updates)
+Resume file: .planning/phases/09-test-stabilization-baseline-regeneration/09-01-SUMMARY.md
