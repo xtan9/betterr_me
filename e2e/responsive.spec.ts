@@ -164,14 +164,19 @@ test.describe('Responsive - Navigation', () => {
     const dashboard = new DashboardPage(page);
     await dashboard.goto();
 
-    // Look for mobile menu trigger (hamburger) or bottom nav
-    const mobileMenu = page.locator('[class*="mobile"], [aria-label*="menu"], button:has(svg)').first();
+    // On mobile, sidebar is a sheet -- open it via the trigger button
+    const sidebarTrigger = page.locator('button[data-sidebar="trigger"]');
+    const triggerVisible = await sidebarTrigger.isVisible().catch(() => false);
+    if (triggerVisible) {
+      await sidebarTrigger.click();
+      // Wait for sheet animation
+      await page.waitForTimeout(300);
+    }
 
-    // Either direct nav links or a menu trigger should exist
-    const navCount = await dashboard.navLinks.count();
-    const hasMenu = await mobileMenu.isVisible().catch(() => false);
-
-    expect(navCount > 0 || hasMenu).toBe(true);
+    // Now nav links should be visible in the sidebar sheet
+    const navLinks = page.getByRole('link', { name: /dashboard|habits|tasks/i });
+    const navCount = await navLinks.count();
+    expect(navCount).toBeGreaterThan(0);
   });
 
   test('navigation should show all links on desktop', async ({ page }) => {
