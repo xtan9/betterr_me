@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ProfilesDB } from "@/lib/db";
+import { validateRequestBody } from "@/lib/validations/api";
+import { log } from "@/lib/logger";
+import { profileUpdateSchema } from "@/lib/validations/profile";
 import type { ProfileUpdate } from "@/lib/db/types";
 
 /**
@@ -27,7 +30,7 @@ export async function GET() {
 
     return NextResponse.json({ profile });
   } catch (error) {
-    console.error("GET /api/profile error:", error);
+    log.error("GET /api/profile error", error);
     return NextResponse.json(
       { error: "Failed to fetch profile" },
       { status: 500 }
@@ -50,35 +53,32 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const profilesDB = new ProfilesDB(supabase);
     const body = await request.json();
 
-    // Build update object
+    // Validate with Zod schema
+    const validation = validateRequestBody(body, profileUpdateSchema);
+    if (!validation.success) return validation.response;
+
+    // Build update object from validated data
     const updates: ProfileUpdate = {};
 
-    if (body.full_name !== undefined) {
-      updates.full_name = body.full_name?.trim() || null;
+    if (validation.data.full_name !== undefined) {
+      updates.full_name = validation.data.full_name?.trim() || null;
     }
 
-    if (body.avatar_url !== undefined) {
-      updates.avatar_url = body.avatar_url?.trim() || null;
+    if (validation.data.avatar_url !== undefined) {
+      updates.avatar_url = validation.data.avatar_url?.trim() || null;
     }
 
-    if (body.preferences !== undefined) {
-      updates.preferences = body.preferences;
+    if (validation.data.preferences !== undefined) {
+      updates.preferences = validation.data.preferences as unknown as ProfileUpdate["preferences"];
     }
 
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json(
-        { error: "No valid updates provided" },
-        { status: 400 }
-      );
-    }
-
+    const profilesDB = new ProfilesDB(supabase);
     const profile = await profilesDB.updateProfile(user.id, updates);
     return NextResponse.json({ profile });
   } catch (error: unknown) {
-    console.error("PATCH /api/profile error:", error);
+    log.error("PATCH /api/profile error", error);
 
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("not found")) {

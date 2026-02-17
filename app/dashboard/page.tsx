@@ -27,18 +27,22 @@ export default async function DashboardPage() {
   // Server-side date — may differ from client timezone; SWR will revalidate with correct client date
   const tomorrowStr = getNextDateString(date);
 
-  const [habitsWithStatus, todayTasks, allTodayTasks, allTasks, tasksTomorrow, milestonesToday] =
+  const [habitsWithStatus, todayTasks, totalTaskCount, tasksTomorrow, milestonesToday] =
     await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
-      tasksDB.getTodayTasks(user.id),
-      tasksDB.getUserTasks(user.id, { due_date: date }),
-      tasksDB.getUserTasks(user.id),
+      tasksDB.getTodayTasks(user.id, date),
+      // Count all tasks (HEAD-only, no row data)
+      tasksDB.getTaskCount(user.id),
+      // Get incomplete tasks for tomorrow (rows needed for rendering)
       tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
       milestonesDB.getTodaysMilestones(user.id, date).catch((err) => {
         console.error("Failed to fetch milestones:", err);
         return [] as HabitMilestone[];
       }),
     ]);
+
+  // Derive completed count from todayTasks (no separate DB call needed)
+  const tasksCompletedTodayCount = todayTasks.filter(t => t.is_completed).length;
 
   const completedHabitsToday = habitsWithStatus.filter(
     (h) => h.completed_today
@@ -47,10 +51,6 @@ export default async function DashboardPage() {
     (max, h) => Math.max(max, h.current_streak),
     0
   );
-  const tasksCompletedToday = allTodayTasks.filter(
-    (t) => t.is_completed
-  ).length;
-
   // Server-side render doesn't have log data to compute absence;
   // SWR will revalidate with the real values from the API route.
   const habitsWithAbsence = habitsWithStatus.map(h => ({
@@ -68,9 +68,9 @@ export default async function DashboardPage() {
       total_habits: habitsWithStatus.length,
       completed_today: completedHabitsToday,
       current_best_streak: bestStreak,
-      total_tasks: allTasks.length,
+      total_tasks: totalTaskCount,
       tasks_due_today: todayTasks.length,
-      tasks_completed_today: tasksCompletedToday,
+      tasks_completed_today: tasksCompletedTodayCount,
     },
   };
 

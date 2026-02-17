@@ -14,7 +14,7 @@ vi.mock("next/dynamic", () => ({
       React.createElement(
         React.Suspense,
         { fallback: options?.loading?.() ?? null },
-        React.createElement(LazyComponent, props)
+        React.createElement(LazyComponent, props),
       );
     DynamicMock.displayName = "DynamicMock";
     return DynamicMock;
@@ -147,7 +147,7 @@ function renderWithProviders(component: React.ReactElement) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       {component}
-    </NextIntlClientProvider>
+    </NextIntlClientProvider>,
   );
 }
 
@@ -313,7 +313,7 @@ describe("DashboardContent", () => {
 
     // Should show full dashboard, not empty state
     expect(
-      screen.queryByText(/Welcome to BetterR.Me!/i)
+      screen.queryByText(/Welcome to BetterR.Me!/i),
     ).not.toBeInTheDocument();
     expect(await screen.findByText("Today's Tasks")).toBeInTheDocument();
     expect(await screen.findByText("Buy groceries")).toBeInTheDocument();
@@ -383,7 +383,7 @@ describe("DashboardContent", () => {
 
     // Should NOT show empty state since user has tasks (just not today)
     expect(
-      screen.queryByText(/Welcome to BetterR.Me!/i)
+      screen.queryByText(/Welcome to BetterR.Me!/i),
     ).not.toBeInTheDocument();
     expect(await screen.findByText("Today's Tasks")).toBeInTheDocument();
   });
@@ -484,7 +484,10 @@ describe("DashboardContent", () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: true, json: () => ({}) });
     global.fetch = mockFetch;
 
-    const mockMutate = vi.fn();
+    // Mock mutate to execute the async updater function (simulates SWR optimistic update)
+    const mockMutate = vi.fn().mockImplementation(async (fn) => {
+      if (typeof fn === "function") await fn();
+    });
     mockUseSWR.mockReturnValue({
       data: mockDashboardData,
       error: undefined,
@@ -502,7 +505,7 @@ describe("DashboardContent", () => {
     await waitFor(() => {
       const toggleCall = mockFetch.mock.calls.find(
         (call: unknown[]) =>
-          typeof call[0] === "string" && call[0].includes("/toggle")
+          typeof call[0] === "string" && call[0].includes("/toggle"),
       );
       expect(toggleCall).toBeDefined();
       const body = JSON.parse(toggleCall![1].body);
@@ -529,11 +532,46 @@ describe("DashboardContent", () => {
     };
 
     const habitsWithAbsence = [
-      { ...baseFields, id: "a", name: "A", missed_scheduled_days: 2, previous_streak: 0, completed_today: false },
-      { ...baseFields, id: "b", name: "B", missed_scheduled_days: 8, previous_streak: 3, completed_today: false },
-      { ...baseFields, id: "c", name: "C", missed_scheduled_days: 0, previous_streak: 0, completed_today: false },
-      { ...baseFields, id: "d", name: "D", missed_scheduled_days: 5, previous_streak: 1, completed_today: false },
-      { ...baseFields, id: "e", name: "E", missed_scheduled_days: 1, previous_streak: 0, completed_today: true },
+      {
+        ...baseFields,
+        id: "a",
+        name: "A",
+        missed_scheduled_days: 2,
+        previous_streak: 0,
+        completed_today: false,
+      },
+      {
+        ...baseFields,
+        id: "b",
+        name: "B",
+        missed_scheduled_days: 8,
+        previous_streak: 3,
+        completed_today: false,
+      },
+      {
+        ...baseFields,
+        id: "c",
+        name: "C",
+        missed_scheduled_days: 0,
+        previous_streak: 0,
+        completed_today: false,
+      },
+      {
+        ...baseFields,
+        id: "d",
+        name: "D",
+        missed_scheduled_days: 5,
+        previous_streak: 1,
+        completed_today: false,
+      },
+      {
+        ...baseFields,
+        id: "e",
+        name: "E",
+        missed_scheduled_days: 1,
+        previous_streak: 0,
+        completed_today: true,
+      },
     ];
 
     mockUseSWR.mockReturnValue({
@@ -561,7 +599,9 @@ describe("DashboardContent", () => {
     // C (0 missed) and E (completed today) excluded; max 3 cards
     await waitFor(() => {
       expect(screen.getByText(/B — it's been 8 days/)).toBeInTheDocument();
-      expect(screen.getByText(/D — 5 days since last check-in/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/D — 5 days since last check-in/),
+      ).toBeInTheDocument();
       expect(screen.getByText(/A — missed 2 day/)).toBeInTheDocument();
     });
     expect(screen.queryByText(/C —/)).not.toBeInTheDocument();
@@ -579,7 +619,9 @@ describe("DashboardContent", () => {
     renderWithProviders(<DashboardContent userName="Test User" />);
 
     await screen.findByText("Today's Habits");
-    expect(screen.queryByText(/missed|since last check-in|it's been/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/missed|since last check-in|it's been/),
+    ).not.toBeInTheDocument();
   });
 
   it("renders milestone cards when milestones_today is present", async () => {
@@ -605,7 +647,9 @@ describe("DashboardContent", () => {
     renderWithProviders(<DashboardContent userName="Test User" />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Morning Meditation reached 7 days!/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Morning Meditation reached 7 days!/),
+      ).toBeInTheDocument();
       expect(screen.getByText("One week strong!")).toBeInTheDocument();
     });
   });
@@ -626,35 +670,17 @@ describe("DashboardContent", () => {
 
   it("shows toast error when habit toggle fails", async () => {
     const originalFetch = global.fetch;
-    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => ({ error: "Server error" }) });
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => ({ error: "Server error" }),
+    });
     global.fetch = mockFetch;
 
-    mockUseSWR.mockReturnValue({
-      data: mockDashboardData,
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
+    // Mock mutate to execute the async updater function (simulates SWR optimistic update)
+    const mockMutate = vi.fn().mockImplementation(async (fn) => {
+      if (typeof fn === "function") await fn();
     });
-
-    renderWithProviders(<DashboardContent userName="Test User" />);
-
-    await screen.findByText("Today's Habits");
-    const checkboxes = screen.getAllByRole("checkbox");
-    checkboxes[0]?.click();
-
-    await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith("Failed to update habit. Please try again.");
-    });
-
-    global.fetch = originalFetch;
-  });
-
-  it("does not call mutate when toggle API returns non-ok response", async () => {
-    const originalFetch = global.fetch;
-    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => ({ error: "Server error" }) });
-    global.fetch = mockFetch;
-
-    const mockMutate = vi.fn();
     mockUseSWR.mockReturnValue({
       data: mockDashboardData,
       error: undefined,
@@ -669,11 +695,93 @@ describe("DashboardContent", () => {
     checkboxes[0]?.click();
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalled();
+      expect(mockToastError).toHaveBeenCalledWith(
+        "Failed to update habit. Please try again.",
+      );
     });
 
-    // mutate should NOT be called since the toggle failed
-    expect(mockMutate).not.toHaveBeenCalled();
+    global.fetch = originalFetch;
+  });
+
+  it("disables checkbox during in-flight toggle to prevent double-click", async () => {
+    const originalFetch = global.fetch;
+    let resolveToggle: () => void;
+    const togglePromise = new Promise<void>((resolve) => {
+      resolveToggle = resolve;
+    });
+    const mockFetch = vi.fn().mockImplementation(() =>
+      togglePromise.then(() => ({ ok: true, json: () => ({}) })),
+    );
+    global.fetch = mockFetch;
+
+    const mockMutate = vi.fn().mockImplementation(async (fn) => {
+      if (typeof fn === "function") await fn();
+    });
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    // After click, mutate is called with optimistic options including the togglingHabitIds set
+    await waitFor(() => {
+      expect(mockMutate).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ rollbackOnError: true }),
+      );
+    });
+
+    // Resolve the toggle to clean up
+    resolveToggle!();
+    global.fetch = originalFetch;
+  });
+
+  it("calls mutate with optimistic data and rollback on error when toggle fails", async () => {
+    const originalFetch = global.fetch;
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => ({ error: "Server error" }),
+    });
+    global.fetch = mockFetch;
+
+    // Mock mutate to execute the async updater (simulates SWR optimistic update)
+    const mockMutate = vi.fn().mockImplementation(async (fn) => {
+      if (typeof fn === "function") await fn();
+    });
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0]?.click();
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalled();
+    });
+
+    // mutate IS called with optimistic update options (rollbackOnError handles the revert)
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        optimisticData: expect.any(Function),
+        rollbackOnError: true,
+        revalidate: true,
+      }),
+    );
 
     global.fetch = originalFetch;
   });

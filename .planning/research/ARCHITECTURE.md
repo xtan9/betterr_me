@@ -1,499 +1,610 @@
-# Architecture Research: Sidebar + Card-on-Gray Layout Redesign
+# Architecture Research: Codebase Hardening
 
-**Domain:** SaaS dashboard UI layout (Next.js App Router + shadcn/ui)
+**Domain:** Next.js App Router + Supabase habit tracking app (existing codebase)
 **Researched:** 2026-02-15
-**Confidence:** HIGH
+**Confidence:** HIGH (based on direct codebase analysis + verified patterns)
 
-## Standard Architecture
-
-### System Overview
+## Current Architecture Overview
 
 ```
-+---------------------------------------------------------------------+
-|                         RootLayout (server)                         |
-|  app/layout.tsx -- ThemeProvider, NextIntlClientProvider, fonts      |
-+---------------------------------------------------------------------+
-        |
-        +-- Auth pages (app/auth/*) -- no sidebar, standalone layouts
-        |
-        +-- Landing page (app/page.tsx) -- no sidebar, public layout
-        |
-+---------------------------------------------------------------------+
-|              Authenticated Layout (app/dashboard/layout.tsx)         |
-|                                                                     |
-|  +---------------------------------------------------------------+  |
-|  |                 SidebarProvider (client)                       |  |
-|  |    defaultOpen={cookieValue}                                  |  |
-|  |                                                               |  |
-|  |  +------------------+  +-----------------------------------+  |  |
-|  |  |   AppSidebar     |  |        SidebarInset               |  |  |
-|  |  |   (client)       |  |        (main content area)        |  |  |
-|  |  |                  |  |                                   |  |  |
-|  |  | +- SidebarHeader |  |  +- PageHeader (SidebarTrigger    |  |  |
-|  |  | |  Logo + Toggle |  |  |   + Breadcrumb)                |  |  |
-|  |  | +- SidebarContent|  |  +- Page Content ({children})     |  |  |
-|  |  | |  NavGroups     |  |  |   wrapped in card-on-gray      |  |  |
-|  |  | |  NavItems      |  |  |   container                    |  |  |
-|  |  | +- SidebarFooter |  |  +-------------------------------+  |  |
-|  |  | |  User menu     |  |                                   |  |  |
-|  |  | |  Theme/Lang    |  |                                   |  |  |
-|  |  +------------------+  +-----------------------------------+  |  |
-|  +---------------------------------------------------------------+  |
-+---------------------------------------------------------------------+
+Client (Browser)
+    |
+    v
+Middleware (proxy.ts) ---- Session refresh, auth redirects
+    |
+    v
+App Router API Routes ---- Manual auth + manual validation per route
+    |
+    v
+DB Classes (lib/db/) ---- HabitsDB, TasksDB, HabitLogsDB, ProfilesDB, etc.
+    |                      Constructor: optional SupabaseClient, defaults to browser client
+    v
+Supabase Client ---- Browser (client.ts) or Server (server.ts)
+    |
+    v
+Supabase (Postgres + Auth + RLS)
+    |
+    ^-- handle_new_user trigger (profile creation on signup)
 ```
 
 ### Component Responsibilities
 
-| Component | Responsibility | Typical Implementation |
-|-----------|----------------|------------------------|
-| `SidebarProvider` | Manages collapse/expand state, cookie persistence, mobile detection | shadcn/ui primitive; wraps the entire authenticated shell |
-| `AppSidebar` | Navigation links, branding, user menu, theme/language controls | Client component; replaces current `MainNav` + `MobileBottomNav` |
-| `SidebarInset` | Main content container; creates the card-on-gray visual effect | shadcn/ui primitive; receives `variant="inset"` styling from peer sidebar |
-| `PageHeader` | Per-page header strip with `SidebarTrigger`, breadcrumbs, page actions | Client component; replaces current sticky header bar |
-| `AppLayout` (retired) | Currently holds top-nav + mobile bottom nav | **Deleted**; replaced by the sidebar layout pattern above |
+| Component | Current Responsibility | Problem |
+|-----------|----------------------|---------|
+| `lib/supabase/client.ts` | Browser Supabase client | Fine as-is |
+| `lib/supabase/server.ts` | Server Supabase client (cookie-based) | Fine as-is |
+| `lib/supabase/proxy.ts` | Middleware session refresh + auth redirects | Fine as-is |
+| `lib/db/*.ts` (6 classes) | Data access layer; each wraps Supabase queries | Optional client in constructor -- silent fallback to browser client on server |
+| `lib/validations/*.ts` | Zod schemas for forms | Exist but are NOT used in API routes |
+| `app/api/**` (12 route files) | Auth check + manual validation + DB calls + error handling | Massive duplication, no shared patterns |
+| `lib/cache.ts` | In-memory TTL cache for stats | Unreliable on Vercel serverless (per-instance) |
+| `lib/habits/absence.ts` | Pure function for missed-day computation | Silently caught in dashboard route |
 
-## Recommended Project Structure
+## Critical Issues to Fix (Ordered by Dependency)
 
-```
-app/
-  layout.tsx                  # Root: fonts, ThemeProvider, NextIntlClientProvider
-  page.tsx                    # Landing page (public, no sidebar)
-  auth/
-    layout.tsx                # Auth shell (centered form, no sidebar)
-    login/page.tsx
-    sign-up/page.tsx
-    ...
-  (dashboard)/                # Route group for authenticated pages
-    layout.tsx                # SidebarProvider + AppSidebar + SidebarInset
-    dashboard/
-      page.tsx                # Dashboard page content
-      settings/
-        page.tsx              # Settings page content
-    habits/
-      page.tsx
-      [id]/page.tsx
-      [id]/edit/page.tsx
-      new/page.tsx
-    tasks/
-      page.tsx
-      [id]/page.tsx
-      [id]/edit/page.tsx
-      new/page.tsx
+### Issue 1: DB Class Constructor -- Silent Browser Client Fallback
 
-components/
-  layouts/
-    app-sidebar.tsx           # The sidebar component (nav items, user menu)
-    sidebar-nav.tsx           # Navigation items configuration
-    page-header.tsx           # SidebarTrigger + breadcrumb strip
-  ui/
-    sidebar.tsx               # shadcn/ui sidebar primitive (added via CLI)
-    ...existing ui components
+**What is broken:**
+
+Every DB class (`HabitsDB`, `TasksDB`, `HabitLogsDB`, `ProfilesDB`) has this pattern:
+
+```typescript
+constructor(supabase?: SupabaseClient) {
+  this.supabase = supabase || createClient(); // createClient() = BROWSER client
+}
 ```
 
-### Structure Rationale
+If an API route forgets to pass the server client, the class silently falls back to the browser client. On the server, `createBrowserClient()` from `@supabase/ssr` does NOT have access to the user's cookies, so auth context is lost. Queries will either fail silently (return empty due to RLS) or throw opaque errors.
 
-- **Route group `(dashboard)/`:** Use a parenthesized route group to apply the sidebar layout to all authenticated pages without adding `/dashboard` as a URL prefix for habits and tasks. This is the key architectural change: currently `dashboard/`, `habits/`, and `tasks/` each import `AppLayout` separately in their own `layout.tsx` files. A route group unifies them under one layout.
+Additionally, each DB file exports a singleton at module scope:
+```typescript
+export const habitsDB = new HabitsDB(); // Browser client, always
+```
 
-- **Alternative: Keep current structure.** If the route group approach is too disruptive (URL changes, redirect updates needed in proxy), the simpler path is to replace the `AppLayout` import in each of the three existing `layout.tsx` files (`dashboard/layout.tsx`, `habits/layout.tsx`, `tasks/layout.tsx`) with the new sidebar shell. This avoids any URL or routing changes. **Recommendation: use this simpler approach** because the app already has working proxy redirects, test fixtures, and E2E paths tied to the current URL structure.
+These singletons are correct for client-side use only, but their existence alongside the optional constructor creates confusion about when to use which.
 
-- **`app-sidebar.tsx` replaces `main-nav.tsx` + `mobile-bottom-nav.tsx`:** The shadcn sidebar handles both desktop and mobile (via Sheet drawer), so separate nav components are no longer needed.
+**Two inconsistent patterns across DB classes:**
 
-- **`page-header.tsx`:** Lightweight client component containing `SidebarTrigger` (hamburger/collapse button) and optional breadcrumbs. Replaces the current sticky `<header>` in `app-layout.tsx`.
+| Class | Constructor | Exported Singleton | Notes |
+|-------|------------|-------------------|-------|
+| `HabitsDB` | `supabase?: SupabaseClient` | `habitsDB` | Falls back to browser |
+| `TasksDB` | `supabase?: SupabaseClient` | `tasksDB` | Falls back to browser |
+| `HabitLogsDB` | `supabase?: SupabaseClient` | `habitLogsDB` | Falls back to browser; also instantiates internal `HabitsDB` |
+| `ProfilesDB` | `supabase?: SupabaseClient` | `profilesDB` | Falls back to browser |
+| `InsightsDB` | `supabase: SupabaseClient` (required!) | None | Correct pattern |
+| `HabitMilestonesDB` | `supabase: SupabaseClient` (required!) | None | Correct pattern |
+
+**Fix:** Make `supabase` parameter **required** in all DB class constructors. Remove browser-fallback. Keep client-side singletons but construct them explicitly. This is what `InsightsDB` and `HabitMilestonesDB` already do correctly.
+
+**Recommended pattern:**
+```typescript
+export class HabitsDB {
+  constructor(private supabase: SupabaseClient) {}
+  // ...methods
+}
+
+// Client-side singleton (explicit, documented)
+import { createClient } from '@/lib/supabase/client';
+export const habitsDB = new HabitsDB(createClient());
+```
+
+**Data flow impact:** Every API route already passes the server client explicitly (`new HabitsDB(supabase)`). This change only breaks code that relies on the fallback, which is a bug you want to find at compile time, not runtime.
+
+**Build order:** Fix FIRST. It is a foundational change that makes all DB usage explicit. Low risk because API routes already pass the client.
+
+---
+
+### Issue 2: Duplicated Auth + Validation Boilerplate in API Routes
+
+**What is broken:**
+
+Every API route repeats identical boilerplate:
+
+```typescript
+// This exact pattern appears in ALL 12 route files
+const supabase = await createClient();
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+}
+```
+
+Additionally, validation is done with hand-written imperative checks instead of using the Zod schemas that already exist in `lib/validations/`:
+
+```typescript
+// API route: manual validation (habits route.ts)
+if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
+  return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+}
+
+// Existing but unused Zod schema (lib/validations/habit.ts)
+export const habitFormSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  // ...full validation
+});
+```
+
+The `isValidFrequency()` function is duplicated verbatim in both `app/api/habits/route.ts` and `app/api/habits/[id]/route.ts`.
+
+**Fix:** Create a `withAuth()` wrapper function and use Zod schemas for API validation.
+
+**Recommended `withAuth` pattern:**
+```typescript
+// lib/api/with-auth.ts
+import { createClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
+
+interface AuthContext {
+  user: User;
+  supabase: SupabaseClient;
+}
+
+type AuthenticatedHandler = (
+  request: NextRequest,
+  context: AuthContext & { params?: Record<string, string> }
+) => Promise<NextResponse>;
+
+export function withAuth(handler: AuthenticatedHandler) {
+  return async (request: NextRequest, routeContext?: { params: Promise<Record<string, string>> }) => {
+    try {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      const params = routeContext?.params ? await routeContext.params : undefined;
+      return await handler(request, { user, supabase, params });
+    } catch (error) {
+      console.error(`${request.method} ${request.nextUrl.pathname} error:`, error);
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+  };
+}
+```
+
+**Recommended Zod validation helper:**
+```typescript
+// lib/api/validate.ts
+import { ZodSchema, ZodError } from 'zod';
+import { NextResponse } from 'next/server';
+
+export function parseBody<T>(schema: ZodSchema<T>, body: unknown):
+  | { success: true; data: T }
+  | { success: false; response: NextResponse } {
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    const errors = result.error.flatten().fieldErrors;
+    return {
+      success: false,
+      response: NextResponse.json(
+        { error: 'Validation failed', details: errors },
+        { status: 400 }
+      ),
+    };
+  }
+  return { success: true, data: result.data };
+}
+```
+
+**API route after refactor:**
+```typescript
+// app/api/habits/route.ts (after)
+import { withAuth } from '@/lib/api/with-auth';
+import { parseBody } from '@/lib/api/validate';
+import { habitFormSchema } from '@/lib/validations/habit';
+
+export const POST = withAuth(async (request, { user, supabase }) => {
+  const body = await request.json();
+  const parsed = parseBody(habitFormSchema, body);
+  if (!parsed.success) return parsed.response;
+
+  const habitsDB = new HabitsDB(supabase);
+  const habit = await habitsDB.createHabit({
+    user_id: user.id,
+    ...parsed.data,
+    status: 'active',
+  });
+  return NextResponse.json({ habit }, { status: 201 });
+});
+```
+
+**Data flow impact:** No change to data flow. Request lifecycle stays the same. Error responses become more consistent (structured JSON with `details` field for validation errors).
+
+**Build order:** Fix SECOND, after DB constructors. Depends on Issue 1 (DB classes with required client) to be clean. Can also create the Zod validation schemas for routes that don't have them yet (e.g., profile preferences PATCH has no schema).
+
+---
+
+### Issue 3: In-Memory Cache Unreliable on Vercel Serverless
+
+**What is broken:**
+
+`lib/cache.ts` implements a `TTLCache` using an in-memory `Map`. On Vercel serverless:
+- Each cold start gets an empty cache
+- Concurrent requests may hit different Lambda instances (no shared memory)
+- The cache has a 1000-entry max size but no per-user isolation
+
+The cache is currently used only for habit stats (`/api/habits/[id]/stats`). The comment in the code acknowledges this limitation:
+
+```typescript
+// Note: This cache is per-instance and will be cleared on server restart.
+// For serverless environments, each cold start will have an empty cache.
+// This is acceptable for short-lived caches as a performance optimization.
+```
+
+**Assessment:** The current approach is actually reasonable for this use case. Stats are expensive to compute (multiple Supabase queries) but not critical to be perfectly fresh. A hit rate of even 20-30% on warm instances is beneficial. The cache is correctly invalidated on writes (toggle, update, delete).
+
+**Fix (minimal -- keep current approach, document and harden):**
+1. Add `Cache-Control: private, max-age=300, stale-while-revalidate=60` headers to stats responses (already partially done with `max-age=300`)
+2. Add `stale-while-revalidate` to allow CDN-level caching on Vercel
+3. Do NOT migrate to Redis/external cache -- overkill for this app's scale
+
+**Fix (if cache becomes unreliable at scale):**
+- Use Vercel's Data Cache via `fetch()` with `next.revalidate` option
+- Or use `unstable_cache` (now `"use cache"` in Next.js 15+) for server-side caching
+
+**Data flow impact:** None for minimal fix. HTTP headers add CDN-layer caching.
+
+**Build order:** Fix THIRD. Low priority since the current implementation is adequate. Can be done independently.
+
+---
+
+### Issue 4: Silent Error Swallowing in Dashboard
+
+**What is broken:**
+
+The dashboard route has two layers of silent error handling:
+
+1. **Supplementary queries swallow errors silently:**
+```typescript
+habitLogsDB.getAllUserLogs(...).catch((err) => {
+  console.error('Failed to fetch habit logs for absence:', err);
+  return [] as Pick<HabitLog, 'habit_id' | 'logged_date' | 'completed'>[];
+}),
+```
+
+2. **Per-habit computeMissedDays failures are silently caught:**
+```typescript
+try {
+  const { missed_scheduled_days, previous_streak } = computeMissedDays(...);
+  return { ...habit, missed_scheduled_days, previous_streak };
+} catch (err) {
+  console.error('computeMissedDays failed for habit', habit.id, err);
+  return { ...habit, missed_scheduled_days: 0, previous_streak: 0 };
+}
+```
+
+**Assessment:** This is actually a deliberate and defensible pattern. The dashboard route separates "core queries" (habits, tasks -- which WILL throw on failure) from "supplementary queries" (logs for absence, milestones -- which degrade gracefully). The user sees their dashboard with slightly less enrichment rather than a 500 error.
+
+**Improvement:** Surface degradation to the client so the UI can show a subtle indicator.
+
+**Recommended pattern:**
+```typescript
+// Add a warnings array to the response
+const warnings: string[] = [];
+
+const [allLogs, milestonesToday] = await Promise.all([
+  habitLogsDB.getAllUserLogs(...).catch((err) => {
+    console.error('Failed to fetch habit logs for absence:', err);
+    warnings.push('absence_data_unavailable');
+    return [];
+  }),
+  // ...
+]);
+
+// In response:
+return NextResponse.json({
+  ...dashboardData,
+  ...(warnings.length > 0 && { _warnings: warnings }),
+});
+```
+
+**Data flow impact:** Adds optional `_warnings` field to dashboard response. Client can show a degraded-data indicator.
+
+**Build order:** Fix FOURTH. Low risk. Independent of other changes.
+
+---
+
+### Issue 5: Profile Creation Trigger Fallback
+
+**What is broken:**
+
+The `handle_new_user` trigger (PostgreSQL) auto-creates profiles on signup. But the habits POST route has an application-level fallback:
+
+```typescript
+// In POST /api/habits
+const { data: profile } = await supabase
+  .from('profiles')
+  .select('id')
+  .eq('id', user.id)
+  .single();
+
+if (!profile) {
+  // Auto-create profile if missing (trigger may have failed during signup)
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .insert({
+      id: user.id,
+      email: user.email!,
+      // ...
+    });
+}
+```
+
+This is a known Supabase pattern -- triggers can fail due to permission issues, race conditions, or configuration drift. The fallback is correct but is only in the habits POST route. Other routes that need a profile (e.g., preferences update) will fail with a confusing "Profile not found" error.
+
+**Fix:** Centralize the "ensure profile exists" logic.
+
+**Recommended pattern:**
+```typescript
+// lib/db/profiles.ts -- add method
+async ensureProfile(user: User): Promise<Profile> {
+  const existing = await this.getProfile(user.id);
+  if (existing) return existing;
+
+  // Profile missing -- trigger may have failed
+  const { data, error } = await this.supabase
+    .from('profiles')
+    .upsert({
+      id: user.id,
+      email: user.email!,
+      full_name: user.user_metadata?.full_name || null,
+      avatar_url: user.user_metadata?.avatar_url || null,
+    }, { onConflict: 'id' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+```
+
+Use `upsert` with `onConflict: 'id'` to handle race conditions (two requests hitting simultaneously).
+
+**Data flow impact:** Profile creation moves from scattered API route logic to a centralized DB method. Called in `withAuth` or in specific routes that need a profile.
+
+**Build order:** Fix with Issue 2 (withAuth wrapper). The `ensureProfile` method can be called inside `withAuth` for write operations, or in specific routes.
+
+---
+
+### Issue 6: Validation Schema Gaps
+
+**What exists vs. what is needed:**
+
+| Schema | Exists | Used in API Route | Notes |
+|--------|--------|-------------------|-------|
+| `habitFormSchema` | Yes | No (manual validation) | Missing `status` field for updates |
+| `taskFormSchema` | Yes | No (manual validation) | Missing `is_completed` for updates |
+| `profileFormSchema` | Yes | No (manual validation) | Only for form, not API |
+| Preferences schema | No | Manual per-field validation | Needs creation |
+| Date format validation | No | Inline regex per route | `YYYY-MM-DD` validated 4 different ways |
+
+**Fix:** Create API-specific schemas (extend form schemas where appropriate) and a shared date validator.
+
+**Recommended schemas:**
+```typescript
+// lib/validations/shared.ts
+export const dateSchema = z.string().regex(
+  /^\d{4}-\d{2}-\d{2}$/,
+  'Invalid date format. Use YYYY-MM-DD'
+);
+
+// lib/validations/habit.ts (add API schemas)
+export const createHabitSchema = habitFormSchema.extend({
+  // API may receive additional fields
+});
+
+export const updateHabitSchema = habitFormSchema.partial().extend({
+  status: z.enum(['active', 'paused', 'archived']).optional(),
+});
+
+// lib/validations/profile.ts (add preferences schema)
+export const preferencesSchema = z.object({
+  date_format: z.string().optional(),
+  week_start_day: z.number().min(0).max(6).optional(),
+  theme: z.enum(['system', 'light', 'dark']).optional(),
+}).refine(obj => Object.keys(obj).length > 0, {
+  message: 'At least one preference must be provided',
+});
+```
+
+**Data flow impact:** Validation moves from inline imperative checks to declarative schemas. Error response format becomes consistent across all routes.
+
+**Build order:** Fix with Issue 2. Schemas must exist before `withAuth` + `parseBody` can use them.
+
+---
+
+## Recommended Fix Order (Dependency-Based)
+
+```
+Phase 1: Foundation
+  Issue 1: DB constructor (required client)  <-- No dependencies
+  Issue 6: Validation schemas                <-- No dependencies
+  (These can be done in parallel)
+
+Phase 2: API Layer
+  Issue 2: withAuth wrapper + parseBody      <-- Depends on Phase 1
+  Issue 5: ensureProfile centralization      <-- Part of Phase 2
+
+Phase 3: Polish
+  Issue 3: Cache headers improvement        <-- Independent
+  Issue 4: Dashboard warnings                <-- Independent
+  (These can be done in parallel)
+```
 
 ## Architectural Patterns
 
-### Pattern 1: Sidebar Layout Shell with Cookie Persistence
+### Pattern 1: Required Dependency Injection (DB Classes)
 
-**What:** Read sidebar open/closed state from a cookie in the server layout, pass as `defaultOpen` to `SidebarProvider`. The provider writes the cookie on state change.
+**What:** Constructor requires `SupabaseClient` parameter. No optional fallback.
+**When to use:** Always for server-side DB access classes.
+**Trade-offs:** Slightly more verbose instantiation, but prevents silent auth failures.
 
-**When to use:** Always, for the authenticated layout.
-
-**Trade-offs:**
-- Pro: No flash of wrong state on page load (SSR reads cookie before render)
-- Pro: Zero client-side state initialization delay
-- Con: Requires `await cookies()` which makes the layout dynamic (no static rendering)
-- Con: Known Next.js 16 issue with Cache Components (#9189), but BetterR.Me does not use `dynamicIO` or Cache Components, so this is not a concern
-
-**Example:**
 ```typescript
-// app/(dashboard)/layout.tsx  OR  app/dashboard/layout.tsx (simpler approach)
-import { cookies } from "next/headers";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/layouts/app-sidebar";
-import { SidebarInset } from "@/components/ui/sidebar";
+// GOOD: Fails at compile time if client forgotten
+export class HabitsDB {
+  constructor(private supabase: SupabaseClient) {}
+}
 
-export default async function AuthenticatedLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const cookieStore = await cookies();
-  const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
-
-  return (
-    <SidebarProvider defaultOpen={defaultOpen}>
-      <AppSidebar />
-      <SidebarInset>
-        {children}
-      </SidebarInset>
-    </SidebarProvider>
-  );
+// BAD: Silently uses wrong client at runtime
+export class HabitsDB {
+  constructor(supabase?: SupabaseClient) {
+    this.supabase = supabase || createClient(); // which createClient??
+  }
 }
 ```
 
-**Key detail:** Default to `true` (open) by checking `!== "false"` rather than `=== "true"`. First-time visitors with no cookie get an open sidebar, which is the expected default for desktop SaaS.
+### Pattern 2: Wrapper Function for Cross-Cutting Concerns
 
-### Pattern 2: Card-on-Gray via `variant="inset"`
+**What:** Higher-order function that wraps API route handlers with auth, error handling, and optionally validation.
+**When to use:** Every API route handler.
+**Trade-offs:** One extra level of nesting, but eliminates 8-12 lines of boilerplate per handler. Error format becomes consistent.
 
-**What:** The sidebar's `variant="inset"` combined with `SidebarInset` creates the card-on-gray visual system automatically. The `SidebarProvider` gets `p-2` padding (revealing the page background as the "gray" area), and `SidebarInset` gets `rounded-xl shadow m-2` to look like a floating card.
+The Next.js App Router team explicitly recommends this pattern over trying to use middleware-style `NextResponse.next()` inside route handlers.
 
-**When to use:** This is the recommended approach for BetterR.Me's redesign.
+### Pattern 3: Graceful Degradation with Warnings
 
-**Trade-offs:**
-- Pro: Zero custom CSS needed -- shadcn/ui handles the card-on-gray effect entirely via data attributes and peer selectors
-- Pro: Responsive -- inset styling only applies at `md:` breakpoint; mobile gets full-width content
-- Con: Known overflow bug (sidebar spacer `h-svh` + provider `p-2` = ~8px overflow). Fix: add `overflow-hidden` to the provider or adjust the spacer height
-- Con: Individual page components should NOT wrap their content in additional Card components for the outer container (the SidebarInset IS the card). Inner content cards are fine.
+**What:** Non-critical queries use `.catch()` to return defaults, with failure info surfaced to the client.
+**When to use:** Dashboard-style aggregation routes where partial data is better than a 500 error.
+**Trade-offs:** Client must handle optional `_warnings` field. Adds complexity to response type. Worth it for user experience.
 
-**Example of the CSS variables needed (already in globals.css):**
-```css
-:root {
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
-}
-```
+### Pattern 4: Defensive Profile Upsert
 
-**These already exist in `globals.css` (lines 72-92).** They were added but never used. The sidebar component will pick them up automatically.
+**What:** Use `upsert` with `onConflict` instead of check-then-insert for profile creation.
+**When to use:** Any "ensure exists" pattern, especially with Supabase triggers that may fail.
+**Trade-offs:** One extra DB round-trip vs. a race condition. Use upsert to handle both cases atomically.
 
-### Pattern 3: Unified Mobile/Desktop Navigation via Sidebar
+## Anti-Patterns to Avoid
 
-**What:** The shadcn sidebar handles mobile responsiveness internally by rendering inside a `Sheet` (slide-in drawer) when `isMobile` is true. This replaces the need for a separate `MobileBottomNav` component.
+### Anti-Pattern 1: Optional Dependencies with Silent Fallbacks
 
-**When to use:** Always. The sidebar component detects the mobile breakpoint (768px) and switches behavior automatically.
+**What people do:** `constructor(dep?: Type) { this.dep = dep || defaultImpl(); }`
+**Why it's wrong:** On the server, the default (browser client) has no auth context. Queries silently return empty results or throw RLS errors. Debugging is extremely difficult because the error appears to come from Supabase, not from the missing dependency injection.
+**Do this instead:** Make the dependency required. Use explicit singletons for client-side usage.
 
-**Trade-offs:**
-- Pro: Single source of truth for navigation items
-- Pro: Consistent behavior and animation
-- Pro: Mobile drawer slides from left (standard SaaS pattern)
-- Con: Loses the iOS-style bottom tab bar that the current design has. However, a sidebar drawer is the SaaS standard and more scalable for future nav items.
-- Decision: Use sidebar drawer on mobile, retire `MobileBottomNav`. If bottom nav is still desired for mobile, it can coexist (sidebar for navigation tree, bottom nav for quick-access tabs), but this adds complexity without clear benefit for a 3-item nav.
+### Anti-Pattern 2: Duplicating Validation Logic Across Routes
 
-### Pattern 4: Page Content Wrapper for Consistent Spacing
+**What people do:** Copy-paste `isValidFrequency()` into every route file; write imperative checks instead of using schemas.
+**Why it's wrong:** Validation rules drift. One route accepts a value another rejects. Updates must be applied in multiple places. No shared error format.
+**Do this instead:** Define Zod schemas in `lib/validations/`. Use `safeParse()` in a shared helper. Return consistent error format.
 
-**What:** Each page's content should follow a consistent structure: page header strip (with trigger + breadcrumb) followed by a content area with standard padding.
+### Anti-Pattern 3: In-Memory Cache as Source of Truth
 
-**When to use:** Every authenticated page.
+**What people do:** Rely on in-memory cache for data that must be consistent.
+**Why it's wrong:** On Vercel serverless, each Lambda instance has its own memory. Cache hits are probabilistic, not guaranteed. Different users may see different data depending on which instance serves their request.
+**Do this instead:** Treat in-memory cache as a performance optimization only. Always have a fallback to the database. Use HTTP `Cache-Control` headers for client-side caching. The current codebase handles this correctly for stats.
 
-**Example:**
-```typescript
-// components/layouts/page-header.tsx
-"use client";
+### Anti-Pattern 4: String Matching for Error Types
 
-import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Separator } from "@/components/ui/separator";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-
-interface PageHeaderProps {
-  breadcrumbs?: { label: string; href?: string }[];
-  actions?: React.ReactNode;
-}
-
-export function PageHeader({ breadcrumbs, actions }: PageHeaderProps) {
-  return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-      <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="mr-2 h-4" />
-      {breadcrumbs && (
-        <Breadcrumb>
-          <BreadcrumbList>
-            {breadcrumbs.map((crumb, i) => (
-              <BreadcrumbItem key={i}>
-                {crumb.href ? (
-                  <BreadcrumbLink href={crumb.href}>{crumb.label}</BreadcrumbLink>
-                ) : (
-                  <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                )}
-                {i < breadcrumbs.length - 1 && <BreadcrumbSeparator />}
-              </BreadcrumbItem>
-            ))}
-          </BreadcrumbList>
-        </Breadcrumb>
-      )}
-      {actions && <div className="ml-auto">{actions}</div>}
-    </header>
-  );
-}
-```
-
-**Page content structure (inside SidebarInset):**
-```typescript
-// A typical page component
-<>
-  <PageHeader breadcrumbs={[
-    { label: "Dashboard", href: "/dashboard" },
-    { label: "Habits" },
-  ]} />
-  <div className="flex-1 p-4 md:p-6">
-    {/* Page-specific content */}
-  </div>
-</>
-```
+**What people do:** `if (message.includes('not found'))` to detect error types.
+**Why it's wrong:** Fragile -- depends on exact error message wording. Breaks if Supabase changes error messages. Can match unintended substrings.
+**Do this instead:** Use error codes (`error.code === 'PGRST116'` for Supabase "not found") or throw typed errors with explicit codes (like `EDIT_WINDOW_EXCEEDED` which is already done well in the toggle route).
 
 ## Data Flow
 
-### Sidebar State Flow
+### Current Request Flow (API Route)
 
 ```
-Cookie ("sidebar_state")
+Browser Request
     |
-    v (read on server)
-Layout (server component)
-    |
-    | defaultOpen={cookieValue}
     v
-SidebarProvider (client component)
-    |
-    |--- state: "expanded" | "collapsed"
-    |--- open: boolean (desktop)
-    |--- openMobile: boolean (mobile)
-    |
-    +---> AppSidebar (reads state via useSidebar())
-    |       |--- Renders collapsed icons or full nav
-    |       |--- On mobile: renders inside Sheet
-    |
-    +---> SidebarInset (reads state via CSS peer selectors)
-    |       |--- Adjusts margin/width automatically
-    |       |--- data-[state] for transition animations
-    |
-    +---> SidebarTrigger (calls toggleSidebar())
-            |--- On click: toggles open state
-            |--- Writes cookie: document.cookie = "sidebar_state=..."
-```
-
-### Navigation Data Flow
-
-```
-sidebar-nav.tsx (navigation configuration)
-    |
-    | navItems array with icons, labels, hrefs, i18n keys
+Next.js Middleware (proxy.ts)
+    |-- Refresh session cookies
+    |-- Redirect unauthed users to /login
+    |-- Redirect authed / to /dashboard
     v
-AppSidebar (client component)
-    |
-    | usePathname() for active state detection
-    | useTranslations() for i18n labels
+API Route Handler
+    |-- await createClient() (server)
+    |-- await supabase.auth.getUser()  [REPEATED IN EVERY ROUTE]
+    |-- if (!user) return 401           [REPEATED IN EVERY ROUTE]
+    |-- Manual validation               [DIFFERENT IN EVERY ROUTE]
+    |-- new XxxDB(supabase)
+    |-- await db.someMethod()
+    |-- return NextResponse.json()
     v
-SidebarMenu > SidebarMenuItem > SidebarMenuButton
+Supabase (RLS enforces user_id check at DB level)
+```
+
+### Proposed Request Flow (After Hardening)
+
+```
+Browser Request
     |
-    | Each button wraps a Next.js <Link>
-    | Active detection: pathname.startsWith(item.href)
     v
-Router navigation (client-side)
+Next.js Middleware (proxy.ts) -- unchanged
+    |
+    v
+withAuth(handler)
+    |-- await createClient()
+    |-- await supabase.auth.getUser()
+    |-- if (!user) return 401
+    |-- Pass { user, supabase } to handler
+    v
+Handler Function
+    |-- parseBody(schema, body)  -- Zod validation
+    |-- if (!parsed.success) return 400 with details
+    |-- new XxxDB(supabase)     -- required client, no fallback
+    |-- await db.someMethod()
+    |-- return NextResponse.json()
+    v
+Supabase (unchanged)
 ```
 
-### Key Data Flows
-
-1. **Sidebar collapse persistence:** Server reads cookie -> passes `defaultOpen` -> client provider manages state -> writes cookie on toggle. Round-trip ensures no flash.
-
-2. **Theme/language in sidebar footer:** `ThemeSwitcher` and `LanguageSwitcher` move from the top-right header area into the `SidebarFooter`. They remain client components. On collapsed sidebar, they can show icon-only via `group-data-[collapsible=icon]:hidden` on their labels.
-
-3. **User profile in sidebar footer:** `ProfileAvatar` (currently a server component in the header) moves to `SidebarFooter`. Since the sidebar is a client component tree, the user data should be fetched at the layout level (server) and passed down as props, or the profile section should use a separate server component pattern (e.g., a server component wrapper that passes serialized data to the client sidebar).
-
-## Component Boundaries & Build Order
-
-### Build Order (Dependencies Flow Downward)
+### State Management (Client-Side, Unchanged)
 
 ```
-Phase 1: Foundation (must be first)
-  |
-  +-- Install shadcn sidebar component (npx shadcn add sidebar)
-  +-- Update globals.css sidebar tokens to match emerald theme
-  +-- Create app-sidebar.tsx (navigation items, basic structure)
-  +-- Create page-header.tsx (SidebarTrigger + breadcrumb)
-  |
-Phase 2: Layout Shell (depends on Phase 1)
-  |
-  +-- Create new authenticated layout with SidebarProvider
-  +-- Wire cookie persistence in layout
-  +-- Replace AppLayout imports in dashboard/habits/tasks layout.tsx
-  +-- Delete old app-layout.tsx, main-nav.tsx, mobile-bottom-nav.tsx
-  |
-Phase 3: Page Content Migration (depends on Phase 2)
-  |
-  +-- Update dashboard page to use PageHeader + content wrapper
-  +-- Update habits pages (list, detail, new, edit)
-  +-- Update tasks pages (list, detail, new, edit)
-  +-- Update settings page
-  |
-Phase 4: Polish & Cleanup (depends on Phase 3)
-  |
-  +-- Move theme/language switchers into sidebar footer
-  +-- Move user profile/avatar into sidebar footer
-  +-- Add collapsible icon-only mode styling
-  +-- Keyboard shortcut verification (Cmd+B / Ctrl+B)
-  +-- Test pass: unit tests, E2E, visual regression
+SWR Cache (keyed by date)
+    |
+    v
+React Components <--> SWR hooks --> fetch('/api/...') --> API Routes
+    |                                                        |
+    |-- keepPreviousData: true                               |
+    |-- mutate() on user action                              v
+    v                                                   Supabase
+UI renders optimistically, SWR revalidates
 ```
 
-### What Changes First vs Last
+## Component Boundaries: What Changes, What Doesn't
 
-| Order | Component | Reason |
-|-------|-----------|--------|
-| 1st | `sidebar.tsx` (UI primitive) | Foundation -- everything else depends on it |
-| 2nd | `app-sidebar.tsx` | Navigation configuration -- needed before layout shell |
-| 3rd | `page-header.tsx` | Lightweight, needed by all pages |
-| 4th | Authenticated layout.tsx | The shell that ties sidebar + content together |
-| 5th | Dashboard page | Highest-traffic page, validate pattern works |
-| 6th | Habits pages | Apply pattern, verify sub-routes work |
-| 7th | Tasks pages | Apply pattern |
-| 8th | Settings page | Apply pattern |
-| Last | Delete old components | Only after all pages migrated and tested |
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Wrapping SidebarInset Content in a Full-Page Card
-
-**What people do:** When switching to card-on-gray, developers wrap their entire page content in a `<Card>` component inside `SidebarInset`, creating a double-card appearance.
-
-**Why it's wrong:** `SidebarInset` with `variant="inset"` already IS the card. Adding another Card creates nested borders, doubled padding, and visual noise.
-
-**Do this instead:** Use `SidebarInset` as the card. Put content directly inside with standard padding (`p-4 md:p-6`). Use Card components only for interior content sections (stats cards, habit cards, etc.), not as the page wrapper.
-
-### Anti-Pattern 2: Duplicating Navigation Config Across Desktop and Mobile
-
-**What people do:** Define nav items separately in the sidebar component and in a mobile bottom nav, leading to config drift.
-
-**Why it's wrong:** When a new page is added, developers update one but forget the other, causing broken mobile navigation.
-
-**Do this instead:** Define navigation items once in `sidebar-nav.tsx` as a shared config array. The shadcn sidebar consumes it for both desktop and mobile (drawer) rendering automatically.
-
-### Anti-Pattern 3: Making SidebarProvider a Client-Only Component
-
-**What people do:** Put `SidebarProvider` in a client component and read sidebar state from localStorage on mount, causing a flash of incorrect layout.
-
-**Why it's wrong:** On first render, the sidebar shows as open/closed based on default, then jumps to the stored state after hydration. This causes layout shift.
-
-**Do this instead:** Read the cookie in the server layout component using `await cookies()` and pass `defaultOpen` to `SidebarProvider`. The server renders the correct initial state, eliminating flash.
-
-### Anti-Pattern 4: Putting SidebarProvider in the Root Layout
-
-**What people do:** Put `SidebarProvider` in `app/layout.tsx` so it wraps everything, including auth pages and the landing page.
-
-**Why it's wrong:** Auth pages and the landing page don't need a sidebar. Wrapping them causes unnecessary sidebar state management, potential layout interference, and wasted rendering.
-
-**Do this instead:** Put `SidebarProvider` in the authenticated layout only (`app/dashboard/layout.tsx` or a route group layout). The root layout stays clean with only ThemeProvider and NextIntlClientProvider.
-
-### Anti-Pattern 5: Sidebar State in React Context Instead of Cookie
-
-**What people do:** Create a custom React context for sidebar state and persist to localStorage.
-
-**Why it's wrong:** shadcn's `SidebarProvider` already manages this with cookie-based persistence. Adding a second state management layer creates conflicts, race conditions, and makes the cookie the provider writes meaningless.
-
-**Do this instead:** Use shadcn's built-in `SidebarProvider` state. Access it via `useSidebar()` hook. The cookie persistence is handled automatically.
+| Component | Change? | Why |
+|-----------|---------|-----|
+| `lib/supabase/client.ts` | No | Correct as-is |
+| `lib/supabase/server.ts` | No | Correct as-is |
+| `lib/supabase/proxy.ts` | No | Correct as-is |
+| `lib/db/*.ts` constructors | Yes | Make `supabase` required |
+| `lib/db/*.ts` methods | No | Query logic is correct |
+| `lib/db/*.ts` singletons | Yes | Make construction explicit |
+| `lib/validations/*.ts` | Yes | Add API schemas, shared date validator |
+| `app/api/**` route handlers | Yes | Wrap with `withAuth`, use `parseBody` |
+| `lib/cache.ts` | Minor | Add `stale-while-revalidate` header |
+| `lib/habits/absence.ts` | No | Pure function, correct |
+| `app/api/dashboard/route.ts` | Minor | Add `_warnings` to response |
 
 ## Scaling Considerations
 
-Not applicable to this UI layout redesign. The sidebar is a purely presentational concern that does not affect backend scaling. The component renders identically regardless of user count.
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 0-1k users (current) | Current architecture is fine. In-memory cache provides modest benefit. |
+| 1k-10k users | Move stats cache to Vercel Data Cache or `"use cache"`. Consider connection pooling (Supavisor). |
+| 10k+ users | Supabase connection pooler (transaction mode) becomes essential. Consider read replicas for stats queries. Dashboard endpoint may need pagination or lazy-loading of absence data. |
 
-| Concern | At any scale | Notes |
-|---------|-------------|-------|
-| Sidebar render performance | Negligible | ~10 nav items, no virtualization needed |
-| Cookie persistence | Works at any scale | Client-side cookie, no server storage |
-| Mobile drawer | Standard Sheet component | No performance concerns |
+### Scaling Priorities
 
-## Integration Points
-
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| next-themes | `ThemeSwitcher` moves to sidebar footer | No API change, just DOM location change |
-| next-intl | `LanguageSwitcher` moves to sidebar footer | No API change |
-| Supabase auth | User profile data passed from server layout to sidebar | Already fetched in layout; pass as props |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| Layout -> Sidebar | Props (`defaultOpen` via cookie, user data) | Server-to-client data flow |
-| Sidebar -> Pages | CSS peer selectors (`data-[state]`, `data-[variant]`) | No JS communication needed for layout adjustment |
-| SidebarTrigger -> SidebarProvider | `useSidebar()` hook (`toggleSidebar()`) | Context-based, automatic |
-| Pages -> PageHeader | Props (breadcrumbs, actions) | Simple prop drilling |
-| Navigation config -> Sidebar | Shared `navItems` array import | Static config, not runtime data |
-
-## Migration Strategy: Current Layout to Sidebar Layout
-
-### What Gets Replaced
-
-| Current Component | Replacement | Notes |
-|-------------------|-------------|-------|
-| `components/layouts/app-layout.tsx` | Sidebar layout in `layout.tsx` | Delete after migration |
-| `components/main-nav.tsx` | Navigation inside `AppSidebar` | Delete after migration |
-| `components/mobile-bottom-nav.tsx` | Sidebar Sheet (mobile drawer) | Delete after migration |
-| Top-right theme/language/profile controls | `SidebarFooter` contents | Move, not delete |
-| Sticky header with logo | `SidebarHeader` (logo) + `PageHeader` (trigger) | Split into two concerns |
-
-### What Stays The Same
-
-| Component | Why |
-|-----------|-----|
-| `app/layout.tsx` (root) | No change -- ThemeProvider, fonts, NextIntl stay here |
-| Auth pages (`app/auth/*`) | No sidebar; independent layout |
-| Landing page (`app/page.tsx`) | No sidebar; independent layout |
-| All page content components | Only their outer container changes, not internal structure |
-| Dashboard content, habit cards, task cards | Internal component structure unchanged |
-| `components/ui/*` (shadcn primitives) | Only addition: `sidebar.tsx` via CLI |
-
-### CSS Token Updates for Brand Alignment
-
-The existing sidebar CSS tokens in `globals.css` use the default shadcn blue/gray palette. They should be updated to match BetterR.Me's emerald brand:
-
-```css
-:root {
-  --sidebar: hsl(0 0% 98%);                    /* Keep: light sidebar background */
-  --sidebar-foreground: hsl(240 5.3% 26.1%);   /* Keep: dark text on light sidebar */
-  --sidebar-primary: hsl(160 84% 39%);          /* Change: emerald-600 (brand primary) */
-  --sidebar-primary-foreground: hsl(0 0% 100%); /* Change: white on emerald */
-  --sidebar-accent: hsl(160 84% 97%);           /* Change: emerald-50 tint for hovers */
-  --sidebar-accent-foreground: hsl(160 84% 20%);/* Change: dark emerald for accent text */
-  --sidebar-border: hsl(220 13% 91%);           /* Keep: subtle border */
-  --sidebar-ring: hsl(160 84% 39%);             /* Change: emerald focus ring */
-}
-
-.dark {
-  --sidebar: hsl(0 0% 7%);                     /* Slightly lighter than background */
-  --sidebar-foreground: hsl(240 4.8% 95.9%);   /* Keep: light text on dark sidebar */
-  --sidebar-primary: hsl(142 71% 45%);          /* Change: emerald-500 (dark mode primary) */
-  --sidebar-primary-foreground: hsl(0 0% 100%); /* White on emerald */
-  --sidebar-accent: hsl(142 71% 15%);           /* Dark emerald tint for hovers */
-  --sidebar-accent-foreground: hsl(142 71% 85%);/* Light emerald for accent text */
-  --sidebar-border: hsl(240 3.7% 15.9%);       /* Keep: dark border */
-  --sidebar-ring: hsl(142 71% 45%);             /* Change: emerald focus ring */
-}
-```
+1. **First bottleneck:** Dashboard endpoint (5 parallel Supabase queries per request). Already optimized with `Promise.all` and bulk log fetch. Next step would be `"use cache"` for stats aggregation.
+2. **Second bottleneck:** Stats endpoint (3 parallel count queries). Already has in-memory cache + HTTP cache headers. Next step would be background recomputation on toggle.
 
 ## Sources
 
-- [shadcn/ui Sidebar documentation](https://ui.shadcn.com/docs/components/radix/sidebar) -- HIGH confidence. Official component docs with API reference, examples, and CSS variable list.
-- [shadcn/ui Sidebar Blocks](https://ui.shadcn.com/blocks/sidebar) -- HIGH confidence. Official pre-built sidebar layout examples showing SidebarInset patterns.
-- [shadcn/ui Changelog](https://ui.shadcn.com/docs/changelog) -- HIGH confidence. Tracks sidebar component updates including Tailwind v4 compatibility.
-- [Next.js 16 cookie issue (#9189)](https://github.com/shadcn-ui/ui/issues/9189) -- HIGH confidence. Documents Cache Components conflict; not applicable to BetterR.Me since `dynamicIO` is not enabled.
-- [SidebarInset overflow bug (#7947)](https://github.com/shadcn-ui/ui/issues/7947) -- MEDIUM confidence. Known 8px overflow with `variant="inset"`; fixable with CSS.
-- [Vercel Admin Dashboard Template](https://vercel.com/templates/next.js/next-js-and-shadcn-ui-admin-dashboard) -- MEDIUM confidence. Reference implementation of sidebar + card-on-gray with Next.js 16.
-- [Cookie persistence approach (v3 docs)](https://v3.shadcn.com/docs/components/sidebar) -- HIGH confidence. Shows the `await cookies()` pattern for server-side state reading.
-- Existing codebase analysis (app-layout.tsx, globals.css, layout files) -- HIGH confidence. Direct inspection of current architecture.
+- Direct codebase analysis (all files in `lib/db/`, `app/api/`, `lib/validations/`, `lib/cache.ts`)
+- [Next.js: Building APIs with App Router](https://nextjs.org/blog/building-apis-with-nextjs) -- withAuth pattern recommendation (HIGH confidence)
+- [Dub.co: Zod API Validation in Next.js](https://dub.co/blog/zod-api-validation) -- schema.parse pattern (HIGH confidence)
+- [Vercel: Caching Serverless Function Responses](https://vercel.com/docs/functions/serverless-functions/edge-caching) -- stale-while-revalidate (HIGH confidence)
+- [Supabase: Troubleshooting User Creation Errors](https://supabase.com/docs/guides/troubleshooting/dashboard-errors-when-managing-users-N1ls4A) -- trigger failure patterns (HIGH confidence)
+- [GitHub Discussion: Vercel Serverless Cache Behavior](https://github.com/vercel/next.js/discussions/87842) -- in-memory cache limitations (MEDIUM confidence)
+- [Supabase GitHub Discussion #6518](https://github.com/orgs/supabase/discussions/6518) -- handle_new_user trigger failures (HIGH confidence)
 
 ---
-*Architecture research for: BetterR.Me sidebar + card-on-gray layout redesign*
+*Architecture research for: BetterR.Me codebase hardening*
 *Researched: 2026-02-15*

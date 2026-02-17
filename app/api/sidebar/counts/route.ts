@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     // Run both queries in parallel
     const [habitsWithStatus, tasksDueToday] = await Promise.all([
       habitsDB.getHabitsWithTodayStatus(user.id, date),
-      tasksDB.getTodayTasks(user.id),
+      tasksDB.getTodayTasks(user.id, date),
     ]);
 
     // Count incomplete habits (active habits not completed today)

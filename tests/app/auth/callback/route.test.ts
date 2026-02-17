@@ -4,6 +4,13 @@ import { GET } from '@/app/auth/callback/route';
 // Mock the server-side Supabase client
 const mockExchangeCodeForSession = vi.fn();
 
+const { mockLogError } = vi.hoisted(() => ({
+  mockLogError: vi.fn(),
+}));
+vi.mock('@/lib/logger', () => ({
+  log: { error: mockLogError, warn: vi.fn(), info: vi.fn() },
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() =>
     Promise.resolve({
@@ -19,6 +26,7 @@ describe('GET /auth/callback', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLogError.mockClear();
     process.env.NODE_ENV = 'development';
   });
 
@@ -75,6 +83,19 @@ describe('GET /auth/callback', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('http://localhost:3000/auth/auth-code-error');
+  });
+
+  it('should log error when session exchange fails', async () => {
+    const sessionError = new Error('Invalid code');
+    mockExchangeCodeForSession.mockResolvedValue({ error: sessionError });
+
+    const request = new Request('http://localhost:3000/auth/callback?code=invalid-code');
+    await GET(request);
+
+    expect(mockLogError).toHaveBeenCalledWith(
+      'Auth callback: code exchange failed',
+      sessionError,
+    );
   });
 
   it('should use x-forwarded-host in production environment', async () => {

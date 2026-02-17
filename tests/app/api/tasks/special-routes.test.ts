@@ -68,7 +68,6 @@ describe('POST /api/tasks/[id]/toggle', () => {
 describe('GET /api/tasks?view=today', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
   });
 
   it('should return today\'s tasks', async () => {
@@ -81,14 +80,22 @@ describe('GET /api/tasks?view=today', () => {
 
     expect(response.status).toBe(200);
     expect(data.tasks).toEqual(mockTasks);
-    expect(mockTasksDB.getTodayTasks).toHaveBeenCalledWith('user-123');
+    expect(mockTasksDB.getTodayTasks).toHaveBeenCalledWith('user-123', expect.any(String));
+  });
+
+  it('should pass explicit date param to getTodayTasks', async () => {
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks?view=today&date=2026-05-01');
+    await tasksGet(request);
+
+    expect(mockTasksDB.getTodayTasks).toHaveBeenCalledWith('user-123', '2026-05-01');
   });
 });
 
 describe('GET /api/tasks?view=upcoming', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
   });
 
   it('should return upcoming tasks with default 7 days', async () => {
@@ -101,7 +108,7 @@ describe('GET /api/tasks?view=upcoming', () => {
 
     expect(response.status).toBe(200);
     expect(data.tasks).toEqual(mockTasks);
-    expect(mockTasksDB.getUpcomingTasks).toHaveBeenCalledWith('user-123', 7);
+    expect(mockTasksDB.getUpcomingTasks).toHaveBeenCalledWith('user-123', expect.any(String), 7);
   });
 
   it('should use custom days parameter', async () => {
@@ -110,7 +117,16 @@ describe('GET /api/tasks?view=upcoming', () => {
     const request = new NextRequest('http://localhost:3000/api/tasks?view=upcoming&days=14');
     await tasksGet(request);
 
-    expect(mockTasksDB.getUpcomingTasks).toHaveBeenCalledWith('user-123', 14);
+    expect(mockTasksDB.getUpcomingTasks).toHaveBeenCalledWith('user-123', expect.any(String), 14);
+  });
+
+  it('should pass explicit date param to getUpcomingTasks', async () => {
+    vi.mocked(mockTasksDB.getUpcomingTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks?view=upcoming&date=2026-05-01');
+    await tasksGet(request);
+
+    expect(mockTasksDB.getUpcomingTasks).toHaveBeenCalledWith('user-123', '2026-05-01', 7);
   });
 
   it('should return 400 if days is invalid', async () => {
@@ -124,7 +140,6 @@ describe('GET /api/tasks?view=upcoming', () => {
 describe('GET /api/tasks?view=overdue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
   });
 
   it('should return overdue tasks', async () => {
@@ -137,6 +152,30 @@ describe('GET /api/tasks?view=overdue', () => {
 
     expect(response.status).toBe(200);
     expect(data.tasks).toEqual(mockTasks);
-    expect(mockTasksDB.getOverdueTasks).toHaveBeenCalledWith('user-123');
+    expect(mockTasksDB.getOverdueTasks).toHaveBeenCalledWith('user-123', expect.any(String));
+  });
+
+  it('should pass explicit date param to getOverdueTasks', async () => {
+    vi.mocked(mockTasksDB.getOverdueTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks?view=overdue&date=2026-05-01');
+    await tasksGet(request);
+
+    expect(mockTasksDB.getOverdueTasks).toHaveBeenCalledWith('user-123', '2026-05-01');
+  });
+});
+
+describe('GET /api/tasks - date validation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should return 400 for invalid date format', async () => {
+    const request = new NextRequest('http://localhost:3000/api/tasks?view=today&date=not-a-date');
+    const response = await tasksGet(request);
+
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toContain('Invalid date format');
   });
 });

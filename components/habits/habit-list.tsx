@@ -7,7 +7,6 @@ import { HabitCard } from "./habit-card";
 import { HabitEmptyState } from "./habit-empty-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
@@ -15,7 +14,7 @@ interface HabitListProps {
   habits: HabitWithTodayStatus[];
   onToggle: (habitId: string) => Promise<void>;
   onHabitClick: (habitId: string) => void;
-  isLoading?: boolean;
+  togglingHabitIds?: Set<string>;
 }
 
 type StatusTab = "active" | "paused" | "archived";
@@ -24,7 +23,7 @@ export function HabitList({
   habits,
   onToggle,
   onHabitClick,
-  isLoading = false,
+  togglingHabitIds,
 }: HabitListProps) {
   const t = useTranslations("habits.list");
   const [activeTab, setActiveTab] = useState<StatusTab>("active");
@@ -46,9 +45,7 @@ export function HabitList({
 
     if (debouncedSearch) {
       const query = debouncedSearch.toLowerCase();
-      filtered = filtered.filter((h) =>
-        h.name.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter((h) => h.name.toLowerCase().includes(query));
     }
 
     return filtered;
@@ -63,24 +60,14 @@ export function HabitList({
   const getEmptyStateVariant = () => {
     if (habits.length === 0) return "no_habits";
     if (debouncedSearch && filteredHabits.length === 0) return "no_results";
-    if (activeTab === "paused" && filteredHabits.length === 0) return "no_paused";
-    if (activeTab === "archived" && filteredHabits.length === 0) return "no_archived";
+    if (activeTab === "paused" && filteredHabits.length === 0)
+      return "no_paused";
+    if (activeTab === "archived" && filteredHabits.length === 0)
+      return "no_archived";
     return null;
   };
 
   const emptyStateVariant = getEmptyStateVariant();
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-48 rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -99,7 +86,10 @@ export function HabitList({
           </TabsList>
 
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" aria-hidden="true" />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
             <Input
               placeholder={t("searchPlaceholder")}
               aria-label={t("searchPlaceholder")}
@@ -124,6 +114,7 @@ export function HabitList({
                   habit={habit}
                   onToggle={() => onToggle(habit.id)}
                   onClick={() => onHabitClick(habit.id)}
+                  isToggling={togglingHabitIds?.has(habit.id)}
                 />
               ))}
             </div>

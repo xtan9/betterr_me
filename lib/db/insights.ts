@@ -4,18 +4,26 @@ import { getLocalDateString } from "@/lib/utils";
 import { shouldTrackOnDate } from "@/lib/habits/format";
 import { MILESTONE_THRESHOLDS } from "@/lib/habits/milestones";
 
-export interface WeeklyInsight {
-  type:
-    | "best_week"
-    | "worst_day"
-    | "best_habit"
-    | "streak_proximity"
-    | "improvement"
-    | "decline";
+type WeeklyInsightBase = {
   message: string; // i18n key
-  params: Record<string, string | number>;
   priority: number; // Higher = more relevant
-}
+};
+
+export type WeeklyInsight = WeeklyInsightBase &
+  (
+    | { type: "best_week"; params: { percent: number } }
+    | { type: "worst_day"; params: { day: string } }
+    | { type: "best_habit"; params: { habit: string; percent: number } }
+    | {
+        type: "streak_proximity";
+        params: { habit: string; days: number; milestone: number };
+      }
+    | { type: "improvement"; params: { change: number } }
+    | {
+        type: "decline";
+        params: { percent: number; lastPercent: number };
+      }
+  );
 
 const DAY_NAMES = [
   "sunday",
@@ -239,6 +247,16 @@ export class InsightsDB {
     }
 
     for (const habit of habits) {
+      // Week-level evaluation for weekly and times_per_week
+      if (habit.frequency.type === 'weekly' || habit.frequency.type === 'times_per_week') {
+        const targetPerWeek = habit.frequency.type === 'times_per_week' ? habit.frequency.count : 1;
+        const habitLogs = logsByHabit.get(habit.id) || new Set<string>();
+        const completions = habitLogs.size;
+        const rate = completions >= targetPerWeek ? 100 : Math.round((completions / targetPerWeek) * 100);
+        rates.set(habit.id, rate);
+        continue;
+      }
+
       const habitLogs = logsByHabit.get(habit.id) || new Set<string>();
       let scheduled = 0;
       let completed = 0;
@@ -278,6 +296,10 @@ export class InsightsDB {
       const dateStr = getLocalDateString(checkDate);
 
       for (const habit of habits) {
+        // Per-day rates not meaningful for week-level habits
+        if (habit.frequency.type === 'weekly' || habit.frequency.type === 'times_per_week') {
+          continue;
+        }
         if (shouldTrackOnDate(habit.frequency, checkDate)) {
           dayScheduled.set(dayOfWeek, (dayScheduled.get(dayOfWeek) || 0) + 1);
           if (logSet.has(`${habit.id}:${dateStr}`)) {

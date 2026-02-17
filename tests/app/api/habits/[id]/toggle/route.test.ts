@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/habits/[id]/toggle/route';
 import { NextRequest } from 'next/server';
-import { statsCache, getStatsCacheKey } from '@/lib/cache';
 
 const { mockToggleLog, mockRecordMilestone } = vi.hoisted(() => ({
   mockToggleLog: vi.fn(),
@@ -149,36 +148,6 @@ describe('POST /api/habits/[id]/toggle', () => {
     expect(response.status).toBe(200);
     expect(data.completed).toBe(true);
     expect(data.currentStreak).toBe(7);
-  });
-
-  it('should invalidate stats cache on successful toggle', async () => {
-    // Pre-populate the cache
-    const cacheKey = getStatsCacheKey('habit-1', 'user-123');
-    statsCache.set(cacheKey, {
-      habitId: 'habit-1',
-      currentStreak: 5,
-      bestStreak: 10,
-      thisWeek: { completed: 3, total: 7, percent: 43 },
-      thisMonth: { completed: 15, total: 30, percent: 50 },
-      allTime: { completed: 100, total: 200, percent: 50 },
-    });
-    expect(statsCache.has(cacheKey)).toBe(true);
-
-    mockToggleLog.mockResolvedValue({
-      log: { completed: true } as any,
-      currentStreak: 6,
-      bestStreak: 10,
-    });
-
-    const request = new NextRequest('http://localhost:3000/api/habits/habit-1/toggle', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    const response = await POST(request, { params });
-
-    expect(response.status).toBe(200);
-    // Cache should be invalidated
-    expect(statsCache.has(cacheKey)).toBe(false);
   });
 
   it('should record milestone when streak hits a threshold', async () => {

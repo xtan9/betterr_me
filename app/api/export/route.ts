@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { HabitsDB } from "@/lib/db";
+import { log } from "@/lib/logger";
 import {
   exportHabitsToCSV,
   exportLogsToCSV,
@@ -176,7 +177,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ error: "Invalid export type" }, { status: 400 });
   } catch (error) {
-    console.error("GET /api/export error:", error);
+    log.error("GET /api/export error", error);
     return NextResponse.json(
       { error: "Failed to export data" },
       { status: 500 }

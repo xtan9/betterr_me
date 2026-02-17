@@ -372,7 +372,8 @@
     },
     "error": {
       "title": "Failed to load habits",
-      "retry": "Try again"
+      "retry": "Try again",
+      "toggleHabitFailed": "Failed to update habit. Please try again."
     },
     "loading": {
       "title": "Loading habits..."

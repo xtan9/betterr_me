@@ -1,39 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB } from '@/lib/db';
-import { invalidateStatsCache } from '@/lib/cache';
-import type { HabitUpdate, HabitFrequency, HabitCategory, HabitStatus } from '@/lib/db/types';
-
-const VALID_CATEGORIES: HabitCategory[] = ['health', 'wellness', 'learning', 'productivity', 'other'];
-const VALID_STATUSES: HabitStatus[] = ['active', 'paused', 'archived'];
-const VALID_FREQUENCY_TYPES = ['daily', 'weekdays', 'weekly', 'times_per_week', 'custom'];
-
-/**
- * Validate frequency object
- */
-function isValidFrequency(frequency: unknown): frequency is HabitFrequency {
-  if (!frequency || typeof frequency !== 'object') return false;
-
-  const freq = frequency as Record<string, unknown>;
-  if (!freq.type || !VALID_FREQUENCY_TYPES.includes(freq.type as string)) return false;
-
-  switch (freq.type) {
-    case 'daily':
-    case 'weekdays':
-    case 'weekly':
-      return true;
-    case 'times_per_week':
-      return typeof freq.count === 'number' && (freq.count === 2 || freq.count === 3);
-    case 'custom':
-      return (
-        Array.isArray(freq.days) &&
-        freq.days.length > 0 &&
-        freq.days.every((d: unknown) => typeof d === 'number' && d >= 0 && d <= 6)
-      );
-    default:
-      return false;
-  }
-}
+import { validateRequestBody } from '@/lib/validations/api';
+import { log } from '@/lib/logger';
+import { habitUpdateSchema } from '@/lib/validations/habit';
+import type { HabitUpdate } from '@/lib/db/types';
 
 /**
  * GET /api/habits/[id]
@@ -63,7 +34,7 @@ export async function GET(
 
     return NextResponse.json({ habit });
   } catch (error) {
-    console.error('GET /api/habits/[id] error:', error);
+    log.error('GET /api/habits/[id] error', error);
     return NextResponse.json({ error: 'Failed to fetch habit' }, { status: 500 });
   }
 }
@@ -89,72 +60,46 @@ export async function PATCH(
 
     const body = await request.json();
 
-    // Build update object
+    // Validate with Zod schema
+    const validation = validateRequestBody(body, habitUpdateSchema);
+    if (!validation.success) return validation.response;
+
+    // Build update object from validated data
     const updates: HabitUpdate = {};
 
-    if (body.name !== undefined) {
-      if (typeof body.name !== 'string' || !body.name.trim()) {
-        return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 });
-      }
-      updates.name = body.name.trim();
+    if (validation.data.name !== undefined) {
+      updates.name = validation.data.name.trim();
     }
 
-    if (body.description !== undefined) {
-      updates.description = body.description?.trim() || null;
+    if (validation.data.description !== undefined) {
+      updates.description = validation.data.description?.trim() || null;
     }
 
-    if (body.category !== undefined) {
-      if (body.category !== null && !VALID_CATEGORIES.includes(body.category)) {
-        return NextResponse.json(
-          { error: `Category must be one of: ${VALID_CATEGORIES.join(', ')}` },
-          { status: 400 }
-        );
-      }
-      updates.category = body.category;
+    if (validation.data.category !== undefined) {
+      updates.category = validation.data.category;
     }
 
-    if (body.frequency !== undefined) {
-      if (!isValidFrequency(body.frequency)) {
-        return NextResponse.json(
-          {
-            error: 'Invalid frequency. Must be one of: daily, weekdays, weekly, times_per_week (count: 2|3), custom (days: [0-6])',
-          },
-          { status: 400 }
-        );
-      }
-      updates.frequency = body.frequency;
+    if (validation.data.frequency !== undefined) {
+      updates.frequency = validation.data.frequency;
     }
 
-    if (body.status !== undefined) {
-      if (!VALID_STATUSES.includes(body.status)) {
-        return NextResponse.json(
-          { error: `Status must be one of: ${VALID_STATUSES.join(', ')}` },
-          { status: 400 }
-        );
-      }
-      updates.status = body.status;
+    if (validation.data.status !== undefined) {
+      updates.status = validation.data.status;
 
       // Set paused_at timestamp when pausing
-      if (body.status === 'paused') {
+      if (validation.data.status === 'paused') {
         updates.paused_at = new Date().toISOString();
-      } else if (body.status === 'active') {
+      } else if (validation.data.status === 'active') {
         updates.paused_at = null;
       }
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: 'No valid updates provided' }, { status: 400 });
     }
 
     const habitsDB = new HabitsDB(supabase);
     const habit = await habitsDB.updateHabit(id, user.id, updates);
 
-    // Invalidate stats cache since habit metadata (frequency, status) may affect stats
-    invalidateStatsCache(id, user.id);
-
     return NextResponse.json({ habit });
   } catch (error: unknown) {
-    console.error('PATCH /api/habits/[id] error:', error);
+    log.error('PATCH /api/habits/[id] error', error);
 
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('not found')) {
@@ -194,16 +139,14 @@ export async function DELETE(
     if (archive) {
       // Soft delete (archive)
       const habit = await habitsDB.archiveHabit(id, user.id);
-      invalidateStatsCache(id, user.id);
       return NextResponse.json({ habit, archived: true });
     }
 
     // Hard delete
     await habitsDB.deleteHabit(id, user.id);
-    invalidateStatsCache(id, user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('DELETE /api/habits/[id] error:', error);
+    log.error('DELETE /api/habits/[id] error', error);
     return NextResponse.json({ error: 'Failed to delete habit' }, { status: 500 });
   }
 }

@@ -4,16 +4,7 @@ import type { Task, TaskInsert, TaskUpdate, TaskFilters } from './types';
 import { getLocalDateString } from '@/lib/utils';
 
 export class TasksDB {
-  private supabase: SupabaseClient;
-
-  /**
-   * @param supabase - Optional Supabase client. Omit for client-side usage
-   *   (uses browser client). Pass a server client in API routes:
-   *   `new TasksDB(await createClient())` from `@/lib/supabase/server`.
-   */
-  constructor(supabase?: SupabaseClient) {
-    this.supabase = supabase || createClient();
-  }
+  constructor(private supabase: SupabaseClient) {}
 
   /**
    * Get all tasks for a user with optional filtering
@@ -46,6 +37,37 @@ export class TasksDB {
 
     if (error) throw error;
     return data || [];
+  }
+
+  /**
+   * Count tasks for a user with optional filtering (HEAD-only, no row data transferred)
+   */
+  async getTaskCount(userId: string, filters?: TaskFilters): Promise<number> {
+    let query = this.supabase
+      .from('tasks')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    if (filters) {
+      if (filters.is_completed !== undefined) {
+        query = query.eq('is_completed', filters.is_completed);
+      }
+      if (filters.priority !== undefined) {
+        query = query.eq('priority', filters.priority);
+      }
+      if (filters.due_date) {
+        query = query.eq('due_date', filters.due_date);
+      }
+      if (filters.has_due_date !== undefined) {
+        query = filters.has_due_date
+          ? query.not('due_date', 'is', null)
+          : query.is('due_date', null);
+      }
+    }
+
+    const { count, error } = await query;
+    if (error) throw error;
+    return count ?? 0;
   }
 
   /**
@@ -128,17 +150,16 @@ export class TasksDB {
   }
 
   /**
-   * Get today's tasks (due today or overdue)
+   * Get today's tasks (due today or overdue), both completed and incomplete.
+   * @param userId - The user's ID
+   * @param date - Client-local date string (YYYY-MM-DD) to avoid timezone mismatch
    */
-  async getTodayTasks(userId: string): Promise<Task[]> {
-    const today = getLocalDateString();
-
+  async getTodayTasks(userId: string, date: string): Promise<Task[]> {
     const { data, error } = await this.supabase
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
-      .eq('is_completed', false)
-      .lte('due_date', today)
+      .lte('due_date', date)
       .not('due_date', 'is', null)
       .order('due_date', { ascending: true });
 
@@ -148,11 +169,13 @@ export class TasksDB {
 
   /**
    * Get upcoming tasks (due in the future)
+   * @param userId - The user's ID
+   * @param date - Client-local date string (YYYY-MM-DD) to avoid timezone mismatch
+   * @param days - Number of days to look ahead (default 7)
    */
-  async getUpcomingTasks(userId: string, days: number = 7): Promise<Task[]> {
-    const today = getLocalDateString();
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + days);
+  async getUpcomingTasks(userId: string, date: string, days: number = 7): Promise<Task[]> {
+    const [year, month, day] = date.split('-').map(Number);
+    const futureDate = new Date(year, month - 1, day + days);
     const future = getLocalDateString(futureDate);
 
     const { data, error } = await this.supabase
@@ -160,7 +183,7 @@ export class TasksDB {
       .select('*')
       .eq('user_id', userId)
       .eq('is_completed', false)
-      .gt('due_date', today)
+      .gt('due_date', date)
       .lte('due_date', future)
       .order('due_date', { ascending: true });
 
@@ -170,16 +193,16 @@ export class TasksDB {
 
   /**
    * Get overdue tasks
+   * @param userId - The user's ID
+   * @param date - Client-local date string (YYYY-MM-DD) to avoid timezone mismatch
    */
-  async getOverdueTasks(userId: string): Promise<Task[]> {
-    const today = getLocalDateString();
-
+  async getOverdueTasks(userId: string, date: string): Promise<Task[]> {
     const { data, error } = await this.supabase
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
       .eq('is_completed', false)
-      .lt('due_date', today)
+      .lt('due_date', date)
       .order('due_date', { ascending: true });
 
     if (error) throw error;
@@ -188,4 +211,4 @@ export class TasksDB {
 }
 
 /** Client-side singleton. Do NOT use in API routes — create a new instance with the server client instead. */
-export const tasksDB = new TasksDB();
+export const tasksDB = new TasksDB(createClient());

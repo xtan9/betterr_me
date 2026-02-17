@@ -1,88 +1,88 @@
-# BetterR.Me UI Style Redesign
+# BetterR.Me
 
 ## What This Is
 
-A comprehensive UI style redesign of BetterR.Me, a habit tracking web app, now featuring a modern SaaS dashboard aesthetic inspired by Chameleon (app.chameleon.io). The app uses a collapsible left sidebar for navigation, a card-on-gray depth system for visual hierarchy, and restrained emerald/teal accent usage — across all pages and both light and dark themes.
+A habit tracking web app built with Next.js 16, Supabase, and TypeScript. Supports daily/weekdays/weekly/times_per_week/custom frequency habits, task management, streaks, weekly insights, and data export. Three locales (en, zh, zh-TW), dark mode, deployed to Vercel.
 
 ## Core Value
 
-The app must feel spacious, clean, and professional — like a premium SaaS product — while preserving all existing functionality and the emerald/teal brand identity.
+Users see accurate stats, the API rejects bad input, and the codebase is maintainable.
 
 ## Requirements
 
 ### Validated
 
-- ✓ Dashboard with daily greeting, stats, habit checklist, and tasks — existing
-- ✓ Habits page with habit management (create, edit, delete, track) — existing
-- ✓ Tasks page with task management (create, edit, delete, prioritize) — existing
-- ✓ Three-locale i18n support (en, zh, zh-TW) — existing
-- ✓ Dark mode with class-based theming (next-themes) — existing
-- ✓ Mobile-responsive layout with sidebar sheet — v1.0
-- ✓ Authentication flow (login, signup, password reset) — existing
-- ✓ Profile management — existing
-- ✓ Collapsible left sidebar navigation (pin/unpin, icon-only collapsed mode) — v1.0
-- ✓ Card-on-gray layout system (light gray page background, white floating cards) — v1.0
-- ✓ Spacious design with generous padding, whitespace, and breathing room — v1.0
-- ✓ Clean typography hierarchy (bold section titles, minimal clutter) — v1.0
-- ✓ Restrained emerald/teal accent color usage (accent only, not dominant) — v1.0
-- ✓ Redesigned dark mode with elevation-based surfaces and desaturated accents — v1.0
-- ✓ Mobile sidebar as drawer/overlay (replaces bottom nav) — v1.0
-- ✓ All pages updated: dashboard, habits, tasks, profile, auth pages — v1.0
-- ✓ Sidebar with navigation items: Dashboard, Habits, Tasks, Settings — v1.0
-- ✓ User profile section at bottom of sidebar with theme/language switchers — v1.0
-- ✓ Breadcrumb navigation on detail/edit views — v1.0
-- ✓ Notification badges on sidebar items (habits incomplete, tasks due) — v1.0
-- ✓ Full test suite green: 961 unit, 92 E2E, 6 visual baselines, 3 locale verifications — v1.0
+- ✓ User can sign up, log in, log out with email/password — existing
+- ✓ User can create, edit, delete habits with daily/weekdays/weekly/times_per_week/custom frequency — existing
+- ✓ User can toggle habit completion per day — existing
+- ✓ User can view dashboard with habits, tasks, streaks, and missed-day indicators — existing
+- ✓ User can view habit stats (streaks, weekly/monthly/all-time completion rates) — existing
+- ✓ User can view weekly insights — existing
+- ✓ User can create, edit, complete, delete tasks — existing
+- ✓ User can manage profile and preferences (week start day, theme, locale) — existing
+- ✓ User can export habit data as ZIP — existing
+- ✓ App supports three locales (en, zh, zh-TW) — existing
+- ✓ App supports dark mode — existing
+- ✓ Habit milestones and streak badges — existing
+- ✓ times_per_week frequency shows accurate completion % (3/3 = 100%) — v1.0
+- ✓ weekly frequency accepts any day (not hardcoded to Monday) — v1.0
+- ✓ Single shouldTrackOnDate source of truth in lib/habits/format.ts — v1.0
+- ✓ WeeklyInsight discriminated union for type-safe params — v1.0
+- ✓ All API POST/PATCH routes validate with Zod .safeParse() — v1.0
+- ✓ Server-side length limits (name:100, desc:500) enforced — v1.0
+- ✓ ensureProfile helper for reliable profile auto-creation — v1.0
+- ✓ handle_new_user trigger has exception handling — v1.0
+- ✓ Auth redirect allowlist on callback and confirm routes — v1.0
+- ✓ PATCH routes use .partial() Zod schemas — v1.0
+- ✓ 20-habit limit enforced in POST /api/habits — v1.0
+- ✓ Logger module replaces all console.error/warn in server code — v1.0
+- ✓ Dead cache removed, theme-switcher cleaned, DB constructors hardened — v1.0
+- ✓ Dashboard _warnings for computeMissedDays errors — v1.0
+- ✓ Dashboard uses COUNT(*) for task count — v1.0
+- ✓ Adaptive streak lookback (30→365 days) — v1.0
+- ✓ 71 tests backfilled (logs route, Zod schemas, frequency regressions) — v1.0
+- ✓ getTodayTasks uses client-sent date parameter (not server-local time) — v1.1
+- ✓ Dashboard completed tasks included in "X of Y" count — v1.1
+- ✓ No timezone-based task duplication between Today and Tomorrow sections — v1.1
 
 ### Active
 
-(No active requirements — milestone complete)
+(None — planning next milestone)
 
 ### Out of Scope
 
-- New features or functionality — this was purely visual/layout
-- Chart or data visualization components — none exist currently
-- Changes to API routes, database layer, or business logic (except /api/sidebar/counts added for badges)
-- Changes to shadcn/ui primitives in `components/ui/` (managed by shadcn)
-- New pages or routes
-- Keyboard shortcut for sidebar toggle (Cmd/Ctrl+B) — dropped from v1.0 scope per user decision
-- Command palette (Cmd+K) — deferred to v2
-- Page transition animations — deferred to v2
-- Keyboard shortcut hints on sidebar items — deferred to v2
+- Mobile app — web-only
+- Rewriting DB layer architecture — only targeted fixes done
+- Upgrading major dependencies — separate milestone
 
 ## Context
 
-**Current state:** BetterR.Me v1.0 redesign complete. The app uses a collapsible left sidebar (200px expanded, 48px icon rail collapsed) with pin/unpin, hover-overlay, and cookie persistence. All pages use card-on-gray layout with PageHeader components. Dark mode uses elevation-based surfaces with desaturated emerald accents. 197 files changed, +19,664/-5,674 lines across 9 phases.
-
-**Tech stack:** Next.js 16 (App Router), Supabase SSR, shadcn/ui + Radix UI + Tailwind CSS 3, next-themes, next-intl, SWR, Vitest + Playwright.
-
-**Design system:** 29 CSS custom properties defining colors, spacing, typography, and sidebar dimensions. Design tokens documented in `DESIGN-TOKENS.md`. Tailwind config extended with custom utilities (bg-page, text-page-title, max-w-content, etc.).
+- **Codebase:** ~170 files, Next.js 16 App Router, Supabase backend, deployed to Vercel
+- **Test suite:** 992+ tests (Vitest + Playwright), 50% coverage threshold
+- **Shipped:** v1.0 Codebase Hardening (2026-02-16) — 5 phases, 11 plans, 26 requirements
+- **Shipped:** v1.1 Dashboard Task Fixes (2026-02-17) — 1 phase, 1 plan, 3 requirements
+- **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit)
+- **Known pre-existing:** Vitest picks up .worktrees/ test files (spurious, not blocking)
 
 ## Constraints
 
-- **UI primitives**: Do not edit `components/ui/` directly — they are shadcn/ui managed
-- **Functionality**: All existing features work identically after redesign (verified)
-- **i18n**: All three locales continue working with sidebar layout
-- **Accessibility**: vitest-axe tests pass for all components
-- **Testing**: 961 unit tests + 92 E2E tests + 6 visual baselines all green
-- **Mobile**: Fully responsive with sidebar sheet on mobile
+- **Tech stack:** Next.js 16, Supabase, TypeScript, pnpm
+- **i18n:** All user-facing strings in en, zh, zh-TW
+- **Test coverage:** Must not decrease from current baseline
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Left sidebar instead of top nav | Chameleon-inspired, provides more content area, feels more like a professional SaaS app | ✓ Good — sidebar provides better navigation UX |
-| Collapsible sidebar (pin/unpin) | Chameleon uses this pattern; gives users control over screen real estate | ✓ Good — icon rail + hover overlay works well |
-| Card-on-gray depth system | Creates visual hierarchy and depth; Chameleon's signature look | ✓ Good — clear visual separation between background and content |
-| Keep emerald/teal brand color | Already matches Chameleon's green accent; just use more sparingly | ✓ Good — desaturated in dark mode for comfort |
-| Redesign both themes simultaneously | Ensures consistency; avoids dark mode becoming an afterthought | ✓ Good — elevation-based dark mode feels natural |
-| All pages in scope | Global layout change (sidebar) affects every page; partial redesign would look inconsistent | ✓ Good — 15+ pages all consistent |
-| Icon rail instead of fully-hidden sidebar | User feedback during Phase 3 — icon rail provides always-visible navigation affordance | ✓ Good — better than invisible trigger zone |
-| Drop keyboard shortcut (SIDE-12) | User decision — deemed unnecessary for v1.0 | ✓ Accepted — can revisit in v2 |
-| Separate sidebar_pinned cookie from sidebar_state | Avoids cookie conflicts with shadcn sidebar internal state | ✓ Good — prevents flash-of-wrong-state |
-| PageHeader uses props API (not children) | Enforces consistent header structure across all pages | ✓ Good — consistency maintained |
-| Hover translateY instead of scale | Scale causes layout reflow, translateY is GPU-composited | ✓ Good — smoother 60fps animations |
-| Semantic colors preserved (amber, blue, orange) | Warning/info/caution colors serve different purpose than brand accent | ✓ Good — clear semantic distinction |
+| Remove in-memory cache entirely | Ineffective on Vercel serverless; HTTP Cache-Control handles client caching | ✓ Good — 669 lines removed, HTTP caching preserved |
+| Fix trigger + shared ensureProfile() helper | Defense-in-depth: trigger primary, helper catches edge cases | ✓ Good — dual defense with COALESCE fallback |
+| Weekly = "any day that week counts" | Per PRD V1.2 §6.2, no day picker needed | ✓ Good — simplified implementation, no migration needed |
+| Wire existing Zod schemas into API routes | Schemas existed but unused server-side | ✓ Good — eliminated parallel validation, all 6 routes wired |
+| Logger with (msg, error?, context?) signature | Matches future Sentry.captureException API | ✓ Good — one-file swap when Sentry added |
+| Adaptive streak lookback (30→365) | Short streaks (majority) need only ~30 days | ✓ Good — reduces data transfer for common case |
+| Habit count limit test unlocked from message text | Flexible assertion prevents brittle tests | ✓ Good — asserts 400 + error presence only |
+| getTodayTasks accepts client date param | Server-local time wrong on Vercel (UTC ≠ user timezone) | ✓ Good — all 3 call sites pass client date, no duplication |
+| Include completed tasks in getTodayTasks | Removing completed tasks breaks "X of Y" dashboard count | ✓ Good — single array for both total and completed count |
 
 ---
-*Last updated: 2026-02-17 after v1.0 milestone*
+*Last updated: 2026-02-17 after v1.1 milestone*

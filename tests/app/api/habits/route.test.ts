@@ -2,34 +2,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, POST } from '@/app/api/habits/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetUserHabits, mockGetHabitsWithTodayStatus, mockCreateHabit } = vi.hoisted(() => ({
+const { mockGetUserHabits, mockGetHabitsWithTodayStatus, mockCreateHabit, mockGetActiveHabitCount } = vi.hoisted(() => ({
   mockGetUserHabits: vi.fn(),
   mockGetHabitsWithTodayStatus: vi.fn(),
   mockCreateHabit: vi.fn(),
+  mockGetActiveHabitCount: vi.fn(),
 }));
 
-// Helper to build a chainable Supabase query mock
-function mockSupabaseClient(overrides?: { user?: { id: string } | null; profileData?: unknown }) {
-  const user = overrides?.user !== undefined ? overrides.user : { id: 'user-123' };
-  const profileData = overrides?.profileData !== undefined ? overrides.profileData : { id: 'user-123' };
-
-  return {
-    auth: {
-      getUser: vi.fn(() => ({ data: { user } })),
-    },
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn(() => ({ data: profileData, error: null })),
-        })),
-      })),
-      insert: vi.fn(() => ({ data: null, error: null })),
-    })),
-  };
-}
+const { mockEnsureProfile } = vi.hoisted(() => ({
+  mockEnsureProfile: vi.fn(),
+}));
 
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => mockSupabaseClient()),
+  createClient: vi.fn(() => ({
+    auth: {
+      getUser: vi.fn(() => ({ data: { user: { id: 'user-123', email: 'test@example.com' } } })),
+    },
+  })),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -37,7 +26,16 @@ vi.mock('@/lib/db', () => ({
     getUserHabits = mockGetUserHabits;
     getHabitsWithTodayStatus = mockGetHabitsWithTodayStatus;
     createHabit = mockCreateHabit;
+    getActiveHabitCount = mockGetActiveHabitCount;
   },
+}));
+
+vi.mock('@/lib/db/ensure-profile', () => ({
+  ensureProfile: mockEnsureProfile,
+}));
+
+vi.mock('@/lib/constants', () => ({
+  MAX_HABITS_PER_USER: 20,
 }));
 
 import { createClient } from '@/lib/supabase/server';
@@ -56,7 +54,9 @@ const mockHabit = {
 describe('GET /api/habits', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue(mockSupabaseClient() as any);
+    vi.mocked(createClient).mockReturnValue({
+      auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123', email: 'test@example.com' } } })) },
+    } as any);
   });
 
   it('should return habits for authenticated user', async () => {
@@ -98,7 +98,9 @@ describe('GET /api/habits', () => {
   });
 
   it('should return 401 if not authenticated', async () => {
-    vi.mocked(createClient).mockReturnValue(mockSupabaseClient({ user: null }) as any);
+    vi.mocked(createClient).mockReturnValue({
+      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
+    } as any);
 
     const request = new NextRequest('http://localhost:3000/api/habits');
     const response = await GET(request);
@@ -110,7 +112,11 @@ describe('GET /api/habits', () => {
 describe('POST /api/habits', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue(mockSupabaseClient() as any);
+    vi.mocked(createClient).mockReturnValue({
+      auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123', email: 'test@example.com' } } })) },
+    } as any);
+    mockEnsureProfile.mockResolvedValue(undefined);
+    mockGetActiveHabitCount.mockResolvedValue(0);
   });
 
   it('should create a new habit', async () => {
@@ -139,7 +145,10 @@ describe('POST /api/habits', () => {
     });
 
     const response = await POST(request);
+    const data = await response.json();
+
     expect(response.status).toBe(400);
+    expect(data.error).toBe('Validation failed');
   });
 
   it('should return 400 if frequency is missing', async () => {
@@ -152,7 +161,7 @@ describe('POST /api/habits', () => {
     const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(data.error).toContain('frequency');
+    expect(data.error).toBe('Validation failed');
   });
 
   it('should return 400 if frequency type is invalid', async () => {
@@ -206,7 +215,9 @@ describe('POST /api/habits', () => {
   });
 
   it('should return 401 if not authenticated', async () => {
-    vi.mocked(createClient).mockReturnValue(mockSupabaseClient({ user: null }) as any);
+    vi.mocked(createClient).mockReturnValue({
+      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
+    } as any);
 
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
@@ -263,6 +274,7 @@ describe('POST /api/habits', () => {
       body: JSON.stringify({
         name: 'Meditate',
         frequency: { type: 'daily' },
+        category: null,
       }),
     });
 
@@ -326,9 +338,7 @@ describe('POST /api/habits', () => {
     );
   });
 
-  it('should auto-create profile and succeed when profile is missing', async () => {
-    const client = mockSupabaseClient({ profileData: null });
-    vi.mocked(createClient).mockReturnValue(client as any);
+  it('should call ensureProfile before creating habit', async () => {
     mockCreateHabit.mockResolvedValue(mockHabit as any);
 
     const request = new NextRequest('http://localhost:3000/api/habits', {
@@ -341,22 +351,11 @@ describe('POST /api/habits', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(201);
-    // Verify profile insert was called
-    expect(client.from).toHaveBeenCalledWith('profiles');
+    expect(mockEnsureProfile).toHaveBeenCalled();
   });
 
-  it('should return 500 when profile creation fails', async () => {
-    const client = mockSupabaseClient({ profileData: null });
-    // Override from to return error on insert
-    client.from = vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn(() => ({ data: null, error: null })),
-        })),
-      })),
-      insert: vi.fn(() => ({ data: null, error: { message: 'RLS policy violation' } })),
-    })) as any;
-    vi.mocked(createClient).mockReturnValue(client as any);
+  it('should return 500 when ensureProfile throws', async () => {
+    mockEnsureProfile.mockRejectedValue(new Error('Profile creation failed'));
 
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
@@ -370,7 +369,7 @@ describe('POST /api/habits', () => {
     const data = await response.json();
 
     expect(response.status).toBe(500);
-    expect(data.error).toContain('Profile setup failed');
+    expect(data.error).toBe('Profile creation failed');
   });
 
   it('should return 400 for whitespace-only name', async () => {
@@ -384,5 +383,23 @@ describe('POST /api/habits', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(400);
+  });
+
+  it('should return 400 when habit limit reached', async () => {
+    mockGetActiveHabitCount.mockResolvedValue(20);
+
+    const request = new NextRequest('http://localhost:3000/api/habits', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'One too many',
+        frequency: { type: 'daily' },
+      }),
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBeDefined();
   });
 });

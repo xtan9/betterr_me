@@ -1,255 +1,249 @@
 # Project Research Summary
 
-**Project:** BetterR.Me UI Style Redesign
-**Domain:** SaaS dashboard layout redesign (sidebar + card-on-gray visual system)
+**Project:** BetterR.Me Codebase Hardening
+**Domain:** Production Next.js 16 + Supabase habit tracking web app
 **Researched:** 2026-02-15
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This research covers a comprehensive UI redesign of BetterR.Me's dashboard layout from the current top-nav + mobile bottom-nav pattern to a modern sidebar-based layout with card-on-gray depth system inspired by Linear, Vercel, and Chameleon. The recommended approach is to leverage the shadcn/ui Sidebar component (which the project already has CSS variables for) combined with Tailwind CSS 3 design token modifications. No new dependencies are required beyond running `pnpm dlx shadcn@latest add sidebar`.
+This hardening milestone addresses 20 identified concerns in a production habit tracking web app. The project already has a solid foundation (Next.js 16, Supabase, Zod, TypeScript) but has critical correctness bugs, security gaps, and fragile patterns that emerged during rapid feature development. The recommended approach is a phased remediation prioritized by user impact: fix data correctness bugs first (users see wrong completion rates), then wire existing Zod schemas into API routes (security + consistency), then remove dead code and fragile patterns (maintainability).
 
-The single most important finding: **use the shadcn/ui Sidebar, do not build custom.** It's the most complex component in the shadcn ecosystem, purpose-built for collapsible sidebar navigation with mobile Sheet fallback, cookie persistence, keyboard shortcuts, and dark mode support. All prerequisites (Radix UI, tailwindcss-animate, next-themes) are already installed. The card-on-gray visual system is achieved purely through CSS variable changes to `--background` and `--card` tokens in `globals.css` — no plugins or new components needed.
+The most critical finding is that `shouldTrackOnDate()` returns incorrect values for `times_per_week` and `weekly` frequency types, causing completion rates to show ~43% when they should show ~100%. This bug ripples through stats, insights, streaks, and missed-day calculations. The function has two copies (one in `lib/habits/format.ts`, one private in `lib/db/habit-logs.ts`) that must be fixed atomically. Additionally, API routes perform manual validation instead of using the existing Zod schemas, leaving the API vulnerable to oversized payloads and creating parallel validation paths that drift over time.
 
-The critical risks are threefold: (1) visual regression baselines become worthless immediately, requiring explicit baseline management strategy; (2) E2E navigation selectors break across the board when nav moves from top-nav to sidebar, requiring simultaneous E2E updates; (3) background token split between page and card surfaces reveals every place `bg-background` and `bg-card` were used interchangeably. All three are preventable with upfront planning and addressed in Phase 1.
+Key risks are addressed by fixing bugs in dependency order (frequency logic before stats optimization), creating API-specific schemas with `.partial()` for PATCH routes, and adding a database migration for the `weekly` frequency `day` field that preserves backward compatibility. No new dependencies are needed. This is about wiring existing tools correctly, not adding new ones.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The project already has everything needed. The shadcn/ui Sidebar component is the single piece to add via CLI. It brings collapsible modes (icon-only, offcanvas), mobile responsiveness via Radix Sheet, cookie-based state persistence, keyboard shortcut (Cmd/Ctrl+B), and full dark mode support. The card-on-gray pattern is pure CSS — modify `--background` to gray and keep `--card` white/elevated. Dark mode uses lighter surfaces for higher elevation (Material Design pattern). No animation library needed beyond the already-installed `tailwindcss-animate`.
+**No new dependencies required.** The project already has all necessary tools in place. This hardening milestone is about correct wiring, not adding new packages. Full details in [STACK.md](./STACK.md).
 
-**Core technologies:**
-- **shadcn/ui Sidebar** (via CLI): Collapsible left sidebar with icon mode, Sheet mobile fallback, and cookie persistence — all solved problems
-- **Tailwind CSS 3** (^3.4.1, installed): Card-on-gray via `--background` / `--card` token split; existing utilities propagate automatically
-- **Radix UI** (^1.4.3, installed): Sidebar uses Sheet, Collapsible, Tooltip — unified package already present
-- **next-themes** (^0.4.6, installed): Class-based dark mode via `.dark` selector; no changes to ThemeProvider needed
-- **tailwindcss-animate** (^1.0.7, installed): Sidebar slide/fade animations via `animate-in/out` — no Framer Motion needed
+**Core technologies (already in use):**
+- **Zod 3.25.46**: Schema validation — currently used for forms only; needs wiring into API routes via `.safeParse()`
+- **next-themes 0.4.6**: Dark mode — works correctly but has manual DOM workaround that should be removed
+- **Tailwind CSS 3.4.x**: Class-based dark mode — configured correctly with `darkMode: ["class"]`
+- **Vercel serverless**: Deployment platform — in-memory cache provides zero benefit, HTTP Cache-Control is the correct approach
 
-**Critical version note:** Sidebar CSS tokens in `globals.css` (lines 72-92) exist but use `hsl()` wrappers. Shadcn expects raw HSL values (e.g., `--sidebar: 0 0% 98%` not `hsl(0 0% 98%)`). Requires reformatting to match the pattern used by other tokens.
+**Critical finding:** The in-memory `TTLCache` in `lib/cache.ts` is ineffective on Vercel serverless (each cold start = empty cache, concurrent workers = separate caches). The stats route already sets `Cache-Control: private, max-age=300` headers, which is the correct caching mechanism. The in-memory cache should be removed as dead code.
 
 ### Expected Features
 
-**Must have (table stakes):**
-- **Persistent left sidebar** — The entire point of the redesign; replaces top-nav `AppLayout` with `SidebarLayout`
-- **Collapsible sidebar (icon mode)** — Standard in Linear, Vercel, Notion; users expect to reclaim screen space
-- **Active state indicators** — Users need to know where they are; every competitor highlights current page
-- **Mobile sidebar as Sheet** — shadcn/ui handles automatically; replaces `MobileBottomNav`
-- **User avatar + account menu in sidebar footer** — Move from top-right to sidebar footer (Linear/Notion pattern)
-- **Card-on-gray background depth** — Second pillar of redesign; creates visual hierarchy
-- **Dark mode elevation system** — Lighter surfaces = higher elevation in dark mode (Material pattern)
-- **Consistent page header pattern** — Standardize all page headers across Dashboard, Habits, Tasks, Settings
-- **Spacious typography and whitespace** — Generous padding (24-32px), display font for headings, reduce borders
+Full prioritization matrix in [FEATURES.md](./FEATURES.md).
 
-**Should have (competitive):**
-- **Breadcrumb navigation** — Shows location in nested views (Habits > Edit "Running"); add after page header established
-- **Sidebar section groups** — Group "Main" (dashboard, habits, tasks) and "Account" (settings) with collapsible headers
-- **Pin/unpin with hover reveal** — Notion pattern; sidebar auto-hides when unpinned, reveals on hover
-- **Theme-aware accent desaturation** — Emerald/teal auto-desaturates in dark mode for comfort
-- **Notification badges** — Small dot/count on sidebar items (e.g., "3 tasks due" on Tasks)
+**Must fix (table stakes — P1):**
+- **Zod API validation (T1)**: Wire Zod schemas into all 12 API routes, replacing hand-rolled validation
+- **Frequency logic (T3, T4)**: Fix `times_per_week` (shows 43% instead of 100%) and `weekly` (hardcoded to Monday)
+- **Profile reliability (T8)**: Centralize profile auto-creation fallback (currently only in habits POST route)
+- **Non-null assertion (T2)**: Replace `user.email!` with `user.email ?? ''` to handle OAuth edge cases
 
-**Defer (v2+):**
-- **Command palette (Cmd+K)** — High value but HIGH complexity; needs search indexing, action registry
-- **Page transition animations** — Risk of conflicts with React Suspense; defer until App Router patterns mature
-- **Keyboard shortcut hints** — Low priority polish; add when command palette is built
+**Should fix (quality improvements — P2):**
+- **Remove cache (D1)**: Delete ineffective in-memory cache, rely on HTTP Cache-Control
+- **Theme-switcher (D3)**: Remove manual DOM class manipulation that fights next-themes
+- **Performance (D4, D5)**: Replace full task fetch with COUNT(*), cap streak lookback window
+
+**Defer (test coverage — P3):**
+- **Test gaps (D8, D10)**: Add unit tests for `/api/habits/[id]/logs` and Zod validation paths
+- **Habit count limit (D9)**: Enforce 20-habit limit per user (planned but not enforced)
 
 ### Architecture Approach
 
-The standard Next.js App Router pattern for authenticated SaaS dashboards: `SidebarProvider` wraps the authenticated layout, containing `AppSidebar` (navigation) and `SidebarInset` (main content). Cookie persistence pattern: server layout reads `await cookies()`, passes `defaultOpen` to `SidebarProvider`, provider writes cookie on state change. No flash of wrong state. The sidebar handles mobile via `isMobile` detection, automatically rendering in a Sheet drawer below `md` breakpoint.
+Full component boundaries and data flow in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-**Major components:**
-1. **SidebarProvider** (client) — Manages collapse/expand state, cookie persistence, mobile detection; wraps entire authenticated shell
-2. **AppSidebar** (client) — Navigation links, branding, user menu, theme/language controls; replaces current `MainNav` + `MobileBottomNav`
-3. **SidebarInset** — Main content container; creates card-on-gray visual effect via `variant="inset"` styling
-4. **PageHeader** — Per-page header strip with `SidebarTrigger`, breadcrumbs, page actions; replaces current sticky header bar
-5. **AppLayout (retired)** — Currently holds top-nav + mobile bottom nav; DELETED and replaced by sidebar layout pattern
+The codebase follows a clean layered architecture: middleware (session refresh) → API routes (auth + validation) → DB classes (Supabase query wrappers) → Supabase (RLS enforcement). The hardening work focuses on three architectural issues:
 
-**Critical architecture decision:** Keep authenticated layout as a SERVER component. Do NOT add `"use client"` to `app/dashboard/layout.tsx` or any route layouts. The `SidebarProvider` is client-only, but it should be imported and composed in the server layout. Follow existing pattern: `ProfileAvatar` (server) vs `ProfileAvatarClient` (client). Apply same split to sidebar components.
+**Major fixes:**
+1. **DB class constructors** — Currently have optional `supabase?: SupabaseClient` parameter that silently falls back to browser client on the server. Fix: make parameter required (like `InsightsDB` and `HabitMilestonesDB` already do correctly)
+2. **API route boilerplate** — Every route repeats identical auth check and manual validation. Fix: extract `withAuth()` wrapper and `parseBody()` helper for consistent error handling
+3. **Validation schema gaps** — Zod schemas exist for forms but not API routes. Forms require all fields; PATCH routes accept partial updates. Fix: create `habitUpdateSchema = habitFormSchema.partial()` for PATCH
+
+**Patterns to apply:**
+- **Required dependency injection**: No optional constructor parameters with fallbacks
+- **Wrapper functions for cross-cutting concerns**: `withAuth()` replaces 12 copies of auth boilerplate
+- **Graceful degradation with warnings**: Dashboard returns `_warnings` array when supplementary queries fail
 
 ### Critical Pitfalls
 
-1. **Visual regression baselines become worthless on first change** — 18 existing baselines fail immediately when sidebar is added. DELETE all baselines at START of migration before any code changes. Generate fresh baselines for new layout in Phase 1, then use component-scoped screenshot tests during migration. Regenerate full-page baselines only at END.
+Full pitfall details and recovery strategies in [PITFALLS.md](./PITFALLS.md).
 
-2. **E2E navigation selectors break across the board** — Current E2E tests use `page.getByRole('navigation', { name: 'Main navigation' })`, `navLinks.count()`, and `aria-current="page"` checks based on top-nav structure. When nav moves to sidebar with `SidebarMenu`, `SidebarMenuButton`, and mobile Sheet, all selectors fail. Add stable `data-testid` attributes to new sidebar nav. Update E2E page objects (`dashboard.page.ts`, etc.) in SAME commit as layout change. `MobileBottomNav` test file gets DELETED entirely.
+1. **Frequency logic fix breaks existing stats retroactively** — `shouldTrackOnDate()` has two copies that must be fixed atomically. Eight tests assert the current (incorrect) behavior. Fix all consumers + all tests simultaneously or stats become internally contradictory.
 
-3. **Background token mismatch in dark mode** — Currently `--background` and `--card` are IDENTICAL in both modes (white in light, near-black in dark). Card-on-gray requires splitting them. This reveals every component using `bg-background` for elevated surfaces (forms, modals) instead of `bg-card`. Audit EVERY `bg-background` usage, classify as "page-level" or "elevated surface," update accordingly. Watch `StatCard` component which hardcodes `bg-white dark:bg-slate-900` instead of semantic tokens.
+2. **Database migration for weekly frequency day field corrupts existing habits** — Adding `day` to `{"type": "weekly"}` JSONB requires backward-compatible migration. Fix: make `day` optional in TypeScript (`day?: number`), default to 1 (Monday) when absent, use `||` JSONB merge in migration.
 
-4. **Sidebar causes content width regression** — Current layout assumes full viewport width for breakpoints. Adding 256px sidebar means `md:` breakpoint (768px) only gives 512px content width. Dashboard stat cards grid `md:grid-cols-3` needs to shift to `lg:grid-cols-3`. Test EVERY page at 768px, 1024px, 1280px with sidebar expanded AND collapsed.
+3. **Zod schema wiring creates two incompatible validation paths** — Form schema requires all fields; PATCH route needs partial updates. Fix: use `habitFormSchema.partial()` for PATCH, verify at least one field provided with `Object.keys(result.data).length > 0`.
 
-5. **Converting layout to client component kills server rendering** — Developers add `"use client"` to layout to make `SidebarProvider` work, forcing all children client-side. Keep layout as server component. Create separate client wrapper `sidebar-provider-wrapper.tsx` containing only `SidebarProvider`. Import wrapper in server layout.
+4. **Tests asserting current (incorrect) behavior block bug fixes** — Multiple tests explicitly assert the wrong behavior as "correct". Fix: write correct tests first (red), then fix production code (green). Update tests atomically with fixes.
 
-6. **Sidebar mobile Sheet conflicts with existing mobile bottom nav** — `MobileBottomNav` (fixed bottom bar) and sidebar Sheet (slide-out drawer) create two navigation mechanisms. `z-50` conflicts and UX confusion. REMOVE `MobileBottomNav` in same commit that sidebar Sheet becomes functional. Mobile uses sidebar's `collapsible="offcanvas"` mode (renders as Sheet via `isMobile`).
-
-7. **Theme switcher hydration flash gets worse** — Sidebar's large surface area (16rem wide, full height) makes flash of wrong background extremely obvious. Use CSS variables for ALL sidebar colors (existing `--sidebar`, `--sidebar-foreground`). Remove debug `console.log` statements in `theme-switcher.tsx`. Never hardcode `bg-white dark:bg-slate-900`.
+5. **next-themes manual DOM workaround masks a configuration bug** — Component manually adds/removes CSS classes, fighting next-themes' internal script. Fix: investigate root cause (likely hydration timing), remove workaround only after verifying theme switching works in minimal reproduction.
 
 ## Implications for Roadmap
 
-Based on research, suggested 3-phase structure with strict dependency ordering:
+Based on research, suggested phase structure follows dependency order and prioritizes user-visible correctness bugs.
 
-### Phase 1: Layout Shell + Design Tokens
-**Rationale:** Foundation phase. Everything depends on getting the layout shell and CSS variables correct from the start. Background token split affects every page, so it must happen before page migration. Sidebar CSS token cleanup is non-negotiable — the component won't render correctly with wrapped HSL values. E2E and visual regression baseline strategy must be set UPFRONT or regressions compound.
+### Phase 1: Security and Validation
 
-**Delivers:**
-- shadcn/ui Sidebar component installed (`pnpm dlx shadcn@latest add sidebar`)
-- CSS tokens updated: sidebar tokens reformatted (strip `hsl()` wrappers), `--background` split from `--card`
-- Authenticated layout shell with `SidebarProvider` + cookie persistence (server reads cookie, passes `defaultOpen`)
-- Basic `AppSidebar` component with navigation items (reuse existing nav config)
-- `PageHeader` component (SidebarTrigger + breadcrumb slot)
-- `MobileBottomNav` deleted
-- E2E page objects updated with new sidebar selectors (`data-testid` attributes)
-- Visual regression baselines DELETED (old ones worthless)
-
-**Addresses:**
-- **Table stakes:** Persistent left sidebar, collapsible icon mode, mobile Sheet, active state indicators
-- **Architecture:** Server component layout with client provider wrapper (avoids Pitfall 5)
-- **Pitfall 1:** Baseline deletion upfront
-- **Pitfall 2:** E2E updates simultaneous with layout
-- **Pitfall 3:** Background token audit complete before page migration
-- **Pitfall 6:** Mobile bottom nav removed
-- **Pitfall 7:** Theme flash prevention via CSS variables only
-
-**Avoids:** Technical debt from hardcoded colors, client boundary creep, dual mobile nav, baseline chaos
-
-### Phase 2: Page Migration + Responsive Validation
-**Rationale:** With layout shell stable, migrate each page to use `PageHeader` + card-on-gray content wrapper. Test responsive behavior at each step since sidebar reduces content width. Breakpoints need adjustment (stat cards grid, habits/tasks grid). Order: Dashboard first (highest traffic, validates pattern), then Habits (complex sub-routes), Tasks, Settings.
+**Rationale:** Security gaps are highest risk. Wiring Zod schemas is the single highest-leverage fix because it resolves security (no server-side length limits), code quality (eliminates parallel validation paths), and enables test coverage later.
 
 **Delivers:**
-- Dashboard page with `PageHeader`, content padding standardization
-- Habits pages (list, detail, edit, new) with breadcrumbs
-- Tasks pages (list, detail, edit, new) with breadcrumbs
-- Settings page
-- Responsive grid breakpoint adjustments (stat cards `lg:grid-cols-3`, habits/tasks grid tuning)
-- `DashboardSkeleton` breakpoint updates for reduced content width
-- All pages tested at 768px, 1024px, 1280px (expanded + collapsed sidebar)
-
-**Uses:**
-- `SidebarInset` as card wrapper (not additional Card component — avoids anti-pattern from Architecture research)
-- `PageHeader` breadcrumbs for nested routes
-- Tailwind breakpoint adjustments for sidebar-aware widths
-
-**Implements:**
-- Page content wrapper pattern from Architecture (PageHeader + content area with standard padding)
-- Consistent spacing: 24-32px padding, display font for titles
+- All 12 API routes use Zod validation via `parseBody()` helper
+- No server-side length limits gap (name max 100, description max 500)
+- Profile auto-creation centralized in `ensureProfile()` helper
+- Auth callback redirect allowlist added (defense-in-depth)
 
 **Addresses:**
-- **Table stakes:** Consistent page header, spacious typography, breadcrumbs, responsive layout
-- **Pitfall 4:** Content width regressions caught via per-page testing
+- T1: Wire Zod schemas into all API routes
+- T2: Fix `user.email!` non-null assertion (folded into T8)
+- T8: Fix profile auto-creation reliability
+- D7: Add redirect path allowlist
 
-**Avoids:** Breakpoint drift, double-card nesting, hardcoded widths
+**Avoids:** Pitfall 3 (Zod partial update breakage) by creating `habitUpdateSchema = habitFormSchema.partial()`
 
-### Phase 3: Polish + Baseline Regeneration
-**Rationale:** Core layout is stable. Add visual polish, move theme/language/profile controls to sidebar footer, finalize dark mode accent tweaks, add section groups. Only after ALL pages migrated can we regenerate visual regression baselines safely (they're meaningful again). E2E suite verification ensures no regressions before marking done.
+**Research flag:** Standard pattern, well-documented. No additional research needed.
+
+### Phase 2: Correctness Bugs
+
+**Rationale:** Users see wrong data. Most user-visible problem. Both frequency bugs touch the same function (`shouldTrackOnDate`), so they must be done together. The `weekly` frequency fix requires a database migration, which must be completed in this phase.
 
 **Delivers:**
-- Theme/language switchers moved to `SidebarFooter`
-- User profile/avatar moved to `SidebarFooter` with DropdownMenu (logout, settings)
-- Sidebar section groups (Main: dashboard/habits/tasks, Account: settings)
-- Dark mode accent desaturation (emerald adjustments for comfort)
-- Notification badges wired to data (tasks due count, habits incomplete)
-- Visual regression baselines REGENERATED for new layout
-- Full E2E test pass (responsive, accessibility, visual regression, navigation)
-- Keyboard shortcut verification (Cmd/Ctrl+B)
-- Old components deleted (`app-layout.tsx`, `main-nav.tsx`, `mobile-bottom-nav.tsx`)
+- `times_per_week` completion rates show 100% when 3 of 3 required completions done (not 43%)
+- `weekly` frequency tracks configurable day (not hardcoded Monday)
+- 2 pre-existing test failures resolved (symptoms of T3)
+- `WeeklyInsight` type uses discriminated union for type-safe narrowing
 
 **Addresses:**
-- **Should have:** Section groups, theme-aware accent, notification badges
-- **Pitfall 1:** Fresh baselines ONLY after migration complete
+- T3: Fix `times_per_week` frequency logic
+- T4: Fix `weekly` frequency hardcoded to Monday (requires migration)
+- T5: Fix 2 pre-existing test failures
+- T7: Fix `WeeklyInsight` discriminated union type
 
-**Avoids:** Premature baseline regeneration, component cleanup before migration done
+**Avoids:**
+- Pitfall 1 (frequency logic fix breaks stats) by fixing both copies of `shouldTrackOnDate` atomically
+- Pitfall 2 (migration corrupts JSONB) by making `day` optional in TypeScript, using `||` merge
+- Pitfall 4 (tests blocking fixes) by updating all 8 tests simultaneously with production code
+
+**Uses:** Zod schemas from Phase 1 (for `weekly` frequency `day` field validation)
+
+**Research flag:** Needs migration testing on staging. Otherwise standard.
+
+### Phase 3: Fragility and Code Quality
+
+**Rationale:** These don't cause user-visible bugs but make the system unreliable or harder to debug. Low complexity, high leverage for maintainability.
+
+**Delivers:**
+- In-memory `statsCache` removed (dead code on serverless)
+- Debug `console.log` statements removed (3 in theme-switcher, 1 in auth callback)
+- Theme-switcher manual DOM workaround removed (after verifying next-themes works correctly)
+- `HabitLogsDB` constructor requires Supabase client (prevents silent browser client fallback)
+- Dashboard errors logged (not silently swallowed)
+
+**Addresses:**
+- T6: Add error logging to `computeMissedDays` catch block
+- D1: Remove in-memory `statsCache`
+- D2: Remove debug `console.log` statements
+- D3: Fix theme-switcher DOM workaround
+- D6: Make `HabitLogsDB` constructor require Supabase client
+
+**Avoids:** Pitfall 3 (cache removal without cleanup) by grepping all import sites and removing atomically
+
+**Research flag:** Standard patterns. D3 (theme-switcher) may need minimal reproduction to verify root cause.
+
+### Phase 4: Performance
+
+**Rationale:** Performance fixes depend on correctness fixes being done first (D5 depends on T3+T4). These are optimizations, not bugs. Users are not blocked.
+
+**Delivers:**
+- Dashboard COUNT(*) query for total tasks (not full fetch)
+- Streak calculation caps lookback to `current_streak + buffer` days
+
+**Addresses:**
+- D4: Replace `getUserTasks()` with `COUNT(*)` query in dashboard
+- D5: Optimize streak calculation lookback window
+
+**Research flag:** Standard SQL patterns. No additional research needed.
+
+### Phase 5: Test Coverage
+
+**Rationale:** Tests validate all fixes above. Writing tests last ensures they cover final corrected behavior, not intermediate states. D10 specifically requires T1 (Zod wiring) to be complete.
+
+**Delivers:**
+- Unit tests for `GET /api/habits/[id]/logs` route
+- Habit count limit enforcement (20 per user)
+- Tests for Zod validation paths in all API routes
+
+**Addresses:**
+- D8: Add unit tests for `GET /api/habits/[id]/logs`
+- D9: Add habit count limit enforcement
+- D10: Add tests for Zod validation paths
+
+**Research flag:** Standard testing patterns. No additional research needed.
 
 ### Phase Ordering Rationale
 
-- **Phase 1 first:** Layout shell and design tokens are the foundation. Cannot migrate pages without stable shell. Background token split must happen before pages are touched or rework is 3-5x costlier. E2E and baseline strategy must be set upfront or regressions compound.
-
-- **Phase 2 second:** Page migration depends on Phase 1 shell. Order within phase (Dashboard > Habits > Tasks > Settings) validates pattern early with highest-traffic page and handles complex sub-routes (habits/tasks detail/edit) before simpler pages.
-
-- **Phase 3 last:** Polish features (footer controls, section groups, badges) are cosmetic and do not affect layout. Baseline regeneration MUST be last — generating them mid-migration creates noise and false positives.
-
-**Dependency chain from Architecture research:**
-```
-Card-on-gray background (CSS variables)
-    +---> Dark mode elevation (extends same CSS pattern)
-    +---> Consistent page header (needs bg contrast)
-
-Persistent left sidebar (SidebarLayout)
-    +--requires--> Active state indicators
-    +--requires--> Icons + text labels
-    +--requires--> User avatar in footer
-    +--requires--> Mobile sheet
-    +--enhances--> Collapsible sidebar
-                      +--enhances--> Pin/unpin hover reveal (v2)
-    +--enhances--> Section groups (Phase 3)
-    +--enhances--> Notification badges (Phase 3)
-
-Breadcrumb navigation
-    +--requires--> Consistent page header (breadcrumbs go inside header)
-```
-
-This maps cleanly to Phase 1 (foundation), Phase 2 (pages + breadcrumbs), Phase 3 (polish).
+- **Security first**: T1 (Zod validation) is foundational because it creates the API schemas used in later phases
+- **Correctness second**: Bugs must be fixed before optimizations. Optimizing incorrect logic wastes effort
+- **Dependencies respected**: T4 (weekly frequency) requires migration before code that reads `frequency.day` is deployed. D5 (streak optimization) requires T3+T4 (frequency logic correct) first
+- **Atomic updates**: T3+T4 touch the same function and must be done together. T2+T8 touch the same code (profile auto-creation)
+- **Test coverage last**: D10 requires T1 complete. Tests validate final behavior, not intermediate states
 
 ### Research Flags
 
-**Phases needing deeper research during planning:**
-- **None.** This is a UI layout migration, not feature development. All patterns are well-documented in shadcn/ui official docs (HIGH confidence). Architecture patterns verified against Vercel Admin Dashboard template and Linear/Notion references. No niche domains or sparse documentation.
+**Phases likely needing deeper research:**
+- **Phase 2 (Correctness)**: Migration testing on staging required. Needs validation that `frequency || '{"day": 1}'::jsonb` preserves existing fields
 
-**Phases with standard patterns (skip `/gsd:research-phase`):**
-- **Phase 1:** Sidebar installation is CLI-driven (`shadcn add sidebar`). Cookie persistence pattern documented in shadcn v3 docs. CSS token updates are straightforward Tailwind theming (official docs).
-- **Phase 2:** Page migration is repetitive — apply same `PageHeader` + content wrapper pattern to each route. Responsive testing is manual but not research-dependent.
-- **Phase 3:** Moving components to sidebar footer is DOM restructuring. Section groups use shadcn `SidebarGroup` + `Collapsible` (documented). Baseline regeneration is Playwright workflow (known process).
-
-**Recommendation:** No phase-level research needed. Research complete. Roadmapper can proceed directly to requirements definition.
+**Phases with standard patterns (skip research-phase):**
+- **Phase 1 (Validation)**: Zod `.safeParse()` + `withAuth()` wrapper are documented patterns
+- **Phase 3 (Code Quality)**: Cache removal, console.log cleanup are trivial
+- **Phase 4 (Performance)**: COUNT(*) and lookback cap are standard SQL/algorithmic patterns
+- **Phase 5 (Testing)**: Unit test patterns are well-established
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Verified via official shadcn/ui documentation, codebase inspection (`package.json`, `globals.css`, `components.json`). All dependencies confirmed installed. Sidebar CSS tokens exist but need reformatting (actionable). |
-| Features | HIGH | Table stakes confirmed via NN/g eyetracking research, Linear/Vercel/Notion UI analysis, UX Planet sidebar best practices. Differentiators sourced from Command Palette UX patterns (Medium), dark mode guides (Toptal, Netguru). Anti-features validated against glassmorphism accessibility issues (WCAG), neumorphism trend data. |
-| Architecture | HIGH | Official shadcn Sidebar docs, Vercel Admin Dashboard template (Next.js 16 reference), cookie persistence pattern from shadcn v3 docs. Server/client boundary pattern confirmed via Next.js App Router docs. Anti-patterns verified against known Next.js 16 Cache Components issue (#9189, not applicable here). |
-| Pitfalls | HIGH | Visual regression baseline issue confirmed via LedgerHQ nav migration PR (#14343, real-world case). E2E selector breakage pattern from WordPress Gutenberg nav PR (#25918). Background token mismatch via codebase inspection (`globals.css` lines 14-24). Theme flash via `theme-switcher.tsx` lines 26-42 analysis. |
+| Stack | HIGH | All recommendations verified against official docs. Zod usage confirmed via Dub.co engineering blog + Zod API docs. Vercel Cache-Control behavior from authoritative Vercel docs |
+| Features | HIGH | All 20 features derived from direct codebase analysis. Prioritization follows industry consensus (Atlassian Technical Debt Guide, SEI/CMU recommendations). Dependencies verified via code inspection |
+| Architecture | HIGH | Current architecture analyzed via direct file inspection. Proposed patterns (`withAuth`, required DI) are Next.js community standards. Supabase client patterns verified against official docs |
+| Pitfalls | HIGH | All 6 critical pitfalls derived from actual code structure (two `shouldTrackOnDate` copies, JSONB schema-less nature, Zod form vs API schemas). Supabase trigger failure pattern confirmed via GitHub issue #37497 |
 
 **Overall confidence:** HIGH
 
-Research is comprehensive, multi-sourced, and verified against the actual codebase. All stack decisions confirmed installable. All architectural patterns documented with official sources. Pitfalls grounded in real-world migrations and codebase-specific inspection.
+All research grounded in actual codebase analysis. External sources used to verify patterns (Zod, next-themes, Vercel caching) match established best practices. No speculative recommendations.
 
 ### Gaps to Address
 
-**Minor gap:** Sidebar CSS token values for emerald brand alignment. Research identifies the issue (HSL wrapper format) and provides correct pattern, but exact HSL values for emerald accent need fine-tuning during implementation. Current `--primary: 160 84% 39%` should map to `--sidebar-primary`, but dark mode desaturation value needs visual validation.
+Minor gaps that need attention during planning:
 
-**Handling:** Phase 1 includes CSS token update task. Use existing `--primary` value for light mode sidebar tokens. For dark mode, start with `142 71% 45%` (existing dark primary) and adjust based on visual inspection. Not research-blocking — this is design fine-tuning.
+- **next-themes workaround root cause**: Component has manual DOM class manipulation that may or may not be necessary. Needs minimal reproduction to determine if it's a real next-themes bug or a configuration issue. Low risk — worst case is reverting to the current workaround.
 
-**Minor gap:** Content area max-width tightening. FEATURES.md suggests `max-w-screen-xl` instead of current `max-w-screen-2xl` for ultra-wide monitors, but ideal max-width depends on sidebar width + content density. Need to validate during Phase 2 page migration at 1920px+ viewports.
+- **Weekly frequency UI for day picker**: Once `day` field is added to `{"type": "weekly"}` frequency, the habit form needs a day-of-week picker. i18n required (all 3 locales). Design not researched — assume standard dropdown with "Monday" through "Sunday".
 
-**Handling:** Phase 2 responsive validation includes ultra-wide testing. Start with `max-w-screen-xl` (1280px), adjust if content feels cramped or too loose. Not blocking.
+- **Migration rollback strategy**: If the `frequency || '{"day": 1}'::jsonb` migration fails mid-execution on a large dataset, what is the rollback path? Supabase supports point-in-time recovery but bounded to backup retention. Migration should be idempotent (safe to re-run).
 
-**No blocking gaps.** Roadmap can proceed.
+- **Zod validation error format consistency**: Currently each route has different error messages. After wiring Zod, all routes will return `{ error: "Validation failed", details: { field: [...messages] } }`. Frontend may need updates to display structured errors instead of single error string.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [shadcn/ui Sidebar Documentation](https://ui.shadcn.com/docs/components/radix/sidebar) — Component API, installation, props, CSS variables, mobile behavior
-- [shadcn/ui Sidebar Blocks](https://ui.shadcn.com/blocks/sidebar) — Pre-built layout patterns, `variant="inset"` examples
-- [shadcn/ui Theming Documentation](https://ui.shadcn.com/docs/theming) — CSS variable patterns, dark mode tokens
-- [shadcn/ui Dark Mode Documentation](https://ui.shadcn.com/docs/dark-mode) — next-themes integration, class-based strategy
-- [Tailwind CSS Dark Mode v3 Documentation](https://v3.tailwindcss.com/docs/dark-mode) — Class-based dark mode strategy
-- [Linear UI Redesign (Part II)](https://linear.app/now/how-we-redesigned-the-linear-ui) — Design philosophy, layout behaviors
-- [NN/g Vertical Navigation Research](https://www.nngroup.com/articles/vertical-nav/) — Left-side scanning, scalability advantages
-- Codebase direct inspection (HIGH confidence): `app-layout.tsx`, `main-nav.tsx`, `mobile-bottom-nav.tsx`, `theme-switcher.tsx`, `globals.css`, `tailwind.config.ts`, `package.json`, `components.json`, E2E specs (`responsive.spec.ts`, `visual-regression.spec.ts`, `dashboard.spec.ts`)
+- Direct codebase analysis: all files in `lib/db/`, `app/api/`, `lib/validations/`, `lib/habits/`, `lib/cache.ts`, `components/theme-switcher.tsx`, `app/layout.tsx`, `tests/`
+- Existing planning docs: `.planning/codebase/CONCERNS.md`, `.planning/PROJECT.md`, `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/TESTING.md`
+- [Vercel Cache-Control Headers docs](https://vercel.com/docs/headers/cache-control-headers) — authoritative source on `private` vs `s-maxage`, CDN behavior
+- [Supabase issue #37497](https://github.com/supabase/supabase/issues/37497) — trigger failure blocks signup, misleading error
+- [Supabase discussion #6518](https://github.com/orgs/supabase/discussions/6518) — `on_auth_user_created` trigger can block signups
+- [next-themes GitHub README](https://github.com/pacocoursey/next-themes) — `attribute="class"` handles DOM class toggling automatically
+- [shadcn/ui Dark Mode guide](https://ui.shadcn.com/docs/dark-mode/next) — canonical next-themes + Tailwind setup
+- [Zod API docs: discriminatedUnion](https://zod.dev/api) — performance benefit over `z.union`
 
 ### Secondary (MEDIUM confidence)
-- [Vercel New Dashboard Sidebar](https://vercel.com/try/new-dashboard) — Sidebar patterns (collapse, tabs)
-- [Vercel Admin Dashboard Template](https://vercel.com/templates/next.js/next-js-and-shadcn-ui-admin-dashboard) — Reference implementation, Next.js 16 + sidebar + card-on-gray
-- [UX Planet Sidebar Best Practices](https://uxplanet.org/best-ux-practices-for-designing-a-sidebar-9174ee0ecaa2) — Width guidelines (240-300px expanded, 48-64px collapsed)
-- [Notion Sidebar UX Breakdown (Medium)](https://medium.com/@quickmasum/ui-breakdown-of-notions-sidebar-2121364ec78d) — Accordion sections, progressive disclosure
-- [shadcn Sidebar Cookie Persistence](https://www.achromatic.dev/blog/shadcn-sidebar) — Cookie-based state persistence pattern
-- [Toptal: Dark UI Design Principles](https://www.toptal.com/designers/ui/dark-ui-design) — Elevation with light, desaturation
-- [Netguru: Dark Mode UI Tips](https://www.netguru.com/blog/tips-dark-mode-ui) — Avoid pure black, 3-4 elevation levels
-- [LedgerHQ navigation E2E migration PR #14343](https://github.com/LedgerHQ/ledger-live/pull/14343) — Real-world E2E selector migration case study
-- [WordPress Gutenberg nav sidebar PR #25918](https://github.com/WordPress/gutenberg/pull/25918) — E2E pattern confirmation
+- [Dub.co: Using Zod to validate Next.js API Route Handlers](https://dub.co/blog/zod-api-validation) — `.safeParse()` pattern with error formatting (verified against Zod docs)
+- [Next.js: Building APIs with App Router](https://nextjs.org/blog/building-apis-with-nextjs) — `withAuth` pattern recommendation
+- [Vercel: Caching Serverless Function Responses](https://vercel.com/docs/functions/serverless-functions/edge-caching) — `stale-while-revalidate` directive
+- [Vercel Fluid Compute blog](https://vercel.com/blog/scale-to-one-how-fluid-solves-cold-starts) — in-memory state preservation on warm instances
+- [Atlassian Technical Debt Guide](https://www.atlassian.com/agile/software-development/technical-debt) — remediation prioritization (security → correctness → performance → tests)
+- [SEI/CMU Technical Debt Recommendations](https://www.sei.cmu.edu/blog/5-recommendations-to-help-your-organization-manage-technical-debt/) — technical debt management strategies
 
-### Tertiary (LOW confidence — informational only, not actionable)
-- [SaaSFrame: Dashboard UI Examples](https://www.saasframe.io/categories/dashboard) — Visual inspiration gallery
-- [Command Palette UX Patterns (Medium)](https://medium.com/design-bootcamp/command-palette-ux-patterns-1-d6b6e68f30c1) — Cmd+K patterns (deferred to v2)
+### Tertiary (LOW confidence)
+- [Zod issue #2106](https://github.com/colinhacks/zod/issues/2106) — `z.switch` proposed but not yet shipped (informational only, does not affect recommendations)
+- [GitHub Discussion: Vercel Serverless Cache Behavior](https://github.com/vercel/next.js/discussions/87842) — in-memory cache limitations (confirmed via Vercel docs)
 
 ---
 *Research completed: 2026-02-15*

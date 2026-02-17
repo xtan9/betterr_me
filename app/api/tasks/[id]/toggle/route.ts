@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { TasksDB } from '@/lib/db';
+import { log } from '@/lib/logger';
 
 /**
  * POST /api/tasks/[id]/toggle
@@ -25,7 +26,7 @@ export async function POST(
     const task = await tasksDB.toggleTaskCompletion(id, user.id);
     return NextResponse.json({ task });
   } catch (error: unknown) {
-    console.error('POST /api/tasks/[id]/toggle error:', error);
+    log.error('PATCH /api/tasks/[id]/toggle error', error);
 
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('not found')) {

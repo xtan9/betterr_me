@@ -16,6 +16,7 @@ const mockHabitsDB = {
 const mockTasksDB = {
   getTodayTasks: vi.fn(),
   getUserTasks: vi.fn().mockResolvedValue([]),
+  getTaskCount: vi.fn().mockResolvedValue(0),
 };
 const mockHabitLogsDB = {
   getAllUserLogs: vi.fn().mockResolvedValue([]),
@@ -64,24 +65,18 @@ describe('GET /api/dashboard', () => {
         created_at: '2026-01-01T00:00:00Z',
       },
     ];
-    const todayTasks = [{ id: 't1', title: 'Task 1', is_completed: false }];
-    const todayDateTasks = [
+    const todayTasks = [
       { id: 't1', title: 'Task 1', is_completed: false },
       { id: 't2', title: 'Task 2', is_completed: true },
-    ];
-    const allTasks = [
-      { id: 't1', title: 'Task 1', is_completed: false },
-      { id: 't2', title: 'Task 2', is_completed: true },
-      { id: 't3', title: 'Task 3', is_completed: false },
     ];
     const tomorrowTasks = [{ id: 't4', title: 'Tomorrow task', is_completed: false }];
 
     vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
     vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue(todayTasks as any);
-    // getUserTasks is called 3 times: due_date today, all tasks, due_date tomorrow
+    // getTaskCount is called once: total_tasks only
+    vi.mocked(mockTasksDB.getTaskCount).mockResolvedValueOnce(3);
+    // getUserTasks is called once: tomorrow tasks
     vi.mocked(mockTasksDB.getUserTasks)
-      .mockResolvedValueOnce(todayDateTasks as any)
-      .mockResolvedValueOnce(allTasks as any)
       .mockResolvedValueOnce(tomorrowTasks as any);
     // Return logs so absence computation can work
     vi.mocked(mockHabitLogsDB.getAllUserLogs).mockResolvedValue([]);
@@ -92,14 +87,16 @@ describe('GET /api/dashboard', () => {
 
     expect(response.status).toBe(200);
     expect(data.habits).toHaveLength(2);
-    expect(data.tasks_today).toHaveLength(1);
+    expect(data.tasks_today).toHaveLength(2);
     expect(data.tasks_tomorrow).toHaveLength(1);
     expect(data.tasks_tomorrow[0].title).toBe('Tomorrow task');
     expect(data.stats.total_habits).toBe(2);
     expect(data.stats.completed_today).toBe(1);
     expect(data.stats.current_best_streak).toBe(5);
     expect(data.stats.total_tasks).toBe(3);
+    // tasks_completed_today is derived from todayTasks (1 completed out of 2)
     expect(data.stats.tasks_completed_today).toBe(1);
+    expect(data.stats.tasks_due_today).toBe(2);
     // Absence fields should be present
     expect(data.habits[0]).toHaveProperty('missed_scheduled_days');
     expect(data.habits[0]).toHaveProperty('previous_streak');
@@ -160,6 +157,7 @@ describe('GET /api/dashboard', () => {
     await GET(request);
 
     expect(mockHabitsDB.getHabitsWithTodayStatus).toHaveBeenCalledWith('user-123', '2026-02-01');
+    expect(mockTasksDB.getTodayTasks).toHaveBeenCalledWith('user-123', '2026-02-01');
   });
 
   it('should return milestones_today in response', async () => {
@@ -205,7 +203,7 @@ describe('GET /api/dashboard', () => {
     await GET(request);
 
     const calls = vi.mocked(mockTasksDB.getUserTasks).mock.calls;
-    expect(calls[2]).toEqual(['user-123', { due_date: '2026-03-01', is_completed: false }]);
+    expect(calls[0]).toEqual(['user-123', { due_date: '2026-03-01', is_completed: false }]);
   });
 
   it('should derive Jan 1 for Dec 31 date param (year rollover)', async () => {
@@ -217,7 +215,7 @@ describe('GET /api/dashboard', () => {
     await GET(request);
 
     const calls = vi.mocked(mockTasksDB.getUserTasks).mock.calls;
-    expect(calls[2]).toEqual(['user-123', { due_date: '2027-01-01', is_completed: false }]);
+    expect(calls[0]).toEqual(['user-123', { due_date: '2027-01-01', is_completed: false }]);
   });
 
   it('should return 400 for invalid date format', async () => {
@@ -290,6 +288,73 @@ describe('GET /api/dashboard', () => {
     expect(data.milestones_today).toEqual([]);
     expect(data.habits).toBeDefined();
     expect(data.stats).toBeDefined();
+  });
+
+  it('should include _warnings when getAllUserLogs fails', async () => {
+    const habits = [
+      {
+        id: 'h1', name: 'Run', current_streak: 3, completed_today: true,
+        monthly_completion_rate: 80, frequency: { type: 'daily' },
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ];
+
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue(habits as any);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    vi.mocked(mockHabitLogsDB.getAllUserLogs).mockRejectedValue(new Error('DB timeout'));
+    vi.mocked(mockMilestonesDB.getTodaysMilestones).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-15');
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // Critical: _warnings must be present when logs fetch fails
+    expect(data._warnings).toBeDefined();
+    expect(data._warnings.length).toBeGreaterThan(0);
+    expect(data._warnings[0]).toContain('Absence');
+  });
+
+  it('should pass client date to getTodayTasks', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-03-15');
+    await GET(request);
+
+    expect(mockTasksDB.getTodayTasks).toHaveBeenCalledWith('user-123', '2026-03-15');
+  });
+
+  it('should include completed tasks in tasks_today and derive stats', async () => {
+    const todayTasks = [
+      { id: 't1', title: 'Incomplete task', is_completed: false },
+      { id: 't2', title: 'Completed task', is_completed: true },
+      { id: 't3', title: 'Another completed', is_completed: true },
+    ];
+
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockResolvedValue(todayTasks as any);
+    vi.mocked(mockTasksDB.getTaskCount).mockResolvedValueOnce(5); // total_tasks
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+
+    const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-03-15');
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    // tasks_today should include both completed and incomplete
+    expect(data.tasks_today).toHaveLength(3);
+    expect(data.tasks_today.some((t: any) => t.is_completed)).toBe(true);
+    expect(data.tasks_today.some((t: any) => !t.is_completed)).toBe(true);
+    // stats derived from array, not separate DB call
+    expect(data.stats.tasks_due_today).toBe(3);
+    expect(data.stats.tasks_completed_today).toBe(2);
+    expect(data.stats.total_tasks).toBe(5);
+    // getTaskCount should only be called once (for total_tasks)
+    expect(mockTasksDB.getTaskCount).toHaveBeenCalledTimes(1);
+    expect(mockTasksDB.getTaskCount).toHaveBeenCalledWith('user-123');
   });
 
   it('should return 401 if not authenticated', async () => {

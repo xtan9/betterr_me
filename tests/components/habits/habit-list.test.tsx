@@ -193,19 +193,6 @@ describe('HabitList', () => {
     });
   });
 
-  describe('loading state', () => {
-    it('shows skeleton cards when loading', () => {
-      render(<HabitList {...defaultProps} isLoading />);
-      const skeletons = screen.getAllByTestId('skeleton');
-      expect(skeletons.length).toBeGreaterThan(0);
-    });
-
-    it('does not show habits when loading', () => {
-      render(<HabitList {...defaultProps} isLoading />);
-      expect(screen.queryByTestId('habit-card-1')).not.toBeInTheDocument();
-    });
-  });
-
   describe('interactions', () => {
     it('calls onHabitClick when a habit card is clicked', () => {
       const onHabitClick = vi.fn();

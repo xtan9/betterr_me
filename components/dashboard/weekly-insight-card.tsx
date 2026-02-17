@@ -4,13 +4,7 @@ import { useTranslations } from "next-intl";
 import { Brain, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-export interface WeeklyInsight {
-  type: string;
-  message: string;
-  params: Record<string, string | number>;
-  priority: number;
-}
+import type { WeeklyInsight } from "@/lib/db/insights";
 
 interface WeeklyInsightCardProps {
   insights: WeeklyInsight[];

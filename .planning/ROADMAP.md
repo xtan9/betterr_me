@@ -1,23 +1,31 @@
-# Roadmap: BetterR.Me UI Style Redesign
+# Roadmap: BetterR.Me
 
 ## Milestones
 
-- ✅ **v1.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
+- ✅ **v1.0 Codebase Hardening** — Phases 1-5 (shipped 2026-02-16)
+- ✅ **v1.1 Dashboard Task Fixes** — Phase 6 (shipped 2026-02-17)
+- ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
 
 ## Phases
 
 <details>
-<summary>✅ v1.0 UI Style Redesign (Phases 1-9) — SHIPPED 2026-02-17</summary>
+<summary>✅ v1.0 Codebase Hardening (Phases 1-5) — SHIPPED 2026-02-16</summary>
 
-- [x] Phase 1: Design Token Extraction & CSS Foundation (2/2 plans) — completed 2026-02-15
-- [x] Phase 2: Sidebar Shell & Navigation Switch (2/2 plans) — completed 2026-02-16
-- [x] Phase 3: Sidebar Collapse & Persistence (3/3 plans) — completed 2026-02-16
-- [x] Phase 4: Page Header & Content Layout (1/1 plans) — completed 2026-02-16
-- [x] Phase 5: Dashboard Page Migration (2/2 plans) — completed 2026-02-16
-- [x] Phase 6: Habits, Tasks & Remaining Pages Migration (4/4 plans) — completed 2026-02-17
-- [x] Phase 7: Sidebar Enrichment (3/3 plans) — completed 2026-02-17
-- [x] Phase 8: Visual Polish (2/2 plans) — completed 2026-02-17
-- [x] Phase 9: Test Stabilization & Baseline Regeneration (2/2 plans) — completed 2026-02-17
+5 phases, 11 plans, 26 requirements. See `.planning/milestones/v1.0-ROADMAP.md` for details.
+
+</details>
+
+<details>
+<summary>✅ v1.1 Dashboard Task Fixes (Phase 6) — SHIPPED 2026-02-17</summary>
+
+- [x] Phase 6: Dashboard Task Data Flow (1/1 plan) — completed 2026-02-16
+
+</details>
+
+<details>
+<summary>✅ v2.0 UI Style Redesign (Phases 1-9) — SHIPPED 2026-02-17</summary>
+
+9 phases: design tokens, sidebar navigation, collapse persistence, page header/layout, dashboard migration, remaining pages migration, sidebar enrichment, visual polish, test stabilization. See `.planning/milestones/v2.0-ROADMAP.md` for details.
 
 </details>
 
@@ -25,14 +33,9 @@
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Design Token Extraction & CSS Foundation | v1.0 | 2/2 | Complete | 2026-02-15 |
-| 2. Sidebar Shell & Navigation Switch | v1.0 | 2/2 | Complete | 2026-02-16 |
-| 3. Sidebar Collapse & Persistence | v1.0 | 3/3 | Complete | 2026-02-16 |
-| 4. Page Header & Content Layout | v1.0 | 1/1 | Complete | 2026-02-16 |
-| 5. Dashboard Page Migration | v1.0 | 2/2 | Complete | 2026-02-16 |
-| 6. Habits, Tasks & Remaining Pages Migration | v1.0 | 4/4 | Complete | 2026-02-17 |
-| 7. Sidebar Enrichment | v1.0 | 3/3 | Complete | 2026-02-17 |
-| 8. Visual Polish | v1.0 | 2/2 | Complete | 2026-02-17 |
-| 9. Test Stabilization & Baseline Regeneration | v1.0 | 2/2 | Complete | 2026-02-17 |
-
-_Full v1.0 details: `.planning/milestones/v1.0-ROADMAP.md`_
+| 1. Frequency Correctness | v1.0 | 3/3 | Complete | 2026-02-15 |
+| 2. API Hardening | v1.0 | 3/3 | Complete | 2026-02-15 |
+| 3. Auth & Profile Reliability | v1.0 | 2/2 | Complete | 2026-02-16 |
+| 4. Dead Code & Observability | v1.0 | 2/2 | Complete | 2026-02-16 |
+| 5. Test Coverage Backfill | v1.0 | 1/1 | Complete | 2026-02-16 |
+| 6. Dashboard Task Data Flow | v1.1 | 1/1 | Complete | 2026-02-16 |
