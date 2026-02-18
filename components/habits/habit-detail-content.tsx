@@ -6,7 +6,6 @@ import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   Edit,
   AlertCircle,
   Heart,
@@ -25,6 +24,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
+import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import { StreakCounter } from "@/components/habits/streak-counter";
 import { NextMilestone } from "@/components/habits/next-milestone";
 import dynamic from "next/dynamic";
@@ -71,45 +73,46 @@ const CATEGORY_COLORS: Record<HabitCategory, string> = {
 
 function HabitDetailSkeleton() {
   return (
-    <div
-      className="max-w-3xl mx-auto space-y-6"
-      data-testid="habit-detail-skeleton"
-    >
-      {/* Header skeleton */}
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-9 w-32" />
-        <Skeleton className="h-9 w-20" />
-      </div>
+    <div className="space-y-6" data-testid="habit-detail-skeleton">
+      {/* Breadcrumb + Header skeleton */}
       <div>
-        <Skeleton className="h-8 w-64 mb-2" />
-        <Skeleton className="h-5 w-48 mb-2" />
-        <Skeleton className="h-4 w-full max-w-md" />
+        <Skeleton className="h-4 w-40 mb-2" />
+        <PageHeaderSkeleton hasActions />
       </div>
-      {/* Streak skeleton */}
-      <div className="grid grid-cols-2 gap-3">
-        <Skeleton className="h-32 rounded-xl" />
-        <Skeleton className="h-32 rounded-xl" />
-      </div>
-      {/* Stats skeleton */}
-      <div className="space-y-3">
-        <Skeleton className="h-5 w-32" />
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-4">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-3 flex-1" />
-            <Skeleton className="h-4 w-16" />
+      {/* Card-wrapped content skeleton */}
+      <Card className="max-w-3xl">
+        <CardContent className="space-y-6 pt-6">
+          <div>
+            <Skeleton className="h-5 w-48 mb-2" />
+            <Skeleton className="h-4 w-full max-w-md" />
           </div>
-        ))}
-      </div>
-      {/* Heatmap skeleton */}
-      <div className="space-y-3">
-        <Skeleton className="h-5 w-32" />
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: 35 }).map((_, i) => (
-            <Skeleton key={i} className="size-8 rounded-md" />
-          ))}
-        </div>
-      </div>
+          {/* Streak skeleton */}
+          <div className="grid grid-cols-2 gap-3">
+            <Skeleton className="h-32 rounded-xl" />
+            <Skeleton className="h-32 rounded-xl" />
+          </div>
+          {/* Stats skeleton */}
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-32" />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-4">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-3 flex-1" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
+          {/* Heatmap skeleton */}
+          <div className="space-y-3">
+            <Skeleton className="h-5 w-32" />
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <Skeleton key={i} className="size-8 rounded-md" />
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -305,7 +308,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
 
   if (habitError || !habit) {
     return (
-      <div className="max-w-3xl mx-auto text-center py-12">
+      <div className="text-center py-12">
         <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
         <h2 className="text-lg font-semibold mb-2">{t("error.title")}</h2>
         <Button onClick={() => mutateHabit()} variant="outline">
@@ -323,115 +326,110 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     : "bg-slate-500";
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          onClick={() => router.push("/habits")}
-          className="gap-2"
-        >
-          <ArrowLeft className="size-4" />
-          {t("detail.backToHabits")}
-        </Button>
-        <Button
-          onClick={() => router.push(`/habits/${habitId}/edit`)}
-          className="gap-2"
-        >
-          <Edit className="size-4" />
-          {t("detail.edit")}
-        </Button>
-      </div>
-
-      {/* Title and metadata */}
+    <div className="space-y-6">
+      {/* Breadcrumbs + Header */}
       <div>
-        <div className="flex items-center gap-3 mb-2">
-          <h1 className="text-2xl font-bold">{habit.name}</h1>
-          <Badge
-            variant={habit.status === "active" ? "default" : "secondary"}
-            className={cn(
-              habit.status === "active" && "bg-emerald-500",
-              habit.status === "paused" && "bg-amber-500",
-              habit.status === "archived" && "bg-slate-500",
-            )}
-          >
-            {t(`detail.status.${habit.status}`)}
-          </Badge>
-        </div>
-        <div className="flex items-center gap-2 text-muted-foreground mb-2">
-          <CategoryIcon
-            className={cn("size-4 text-white rounded p-0.5", categoryColor)}
-          />
-          <span>{habit.category ? t(`categories.${habit.category}`) : ""}</span>
-          <span>•</span>
-          <span>{formatFrequency(habit.frequency, t)}</span>
-        </div>
-        {habit.description && (
-          <p className="text-muted-foreground">{habit.description}</p>
-        )}
+        <PageBreadcrumbs section="habits" itemName={habit.name} />
+        <PageHeader
+          title={habit.name}
+          actions={
+            <Button onClick={() => router.push(`/habits/${habitId}/edit`)} className="gap-2">
+              <Edit className="size-4" />
+              {t("detail.edit")}
+            </Button>
+          }
+        />
       </div>
 
-      {/* Streak Counter */}
-      <StreakCounter
-        currentStreak={habit.current_streak}
-        bestStreak={habit.best_streak}
-      />
-
-      {/* Next Milestone */}
-      <NextMilestone currentStreak={habit.current_streak} />
-
-      {/* Completion Stats */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">
-          {t("detail.completion.title")}
-        </h2>
-        <div className="space-y-3">
-          {completionPeriods.map(({ key, label, percent }) => (
-            <div key={key} className="flex items-center gap-4">
-              <span className="w-24 text-sm text-muted-foreground">
-                {label}
-              </span>
-              <Progress value={percent} className="flex-1" />
-              <span className="w-24 text-sm text-right">
-                {t("detail.completion.percent", { percent })}
-              </span>
+      {/* All content wrapped in Card */}
+      <Card className="max-w-3xl">
+        <CardContent className="space-y-6 pt-6">
+          {/* Title metadata */}
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <Badge
+                variant={habit.status === "active" ? "default" : "secondary"}
+                className={cn(
+                  habit.status === "active" && "bg-primary",
+                  habit.status === "paused" && "bg-amber-500",
+                  habit.status === "archived" && "bg-slate-500"
+                )}
+              >
+                {t(`detail.status.${habit.status}`)}
+              </Badge>
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="flex items-center gap-2 text-muted-foreground mb-2">
+              <CategoryIcon className={cn("size-4 text-white rounded p-0.5", categoryColor)} />
+              <span>{habit.category ? t(`categories.${habit.category}`) : ""}</span>
+              <span>•</span>
+              <span>{formatFrequency(habit.frequency, t)}</span>
+            </div>
+            {habit.description && (
+              <p className="text-muted-foreground">{habit.description}</p>
+            )}
+          </div>
 
-      {/* Heatmap */}
-      <Heatmap30Day
-        habitId={habitId}
-        frequency={frequency ?? habit.frequency}
-        logs={logs}
-        onToggleDate={handleToggleDate}
-      />
+          {/* Streak Counter */}
+          <StreakCounter
+            currentStreak={habit.current_streak}
+            bestStreak={habit.best_streak}
+          />
 
-      {/* Actions */}
-      <div className="flex flex-wrap gap-3 pt-4 border-t">
-        <Button variant="outline" onClick={handlePause} className="gap-2">
-          {habit.status === "paused" ? (
-            <>
-              <Play className="size-4" />
-              {t("detail.actions.resume")}
-            </>
-          ) : (
-            <>
-              <Pause className="size-4" />
-              {t("detail.actions.pause")}
-            </>
-          )}
-        </Button>
-        <Button variant="outline" onClick={handleArchive} className="gap-2">
-          <Archive className="size-4" />
-          {t("detail.actions.archive")}
-        </Button>
-        <Button variant="destructive" onClick={handleDelete} className="gap-2">
-          <Trash2 className="size-4" />
-          {t("detail.actions.delete")}
-        </Button>
-      </div>
+          {/* Next Milestone */}
+          <NextMilestone currentStreak={habit.current_streak} />
+
+          {/* Completion Stats */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold">{t("detail.completion.title")}</h2>
+            <div className="space-y-3">
+              {completionPeriods.map(({ key, label, percent }) => (
+                <div key={key} className="flex items-center gap-4">
+                  <span className="w-24 text-sm text-muted-foreground">
+                    {label}
+                  </span>
+                  <Progress value={percent} className="flex-1" />
+                  <span className="w-24 text-sm text-right">
+                    {t("detail.completion.percent", { percent })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Heatmap */}
+          <Heatmap30Day
+            habitId={habitId}
+            frequency={frequency ?? habit.frequency}
+            logs={logs}
+            onToggleDate={handleToggleDate}
+          />
+
+          {/* Actions */}
+          <div className="flex flex-wrap gap-3 pt-4 border-t">
+            <Button variant="outline" onClick={handlePause} className="gap-2">
+              {habit.status === "paused" ? (
+                <>
+                  <Play className="size-4" />
+                  {t("detail.actions.resume")}
+                </>
+              ) : (
+                <>
+                  <Pause className="size-4" />
+                  {t("detail.actions.pause")}
+                </>
+              )}
+            </Button>
+            <Button variant="outline" onClick={handleArchive} className="gap-2">
+              <Archive className="size-4" />
+              {t("detail.actions.archive")}
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} className="gap-2">
+              <Trash2 className="size-4" />
+              {t("detail.actions.delete")}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

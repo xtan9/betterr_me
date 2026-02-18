@@ -34,7 +34,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
   };
 
   return (
-    <Card data-testid={`habit-card-${habit.id}`} className="transition-all hover:shadow-lg hover:scale-[1.03] hover:-translate-y-0.5 duration-200 p-5">
+    <Card data-testid={`habit-card-${habit.id}`} className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 motion-reduce:transition-none motion-reduce:hover:transform-none p-5">
       <CardContent className="p-0 space-y-3">
         <div className="flex items-start justify-between">
           <button
@@ -57,7 +57,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
             onCheckedChange={handleCheckedChange}
             disabled={isToggling}
             aria-label={`${t("card.markComplete")} ${habit.name}`}
-            className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+            className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
           />
         </div>
 
@@ -86,7 +86,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
           </div>
           <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700" aria-hidden="true">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400"
+              className="h-full rounded-full bg-primary"
               style={{ width: `${habit.monthly_completion_rate}%` }}
             />
           </div>

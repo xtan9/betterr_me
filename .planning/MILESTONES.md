@@ -30,3 +30,20 @@
 
 ---
 
+## v2.0 UI Style Redesign (Shipped: 2026-02-17)
+
+**Phases completed:** 9 phases
+
+**Key accomplishments:**
+- Extracted design tokens and established CSS foundation for consistent styling
+- Replaced top-nav with collapsible sidebar navigation shell
+- Implemented sidebar collapse state persistence
+- Created reusable PageHeader and PageBreadcrumbs layout components
+- Migrated dashboard page to card-on-gray layout pattern
+- Migrated habits, tasks, and remaining pages to new layout
+- Added sidebar enrichment (active states, icons, user section)
+- Applied visual polish across all pages (dark mode, spacing, typography)
+- Stabilized tests and regenerated visual regression baselines
+
+---
+

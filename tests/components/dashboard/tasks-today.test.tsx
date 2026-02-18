@@ -358,7 +358,7 @@ describe("TasksToday", () => {
     const taskRow = taskTitle.closest(".flex.items-center.gap-2");
     const circleIcon = taskRow?.querySelector("svg");
     expect(circleIcon).toBeInTheDocument();
-    expect(circleIcon?.classList.contains("text-slate-400")).toBe(true);
+    expect(circleIcon?.classList.contains("text-muted-foreground")).toBe(true);
   });
 
   it("renders task titles as buttons for accessibility", () => {
@@ -799,7 +799,7 @@ describe("TasksToday — Coming Up section", () => {
     const tomorrowRow = tomorrowTitle.closest(".flex.items-center.gap-2");
     const circleIcon = tomorrowRow?.querySelector("svg");
     expect(circleIcon).toBeInTheDocument();
-    expect(circleIcon?.classList.contains("text-slate-400")).toBe(true);
+    expect(circleIcon?.classList.contains("text-muted-foreground")).toBe(true);
   });
 
   it("applies reduced opacity when today tasks are not all complete", () => {

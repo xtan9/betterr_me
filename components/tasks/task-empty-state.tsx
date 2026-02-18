@@ -18,7 +18,7 @@ const VARIANT_CONFIG = {
     titleKey: "noTasks.title",
     descriptionKey: "noTasks.description",
     ctaKey: "noTasks.cta",
-    iconColorClass: "text-emerald-500",
+    iconColorClass: "text-primary",
   },
   no_results: {
     icon: Search,
@@ -58,7 +58,7 @@ export function TaskEmptyState({ variant, onCreateTask }: TaskEmptyStateProps) {
           variant === "all_complete"
             ? "bg-amber-100"
             : variant === "no_tasks"
-              ? "bg-emerald-100"
+              ? "bg-primary/10"
               : "bg-slate-100"
         )}
       >
@@ -76,7 +76,7 @@ export function TaskEmptyState({ variant, onCreateTask }: TaskEmptyStateProps) {
       {showCta && (
         <Button
           onClick={onCreateTask}
-          className="mt-6 bg-emerald-500 hover:bg-emerald-600"
+          className="mt-6 bg-primary hover:bg-primary/90"
         >
           {t(config.ctaKey!)}
         </Button>

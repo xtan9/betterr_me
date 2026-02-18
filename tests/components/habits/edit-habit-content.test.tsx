@@ -25,6 +25,11 @@ vi.mock('sonner', () => ({
 
 // Namespace-aware mock matching next-intl's useTranslations behavior
 const allTranslations: Record<string, Record<string, string>> = {
+  'common.nav': {
+    'habits': 'Habits',
+    'tasks': 'Tasks',
+    'settings': 'Settings',
+  },
   'habits': {
     'toast.updateSuccess': 'Habit updated successfully',
     'toast.updateError': 'Failed to update habit',

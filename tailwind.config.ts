@@ -54,6 +54,48 @@ export default {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+        page: "hsl(var(--page))",
+        highlight: "hsl(var(--highlight))",
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar-background))",
+          foreground: "hsl(var(--sidebar-foreground))",
+          primary: "hsl(var(--sidebar-primary))",
+          "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
+          accent: "hsl(var(--sidebar-accent))",
+          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
+          border: "hsl(var(--sidebar-border))",
+          ring: "hsl(var(--sidebar-ring))",
+        },
+      },
+      fontSize: {
+        "page-title": [
+          "var(--font-size-page-title)",
+          { lineHeight: "1.33", fontWeight: "700", letterSpacing: "-0.025em" },
+        ],
+        "section-heading": [
+          "var(--font-size-section-heading)",
+          { lineHeight: "1.3", fontWeight: "600" },
+        ],
+        body: ["var(--font-size-body)", { lineHeight: "1.5", fontWeight: "400" }],
+        caption: [
+          "var(--font-size-caption)",
+          { lineHeight: "1.4", fontWeight: "400" },
+        ],
+        stat: ["var(--font-size-stat)", { lineHeight: "1.2", fontWeight: "700" }],
+      },
+      spacing: {
+        "card-padding": "var(--spacing-card-padding)",
+        "page-padding": "var(--spacing-page-padding)",
+        "page-padding-top": "var(--spacing-page-padding-top)",
+        "card-gap": "var(--spacing-card-gap)",
+      },
+      maxWidth: {
+        content: "var(--content-max-width)",
+      },
+      width: {
+        sidebar: "var(--sidebar-width)",
+        "sidebar-mobile": "var(--sidebar-width-mobile)",
+        "sidebar-icon": "var(--sidebar-width-icon)",
       },
       borderRadius: {
         lg: "var(--radius)",

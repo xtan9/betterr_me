@@ -43,8 +43,8 @@ test.describe('Tasks List Page', () => {
     await page.goto('/tasks');
     await page.waitForLoadState('networkidle');
 
-    // Desktop nav should show Tasks link (hidden on mobile, visible on desktop)
-    const tasksNavLink = page.locator('nav a[href="/tasks"]').first();
+    // Sidebar renders nav links -- use role-based locator for resilience
+    const tasksNavLink = page.getByRole('link', { name: /tasks/i }).first();
     await expect(tasksNavLink).toBeAttached({ timeout: 10000 });
   });
 });

@@ -11,6 +11,24 @@
       "learnMore": "了解更多",
       "profile": "個人資料"
     },
+    "sidebar": {
+      "pin": "釘選",
+      "unpin": "取消釘選",
+      "pinLabel": "釘選側邊欄導航。目前未釘選。",
+      "unpinLabel": "取消釘選側邊欄導航。目前已釘選。",
+      "mainGroup": "主要",
+      "accountGroup": "帳戶",
+      "myAccount": "我的帳戶",
+      "logOut": "登出",
+      "theme": "主題",
+      "language": "語言",
+      "themeLight": "淺色",
+      "themeDark": "深色",
+      "themeSystem": "跟隨系統",
+      "loading": "載入中...",
+      "profileError": "個人資料無法使用",
+      "signOutError": "登出失敗"
+    },
     "footer": {
       "product": "產品",
       "features": "功能",
@@ -200,6 +218,9 @@
         "fri": "週五",
         "sat": "週六"
       }
+    },
+    "breadcrumb": {
+      "newHabit": "新習慣"
     },
     "form": {
       "createTitle": "建立新習慣",
@@ -431,6 +452,9 @@
     }
   },
   "tasks": {
+    "breadcrumb": {
+      "newTask": "新任務"
+    },
     "form": {
       "createTitle": "建立新任務",
       "editTitle": "編輯任務",

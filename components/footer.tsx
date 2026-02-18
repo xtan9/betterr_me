@@ -17,7 +17,7 @@ export default async function Footer() {
               <li>
                 <Link
                   href="#features"
-                  className="text-muted-foreground hover:text-emerald-600"
+                  className="text-muted-foreground hover:text-primary"
                 >
                   {t("features")}
                 </Link>
@@ -25,18 +25,18 @@ export default async function Footer() {
               <li>
                 <Link
                   href="/dashboard"
-                  className="text-muted-foreground hover:text-emerald-600"
+                  className="text-muted-foreground hover:text-primary"
                 >
                   {navT("dashboard")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("habitTemplates")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("mobileApp")}
                 </Link>
               </li>
@@ -47,22 +47,22 @@ export default async function Footer() {
             <h3 className="font-semibold text-foreground mb-4">{t("company")}</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("about")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("blog")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("careers")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("press")}
                 </Link>
               </li>
@@ -73,22 +73,22 @@ export default async function Footer() {
             <h3 className="font-semibold text-foreground mb-4">{t("resources")}</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("documentation")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("helpCenter")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("community")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("status")}
                 </Link>
               </li>
@@ -99,22 +99,22 @@ export default async function Footer() {
             <h3 className="font-semibold text-foreground mb-4">{t("legal")}</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("privacy")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("terms")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("security")}
                 </Link>
               </li>
               <li>
-                <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+                <Link href="#" className="text-muted-foreground hover:text-primary">
                   {t("cookies")}
                 </Link>
               </li>
@@ -124,13 +124,13 @@ export default async function Footer() {
 
         <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-border">
           <div className="flex items-center space-x-4 mb-4 md:mb-0">
-            <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+            <Link href="#" className="text-muted-foreground hover:text-primary">
               <Twitter className="w-5 h-5" />
             </Link>
-            <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+            <Link href="#" className="text-muted-foreground hover:text-primary">
               <Linkedin className="w-5 h-5" />
             </Link>
-            <Link href="#" className="text-muted-foreground hover:text-emerald-600">
+            <Link href="#" className="text-muted-foreground hover:text-primary">
               <Github className="w-5 h-5" />
             </Link>
           </div>

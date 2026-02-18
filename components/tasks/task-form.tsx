@@ -33,6 +33,8 @@ interface TaskFormProps {
   onSubmit: (data: TaskFormValues) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
+  hideChrome?: boolean;
+  id?: string;
 }
 
 const CATEGORY_OPTIONS: {
@@ -75,6 +77,8 @@ export function TaskForm({
   onSubmit,
   onCancel,
   isLoading = false,
+  hideChrome = false,
+  id,
 }: TaskFormProps) {
   const t = useTranslations("tasks.form");
   const categoryT = useTranslations("tasks.categories");
@@ -103,12 +107,15 @@ export function TaskForm({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold">
-        {mode === "create" ? t("createTitle") : t("editTitle")}
-      </h2>
+      {!hideChrome && (
+        <h2 className="text-lg font-semibold">
+          {mode === "create" ? t("createTitle") : t("editTitle")}
+        </h2>
+      )}
 
       <Form {...form}>
         <form
+          id={id}
           onSubmit={form.handleSubmit(handleFormSubmit)}
           className="space-y-5"
         >
@@ -277,29 +284,30 @@ export function TaskForm({
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onCancel}
-              disabled={isLoading}
-            >
-              {t("cancel")}
-            </Button>
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white"
-            >
-              {isLoading
-                ? mode === "create"
-                  ? t("creating")
-                  : t("saving")
-                : mode === "create"
-                  ? t("create")
-                  : t("save")}
-            </Button>
-          </div>
+          {!hideChrome && (
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onCancel}
+                disabled={isLoading}
+              >
+                {t("cancel")}
+              </Button>
+              <Button
+                type="submit"
+                disabled={isLoading}
+              >
+                {isLoading
+                  ? mode === "create"
+                    ? t("creating")
+                    : t("saving")
+                  : mode === "create"
+                    ? t("create")
+                    : t("save")}
+              </Button>
+            </div>
+          )}
         </form>
       </Form>
     </div>

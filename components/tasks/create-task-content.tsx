@@ -5,12 +5,18 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useSWRConfig } from "swr";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/layouts/page-header";
+import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import { TaskForm } from "@/components/tasks/task-form";
 import type { TaskFormValues } from "@/lib/validations/task";
 
 export function CreateTaskContent() {
   const router = useRouter();
   const t = useTranslations("tasks");
+  const tBreadcrumb = useTranslations("tasks.breadcrumb");
+  const tForm = useTranslations("tasks.form");
   const { mutate } = useSWRConfig();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -54,13 +60,43 @@ export function CreateTaskContent() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <TaskForm
-        mode="create"
-        onSubmit={handleSubmit}
-        onCancel={handleCancel}
-        isLoading={isLoading}
-      />
+    <div className="space-y-6">
+      <div>
+        <PageBreadcrumbs section="tasks" itemName={tBreadcrumb("newTask")} />
+        <PageHeader
+          title={tForm("createTitle")}
+          actions={
+            <>
+              <Button
+                variant="ghost"
+                onClick={handleCancel}
+                disabled={isLoading}
+              >
+                {tForm("cancel")}
+              </Button>
+              <Button
+                type="submit"
+                form="task-form"
+                disabled={isLoading}
+              >
+                {isLoading ? tForm("creating") : tForm("create")}
+              </Button>
+            </>
+          }
+        />
+      </div>
+      <Card className="max-w-2xl">
+        <CardContent className="pt-6">
+          <TaskForm
+            id="task-form"
+            mode="create"
+            onSubmit={handleSubmit}
+            onCancel={handleCancel}
+            isLoading={isLoading}
+            hideChrome
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

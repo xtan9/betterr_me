@@ -37,7 +37,7 @@ function ReflectionStrip({ onReflect }: ReflectionStripProps) {
             key={difficulty}
             type="button"
             onClick={() => onReflect(difficulty)}
-            className="text-sm px-2 py-0.5 rounded-md hover:bg-muted transition-colors"
+            className="text-sm px-2 py-0.5 rounded-md hover:bg-muted transition-colors duration-150 motion-reduce:transition-none"
             title={t(label)}
             aria-label={t(label)}
           >
@@ -69,13 +69,13 @@ function TaskRow({
   const t = useTranslations("dashboard.tasks");
 
   const priorityColors = {
-    0: "text-slate-400", // none
+    0: "text-muted-foreground", // none
     1: "text-green-500", // low
     2: "text-yellow-500", // medium
     3: "text-red-500", // high/urgent
   };
 
-  const priorityColor = priorityColors[task.priority] ?? "text-slate-400";
+  const priorityColor = priorityColors[task.priority] ?? "text-muted-foreground";
 
   // Format due time to 12-hour format
   const formatTime = (time: string) => {
@@ -95,12 +95,12 @@ function TaskRow({
   };
 
   return (
-    <div className="flex items-start gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800">
+    <div className="flex items-start gap-3 rounded-lg px-3 py-2 transition-colors duration-150 hover:bg-accent motion-reduce:transition-none">
       <Checkbox
         checked={task.is_completed}
         onCheckedChange={handleCheckboxChange}
         disabled={isToggling}
-        className="mt-0.5 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+        className="mt-0.5 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -292,7 +292,7 @@ export function TasksToday({
             </div>
             <div className="mt-4 pt-4 border-t text-sm text-center text-muted-foreground">
               {allComplete ? (
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                <span className="text-primary font-medium">
                   {t("allComplete")} 🎉
                 </span>
               ) : (
@@ -320,11 +320,11 @@ export function TasksToday({
                     className={cn(
                       "size-2 fill-current",
                       ({
-                        0: "text-slate-400",
+                        0: "text-muted-foreground",
                         1: "text-green-500",
                         2: "text-yellow-500",
                         3: "text-red-500",
-                      } as Record<number, string>)[task.priority] ?? "text-slate-400",
+                      } as Record<number, string>)[task.priority] ?? "text-muted-foreground",
                     )}
                   />
                   <span>{task.title}</span>
@@ -334,7 +334,7 @@ export function TasksToday({
             {extraTomorrow > 0 && (
               <Link
                 href="/tasks"
-                className="flex items-center justify-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center justify-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors duration-150 motion-reduce:transition-none"
               >
                 {t("moreTomorrow", { count: extraTomorrow })}
                 <ChevronRight className="size-3" />

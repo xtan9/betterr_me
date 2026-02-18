@@ -84,17 +84,6 @@ vi.mock("@/lib/supabase/client", () => ({
   }),
 }));
 
-// Mock child components for Navbar
-vi.mock("@/components/auth-button", () => ({
-  AuthButton: () => <button>Auth</button>,
-}));
-vi.mock("@/components/language-switcher", () => ({
-  LanguageSwitcher: () => <button>Language</button>,
-}));
-vi.mock("@/components/theme-switcher", () => ({
-  ThemeSwitcher: () => <button>Theme</button>,
-}));
-
 describe("Accessibility - Login Form", () => {
   it("should have no axe violations", async () => {
     const { LoginForm } = await import("@/components/login-form");
@@ -124,16 +113,6 @@ describe("Accessibility - Login Form", () => {
 
     const googleIcon = container.querySelector("svg");
     expect(googleIcon?.getAttribute("aria-hidden")).toBe("true");
-  });
-});
-
-describe("Accessibility - Navbar", () => {
-  it("should have aria-label on nav element", async () => {
-    const Navbar = (await import("@/components/navbar")).default;
-    const { container } = render(await Navbar());
-    const nav = container.querySelector("nav");
-    expect(nav).toBeTruthy();
-    expect(nav?.getAttribute("aria-label")).toBe("Main navigation");
   });
 });
 
