@@ -36,7 +36,7 @@ function StatCard({ icon, iconBgClass, title, value, subtitle, trend }: StatCard
               <div
                 className={cn(
                   "flex items-center gap-1 text-sm mt-1",
-                  trend.isPositive ? "text-primary" : "text-red-500"
+                  trend.isPositive ? "text-primary" : "text-status-error"
                 )}
               >
                 {trend.isPositive ? (
@@ -98,8 +98,8 @@ export function DailySnapshot({ stats, yesterdayStats }: DailySnapshotProps) {
       <h2 className="font-display text-section-heading">{t("title")}</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-card-gap">
         <StatCard
-          icon={<Target className="size-4 text-blue-600 dark:text-blue-400" />}
-          iconBgClass="bg-blue-100 dark:bg-blue-900/30"
+          icon={<Target className="size-4 text-stat-icon-blue" />}
+          iconBgClass="bg-stat-icon-blue-bg"
           title={t("activeHabits")}
           value={stats.total_habits}
         />
@@ -112,8 +112,8 @@ export function DailySnapshot({ stats, yesterdayStats }: DailySnapshotProps) {
           trend={trend}
         />
         <StatCard
-          icon={<Flame className="size-4 text-orange-600 dark:text-orange-400" />}
-          iconBgClass="bg-orange-100 dark:bg-orange-900/30"
+          icon={<Flame className="size-4 text-stat-icon-orange" />}
+          iconBgClass="bg-stat-icon-orange-bg"
           title={t("currentStreak")}
           value={t("days", { count: stats.current_best_streak })}
         />

@@ -76,7 +76,7 @@ describe("DailySnapshot", () => {
     // 3/7 (43%) today vs 5/7 (71%) yesterday = -28% decline
     const trendElement = screen.getByText(/vs yesterday/i);
     expect(trendElement).toBeInTheDocument();
-    expect(trendElement.parentElement).toHaveClass("text-red-500");
+    expect(trendElement.parentElement).toHaveClass("text-status-error");
   });
 
   it("hides trend when no yesterday stats (Day 1)", () => {

@@ -20,23 +20,23 @@ const variantConfig = {
   recovery: {
     icon: AlertCircle,
     border: "border-l-amber-500",
-    bg: "bg-amber-50 dark:bg-amber-950/20",
-    iconColor: "text-amber-500",
-    titleColor: "text-amber-700 dark:text-amber-400",
+    bg: "bg-absence-warning-bg",
+    iconColor: "text-absence-warning-icon",
+    titleColor: "text-absence-warning-title",
   },
   lapse: {
     icon: Clock,
     border: "border-l-blue-500",
-    bg: "bg-blue-50 dark:bg-blue-950/20",
-    iconColor: "text-blue-500",
-    titleColor: "text-blue-700 dark:text-blue-400",
+    bg: "bg-absence-info-bg",
+    iconColor: "text-absence-info-icon",
+    titleColor: "text-absence-info-title",
   },
   hiatus: {
     icon: Heart,
     border: "border-l-orange-500",
-    bg: "bg-orange-50 dark:bg-orange-950/20",
-    iconColor: "text-orange-500",
-    titleColor: "text-orange-700 dark:text-orange-400",
+    bg: "bg-absence-caution-bg",
+    iconColor: "text-absence-caution-icon",
+    titleColor: "text-absence-caution-title",
   },
 };
 

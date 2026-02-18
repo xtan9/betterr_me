@@ -70,9 +70,9 @@ function TaskRow({
 
   const priorityColors = {
     0: "text-muted-foreground", // none
-    1: "text-green-500", // low
-    2: "text-yellow-500", // medium
-    3: "text-red-500", // high/urgent
+    1: "text-priority-low", // low
+    2: "text-priority-medium", // medium
+    3: "text-priority-high", // high/urgent
   };
 
   const priorityColor = priorityColors[task.priority] ?? "text-muted-foreground";
@@ -324,9 +324,9 @@ export function TasksToday({
                       "size-2 fill-current",
                       ({
                         0: "text-muted-foreground",
-                        1: "text-green-500",
-                        2: "text-yellow-500",
-                        3: "text-red-500",
+                        1: "text-priority-low",
+                        2: "text-priority-medium",
+                        3: "text-priority-high",
                       } as Record<number, string>)[task.priority] ?? "text-muted-foreground",
                     )}
                   />
