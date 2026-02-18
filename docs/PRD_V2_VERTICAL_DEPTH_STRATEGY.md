@@ -1,4 +1,4 @@
-# Vertical Depth Strategy: From Tracker to Self-Coaching Tool
+# PRD V2: Vertical Depth Strategy: From Tracker to Self-Coaching Tool
 
 ## Context
 
