@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { useTranslations } from "next-intl";
 import { Flame, Star } from "lucide-react";
 
@@ -19,7 +20,7 @@ function getStreakMessageKey(streak: number): string {
   return "messages.legendary";
 }
 
-export function StreakCounter({
+export const StreakCounter = memo(function StreakCounter({
   currentStreak,
   bestStreak,
   variant = "default",
@@ -71,4 +72,4 @@ export function StreakCounter({
       </div>
     </div>
   );
-}
+});
