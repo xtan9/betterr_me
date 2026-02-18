@@ -18,8 +18,9 @@ interface SidebarLayoutProps {
 export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
   const [pinned, setPinned] = useState(defaultPinned);
   const [hoverOpen, setHoverOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const open = pinned || hoverOpen;
+  const open = pinned || hoverOpen || dropdownOpen;
 
   const handleTogglePin = useCallback(() => {
     const newPinned = !pinned;
@@ -57,7 +58,7 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <AppSidebar pinned={pinned} onTogglePin={handleTogglePin} />
+        <AppSidebar pinned={pinned} onTogglePin={handleTogglePin} onDropdownOpenChange={setDropdownOpen} />
       </div>
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 md:hidden">

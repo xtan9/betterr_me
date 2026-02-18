@@ -59,7 +59,11 @@ function getInitials(fullName: string | null | undefined, email: string): string
   return email[0].toUpperCase();
 }
 
-export function SidebarUserFooter() {
+interface SidebarUserFooterProps {
+  onDropdownOpenChange?: (open: boolean) => void;
+}
+
+export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterProps) {
   const { data, error } = useSWR<ProfileData>("/api/profile", fetcher);
   const { theme, setTheme } = useTheme();
   const locale = useLocale();
@@ -140,13 +144,13 @@ export function SidebarUserFooter() {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={onDropdownOpenChange}>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
               className="transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:bg-sidebar-hover-bg hover:text-sidebar-hover-text hover:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))] data-[state=open]:bg-sidebar-hover-bg data-[state=open]:text-sidebar-hover-text data-[state=open]:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))]"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
+              <Avatar className="h-8 w-8 rounded-lg group-data-[collapsible=icon]:hidden">
                 <AvatarImage
                   src={profile?.avatar_url ?? undefined}
                   alt={profile?.full_name ?? ""}
@@ -155,13 +159,14 @@ export function SidebarUserFooter() {
                   {initials}
                 </AvatarFallback>
               </Avatar>
+              <Settings className="hidden size-4 group-data-[collapsible=icon]:block" />
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{displayName}</span>
                 <span className="truncate text-xs text-muted-foreground">
                   {displayEmail}
                 </span>
               </div>
-              <Settings className="ml-auto size-4" />
+              <Settings className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent

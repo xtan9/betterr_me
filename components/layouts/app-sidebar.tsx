@@ -56,6 +56,7 @@ const mainNavItems = [
 interface AppSidebarProps {
   pinned?: boolean;
   onTogglePin?: () => void;
+  onDropdownOpenChange?: (open: boolean) => void;
 }
 
 const formatBadge = (count: number) => (count > 9 ? "9+" : String(count));
@@ -83,7 +84,7 @@ const navButtonClassName = [
 /** Asymmetric Chameleon padding (6px 12px 6px 6px) */
 const navButtonStyle = { padding: "6px 12px 6px 6px" };
 
-export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
+export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSidebarProps) {
   const pathname = usePathname();
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
@@ -164,7 +165,7 @@ export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarUserFooter />
+        <SidebarUserFooter onDropdownOpenChange={onDropdownOpenChange} />
       </SidebarFooter>
     </Sidebar>
   );
