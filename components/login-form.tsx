@@ -110,7 +110,7 @@ export function LoginForm({
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
-              {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+              {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? t('loggingIn') : t('loginButton')}
               </Button>

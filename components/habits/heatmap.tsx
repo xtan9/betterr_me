@@ -78,9 +78,9 @@ export const Heatmap30Day = memo(function Heatmap30Day({
     if (cell.status === "completed") {
       statusClass = "bg-primary";
     } else if (cell.status === "missed") {
-      statusClass = "bg-slate-200";
+      statusClass = "bg-muted";
     } else {
-      statusClass = "border border-dashed border-slate-300 bg-transparent";
+      statusClass = "border border-dashed border-border bg-transparent";
     }
 
     // Today highlight
@@ -138,13 +138,13 @@ export const Heatmap30Day = memo(function Heatmap30Day({
         <div className="animate-pulse">
           <div className="grid grid-cols-7 gap-1 mb-2">
             {DAY_KEYS.map((day) => (
-              <div key={day} className="h-4 bg-slate-100 rounded" />
+              <div key={day} className="h-4 bg-muted rounded" />
             ))}
           </div>
           {[0, 1, 2, 3, 4].map((week) => (
             <div key={week} className="grid grid-cols-7 gap-1 mb-1">
               {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-                <div key={day} className="size-8 bg-slate-100 rounded-md" />
+                <div key={day} className="size-8 bg-muted rounded-md" />
               ))}
             </div>
           ))}
@@ -199,11 +199,11 @@ export const Heatmap30Day = memo(function Heatmap30Day({
           <span>{t("legend.completed")}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="size-3 rounded bg-slate-200" />
+          <div className="size-3 rounded bg-muted" />
           <span>{t("legend.missed")}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="size-3 rounded border border-dashed border-slate-300" />
+          <div className="size-3 rounded border border-dashed border-border" />
           <span>{t("legend.notScheduled")}</span>
         </div>
       </div>

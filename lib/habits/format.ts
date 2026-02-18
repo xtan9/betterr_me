@@ -47,16 +47,16 @@ export function formatFrequency(freq: HabitFrequency): string {
 export function getCategoryColor(category: HabitCategory | null): string {
   switch (category) {
     case "health":
-      return "text-rose-500 bg-rose-50";
+      return "text-category-health bg-category-health-muted";
     case "wellness":
-      return "text-purple-500 bg-purple-50";
+      return "text-category-wellness bg-category-wellness-muted";
     case "learning":
-      return "text-blue-500 bg-blue-50";
+      return "text-category-learning bg-category-learning-muted";
     case "productivity":
-      return "text-amber-500 bg-amber-50";
+      return "text-category-productivity bg-category-productivity-muted";
     case "other":
     default:
-      return "text-slate-500 bg-slate-50";
+      return "text-category-other bg-category-other-muted";
   }
 }
 

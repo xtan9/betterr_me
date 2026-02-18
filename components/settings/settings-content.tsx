@@ -104,7 +104,7 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
             {isSaving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : saveSuccess ? (
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <CheckCircle className="h-4 w-4 text-status-success" />
             ) : (
               <Save className="h-4 w-4" />
             )}

@@ -49,7 +49,7 @@ export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps
         {categoryLabel}
       </span>
       <div className="flex items-center gap-1 text-sm text-muted-foreground shrink-0">
-        {habit.current_streak >= 7 && <Flame className="size-3.5 text-orange-500" aria-hidden="true" />}
+        {habit.current_streak >= 7 && <Flame className="size-3.5 text-status-streak" aria-hidden="true" />}
         <span>{t("card.streakDays", { count: habit.current_streak })}</span>
       </div>
     </div>

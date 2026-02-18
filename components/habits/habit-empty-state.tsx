@@ -31,28 +31,28 @@ const VARIANT_CONFIG = {
     titleKey: "allComplete.title",
     descriptionKey: "allComplete.description",
     ctaKey: null,
-    iconColorClass: "text-amber-500",
+    iconColorClass: "text-status-warning",
   },
   no_results: {
     icon: Search,
     titleKey: "noResults.title",
     descriptionKey: "noResults.description",
     ctaKey: null,
-    iconColorClass: "text-slate-400",
+    iconColorClass: "text-muted-foreground",
   },
   no_paused: {
     icon: Pause,
     titleKey: "noPaused.title",
     descriptionKey: "noPaused.description",
     ctaKey: null,
-    iconColorClass: "text-slate-400",
+    iconColorClass: "text-muted-foreground",
   },
   no_archived: {
     icon: Archive,
     titleKey: "noArchived.title",
     descriptionKey: "noArchived.description",
     ctaKey: null,
-    iconColorClass: "text-slate-400",
+    iconColorClass: "text-muted-foreground",
   },
 } as const;
 
@@ -77,17 +77,17 @@ export function HabitEmptyState({
       data-testid="empty-state"
       className={cn(
         "flex flex-col items-center justify-center text-center py-12 px-4",
-        variant === "all_complete" && "bg-gradient-to-b from-amber-50/50 to-transparent rounded-xl"
+        variant === "all_complete" && "bg-gradient-to-b from-empty-state-celebration-bg/50 to-transparent rounded-xl"
       )}
     >
       <div
         className={cn(
           "flex items-center justify-center size-16 rounded-full mb-4",
           variant === "all_complete"
-            ? "bg-amber-100"
+            ? "bg-status-warning/20"
             : variant === "no_habits"
             ? "bg-primary/10"
-            : "bg-slate-100"
+            : "bg-muted"
         )}
       >
         <Icon className={cn("size-8", config.iconColorClass)} />

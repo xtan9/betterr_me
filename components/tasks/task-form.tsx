@@ -56,30 +56,30 @@ const CATEGORY_OPTIONS: {
   {
     value: "work",
     icon: Briefcase,
-    colorClass: "data-[state=on]:bg-blue-500 data-[state=on]:text-white",
+    colorClass: "data-[state=on]:bg-category-learning data-[state=on]:text-white",
   },
   {
     value: "personal",
     icon: User,
-    colorClass: "data-[state=on]:bg-purple-500 data-[state=on]:text-white",
+    colorClass: "data-[state=on]:bg-category-wellness data-[state=on]:text-white",
   },
   {
     value: "shopping",
     icon: ShoppingCart,
-    colorClass: "data-[state=on]:bg-amber-500 data-[state=on]:text-white",
+    colorClass: "data-[state=on]:bg-category-productivity data-[state=on]:text-white",
   },
   {
     value: "other",
     icon: MoreHorizontal,
-    colorClass: "data-[state=on]:bg-slate-500 data-[state=on]:text-white",
+    colorClass: "data-[state=on]:bg-category-other data-[state=on]:text-white",
   },
 ];
 
 const PRIORITY_OPTIONS = [
-  { value: "0", colorClass: "text-slate-400" },
-  { value: "1", colorClass: "text-green-500" },
-  { value: "2", colorClass: "text-yellow-500" },
-  { value: "3", colorClass: "text-red-500" },
+  { value: "0", colorClass: "text-priority-none" },
+  { value: "1", colorClass: "text-priority-low" },
+  { value: "2", colorClass: "text-priority-medium" },
+  { value: "3", colorClass: "text-priority-high" },
 ] as const;
 
 export function TaskForm({

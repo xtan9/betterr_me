@@ -64,7 +64,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
         <div className="flex gap-3" data-testid="habit-streaks">
           <div className="flex-1 rounded-lg border p-2 text-center">
             <div className="flex items-center justify-center gap-1">
-              {habit.current_streak >= 7 && <Flame className="size-4 text-orange-500" aria-hidden="true" />}
+              {habit.current_streak >= 7 && <Flame className="size-4 text-status-streak" aria-hidden="true" />}
               <span className="font-semibold text-sm">
                 {t("card.streakDays", { count: habit.current_streak })}
               </span>
@@ -84,7 +84,7 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>{t("card.thisMonth", { percent: habit.monthly_completion_rate })}</span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700" aria-hidden="true">
+          <div className="h-1.5 w-full rounded-full bg-muted" aria-hidden="true">
             <div
               className="h-full rounded-full bg-primary"
               style={{ width: `${habit.monthly_completion_rate}%` }}
