@@ -131,6 +131,16 @@ describe("AppSidebar", () => {
     expect(screen.queryByText("accountGroup")).not.toBeInTheDocument();
   });
 
+  it("renders icon containers for each nav item", () => {
+    render(<AppSidebar {...defaultProps} />);
+
+    const links = screen.getAllByRole("link");
+    links.forEach((link) => {
+      const iconContainer = link.querySelector(".size-6");
+      expect(iconContainer).toBeInTheDocument();
+    });
+  });
+
   it("highlights dashboard link when pathname is /dashboard", () => {
     mockPathname.mockReturnValue("/dashboard");
     render(<AppSidebar {...defaultProps} />);
