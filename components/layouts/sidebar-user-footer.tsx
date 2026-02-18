@@ -148,7 +148,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:bg-sidebar-hover-bg hover:text-sidebar-hover-text hover:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))] data-[state=open]:bg-sidebar-hover-bg data-[state=open]:text-sidebar-hover-text data-[state=open]:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))] group-data-[collapsible=icon]:!size-10"
+              className="transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:bg-sidebar-hover-bg hover:text-sidebar-hover-text hover:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))] data-[state=open]:bg-sidebar-hover-bg data-[state=open]:text-sidebar-hover-text data-[state=open]:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))] group-data-[collapsible=icon]:!size-10 group-data-[collapsible=icon]:justify-center"
             >
               <Avatar className="h-8 w-8 rounded-lg group-data-[collapsible=icon]:hidden">
                 <AvatarImage

@@ -63,7 +63,7 @@ const formatBadge = (count: number) => (count > 9 ? "9+" : String(count));
 
 function NavIconContainer({ icon: Icon }: { icon: LucideIcon }) {
   return (
-    <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-sidebar-icon-bg">
+    <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sidebar-icon-bg">
       <Icon className="size-3.5" />
     </div>
   );
@@ -72,7 +72,7 @@ function NavIconContainer({ icon: Icon }: { icon: LucideIcon }) {
 /** Chameleon-matched nav item class overrides */
 const navButtonClassName = [
   // Size & spacing (h-10 = 40px matches collapsed !size-10 for seamless transition)
-  "h-10 rounded-xl font-semibold text-sm",
+  "h-10 rounded-xl font-medium text-sm",
   // Collapsed: enlarge button so 24px icon container fits (40px - 2*8px padding = 24px)
   "group-data-[collapsible=icon]:!size-10",
   // Transition
@@ -83,8 +83,8 @@ const navButtonClassName = [
   "data-[active=true]:bg-sidebar-active-bg data-[active=true]:text-sidebar-accent-foreground data-[active=true]:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-active-ring))] data-[active=true]:font-semibold",
 ].join(" ");
 
-/** Asymmetric Chameleon padding (6px 12px 6px 6px) */
-const navButtonStyle = { padding: "6px 12px 6px 6px" };
+/** Chameleon padding — 8px left matches collapsed centering (40px - 2*8px = 24px icon) */
+const navButtonStyle = { padding: "8px 12px 8px 8px" };
 
 export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSidebarProps) {
   const pathname = usePathname();
@@ -98,7 +98,7 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
+      <SidebarHeader className="pt-4">
         <div className="flex h-8 items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <span className="font-display font-bold text-sm">B</span>
