@@ -63,8 +63,8 @@ const formatBadge = (count: number) => (count > 9 ? "9+" : String(count));
 
 function NavIconContainer({ icon: Icon }: { icon: LucideIcon }) {
   return (
-    <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-sidebar-icon-bg group-data-[collapsible=icon]:size-auto group-data-[collapsible=icon]:bg-transparent">
-      <Icon className="size-3.5 group-data-[collapsible=icon]:size-4" />
+    <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-sidebar-icon-bg">
+      <Icon className="size-3.5" />
     </div>
   );
 }
@@ -73,6 +73,8 @@ function NavIconContainer({ icon: Icon }: { icon: LucideIcon }) {
 const navButtonClassName = [
   // Size & spacing
   "h-9 rounded-xl font-semibold text-sm",
+  // Collapsed: enlarge button so 24px icon container fits (40px - 2*8px padding = 24px)
+  "group-data-[collapsible=icon]:!size-10",
   // Transition
   "transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]",
   // Hover state (teal tint + inset ring)
