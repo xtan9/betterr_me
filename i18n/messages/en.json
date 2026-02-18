@@ -607,7 +607,8 @@
       "delete": "Delete",
       "resumeSuccess": "Recurring task resumed",
       "deleteSuccess": "Recurring task deleted",
-      "actionError": "Action failed"
+      "actionError": "Action failed",
+      "loadError": "Failed to load paused tasks."
     }
   },
   "settings": {

@@ -607,7 +607,8 @@
       "delete": "删除",
       "resumeSuccess": "重复任务已恢复",
       "deleteSuccess": "重复任务已删除",
-      "actionError": "操作失败"
+      "actionError": "操作失败",
+      "loadError": "加载已暂停任务失败。"
     }
   },
   "settings": {

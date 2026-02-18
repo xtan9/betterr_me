@@ -42,6 +42,7 @@ export function TasksPageContent() {
 
   const {
     data: pausedTemplates,
+    error: pausedError,
     mutate: mutatePaused,
   } = useSWR<RecurringTask[]>(
     "/api/recurring-tasks?status=paused",
@@ -75,7 +76,8 @@ export function TasksPageContent() {
       mutatePaused();
       mutate(); // refresh tasks list — resumed template may generate new instances
       toast.success(t("paused.resumeSuccess"));
-    } catch {
+    } catch (err) {
+      console.error("Failed to resume recurring task:", templateId, err);
       toast.error(t("paused.actionError"));
     }
   };
@@ -86,7 +88,8 @@ export function TasksPageContent() {
       if (!res.ok) throw new Error("Failed");
       mutatePaused();
       toast.success(t("paused.deleteSuccess"));
-    } catch {
+    } catch (err) {
+      console.error("Failed to delete recurring task:", templateId, err);
       toast.error(t("paused.actionError"));
     }
   };
@@ -128,6 +131,19 @@ export function TasksPageContent() {
         onTaskClick={handleTaskClick}
         onCreateTask={handleCreateTask}
       />
+
+      {/* Paused recurring tasks load error */}
+      {pausedError && (
+        <p className="text-sm text-destructive">
+          {t("paused.loadError")}{" "}
+          <button
+            onClick={() => mutatePaused()}
+            className="underline hover:no-underline"
+          >
+            {t("error.retry")}
+          </button>
+        </p>
+      )}
 
       {/* Paused recurring tasks banner */}
       {pausedTemplates && pausedTemplates.length > 0 && (
