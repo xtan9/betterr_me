@@ -54,7 +54,6 @@ export default {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
-        page: "hsl(var(--page))",
         highlight: "hsl(var(--highlight))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
@@ -163,11 +162,6 @@ export default {
       },
       maxWidth: {
         content: "var(--content-max-width)",
-      },
-      width: {
-        sidebar: "var(--sidebar-width)",
-        "sidebar-mobile": "var(--sidebar-width-mobile)",
-        "sidebar-icon": "var(--sidebar-width-icon)",
       },
       borderRadius: {
         lg: "var(--radius)",

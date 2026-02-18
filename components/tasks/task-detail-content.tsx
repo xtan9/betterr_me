@@ -43,6 +43,7 @@ import { EditScopeDialog } from "@/components/tasks/edit-scope-dialog";
 import type { Task, TaskCategory, RecurringTask } from "@/lib/db/types";
 import type { EditScope } from "@/lib/validations/recurring-task";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
+import { getPriorityColor } from "@/lib/tasks/format";
 
 interface TaskDetailContentProps {
   taskId: string;
@@ -67,13 +68,6 @@ const CATEGORY_COLORS: Record<TaskCategory, string> = {
   personal: "bg-category-wellness",
   shopping: "bg-category-productivity",
   other: "bg-category-other",
-};
-
-const PRIORITY_COLORS: Record<number, string> = {
-  0: "text-priority-none",
-  1: "text-priority-low",
-  2: "text-priority-medium",
-  3: "text-priority-high",
 };
 
 function TaskDetailSkeleton() {
@@ -224,7 +218,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   const categoryColor = task.category
     ? CATEGORY_COLORS[task.category]
     : "bg-category-other";
-  const priorityColor = PRIORITY_COLORS[task.priority] ?? "text-priority-none";
+  const priorityColor = getPriorityColor(task.priority);
 
   return (
     <div className="space-y-6">

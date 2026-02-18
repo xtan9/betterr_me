@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   SidebarProvider,
   SidebarInset,
@@ -52,7 +52,11 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
   }, []);
 
   return (
-    <SidebarProvider open={open} onOpenChange={handleOpenChange}>
+    <SidebarProvider
+      open={open}
+      onOpenChange={handleOpenChange}
+      style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "3.75rem" } as React.CSSProperties}
+    >
       <div
         data-sidebar-hover={!pinned && hoverOpen ? "true" : undefined}
         onMouseEnter={handleMouseEnter}

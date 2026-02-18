@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { Task } from "@/lib/db/types";
+import { getPriorityColor } from "@/lib/tasks/format";
 
 function qualifiesForReflection(task: Task): boolean {
   return task.priority === 3 || !!task.intention;
@@ -68,14 +69,7 @@ function TaskRow({
 }: TaskRowProps) {
   const t = useTranslations("dashboard.tasks");
 
-  const priorityColors = {
-    0: "text-muted-foreground", // none
-    1: "text-priority-low", // low
-    2: "text-priority-medium", // medium
-    3: "text-priority-high", // high/urgent
-  };
-
-  const priorityColor = priorityColors[task.priority] ?? "text-muted-foreground";
+  const priorityColor = getPriorityColor(task.priority);
 
   // Format due time to 12-hour format
   const formatTime = (time: string) => {
@@ -322,12 +316,7 @@ export function TasksToday({
                   <Circle
                     className={cn(
                       "size-2 fill-current",
-                      ({
-                        0: "text-muted-foreground",
-                        1: "text-priority-low",
-                        2: "text-priority-medium",
-                        3: "text-priority-high",
-                      } as Record<number, string>)[task.priority] ?? "text-muted-foreground",
+                      getPriorityColor(task.priority),
                     )}
                   />
                   <span>{task.title}</span>

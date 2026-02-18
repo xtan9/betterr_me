@@ -36,6 +36,11 @@ const VARIANT_CONFIG = {
   },
 } as const;
 
+const ICON_BG_CLASS: Record<string, string> = {
+  all_complete: "bg-status-warning/20",
+  no_tasks: "bg-primary/10",
+};
+
 export function TaskEmptyState({ variant, onCreateTask }: TaskEmptyStateProps) {
   const t = useTranslations("tasks.empty");
   const config = VARIANT_CONFIG[variant];
@@ -55,11 +60,7 @@ export function TaskEmptyState({ variant, onCreateTask }: TaskEmptyStateProps) {
       <div
         className={cn(
           "flex items-center justify-center size-16 rounded-full mb-4",
-          variant === "all_complete"
-            ? "bg-status-warning/20"
-            : variant === "no_tasks"
-              ? "bg-primary/10"
-              : "bg-muted"
+          ICON_BG_CLASS[variant] ?? "bg-muted"
         )}
       >
         <Icon className={cn("size-8", config.iconColorClass)} />

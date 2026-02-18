@@ -25,10 +25,12 @@ vi.mock("@/components/ui/sidebar", () => ({
 
 // Mock AppSidebar to capture props
 const mockOnTogglePin = vi.fn();
+const mockOnDropdownOpenChange = vi.fn();
 vi.mock("@/components/layouts/app-sidebar", () => ({
-  AppSidebar: ({ pinned, onTogglePin }: any) => {
-    // Store the callback so tests can invoke it
+  AppSidebar: ({ pinned, onTogglePin, onDropdownOpenChange }: any) => {
+    // Store the callbacks so tests can invoke them
     mockOnTogglePin.mockImplementation(onTogglePin);
+    mockOnDropdownOpenChange.mockImplementation(onDropdownOpenChange);
     return (
       <div
         data-testid="app-sidebar"
@@ -131,6 +133,49 @@ describe("SidebarLayout", () => {
 
     // Mouse leave → closes
     fireEvent.mouseLeave(hoverWrapper);
+    expect(screen.getByTestId("sidebar-provider")).toHaveAttribute(
+      "data-open",
+      "false"
+    );
+  });
+
+  it("dropdown open keeps sidebar open when unpinned and not hovered", () => {
+    render(
+      <SidebarLayout defaultPinned={false}>
+        <div>Content</div>
+      </SidebarLayout>
+    );
+
+    // Initially closed (unpinned, not hovering)
+    expect(screen.getByTestId("sidebar-provider")).toHaveAttribute(
+      "data-open",
+      "false"
+    );
+
+    // Open dropdown → sidebar opens
+    act(() => { mockOnDropdownOpenChange(true); });
+    expect(screen.getByTestId("sidebar-provider")).toHaveAttribute(
+      "data-open",
+      "true"
+    );
+  });
+
+  it("dropdown close allows sidebar to close when unpinned and not hovered", () => {
+    render(
+      <SidebarLayout defaultPinned={false}>
+        <div>Content</div>
+      </SidebarLayout>
+    );
+
+    // Open dropdown
+    act(() => { mockOnDropdownOpenChange(true); });
+    expect(screen.getByTestId("sidebar-provider")).toHaveAttribute(
+      "data-open",
+      "true"
+    );
+
+    // Close dropdown → sidebar closes (not pinned, not hovered)
+    act(() => { mockOnDropdownOpenChange(false); });
     expect(screen.getByTestId("sidebar-provider")).toHaveAttribute(
       "data-open",
       "false"

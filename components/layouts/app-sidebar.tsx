@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/tooltip";
 import { SidebarUserFooter } from "@/components/layouts/sidebar-user-footer";
 import { useSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
+import { SIDEBAR_TRANSITION, SIDEBAR_HOVER } from "@/lib/sidebar-styles";
 
 const mainNavItems = [
   {
@@ -75,10 +76,9 @@ const navButtonClassName = [
   "h-10 rounded-xl font-medium text-sm",
   // Collapsed: enlarge button so 24px icon container fits (40px - 2*8px padding = 24px)
   "group-data-[collapsible=icon]:!size-10",
-  // Transition
-  "transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]",
-  // Hover state (teal tint + inset ring)
-  "hover:bg-sidebar-hover-bg hover:text-sidebar-hover-text hover:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))]",
+  // Transition + hover
+  SIDEBAR_TRANSITION,
+  SIDEBAR_HOVER,
   // Active state (blue-gray + inset ring)
   "data-[active=true]:bg-sidebar-active-bg data-[active=true]:text-sidebar-accent-foreground data-[active=true]:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-active-ring))] data-[active=true]:font-semibold",
 ].join(" ");

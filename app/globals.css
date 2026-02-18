@@ -9,7 +9,6 @@
     --foreground: 0 0% 3.9%;
 
     /* === Surface hierarchy === */
-    --page: 216 25% 97%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
@@ -39,7 +38,7 @@
     /* === Radius === */
     --radius: 0.75rem;
 
-    /* === Sidebar (raw HSL format) === */
+    /* === Sidebar === */
     --sidebar-background: 220 20% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 157 63% 45%;
@@ -132,11 +131,6 @@
     --sidebar-active-ring: 214 20% 82%;
     --sidebar-icon-bg: 0 0% 100%;
 
-    /* === Layout === */
-    --sidebar-width: 224px;
-    --sidebar-width-mobile: 280px;
-    --sidebar-width-icon: 60px;
-
     /* === Chart colors === */
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
@@ -151,7 +145,6 @@
     --foreground: 0 0% 95%;
 
     /* === Surface hierarchy === */
-    --page: 240 27% 14%;
     --card: 240 25% 18%;
     --card-foreground: 0 0% 95%;
     --popover: 240 24% 22%;

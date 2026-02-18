@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Task, TaskCategory } from "@/lib/db/types";
+import { getPriorityColor } from "@/lib/tasks/format";
 
 interface TaskCardProps {
   task: Task;
@@ -27,13 +28,6 @@ const CATEGORY_COLORS: Record<TaskCategory, string> = {
   personal: "bg-category-wellness-muted text-category-wellness",
   shopping: "bg-category-productivity-muted text-category-productivity",
   other: "bg-category-other-muted text-category-other",
-};
-
-const PRIORITY_COLORS: Record<number, string> = {
-  0: "text-priority-none",
-  1: "text-priority-low",
-  2: "text-priority-medium",
-  3: "text-priority-high",
 };
 
 function isOverdue(dueDate: string | null, isCompleted: boolean): boolean {
@@ -58,7 +52,7 @@ export function TaskCard({ task, onToggle, onClick, isToggling }: TaskCardProps)
   const CategoryIcon = task.category
     ? CATEGORY_ICONS[task.category]
     : MoreHorizontal;
-  const priorityColor = PRIORITY_COLORS[task.priority] ?? "text-priority-none";
+  const priorityColor = getPriorityColor(task.priority);
   const overdue = isOverdue(task.due_date, task.is_completed);
 
   const handleCheckedChange = () => {
