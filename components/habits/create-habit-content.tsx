@@ -5,12 +5,18 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useSWRConfig } from "swr";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/layouts/page-header";
+import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import { HabitForm } from "@/components/habits/habit-form";
 import type { HabitFormValues } from "@/lib/validations/habit";
 
 export function CreateHabitContent() {
   const router = useRouter();
   const t = useTranslations("habits");
+  const tBreadcrumb = useTranslations("habits.breadcrumb");
+  const tForm = useTranslations("habits.form");
   const { mutate } = useSWRConfig();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -47,13 +53,35 @@ export function CreateHabitContent() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <HabitForm
-        mode="create"
-        onSubmit={handleSubmit}
-        onCancel={handleCancel}
-        isLoading={isLoading}
-      />
+    <div className="space-y-6">
+      <div>
+        <PageBreadcrumbs section="habits" itemName={tBreadcrumb("newHabit")} />
+        <PageHeader
+          title={tForm("createTitle")}
+          actions={
+            <>
+              <Button variant="ghost" onClick={handleCancel} disabled={isLoading}>
+                {tForm("cancel")}
+              </Button>
+              <Button type="submit" form="habit-form" disabled={isLoading}>
+                {isLoading ? tForm("creating") : tForm("create")}
+              </Button>
+            </>
+          }
+        />
+      </div>
+      <Card className="max-w-2xl">
+        <CardContent className="pt-6">
+          <HabitForm
+            id="habit-form"
+            mode="create"
+            onSubmit={handleSubmit}
+            onCancel={handleCancel}
+            isLoading={isLoading}
+            hideChrome
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

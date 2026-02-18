@@ -36,7 +36,7 @@ export function StreakCounter({
         </div>
         <span className="text-muted-foreground">|</span>
         <div className="flex items-center gap-1">
-          <Star className="size-3.5 text-emerald-500" />
+          <Star className="size-3.5 text-primary" />
           <span className="font-medium">{t("days", { count: bestStreak })}</span>
         </div>
       </div>
@@ -57,14 +57,14 @@ export function StreakCounter({
           {t(getStreakMessageKey(currentStreak))}
         </p>
         {isPersonalBest && (
-          <p className="text-xs font-medium text-emerald-500 mt-1">{t("personalBest")}</p>
+          <p className="text-xs font-medium text-primary mt-1">{t("personalBest")}</p>
         )}
       </div>
       <div className="rounded-xl border p-4">
         <p className="text-xs text-muted-foreground uppercase tracking-wide">{t("best")}</p>
         <div className="flex items-center gap-1.5 mt-1">
-          <Star className="size-5 text-emerald-500" />
-          <span className="text-2xl font-bold text-emerald-500">
+          <Star className="size-5 text-primary" />
+          <span className="text-2xl font-bold text-primary">
             {t("days", { count: bestStreak })}
           </span>
         </div>

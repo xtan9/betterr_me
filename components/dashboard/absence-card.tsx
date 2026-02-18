@@ -69,9 +69,9 @@ export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
 
   if (justCompleted) {
     return (
-      <div className="flex items-center gap-3 p-4 rounded-lg border-l-4 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-950/20">
-        <Check className="size-5 text-emerald-500 shrink-0" />
-        <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+      <div className="flex items-center gap-3 p-4 rounded-lg border-l-4 border-l-primary bg-highlight">
+        <Check className="size-5 text-primary shrink-0" />
+        <p className="text-sm font-medium text-primary">
           {t("completed", { name: habit.name })}
         </p>
       </div>
@@ -105,7 +105,7 @@ export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
               checked={false}
               onCheckedChange={handleComplete}
               disabled={isCompleting}
-              className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+              className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
             />
             <span className="text-xs text-muted-foreground">
               {t("markComplete")}

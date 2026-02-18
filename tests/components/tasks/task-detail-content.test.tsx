@@ -63,6 +63,11 @@ const allTranslations: Record<string, Record<string, string>> = {
     "2": "Medium",
     "3": "High",
   },
+  "common.nav": {
+    tasks: "Tasks",
+    habits: "Habits",
+    settings: "Settings",
+  },
 };
 
 vi.mock("next-intl", () => ({
@@ -166,7 +171,9 @@ describe("TaskDetailContent", () => {
   it("renders task details when loaded", () => {
     render(<TaskDetailContent taskId="task-1" />);
 
-    expect(screen.getByText("Buy groceries")).toBeInTheDocument();
+    // Title appears in both breadcrumb and page header
+    const titles = screen.getAllByText("Buy groceries");
+    expect(titles.length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Milk, eggs, bread")).toBeInTheDocument();
     expect(screen.getByText("Shopping")).toBeInTheDocument();
     expect(screen.getByText("Medium")).toBeInTheDocument();
@@ -218,11 +225,11 @@ describe("TaskDetailContent", () => {
     expect(mockPush).toHaveBeenCalledWith("/tasks/task-1/edit");
   });
 
-  it("navigates back when back button clicked", async () => {
+  it("shows breadcrumb navigation to tasks list", () => {
     render(<TaskDetailContent taskId="task-1" />);
 
-    await user.click(screen.getByRole("button", { name: /back/i }));
-    expect(mockPush).toHaveBeenCalledWith("/tasks");
+    expect(screen.getByText("Tasks")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Tasks" })).toHaveAttribute("href", "/tasks");
   });
 
   it("shows delete confirmation dialog", async () => {

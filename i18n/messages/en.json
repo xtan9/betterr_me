@@ -11,6 +11,24 @@
       "learnMore": "Learn More",
       "profile": "Profile"
     },
+    "sidebar": {
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "pinLabel": "Pin sidebar navigation. Currently unpinned.",
+      "unpinLabel": "Unpin sidebar navigation. Currently pinned.",
+      "mainGroup": "Main",
+      "accountGroup": "Account",
+      "myAccount": "My Account",
+      "logOut": "Log out",
+      "theme": "Theme",
+      "language": "Language",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "themeSystem": "System",
+      "loading": "Loading...",
+      "profileError": "Profile unavailable",
+      "signOutError": "Sign out failed"
+    },
     "footer": {
       "product": "Product",
       "features": "Features",
@@ -200,6 +218,9 @@
         "fri": "Fri",
         "sat": "Sat"
       }
+    },
+    "breadcrumb": {
+      "newHabit": "New Habit"
     },
     "form": {
       "createTitle": "Create New Habit",
@@ -431,6 +452,9 @@
     }
   },
   "tasks": {
+    "breadcrumb": {
+      "newTask": "New Task"
+    },
     "form": {
       "createTitle": "Create New Task",
       "editTitle": "Edit Task",

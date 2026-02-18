@@ -60,7 +60,7 @@ describe("DailySnapshot", () => {
     // 3/7 (43%) today vs 2/7 (29%) yesterday = +14% improvement
     const trendElement = screen.getByText(/vs yesterday/i);
     expect(trendElement).toBeInTheDocument();
-    expect(trendElement.parentElement).toHaveClass("text-emerald-500");
+    expect(trendElement.parentElement).toHaveClass("text-primary");
   });
 
   it("shows negative trend indicator when declined", () => {

@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Lightbulb } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface MotivationMessageProps {
   stats: {
@@ -79,9 +80,11 @@ export function MotivationMessage({
   const message = getMessage();
 
   return (
-    <div className="rounded-lg bg-primary/5 dark:bg-primary/10 p-4 flex items-start gap-3">
-      <Lightbulb className="size-5 text-primary shrink-0 mt-0.5" />
-      <p className="text-sm text-foreground/90">{message}</p>
-    </div>
+    <Card>
+      <CardContent className="flex items-start gap-3 py-4">
+        <Lightbulb className="size-5 text-primary shrink-0 mt-0.5" />
+        <p className="text-sm text-foreground/90">{message}</p>
+      </CardContent>
+    </Card>
   );
 }

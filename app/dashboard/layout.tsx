@@ -1,9 +1,9 @@
-import { AppLayout } from "@/components/layouts/app-layout";
+import { SidebarShell } from "@/components/layouts/sidebar-shell";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <AppLayout>{children}</AppLayout>;
+  return <SidebarShell>{children}</SidebarShell>;
 }

@@ -18,7 +18,7 @@ export function NextMilestone({ currentStreak }: NextMilestoneProps) {
   if (!nextMilestone || daysRemaining === null) {
     return (
       <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
-        <Target className="size-5 text-emerald-600 dark:text-emerald-400" />
+        <Target className="size-5 text-primary" />
         <p className="text-sm text-muted-foreground">{t("noNextMilestone")}</p>
       </div>
     );
@@ -29,7 +29,7 @@ export function NextMilestone({ currentStreak }: NextMilestoneProps) {
   return (
     <div className="space-y-2 rounded-lg bg-muted/50 p-3">
       <div className="flex items-center gap-3">
-        <Target className="size-5 text-emerald-600 dark:text-emerald-400" />
+        <Target className="size-5 text-primary" />
         <p className="text-sm font-medium">
           {t("nextMilestone", { days: daysRemaining, milestone: nextMilestone })}
         </p>

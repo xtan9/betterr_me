@@ -70,7 +70,7 @@ export function TaskCard({ task, onToggle, onClick, isToggling }: TaskCardProps)
   return (
     <Card
       data-testid={`task-card-${task.id}`}
-      className="transition-all hover:shadow-lg hover:scale-[1.03] hover:-translate-y-0.5 duration-200 p-5"
+      className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 motion-reduce:transition-none motion-reduce:hover:transform-none p-5"
     >
       <CardContent className="p-0 space-y-3">
         <div className="flex items-start justify-between">
@@ -107,7 +107,7 @@ export function TaskCard({ task, onToggle, onClick, isToggling }: TaskCardProps)
             onCheckedChange={handleCheckedChange}
             disabled={isToggling}
             aria-label={`${cardT("markComplete")} ${task.title}`}
-            className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+            className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
           />
         </div>
 

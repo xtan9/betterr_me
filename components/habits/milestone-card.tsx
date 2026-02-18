@@ -29,17 +29,17 @@ export function MilestoneCard({ milestone, habitName }: MilestoneCardProps) {
   const celebrationKey = getCelebrationKey(milestone.milestone);
 
   return (
-    <Card className="bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200 dark:from-emerald-950/30 dark:to-teal-950/30 dark:border-emerald-800">
+    <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20 dark:from-primary/10 dark:to-primary/20 dark:border-primary/30">
       <CardContent className="flex items-center gap-4 p-4">
-        <div className="rounded-full bg-emerald-100 dark:bg-emerald-900/50 p-3">
-          <Trophy className="size-6 text-emerald-600 dark:text-emerald-400" />
+        <div className="rounded-full bg-primary/10 p-3">
+          <Trophy className="size-6 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-emerald-900 dark:text-emerald-100 truncate">
+          <p className="font-semibold text-foreground truncate">
             {t("celebration", { habit: habitName, count: milestone.milestone })}
           </p>
           {celebrationKey && (
-            <p className="text-sm text-emerald-700 dark:text-emerald-300">
+            <p className="text-sm text-primary">
               {t(celebrationKey)}
             </p>
           )}

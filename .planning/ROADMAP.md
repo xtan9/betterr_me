@@ -4,6 +4,7 @@
 
 - ✅ **v1.0 Codebase Hardening** — Phases 1-5 (shipped 2026-02-16)
 - ✅ **v1.1 Dashboard Task Fixes** — Phase 6 (shipped 2026-02-17)
+- ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
 
 ## Phases
 
@@ -18,6 +19,13 @@
 <summary>✅ v1.1 Dashboard Task Fixes (Phase 6) — SHIPPED 2026-02-17</summary>
 
 - [x] Phase 6: Dashboard Task Data Flow (1/1 plan) — completed 2026-02-16
+
+</details>
+
+<details>
+<summary>✅ v2.0 UI Style Redesign (Phases 1-9) — SHIPPED 2026-02-17</summary>
+
+9 phases: design tokens, sidebar navigation, collapse persistence, page header/layout, dashboard migration, remaining pages migration, sidebar enrichment, visual polish, test stabilization. See `.planning/milestones/v2.0-ROADMAP.md` for details.
 
 </details>
 

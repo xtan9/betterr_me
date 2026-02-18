@@ -1,66 +1,140 @@
 @tailwind base;
-
-@custom-variant dark (&:is(.dark *));
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
+    /* === Core surface tokens === */
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
+
+    /* === Surface hierarchy === */
+    --page: 216 25% 97%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 160 84% 39%;
+
+    /* === Accent / Brand === */
+    --primary: 157 63% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 96.1%;
+    --ring: 157 63% 45%;
+
+    /* === Neutral semantic === */
+    --secondary: 216 16% 96%;
     --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
+    --muted: 216 16% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 216 16% 96%;
     --accent-foreground: 0 0% 9%;
+
+    /* === Borders === */
+    --border: 216 16% 91%;
+    --input: 216 16% 91%;
+
+    /* === Destructive === */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 160 84% 39%;
+
+    /* === Radius === */
+    --radius: 0.75rem;
+
+    /* === Sidebar (raw HSL format) === */
+    --sidebar-background: 220 20% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 157 63% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 216 24% 95%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 216 16% 91%;
+    --sidebar-ring: 157 63% 45%;
+
+    /* === Highlight === */
+    --highlight: 155 50% 94%;
+
+    /* === Typography scale === */
+    --font-size-page-title: 1.5rem;
+    --font-size-section-heading: 1.125rem;
+    --font-size-body: 0.875rem;
+    --font-size-caption: 0.8125rem;
+    --font-size-stat: 1.75rem;
+
+    /* === Spacing === */
+    --spacing-card-padding: 1.5rem;
+    --spacing-page-padding: 2rem;
+    --spacing-page-padding-top: 2.5rem;
+    --spacing-card-gap: 1rem;
+
+    /* === Content layout === */
+    --content-max-width: 1400px;
+
+    /* === Layout === */
+    --sidebar-width: 200px;
+    --sidebar-width-mobile: 280px;
+    --sidebar-width-icon: 48px;
+
+    /* === Chart colors === */
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
   }
+
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 142 71% 45%;
+    /* === Base surface (Level 0 -- darkest) === */
+    --background: 240 27% 14%;
+    --foreground: 0 0% 95%;
+
+    /* === Surface hierarchy === */
+    --page: 240 27% 14%;
+    --card: 240 25% 18%;
+    --card-foreground: 0 0% 95%;
+    --popover: 240 24% 22%;
+    --popover-foreground: 0 0% 95%;
+
+    /* === Accent === */
+    --primary: 160 45% 55%; /* desaturated for eye comfort (light: 157 63% 45%) */
     --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --ring: 160 45% 55%;
+
+    /* === Neutral semantic === */
+    --secondary: 240 15% 20%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 240 15% 20%;
+    --muted-foreground: 240 5% 60%;
+    --accent: 240 15% 20%;
+    --accent-foreground: 0 0% 95%;
+
+    /* === Borders === */
+    --border: 240 15% 25%;
+    --input: 240 15% 25%;
+
+    /* === Destructive === */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 142 71% 45%;
+
+    /* === Sidebar (darker than content) === */
+    --sidebar-background: 240 28% 12%;
+    --sidebar-foreground: 240 5% 85%;
+    --sidebar-primary: 160 45% 55%;
+    --sidebar-primary-foreground: 0 0% 9%;
+    --sidebar-accent: 240 15% 18%;
+    --sidebar-accent-foreground: 240 5% 85%;
+    --sidebar-border: 240 15% 20%;
+    --sidebar-ring: 160 45% 55%;
+
+    /* === Highlight === */
+    --highlight: 160 30% 20%;
+
+    /* === Chart colors === */
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
@@ -69,44 +143,23 @@
   }
 }
 
-:root {
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+/* Sidebar hover-overlay mode: when unpinned, hovering icon rail expands sidebar as overlay */
+/* Keep the gap div at icon width so content doesn't shift */
+[data-sidebar-hover="true"] .peer[data-state="expanded"] > div:first-child {
+  width: var(--sidebar-width-icon) !important;
+  transition: none !important;
 }
 
-.dark {
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+/* Add overlay styling to the expanded sidebar in hover mode — translucent with blur */
+[data-sidebar-hover="true"] .peer[data-state="expanded"] > div:last-child {
+  z-index: 30;
+  background-color: hsl(var(--sidebar-background) / 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.06), 1px 0 0 rgba(0, 0, 0, 0.04);
 }
 
-@theme inline {
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-}
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+.dark [data-sidebar-hover="true"] .peer[data-state="expanded"] > div:last-child {
+  background-color: hsl(var(--sidebar-background) / 0.88);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25), 1px 0 0 rgba(0, 0, 0, 0.15);
 }

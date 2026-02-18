@@ -24,7 +24,7 @@ const VARIANT_CONFIG = {
     titleKey: "noHabits.title",
     descriptionKey: "noHabits.description",
     ctaKey: "noHabits.cta",
-    iconColorClass: "text-emerald-500",
+    iconColorClass: "text-primary",
   },
   all_complete: {
     icon: PartyPopper,
@@ -86,7 +86,7 @@ export function HabitEmptyState({
           variant === "all_complete"
             ? "bg-amber-100"
             : variant === "no_habits"
-            ? "bg-emerald-100"
+            ? "bg-primary/10"
             : "bg-slate-100"
         )}
       >
@@ -102,7 +102,7 @@ export function HabitEmptyState({
       {showCta && (
         <Button
           onClick={onCreateHabit}
-          className="mt-6 bg-emerald-500 hover:bg-emerald-600"
+          className="mt-6 bg-primary hover:bg-primary/90"
         >
           {t(config.ctaKey!)}
         </Button>

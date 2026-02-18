@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/layouts/page-header";
 import { ProfileForm } from "./profile-form";
 import { WeekStartSelector } from "./week-start-selector";
 import { DataExport } from "./data-export";
@@ -80,7 +81,7 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
   if (error) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">{t("title")}</h1>
+        <PageHeader title={t("title")} />
         <Card>
           <CardContent className="pt-6">
             <p className="text-destructive">{t("error")}</p>
@@ -92,23 +93,25 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("title")}</h1>
-        <Button
-          onClick={handleSave}
-          disabled={!hasChanges || isSaving}
-          className="gap-2"
-        >
-          {isSaving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : saveSuccess ? (
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          {saveSuccess ? t("saved") : t("save")}
-        </Button>
-      </div>
+      <PageHeader
+        title={t("title")}
+        actions={
+          <Button
+            onClick={handleSave}
+            disabled={!hasChanges || isSaving}
+            className="gap-2"
+          >
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : saveSuccess ? (
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saveSuccess ? t("saved") : t("save")}
+          </Button>
+        }
+      />
 
       <Card>
         <CardHeader>
