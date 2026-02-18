@@ -41,20 +41,20 @@ None deferred for this milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIDE-01 | — | Pending |
-| SIDE-02 | — | Pending |
-| SIDE-03 | — | Pending |
-| TOKN-01 | — | Pending |
-| TOKN-02 | — | Pending |
-| TOKN-03 | — | Pending |
-| COMP-01 | — | Pending |
-| COMP-02 | — | Pending |
+| SIDE-01 | Phase 11 | Pending |
+| SIDE-02 | Phase 11 | Pending |
+| SIDE-03 | Phase 11 | Pending |
+| TOKN-01 | Phase 10 | Pending |
+| TOKN-02 | Phase 10 | Pending |
+| TOKN-03 | Phase 10 | Pending |
+| COMP-01 | Phase 12 | Pending |
+| COMP-02 | Phase 12 | Pending |
 
 **Coverage:**
 - v2.1 requirements: 8 total
-- Mapped to phases: 0
-- Unmapped: 8 ⚠️
+- Mapped to phases: 8
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-17*
-*Last updated: 2026-02-17 after initial definition*
+*Last updated: 2026-02-17 after roadmap creation*
