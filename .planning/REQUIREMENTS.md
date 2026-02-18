@@ -9,9 +9,9 @@ Requirements for UI polish & refinement pass. Each maps to roadmap phases.
 
 ### Sidebar Polish
 
-- [ ] **SIDE-01**: Sidebar has consistent spacing and padding using design tokens
-- [ ] **SIDE-02**: Sidebar hover/active states have smooth transitions
-- [ ] **SIDE-03**: Sidebar group headers and icons are visually refined
+- [x] **SIDE-01**: Sidebar has consistent spacing and padding using design tokens
+- [x] **SIDE-02**: Sidebar hover/active states have smooth transitions
+- [x] **SIDE-03**: Sidebar group headers and icons are visually refined
 
 ### Token Consistency
 
@@ -41,9 +41,9 @@ None deferred for this milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIDE-01 | Phase 11 | Pending |
-| SIDE-02 | Phase 11 | Pending |
-| SIDE-03 | Phase 11 | Pending |
+| SIDE-01 | Phase 11 | Complete |
+| SIDE-02 | Phase 11 | Complete |
+| SIDE-03 | Phase 11 | Complete |
 | TOKN-01 | Phase 10 | Complete |
 | TOKN-02 | Phase 10 | Complete |
 | TOKN-03 | Phase 10 | Complete |

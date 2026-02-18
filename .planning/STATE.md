@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v2.1 Phase 10 - Token Consistency
+**Current focus:** v2.1 Phase 11 - Sidebar Polish
 
 ## Current Position
 
-Phase: 10 of 12 (Token Consistency)
-Plan: 3 of 3 in current phase (COMPLETE)
-Status: Phase Complete
-Last activity: 2026-02-18 — Completed 10-03 (Remaining Component Migration)
+Phase: 11 of 12 (Sidebar Polish)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-02-18 — Completed 11-01 (Sidebar Restructure & Chameleon Styling)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [####░░░░░░] 33% v2.1
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [######░░░░] 56% v2.1
 
 ## Performance Metrics
 
@@ -28,8 +28,8 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - Execution time: ~10min
 
 **v2.1 Velocity:**
-- Total plans completed: 3
-- Execution time: ~11min
+- Total plans completed: 4
+- Execution time: ~16min
 
 ## Accumulated Context
 
@@ -40,6 +40,7 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - **10-01:** Used raw HSL convention for CSS variables; nested Tailwind objects for categories with DEFAULT/muted
 - **10-02:** Kept border-l accent colors on absence card; dashboard components use absence-*/info-card-*/stat-icon-*/priority-* tokens
 - **10-03:** Task categories reuse habit category tokens (work=learning, personal=wellness, shopping=productivity); destructive button uses text-destructive-foreground token
+- **11-01:** Sidebar width 224px; flat nav (3 items, no groups); Settings removed from nav (footer-only); footer icon changed to gear; icon containers for nav items
 
 ### Pending Todos
 
@@ -52,5 +53,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 10-02-PLAN.md (dashboard component migration)
-Resume: Phase 10 fully complete; execute next phase (11) plans
+Stopped at: Completed 11-01-PLAN.md (Sidebar Restructure & Chameleon Styling)
+Resume: Execute 11-02-PLAN.md next
