@@ -21,8 +21,8 @@ Requirements for UI polish & refinement pass. Each maps to roadmap phases.
 
 ### Component Fixes
 
-- [ ] **COMP-01**: Motivation message restored to colored background style (`bg-primary/5`) instead of plain Card
-- [ ] **COMP-02**: Habit checklist footer ("X of Y completed") sticks to card bottom in grid layout
+- [x] **COMP-01**: Motivation message restored to colored background style (`bg-primary/5`) instead of plain Card
+- [x] **COMP-02**: Habit checklist footer ("X of Y completed") sticks to card bottom in grid layout
 
 ## Future Requirements
 
@@ -47,8 +47,8 @@ None deferred for this milestone.
 | TOKN-01 | Phase 10 | Complete |
 | TOKN-02 | Phase 10 | Complete |
 | TOKN-03 | Phase 10 | Complete |
-| COMP-01 | Phase 12 | Pending |
-| COMP-02 | Phase 12 | Pending |
+| COMP-01 | Phase 12 | Complete |
+| COMP-02 | Phase 12 | Complete |
 
 **Coverage:**
 - v2.1 requirements: 8 total

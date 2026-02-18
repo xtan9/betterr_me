@@ -5,7 +5,7 @@
 - ✅ **v1.0 Codebase Hardening** — Phases 1-5 (shipped 2026-02-16)
 - ✅ **v1.1 Dashboard Task Fixes** — Phase 6 (shipped 2026-02-17)
 - ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
-- 🚧 **v2.1 UI Polish & Refinement** — Phases 10-12 (in progress)
+- ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
 
 ## Phases
 
@@ -30,13 +30,13 @@
 
 </details>
 
-### 🚧 v2.1 UI Polish & Refinement (In Progress)
+### ✅ v2.1 UI Polish & Refinement (Shipped 2026-02-18)
 
 **Milestone Goal:** Polish sidebar, fix layout issues, restore component styles, and enforce design token consistency across the app.
 
 - [x] **Phase 10: Token Consistency** - Replace all hardcoded color and spacing values with design tokens (completed 2026-02-18)
 - [x] **Phase 11: Sidebar Polish** - Refine sidebar spacing, transitions, and visual hierarchy (completed 2026-02-18)
-- [ ] **Phase 12: Component Fixes** - Restore motivation message style and fix habit checklist layout
+- [x] **Phase 12: Component Fixes** - Restore motivation message style and fix habit checklist layout (completed 2026-02-18)
 
 ## Phase Details
 
@@ -79,10 +79,10 @@ Plans:
   1. The dashboard motivation message displays with a colored background (`bg-primary/5` or equivalent token) instead of rendering as a plain Card -- visually distinct from surrounding content
   2. The habit checklist footer ("X of Y completed") is pinned to the bottom of its card regardless of how many habits are listed, so cards in the same grid row have aligned footers
   3. Both fixes render correctly in light mode, dark mode, and across the three locales (en, zh, zh-TW) without layout overflow
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 12-01-PLAN.md — Restore motivation message colored background and pin habit checklist footer
+- [x] 12-01-PLAN.md — Restore motivation message colored background and pin habit checklist footer
 
 ## Progress
 
@@ -98,4 +98,4 @@ Plans:
 | 6. Dashboard Task Data Flow | v1.1 | 1/1 | Complete | 2026-02-16 |
 | 10. Token Consistency | v2.1 | 3/3 | Complete | 2026-02-18 |
 | 11. Sidebar Polish | v2.1 | 2/2 | Complete | 2026-02-18 |
-| 12. Component Fixes | v2.1 | 0/? | Not started | - |
+| 12. Component Fixes | v2.1 | 1/1 | Complete | 2026-02-18 |
