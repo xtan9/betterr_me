@@ -71,8 +71,8 @@ function NavIconContainer({ icon: Icon }: { icon: LucideIcon }) {
 
 /** Chameleon-matched nav item class overrides */
 const navButtonClassName = [
-  // Size & spacing
-  "h-9 rounded-xl font-semibold text-sm",
+  // Size & spacing (h-10 = 40px matches collapsed !size-10 for seamless transition)
+  "h-10 rounded-xl font-semibold text-sm",
   // Collapsed: enlarge button so 24px icon container fits (40px - 2*8px padding = 24px)
   "group-data-[collapsible=icon]:!size-10",
   // Transition
