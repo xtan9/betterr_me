@@ -3,13 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, ClipboardList, ListChecks, Settings, ChevronDown, PanelLeftClose, PanelLeft } from "lucide-react";
+import {
+  Home,
+  ClipboardList,
+  ListChecks,
+  PanelLeftClose,
+  PanelLeft,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
@@ -17,11 +23,6 @@ import {
   SidebarMenuBadge,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
 import {
   Tooltip,
   TooltipTrigger,
@@ -52,21 +53,35 @@ const mainNavItems = [
   },
 ];
 
-const accountNavItems = [
-  {
-    href: "/dashboard/settings",
-    icon: Settings,
-    labelKey: "settings",
-    match: (p: string) => p === "/dashboard/settings",
-  },
-];
-
 interface AppSidebarProps {
   pinned?: boolean;
   onTogglePin?: () => void;
 }
 
 const formatBadge = (count: number) => (count > 9 ? "9+" : String(count));
+
+function NavIconContainer({ icon: Icon }: { icon: LucideIcon }) {
+  return (
+    <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-sidebar-icon-bg">
+      <Icon className="size-3.5" />
+    </div>
+  );
+}
+
+/** Chameleon-matched nav item class overrides */
+const navButtonClassName = [
+  // Size & spacing
+  "h-9 rounded-xl font-semibold text-sm",
+  // Transition
+  "transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]",
+  // Hover state (teal tint + inset ring)
+  "hover:bg-sidebar-hover-bg hover:text-sidebar-hover-text hover:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))]",
+  // Active state (blue-gray + inset ring)
+  "data-[active=true]:bg-sidebar-active-bg data-[active=true]:text-sidebar-accent-foreground data-[active=true]:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-active-ring))] data-[active=true]:font-semibold",
+].join(" ");
+
+/** Asymmetric Chameleon padding (6px 12px 6px 6px) */
+const navButtonStyle = { padding: "6px 12px 6px 6px" };
 
 export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
   const pathname = usePathname();
@@ -120,71 +135,33 @@ export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <Collapsible defaultOpen className="group/collapsible">
-          <SidebarGroup>
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className="flex w-full items-center">
-                {tSidebar("mainGroup")}
-                <ChevronDown className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {mainNavItems.map((item) => (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={item.match(pathname)}
-                        tooltip={t(item.labelKey)}
-                      >
-                        <Link href={item.href}>
-                          <item.icon />
-                          <span>{t(item.labelKey)}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                      {badgeCounts[item.labelKey] > 0 && (
-                        <SidebarMenuBadge>
-                          {formatBadge(badgeCounts[item.labelKey])}
-                        </SidebarMenuBadge>
-                      )}
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </CollapsibleContent>
-          </SidebarGroup>
-        </Collapsible>
-        <Collapsible defaultOpen className="group/collapsible">
-          <SidebarGroup>
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className="flex w-full items-center">
-                {tSidebar("accountGroup")}
-                <ChevronDown className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {accountNavItems.map((item) => (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={item.match(pathname)}
-                        tooltip={t(item.labelKey)}
-                      >
-                        <Link href={item.href}>
-                          <item.icon />
-                          <span>{t(item.labelKey)}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </CollapsibleContent>
-          </SidebarGroup>
-        </Collapsible>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {mainNavItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={item.match(pathname)}
+                    tooltip={t(item.labelKey)}
+                    className={navButtonClassName}
+                    style={navButtonStyle}
+                  >
+                    <Link href={item.href}>
+                      <NavIconContainer icon={item.icon} />
+                      <span>{t(item.labelKey)}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                  {badgeCounts[item.labelKey] > 0 && (
+                    <SidebarMenuBadge>
+                      {formatBadge(badgeCounts[item.labelKey])}
+                    </SidebarMenuBadge>
+                  )}
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
         <SidebarUserFooter />
