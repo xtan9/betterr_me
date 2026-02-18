@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       due_time: validation.data.due_time || null,
       recurrence_rule: validation.data.recurrence_rule,
       start_date: validation.data.start_date,
-      end_type: validation.data.end_type,
+      end_type: validation.data.end_type ?? 'never',
       end_date: validation.data.end_date || null,
       end_count: validation.data.end_count || null,
       status: 'active',
