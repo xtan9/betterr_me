@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  ChevronsUpDown,
   Settings,
   LogOut,
   Sun,
@@ -145,7 +144,7 @@ export function SidebarUserFooter() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] hover:bg-sidebar-hover-bg hover:text-sidebar-hover-text hover:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))] data-[state=open]:bg-sidebar-hover-bg data-[state=open]:text-sidebar-hover-text data-[state=open]:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))]"
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage
@@ -162,7 +161,7 @@ export function SidebarUserFooter() {
                   {displayEmail}
                 </span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <Settings className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
