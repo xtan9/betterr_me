@@ -47,7 +47,15 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ### Active
 
-(None — planning next milestone)
+## Current Milestone: v2.1 UI Polish & Refinement
+
+**Goal:** Polish sidebar, fix layout issues, restore component styles, and enforce design token consistency across the app.
+
+**Target features:**
+- Sidebar visual refinement (spacing, transitions, hover states)
+- Design token consistency (replace hardcoded colors/spacing with tokens)
+- Restore motivation message colored background style
+- Fix habit checklist footer alignment in dashboard grid
 
 ### Out of Scope
 
@@ -61,6 +69,7 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - **Test suite:** 992+ tests (Vitest + Playwright), 50% coverage threshold
 - **Shipped:** v1.0 Codebase Hardening (2026-02-16) — 5 phases, 11 plans, 26 requirements
 - **Shipped:** v1.1 Dashboard Task Fixes (2026-02-17) — 1 phase, 1 plan, 3 requirements
+- **Shipped:** v2.0 UI Style Redesign (2026-02-17) — 9 phases, 21 plans, 28 requirements
 - **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit)
 - **Known pre-existing:** Vitest picks up .worktrees/ test files (spurious, not blocking)
 
@@ -85,4 +94,4 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | Include completed tasks in getTodayTasks | Removing completed tasks breaks "X of Y" dashboard count | ✓ Good — single array for both total and completed count |
 
 ---
-*Last updated: 2026-02-17 after v1.1 milestone*
+*Last updated: 2026-02-17 after v2.1 milestone started*
