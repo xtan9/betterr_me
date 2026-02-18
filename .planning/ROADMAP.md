@@ -34,7 +34,7 @@
 
 **Milestone Goal:** Polish sidebar, fix layout issues, restore component styles, and enforce design token consistency across the app.
 
-- [ ] **Phase 10: Token Consistency** - Replace all hardcoded color and spacing values with design tokens
+- [x] **Phase 10: Token Consistency** - Replace all hardcoded color and spacing values with design tokens (completed 2026-02-18)
 - [ ] **Phase 11: Sidebar Polish** - Refine sidebar spacing, transitions, and visual hierarchy
 - [ ] **Phase 12: Component Fixes** - Restore motivation message style and fix habit checklist layout
 
@@ -49,7 +49,7 @@
   2. No hardcoded spacing values (e.g., `gap-4`, `p-6`, `space-y-3`) remain where a spacing token (`gap-card-gap`, `p-page-padding`, etc.) should be used
   3. Progress bar track renders with `bg-muted` and adapts correctly in both light and dark mode
   4. Existing tests continue to pass with no visual regressions in dark mode
-**Plans:** 1/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 10-01-PLAN.md — Define semantic color CSS tokens and Tailwind utilities
@@ -95,6 +95,6 @@ Plans:
 | 4. Dead Code & Observability | v1.0 | 2/2 | Complete | 2026-02-16 |
 | 5. Test Coverage Backfill | v1.0 | 1/1 | Complete | 2026-02-16 |
 | 6. Dashboard Task Data Flow | v1.1 | 1/1 | Complete | 2026-02-16 |
-| 10. Token Consistency | 1/3 | In Progress|  | - |
+| 10. Token Consistency | 3/3 | Complete   | 2026-02-18 | - |
 | 11. Sidebar Polish | v2.1 | 0/? | Not started | - |
 | 12. Component Fixes | v2.1 | 0/? | Not started | - |
