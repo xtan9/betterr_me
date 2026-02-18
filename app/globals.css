@@ -131,7 +131,6 @@
     --sidebar-active-bg: 216 24% 95%;
     --sidebar-active-ring: 214 20% 82%;
     --sidebar-icon-bg: 0 0% 100%;
-    --sidebar-item-radius: 12px;
 
     /* === Layout === */
     --sidebar-width: 224px;
@@ -196,7 +195,6 @@
     --sidebar-active-bg: 240 15% 18%;
     --sidebar-active-ring: 240 15% 25%;
     --sidebar-icon-bg: 240 20% 20%;
-    --sidebar-item-radius: 12px;
 
     /* === Highlight === */
     --highlight: 160 30% 20%;
