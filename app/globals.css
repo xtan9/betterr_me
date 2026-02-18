@@ -124,8 +124,17 @@
     /* === Content layout === */
     --content-max-width: 1400px;
 
+    /* === Sidebar interaction states === */
+    --sidebar-hover-bg: 166 50% 94%;
+    --sidebar-hover-ring: 160 55% 72%;
+    --sidebar-hover-text: 157 63% 30%;
+    --sidebar-active-bg: 216 24% 95%;
+    --sidebar-active-ring: 214 20% 82%;
+    --sidebar-icon-bg: 0 0% 100%;
+    --sidebar-item-radius: 12px;
+
     /* === Layout === */
-    --sidebar-width: 200px;
+    --sidebar-width: 224px;
     --sidebar-width-mobile: 280px;
     --sidebar-width-icon: 48px;
 
@@ -179,6 +188,15 @@
     --sidebar-accent-foreground: 240 5% 85%;
     --sidebar-border: 240 15% 20%;
     --sidebar-ring: 160 45% 55%;
+
+    /* === Sidebar interaction states === */
+    --sidebar-hover-bg: 160 25% 16%;
+    --sidebar-hover-ring: 160 30% 28%;
+    --sidebar-hover-text: 160 40% 70%;
+    --sidebar-active-bg: 240 15% 18%;
+    --sidebar-active-ring: 240 15% 25%;
+    --sidebar-icon-bg: 240 20% 20%;
+    --sidebar-item-radius: 12px;
 
     /* === Highlight === */
     --highlight: 160 30% 20%;

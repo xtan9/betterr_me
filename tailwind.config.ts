@@ -65,6 +65,12 @@ export default {
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
+          "hover-bg": "hsl(var(--sidebar-hover-bg))",
+          "hover-ring": "hsl(var(--sidebar-hover-ring))",
+          "hover-text": "hsl(var(--sidebar-hover-text))",
+          "active-bg": "hsl(var(--sidebar-active-bg))",
+          "active-ring": "hsl(var(--sidebar-active-ring))",
+          "icon-bg": "hsl(var(--sidebar-icon-bg))",
         },
         category: {
           health: {
