@@ -76,8 +76,12 @@ export async function PATCH(
         );
       }
 
+      // Validate body with taskUpdateSchema (same as non-scope path)
+      const validation = validateRequestBody(body, taskUpdateSchema);
+      if (!validation.success) return validation.response;
+
       const recurringTasksDB = new RecurringTasksDB(supabase);
-      await recurringTasksDB.updateInstanceWithScope(id, user.id, scopeResult.data, body);
+      await recurringTasksDB.updateInstanceWithScope(id, user.id, scopeResult.data, validation.data);
       return NextResponse.json({ success: true });
     }
 

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { RecurringTask, RecurringTaskInsert, RecurringTaskUpdate } from './types';
+import type { RecurringTask, RecurringTaskInsert, RecurringTaskUpdate, TaskUpdate } from './types';
 import { ensureRecurringInstances } from '@/lib/recurring-tasks';
 import { getNextOccurrence } from '@/lib/recurring-tasks/recurrence';
 
@@ -150,7 +150,7 @@ export class RecurringTasksDB {
     taskId: string,
     userId: string,
     scope: 'this' | 'following' | 'all',
-    updates: Record<string, unknown>
+    updates: TaskUpdate
   ): Promise<void> {
     const { data: task } = await this.supabase
       .from('tasks')
@@ -176,12 +176,12 @@ export class RecurringTasksDB {
       case 'following': {
         // Update the template from this date forward
         const templateUpdates: RecurringTaskUpdate = {};
-        if (updates.title !== undefined) templateUpdates.title = updates.title as string;
-        if (updates.description !== undefined) templateUpdates.description = updates.description as string | null;
-        if (updates.intention !== undefined) templateUpdates.intention = updates.intention as string | null;
-        if (updates.priority !== undefined) templateUpdates.priority = updates.priority as 0 | 1 | 2 | 3;
+        if (updates.title !== undefined) templateUpdates.title = updates.title;
+        if (updates.description !== undefined) templateUpdates.description = updates.description;
+        if (updates.intention !== undefined) templateUpdates.intention = updates.intention;
+        if (updates.priority !== undefined) templateUpdates.priority = updates.priority;
         if (updates.category !== undefined) templateUpdates.category = updates.category as RecurringTask['category'];
-        if (updates.due_time !== undefined) templateUpdates.due_time = updates.due_time as string | null;
+        if (updates.due_time !== undefined) templateUpdates.due_time = updates.due_time;
 
         if (Object.keys(templateUpdates).length > 0) {
           await this.updateRecurringTask(task.recurring_task_id, userId, templateUpdates);
@@ -203,12 +203,12 @@ export class RecurringTasksDB {
       case 'all': {
         // Update template
         const templateUpdates: RecurringTaskUpdate = {};
-        if (updates.title !== undefined) templateUpdates.title = updates.title as string;
-        if (updates.description !== undefined) templateUpdates.description = updates.description as string | null;
-        if (updates.intention !== undefined) templateUpdates.intention = updates.intention as string | null;
-        if (updates.priority !== undefined) templateUpdates.priority = updates.priority as 0 | 1 | 2 | 3;
+        if (updates.title !== undefined) templateUpdates.title = updates.title;
+        if (updates.description !== undefined) templateUpdates.description = updates.description;
+        if (updates.intention !== undefined) templateUpdates.intention = updates.intention;
+        if (updates.priority !== undefined) templateUpdates.priority = updates.priority;
         if (updates.category !== undefined) templateUpdates.category = updates.category as RecurringTask['category'];
-        if (updates.due_time !== undefined) templateUpdates.due_time = updates.due_time as string | null;
+        if (updates.due_time !== undefined) templateUpdates.due_time = updates.due_time;
 
         if (Object.keys(templateUpdates).length > 0) {
           await this.updateRecurringTask(task.recurring_task_id, userId, templateUpdates);
