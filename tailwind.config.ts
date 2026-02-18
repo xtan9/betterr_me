@@ -54,7 +54,6 @@ export default {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
-        page: "hsl(var(--page))",
         highlight: "hsl(var(--highlight))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
@@ -65,6 +64,78 @@ export default {
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
+          "hover-bg": "hsl(var(--sidebar-hover-bg))",
+          "hover-ring": "hsl(var(--sidebar-hover-ring))",
+          "hover-text": "hsl(var(--sidebar-hover-text))",
+          "active-bg": "hsl(var(--sidebar-active-bg))",
+          "active-ring": "hsl(var(--sidebar-active-ring))",
+          "icon-bg": "hsl(var(--sidebar-icon-bg))",
+        },
+        category: {
+          health: {
+            DEFAULT: "hsl(var(--category-health))",
+            muted: "hsl(var(--category-health-muted))",
+          },
+          wellness: {
+            DEFAULT: "hsl(var(--category-wellness))",
+            muted: "hsl(var(--category-wellness-muted))",
+          },
+          learning: {
+            DEFAULT: "hsl(var(--category-learning))",
+            muted: "hsl(var(--category-learning-muted))",
+          },
+          productivity: {
+            DEFAULT: "hsl(var(--category-productivity))",
+            muted: "hsl(var(--category-productivity-muted))",
+          },
+          other: {
+            DEFAULT: "hsl(var(--category-other))",
+            muted: "hsl(var(--category-other-muted))",
+          },
+        },
+        priority: {
+          none: "hsl(var(--priority-none))",
+          low: "hsl(var(--priority-low))",
+          medium: "hsl(var(--priority-medium))",
+          high: "hsl(var(--priority-high))",
+        },
+        status: {
+          error: "hsl(var(--status-error))",
+          success: "hsl(var(--status-success))",
+          warning: "hsl(var(--status-warning))",
+          info: "hsl(var(--status-info))",
+          streak: "hsl(var(--status-streak))",
+        },
+        "info-card": {
+          DEFAULT: "hsl(var(--info-card-bg))",
+          to: "hsl(var(--info-card-bg-to))",
+          border: "hsl(var(--info-card-border))",
+          text: "hsl(var(--info-card-text))",
+          "text-secondary": "hsl(var(--info-card-text-secondary))",
+          icon: "hsl(var(--info-card-icon))",
+          button: "hsl(var(--info-card-button))",
+          "button-hover": "hsl(var(--info-card-button-hover))",
+          "button-hover-bg": "hsl(var(--info-card-button-hover-bg))",
+        },
+        absence: {
+          "warning-bg": "hsl(var(--absence-warning-bg))",
+          "warning-icon": "hsl(var(--absence-warning-icon))",
+          "warning-title": "hsl(var(--absence-warning-title))",
+          "info-bg": "hsl(var(--absence-info-bg))",
+          "info-icon": "hsl(var(--absence-info-icon))",
+          "info-title": "hsl(var(--absence-info-title))",
+          "caution-bg": "hsl(var(--absence-caution-bg))",
+          "caution-icon": "hsl(var(--absence-caution-icon))",
+          "caution-title": "hsl(var(--absence-caution-title))",
+        },
+        "stat-icon": {
+          blue: "hsl(var(--stat-icon-blue))",
+          "blue-bg": "hsl(var(--stat-icon-blue-bg))",
+          orange: "hsl(var(--stat-icon-orange))",
+          "orange-bg": "hsl(var(--stat-icon-orange-bg))",
+        },
+        "empty-state": {
+          "celebration-bg": "hsl(var(--empty-state-celebration-bg))",
         },
       },
       fontSize: {
@@ -91,11 +162,6 @@ export default {
       },
       maxWidth: {
         content: "var(--content-max-width)",
-      },
-      width: {
-        sidebar: "var(--sidebar-width)",
-        "sidebar-mobile": "var(--sidebar-width-mobile)",
-        "sidebar-icon": "var(--sidebar-width-icon)",
       },
       borderRadius: {
         lg: "var(--radius)",

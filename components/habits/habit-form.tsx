@@ -36,11 +36,11 @@ const CATEGORY_OPTIONS: {
   icon: React.ComponentType<{ className?: string }>;
   colorClass: string;
 }[] = [
-  { value: "health", icon: Heart, colorClass: "data-[state=on]:bg-rose-500 data-[state=on]:text-white" },
-  { value: "wellness", icon: Brain, colorClass: "data-[state=on]:bg-purple-500 data-[state=on]:text-white" },
-  { value: "learning", icon: BookOpen, colorClass: "data-[state=on]:bg-blue-500 data-[state=on]:text-white" },
-  { value: "productivity", icon: Zap, colorClass: "data-[state=on]:bg-amber-500 data-[state=on]:text-white" },
-  { value: "other", icon: MoreHorizontal, colorClass: "data-[state=on]:bg-slate-500 data-[state=on]:text-white" },
+  { value: "health", icon: Heart, colorClass: "data-[state=on]:bg-category-health data-[state=on]:text-white" },
+  { value: "wellness", icon: Brain, colorClass: "data-[state=on]:bg-category-wellness data-[state=on]:text-white" },
+  { value: "learning", icon: BookOpen, colorClass: "data-[state=on]:bg-category-learning data-[state=on]:text-white" },
+  { value: "productivity", icon: Zap, colorClass: "data-[state=on]:bg-category-productivity data-[state=on]:text-white" },
+  { value: "other", icon: MoreHorizontal, colorClass: "data-[state=on]:bg-category-other data-[state=on]:text-white" },
 ];
 
 export function HabitForm({

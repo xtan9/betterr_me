@@ -64,11 +64,11 @@ const CATEGORY_ICONS: Record<HabitCategory, typeof Heart> = {
 };
 
 const CATEGORY_COLORS: Record<HabitCategory, string> = {
-  health: "bg-rose-500",
-  wellness: "bg-purple-500",
-  learning: "bg-blue-500",
-  productivity: "bg-amber-500",
-  other: "bg-slate-500",
+  health: "bg-category-health",
+  wellness: "bg-category-wellness",
+  learning: "bg-category-learning",
+  productivity: "bg-category-productivity",
+  other: "bg-category-other",
 };
 
 function HabitDetailSkeleton() {
@@ -323,7 +323,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     : MoreHorizontal;
   const categoryColor = habit.category
     ? CATEGORY_COLORS[habit.category]
-    : "bg-slate-500";
+    : "bg-category-other";
 
   return (
     <div className="space-y-6">
@@ -351,8 +351,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
                 variant={habit.status === "active" ? "default" : "secondary"}
                 className={cn(
                   habit.status === "active" && "bg-primary",
-                  habit.status === "paused" && "bg-amber-500",
-                  habit.status === "archived" && "bg-slate-500"
+                  habit.status === "paused" && "bg-status-warning",
+                  habit.status === "archived" && "bg-category-other"
                 )}
               >
                 {t(`detail.status.${habit.status}`)}

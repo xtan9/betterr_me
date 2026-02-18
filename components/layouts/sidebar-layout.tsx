@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   SidebarProvider,
   SidebarInset,
@@ -18,8 +18,9 @@ interface SidebarLayoutProps {
 export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
   const [pinned, setPinned] = useState(defaultPinned);
   const [hoverOpen, setHoverOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const open = pinned || hoverOpen;
+  const open = pinned || hoverOpen || dropdownOpen;
 
   const handleTogglePin = useCallback(() => {
     const newPinned = !pinned;
@@ -51,13 +52,17 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
   }, []);
 
   return (
-    <SidebarProvider open={open} onOpenChange={handleOpenChange}>
+    <SidebarProvider
+      open={open}
+      onOpenChange={handleOpenChange}
+      style={{ "--sidebar-width": "14rem", "--sidebar-width-icon": "3.75rem" } as React.CSSProperties}
+    >
       <div
         data-sidebar-hover={!pinned && hoverOpen ? "true" : undefined}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <AppSidebar pinned={pinned} onTogglePin={handleTogglePin} />
+        <AppSidebar pinned={pinned} onTogglePin={handleTogglePin} onDropdownOpenChange={setDropdownOpen} />
       </div>
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 md:hidden">
@@ -66,7 +71,7 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
             BetterR.me
           </span>
         </header>
-        <div className="flex-1 overflow-auto bg-page">
+        <div className="flex-1 overflow-auto bg-background">
           <div className="mx-auto w-full max-w-content px-4 py-6 sm:px-6 md:px-8 md:pt-10">
             {children}
           </div>

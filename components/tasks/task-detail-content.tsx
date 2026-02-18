@@ -43,6 +43,7 @@ import { EditScopeDialog } from "@/components/tasks/edit-scope-dialog";
 import type { Task, TaskCategory, RecurringTask } from "@/lib/db/types";
 import type { EditScope } from "@/lib/validations/recurring-task";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
+import { getPriorityColor } from "@/lib/tasks/format";
 
 interface TaskDetailContentProps {
   taskId: string;
@@ -63,17 +64,10 @@ const CATEGORY_ICONS: Record<TaskCategory, typeof Briefcase> = {
 };
 
 const CATEGORY_COLORS: Record<TaskCategory, string> = {
-  work: "bg-blue-500",
-  personal: "bg-purple-500",
-  shopping: "bg-amber-500",
-  other: "bg-slate-500",
-};
-
-const PRIORITY_COLORS: Record<number, string> = {
-  0: "text-slate-400",
-  1: "text-green-500",
-  2: "text-yellow-500",
-  3: "text-red-500",
+  work: "bg-category-learning",
+  personal: "bg-category-wellness",
+  shopping: "bg-category-productivity",
+  other: "bg-category-other",
 };
 
 function TaskDetailSkeleton() {
@@ -223,8 +217,8 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
     : MoreHorizontal;
   const categoryColor = task.category
     ? CATEGORY_COLORS[task.category]
-    : "bg-slate-500";
-  const priorityColor = PRIORITY_COLORS[task.priority] ?? "text-slate-400";
+    : "bg-category-other";
+  const priorityColor = getPriorityColor(task.priority);
 
   return (
     <div className="space-y-6">
@@ -401,7 +395,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
                     <AlertDialogAction
                       onClick={handleDelete}
                       disabled={isDeleting}
-                      className="bg-destructive text-white hover:bg-destructive/90"
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
                       <Trash2 className="size-4 mr-2" />
                       {t("detail.delete")}

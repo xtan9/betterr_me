@@ -43,34 +43,34 @@ describe('formatFrequency', () => {
 });
 
 describe('getCategoryColor', () => {
-  it('returns rose classes for health', () => {
+  it('returns semantic token classes for health', () => {
     const color = getCategoryColor('health');
-    expect(color).toContain('rose');
+    expect(color).toContain('category-health');
   });
 
-  it('returns purple classes for wellness', () => {
+  it('returns semantic token classes for wellness', () => {
     const color = getCategoryColor('wellness');
-    expect(color).toContain('purple');
+    expect(color).toContain('category-wellness');
   });
 
-  it('returns blue classes for learning', () => {
+  it('returns semantic token classes for learning', () => {
     const color = getCategoryColor('learning');
-    expect(color).toContain('blue');
+    expect(color).toContain('category-learning');
   });
 
-  it('returns amber classes for productivity', () => {
+  it('returns semantic token classes for productivity', () => {
     const color = getCategoryColor('productivity');
-    expect(color).toContain('amber');
+    expect(color).toContain('category-productivity');
   });
 
-  it('returns slate classes for other', () => {
+  it('returns semantic token classes for other', () => {
     const color = getCategoryColor('other');
-    expect(color).toContain('slate');
+    expect(color).toContain('category-other');
   });
 
-  it('returns slate classes for null', () => {
+  it('returns semantic token classes for null', () => {
     const color = getCategoryColor(null);
-    expect(color).toContain('slate');
+    expect(color).toContain('category-other');
   });
 });
 

@@ -19,14 +19,14 @@ export function WeeklyInsightCard({ insights, onDismiss }: WeeklyInsightCardProp
   const topInsight = insights[0];
 
   return (
-    <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-200 dark:border-blue-800">
+    <Card className="bg-gradient-to-r from-info-card to-info-card-to border-info-card-border">
       <CardContent className="flex items-start gap-3 p-4">
-        <Brain className="size-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+        <Brain className="size-5 text-info-card-icon mt-0.5 shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-0.5">
+          <p className="text-sm font-medium text-info-card-text mb-0.5">
             {t("title")}
           </p>
-          <p className="text-sm text-blue-700 dark:text-blue-300">
+          <p className="text-sm text-info-card-text-secondary">
             {t(topInsight.message, topInsight.params)}
           </p>
         </div>
@@ -34,7 +34,7 @@ export function WeeklyInsightCard({ insights, onDismiss }: WeeklyInsightCardProp
           variant="ghost"
           size="sm"
           onClick={onDismiss}
-          className="shrink-0 h-7 w-7 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900"
+          className="shrink-0 h-7 w-7 p-0 text-info-card-button hover:text-info-card-button-hover hover:bg-info-card-button-hover-bg"
           aria-label={t("dismiss")}
         >
           <X className="size-4" />

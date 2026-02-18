@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  ChevronsUpDown,
   Settings,
   LogOut,
   Sun,
@@ -34,6 +33,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
+import { SIDEBAR_TRANSITION, SIDEBAR_HOVER } from "@/lib/sidebar-styles";
 
 interface ProfileData {
   profile: {
@@ -60,7 +60,11 @@ function getInitials(fullName: string | null | undefined, email: string): string
   return email[0].toUpperCase();
 }
 
-export function SidebarUserFooter() {
+interface SidebarUserFooterProps {
+  onDropdownOpenChange?: (open: boolean) => void;
+}
+
+export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterProps) {
   const { data, error } = useSWR<ProfileData>("/api/profile", fetcher);
   const { theme, setTheme } = useTheme();
   const locale = useLocale();
@@ -141,13 +145,13 @@ export function SidebarUserFooter() {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={onDropdownOpenChange}>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className={`${SIDEBAR_TRANSITION} ${SIDEBAR_HOVER} data-[state=open]:bg-sidebar-hover-bg data-[state=open]:text-sidebar-hover-text data-[state=open]:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))] group-data-[collapsible=icon]:!size-10 group-data-[collapsible=icon]:justify-center`}
             >
-              <Avatar className="h-8 w-8 rounded-lg">
+              <Avatar className="h-8 w-8 rounded-lg group-data-[collapsible=icon]:hidden">
                 <AvatarImage
                   src={profile?.avatar_url ?? undefined}
                   alt={profile?.full_name ?? ""}
@@ -156,17 +160,18 @@ export function SidebarUserFooter() {
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
+              <Settings className="hidden size-4 shrink-0 group-data-[collapsible=icon]:block" />
+              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-semibold">{displayName}</span>
                 <span className="truncate text-xs text-muted-foreground">
                   {displayEmail}
                 </span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <Settings className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+            className="min-w-48 rounded-lg"
             side="top"
             align="end"
             sideOffset={4}

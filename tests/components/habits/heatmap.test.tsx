@@ -107,7 +107,7 @@ describe('Heatmap30Day', () => {
     render(<Heatmap30Day {...defaultProps} />);
     // 2026-02-03 is yesterday with no log → missed
     const cell = screen.getByTestId('cell-2026-02-03');
-    expect(cell).toHaveClass('bg-slate-200');
+    expect(cell).toHaveClass('bg-muted');
   });
 
   it('renders a not_scheduled cell with dashed border', () => {

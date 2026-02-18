@@ -34,7 +34,7 @@ export function HabitChecklist({
   };
 
   return (
-    <Card>
+    <Card className="flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <h2 className="font-display text-lg font-semibold">{t("title")}</h2>
         <Button
@@ -47,7 +47,7 @@ export function HabitChecklist({
           {t("addHabit")}
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col">
         {totalCount === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p className="font-medium mb-1">{t("noHabits")}</p>
@@ -66,7 +66,7 @@ export function HabitChecklist({
                 />
               ))}
             </div>
-            <div className="mt-4 pt-4 border-t">
+            <div className="mt-auto pt-4 border-t">
               {allComplete ? (
                 <div className="rounded-xl bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20 border border-primary/20 dark:border-primary/30 p-6 text-center">
                   <div className="inline-flex items-center justify-center rounded-full bg-primary/10 p-3 mb-3">

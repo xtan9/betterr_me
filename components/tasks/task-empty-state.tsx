@@ -25,16 +25,21 @@ const VARIANT_CONFIG = {
     titleKey: "noResults.title",
     descriptionKey: "noResults.description",
     ctaKey: null,
-    iconColorClass: "text-slate-400",
+    iconColorClass: "text-muted-foreground",
   },
   all_complete: {
     icon: PartyPopper,
     titleKey: "allComplete.title",
     descriptionKey: "allComplete.description",
     ctaKey: null,
-    iconColorClass: "text-amber-500",
+    iconColorClass: "text-status-warning",
   },
 } as const;
+
+const ICON_BG_CLASS: Record<string, string> = {
+  all_complete: "bg-status-warning/20",
+  no_tasks: "bg-primary/10",
+};
 
 export function TaskEmptyState({ variant, onCreateTask }: TaskEmptyStateProps) {
   const t = useTranslations("tasks.empty");
@@ -49,17 +54,13 @@ export function TaskEmptyState({ variant, onCreateTask }: TaskEmptyStateProps) {
       className={cn(
         "flex flex-col items-center justify-center text-center py-12 px-4",
         variant === "all_complete" &&
-          "bg-gradient-to-b from-amber-50/50 to-transparent rounded-xl"
+          "bg-gradient-to-b from-empty-state-celebration-bg/50 to-transparent rounded-xl"
       )}
     >
       <div
         className={cn(
           "flex items-center justify-center size-16 rounded-full mb-4",
-          variant === "all_complete"
-            ? "bg-amber-100"
-            : variant === "no_tasks"
-              ? "bg-primary/10"
-              : "bg-slate-100"
+          ICON_BG_CLASS[variant] ?? "bg-muted"
         )}
       >
         <Icon className={cn("size-8", config.iconColorClass)} />

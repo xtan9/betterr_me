@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Task, TaskCategory } from "@/lib/db/types";
+import { getPriorityColor } from "@/lib/tasks/format";
 
 interface TaskCardProps {
   task: Task;
@@ -23,17 +24,10 @@ const CATEGORY_ICONS: Record<TaskCategory, typeof Briefcase> = {
 };
 
 const CATEGORY_COLORS: Record<TaskCategory, string> = {
-  work: "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400",
-  personal: "bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-400",
-  shopping: "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400",
-  other: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
-};
-
-const PRIORITY_COLORS: Record<number, string> = {
-  0: "text-slate-400",
-  1: "text-green-500",
-  2: "text-yellow-500",
-  3: "text-red-500",
+  work: "bg-category-learning-muted text-category-learning",
+  personal: "bg-category-wellness-muted text-category-wellness",
+  shopping: "bg-category-productivity-muted text-category-productivity",
+  other: "bg-category-other-muted text-category-other",
 };
 
 function isOverdue(dueDate: string | null, isCompleted: boolean): boolean {
@@ -58,7 +52,7 @@ export function TaskCard({ task, onToggle, onClick, isToggling }: TaskCardProps)
   const CategoryIcon = task.category
     ? CATEGORY_ICONS[task.category]
     : MoreHorizontal;
-  const priorityColor = PRIORITY_COLORS[task.priority] ?? "text-slate-400";
+  const priorityColor = getPriorityColor(task.priority);
   const overdue = isOverdue(task.due_date, task.is_completed);
 
   const handleCheckedChange = () => {
@@ -127,7 +121,7 @@ export function TaskCard({ task, onToggle, onClick, isToggling }: TaskCardProps)
                 className={cn(
                   "text-xs",
                   overdue
-                    ? "text-red-500 font-medium"
+                    ? "text-status-error font-medium"
                     : "text-muted-foreground"
                 )}
               >
