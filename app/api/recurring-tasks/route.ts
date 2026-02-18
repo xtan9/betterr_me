@@ -22,7 +22,11 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const status = searchParams.get('status') as 'active' | 'paused' | 'archived' | null;
+    const validStatuses = ['active', 'paused', 'archived'] as const;
+    const statusParam = searchParams.get('status');
+    const status = statusParam && (validStatuses as readonly string[]).includes(statusParam)
+      ? (statusParam as 'active' | 'paused' | 'archived')
+      : null;
 
     const recurringTasksDB = new RecurringTasksDB(supabase);
     const templates = await recurringTasksDB.getUserRecurringTasks(
