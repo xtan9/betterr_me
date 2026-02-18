@@ -625,6 +625,14 @@
         "paused": "Paused",
         "archived": "Archived"
       }
+    },
+    "paused": {
+      "title": "{count} paused recurring tasks",
+      "resume": "Resume",
+      "delete": "Delete",
+      "resumeSuccess": "Recurring task resumed",
+      "deleteSuccess": "Recurring task deleted",
+      "actionError": "Action failed"
     }
   },
   "settings": {

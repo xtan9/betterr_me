@@ -625,6 +625,14 @@
         "paused": "已暂停",
         "archived": "已归档"
       }
+    },
+    "paused": {
+      "title": "{count} 个已暂停的重复任务",
+      "resume": "恢复",
+      "delete": "删除",
+      "resumeSuccess": "重复任务已恢复",
+      "deleteSuccess": "重复任务已删除",
+      "actionError": "操作失败"
     }
   },
   "settings": {

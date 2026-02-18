@@ -625,6 +625,14 @@
         "paused": "已暫停",
         "archived": "已封存"
       }
+    },
+    "paused": {
+      "title": "{count} 個已暫停的重複任務",
+      "resume": "恢復",
+      "delete": "刪除",
+      "resumeSuccess": "重複任務已恢復",
+      "deleteSuccess": "重複任務已刪除",
+      "actionError": "操作失敗"
     }
   },
   "settings": {
