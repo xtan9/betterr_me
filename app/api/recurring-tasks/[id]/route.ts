@@ -70,11 +70,17 @@ export async function PATCH(
       return NextResponse.json({ recurring_task: template });
     }
     if (action === 'resume') {
-      const today = getLocalDateString();
+      const today = searchParams.get('date') || getLocalDateString();
       const [y, m, d] = today.split('-').map(Number);
       const throughDate = getLocalDateString(new Date(y, m - 1, d + 7));
       const template = await recurringTasksDB.resumeRecurringTask(id, user.id, today, throughDate);
       return NextResponse.json({ recurring_task: template });
+    }
+    if (action) {
+      return NextResponse.json(
+        { error: 'Invalid action. Must be: pause or resume' },
+        { status: 400 }
+      );
     }
 
     // Handle general updates
