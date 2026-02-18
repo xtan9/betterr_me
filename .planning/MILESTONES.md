@@ -47,3 +47,20 @@
 
 ---
 
+
+## v2.1 UI Polish & Refinement (Shipped: 2026-02-18)
+
+**Phases completed:** 3 phases, 6 plans
+**Stats:** 59 files changed, +3220/-276 lines, 55 commits, 2 days
+
+**Key accomplishments:**
+- Defined 56 semantic CSS design tokens for categories, priorities, and status indicators with full light/dark mode support
+- Eliminated all hardcoded Tailwind color classes across habit, dashboard, task, auth, hero, and settings components
+- Standardized card grid spacing with `gap-card-gap` semantic token across all list views
+- Restructured sidebar to Chameleon-matched flat navigation with icon containers and smooth teal hover/active transitions
+- Restored motivation message colored background and pinned habit checklist footer layout
+
+**Requirements:** 8/8 satisfied (TOKN-01/02/03, SIDE-01/02/03, COMP-01/02)
+
+---
+

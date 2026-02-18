@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A habit tracking web app built with Next.js 16, Supabase, and TypeScript. Supports daily/weekdays/weekly/times_per_week/custom frequency habits, task management, streaks, weekly insights, and data export. Three locales (en, zh, zh-TW), dark mode, deployed to Vercel.
+A habit tracking web app built with Next.js 16, Supabase, and TypeScript. Supports daily/weekdays/weekly/times_per_week/custom frequency habits, task management, streaks, weekly insights, and data export. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
 
 ## Core Value
 
@@ -44,32 +44,37 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ getTodayTasks uses client-sent date parameter (not server-local time) — v1.1
 - ✓ Dashboard completed tasks included in "X of Y" count — v1.1
 - ✓ No timezone-based task duplication between Today and Tomorrow sections — v1.1
+- ✓ All hardcoded color values replaced with semantic design token variables — v2.1
+- ✓ All hardcoded spacing values replaced with spacing tokens (gap-card-gap) — v2.1
+- ✓ Progress bar track uses bg-muted instead of hardcoded slate — v2.1
+- ✓ Sidebar has consistent spacing and padding using design tokens — v2.1
+- ✓ Sidebar hover/active states have smooth transitions — v2.1
+- ✓ Sidebar icons visually refined with icon containers — v2.1
+- ✓ Motivation message restored to colored background style — v2.1
+- ✓ Habit checklist footer sticks to card bottom in grid layout — v2.1
 
 ### Active
 
-## Current Milestone: v2.1 UI Polish & Refinement
-
-**Goal:** Polish sidebar, fix layout issues, restore component styles, and enforce design token consistency across the app.
-
-**Target features:**
-- Sidebar visual refinement (spacing, transitions, hover states)
-- Design token consistency (replace hardcoded colors/spacing with tokens)
-- Restore motivation message colored background style
-- Fix habit checklist footer alignment in dashboard grid
+(No active milestone — planning next)
 
 ### Out of Scope
 
 - Mobile app — web-only
 - Rewriting DB layer architecture — only targeted fixes done
 - Upgrading major dependencies — separate milestone
+- Replacing window.confirm() with AlertDialog — separate polish milestone
+- Dark mode card-on-gray depth fix — requires design decision on dark surface hierarchy
+- Custom date/time picker components — native inputs functional, separate effort
+- Mobile sidebar improvements — current mobile sheet works, separate scope
 
 ## Context
 
 - **Codebase:** ~170 files, Next.js 16 App Router, Supabase backend, deployed to Vercel
-- **Test suite:** 992+ tests (Vitest + Playwright), 50% coverage threshold
+- **Test suite:** 1084+ tests (Vitest + Playwright), 50% coverage threshold
 - **Shipped:** v1.0 Codebase Hardening (2026-02-16) — 5 phases, 11 plans, 26 requirements
 - **Shipped:** v1.1 Dashboard Task Fixes (2026-02-17) — 1 phase, 1 plan, 3 requirements
 - **Shipped:** v2.0 UI Style Redesign (2026-02-17) — 9 phases, 21 plans, 28 requirements
+- **Shipped:** v2.1 UI Polish & Refinement (2026-02-18) — 3 phases, 6 plans, 8 requirements
 - **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit)
 - **Known pre-existing:** Vitest picks up .worktrees/ test files (spurious, not blocking)
 
@@ -89,9 +94,12 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | Wire existing Zod schemas into API routes | Schemas existed but unused server-side | ✓ Good — eliminated parallel validation, all 6 routes wired |
 | Logger with (msg, error?, context?) signature | Matches future Sentry.captureException API | ✓ Good — one-file swap when Sentry added |
 | Adaptive streak lookback (30→365) | Short streaks (majority) need only ~30 days | ✓ Good — reduces data transfer for common case |
-| Habit count limit test unlocked from message text | Flexible assertion prevents brittle tests | ✓ Good — asserts 400 + error presence only |
 | getTodayTasks accepts client date param | Server-local time wrong on Vercel (UTC ≠ user timezone) | ✓ Good — all 3 call sites pass client date, no duplication |
 | Include completed tasks in getTodayTasks | Removing completed tasks breaks "X of Y" dashboard count | ✓ Good — single array for both total and completed count |
+| Raw HSL convention for CSS custom properties | Matches existing shadcn/ui token pattern, enables opacity modifiers | ✓ Good — 56 tokens defined, all components migrated |
+| Flat sidebar nav (remove collapsible groups) | Chameleon reference uses flat list, cleaner UX with 3 items | ✓ Good — simpler code, cleaner visual hierarchy |
+| Task categories reuse habit category tokens | Same visual intent (work=learning blue, personal=wellness purple) | ✓ Good — unified token system, no category token duplication |
+| Sidebar width 224px with 60px collapsed rail | Matched Chameleon reference measurements | ✓ Good — pixel-matched design reference |
 
 ---
-*Last updated: 2026-02-17 after v2.1 milestone started*
+*Last updated: 2026-02-18 after v2.1 milestone shipped*
