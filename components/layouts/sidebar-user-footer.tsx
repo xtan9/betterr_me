@@ -165,7 +165,7 @@ export function SidebarUserFooter() {
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+            className="min-w-48 rounded-lg"
             side="top"
             align="end"
             sideOffset={4}

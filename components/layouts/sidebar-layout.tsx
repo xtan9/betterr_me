@@ -66,7 +66,7 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
             BetterR.me
           </span>
         </header>
-        <div className="flex-1 overflow-auto bg-page">
+        <div className="flex-1 overflow-auto bg-background">
           <div className="mx-auto w-full max-w-content px-4 py-6 sm:px-6 md:px-8 md:pt-10">
             {children}
           </div>

@@ -62,8 +62,8 @@ const formatBadge = (count: number) => (count > 9 ? "9+" : String(count));
 
 function NavIconContainer({ icon: Icon }: { icon: LucideIcon }) {
   return (
-    <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-sidebar-icon-bg">
-      <Icon className="size-3.5" />
+    <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-sidebar-icon-bg group-data-[collapsible=icon]:size-auto group-data-[collapsible=icon]:bg-transparent">
+      <Icon className="size-3.5 group-data-[collapsible=icon]:size-4" />
     </div>
   );
 }
