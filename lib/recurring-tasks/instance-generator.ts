@@ -27,8 +27,7 @@ export async function ensureRecurringInstances(
     .lte('next_generate_date', throughDate);
 
   if (fetchErr) {
-    log.error('ensureRecurringInstances: failed to fetch templates', fetchErr);
-    return;
+    throw new Error(`ensureRecurringInstances: failed to fetch templates: ${fetchErr.message}`);
   }
   if (!templates || templates.length === 0) return;
 
@@ -79,21 +78,28 @@ async function generateInstancesForTemplate(
     const remaining = template.end_count - template.instances_generated;
     if (remaining <= 0) {
       // Archive the template — limit reached
-      await supabase
+      const { error: archiveErr } = await supabase
         .from('recurring_tasks')
         .update({ status: 'archived' })
         .eq('id', template.id);
+      if (archiveErr) {
+        log.error('Failed to archive template at count limit', archiveErr, { templateId: template.id });
+      }
       return;
     }
     allowedOccurrences = occurrences.slice(0, remaining);
   }
 
   // Find existing instances to avoid duplicates
-  const { data: existingInstances } = await supabase
+  const { data: existingInstances, error: existingErr } = await supabase
     .from('tasks')
     .select('original_date')
     .eq('recurring_task_id', template.id)
     .in('original_date', allowedOccurrences);
+
+  if (existingErr) {
+    throw new Error(`Failed to check existing instances: ${existingErr.message}`);
+  }
 
   const existingDates = new Set(
     (existingInstances ?? []).map((i: { original_date: string }) => i.original_date)

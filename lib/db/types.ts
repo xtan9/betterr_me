@@ -110,7 +110,7 @@ export type RecurringTaskInsert = Omit<RecurringTask, 'id' | 'created_at' | 'upd
   next_generate_date?: string | null;
 };
 
-export type RecurringTaskUpdate = Partial<Omit<RecurringTask, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+export type RecurringTaskUpdate = Partial<Omit<RecurringTask, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'instances_generated' | 'next_generate_date'>>;
 
 // =============================================================================
 // HELPER TYPES

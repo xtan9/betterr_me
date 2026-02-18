@@ -122,7 +122,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
     task?.recurring_task_id ? `/api/recurring-tasks/${task.recurring_task_id}` : null,
     async (url: string) => {
       const res = await fetch(url);
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`Failed to fetch recurring template: ${res.status}`);
       const data = await res.json();
       return data.recurring_task;
     }

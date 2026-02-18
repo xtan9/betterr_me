@@ -51,8 +51,10 @@ export async function GET(request: NextRequest) {
     // Generate recurring task instances through 7 days from now
     const [dy, dm, dd] = date.split('-').map(Number);
     const throughDate = getLocalDateString(new Date(dy, dm - 1, dd + 7));
+    let recurringGenFailed = false;
     await ensureRecurringInstances(supabase, user.id, throughDate).catch((err) => {
       log.error('ensureRecurringInstances failed on dashboard', err, { userId: user.id });
+      recurringGenFailed = true;
     });
 
     // 30-day lookback window for absence computation
@@ -108,6 +110,9 @@ export async function GET(request: NextRequest) {
     const warnings: string[] = [];
     if (logsFetchFailed) {
       warnings.push('Absence data may be inaccurate — habit logs temporarily unavailable');
+    }
+    if (recurringGenFailed) {
+      warnings.push('Some recurring tasks may not appear — generation failed temporarily');
     }
     const enrichedHabits = habitsWithStatus.map(habit => {
       try {

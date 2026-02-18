@@ -46,18 +46,22 @@ export async function GET(request: NextRequest) {
     }
 
     // Generate recurring instances when loading today/upcoming views
+    let recurringGenFailed = false;
     if (view === 'today' || view === 'upcoming') {
       const [dy, dm, dd] = date.split('-').map(Number);
       const throughDate = getLocalDateString(new Date(dy, dm - 1, dd + 7));
       await ensureRecurringInstances(supabase, user.id, throughDate).catch((err) => {
         log.error('ensureRecurringInstances failed on tasks', err, { userId: user.id });
+        recurringGenFailed = true;
       });
     }
 
     // Handle special views
     if (view === 'today') {
       const tasks = await tasksDB.getTodayTasks(user.id, date);
-      return NextResponse.json({ tasks });
+      const response: Record<string, unknown> = { tasks };
+      if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
+      return NextResponse.json(response);
     }
 
     if (view === 'upcoming') {
@@ -69,7 +73,9 @@ export async function GET(request: NextRequest) {
         );
       }
       const tasks = await tasksDB.getUpcomingTasks(user.id, date, days);
-      return NextResponse.json({ tasks });
+      const response: Record<string, unknown> = { tasks };
+      if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
+      return NextResponse.json(response);
     }
 
     if (view === 'overdue') {

@@ -94,12 +94,14 @@ export class RecurringTasksDB {
 
   async deleteRecurringTask(id: string, userId: string): Promise<void> {
     // Delete all future incomplete instances first
-    await this.supabase
+    const { error: instancesErr } = await this.supabase
       .from('tasks')
       .delete()
       .eq('recurring_task_id', id)
       .eq('user_id', userId)
       .eq('is_completed', false);
+
+    if (instancesErr) throw instancesErr;
 
     // Delete the template
     const { error } = await this.supabase
@@ -131,10 +133,20 @@ export class RecurringTasksDB {
       todayDate
     );
 
-    const updated = await this.updateRecurringTask(id, userId, {
-      status: 'active',
-      next_generate_date: nextOccurrence ?? todayDate,
-    });
+    // Use supabase directly since next_generate_date is a bookkeeping field
+    // excluded from RecurringTaskUpdate
+    const { data: updated, error } = await this.supabase
+      .from('recurring_tasks')
+      .update({
+        status: 'active',
+        next_generate_date: nextOccurrence ?? todayDate,
+      })
+      .eq('id', id)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
 
     // Generate instances for the rolling window
     await ensureRecurringInstances(this.supabase, userId, throughDate);
@@ -152,13 +164,14 @@ export class RecurringTasksDB {
     scope: 'this' | 'following' | 'all',
     updates: TaskUpdate
   ): Promise<void> {
-    const { data: task } = await this.supabase
+    const { data: task, error: fetchErr } = await this.supabase
       .from('tasks')
       .select('*, recurring_tasks(*)')
       .eq('id', taskId)
       .eq('user_id', userId)
       .single();
 
+    if (fetchErr && fetchErr.code !== 'PGRST116') throw fetchErr;
     if (!task || !task.recurring_task_id) {
       throw new Error('Task not found or not part of a recurring series');
     }
@@ -166,11 +179,12 @@ export class RecurringTasksDB {
     switch (scope) {
       case 'this': {
         // Update just this instance and mark as exception
-        await this.supabase
+        const { error: updateErr } = await this.supabase
           .from('tasks')
           .update({ ...updates, is_exception: true })
           .eq('id', taskId)
           .eq('user_id', userId);
+        if (updateErr) throw updateErr;
         break;
       }
       case 'following': {
@@ -189,7 +203,7 @@ export class RecurringTasksDB {
 
         // Update all future incomplete instances (from this task's original_date onward)
         if (task.original_date) {
-          await this.supabase
+          const { error: updateErr } = await this.supabase
             .from('tasks')
             .update(updates)
             .eq('recurring_task_id', task.recurring_task_id)
@@ -197,6 +211,7 @@ export class RecurringTasksDB {
             .eq('is_completed', false)
             .eq('is_exception', false)
             .gte('original_date', task.original_date);
+          if (updateErr) throw updateErr;
         }
         break;
       }
@@ -215,13 +230,14 @@ export class RecurringTasksDB {
         }
 
         // Update all future incomplete non-exception instances
-        await this.supabase
+        const { error: updateErr } = await this.supabase
           .from('tasks')
           .update(updates)
           .eq('recurring_task_id', task.recurring_task_id)
           .eq('user_id', userId)
           .eq('is_completed', false)
           .eq('is_exception', false);
+        if (updateErr) throw updateErr;
         break;
       }
     }
@@ -232,13 +248,14 @@ export class RecurringTasksDB {
     userId: string,
     scope: 'this' | 'following' | 'all'
   ): Promise<void> {
-    const { data: task } = await this.supabase
+    const { data: task, error: fetchErr } = await this.supabase
       .from('tasks')
       .select('*')
       .eq('id', taskId)
       .eq('user_id', userId)
       .single();
 
+    if (fetchErr && fetchErr.code !== 'PGRST116') throw fetchErr;
     if (!task || !task.recurring_task_id) {
       throw new Error('Task not found or not part of a recurring series');
     }
@@ -246,11 +263,12 @@ export class RecurringTasksDB {
     switch (scope) {
       case 'this': {
         // Delete just this instance
-        await this.supabase
+        const { error: delErr } = await this.supabase
           .from('tasks')
           .delete()
           .eq('id', taskId)
           .eq('user_id', userId);
+        if (delErr) throw delErr;
         break;
       }
       case 'following': {
@@ -283,12 +301,13 @@ export class RecurringTasksDB {
       }
       case 'all': {
         // Delete all incomplete instances and archive template
-        await this.supabase
+        const { error: delAllErr } = await this.supabase
           .from('tasks')
           .delete()
           .eq('recurring_task_id', task.recurring_task_id)
           .eq('user_id', userId)
           .eq('is_completed', false);
+        if (delAllErr) throw delAllErr;
 
         await this.archiveRecurringTask(task.recurring_task_id, userId);
         break;
