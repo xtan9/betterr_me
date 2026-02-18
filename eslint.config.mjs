@@ -4,9 +4,9 @@ import typescript from "eslint-config-next/typescript";
 const eslintConfig = [
   ...coreWebVitals,
   ...typescript,
-  // shadcn/ui managed files — do not lint
+  // Ignore worktrees and shadcn/ui managed files
   {
-    ignores: ["components/ui/**"],
+    ignores: [".worktrees/**", "components/ui/**"],
   },
   // Test files — relax strict rules
   {

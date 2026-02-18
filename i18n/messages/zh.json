@@ -169,7 +169,8 @@
       "comingUp": "明日待办",
       "headStart": "提前准备",
       "moreTomorrow": "明天还有 {count} 项",
-      "viewAll": "查看所有任务"
+      "viewAll": "查看所有任务",
+      "recurring": "重复"
     },
     "motivation": {
       "firstDay": "欢迎！成为更好自己的旅程从今天开始。🌟",
@@ -472,7 +473,8 @@
       "creating": "正在创建...",
       "saving": "正在保存...",
       "intentionLabel": "为什么重要",
-      "intentionPlaceholder": "这件事对你来说为什么重要？"
+      "intentionPlaceholder": "这件事对你来说为什么重要？",
+      "repeatLabel": "重复"
     },
     "categories": {
       "work": "工作",
@@ -524,7 +526,8 @@
     },
     "page": {
       "title": "我的任务",
-      "createButton": "创建任务"
+      "createButton": "创建任务",
+      "recurringButton": "重复任务"
     },
     "list": {
       "searchPlaceholder": "搜索任务...",
@@ -556,6 +559,72 @@
     "error": {
       "title": "加载任务失败",
       "retry": "重试"
+    },
+    "recurrence": {
+      "none": "不重复",
+      "daily": "每天",
+      "weekdays": "每个工作日（周一至周五）",
+      "weekly": "每周",
+      "biweekly": "每两周",
+      "monthly": "每月",
+      "yearly": "每年",
+      "custom": "自定义...",
+      "every": "每",
+      "days": "天",
+      "weeks": "周",
+      "months": "月",
+      "years": "年",
+      "onDays": "在这几天",
+      "dayShort": {
+        "sun": "日",
+        "mon": "一",
+        "tue": "二",
+        "wed": "三",
+        "thu": "四",
+        "fri": "五",
+        "sat": "六"
+      },
+      "ends": "结束",
+      "endNever": "永不",
+      "endAfter": "在",
+      "endTimes": "次后",
+      "endOn": "在日期"
+    },
+    "scope": {
+      "editTitle": "编辑重复任务",
+      "editDescription": "此任务属于重复系列。您想如何应用更改？",
+      "deleteTitle": "删除重复任务",
+      "deleteDescription": "此任务属于重复系列。您想删除哪些任务？",
+      "thisOnly": "仅此任务",
+      "thisAndFollowing": "此任务及后续所有任务",
+      "allInstances": "此系列中的所有任务",
+      "cancel": "取消",
+      "confirmEdit": "编辑",
+      "confirmDelete": "删除"
+    },
+    "recurring": {
+      "title": "重复任务",
+      "createNew": "新建",
+      "empty": "暂无重复任务",
+      "emptyDescription": "创建重复任务以自动化您的重复待办事项。",
+      "error": "加载重复任务失败",
+      "retry": "重试",
+      "activeSection": "进行中",
+      "pausedSection": "已暂停",
+      "archivedSection": "已归档",
+      "nextOccurrence": "下次",
+      "pause": "暂停",
+      "resume": "恢复",
+      "deleteTemplate": "删除",
+      "pauseSuccess": "重复任务已暂停",
+      "resumeSuccess": "重复任务已恢复",
+      "deleteSuccess": "重复任务已删除",
+      "actionError": "操作失败",
+      "status": {
+        "active": "进行中",
+        "paused": "已暂停",
+        "archived": "已归档"
+      }
     }
   },
   "settings": {

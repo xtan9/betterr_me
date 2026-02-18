@@ -19,6 +19,7 @@ import {
   Clock,
   Flag,
   Tag,
+  Repeat,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,7 +39,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import type { Task, TaskCategory } from "@/lib/db/types";
+import { EditScopeDialog } from "@/components/tasks/edit-scope-dialog";
+import type { Task, TaskCategory, RecurringTask } from "@/lib/db/types";
+import type { EditScope } from "@/lib/validations/recurring-task";
+import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
 
 interface TaskDetailContentProps {
   taskId: string;
@@ -103,6 +107,8 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   const categoryT = useTranslations("tasks.categories");
   const priorityT = useTranslations("tasks.priorities");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+  const [scopeAction, setScopeAction] = useState<"edit" | "delete">("edit");
 
   const {
     data: task,
@@ -110,6 +116,17 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
     isLoading,
     mutate,
   } = useSWR<Task>(`/api/tasks/${taskId}`, fetcher);
+
+  // Fetch recurring task template if this is a recurring instance
+  const { data: recurringTemplate } = useSWR<RecurringTask>(
+    task?.recurring_task_id ? `/api/recurring-tasks/${task.recurring_task_id}` : null,
+    async (url: string) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Failed to fetch recurring template: ${res.status}`);
+      const data = await res.json();
+      return data.recurring_task;
+    }
+  );
 
   const handleToggle = async () => {
     try {
@@ -120,6 +137,43 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
       mutate();
     } catch {
       toast.error(t("toast.toggleError"));
+    }
+  };
+
+  const handleEditClick = () => {
+    if (task?.recurring_task_id) {
+      setScopeAction("edit");
+      setScopeDialogOpen(true);
+    } else {
+      router.push(`/tasks/${taskId}/edit`);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    if (task?.recurring_task_id) {
+      setScopeAction("delete");
+      setScopeDialogOpen(true);
+    }
+    // For non-recurring, the AlertDialog handles it
+  };
+
+  const handleScopeConfirm = async (scope: EditScope) => {
+    if (scopeAction === "edit") {
+      router.push(`/tasks/${taskId}/edit?scope=${scope}`);
+    } else {
+      setIsDeleting(true);
+      try {
+        const response = await fetch(`/api/tasks/${taskId}?scope=${scope}`, {
+          method: "DELETE",
+        });
+        if (!response.ok) throw new Error("Failed to delete");
+        toast.success(t("delete.success"));
+        router.push("/tasks");
+      } catch {
+        toast.error(t("delete.error"));
+      } finally {
+        setIsDeleting(false);
+      }
     }
   };
 
@@ -180,7 +234,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
           title={task.title}
           actions={
             <Button
-              onClick={() => router.push(`/tasks/${taskId}/edit`)}
+              onClick={handleEditClick}
               className="gap-2"
             >
               <Edit className="size-4" />
@@ -230,6 +284,14 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
                   {task.intention}
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Recurrence info */}
+          {task.recurring_task_id && recurringTemplate && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Repeat className="size-4" />
+              <span>{describeRecurrence(recurringTemplate.recurrence_rule)}</span>
             </div>
           )}
 
@@ -309,34 +371,54 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3 pt-4 border-t">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="gap-2">
-                  <Trash2 className="size-4" />
-                  {t("detail.delete")}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>{t("detail.delete")}</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {t("detail.deleteConfirm")}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>{t("detail.deleteCancel")}</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="bg-destructive text-white hover:bg-destructive/90"
-                  >
-                    <Trash2 className="size-4 mr-2" />
+            {task.recurring_task_id ? (
+              <Button
+                variant="destructive"
+                className="gap-2"
+                onClick={handleDeleteClick}
+                disabled={isDeleting}
+              >
+                <Trash2 className="size-4" />
+                {t("detail.delete")}
+              </Button>
+            ) : (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="gap-2">
+                    <Trash2 className="size-4" />
                     {t("detail.delete")}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{t("detail.delete")}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t("detail.deleteConfirm")}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("detail.deleteCancel")}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="bg-destructive text-white hover:bg-destructive/90"
+                    >
+                      <Trash2 className="size-4 mr-2" />
+                      {t("detail.delete")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
+
+          {/* Scope dialog for recurring tasks */}
+          <EditScopeDialog
+            open={scopeDialogOpen}
+            onOpenChange={setScopeDialogOpen}
+            onConfirm={handleScopeConfirm}
+            action={scopeAction}
+          />
         </CardContent>
       </Card>
     </div>

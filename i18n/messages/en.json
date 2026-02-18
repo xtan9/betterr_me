@@ -169,7 +169,8 @@
       "comingUp": "Coming Up Tomorrow",
       "headStart": "Get a Head Start",
       "moreTomorrow": "+{count} more tomorrow",
-      "viewAll": "View all tasks"
+      "viewAll": "View all tasks",
+      "recurring": "Repeats"
     },
     "motivation": {
       "firstDay": "Welcome! Your journey to becoming better starts today. 🌟",
@@ -472,7 +473,8 @@
       "creating": "Creating...",
       "saving": "Saving...",
       "intentionLabel": "Why This Matters",
-      "intentionPlaceholder": "Why does this matter to you?"
+      "intentionPlaceholder": "Why does this matter to you?",
+      "repeatLabel": "Repeat"
     },
     "categories": {
       "work": "Work",
@@ -524,7 +526,8 @@
     },
     "page": {
       "title": "My Tasks",
-      "createButton": "Create Task"
+      "createButton": "Create Task",
+      "recurringButton": "Recurring"
     },
     "list": {
       "searchPlaceholder": "Search tasks...",
@@ -556,6 +559,72 @@
     "error": {
       "title": "Failed to load task",
       "retry": "Try again"
+    },
+    "recurrence": {
+      "none": "Does not repeat",
+      "daily": "Every day",
+      "weekdays": "Every weekday (Mon–Fri)",
+      "weekly": "Every week",
+      "biweekly": "Every 2 weeks",
+      "monthly": "Every month",
+      "yearly": "Every year",
+      "custom": "Custom...",
+      "every": "Every",
+      "days": "days",
+      "weeks": "weeks",
+      "months": "months",
+      "years": "years",
+      "onDays": "On days",
+      "dayShort": {
+        "sun": "S",
+        "mon": "M",
+        "tue": "T",
+        "wed": "W",
+        "thu": "T",
+        "fri": "F",
+        "sat": "S"
+      },
+      "ends": "Ends",
+      "endNever": "Never",
+      "endAfter": "After",
+      "endTimes": "times",
+      "endOn": "On date"
+    },
+    "scope": {
+      "editTitle": "Edit Recurring Task",
+      "editDescription": "This task is part of a recurring series. How would you like to apply the changes?",
+      "deleteTitle": "Delete Recurring Task",
+      "deleteDescription": "This task is part of a recurring series. Which tasks would you like to delete?",
+      "thisOnly": "This task only",
+      "thisAndFollowing": "This and all following tasks",
+      "allInstances": "All tasks in this series",
+      "cancel": "Cancel",
+      "confirmEdit": "Edit",
+      "confirmDelete": "Delete"
+    },
+    "recurring": {
+      "title": "Recurring Tasks",
+      "createNew": "Create New",
+      "empty": "No recurring tasks",
+      "emptyDescription": "Create a recurring task to automate your repeating to-dos.",
+      "error": "Failed to load recurring tasks",
+      "retry": "Try again",
+      "activeSection": "Active",
+      "pausedSection": "Paused",
+      "archivedSection": "Archived",
+      "nextOccurrence": "Next",
+      "pause": "Pause",
+      "resume": "Resume",
+      "deleteTemplate": "Delete",
+      "pauseSuccess": "Recurring task paused",
+      "resumeSuccess": "Recurring task resumed",
+      "deleteSuccess": "Recurring task deleted",
+      "actionError": "Action failed",
+      "status": {
+        "active": "Active",
+        "paused": "Paused",
+        "archived": "Archived"
+      }
     }
   },
   "settings": {

@@ -6,3 +6,4 @@ export * from "./habits";
 export * from "./habit-logs";
 export * from "./habit-milestones";
 export * from "./insights";
+export * from "./recurring-tasks";
