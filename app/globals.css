@@ -52,6 +52,62 @@
     /* === Highlight === */
     --highlight: 155 50% 94%;
 
+    /* === Category colors === */
+    --category-health: 350 80% 55%;
+    --category-health-muted: 350 80% 95%;
+    --category-wellness: 270 60% 55%;
+    --category-wellness-muted: 270 60% 95%;
+    --category-learning: 215 75% 55%;
+    --category-learning-muted: 215 75% 95%;
+    --category-productivity: 40 85% 55%;
+    --category-productivity-muted: 40 85% 95%;
+    --category-other: 215 15% 55%;
+    --category-other-muted: 215 15% 95%;
+
+    /* === Priority colors === */
+    --priority-none: 0 0% 65%;
+    --priority-low: 142 70% 45%;
+    --priority-medium: 48 95% 50%;
+    --priority-high: 0 72% 55%;
+
+    /* === Status indicators === */
+    --status-error: 0 84% 60%;
+    --status-success: 142 70% 45%;
+    --status-warning: 38 92% 50%;
+    --status-info: 215 75% 55%;
+    --status-streak: 25 95% 55%;
+
+    /* === Info card (weekly insights) === */
+    --info-card-bg: 224 75% 97%;
+    --info-card-bg-to: 230 60% 96%;
+    --info-card-border: 215 60% 80%;
+    --info-card-text: 215 70% 25%;
+    --info-card-text-secondary: 215 60% 35%;
+    --info-card-icon: 215 75% 45%;
+    --info-card-button: 215 75% 55%;
+    --info-card-button-hover: 215 75% 40%;
+    --info-card-button-hover-bg: 215 75% 95%;
+
+    /* === Absence card variants === */
+    --absence-warning-bg: 45 90% 96%;
+    --absence-warning-icon: 38 92% 50%;
+    --absence-warning-title: 38 70% 35%;
+    --absence-info-bg: 215 75% 97%;
+    --absence-info-icon: 215 75% 55%;
+    --absence-info-title: 215 60% 35%;
+    --absence-caution-bg: 25 90% 96%;
+    --absence-caution-icon: 25 95% 55%;
+    --absence-caution-title: 25 70% 35%;
+
+    /* === Stat icon colors === */
+    --stat-icon-blue: 215 75% 45%;
+    --stat-icon-blue-bg: 215 75% 93%;
+    --stat-icon-orange: 25 90% 45%;
+    --stat-icon-orange-bg: 25 90% 93%;
+
+    /* === Empty state === */
+    --empty-state-celebration-bg: 45 90% 97%;
+
     /* === Typography scale === */
     --font-size-page-title: 1.5rem;
     --font-size-section-heading: 1.125rem;
@@ -126,6 +182,62 @@
 
     /* === Highlight === */
     --highlight: 160 30% 20%;
+
+    /* === Category colors === */
+    --category-health: 350 65% 60%;
+    --category-health-muted: 350 40% 18%;
+    --category-wellness: 270 50% 60%;
+    --category-wellness-muted: 270 30% 18%;
+    --category-learning: 215 60% 60%;
+    --category-learning-muted: 215 35% 18%;
+    --category-productivity: 40 70% 60%;
+    --category-productivity-muted: 40 40% 18%;
+    --category-other: 215 10% 55%;
+    --category-other-muted: 215 10% 18%;
+
+    /* === Priority colors === */
+    --priority-none: 0 0% 50%;
+    --priority-low: 142 55% 50%;
+    --priority-medium: 48 80% 55%;
+    --priority-high: 0 60% 55%;
+
+    /* === Status indicators === */
+    --status-error: 0 62% 55%;
+    --status-success: 142 55% 50%;
+    --status-warning: 38 75% 55%;
+    --status-info: 215 60% 55%;
+    --status-streak: 25 80% 58%;
+
+    /* === Info card (weekly insights) === */
+    --info-card-bg: 215 50% 12%;
+    --info-card-bg-to: 230 40% 12%;
+    --info-card-border: 215 40% 30%;
+    --info-card-text: 215 50% 85%;
+    --info-card-text-secondary: 215 45% 70%;
+    --info-card-icon: 215 50% 65%;
+    --info-card-button: 215 50% 55%;
+    --info-card-button-hover: 215 50% 70%;
+    --info-card-button-hover-bg: 215 40% 20%;
+
+    /* === Absence card variants === */
+    --absence-warning-bg: 45 40% 12%;
+    --absence-warning-icon: 38 75% 55%;
+    --absence-warning-title: 38 55% 65%;
+    --absence-info-bg: 215 35% 12%;
+    --absence-info-icon: 215 60% 55%;
+    --absence-info-title: 215 50% 65%;
+    --absence-caution-bg: 25 40% 12%;
+    --absence-caution-icon: 25 80% 58%;
+    --absence-caution-title: 25 55% 65%;
+
+    /* === Stat icon colors === */
+    --stat-icon-blue: 215 60% 60%;
+    --stat-icon-blue-bg: 215 40% 20%;
+    --stat-icon-orange: 25 80% 58%;
+    --stat-icon-orange-bg: 25 40% 20%;
+
+    /* === Empty state === */
+    --empty-state-celebration-bg: 45 30% 14%;
 
     /* === Chart colors === */
     --chart-1: 220 70% 50%;
