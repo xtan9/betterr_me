@@ -79,10 +79,10 @@ Plans:
   1. The dashboard motivation message displays with a colored background (`bg-primary/5` or equivalent token) instead of rendering as a plain Card -- visually distinct from surrounding content
   2. The habit checklist footer ("X of Y completed") is pinned to the bottom of its card regardless of how many habits are listed, so cards in the same grid row have aligned footers
   3. Both fixes render correctly in light mode, dark mode, and across the three locales (en, zh, zh-TW) without layout overflow
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 12-01: TBD
+- [ ] 12-01-PLAN.md — Restore motivation message colored background and pin habit checklist footer
 
 ## Progress
 
