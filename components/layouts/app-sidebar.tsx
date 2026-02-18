@@ -99,7 +99,7 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex h-8 items-center gap-2">
+        <div className="flex h-8 items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <span className="font-display font-bold text-sm">B</span>
           </div>
