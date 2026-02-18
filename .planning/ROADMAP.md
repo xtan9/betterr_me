@@ -35,7 +35,7 @@
 **Milestone Goal:** Polish sidebar, fix layout issues, restore component styles, and enforce design token consistency across the app.
 
 - [x] **Phase 10: Token Consistency** - Replace all hardcoded color and spacing values with design tokens (completed 2026-02-18)
-- [ ] **Phase 11: Sidebar Polish** - Refine sidebar spacing, transitions, and visual hierarchy
+- [x] **Phase 11: Sidebar Polish** - Refine sidebar spacing, transitions, and visual hierarchy (completed 2026-02-18)
 - [ ] **Phase 12: Component Fixes** - Restore motivation message style and fix habit checklist layout
 
 ## Phase Details
@@ -65,7 +65,7 @@ Plans:
   2. Hovering over sidebar items produces a smooth visual transition (not an abrupt color swap), and the active/current page item is clearly distinguished
   3. Sidebar group headers (e.g., "Navigation", "Management") are visually distinct from nav items -- smaller font, muted color, proper spacing above/below
   4. Sidebar icons are vertically aligned with their labels and consistently sized across all nav items
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 11-01-PLAN.md — Add sidebar tokens, restructure flat nav with icon containers, update footer
@@ -97,5 +97,5 @@ Plans:
 | 5. Test Coverage Backfill | v1.0 | 1/1 | Complete | 2026-02-16 |
 | 6. Dashboard Task Data Flow | v1.1 | 1/1 | Complete | 2026-02-16 |
 | 10. Token Consistency | v2.1 | 3/3 | Complete | 2026-02-18 |
-| 11. Sidebar Polish | 1/2 | In Progress|  | - |
+| 11. Sidebar Polish | v2.1 | 2/2 | Complete | 2026-02-18 |
 | 12. Component Fixes | v2.1 | 0/? | Not started | - |

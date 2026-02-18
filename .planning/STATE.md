@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v2.1 Phase 11 - Sidebar Polish
+**Current focus:** v2.1 Phase 12 - Component Fixes
 
 ## Current Position
 
-Phase: 11 of 12 (Sidebar Polish)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-18 — Completed 11-01 (Sidebar Restructure & Chameleon Styling)
+Phase: 12 of 12 (Component Fixes)
+Plan: Not yet planned
+Status: Not Started
+Last activity: 2026-02-18 — Completed Phase 11 (Sidebar Polish)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [######░░░░] 56% v2.1
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [########░░] 78% v2.1
 
 ## Performance Metrics
 
@@ -28,8 +28,8 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - Execution time: ~10min
 
 **v2.1 Velocity:**
-- Total plans completed: 4
-- Execution time: ~16min
+- Total plans completed: 5
+- Execution time: ~61min
 
 ## Accumulated Context
 
@@ -41,6 +41,7 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - **10-02:** Kept border-l accent colors on absence card; dashboard components use absence-*/info-card-*/stat-icon-*/priority-* tokens
 - **10-03:** Task categories reuse habit category tokens (work=learning, personal=wellness, shopping=productivity); destructive button uses text-destructive-foreground token
 - **11-01:** Sidebar width 224px; flat nav (3 items, no groups); Settings removed from nav (footer-only); footer icon changed to gear; icon containers for nav items
+- **11-02:** Collapsed rail 60px; font-medium inactive/font-semibold active; logo center-aligned with nav icons at 28px; dropdown keeps sidebar expanded; header pt-5 (20px)
 
 ### Pending Todos
 
@@ -53,5 +54,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 11-01-PLAN.md (Sidebar Restructure & Chameleon Styling)
-Resume: Execute 11-02-PLAN.md next
+Stopped at: Completed Phase 11 (Sidebar Polish) — all plans done
+Resume: Plan and execute Phase 12 (Component Fixes)
