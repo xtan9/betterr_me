@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
@@ -72,10 +72,16 @@ export function TasksPageContent() {
       <PageHeader
         title={t("page.title")}
         actions={
-          <Button onClick={handleCreateTask}>
-            <Plus className="size-4 mr-2" />
-            {t("page.createButton")}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.push("/tasks/recurring")}>
+              <Repeat className="size-4 mr-2" />
+              {t("page.recurringButton")}
+            </Button>
+            <Button onClick={handleCreateTask}>
+              <Plus className="size-4 mr-2" />
+              {t("page.createButton")}
+            </Button>
+          </div>
         }
       />
 

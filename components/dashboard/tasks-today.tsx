@@ -3,7 +3,7 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Plus, Circle, ChevronRight } from "lucide-react";
+import { Plus, Circle, ChevronRight, Repeat } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -115,6 +115,9 @@ function TaskRow({
           >
             {task.title}
           </button>
+          {task.recurring_task_id && (
+            <Repeat className="size-3 text-muted-foreground" aria-label={t("recurring")} />
+          )}
         </div>
         {isReflecting && onReflect ? (
           <ReflectionStrip onReflect={onReflect} />

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
@@ -24,17 +25,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RecurrencePicker } from "@/components/tasks/recurrence-picker";
 import { taskFormSchema, type TaskFormValues } from "@/lib/validations/task";
-import type { Task, TaskCategory } from "@/lib/db/types";
+import type { Task, TaskCategory, RecurrenceRule, EndType } from "@/lib/db/types";
+
+export interface RecurrenceConfig {
+  rule: RecurrenceRule | null;
+  endType: EndType;
+  endDate: string | null;
+  endCount: number | null;
+}
 
 interface TaskFormProps {
   mode: "create" | "edit";
   initialData?: Task;
-  onSubmit: (data: TaskFormValues) => Promise<void>;
+  onSubmit: (data: TaskFormValues, recurrence?: RecurrenceConfig) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
   hideChrome?: boolean;
   id?: string;
+  showRecurrence?: boolean;
+  initialRecurrence?: RecurrenceConfig;
 }
 
 const CATEGORY_OPTIONS: {
@@ -79,6 +90,8 @@ export function TaskForm({
   isLoading = false,
   hideChrome = false,
   id,
+  showRecurrence = true,
+  initialRecurrence,
 }: TaskFormProps) {
   const t = useTranslations("tasks.form");
   const categoryT = useTranslations("tasks.categories");
@@ -97,12 +110,39 @@ export function TaskForm({
     },
   });
 
+  const [recurrence, setRecurrence] = useState<RecurrenceConfig>(
+    initialRecurrence ?? {
+      rule: null,
+      endType: "never",
+      endDate: null,
+      endCount: null,
+    }
+  );
+
+  const handleRecurrenceChange = useCallback(
+    (
+      rule: RecurrenceRule | null,
+      endType: EndType,
+      endDate: string | null,
+      endCount: number | null
+    ) => {
+      setRecurrence({ rule, endType, endDate, endCount });
+    },
+    []
+  );
+
+  const dueDate = form.watch("due_date");
+  const showRecurrenceSection = showRecurrence && mode === "create" && !!dueDate;
+
   const handleFormSubmit = async (data: TaskFormValues) => {
-    await onSubmit({
-      ...data,
-      description: data.description || null,
-      intention: data.intention || null,
-    });
+    await onSubmit(
+      {
+        ...data,
+        description: data.description || null,
+        intention: data.intention || null,
+      },
+      recurrence.rule ? recurrence : undefined
+    );
   };
 
   return (
@@ -283,6 +323,22 @@ export function TaskForm({
               )}
             />
           </div>
+
+          {/* Recurrence section — only shown in create mode when due_date is set */}
+          {showRecurrenceSection && (
+            <FormItem>
+              <FormLabel>{t("repeatLabel")}</FormLabel>
+              <RecurrencePicker
+                value={recurrence.rule}
+                endType={recurrence.endType}
+                endDate={recurrence.endDate}
+                endCount={recurrence.endCount}
+                onChange={handleRecurrenceChange}
+                disabled={isLoading}
+                startDate={dueDate}
+              />
+            </FormItem>
+          )}
 
           {!hideChrome && (
             <div className="flex justify-end gap-3 pt-2">

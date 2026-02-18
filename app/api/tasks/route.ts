@@ -5,6 +5,7 @@ import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { taskFormSchema } from '@/lib/validations/task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
+import { ensureRecurringInstances } from '@/lib/recurring-tasks';
 import { getLocalDateString } from '@/lib/utils';
 import type { TaskInsert, TaskFilters } from '@/lib/db/types';
 
@@ -42,6 +43,15 @@ export async function GET(request: NextRequest) {
         { error: 'Invalid date format. Use YYYY-MM-DD' },
         { status: 400 }
       );
+    }
+
+    // Generate recurring instances when loading today/upcoming views
+    if (view === 'today' || view === 'upcoming') {
+      const [dy, dm, dd] = date.split('-').map(Number);
+      const throughDate = getLocalDateString(new Date(dy, dm - 1, dd + 7));
+      await ensureRecurringInstances(supabase, user.id, throughDate).catch((err) => {
+        log.error('ensureRecurringInstances failed on tasks', err, { userId: user.id });
+      });
     }
 
     // Handle special views

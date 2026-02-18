@@ -46,18 +46,71 @@ export interface Task {
   intention: string | null;
   completion_difficulty: 1 | 2 | 3 | null;
   completed_at: string | null; // TIMESTAMPTZ
+  recurring_task_id: string | null; // UUID, link to recurring_tasks template
+  is_exception: boolean; // true if this instance was individually modified
+  original_date: string | null; // DATE (YYYY-MM-DD), the scheduled date from recurrence rule
   created_at: string;
   updated_at: string;
 }
 
-export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'intention' | 'completion_difficulty'> & {
+export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'intention' | 'completion_difficulty' | 'recurring_task_id' | 'is_exception' | 'original_date'> & {
   id?: string;
   category?: TaskCategory | null;
   intention?: string | null;
   completion_difficulty?: 1 | 2 | 3 | null;
+  recurring_task_id?: string | null;
+  is_exception?: boolean;
+  original_date?: string | null;
 };
 
 export type TaskUpdate = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
+// =============================================================================
+// RECURRING TASKS
+// =============================================================================
+
+export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type WeekPosition = 'first' | 'second' | 'third' | 'fourth' | 'last';
+export type EndType = 'never' | 'after_count' | 'on_date';
+
+export interface RecurrenceRule {
+  frequency: RecurrenceFrequency;
+  interval: number; // e.g., every 2 weeks
+  days_of_week?: number[]; // 0-6 (Sun=0), for weekly
+  day_of_month?: number; // 1-31, for monthly by date
+  week_position?: WeekPosition; // for monthly by weekday
+  day_of_week_monthly?: number; // 0-6, for monthly by weekday
+  month_of_year?: number; // 1-12, for yearly
+}
+
+export interface RecurringTask {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  intention: string | null;
+  priority: 0 | 1 | 2 | 3;
+  category: TaskCategory | null;
+  due_time: string | null;
+  recurrence_rule: RecurrenceRule;
+  start_date: string; // DATE (YYYY-MM-DD)
+  end_type: EndType;
+  end_date: string | null;
+  end_count: number | null;
+  instances_generated: number;
+  next_generate_date: string | null;
+  status: 'active' | 'paused' | 'archived';
+  created_at: string;
+  updated_at: string;
+}
+
+export type RecurringTaskInsert = Omit<RecurringTask, 'id' | 'created_at' | 'updated_at' | 'instances_generated' | 'next_generate_date'> & {
+  id?: string;
+  instances_generated?: number;
+  next_generate_date?: string | null;
+};
+
+export type RecurringTaskUpdate = Partial<Omit<RecurringTask, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
 
 // =============================================================================
 // HELPER TYPES

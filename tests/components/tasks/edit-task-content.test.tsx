@@ -10,6 +10,7 @@ vi.mock('next/navigation', () => ({
     push: mockPush,
     back: mockBack,
   }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 const mockToastSuccess = vi.fn();

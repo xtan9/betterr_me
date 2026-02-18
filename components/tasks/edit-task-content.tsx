@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -12,8 +12,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
 import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import { TaskForm } from "@/components/tasks/task-form";
-import type { Task } from "@/lib/db/types";
 import type { TaskFormValues } from "@/lib/validations/task";
+import type { Task } from "@/lib/db/types";
 
 interface EditTaskContentProps {
   taskId: string;
@@ -65,6 +65,8 @@ function EditTaskSkeleton() {
 
 export function EditTaskContent({ taskId }: EditTaskContentProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const scope = searchParams.get("scope") as "this" | "following" | "all" | null;
   const t = useTranslations("tasks");
   const tForm = useTranslations("tasks.form");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,7 +79,11 @@ export function EditTaskContent({ taskId }: EditTaskContentProps) {
   const handleSubmit = async (data: TaskFormValues) => {
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
+      const url = scope
+        ? `/api/tasks/${taskId}?scope=${scope}`
+        : `/api/tasks/${taskId}`;
+
+      const response = await fetch(url, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -159,6 +165,7 @@ export function EditTaskContent({ taskId }: EditTaskContentProps) {
             onCancel={handleCancel}
             isLoading={isSubmitting}
             hideChrome
+            showRecurrence={false}
           />
         </CardContent>
       </Card>

@@ -57,6 +57,9 @@ const mockTask: Task = {
   completed_at: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+  recurring_task_id: null,
+  is_exception: false,
+  original_date: null,
 };
 
 describe('TaskForm', () => {
@@ -177,7 +180,7 @@ describe('TaskForm', () => {
           priority: 0,
           due_date: null,
           due_time: null,
-        });
+        }, undefined);
       });
     });
 
@@ -202,7 +205,7 @@ describe('TaskForm', () => {
           priority: 0,
           due_date: null,
           due_time: null,
-        });
+        }, undefined);
       });
     });
 
@@ -225,7 +228,8 @@ describe('TaskForm', () => {
         expect(mockOnSubmit).toHaveBeenCalledWith(
           expect.objectContaining({
             title: 'Buy supplies',
-          })
+          }),
+          undefined
         );
       });
     });
@@ -244,7 +248,8 @@ describe('TaskForm', () => {
 
       await waitFor(() => {
         expect(mockOnSubmit).toHaveBeenCalledWith(
-          expect.objectContaining({ description: null })
+          expect.objectContaining({ description: null }),
+          undefined
         );
       });
     });
@@ -368,7 +373,8 @@ describe('TaskForm', () => {
 
       await waitFor(() => {
         expect(mockOnSubmit).toHaveBeenCalledWith(
-          expect.objectContaining({ intention: 'To stay healthy' })
+          expect.objectContaining({ intention: 'To stay healthy' }),
+          undefined
         );
       });
     });
@@ -387,7 +393,8 @@ describe('TaskForm', () => {
 
       await waitFor(() => {
         expect(mockOnSubmit).toHaveBeenCalledWith(
-          expect.objectContaining({ intention: null })
+          expect.objectContaining({ intention: null }),
+          undefined
         );
       });
     });

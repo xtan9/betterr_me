@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { TasksDB } from '@/lib/db';
+import { TasksDB, RecurringTasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { taskUpdateSchema } from '@/lib/validations/task';
+import { editScopeSchema } from '@/lib/validations/recurring-task';
 import type { TaskUpdate } from '@/lib/db/types';
 
 /**
@@ -62,6 +63,23 @@ export async function PATCH(
     }
 
     const body = await request.json();
+    const searchParams = request.nextUrl.searchParams;
+    const scopeParam = searchParams.get('scope');
+
+    // Handle recurring task scope-based updates
+    if (scopeParam) {
+      const scopeResult = editScopeSchema.safeParse(scopeParam);
+      if (!scopeResult.success) {
+        return NextResponse.json(
+          { error: 'Invalid scope. Must be: this, following, or all' },
+          { status: 400 }
+        );
+      }
+
+      const recurringTasksDB = new RecurringTasksDB(supabase);
+      await recurringTasksDB.updateInstanceWithScope(id, user.id, scopeResult.data, body);
+      return NextResponse.json({ success: true });
+    }
 
     // Validate with Zod schema
     const validation = validateRequestBody(body, taskUpdateSchema);
@@ -139,6 +157,24 @@ export async function DELETE(
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const searchParams = request.nextUrl.searchParams;
+    const scopeParam = searchParams.get('scope');
+
+    // Handle recurring task scope-based deletes
+    if (scopeParam) {
+      const scopeResult = editScopeSchema.safeParse(scopeParam);
+      if (!scopeResult.success) {
+        return NextResponse.json(
+          { error: 'Invalid scope. Must be: this, following, or all' },
+          { status: 400 }
+        );
+      }
+
+      const recurringTasksDB = new RecurringTasksDB(supabase);
+      await recurringTasksDB.deleteInstanceWithScope(id, user.id, scopeResult.data);
+      return NextResponse.json({ success: true });
     }
 
     const tasksDB = new TasksDB(supabase);

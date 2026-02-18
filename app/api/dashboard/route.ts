@@ -4,6 +4,7 @@ import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
 import type { DashboardData, HabitLog, HabitMilestone } from '@/lib/db/types';
 import { getLocalDateString, getNextDateString } from '@/lib/utils';
 import { computeMissedDays } from '@/lib/habits/absence';
+import { ensureRecurringInstances } from '@/lib/recurring-tasks';
 import { log } from '@/lib/logger';
 
 /**
@@ -46,6 +47,13 @@ export async function GET(request: NextRequest) {
     }
 
     const tomorrowStr = getNextDateString(date);
+
+    // Generate recurring task instances through 7 days from now
+    const [dy, dm, dd] = date.split('-').map(Number);
+    const throughDate = getLocalDateString(new Date(dy, dm - 1, dd + 7));
+    await ensureRecurringInstances(supabase, user.id, throughDate).catch((err) => {
+      log.error('ensureRecurringInstances failed on dashboard', err, { userId: user.id });
+    });
 
     // 30-day lookback window for absence computation
     const [year, month, day] = date.split('-').map(Number);
