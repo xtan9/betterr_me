@@ -526,8 +526,7 @@
     },
     "page": {
       "title": "My Tasks",
-      "createButton": "Create Task",
-      "recurringButton": "Recurring"
+      "createButton": "Create Task"
     },
     "list": {
       "searchPlaceholder": "Search tasks...",
@@ -601,30 +600,6 @@
       "cancel": "Cancel",
       "confirmEdit": "Edit",
       "confirmDelete": "Delete"
-    },
-    "recurring": {
-      "title": "Recurring Tasks",
-      "createNew": "Create New",
-      "empty": "No recurring tasks",
-      "emptyDescription": "Create a recurring task to automate your repeating to-dos.",
-      "error": "Failed to load recurring tasks",
-      "retry": "Try again",
-      "activeSection": "Active",
-      "pausedSection": "Paused",
-      "archivedSection": "Archived",
-      "nextOccurrence": "Next",
-      "pause": "Pause",
-      "resume": "Resume",
-      "deleteTemplate": "Delete",
-      "pauseSuccess": "Recurring task paused",
-      "resumeSuccess": "Recurring task resumed",
-      "deleteSuccess": "Recurring task deleted",
-      "actionError": "Action failed",
-      "status": {
-        "active": "Active",
-        "paused": "Paused",
-        "archived": "Archived"
-      }
     },
     "paused": {
       "title": "{count} paused recurring tasks",

@@ -526,8 +526,7 @@
     },
     "page": {
       "title": "我的任务",
-      "createButton": "创建任务",
-      "recurringButton": "重复任务"
+      "createButton": "创建任务"
     },
     "list": {
       "searchPlaceholder": "搜索任务...",
@@ -601,30 +600,6 @@
       "cancel": "取消",
       "confirmEdit": "编辑",
       "confirmDelete": "删除"
-    },
-    "recurring": {
-      "title": "重复任务",
-      "createNew": "新建",
-      "empty": "暂无重复任务",
-      "emptyDescription": "创建重复任务以自动化您的重复待办事项。",
-      "error": "加载重复任务失败",
-      "retry": "重试",
-      "activeSection": "进行中",
-      "pausedSection": "已暂停",
-      "archivedSection": "已归档",
-      "nextOccurrence": "下次",
-      "pause": "暂停",
-      "resume": "恢复",
-      "deleteTemplate": "删除",
-      "pauseSuccess": "重复任务已暂停",
-      "resumeSuccess": "重复任务已恢复",
-      "deleteSuccess": "重复任务已删除",
-      "actionError": "操作失败",
-      "status": {
-        "active": "进行中",
-        "paused": "已暂停",
-        "archived": "已归档"
-      }
     },
     "paused": {
       "title": "{count} 个已暂停的重复任务",

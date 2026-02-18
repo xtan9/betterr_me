@@ -526,8 +526,7 @@
     },
     "page": {
       "title": "我的任務",
-      "createButton": "建立任務",
-      "recurringButton": "重複任務"
+      "createButton": "建立任務"
     },
     "list": {
       "searchPlaceholder": "搜尋任務...",
@@ -601,30 +600,6 @@
       "cancel": "取消",
       "confirmEdit": "編輯",
       "confirmDelete": "刪除"
-    },
-    "recurring": {
-      "title": "重複任務",
-      "createNew": "新建",
-      "empty": "暫無重複任務",
-      "emptyDescription": "建立重複任務以自動化您的重複待辦事項。",
-      "error": "載入重複任務失敗",
-      "retry": "重試",
-      "activeSection": "進行中",
-      "pausedSection": "已暫停",
-      "archivedSection": "已封存",
-      "nextOccurrence": "下次",
-      "pause": "暫停",
-      "resume": "恢復",
-      "deleteTemplate": "刪除",
-      "pauseSuccess": "重複任務已暫停",
-      "resumeSuccess": "重複任務已恢復",
-      "deleteSuccess": "重複任務已刪除",
-      "actionError": "操作失敗",
-      "status": {
-        "active": "進行中",
-        "paused": "已暫停",
-        "archived": "已封存"
-      }
     },
     "paused": {
       "title": "{count} 個已暫停的重複任務",
