@@ -17,7 +17,7 @@ Requirements for UI polish & refinement pass. Each maps to roadmap phases.
 
 - [x] **TOKN-01**: All hardcoded color values replaced with design token variables
 - [x] **TOKN-02**: All hardcoded spacing values (`gap-4`, etc.) replaced with spacing tokens (`gap-card-gap`)
-- [ ] **TOKN-03**: Progress bar track uses `bg-muted` instead of hardcoded slate
+- [x] **TOKN-03**: Progress bar track uses `bg-muted` instead of hardcoded slate
 
 ### Component Fixes
 
@@ -46,7 +46,7 @@ None deferred for this milestone.
 | SIDE-03 | Phase 11 | Pending |
 | TOKN-01 | Phase 10 | Complete |
 | TOKN-02 | Phase 10 | Complete |
-| TOKN-03 | Phase 10 | Pending |
+| TOKN-03 | Phase 10 | Complete |
 | COMP-01 | Phase 12 | Pending |
 | COMP-02 | Phase 12 | Pending |
 
