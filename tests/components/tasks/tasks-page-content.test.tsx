@@ -19,11 +19,24 @@ vi.mock("swr", () => ({
   default: (...args: unknown[]) => mockUseSWR(...args),
 }));
 
+// Mock sonner
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+
 const messages = {
   tasks: {
     page: {
       title: "My Tasks",
       createButton: "Create Task",
+    },
+    paused: {
+      title: "{count} paused recurring tasks",
+      resume: "Resume",
+      delete: "Delete",
+      resumeSuccess: "Recurring task resumed",
+      deleteSuccess: "Recurring task deleted",
+      actionError: "Action failed",
     },
     list: {
       searchPlaceholder: "Search tasks...",
@@ -110,17 +123,20 @@ const mockTasks = [
   },
 ];
 
+/** Default paused SWR return value (empty list, no paused templates) */
+const defaultPausedReturn = { data: [], error: undefined, isLoading: false, mutate: vi.fn() };
+
 describe("TasksPageContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("shows loading skeleton while data is loading", () => {
-    mockUseSWR.mockReturnValue({
-      data: undefined,
-      error: undefined,
-      isLoading: true,
-      mutate: vi.fn(),
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: undefined, error: undefined, isLoading: true, mutate: vi.fn() };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
     });
 
     renderWithProviders(<TasksPageContent />);
@@ -129,11 +145,11 @@ describe("TasksPageContent", () => {
   });
 
   it("shows error state when fetch fails", () => {
-    mockUseSWR.mockReturnValue({
-      data: undefined,
-      error: new Error("Failed to fetch"),
-      isLoading: false,
-      mutate: vi.fn(),
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: undefined, error: new Error("Failed to fetch"), isLoading: false, mutate: vi.fn() };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
     });
 
     renderWithProviders(<TasksPageContent />);
@@ -143,11 +159,11 @@ describe("TasksPageContent", () => {
   });
 
   it("renders task list when data is loaded", () => {
-    mockUseSWR.mockReturnValue({
-      data: mockTasks,
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: mockTasks, error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
     });
 
     renderWithProviders(<TasksPageContent />);
@@ -157,11 +173,11 @@ describe("TasksPageContent", () => {
   });
 
   it("navigates to create task page when button clicked", () => {
-    mockUseSWR.mockReturnValue({
-      data: mockTasks,
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: mockTasks, error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
     });
 
     renderWithProviders(<TasksPageContent />);
@@ -173,11 +189,11 @@ describe("TasksPageContent", () => {
   });
 
   it("navigates to task detail when task clicked", () => {
-    mockUseSWR.mockReturnValue({
-      data: mockTasks,
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: mockTasks, error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
     });
 
     renderWithProviders(<TasksPageContent />);
@@ -193,11 +209,11 @@ describe("TasksPageContent", () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
     global.fetch = mockFetch;
 
-    mockUseSWR.mockReturnValue({
-      data: mockTasks,
-      error: undefined,
-      isLoading: false,
-      mutate: mockMutate,
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: mockTasks, error: undefined, isLoading: false, mutate: mockMutate };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
     });
 
     renderWithProviders(<TasksPageContent />);
@@ -211,5 +227,39 @@ describe("TasksPageContent", () => {
         method: "POST",
       });
     });
+  });
+
+  it("shows paused recurring tasks banner when paused templates exist", () => {
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: mockTasks, error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      if (key === "/api/recurring-tasks?status=paused") {
+        return {
+          data: [
+            { id: "rt-1", title: "Weekly review", status: "paused", recurrence_rule: { frequency: "weekly", interval: 1 } },
+          ],
+          error: undefined,
+          isLoading: false,
+          mutate: vi.fn(),
+        };
+      }
+      return { data: undefined, error: undefined, isLoading: false, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+    expect(screen.getByText("Weekly review")).toBeInTheDocument();
+  });
+
+  it("does not show paused banner when no paused templates", () => {
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: mockTasks, error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      return { data: [], error: undefined, isLoading: false, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+    expect(screen.queryByText(/paused recurring/i)).not.toBeInTheDocument();
   });
 });

@@ -3,18 +3,28 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
-import { Plus, RefreshCw } from "lucide-react";
+import { Pause, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
+import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
 import { TaskList } from "./task-list";
-import type { Task } from "@/lib/db/types";
+import type { Task, RecurringTask } from "@/lib/db/types";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
   if (!res.ok) throw new Error("Failed to fetch tasks");
   const data = await res.json();
   return data.tasks;
+};
+
+const recurringFetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch");
+  const data = await res.json();
+  return data.recurring_tasks;
 };
 
 export function TasksPageContent() {
@@ -28,6 +38,15 @@ export function TasksPageContent() {
       revalidateOnFocus: true,
       keepPreviousData: true,
     }
+  );
+
+  const {
+    data: pausedTemplates,
+    mutate: mutatePaused,
+  } = useSWR<RecurringTask[]>(
+    "/api/recurring-tasks?status=paused",
+    recurringFetcher,
+    { revalidateOnFocus: true }
   );
 
   const handleToggleTask = async (taskId: string) => {
@@ -47,6 +66,29 @@ export function TasksPageContent() {
 
   const handleCreateTask = () => {
     router.push("/tasks/new");
+  };
+
+  const handleResume = async (templateId: string) => {
+    try {
+      const res = await fetch(`/api/recurring-tasks/${templateId}?action=resume`, { method: "PATCH" });
+      if (!res.ok) throw new Error("Failed");
+      mutatePaused();
+      mutate(); // refresh tasks list — resumed template may generate new instances
+      toast.success(t("paused.resumeSuccess"));
+    } catch {
+      toast.error(t("paused.actionError"));
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    try {
+      const res = await fetch(`/api/recurring-tasks/${templateId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed");
+      mutatePaused();
+      toast.success(t("paused.deleteSuccess"));
+    } catch {
+      toast.error(t("paused.actionError"));
+    }
   };
 
   if (isLoading) {
@@ -86,6 +128,52 @@ export function TasksPageContent() {
         onTaskClick={handleTaskClick}
         onCreateTask={handleCreateTask}
       />
+
+      {/* Paused recurring tasks banner */}
+      {pausedTemplates && pausedTemplates.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Pause className="size-4" />
+            {t("paused.title", { count: pausedTemplates.length })}
+          </h3>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {pausedTemplates.map((template) => (
+              <Card key={template.id} className="border-dashed">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-medium truncate text-sm">{template.title}</h4>
+                      <p className="text-xs text-muted-foreground">
+                        {describeRecurrence(template.recurrence_rule)}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={() => handleResume(template.id)}
+                        title={t("paused.resume")}
+                      >
+                        <Play className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteTemplate(template.id)}
+                        title={t("paused.delete")}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
