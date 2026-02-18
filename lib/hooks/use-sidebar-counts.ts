@@ -1,12 +1,11 @@
 import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 import { getLocalDateString } from "@/lib/utils";
 
 interface SidebarCounts {
   habits_incomplete: number;
   tasks_due: number;
 }
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function useSidebarCounts() {
   const date = getLocalDateString();

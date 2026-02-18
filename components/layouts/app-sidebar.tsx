@@ -72,12 +72,11 @@ export function AppSidebar({ pinned, onTogglePin }: AppSidebarProps) {
   const pathname = usePathname();
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
-  const { habitsIncomplete, tasksDue } = useSidebarCounts();
+  const { habitsIncomplete, tasksDue, error } = useSidebarCounts();
 
-  const badgeCounts: Record<string, number> = {
-    habits: habitsIncomplete,
-    tasks: tasksDue,
-  };
+  const badgeCounts: Record<string, number> = error
+    ? {}
+    : { habits: habitsIncomplete, tasks: tasksDue };
 
   return (
     <Sidebar collapsible="icon">

@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
+import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -16,6 +17,7 @@ import {
   Languages,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetcher } from "@/lib/fetcher";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -41,8 +43,6 @@ interface ProfileData {
   };
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
 const locales = [
   { code: "en", name: "English" },
   { code: "zh", name: "\u7B80\u4F53\u4E2D\u6587" },
@@ -61,7 +61,7 @@ function getInitials(fullName: string | null | undefined, email: string): string
 }
 
 export function SidebarUserFooter() {
-  const { data } = useSWR<ProfileData>("/api/profile", fetcher);
+  const { data, error } = useSWR<ProfileData>("/api/profile", fetcher);
   const { theme, setTheme } = useTheme();
   const locale = useLocale();
   const t = useTranslations("common.nav");
@@ -86,10 +86,37 @@ export function SidebarUserFooter() {
   };
 
   const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/auth/login");
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      router.push("/auth/login");
+    } catch (err) {
+      console.error("Sign out failed:", err);
+      toast.error(tSidebar("signOutError"));
+    }
   };
+
+  if (error) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton size="lg">
+            <Avatar className="h-8 w-8 rounded-lg">
+              <AvatarFallback className="rounded-lg">!</AvatarFallback>
+            </Avatar>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-semibold text-destructive">
+                {tSidebar("profileError")}
+              </span>
+              <span className="truncate text-xs text-muted-foreground">
+                &nbsp;
+              </span>
+            </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    );
+  }
 
   if (!data) {
     return (
@@ -100,7 +127,7 @@ export function SidebarUserFooter() {
               <AvatarFallback className="rounded-lg">?</AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-semibold">Loading...</span>
+              <span className="truncate font-semibold">{tSidebar("loading")}</span>
               <span className="truncate text-xs text-muted-foreground">
                 &nbsp;
               </span>

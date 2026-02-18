@@ -28,6 +28,16 @@ vi.mock("swr", () => ({
   default: () => mockSWRReturn,
 }));
 
+// Mock sonner toast
+vi.mock("sonner", () => ({
+  toast: { error: vi.fn() },
+}));
+
+// Mock shared fetcher
+vi.mock("@/lib/fetcher", () => ({
+  fetcher: vi.fn(),
+}));
+
 // Mock next-intl
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -166,6 +176,7 @@ describe("SidebarUserFooter", () => {
       },
     };
     mockSWRReturn.isLoading = false;
+    mockSWRReturn.error = undefined;
     mockSetTheme.mockReset();
     mockPush.mockReset();
     mockSignOut.mockReset().mockResolvedValue({});
@@ -217,7 +228,7 @@ describe("SidebarUserFooter", () => {
 
     render(<SidebarUserFooter />);
 
-    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(screen.getByText("loading")).toBeInTheDocument();
     expect(screen.getAllByText("?").length).toBeGreaterThan(0);
   });
 

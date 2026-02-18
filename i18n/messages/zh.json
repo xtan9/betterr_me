@@ -24,7 +24,10 @@
       "language": "语言",
       "themeLight": "浅色",
       "themeDark": "深色",
-      "themeSystem": "跟随系统"
+      "themeSystem": "跟随系统",
+      "loading": "加载中...",
+      "profileError": "个人资料不可用",
+      "signOutError": "退出登录失败"
     },
     "footer": {
       "product": "产品",

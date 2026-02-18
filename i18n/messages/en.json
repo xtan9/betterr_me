@@ -24,7 +24,10 @@
       "language": "Language",
       "themeLight": "Light",
       "themeDark": "Dark",
-      "themeSystem": "System"
+      "themeSystem": "System",
+      "loading": "Loading...",
+      "profileError": "Profile unavailable",
+      "signOutError": "Sign out failed"
     },
     "footer": {
       "product": "Product",
