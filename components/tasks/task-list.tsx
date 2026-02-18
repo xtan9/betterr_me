@@ -79,7 +79,7 @@ export function TaskList({
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-40 rounded-xl" />
           ))}
@@ -123,7 +123,7 @@ export function TaskList({
               onCreateTask={onCreateTask}
             />
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
               {filteredTasks.map((task) => (
                 <TaskCard
                   key={task.id}

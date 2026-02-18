@@ -206,7 +206,7 @@ function TasksPageSkeleton() {
       </div>
 
       {/* Cards skeleton */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <Skeleton key={i} className="h-40 rounded-xl" />
         ))}
