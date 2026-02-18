@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { buildHeatmapData, type HeatmapCell } from "@/lib/habits/heatmap";
@@ -20,14 +21,47 @@ interface Heatmap30DayProps {
 
 const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
-export function Heatmap30Day({
+function organizeByWeeks(cells: HeatmapCell[]) {
+  const weeks: (HeatmapCell | null)[][] = [];
+  let currentWeek: (HeatmapCell | null)[] = [];
+
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    const date = new Date(cell.date + "T00:00:00");
+    const dayOfWeek = date.getDay(); // 0 = Sunday
+
+    // If this is the first cell, fill in empty slots before it
+    if (i === 0) {
+      for (let j = 0; j < dayOfWeek; j++) {
+        currentWeek.push(null);
+      }
+    }
+
+    currentWeek.push(cell);
+
+    // If it's Saturday or the last cell, end the week
+    if (dayOfWeek === 6 || i === cells.length - 1) {
+      // Fill remaining slots if needed
+      while (currentWeek.length < 7) {
+        currentWeek.push(null);
+      }
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+  }
+
+  return weeks;
+}
+
+export const Heatmap30Day = memo(function Heatmap30Day({
   frequency,
   logs,
   onToggleDate,
   isLoading = false,
 }: Heatmap30DayProps) {
   const t = useTranslations("habits.heatmap");
-  const cells = buildHeatmapData(logs, frequency, 30);
+  const cells = useMemo(() => buildHeatmapData(logs, frequency, 30), [logs, frequency]);
+  const weeks = useMemo(() => organizeByWeeks(cells), [cells]);
 
   const handleCellClick = (cell: HeatmapCell) => {
     if (isLoading) return;
@@ -96,42 +130,6 @@ export function Heatmap30Day({
 
     return parts.join(" ");
   };
-
-  // Organize cells into a grid by week (columns = days of week)
-  // We need to figure out which day of week each cell starts on
-  const organizeByWeeks = (cells: HeatmapCell[]) => {
-    const weeks: (HeatmapCell | null)[][] = [];
-    let currentWeek: (HeatmapCell | null)[] = [];
-
-    for (let i = 0; i < cells.length; i++) {
-      const cell = cells[i];
-      const date = new Date(cell.date + "T00:00:00");
-      const dayOfWeek = date.getDay(); // 0 = Sunday
-
-      // If this is the first cell, fill in empty slots before it
-      if (i === 0) {
-        for (let j = 0; j < dayOfWeek; j++) {
-          currentWeek.push(null);
-        }
-      }
-
-      currentWeek.push(cell);
-
-      // If it's Saturday or the last cell, end the week
-      if (dayOfWeek === 6 || i === cells.length - 1) {
-        // Fill remaining slots if needed
-        while (currentWeek.length < 7) {
-          currentWeek.push(null);
-        }
-        weeks.push(currentWeek);
-        currentWeek = [];
-      }
-    }
-
-    return weeks;
-  };
-
-  const weeks = organizeByWeeks(cells);
 
   if (isLoading) {
     return (
@@ -211,4 +209,4 @@ export function Heatmap30Day({
       </div>
     </div>
   );
-}
+});

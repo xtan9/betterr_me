@@ -130,7 +130,8 @@ test.describe('Complete Habit Flow - Toggle', () => {
 
     const initialState = await checkbox.getAttribute('data-state');
 
-    // Rapidly toggle — two clicks with no wait in between to test debounce/race handling
+    // Rapidly toggle — two clicks. Playwright awaits actionability (enabled) between clicks,
+    // so both go through sequentially (double-click protection disables during in-flight).
     await checkbox.click();
     await checkbox.click();
 
@@ -138,7 +139,7 @@ test.describe('Complete Habit Flow - Toggle', () => {
     await page.waitForLoadState('networkidle');
 
     // Should return to initial state after double toggle
-    await expect(checkbox).toHaveAttribute('data-state', initialState!, { timeout: 5000 });
+    await expect(checkbox).toHaveAttribute('data-state', initialState!, { timeout: 10000 });
   });
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
@@ -158,7 +158,14 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     fetcher,
   );
 
-  const logs = logsData?.logs || logsData || [];
+  const logs = useMemo(() => {
+    const raw = logsData?.logs || logsData;
+    return Array.isArray(raw) ? raw : [];
+  }, [logsData]);
+
+  const frequencyKey = habit ? JSON.stringify(habit.frequency) : "";
+  const frequency = useMemo(() => habit?.frequency, [frequencyKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const stats = useMemo(
     () =>
       statsData || {
@@ -180,7 +187,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
 
   const { isToggling, startToggling, stopToggling } = useTogglingSet();
 
-  const handleToggleDate = async (date: string) => {
+  const handleToggleDate = useCallback(async (date: string) => {
     if (isToggling(date)) return;
 
     startToggling(date);
@@ -227,8 +234,9 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
             }
             return { logs: updatedLogs };
           },
+          populateCache: false,
           rollbackOnError: true,
-          revalidate: true,
+          revalidate: false,
         },
       );
       mutateHabit();
@@ -238,7 +246,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     } finally {
       stopToggling(date);
     }
-  };
+  }, [isToggling, startToggling, stopToggling, mutateLogs, habitId, mutateHabit, t]);
 
   const handlePause = async () => {
     if (!habit) return;
@@ -391,8 +399,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
           {/* Heatmap */}
           <Heatmap30Day
             habitId={habitId}
-            frequency={habit.frequency}
-            logs={Array.isArray(logs) ? logs : []}
+            frequency={frequency ?? habit.frequency}
+            logs={logs}
             onToggleDate={handleToggleDate}
           />
 

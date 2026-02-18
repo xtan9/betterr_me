@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { useTranslations } from "next-intl";
 import { getNextMilestone, getDaysToNextMilestone } from "@/lib/habits/milestones";
 import { Progress } from "@/components/ui/progress";
@@ -9,7 +10,7 @@ interface NextMilestoneProps {
   currentStreak: number;
 }
 
-export function NextMilestone({ currentStreak }: NextMilestoneProps) {
+export const NextMilestone = memo(function NextMilestone({ currentStreak }: NextMilestoneProps) {
   const t = useTranslations("habits.milestone");
 
   const nextMilestone = getNextMilestone(currentStreak);
@@ -37,4 +38,4 @@ export function NextMilestone({ currentStreak }: NextMilestoneProps) {
       <Progress value={progress} className="h-2" aria-label={t("nextMilestone", { days: daysRemaining, milestone: nextMilestone })} />
     </div>
   );
-}
+});

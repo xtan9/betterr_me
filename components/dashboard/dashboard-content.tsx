@@ -31,6 +31,21 @@ import type { DashboardData } from "@/lib/db/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
+const EMPTY_DASHBOARD: DashboardData = {
+  habits: [],
+  tasks_today: [],
+  tasks_tomorrow: [],
+  milestones_today: [],
+  stats: {
+    total_habits: 0,
+    completed_today: 0,
+    current_best_streak: 0,
+    total_tasks: 0,
+    tasks_due_today: 0,
+    tasks_completed_today: 0,
+  },
+};
+
 interface DashboardContentProps {
   userName: string;
   initialData?: DashboardData;
@@ -105,6 +120,13 @@ export function DashboardContent({
     stopToggling,
   } = useTogglingSet();
 
+  const {
+    togglingIds: togglingTaskIds,
+    isToggling: isTogglingTask,
+    startToggling: startTogglingTask,
+    stopToggling: stopTogglingTask,
+  } = useTogglingSet();
+
   const handleToggleHabit = async (habitId: string) => {
     if (isToggling(habitId)) return;
 
@@ -127,21 +149,7 @@ export function DashboardContent({
         },
         {
           optimisticData: (current: DashboardData | undefined) => {
-            if (!current)
-              return {
-                habits: [],
-                tasks_today: [],
-                tasks_tomorrow: [],
-                milestones_today: [],
-                stats: {
-                  total_habits: 0,
-                  completed_today: 0,
-                  current_best_streak: 0,
-                  total_tasks: 0,
-                  tasks_due_today: 0,
-                  tasks_completed_today: 0,
-                },
-              };
+            if (!current) return EMPTY_DASHBOARD;
             const habit = current.habits.find((h) => h.id === habitId);
             const wasCompleted = habit?.completed_today ?? false;
             return {
@@ -159,8 +167,9 @@ export function DashboardContent({
               },
             };
           },
+          populateCache: false,
           rollbackOnError: true,
-          revalidate: true,
+          revalidate: false,
         },
       );
     } catch (err) {
@@ -172,17 +181,57 @@ export function DashboardContent({
   };
 
   const handleToggleTask = async (taskId: string) => {
+    if (isTogglingTask(taskId)) return;
+
+    startTogglingTask(taskId);
+
     try {
-      const response = await fetch(`/api/tasks/${taskId}/toggle`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to toggle task ${taskId}: ${response.status}`);
-      }
-      mutate(); // Revalidate dashboard data
+      await mutate(
+        async () => {
+          const response = await fetch(`/api/tasks/${taskId}/toggle`, {
+            method: "POST",
+          });
+          if (!response.ok) {
+            throw new Error(
+              `Failed to toggle task ${taskId}: ${response.status}`,
+            );
+          }
+          return undefined;
+        },
+        {
+          optimisticData: (current: DashboardData | undefined) => {
+            if (!current) return EMPTY_DASHBOARD;
+            const task = current.tasks_today.find((t) => t.id === taskId);
+            const wasCompleted = task?.is_completed ?? false;
+            return {
+              ...current,
+              tasks_today: current.tasks_today.map((t) =>
+                t.id === taskId
+                  ? {
+                      ...t,
+                      is_completed: !t.is_completed,
+                      completed_at: t.is_completed ? null : new Date().toISOString(),
+                    }
+                  : t,
+              ),
+              stats: {
+                ...current.stats,
+                tasks_completed_today: wasCompleted
+                  ? current.stats.tasks_completed_today - 1
+                  : current.stats.tasks_completed_today + 1,
+              },
+            };
+          },
+          populateCache: false,
+          rollbackOnError: true,
+          revalidate: false,
+        },
+      );
     } catch (err) {
       console.error("Failed to toggle task:", err);
       toast.error(t("error.toggleTaskFailed"));
+    } finally {
+      stopTogglingTask(taskId);
     }
   };
 
@@ -353,6 +402,7 @@ export function DashboardContent({
           onToggle={handleToggleTask}
           onTaskClick={handleTaskClick}
           onCreateTask={handleCreateTask}
+          togglingTaskIds={togglingTaskIds}
         />
       </div>
     </div>
