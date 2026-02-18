@@ -254,16 +254,19 @@ export class RecurringTasksDB {
         break;
       }
       case 'following': {
-        // Delete this and all future incomplete instances, archive template
-        if (task.original_date) {
-          await this.supabase
-            .from('tasks')
-            .delete()
-            .eq('recurring_task_id', task.recurring_task_id)
-            .eq('user_id', userId)
-            .eq('is_completed', false)
-            .gte('original_date', task.original_date);
+        if (!task.original_date) {
+          throw new Error('Cannot delete following instances: task has no original_date');
         }
+        // Delete this and all future incomplete instances
+        const { error: delErr } = await this.supabase
+          .from('tasks')
+          .delete()
+          .eq('recurring_task_id', task.recurring_task_id)
+          .eq('user_id', userId)
+          .eq('is_completed', false)
+          .gte('original_date', task.original_date);
+        if (delErr) throw delErr;
+
         // Set template end_date to the day before this instance
         const [y, m, d] = task.original_date.split('-').map(Number);
         const prevDay = new Date(y, m - 1, d - 1);
