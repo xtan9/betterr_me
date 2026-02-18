@@ -65,10 +65,11 @@ Plans:
   2. Hovering over sidebar items produces a smooth visual transition (not an abrupt color swap), and the active/current page item is clearly distinguished
   3. Sidebar group headers (e.g., "Navigation", "Management") are visually distinct from nav items -- smaller font, muted color, proper spacing above/below
   4. Sidebar icons are vertically aligned with their labels and consistently sized across all nav items
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 11-01: TBD
+- [ ] 11-01-PLAN.md — Add sidebar tokens, restructure flat nav with icon containers, update footer
+- [ ] 11-02-PLAN.md — Update sidebar tests and visual verification checkpoint
 
 ### Phase 12: Component Fixes
 **Goal**: Two specific layout/style regressions from the v2.0 redesign are restored to their intended appearance
@@ -95,6 +96,6 @@ Plans:
 | 4. Dead Code & Observability | v1.0 | 2/2 | Complete | 2026-02-16 |
 | 5. Test Coverage Backfill | v1.0 | 1/1 | Complete | 2026-02-16 |
 | 6. Dashboard Task Data Flow | v1.1 | 1/1 | Complete | 2026-02-16 |
-| 10. Token Consistency | 3/3 | Complete    | 2026-02-18 | - |
-| 11. Sidebar Polish | v2.1 | 0/? | Not started | - |
+| 10. Token Consistency | v2.1 | 3/3 | Complete | 2026-02-18 |
+| 11. Sidebar Polish | v2.1 | 0/2 | Not started | - |
 | 12. Component Fixes | v2.1 | 0/? | Not started | - |
