@@ -7,6 +7,8 @@ import { taskFormSchema } from '@/lib/validations/task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import { ensureRecurringInstances } from '@/lib/recurring-tasks';
 import { getLocalDateString } from '@/lib/utils';
+import { syncTaskCreate } from '@/lib/tasks/sync';
+import { getBottomSortOrder } from '@/lib/tasks/sort-order';
 import type { TaskInsert, TaskFilters } from '@/lib/db/types';
 
 /**
@@ -138,6 +140,16 @@ export async function POST(request: NextRequest) {
     await ensureProfile(supabase, user);
 
     const tasksDB = new TasksDB(supabase);
+
+    // Query max sort_order for this user to place new task at bottom
+    const { data: maxRow } = await supabase
+      .from('tasks')
+      .select('sort_order')
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     const taskData: TaskInsert = {
       user_id: user.id,
       title: validation.data.title.trim(),
@@ -148,9 +160,13 @@ export async function POST(request: NextRequest) {
       category: validation.data.category || null,
       due_date: validation.data.due_date || null,
       due_time: validation.data.due_time || null,
+      status: validation.data.status,
+      sort_order: getBottomSortOrder(maxRow?.sort_order ?? null),
     };
 
-    const task = await tasksDB.createTask(taskData);
+    // Apply sync to ensure status/is_completed/completed_at consistency
+    const syncedTask = syncTaskCreate(taskData);
+    const task = await tasksDB.createTask(syncedTask);
     return NextResponse.json({ task }, { status: 201 });
   } catch (error) {
     log.error('POST /api/tasks error', error);

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Task, TaskInsert, TaskUpdate, TaskFilters } from './types';
 import { getLocalDateString } from '@/lib/utils';
+import { syncTaskUpdate } from '@/lib/tasks/sync';
 
 export class TasksDB {
   constructor(private supabase: SupabaseClient) {}
@@ -127,13 +128,13 @@ export class TasksDB {
     const task = await this.getTask(taskId, userId);
     if (!task) throw new Error('Task not found');
 
-    // Toggle completion
     const updates: TaskUpdate = {
       is_completed: !task.is_completed,
-      completed_at: !task.is_completed ? new Date().toISOString() : null,
     };
 
-    return this.updateTask(taskId, userId, updates);
+    // Apply sync to keep status consistent with is_completed
+    const syncedUpdates = syncTaskUpdate(updates);
+    return this.updateTask(taskId, userId, syncedUpdates);
   }
 
   /**

@@ -5,6 +5,7 @@ import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { taskUpdateSchema } from '@/lib/validations/task';
 import { editScopeSchema } from '@/lib/validations/recurring-task';
+import { syncTaskUpdate } from '@/lib/tasks/sync';
 import type { TaskUpdate } from '@/lib/db/types';
 
 /**
@@ -106,8 +107,6 @@ export async function PATCH(
 
     if (validation.data.is_completed !== undefined) {
       updates.is_completed = validation.data.is_completed;
-      // Set completed_at timestamp
-      updates.completed_at = validation.data.is_completed ? new Date().toISOString() : null;
     }
 
     if (validation.data.priority !== undefined) {
@@ -126,8 +125,20 @@ export async function PATCH(
       updates.completion_difficulty = validation.data.completion_difficulty;
     }
 
+    if (validation.data.status !== undefined) {
+      updates.status = validation.data.status;
+    }
+    if (validation.data.section !== undefined) {
+      updates.section = validation.data.section;
+    }
+    if (validation.data.sort_order !== undefined) {
+      updates.sort_order = validation.data.sort_order;
+    }
+
+    // Apply sync to keep status/is_completed consistent
+    const syncedUpdates = syncTaskUpdate(updates);
     const tasksDB = new TasksDB(supabase);
-    const task = await tasksDB.updateTask(id, user.id, updates);
+    const task = await tasksDB.updateTask(id, user.id, syncedUpdates);
     return NextResponse.json({ task });
   } catch (error: unknown) {
     log.error('PATCH /api/tasks/[id] error', error);
