@@ -105,8 +105,9 @@ describe("TasksToday", () => {
     );
 
     expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
+    // Only incomplete tasks are shown
     expect(screen.getByText("Finish proposal")).toBeInTheDocument();
-    expect(screen.getByText("Team standup")).toBeInTheDocument();
+    expect(screen.queryByText("Team standup")).not.toBeInTheDocument();
     expect(screen.getByText("Read documentation")).toBeInTheDocument();
   });
 
@@ -123,7 +124,7 @@ describe("TasksToday", () => {
     );
 
     expect(screen.getByText(/Due 5:00 PM/i)).toBeInTheDocument();
-    expect(screen.getByText(/Due 10:00 AM/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Due 10:00 AM/i)).not.toBeInTheDocument();
   });
 
   it("shows all day for tasks without due time", () => {
@@ -191,6 +192,9 @@ describe("TasksToday", () => {
     );
 
     expect(screen.getByText(/All tasks done!/)).toBeInTheDocument();
+    expect(screen.queryByText("Finish proposal")).not.toBeInTheDocument();
+    expect(screen.queryByText("Team standup")).not.toBeInTheDocument();
+    expect(screen.queryByText("Read documentation")).not.toBeInTheDocument();
   });
 
   it("shows empty state when no tasks", () => {
@@ -286,7 +290,7 @@ describe("TasksToday", () => {
   it("does not show intention subtitle for non-P3 tasks", () => {
     const nonP3WithIntention: Task[] = [
       {
-        ...mockTasks[1],
+        ...mockTasks[2], // use incomplete task as base
         priority: 2,
         intention: "Should not appear",
       },
@@ -377,10 +381,9 @@ describe("TasksToday", () => {
     const taskButtons = buttons.filter(
       (b) =>
         b.textContent === "Finish proposal" ||
-        b.textContent === "Team standup" ||
         b.textContent === "Read documentation",
     );
-    expect(taskButtons).toHaveLength(3);
+    expect(taskButtons).toHaveLength(2);
   });
 
   describe("reflection strip", () => {
@@ -596,10 +599,49 @@ describe("TasksToday", () => {
       // Task and reflection strip should still be visible
       expect(screen.getByText("Finish proposal")).toBeInTheDocument();
       expect(screen.getByText("How was it?")).toBeInTheDocument();
+      expect(screen.queryByText("No tasks for today")).not.toBeInTheDocument();
     });
 
-    it("does not show reflection when uncompleting a task", async () => {
+    it("re-injects reflecting task when SWR returns it as completed", async () => {
       const onToggle = vi.fn().mockResolvedValue(undefined);
+      const onCreateTask = vi.fn();
+      const p3Task: Task[] = [mockTasks[0]];
+
+      const { rerender } = renderWithIntl(
+        <TasksToday
+          tasks={p3Task}
+          onToggle={onToggle}
+          onCreateTask={onCreateTask}
+        />,
+      );
+
+      // Complete the task to trigger reflection
+      const checkbox = screen.getByRole("checkbox");
+      await act(async () => {
+        fireEvent.click(checkbox);
+      });
+
+      expect(screen.getByText("How was it?")).toBeInTheDocument();
+
+      // Simulate SWR revalidation returning the task as completed
+      const completedTask: Task[] = [{ ...mockTasks[0], is_completed: true, completed_at: new Date().toISOString() }];
+      rerender(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <TasksToday
+            tasks={completedTask}
+            onToggle={onToggle}
+            onCreateTask={onCreateTask}
+          />
+        </NextIntlClientProvider>,
+      );
+
+      // Task should still be visible because it's being reflected on
+      expect(screen.getByText("Finish proposal")).toBeInTheDocument();
+      expect(screen.getByText("How was it?")).toBeInTheDocument();
+      expect(screen.queryByText("No tasks for today")).not.toBeInTheDocument();
+    });
+
+    it("does not render completed tasks (cannot uncomplete from dashboard)", () => {
       const onCreateTask = vi.fn();
 
       // P3 task that is already completed
@@ -614,17 +656,15 @@ describe("TasksToday", () => {
       renderWithIntl(
         <TasksToday
           tasks={completedP3}
-          onToggle={onToggle}
+          onToggle={vi.fn()}
           onCreateTask={onCreateTask}
         />,
       );
 
-      const checkbox = screen.getByRole("checkbox");
-      await act(async () => {
-        fireEvent.click(checkbox);
-      });
-
-      expect(screen.queryByText("How was it?")).not.toBeInTheDocument();
+      // Completed task should not be rendered
+      expect(screen.queryByText("Finish proposal")).not.toBeInTheDocument();
+      // Should show "all complete" celebration
+      expect(screen.getByText(/All tasks done!/)).toBeInTheDocument();
     });
   });
 });

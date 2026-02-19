@@ -210,15 +210,19 @@ export function TasksToday({
     [reflectingTaskId, t],
   );
 
-  // Re-inject the reflecting task if SWR revalidation removed it
-  const visibleTasks = useMemo(() => {
-    if (!reflectingTask || !reflectingTaskId) return tasks;
-    const hasTask = tasks.some((t) => t.id === reflectingTaskId);
-    if (hasTask) return tasks;
-    return [reflectingTask, ...tasks];
-  }, [tasks, reflectingTask, reflectingTaskId]);
+  const incompleteTasks = useMemo(() => tasks.filter(t => !t.is_completed), [tasks]);
 
-  // Sort tasks: completed last, then by due time, then by priority
+  // Re-inject the reflecting task into the visible list.
+  // Since incompleteTasks filters out completed tasks, a just-completed task
+  // undergoing reflection would otherwise disappear immediately.
+  const visibleTasks = useMemo(() => {
+    if (!reflectingTask || !reflectingTaskId) return incompleteTasks;
+    const hasTask = incompleteTasks.some((t) => t.id === reflectingTaskId);
+    if (hasTask) return incompleteTasks;
+    return [reflectingTask, ...incompleteTasks];
+  }, [incompleteTasks, reflectingTask, reflectingTaskId]);
+
+  // Sort visible tasks: by due time, then by priority
   const sortedTasks = [...visibleTasks].sort((a, b) => {
     // Completed tasks go last
     if (a.is_completed !== b.is_completed) {
@@ -239,8 +243,8 @@ export function TasksToday({
     return b.priority - a.priority;
   });
 
-  const completedCount = visibleTasks.filter((t) => t.is_completed).length;
-  const totalCount = visibleTasks.length;
+  const completedCount = tasks.filter((t) => t.is_completed).length;
+  const totalCount = tasks.length;
   const allComplete = totalCount > 0 && completedCount === totalCount;
   // For Coming Up section: treat "no today tasks" the same as "all complete"
   const todayClear = totalCount === 0 || allComplete;
@@ -251,7 +255,7 @@ export function TasksToday({
   const extraTomorrow = tasksTomorrow.length - maxTomorrowPreview;
 
   return (
-    <Card>
+    <Card className="flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <h2 className="text-lg font-semibold">{t("title")}</h2>
         <Button
@@ -264,8 +268,8 @@ export function TasksToday({
           {t("addTask")}
         </Button>
       </CardHeader>
-      <CardContent>
-        {totalCount === 0 ? (
+      <CardContent className="flex-1 flex flex-col">
+        {totalCount === 0 && sortedTasks.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p className="font-medium mb-1">{t("noTasks")}</p>
             <p className="text-sm">{t("createFirst")}</p>
@@ -287,7 +291,7 @@ export function TasksToday({
                 />
               ))}
             </div>
-            <div className="mt-4 pt-4 border-t text-sm text-center text-muted-foreground">
+            <div className="mt-auto pt-4 border-t text-sm text-center text-muted-foreground">
               {allComplete ? (
                 <span className="text-primary font-medium">
                   {t("allComplete")} 🎉
