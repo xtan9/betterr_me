@@ -105,7 +105,7 @@ describe("TasksToday", () => {
     );
 
     expect(screen.getByText("Today's Tasks")).toBeInTheDocument();
-    // Only incomplete tasks are shown
+    // Tasks completed before today are hidden
     expect(screen.getByText("Finish proposal")).toBeInTheDocument();
     expect(screen.queryByText("Team standup")).not.toBeInTheDocument();
     expect(screen.getByText("Read documentation")).toBeInTheDocument();
@@ -641,6 +641,9 @@ describe("TasksToday", () => {
       expect(screen.queryByText("No tasks for today")).not.toBeInTheDocument();
     });
 
+  });
+
+  describe("completed task filtering", () => {
     it("shows tasks completed today in the list", () => {
       const todayCompleted: Task[] = [{
         ...mockTasks[0],
@@ -666,30 +669,39 @@ describe("TasksToday", () => {
       expect(screen.queryByText("Finish proposal")).not.toBeInTheDocument();
     });
 
-    it("does not render completed tasks (cannot uncomplete from dashboard)", () => {
-      const onCreateTask = vi.fn();
-
-      // P3 task that is already completed
-      const completedP3: Task[] = [
-        {
-          ...mockTasks[0],
-          is_completed: true,
-          completed_at: "2024-01-01T17:00:00Z",
-        },
-      ];
-
+    it("hides completed tasks with null completed_at", () => {
+      const nullCompletedAt: Task[] = [{
+        ...mockTasks[0],
+        is_completed: true,
+        completed_at: null,
+      }];
       renderWithIntl(
-        <TasksToday
-          tasks={completedP3}
-          onToggle={vi.fn()}
-          onCreateTask={onCreateTask}
-        />,
+        <TasksToday tasks={nullCompletedAt} onToggle={vi.fn()} onCreateTask={vi.fn()} />,
       );
-
-      // Completed task should not be rendered
       expect(screen.queryByText("Finish proposal")).not.toBeInTheDocument();
-      // Should show "all complete" celebration
-      expect(screen.getByText(/All tasks done!/)).toBeInTheDocument();
+    });
+
+    it("shows both incomplete and today-completed tasks together", () => {
+      const mixedTasks: Task[] = [
+        mockTasks[0], // incomplete
+        {
+          ...mockTasks[1],
+          is_completed: true,
+          completed_at: new Date().toISOString(),
+        }, // completed today
+        {
+          ...mockTasks[2],
+          is_completed: true,
+          completed_at: "2024-01-01T10:00:00Z",
+        }, // completed in past — hidden
+      ];
+      renderWithIntl(
+        <TasksToday tasks={mixedTasks} onToggle={vi.fn()} onCreateTask={vi.fn()} />,
+      );
+      expect(screen.getByText("Finish proposal")).toBeInTheDocument();
+      expect(screen.getByText("Team standup")).toBeInTheDocument();
+      expect(screen.queryByText("Read documentation")).not.toBeInTheDocument();
+      expect(screen.getByText(/2 of 3 completed/)).toBeInTheDocument();
     });
   });
 });
