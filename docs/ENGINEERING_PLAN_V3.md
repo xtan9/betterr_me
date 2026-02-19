@@ -2,7 +2,7 @@
 
 **Status:** Proposed
 **Date:** Feb 9, 2026
-**PRD:** `docs/VERTICAL_DEPTH_STRATEGY.md`
+**PRD:** `docs/FEATURE_VERTICAL_DEPTH_STRATEGY.md`
 
 This plan translates the Vertical Depth Strategy into concrete engineering work, organized by phase. Each step includes database migrations, API changes, UI components, tests, and i18n — in dependency order.
 
