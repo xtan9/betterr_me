@@ -57,11 +57,11 @@
   2. Setting a task's status to `done` via API automatically sets `is_completed=true` and records `completed_at`; moving status away from `done` clears both
   3. Dashboard task counts, sidebar counts, recurring task generation, and all existing task features work identically to before the migration
   4. Task status field accepts exactly four values: backlog, todo, in_progress, done
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 13-01: TBD
-- [ ] 13-02: TBD
+- [ ] 13-01-PLAN.md — Types, sync utility, sort-order utility, migration SQL (TDD)
+- [ ] 13-02-PLAN.md — Wire sync into DB layer, API routes, instance generator, update tests
 
 ### Phase 14: Projects & Sections
 **Goal**: Users can organize tasks into Work/Personal sections and named projects, and the tasks page displays this structure
