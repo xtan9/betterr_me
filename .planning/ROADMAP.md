@@ -73,12 +73,12 @@ Plans:
   3. Task create/edit form has a required section selector (defaults to Personal) and an optional project dropdown filtered by the selected section
   4. Tasks page displays Work and Personal as top-level sections, each showing project cards (with X/Y progress) and a standalone tasks area
   5. All new UI strings (project names, section labels, form fields, confirmations) are translated in en, zh, and zh-TW
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 14-01: TBD
-- [ ] 14-02: TBD
-- [ ] 14-03: TBD
+- [ ] 14-01-PLAN.md — Data foundation: SQL migrations, types, ProjectsDB, validation, API routes, tests
+- [ ] 14-02-PLAN.md — Project CRUD UI, task form extensions (section toggle + project dropdown), i18n strings
+- [ ] 14-03-PLAN.md — Tasks page redesign (section layout, project cards) + archived projects page
 
 ### Phase 15: Kanban Board
 **Goal**: Users can view and manage a project's tasks on a 4-column kanban board with drag-and-drop, completion reflection, and intention display
