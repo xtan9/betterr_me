@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { syncTaskCreate, syncTaskUpdate } from '@/lib/tasks/sync';
 import type { TaskInsert, TaskUpdate } from '@/lib/db/types';
 
