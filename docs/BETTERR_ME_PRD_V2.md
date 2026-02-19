@@ -457,6 +457,7 @@ These are options, not commitments. CEO should prioritize based on business goal
 
 | Feature | Effort | Value | Primary Persona | Notes |
 |---------|--------|-------|-----------------|-------|
+| **Projects & Kanban** | High | High | Productivity Warrior | Work/Personal separation, project-based task organization, kanban boards. Full spec in Appendix C. **Recommended next build.** |
 | **Mood Check-ins** | High | High | Self-Awareness Seeker | Full spec in Appendix A. Quick emotional logging, therapist export, crisis resources. |
 | **Habit Templates Library** | Medium | Medium | Consistency Builder | 50+ pre-built habits by category. "Start tracking" one-click setup. |
 | **Notifications / Reminders** | Medium | High | All | In-app notification center, habit reminders, streak-at-risk warnings. No spec exists yet — needs design work. |
@@ -640,7 +641,141 @@ PDF/CSV report formatted for clinical review:
 | **Template** | The recurring task definition that generates individual task instances. |
 | **Instance** | A single occurrence of a recurring task, generated from a template. |
 | **Scope editing** | Editing a recurring task instance with options: "this only," "this and following," or "all instances." |
+| **Section** | Top-level Work or Personal classification that separates professional and personal tasks. |
+| **Project** | A named container for related tasks within a section, displayed as a kanban board. |
+| **Kanban board** | A visual board with columns (To Do / Done) for organizing tasks within a project. |
+| **Standalone task** | A task that doesn't belong to any project — exists directly within a section. |
 | **Design token** | A named, semantic CSS variable (e.g., "category-health") that ensures consistent styling across the app. |
+
+---
+
+## Appendix C: Projects & Kanban Specification
+
+> **Status:** Not yet built. Recommended as the V2.5 centerpiece. Included here as a product specification for engineering planning.
+
+### The Problem
+
+BetterR.Me's task system treats all tasks as a flat list. A quick errand ("Buy milk") sits alongside a multi-step work deliverable ("Launch Q1 campaign") with no structural difference. Users who manage both personal and professional responsibilities need two things the current system lacks:
+
+1. **Clear separation between Work and Personal** — so work tasks don't bleed into personal time and vice versa.
+2. **Project-level organization** — so related tasks can be grouped, tracked, and managed as a unit.
+
+### Core Concept
+
+Introduce **Projects** as an organizational layer between sections and tasks. The task system gains a two-level hierarchy:
+
+```
+Section (Work or Personal)
+  └── Project (optional grouping)
+       └── Tasks (with kanban positioning)
+```
+
+Tasks can still exist without a project (standalone quick tasks). Projects live inside a section. Every task belongs to a section — either inherited from its project or set directly for standalone tasks.
+
+### Work / Personal Separation
+
+The current task categories (Work, Personal, Shopping, Other) are repurposed:
+
+| Current Category | New Section | Notes |
+|-----------------|-------------|-------|
+| Work | **Work** | Top-level section |
+| Personal | **Personal** | Top-level section |
+| Shopping | **Personal** | Becomes a category tag within the Personal section |
+| Other | **Personal** | Becomes a category tag within the Personal section |
+
+Categories remain as optional sub-labels on individual tasks for finer-grained filtering (e.g., a "Shopping" tag within the Personal section). The key change: **Work and Personal are separated at the structural level**, not just tagged.
+
+### Projects
+
+A project is a named container for related tasks within a section.
+
+| Attribute | Details |
+|-----------|---------|
+| **Name** | Required. e.g., "Q1 Marketing Campaign", "Kitchen Renovation" |
+| **Section** | Work or Personal (required) |
+| **Color** | Optional accent color for visual differentiation |
+| **Status** | Active or Archived |
+| **Sort order** | Position within its section |
+
+**What a project is NOT:**
+- Not a folder hierarchy — projects are flat (no sub-projects in V1)
+- Not a team feature — projects belong to one user (collaboration is a future concern)
+- Not required — standalone tasks are first-class citizens
+
+### Kanban Board
+
+Each project contains a kanban board for visualizing task progress.
+
+**V1 Columns:** To Do | Done
+
+Two columns keep the initial experience simple — essentially a visual task list with drag-and-drop completion. The value is in the visual grouping and spatial organization, not column complexity.
+
+**Future:** Add an "In Progress" middle column once usage patterns confirm users want a three-stage workflow.
+
+**Kanban task cards show:** Title, priority indicator, due date (if set), category tag (if set).
+
+**Adding tasks:** An "Add task" action at the bottom of the To Do column creates a task pre-assigned to this project and section.
+
+**Completing tasks:** Drag a task from To Do to Done, or check it off — same behavior as today, but visually represented in the board.
+
+### The `/tasks` Page
+
+The `/tasks` page becomes the hub for the new model:
+
+**Layout:** Two sections stacked vertically — Work and Personal.
+
+**Within each section:** A card grid where each card is either:
+- A **project card** — shows project name, color, task count, completion progress bar. Clicking opens the kanban view.
+- A **standalone tasks card** — groups all tasks in that section that don't belong to a project. Displays as a simple task list.
+
+**Project card preview:**
+
+```
+┌─────────────────────────────────┐
+│  Q1 Marketing Campaign          │
+│  3 of 8 tasks done              │
+│  ████████░░░░░ 38%              │
+└─────────────────────────────────┘
+```
+
+### Task Creation Changes
+
+- Task form gains an optional **Project** selector (dropdown grouped by section)
+- Task form gains a **Section** selector: Work / Personal (required, defaults to Personal)
+- Selecting a project auto-fills the section from the project
+- Creating a task from inside a kanban board pre-fills project and section
+
+### What Stays the Same
+
+| Area | Impact |
+|------|--------|
+| **Dashboard** | No changes. Tasks due today still appear in "Tasks Today" regardless of project or section. |
+| **Sidebar** | No changes. |
+| **Recurring tasks** | Continue to work. Recurring task instances can optionally belong to a project. |
+| **Standalone tasks** | Fully supported. No project required. |
+| **All existing task features** | Priority, intention, reflection, horizon, categories — all work on project tasks. |
+
+### Migration Path
+
+Existing tasks receive `section = personal` as a safe default. No data loss, no behavioral change for existing users until they create their first project.
+
+### Success Metrics
+
+| Metric | Target |
+|--------|--------|
+| Project adoption | 30%+ of active users create at least 1 project within 2 weeks |
+| Work/Personal separation usage | 20%+ of users have tasks in both sections |
+| Kanban engagement | Users with projects complete tasks at same or higher rate than standalone |
+| Task organization satisfaction | Qualitative — users report feeling more organized (survey/feedback) |
+
+### Future Enhancements (Deferred)
+
+- **In Progress column** — third kanban column for active work
+- **Project-level analytics** — completion velocity, burndown-style progress
+- **Project templates** — pre-built project structures ("Sprint Planning", "Event Planning")
+- **Shared projects** — collaboration, assigned tasks (requires multi-user infrastructure)
+- **Sub-projects** — hierarchical project nesting
+- **Project archiving with history** — completed projects preserved for review
 
 ---
 
