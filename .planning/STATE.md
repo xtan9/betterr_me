@@ -56,5 +56,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Roadmap created for v3.0 milestone (3 phases: 13-15)
+Stopped at: Phase 13 context gathered
+Resume file: .planning/phases/13-data-foundation-migration/13-CONTEXT.md
 Resume: Plan Phase 13 (Data Foundation & Migration)
