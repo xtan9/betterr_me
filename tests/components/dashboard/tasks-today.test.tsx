@@ -641,6 +641,31 @@ describe("TasksToday", () => {
       expect(screen.queryByText("No tasks for today")).not.toBeInTheDocument();
     });
 
+    it("shows tasks completed today in the list", () => {
+      const todayCompleted: Task[] = [{
+        ...mockTasks[0],
+        is_completed: true,
+        completed_at: new Date().toISOString(),
+      }];
+      renderWithIntl(
+        <TasksToday tasks={todayCompleted} onToggle={vi.fn()} onCreateTask={vi.fn()} />,
+      );
+      expect(screen.getByText("Finish proposal")).toBeInTheDocument();
+      expect(screen.getByText(/All tasks done!/)).toBeInTheDocument();
+    });
+
+    it("hides tasks completed before today", () => {
+      const pastCompleted: Task[] = [{
+        ...mockTasks[0],
+        is_completed: true,
+        completed_at: "2024-01-01T10:00:00Z",
+      }];
+      renderWithIntl(
+        <TasksToday tasks={pastCompleted} onToggle={vi.fn()} onCreateTask={vi.fn()} />,
+      );
+      expect(screen.queryByText("Finish proposal")).not.toBeInTheDocument();
+    });
+
     it("does not render completed tasks (cannot uncomplete from dashboard)", () => {
       const onCreateTask = vi.fn();
 

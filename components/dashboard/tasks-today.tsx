@@ -8,7 +8,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn } from "@/lib/utils";
+import { cn, getLocalDateString } from "@/lib/utils";
 import type { Task } from "@/lib/db/types";
 import { getPriorityColor } from "@/lib/tasks/format";
 
@@ -210,19 +210,26 @@ export function TasksToday({
     [reflectingTaskId, t],
   );
 
-  const incompleteTasks = useMemo(() => tasks.filter(t => !t.is_completed), [tasks]);
+  const filteredTasks = useMemo(() => {
+    const today = getLocalDateString();
+    return tasks.filter(t =>
+      !t.is_completed ||
+      (t.completed_at && getLocalDateString(new Date(t.completed_at)) === today)
+    );
+  }, [tasks]);
 
   // Re-inject the reflecting task into the visible list.
-  // Since incompleteTasks filters out completed tasks, a just-completed task
-  // undergoing reflection would otherwise disappear immediately.
+  // Since filteredTasks hides tasks completed before today, a just-completed
+  // task undergoing reflection stays visible naturally. This re-injection
+  // handles the edge case where SWR briefly returns stale/empty data.
   const visibleTasks = useMemo(() => {
-    if (!reflectingTask || !reflectingTaskId) return incompleteTasks;
-    const hasTask = incompleteTasks.some((t) => t.id === reflectingTaskId);
-    if (hasTask) return incompleteTasks;
-    return [reflectingTask, ...incompleteTasks];
-  }, [incompleteTasks, reflectingTask, reflectingTaskId]);
+    if (!reflectingTask || !reflectingTaskId) return filteredTasks;
+    const hasTask = filteredTasks.some((t) => t.id === reflectingTaskId);
+    if (hasTask) return filteredTasks;
+    return [reflectingTask, ...filteredTasks];
+  }, [filteredTasks, reflectingTask, reflectingTaskId]);
 
-  // Sort visible tasks: by due time, then by priority
+  // Sort visible tasks: completed last, then by due time, then by priority
   const sortedTasks = [...visibleTasks].sort((a, b) => {
     // Completed tasks go last
     if (a.is_completed !== b.is_completed) {
