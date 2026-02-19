@@ -6,6 +6,7 @@
 - ✅ **v1.1 Dashboard Task Fixes** — Phase 6 (shipped 2026-02-17)
 - ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
 - ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
+- 🚧 **v3.0 Projects & Kanban** — Phases 13-15 (in progress)
 
 ## Phases
 
@@ -37,6 +38,65 @@
 
 </details>
 
+### 🚧 v3.0 Projects & Kanban (In Progress)
+
+**Milestone Goal:** Transform the flat task list into a structured project-based system with Work/Personal sections, project containers, and 4-column kanban boards with drag-and-drop.
+
+- [ ] **Phase 13: Data Foundation & Migration** - Status field, is_completed sync, migration of existing tasks, backward compatibility
+- [ ] **Phase 14: Projects & Sections** - Project CRUD, task form extensions, tasks page redesign with section-based layout
+- [ ] **Phase 15: Kanban Board** - 4-column kanban with drag-and-drop, completion reflection, intention display
+
+## Phase Details
+
+### Phase 13: Data Foundation & Migration
+**Goal**: Existing tasks migrate safely to the new data model, and the status/is_completed sync works bidirectionally without breaking any existing feature
+**Depends on**: Nothing (first phase of v3.0)
+**Requirements**: DATA-01, DATA-02, DATA-03, DATA-04
+**Success Criteria** (what must be TRUE):
+  1. Existing tasks have `section=personal` and `status` derived from their `is_completed` value after migration
+  2. Setting a task's status to `done` via API automatically sets `is_completed=true` and records `completed_at`; moving status away from `done` clears both
+  3. Dashboard task counts, sidebar counts, recurring task generation, and all existing task features work identically to before the migration
+  4. Task status field accepts exactly four values: backlog, todo, in_progress, done
+**Plans**: TBD
+
+Plans:
+- [ ] 13-01: TBD
+- [ ] 13-02: TBD
+
+### Phase 14: Projects & Sections
+**Goal**: Users can organize tasks into Work/Personal sections and named projects, and the tasks page displays this structure
+**Depends on**: Phase 13
+**Requirements**: PROJ-01, PROJ-02, PROJ-03, PROJ-04, PROJ-05, FORM-01, FORM-02, PAGE-01, PAGE-02
+**Success Criteria** (what must be TRUE):
+  1. User can create a project with a name, section (Work/Personal), and preset color, and can edit or delete it afterward
+  2. User can archive a project so it is hidden from the default view; deleting a project orphans its tasks into standalone within the same section
+  3. Task create/edit form has a required section selector (defaults to Personal) and an optional project dropdown filtered by the selected section
+  4. Tasks page displays Work and Personal as top-level sections, each showing project cards (with X/Y progress) and a standalone tasks area
+  5. All new UI strings (project names, section labels, form fields, confirmations) are translated in en, zh, and zh-TW
+**Plans**: TBD
+
+Plans:
+- [ ] 14-01: TBD
+- [ ] 14-02: TBD
+- [ ] 14-03: TBD
+
+### Phase 15: Kanban Board
+**Goal**: Users can view and manage a project's tasks on a 4-column kanban board with drag-and-drop, completion reflection, and intention display
+**Depends on**: Phase 14
+**Requirements**: PAGE-03, KANB-01, KANB-02, KANB-03, KANB-04, KANB-05, I18N-01
+**Success Criteria** (what must be TRUE):
+  1. Clicking a project card on the tasks page opens a 4-column kanban board (Backlog, To Do, In Progress, Done) showing that project's tasks
+  2. User can drag a task card between columns to change its status, and the change persists after page reload
+  3. User can drag a task card within a column to reorder it, and the order persists after page reload
+  4. Dragging a task to the Done column triggers a completion reflection prompt (emoji strip) for high-priority or intentional tasks
+  5. Kanban cards display the task's intention ("Your Why") when present, and all kanban UI strings are translated in en, zh, and zh-TW
+**Plans**: TBD
+
+Plans:
+- [ ] 15-01: TBD
+- [ ] 15-02: TBD
+- [ ] 15-03: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -50,3 +110,6 @@
 | 10. Token Consistency | v2.1 | 3/3 | Complete | 2026-02-18 |
 | 11. Sidebar Polish | v2.1 | 2/2 | Complete | 2026-02-18 |
 | 12. Component Fixes | v2.1 | 1/1 | Complete | 2026-02-18 |
+| 13. Data Foundation & Migration | v3.0 | 0/? | Not started | - |
+| 14. Projects & Sections | v3.0 | 0/? | Not started | - |
+| 15. Kanban Board | v3.0 | 0/? | Not started | - |

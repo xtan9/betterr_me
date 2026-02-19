@@ -83,32 +83,34 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | — | Pending |
-| DATA-02 | — | Pending |
-| DATA-03 | — | Pending |
-| DATA-04 | — | Pending |
-| PROJ-01 | — | Pending |
-| PROJ-02 | — | Pending |
-| PROJ-03 | — | Pending |
-| PROJ-04 | — | Pending |
-| PROJ-05 | — | Pending |
-| FORM-01 | — | Pending |
-| FORM-02 | — | Pending |
-| PAGE-01 | — | Pending |
-| PAGE-02 | — | Pending |
-| PAGE-03 | — | Pending |
-| KANB-01 | — | Pending |
-| KANB-02 | — | Pending |
-| KANB-03 | — | Pending |
-| KANB-04 | — | Pending |
-| KANB-05 | — | Pending |
-| I18N-01 | — | Pending |
+| DATA-01 | Phase 13 | Pending |
+| DATA-02 | Phase 13 | Pending |
+| DATA-03 | Phase 13 | Pending |
+| DATA-04 | Phase 13 | Pending |
+| PROJ-01 | Phase 14 | Pending |
+| PROJ-02 | Phase 14 | Pending |
+| PROJ-03 | Phase 14 | Pending |
+| PROJ-04 | Phase 14 | Pending |
+| PROJ-05 | Phase 14 | Pending |
+| FORM-01 | Phase 14 | Pending |
+| FORM-02 | Phase 14 | Pending |
+| PAGE-01 | Phase 14 | Pending |
+| PAGE-02 | Phase 14 | Pending |
+| PAGE-03 | Phase 15 | Pending |
+| KANB-01 | Phase 15 | Pending |
+| KANB-02 | Phase 15 | Pending |
+| KANB-03 | Phase 15 | Pending |
+| KANB-04 | Phase 15 | Pending |
+| KANB-05 | Phase 15 | Pending |
+| I18N-01 | Phase 15 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20
+- Mapped to phases: 20
+- Unmapped: 0
+
+**I18N-01 note:** Mapped to Phase 15 for final verification, but i18n strings are added alongside each feature in every phase. Each phase's success criteria includes translation of strings built in that phase.
 
 ---
 *Requirements defined: 2026-02-18*
-*Last updated: 2026-02-18 after initial definition*
+*Last updated: 2026-02-18 after roadmap creation*

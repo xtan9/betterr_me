@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v3.0 Projects & Kanban
+**Current focus:** v3.0 Projects & Kanban — Phase 13 (Data Foundation & Migration)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 13 (first of 3 in v3.0)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-02-18 — Milestone v3.0 started
+Status: Ready to plan
+Last activity: 2026-02-18 — Roadmap created for v3.0
 
 Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [..........] 0% v3.0
 
@@ -37,6 +37,12 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 
 See PROJECT.md Key Decisions table for full log with outcomes.
 
+Recent decisions affecting current work:
+- Research recommends @dnd-kit/core v6 (stable) over @dnd-kit/react v0.3.x (pre-1.0)
+- API-layer is_completed/status sync preferred over DB trigger (testability)
+- Float-based sort_order for kanban reordering (single-row updates)
+- SWR as single source of truth for kanban state (no dual local+server state)
+
 ### Pending Todos
 
 None.
@@ -44,9 +50,11 @@ None.
 ### Blockers/Concerns
 
 - Vitest picks up .worktrees/ test files causing spurious failures (pre-existing, not blocking)
+- is_completed/status bidirectional sync touches 94+ test assertions — needs careful migration testing
+- @dnd-kit/core v6 + React 19 peer dep mismatch requires pnpm config (cosmetic, works correctly)
 
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Milestone v3.0 started, defining requirements
-Resume: Continue requirements definition and roadmap creation
+Stopped at: Roadmap created for v3.0 milestone (3 phases: 13-15)
+Resume: Plan Phase 13 (Data Foundation & Migration)
