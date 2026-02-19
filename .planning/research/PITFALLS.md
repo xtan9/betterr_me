@@ -1,315 +1,402 @@
 # Pitfalls Research
 
-**Domain:** Codebase hardening for a production Next.js 16 + Supabase habit tracking app
-**Researched:** 2026-02-15
-**Confidence:** HIGH (pitfalls derived from direct codebase analysis + verified external patterns)
+**Domain:** Adding project organization and kanban boards to an existing task management system (BetterR.Me)
+**Researched:** 2026-02-18
+**Confidence:** HIGH (verified against codebase + current library ecosystem)
 
 ## Critical Pitfalls
 
-### Pitfall 1: Frequency Logic Fix Breaks Existing Habit Stats Retroactively
+### Pitfall 1: DnD Library React 19 Incompatibility
 
 **What goes wrong:**
-Fixing `shouldTrackOnDate()` for `times_per_week` (currently returns `true` every day) changes the denominator in every calculation that uses it. Three separate consumers rely on this function with its current behavior: `lib/db/insights.ts:248` (weekly insights), `lib/db/habit-logs.ts:295` (streak calculation via private copy), and `lib/habits/absence.ts:74` (dashboard missed-days). Fixing the shared `shouldTrackOnDate` in `lib/habits/format.ts` immediately changes behavior in insights and absence, but the private copy in `habit-logs.ts` stays broken until separately fixed. The result: two different definitions of "scheduled day" coexist during partial fixes, producing internally contradictory stats.
+Every major drag-and-drop library has some level of React 19 incompatibility. BetterR.Me uses React `^19.0.0` with Next.js 16. The landscape as of February 2026:
 
-Additionally, 8 existing tests explicitly assert the current (incorrect) behavior:
-- `tests/lib/habits/format.test.ts:123-125` asserts `shouldTrackOnDate` returns `true` for `times_per_week` every day
-- `tests/lib/habits/absence.test.ts:143-157` asserts `times_per_week` treats every day as scheduled
-- `tests/lib/db/habit-logs.test.ts:285-320` has 2 known failing tests under `times_per_week` describe block
+- `react-beautiful-dnd`: **Deprecated and archived** (April 2025). Peer dep requires React ^16/17/18. Does NOT work with React 19.
+- `@hello-pangea/dnd` (community fork of rbd): Peer dep requires React ^18. Runtime may work but peer dep conflict exists. Latest version 18.0.1 published ~1 year ago.
+- `@dnd-kit/core` (v6.3.1): Legacy package, no longer actively updated. React 19 not explicitly supported.
+- `@dnd-kit/react` (v0.3.1): New rewrite, actively developed, but **still in pre-1.0**. Known issue with missing `"use client"` directive on `DragDropProvider` (GitHub #1654). SSR/RSC compatibility actively being patched.
+- `@atlaskit/pragmatic-drag-and-drop`: Peer dep requires React ^16/17/18. **React 19 NOT officially supported** (GitHub #181). React-specific sub-packages (`react-drop-indicator`, `react-accessibility`, `flourish`) all have peer dep conflicts.
 
 **Why it happens:**
-The function `shouldTrackOnDate` was written with a simplification for `times_per_week`: "track daily but evaluate weekly." This is conceptually correct for the toggle UI (let users mark any day) but wrong for stats (makes 3x/week look like daily with 43% completion instead of 100%). The simplification leaked across boundaries.
+Developers pick a DnD library based on popularity/familiarity without checking React 19 peer dependency compatibility. The ecosystem is in transition -- the old guard (`react-beautiful-dnd`, `react-dnd`) are deprecated/stale, and the new generation (`@dnd-kit/react`, pragmatic-drag-and-drop) have not fully caught up with React 19.
 
 **How to avoid:**
-1. Fix all three consumers atomically in a single phase: `lib/habits/format.ts`, `lib/db/habit-logs.ts` (remove private copy, import shared), and verify `lib/db/insights.ts` and `lib/habits/absence.ts` behavior.
-2. Update all 8 tests simultaneously. Do not fix the function then discover test failures later.
-3. For `times_per_week`, `shouldTrackOnDate` should continue returning `true` (users can mark any day). The fix belongs in the *callers* that count scheduled days: `computePerHabitRates`, `computePerDayRates`, and `getScheduledDays` in `habits.ts:196-215` need `times_per_week`-specific branches (similar to what `getDetailedHabitStats` in `habit-logs.ts:402-415` already implements correctly).
-4. Write a characterization test that captures expected completion rates for a 3x/week habit with 3 completions across a 7-day window, asserting ~100% (not ~43%). Run this test first to confirm it fails, then implement the fix.
+Use `@dnd-kit/react` (the new package, NOT `@dnd-kit/core`). Despite being pre-1.0, it is the only actively-maintained option targeting React 19. Specific mitigations:
+1. Pin to a specific version (e.g., `0.3.1`) rather than using `^` range -- pre-1.0 APIs can break between minor versions.
+2. Wrap ALL DnD components in a single client component with `"use client"` directive.
+3. Use `next/dynamic` with `{ ssr: false }` for the kanban board component to avoid hydration mismatches.
+4. Do NOT use `@dnd-kit/core` or `@dnd-kit/sortable` (the old API). The new `@dnd-kit/react` has a completely different API surface.
+
+If `@dnd-kit/react` proves too unstable, the fallback is `@hello-pangea/dnd` with `--legacy-peer-deps` (runtime works with React 19 per community testing, but peer dep declarations have not been updated).
 
 **Warning signs:**
-- Weekly insights show different completion rates than the stats page for the same `times_per_week` habit
-- `computeMissedDays` for `times_per_week` shows 4+ missed days when a user completed 3 of their required 3
-- Tests pass individually but integration behavior is inconsistent
+- `npm install` or `pnpm install` warnings about peer dependency conflicts
+- Hydration mismatch errors in development console
+- `DragDropProvider` not recognized as a client component
+- Drop animations jumping/flickering instead of smooth transitions
 
 **Phase to address:**
-Must be the first fix in the hardening milestone. All other stats-related work (streak optimization, cache removal) depends on the frequency logic being correct.
+Phase 1 (Foundation) -- the DnD library choice must be validated with a proof-of-concept before building the full kanban board. Create a minimal kanban prototype with 2 columns and 3 cards to verify the library works in the existing stack.
 
 ---
 
-### Pitfall 2: Database Migration for Weekly Frequency Day Field Corrupts Existing Habits
+### Pitfall 2: Hydration Mismatch with Server-Side Rendering
 
 **What goes wrong:**
-The `weekly` frequency type is stored as `{"type": "weekly"}` in a JSONB column. Adding a `day` field requires a migration that updates all existing rows: `UPDATE habits SET frequency = frequency || '{"day": 1}'::jsonb WHERE frequency->>'type' = 'weekly'`. If this migration is written incorrectly or rolled back partially:
-- Existing habits could lose their frequency data if the JSONB update overwrites the entire column
-- The TypeScript `HabitFrequency` discriminated union type (`{ type: 'weekly' }`) would need to become `{ type: 'weekly'; day?: number }` or `{ type: 'weekly'; day: number }`, and this ripples through Zod schemas, API validation (`isValidFrequency`), and the format functions
-- If `day` is required in TypeScript but missing in the DB for not-yet-migrated rows, runtime crashes occur
-- Supabase does not support transactional DDL + DML in all migration runners, so a failed migration could leave the database in an inconsistent state
+DnD components rely on browser APIs (pointer events, DOM measurements, `requestAnimationFrame`) that do not exist on the server. When Next.js App Router renders the page server-side, the DnD components produce different HTML than what the client expects, causing React hydration errors: "Hydration failed because the initial UI does not match what was rendered on the server."
+
+Even marking a component with `"use client"` does NOT prevent it from rendering on the server -- it only means it will hydrate on the client. The server still attempts to render it.
 
 **Why it happens:**
-JSONB columns have no schema enforcement by default. TypeScript types and Zod schemas provide compile-time safety but not runtime guarantees about what is actually stored in the database. The gap between "what TypeScript expects" and "what the DB contains" is the failure mode.
+Developers assume `"use client"` means "client-only rendering." In Next.js App Router, `"use client"` means "this component and its children are part of the client bundle" but the server still pre-renders them.
 
 **How to avoid:**
-1. Make `day` optional in TypeScript: `{ type: 'weekly'; day?: number }`. Default to `1` (Monday) in code when absent: `const trackDay = frequency.day ?? 1`.
-2. Write the migration as a pure JSONB merge: `frequency || '{"day": 1}'::jsonb` -- this preserves existing fields.
-3. Add a `pg_jsonschema` CHECK constraint (or a PostgreSQL trigger) that validates the `day` field is 0-6 when `frequency->>'type' = 'weekly'`.
-4. Test the migration against a copy of production data before running it on production.
-5. Update the Zod schema to accept both `{ type: 'weekly' }` (backwards compat) and `{ type: 'weekly', day: 0-6 }`:
-   ```ts
-   z.object({ type: z.literal("weekly"), day: z.number().min(0).max(6).optional() })
-   ```
-6. Update both `isValidFrequency` functions (in `app/api/habits/route.ts` and `app/api/habits/[id]/route.ts`) to accept the optional `day` field -- or better yet, replace them with Zod as planned.
+1. Wrap the entire kanban board component with `next/dynamic`:
+```tsx
+const KanbanBoard = dynamic(
+  () => import("@/components/tasks/kanban-board"),
+  { ssr: false, loading: () => <KanbanSkeleton /> }
+);
+```
+2. The task list view (non-kanban) should remain server-renderable. Only the kanban view needs SSR disabled.
+3. Provide a proper loading skeleton so the page does not flash empty content during client-side hydration.
+4. Test with `reactStrictMode: true` (the project default) -- Strict Mode double-renders in development and exposes DnD bugs that hide in production mode.
 
 **Warning signs:**
-- `shouldTrackOnDate` returns different results for habits created before vs after the migration
-- API returns 400 when editing old habits that lack the `day` field
-- Streak calculation breaks for pre-migration weekly habits
+- Console errors mentioning "hydration" in development
+- Content flashing or disappearing on initial page load
+- DnD working in dev but failing in production (or vice versa)
 
 **Phase to address:**
-Implement after Zod wiring (so validation is centralized) but before or alongside the `shouldTrackOnDate` fix for `weekly`. The migration must run before the code that reads `frequency.day` is deployed.
+Phase 2 (Kanban Board) -- must be architected from the start with SSR-disabled wrapper.
 
 ---
 
-### Pitfall 3: Removing In-Memory Cache Without Verifying HTTP Caching Is Sufficient
+### Pitfall 3: Breaking the `is_completed` Boolean Contract
 
 **What goes wrong:**
-The `statsCache` in `lib/cache.ts` is ineffective on Vercel serverless, but removing it is not zero-risk. The stats route (`app/api/habits/[id]/stats/route.ts`) currently sets `Cache-Control: private, max-age=300` AND uses the in-memory cache. If you remove the server cache, every stats request hits the database. The HTTP `Cache-Control` header only works if:
-- The client (browser or SWR) respects it
-- No intermediate CDN strips `private` headers
-- SWR's `revalidate` interval does not override the cache header
+The current task system uses `is_completed: boolean` as the universal completion signal. Introducing a kanban `status` field (e.g., `'todo' | 'in_progress' | 'done'`) creates two sources of truth for task completion. The dashboard, sidebar counts, recurring task logic, and 94+ test assertions all rely on `is_completed`. If the new `status` field disagrees with `is_completed`, the system enters an inconsistent state.
 
-Additionally, `invalidateStatsCache()` is called in `app/api/habits/[id]/route.ts:153` and `app/api/habits/[id]/toggle/route.ts:52`. After removing the cache, these calls become no-ops importing from a module that no longer exports them. Every import site must be updated, and every test that mocks or references `invalidateStatsCache` must be updated.
+Specific breakage points found in the codebase:
+- `TasksDB.getTodayTasks()` -- no filter on `is_completed`, returns all tasks due today
+- `TasksDB.getUpcomingTasks()` -- filters `is_completed = false`
+- `TasksDB.getOverdueTasks()` -- filters `is_completed = false`
+- `TasksDB.toggleTaskCompletion()` -- flips `is_completed` and sets `completed_at`
+- `DashboardContent` optimistic updates -- mutates `is_completed` and `completed_at` directly
+- `RecurringTasksDB.deleteRecurringTask()` -- deletes incomplete instances using `.eq('is_completed', false)`
+- `RecurringTasksDB.updateInstanceWithScope()` -- filters with `.eq('is_completed', false)`
+- Sidebar counts route -- counts tasks via `getTodayTasks()` which returns both completed/incomplete
+- Dashboard `tasks_completed_today` stat -- counts `tasks_today.filter(t => t.is_completed)`
+- Task list component -- filters `!t.is_completed` for pending tab, `t.is_completed` for completed tab
 
 **Why it happens:**
-Developers assume "remove the cache" is a pure deletion. In reality, it is a behavior change: response latency increases, import references break, and test mocks fail.
+The temptation is to add a `status` enum and start using it for the kanban board while leaving `is_completed` in place. Without a synchronization mechanism, developers update `status` to `'done'` but forget to also set `is_completed = true`, or vice versa. The two fields drift apart.
 
 **How to avoid:**
-1. Grep for all imports of `cache.ts` before removing: `invalidateStatsCache` (2 call sites), `invalidateUserStatsCache` (check for usage), `statsCache` (1 call site), `getStatsCacheKey` (1 call site).
-2. Remove imports and function calls at the same time as removing the module.
-3. Verify that SWR on the client uses `keepPreviousData: true` and `revalidateOnFocus` (or similar) to prevent redundant fetches.
-4. Confirm the HTTP `Cache-Control: private, max-age=300` header is preserved in the stats route after the cache removal -- this is the real caching mechanism.
-5. Consider keeping `X-Cache: MISS` header (always) for observability, or remove it to simplify.
+Use the **Expand and Contract** pattern with a computed/derived approach:
+1. **Phase 1 (Expand):** Add `status` column with default `NULL`. Add `project_id` column with default `NULL`. Do NOT change any existing queries.
+2. **Phase 2 (Dual-write):** When `status` is set to `'done'`, also set `is_completed = true` and `completed_at`. When `is_completed` is toggled to `true`, also set `status = 'done'`. Use a database trigger OR application-level middleware for synchronization:
+```sql
+CREATE OR REPLACE FUNCTION sync_task_status()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'done' AND NOT NEW.is_completed THEN
+    NEW.is_completed := true;
+    NEW.completed_at := now();
+  END IF;
+  IF NEW.is_completed AND NEW.status IS NOT NULL AND NEW.status != 'done' THEN
+    NEW.status := 'done';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+3. **Phase 3 (Contract):** Only after all consumers are migrated, consider removing `is_completed` (or keep it permanently as a denormalized field for query performance).
+
+Critical: NEVER remove `is_completed` in the same phase as adding `status`. The 1084+ existing tests and all existing features depend on it.
 
 **Warning signs:**
-- Build fails with "Cannot find module '@/lib/cache'" after partial removal
-- Stats page feels slower after deployment (expected but should be measured)
-- Dashboard fires stats requests on every tab switch without any caching
+- Tasks appearing as "done" in kanban but "pending" in dashboard
+- Task counts in sidebar not matching kanban board state
+- Recurring task cleanup deleting tasks that were moved to "done" column in kanban but have `is_completed = false`
+- Tests passing in isolation but failing in integration
 
 **Phase to address:**
-Implement as a standalone change, after frequency logic fixes (since the cache caches incorrect data when frequency logic is wrong). Low risk but requires careful import cleanup.
+Phase 1 (Database Migration) -- the synchronization strategy must be designed before any status field is added. The DB trigger approach is safest because it catches ALL writes, not just application-level writes.
 
 ---
 
-### Pitfall 4: Zod Schema Wiring Creates Two Incompatible Validation Paths During Transition
+### Pitfall 4: SWR Cache Fragmentation After Adding Projects
 
 **What goes wrong:**
-The plan is to replace hand-rolled `isValidFrequency()` with `habitFormSchema.safeParse()`. But the existing Zod schema (`lib/validations/habit.ts`) is designed for the *form* (client-side), not the API. Key differences:
-- The form schema requires `name`, `frequency`, and `category` (as `nullable`). The PATCH route should accept partial updates -- only the fields being changed.
-- The form schema uses `z.discriminatedUnion("type", [...])` for frequency. The API's `isValidFrequency` does the same check but also accepts the raw JSON body (not form-encoded data).
-- The form schema has `description: z.string().max(500).optional().nullable()`. The API currently has no length limit on description.
+The current SWR cache keys are simple: `/api/tasks`, `/api/tasks/${id}`, `/api/dashboard?date=${today}`, `/api/sidebar/counts?date=${today}`. When projects are added, new keys emerge: `/api/projects`, `/api/projects/${id}/tasks`, `/api/tasks?project_id=${id}`. A task status change via kanban drag must invalidate:
+1. The kanban board's project-specific task list
+2. The main `/api/tasks` list (tasks page)
+3. The `/api/dashboard` data (tasks today section)
+4. The `/api/sidebar/counts` data
+5. The individual `/api/tasks/${id}` cache (if task detail was viewed)
 
-If you naively use `habitFormSchema.safeParse(body)` in the PATCH route, every partial update will fail because `name` and `frequency` are required in the form schema.
+Missing any of these causes stale data -- a task moved to "done" in kanban still showing as pending in the dashboard.
+
+The existing codebase already demonstrates this pattern in `create-task-content.tsx`:
+```ts
+mutate("/api/dashboard");
+mutate(
+  (key: string) => typeof key === "string" && key.startsWith("/api/tasks"),
+  undefined,
+);
+```
+But this invalidation pattern becomes much more complex with projects. The filter-based `mutate` on `/api/tasks` prefix would work, but `/api/dashboard` and `/api/sidebar/counts` also need invalidation.
 
 **Why it happens:**
-Form validation schemas and API validation schemas have different requirements. Forms always submit complete data; API PATCH routes submit partial data. Using one schema for both without `.partial()` breaks PATCH.
+SWR's cache is keyed by exact URL strings. When new endpoints are added, developers forget to update ALL the mutation/invalidation call sites. The problem compounds because there are multiple places that modify task state:
+- Dashboard toggle (optimistic update in `dashboard-content.tsx`)
+- Tasks page toggle (in `tasks-page-content.tsx`)
+- Task detail page edits (in `edit-task-content.tsx`)
+- Task creation (in `create-task-content.tsx`)
+- Kanban drag-and-drop (NEW)
+- Project-specific task operations (NEW)
 
 **How to avoid:**
-1. Create two derived schemas from the base:
-   ```ts
-   // POST: full validation (same as form)
-   export const habitCreateSchema = habitFormSchema;
+Create a centralized cache invalidation utility:
+```ts
+// lib/swr/invalidation.ts
+import { mutate } from "swr";
 
-   // PATCH: partial validation
-   export const habitUpdateSchema = habitFormSchema.partial();
-   ```
-2. In the PATCH handler, use `habitUpdateSchema.safeParse(body)`, which makes all fields optional.
-3. After parsing, check `Object.keys(result.data).length > 0` to ensure at least one field was provided.
-4. Do NOT remove the hand-rolled `isValidFrequency` until the Zod schema is verified to cover all its edge cases (e.g., `count` must be exactly 2 or 3, `days` array must be non-empty for `custom`).
-5. Add the `day` field for `weekly` frequency to the Zod schema at the same time (to avoid updating the schema twice).
+export function invalidateTaskCaches() {
+  // Invalidate all task-related caches with a single call
+  mutate((key: string) =>
+    typeof key === "string" && (
+      key.startsWith("/api/tasks") ||
+      key.startsWith("/api/projects") ||
+      key.startsWith("/api/dashboard") ||
+      key.startsWith("/api/sidebar/counts")
+    ),
+    undefined,
+    { revalidate: true }
+  );
+}
+
+export function invalidateProjectCaches(projectId?: string) {
+  invalidateTaskCaches(); // Tasks and projects are coupled
+}
+```
+All task mutation call sites should use this utility instead of manual `mutate()` calls.
 
 **Warning signs:**
-- PATCH requests return 400 "Name is required" when only updating description
-- POST requests accept descriptions longer than 500 characters (if Zod schema is not applied to POST)
-- Tests for the PATCH route that send `{ name: "new name" }` (without frequency) start failing
+- Users seeing stale task counts in the sidebar after using kanban
+- Dashboard showing different completion counts than the tasks page
+- "Ghost tasks" appearing in one view but not another after drag-and-drop
 
 **Phase to address:**
-Wire Zod schemas after the frequency type changes (weekly `day` field addition) to avoid touching the schema twice. Update tests simultaneously.
+Phase 1 (Foundation) -- create the invalidation utility BEFORE building the kanban board. Retrofit existing mutation sites to use it.
 
 ---
 
-### Pitfall 5: Tests Asserting Current (Incorrect) Behavior Block Bug Fixes
+### Pitfall 5: Optimistic Update Rollback Chaos in Kanban Drag-and-Drop
 
 **What goes wrong:**
-Multiple test files assert the current incorrect behavior as "correct":
-- `tests/lib/habits/format.test.ts:117-121`: "weekly tracks only Monday" -- this test will need to change when weekly gets a configurable day
-- `tests/lib/habits/format.test.ts:123-125`: "times_per_week tracks every day" -- this is the root cause behavior being fixed
-- `tests/lib/habits/absence.test.ts:143-157`: "treats every day as scheduled for times_per_week frequency" -- this test explicitly documents the incorrect behavior
-- `tests/lib/db/habit-logs.test.ts` has 2 known failing tests that are acknowledged but not fixed
+Kanban drag-and-drop requires optimistic updates -- the card must move instantly when dropped, before the server confirms. If the server rejects the update (e.g., validation error, network failure), the card must snap back to its original position. With SWR's `rollbackOnError: true`, this works for simple toggles. But kanban drags involve:
+1. Moving a card from column A to column B (status change)
+2. Potentially reordering cards within a column (position change)
+3. Updating the task's `status` AND `is_completed` (if moved to "done")
+4. Cross-invalidating multiple caches simultaneously
 
-Developers fixing the bug will run `pnpm test:run`, see 5+ test failures, and cannot tell which failures are expected (from the fix) vs unexpected (regressions). This slows progress and creates risk of accidentally "fixing" a test by making it pass with wrong logic.
+If the API call fails mid-flight, SWR rolls back the optimistic update, but the DnD library's internal state may have already committed the move. The DnD overlay animation and SWR state diverge, causing cards to appear in two places or disappear entirely.
+
+Additionally, SWR's `revalidateOnFocus` (currently enabled in `tasks-page-content.tsx`) can trigger a revalidation DURING a drag operation, resetting the list and canceling the drag.
 
 **Why it happens:**
-Tests were written to match implementation, not specification. When the implementation is wrong, the tests document the wrong behavior. This is a common trap in legacy codebases.
+DnD libraries manage their own internal state for drag positions and overlays. SWR manages its own cache state. When a rollback happens, these two state systems do not communicate, leading to visual artifacts.
 
 **How to avoid:**
-1. Before changing any production code, update the test descriptions to document why they will change:
-   ```ts
-   it.todo('times_per_week should NOT treat every day as scheduled (fix coming in issue #98)');
-   ```
-2. Write the *correct* tests first (red), then fix the production code (green). This is the standard TDD approach for bug fixes.
-3. For `shouldTrackOnDate`, the fix path depends on the decision: if `shouldTrackOnDate` continues returning `true` for `times_per_week` (so the toggle UI works), then the format test is actually correct and should not change. The bug is in the *callers* that use it for stats calculation.
-4. For `weekly`, the test "weekly tracks only Monday" will need to change to "weekly tracks the configured day, defaulting to Monday."
-5. Keep a running list of test files that need updating with each fix. Update tests atomically with production code -- never commit a test update without the corresponding fix, and vice versa.
+1. **Disable `revalidateOnFocus` and `refreshInterval`** on any SWR hook used by the kanban board during drag operations. Use a `isDragging` state variable:
+```ts
+const [isDragging, setIsDragging] = useState(false);
+const { data, mutate } = useSWR(key, fetcher, {
+  revalidateOnFocus: !isDragging,
+  refreshInterval: isDragging ? 0 : 60000,
+});
+```
+2. **Use local state as the source of truth during drag**, synced from SWR data via `useEffect`. On `onDragEnd`, update local state immediately, then fire the API call. On API success, let SWR revalidation sync. On API failure, reset local state from SWR cache:
+```ts
+const [columns, setColumns] = useState(serverData);
+useEffect(() => {
+  if (!isDragging && serverData) setColumns(serverData);
+}, [serverData, isDragging]);
+```
+3. **Batch status updates** -- if a drag moves a card AND reorders, send a single API call, not two.
+4. **Never call `mutate()` with `revalidate: true` during a drag sequence.**
 
 **Warning signs:**
-- `pnpm test:run` shows failures that nobody can explain
-- A developer "fixes" a test by reverting it to the old assertion
-- Coverage drops because tests are deleted instead of updated
+- Cards visually jumping back and then forward after a drop
+- Cards appearing in two columns simultaneously for a brief moment
+- Drag getting "stuck" or canceled when the window regains focus
+- Console errors about state updates on unmounted components during drag
 
 **Phase to address:**
-Test updates must happen in lockstep with each production fix. Not a separate phase -- it is part of every fix phase.
+Phase 2 (Kanban Board) -- the optimistic update strategy must be designed alongside the drag-and-drop implementation. Do not add optimistic updates as an afterthought.
 
 ---
 
-### Pitfall 6: next-themes Manual DOM Workaround Masks a Configuration Bug
+### Pitfall 6: Breaking Recurring Task Instance Generation
 
 **What goes wrong:**
-The `theme-switcher.tsx` component (lines 26-36) manually adds/removes `dark`/`light` CSS classes on `document.documentElement`. This fights against `next-themes`, which is configured with `attribute="class"` in `app/layout.tsx:54`. If you remove the workaround without fixing the root cause, theme switching breaks in production. If you leave the workaround, it creates a race condition: both `next-themes`' internal script and the component's `useEffect` modify the same DOM classes.
+Recurring task instances are generated as regular tasks with a `recurring_task_id` foreign key. The `RecurringTasksDB.deleteRecurringTask()` method deletes all incomplete instances using `.eq('is_completed', false)`. If a project/kanban system introduces an `in_progress` status that is NOT `is_completed = true`, these in-progress instances would be deleted when the recurring template is deleted, because they still have `is_completed = false`.
 
-The root cause is likely one of:
-- `suppressHydrationWarning` on the `<html>` tag works, but `next-themes` needs `disableTransitionOnChange` to avoid FOUC
-- The `storageKey="betterr-theme"` conflicts with `next-themes`' default behavior
-- `next-themes` v0.4+ changed its class application timing, and the current version installed may have a known issue with React 19 / Next.js 15+
+Similarly, `updateInstanceWithScope('following')` and `updateInstanceWithScope('all')` filter on `.eq('is_completed', false)` to find future instances. If the new status system decouples from `is_completed`, these scope operations break.
 
-There are also 3 `console.log` statements (lines 39-41) that leak internal state to browser devtools in production.
+The recurring task resume flow in `resumeRecurringTask()` generates instances via `ensureRecurringInstances()`. If new tasks get a `project_id`, recurring instances should NOT inherit it (recurring tasks are template-based, not project-based), but a careless migration that adds a NOT NULL constraint to `project_id` would break instance generation.
 
 **Why it happens:**
-When `next-themes` did not immediately apply the correct class on mount, the developer added a manual fix instead of diagnosing the configuration. This is a common pattern: workaround first, investigation deferred.
+Recurring task logic is the most complex part of the existing task system. It touches both the `tasks` table (for instances) and `recurring_tasks` table (for templates). Developers adding project/kanban features focus on the tasks table and forget that recurring task logic makes assumptions about the task schema.
 
 **How to avoid:**
-1. First, check the installed `next-themes` version: `pnpm list next-themes`. Verify against the package's GitHub issues for known React 19 / Next.js 15 issues.
-2. Test in a minimal reproduction: create a test page with just `ThemeProvider` + `useTheme` + no manual DOM manipulation. If the class applies correctly, the workaround is unnecessary and can be removed.
-3. If the class does NOT apply correctly, the fix is in `ThemeProvider` configuration, not in the component. Check that:
-   - `attribute="class"` is set (it is, in `layout.tsx:54`)
-   - `enableSystem` is set (it is)
-   - `disableTransitionOnChange` is considered for smooth switching
-4. Remove the `console.log` statements regardless of the workaround decision.
-5. After removing the workaround, run Playwright E2E tests (specifically visual regression tests) to verify theme switching works correctly.
+1. `project_id` on tasks MUST be nullable (default NULL). Recurring task instances should be created with `project_id = NULL` unless explicitly assigned.
+2. The `status` field MUST be kept in sync with `is_completed` via the DB trigger described in Pitfall 3. This ensures recurring task operations that filter on `is_completed = false` continue to work correctly.
+3. Add a test specifically for: "recurring task instances created after project/status migration still work correctly with scope operations."
+4. Do NOT add `status` or `project_id` to the `recurring_tasks` template table. Templates define WHAT recurs, not project assignment.
 
 **Warning signs:**
-- Theme flickers on page load (FOUC)
-- `document.documentElement.className` contains both `dark` and `light` simultaneously
-- Browser console shows theme debug logs in production
+- Recurring tasks stop generating after migration
+- `ensureRecurringInstances` throws errors about NOT NULL constraint violations
+- Deleting a recurring template orphans tasks that are "in progress" in the kanban
+- Edit scope operations affecting fewer tasks than expected
 
 **Phase to address:**
-Implement as an isolated fix. Low dependency on other changes. The console.log removal can be done first as a trivial sub-task.
+Phase 1 (Database Migration) -- migration SQL must be reviewed against all recurring task queries. Add integration tests for recurring task operations post-migration.
+
+---
+
+### Pitfall 7: Dashboard "Tasks Today" Widget Regression
+
+**What goes wrong:**
+The dashboard's `TasksToday` component receives `tasks_today` from the dashboard API. The dashboard API calls `tasksDB.getTodayTasks(userId, date)` which returns ALL tasks with `due_date <= today` (both completed and incomplete, no project filter). The `TasksToday` component then filters `!t.is_completed` for display and shows a completion counter.
+
+If the kanban board allows changing task status to values other than completed/incomplete (e.g., "in_progress"), the dashboard widget has no concept of this. A task marked "in progress" in the kanban would still appear as an incomplete task in the dashboard -- which is arguably correct behavior, but needs explicit design decision.
+
+More critically, if a task's `due_date` is removed when assigned to a kanban project (some project-based workflows ignore due dates), the task would disappear from the dashboard's "Tasks Today" entirely, even if it was previously tracked there.
+
+**Why it happens:**
+The dashboard `getTodayTasks()` query requires a non-null `due_date`. Tasks without due dates are invisible to the dashboard. If project-based workflows encourage optional due dates, tasks silently disappear from the dashboard.
+
+**How to avoid:**
+1. NEVER modify `due_date` behavior when assigning tasks to projects. Adding `project_id` should be purely additive.
+2. Document the design decision: tasks assigned to projects STILL appear in "Tasks Today" if they have a due date.
+3. The dashboard should remain completely unchanged in Phase 1. Do not add project awareness to the dashboard until a later phase.
+4. Add a regression test: "tasks with project_id still appear in getTodayTasks".
+
+**Warning signs:**
+- Task counts dropping after assigning tasks to projects
+- Users reporting "missing tasks" from their daily view
+- Dashboard "all complete" message showing when kanban has active tasks
+
+**Phase to address:**
+Phase 1 (Database Migration) -- ensure migration is purely additive. Phase 3 or later for any dashboard project-awareness.
 
 ---
 
 ## Technical Debt Patterns
 
-Shortcuts that seem reasonable but create long-term problems.
-
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Duplicated `shouldTrackOnDate` (format.ts + habit-logs.ts private method) | Self-contained class, no external dependency | Two copies diverge: format.ts is used by 5 callers, habit-logs.ts has its own copy with identical logic. Fixing one does not fix the other. | Never -- deduplicate now |
-| Hand-rolled `isValidFrequency` in 2 API routes instead of Zod | Quick to write, no schema import needed | Two validation paths diverge from Zod; edge cases (like new `day` field) must be added in 3 places (Zod + 2 validators) | Only acceptable in early MVP before schemas exist |
-| `user.email!` non-null assertion in profile auto-creation | Avoids null-check boilerplate | Crashes silently if a Supabase auth provider does not provide email | Never in production code |
-| Fetching all tasks (`getUserTasks`) to get a count | Works with small datasets | Linear memory growth; fetches full row objects when only count is needed | Acceptable below 100 tasks/user, unacceptable at scale |
-| In-memory cache for serverless functions | Works in dev, provides nice `X-Cache` header | Zero benefit in production (each Lambda has its own cache instance); false confidence in caching | Never on serverless |
+| Keep `is_completed` boolean forever alongside `status` enum | Zero risk to existing features, no migration needed | Two fields representing similar concepts, sync logic required | Always -- the sync overhead is minimal and the safety is worth it |
+| Use `--legacy-peer-deps` for DnD library install | Bypass React 19 peer dep conflict | Masks real incompatibilities, may break on minor updates | Only as temporary measure during library evaluation; replace once library officially supports React 19 |
+| Hardcode kanban column order (`todo`, `in_progress`, `done`) instead of making configurable | Ship kanban faster | Users cannot customize workflow columns | MVP only -- plan for configurability in a later phase |
+| Store card position as array index rather than fractional ranking | Simpler implementation | Reordering requires updating ALL cards in a column | Acceptable for <100 tasks per column; add fractional ranking later if needed |
+| Disable SSR entirely for tasks page instead of just kanban board | Simpler code | Slower initial page load, worse SEO (though SEO irrelevant for authenticated app) | Acceptable since tasks page is behind auth |
 
 ## Integration Gotchas
 
-Common mistakes when connecting to external services.
-
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Supabase JSONB | Adding a field to the TypeScript type without a migration; old rows lack the field | Always add migration first, make new fields optional in TypeScript, provide defaults in code |
-| Supabase RLS | Forgetting to add RLS policies when adding new tables or columns | Run `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` in every create-table migration |
-| next-themes + SSR | Accessing `resolvedTheme` during server render causes hydration mismatch | Use `mounted` guard pattern: `if (!mounted) return null` before rendering theme-dependent UI |
-| SWR + date-based keys | Not using `keepPreviousData: true` causes flash of empty state at midnight | Always set `keepPreviousData: true` when SWR key contains a date |
+| Supabase RLS + new `projects` table | Forgetting to add RLS policies for the new table, leaving it world-readable | Add `CREATE POLICY` statements in the same migration that creates the table. Use the same pattern as existing tasks RLS: `auth.uid() = user_id` |
+| SWR + kanban drag-and-drop | Using bound `mutate` from the kanban's SWR hook, which only invalidates that one cache key | Use global `mutate` from `useSWRConfig()` with a filter function to invalidate all related caches |
+| `@dnd-kit/react` + Next.js App Router | Importing DnD components in a Server Component or forgetting `"use client"` | Ensure the kanban board AND its DnD wrapper are in a file marked `"use client"`, or use `next/dynamic` with `{ ssr: false }` |
+| Zod validation + new fields | Adding `project_id` and `status` to the Task type but not updating `taskFormSchema` and `taskUpdateSchema` | Update ALL Zod schemas in `lib/validations/task.ts` when adding new task fields. Make new fields optional in schemas for backward compatibility |
+| Supabase migration + existing data | Running `ALTER TABLE tasks ADD COLUMN status TEXT NOT NULL` which fails because existing rows have no value | Always use `ADD COLUMN ... DEFAULT NULL` or `ADD COLUMN ... DEFAULT 'todo'`. Never use NOT NULL without a DEFAULT on a populated table |
 
 ## Performance Traps
 
-Patterns that work at small scale but fail as usage grows.
-
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| 365-day log fetch on every toggle | Toggle response time increases with habit age | Cap lookback to `current_streak + buffer` days; skip if streak is 0 | Noticeable above 3 months of daily logging |
-| Dashboard fetches ALL tasks for count | Dashboard API response grows with total task count | Add `countTasks(userId)` method using `SELECT count(*) ... head: true` | Noticeable above 200 tasks per user |
-| N+1 `computeMissedDays` in dashboard | Dashboard enrichment loops per habit, each doing date iteration | Already mitigated by bulk `getAllUserLogs`; in-memory iteration is O(habits * 30 days), acceptable | Not a problem below 50 habits |
-| JSONB frequency column without index | Queries filtering by `frequency->>'type'` do full table scan | Add GIN index on `frequency` column if filtering by type becomes common | Not a problem below 10K habits total |
+| Re-rendering entire kanban board on every card drag | Visible lag during drag, janky animations, dropped frames | Memoize column components with `React.memo`. Use `useCallback` for drag handlers. DnD state should be isolated from card rendering. | >20 cards visible on screen |
+| Fetching ALL tasks when kanban only needs project-specific ones | Slow kanban load time, unnecessary bandwidth | Add `project_id` filter to task queries: `/api/tasks?project_id=${id}`. Add database index on `(user_id, project_id)` | >100 total tasks |
+| Updating sort order for ALL cards in a column on every reorder | Multiple API calls per drag, visible save lag | Use fractional indexing (e.g., moving between position 1.0 and 2.0 gets position 1.5) or batch update. Store position as `REAL` not `INTEGER` | >50 cards in one column |
+| SWR polling with `refreshInterval` during kanban drag | Network requests during drag cause re-renders, animations break | Pause `refreshInterval` while `isDragging === true` | Any drag operation |
+| Loading all project tasks for sidebar/counts | N+1 queries: one per project | Use a single aggregated query: `SELECT project_id, COUNT(*) FROM tasks WHERE user_id = ? GROUP BY project_id` | >10 projects |
 
 ## Security Mistakes
 
-Domain-specific security issues beyond general web security.
-
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| No server-side string length validation | A malicious client can POST a 10MB habit description, filling the database | Wire Zod schemas (max 100 chars name, max 500 chars description) into API route handlers |
-| `user.email!` non-null assertion | Crashes the profile creation flow if auth provider does not supply email; error message may leak internal details | Replace with `user.email ?? ''` and add explicit guard |
-| `console.log` of theme state in production | Leaks internal state (theme, resolved theme, HTML classes) to browser devtools | Remove the 3 `console.log` calls in `theme-switcher.tsx:39-41` |
-| `computeMissedDays` catch block silently returns `{missed: 0, streak: 0}` | A bug in absence calculation produces invisibly wrong data; users see "no missed days" when they actually missed many | Log errors with `console.error` (already done) but also consider a monitoring flag or metric |
+| Missing RLS policy on `projects` table | Any authenticated user can read/modify any user's projects | Add `USING (auth.uid() = user_id)` policy. Copy pattern from existing `tasks` table RLS |
+| Not validating `project_id` ownership in API routes | User A could assign their task to User B's project by guessing the UUID | Before assigning `project_id`, verify the project belongs to the authenticated user: `SELECT id FROM projects WHERE id = $1 AND user_id = $2` |
+| Accepting arbitrary `status` values from client | Injection of unexpected status values could break kanban rendering | Validate `status` with Zod enum: `z.enum(['todo', 'in_progress', 'done']).nullable()` |
 
 ## UX Pitfalls
 
-Common user experience mistakes during hardening.
-
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Changing `weekly` frequency from Monday to creation-day retroactively | Users with existing Monday habits suddenly see their streak reset because the tracking day changed | Default new `day` field to Monday (1) for existing habits; only let users choose a day for new habits or via explicit edit |
-| Fixing `times_per_week` stats without explaining the change | Users see their completion rate jump from ~43% to ~100% overnight, causing confusion | Consider a one-time UI notification or changelog entry explaining the stats calculation improvement |
-| Removing the cache increases response latency | Stats page loads noticeably slower after cache removal (previously served from memory on warm instances) | Ensure HTTP `Cache-Control` headers are correctly set so the browser caches responses for 5 minutes |
+| Drag-and-drop as the ONLY way to change task status | Mobile users cannot drag precisely; accessibility failure for keyboard/screen reader users | Provide a dropdown/menu on each card to change status. DnD is an enhancement, not the primary interaction |
+| No visual feedback during drag on touch devices | Users do not know if they grabbed the card; touch-and-hold feels unresponsive | Add a grab handle icon, use a brief haptic/visual pulse on drag start, show a drag preview |
+| Forcing all tasks into projects | Users with simple task lists are forced into unnecessary project structure | Keep "No Project" / "Inbox" as the default. Tasks without a project_id should display in a default "Inbox" section |
+| Kanban columns not scrollable independently | With many cards, the entire page scrolls instead of individual columns | Each column must be a scrollable container with `overflow-y: auto` and a max height |
+| Moving task to "done" column not triggering completion reflection | The existing dashboard has a reflection strip (difficulty rating) for high-priority completed tasks; kanban bypass skips this | When a kanban drag moves a task to "done", check if it qualifies for reflection and show the prompt inline in the kanban card |
 
 ## "Looks Done But Isn't" Checklist
 
-Things that appear complete but are missing critical pieces.
-
-- [ ] **`shouldTrackOnDate` fix:** Often only fixes the shared copy in `format.ts` -- verify the private copy in `habit-logs.ts:295` is also fixed (or removed and replaced with import)
-- [ ] **Zod wiring:** Often only applied to POST -- verify PATCH routes use `.partial()` schema and still reject empty updates
-- [ ] **Cache removal:** Often only deletes `lib/cache.ts` -- verify all 4 import sites are cleaned up and tests updated
-- [ ] **Weekly day field migration:** Often only adds the migration -- verify the TypeScript type, Zod schema, API validator, `shouldTrackOnDate`, and `formatFrequency` are all updated
-- [ ] **Theme-switcher fix:** Often only removes the `console.log` -- verify the manual DOM manipulation is also removed and theme switching still works
-- [ ] **Test updates:** Often marked "done" after fixing format tests -- verify absence tests, habit-logs tests, API route tests, and insight tests are also updated
-- [ ] **i18n:** Any new user-facing string (e.g., day picker for weekly habits) must exist in all 3 locale files: `en.json`, `zh.json`, `zh-TW.json`
+- [ ] **Kanban drag-and-drop:** Often missing keyboard accessibility (arrow keys to move cards between columns) -- verify with keyboard-only navigation
+- [ ] **Project CRUD:** Often missing the delete confirmation that handles orphan tasks -- verify what happens to tasks when a project is deleted
+- [ ] **Status migration:** Often missing the database trigger to sync `is_completed` <-> `status` -- verify by toggling via the old API and checking kanban state
+- [ ] **SWR cache invalidation:** Often missing sidebar counts invalidation after kanban operations -- verify sidebar counts update after dragging a card to "done"
+- [ ] **Recurring tasks post-migration:** Often missing tests for recurring task scope operations after adding new columns -- verify "edit all future" still works
+- [ ] **Mobile drag-and-drop:** Often missing touch event handling -- verify on actual mobile device, not just responsive browser
+- [ ] **Empty project state:** Often missing what to show when a project has zero tasks -- verify the kanban board renders correctly with empty columns
+- [ ] **i18n for new strings:** Project names, status labels, kanban UI strings need all three locales (en, zh, zh-TW) -- verify no missing translation keys
+- [ ] **Optimistic rollback:** Often missing error recovery UX -- verify that a failed drag shows a toast and the card returns to original position
 
 ## Recovery Strategies
 
-When pitfalls occur despite prevention, how to recover.
-
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Frequency fix breaks existing stats | MEDIUM | Revert the `shouldTrackOnDate` change; redeploy; re-plan the fix with callers updated simultaneously |
-| Migration corrupts JSONB frequency data | HIGH | Restore from Supabase point-in-time recovery; fix the migration SQL; re-run. Data loss is bounded to changes since last backup |
-| Zod schema rejects valid PATCH requests | LOW | Hot-fix by using `.partial()` on the schema; deploy within minutes |
-| Cache removal causes excessive DB load | LOW | Re-add `Cache-Control` headers if missing; SWR client-side cache handles most cases; add the module back temporarily if needed |
-| Theme switching breaks after workaround removal | LOW | Re-add the workaround temporarily; file issue against next-themes; investigate root cause async |
-| Tests fail in CI after frequency logic changes | LOW | Check which tests assert old behavior; update them in the same PR; do not merge PRs with known test failures |
+| `is_completed` / `status` desync | MEDIUM | Write a one-time migration script to reconcile: `UPDATE tasks SET is_completed = true WHERE status = 'done' AND NOT is_completed`. Add the DB trigger retroactively. |
+| DnD library incompatibility discovered late | HIGH | If `@dnd-kit/react` fails, switching to `@hello-pangea/dnd` with `--legacy-peer-deps` requires rewriting all DnD code. Mitigate by abstracting DnD behind an adapter layer. |
+| SWR cache stale data in production | LOW | Call `mutate(() => true)` to clear all caches (nuclear option). Then fix the specific invalidation patterns. |
+| Recurring task instances broken by migration | HIGH | Requires manual data repair: identify orphaned instances, re-link to templates, regenerate missing instances. Prevention is far cheaper than cure. |
+| Dashboard regression (missing tasks) | LOW | Revert the dashboard API to its pre-migration behavior. Dashboard should not change in the first phase anyway. |
 
 ## Pitfall-to-Phase Mapping
 
-How roadmap phases should address these pitfalls.
-
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Frequency logic fix breaks stats (Pitfall 1) | Phase 1: Fix frequency logic + all callers + all tests atomically | `pnpm test:run` passes with 0 failures; manual verification of stats page for times_per_week habit |
-| Migration corrupts JSONB data (Pitfall 2) | Phase 2: DB migration + type updates + Zod update | Run migration on staging first; verify existing habits load correctly; verify new habits can set custom day |
-| Cache removal without cleanup (Pitfall 3) | Phase 3: Remove cache module + all references | `pnpm build` succeeds (no dangling imports); stats route still returns `Cache-Control` header |
-| Zod partial update breakage (Pitfall 4) | Phase 2: Wire Zod after frequency type changes | PATCH request with single field succeeds; PATCH with empty body returns 400; POST with missing name returns 400 |
-| Tests blocking fixes (Pitfall 5) | Every phase: update tests with each fix | `pnpm test:run` passes after each PR; no `it.skip` or `it.todo` left unresolved |
-| Theme workaround masking config bug (Pitfall 6) | Phase 3: Investigate root cause, then remove workaround | E2E visual regression tests pass for light/dark/system themes; no console.log in production |
+| DnD Library React 19 Incompatibility | Phase 1 (Foundation) | Build a 2-column, 3-card kanban prototype. Verify drag works with React Strict Mode, SSR, and production build. |
+| Hydration Mismatch with SSR | Phase 2 (Kanban Board) | Run `pnpm build && pnpm start` and verify kanban loads without hydration errors in browser console. |
+| Breaking `is_completed` Boolean Contract | Phase 1 (Database Migration) | Run ALL existing 1084+ tests after migration. Specifically run `pnpm test:run -- tests/lib/db/tasks.test.ts` and verify all 21 `is_completed` assertions pass. |
+| SWR Cache Fragmentation | Phase 1 (Foundation) | Create centralized invalidation utility. Retrofit existing `create-task-content.tsx` and `dashboard-content.tsx` to use it. Run existing tests. |
+| Optimistic Update Rollback in Kanban | Phase 2 (Kanban Board) | Simulate network failure during drag (e.g., disconnect network in DevTools). Verify card returns to original position with error toast. |
+| Breaking Recurring Task Instance Generation | Phase 1 (Database Migration) | Create new recurring task after migration. Verify instances generate correctly. Test all scope operations (this/following/all). |
+| Dashboard "Tasks Today" Widget Regression | Phase 1 (Database Migration) | Assign a task with due_date to a project. Verify it still appears in dashboard "Tasks Today". Run `tests/app/api/dashboard/route.test.ts`. |
 
 ## Sources
 
-- Direct codebase analysis: `lib/habits/format.ts`, `lib/db/habit-logs.ts`, `lib/db/insights.ts`, `lib/habits/absence.ts`, `lib/cache.ts`, `components/theme-switcher.tsx`, `app/layout.tsx`, `app/api/habits/route.ts`, `app/api/habits/[id]/route.ts`, `app/api/habits/[id]/stats/route.ts`, `app/api/habits/[id]/toggle/route.ts`, `app/api/dashboard/route.ts`, `lib/validations/habit.ts`, `lib/db/types.ts`
-- Test files: `tests/lib/habits/format.test.ts`, `tests/lib/habits/absence.test.ts`, `tests/lib/db/habit-logs.test.ts`, `tests/components/theme-switcher.test.tsx`
-- Existing codebase audit: `.planning/codebase/CONCERNS.md`
-- Project plan: `.planning/PROJECT.md`
-- [Zod API validation patterns in Next.js](https://dub.co/blog/zod-api-validation) -- MEDIUM confidence, verified against codebase patterns
-- [Zod `.partial()` for PATCH routes](https://kirandev.com/nextjs-api-routes-zod-validation) -- MEDIUM confidence
-- [next-themes hydration mismatch workarounds](https://github.com/pacocoursey/next-themes) -- MEDIUM confidence
-- [shadcn/ui ThemeProvider hydration error with Next.js 15](https://github.com/shadcn-ui/ui/issues/5552) -- MEDIUM confidence
-- [Supabase JSONB column management](https://supabase.com/docs/guides/database/json) -- HIGH confidence (official docs)
-- [Supabase database migrations best practices](https://supabase.com/docs/guides/deployment/database-migrations) -- HIGH confidence (official docs)
+- [dnd-kit future/maintenance discussion (GitHub #1194)](https://github.com/clauderic/dnd-kit/issues/1194)
+- [@dnd-kit/react "use client" issue (GitHub #1654)](https://github.com/clauderic/dnd-kit/issues/1654)
+- [react-beautiful-dnd deprecated (GitHub #2672)](https://github.com/atlassian/react-beautiful-dnd/issues/2672)
+- [react-beautiful-dnd React 19 incompatibility (GitHub #2653)](https://github.com/atlassian/react-beautiful-dnd/issues/2653)
+- [pragmatic-drag-and-drop React 19 support (GitHub #181)](https://github.com/atlassian/pragmatic-drag-and-drop/issues/181)
+- [@hello-pangea/dnd React 19 support (GitHub #864)](https://github.com/hello-pangea/dnd/issues/864)
+- [SWR Mutation & Revalidation docs](https://swr.vercel.app/docs/mutation)
+- [Prisma expand/contract migration pattern](https://www.prisma.io/docs/guides/data-migration)
+- [Supabase database migrations docs](https://supabase.com/docs/guides/deployment/database-migrations)
+- [Next.js hydration error docs](https://nextjs.org/docs/messages/react-hydration-error)
+- [dnd-kit Sortable docs](https://docs.dndkit.com/presets/sortable)
+- [Top 5 DnD Libraries for React 2026](https://puckeditor.com/blog/top-5-drag-and-drop-libraries-for-react)
+- [dnd-kit async reorder issue (GitHub #833)](https://github.com/clauderic/dnd-kit/issues/833)
+- [SWR race condition discussion (GitHub #479)](https://github.com/vercel/swr/discussions/479)
+- [SWR v2 optimistic updates](https://swr.vercel.app/blog/swr-v2)
+- BetterR.Me codebase analysis: `lib/db/tasks.ts`, `lib/db/recurring-tasks.ts`, `lib/db/types.ts`, `lib/validations/task.ts`, `components/dashboard/dashboard-content.tsx`, `components/dashboard/tasks-today.tsx`, `components/tasks/tasks-page-content.tsx`, `components/tasks/create-task-content.tsx`, `app/api/dashboard/route.ts`, `app/api/tasks/route.ts`, `app/api/tasks/[id]/route.ts`, `app/api/tasks/[id]/toggle/route.ts`, `app/api/sidebar/counts/route.ts`
 
 ---
-*Pitfalls research for: BetterR.Me codebase hardening milestone*
-*Researched: 2026-02-15*
+*Pitfalls research for: Adding projects & kanban to BetterR.Me task management*
+*Researched: 2026-02-18*

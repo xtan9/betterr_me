@@ -1,610 +1,956 @@
-# Architecture Research: Codebase Hardening
+# Architecture Patterns
 
-**Domain:** Next.js App Router + Supabase habit tracking app (existing codebase)
-**Researched:** 2026-02-15
-**Confidence:** HIGH (based on direct codebase analysis + verified patterns)
+**Domain:** Projects & Kanban integration into existing BetterR.Me habit tracking app
+**Researched:** 2026-02-18
 
-## Current Architecture Overview
+## Recommended Architecture
+
+### High-Level Integration Overview
+
+The Projects & Kanban feature integrates into the existing `DB class -> API route -> SWR hook -> React component` data flow. No new architectural patterns are introduced -- every new piece follows the exact conventions already established in the codebase.
 
 ```
-Client (Browser)
-    |
-    v
-Middleware (proxy.ts) ---- Session refresh, auth redirects
-    |
-    v
-App Router API Routes ---- Manual auth + manual validation per route
-    |
-    v
-DB Classes (lib/db/) ---- HabitsDB, TasksDB, HabitLogsDB, ProfilesDB, etc.
-    |                      Constructor: optional SupabaseClient, defaults to browser client
-    v
-Supabase Client ---- Browser (client.ts) or Server (server.ts)
-    |
-    v
-Supabase (Postgres + Auth + RLS)
-    |
-    ^-- handle_new_user trigger (profile creation on signup)
+                                    EXISTING                          NEW
+                             +-----------------+            +-----------------+
+                             |   Dashboard     |            |  Projects Page  |
+                             |  Tasks Page     |            |  Kanban Board   |
+                             +-----------------+            +-----------------+
+                                     |                              |
+                              SWR hooks                      SWR hooks (new)
+                              (existing)                     useProjects()
+                                     |                       useTasks() (extended)
+                                     v                              v
+                             +-----------------+            +-----------------+
+                             | /api/tasks      |            | /api/projects   |
+                             | /api/dashboard  |            | /api/tasks      |
+                             +-----------------+            |   (extended)    |
+                                     |                      +-----------------+
+                                     v                              v
+                             +-----------------+            +-----------------+
+                             |   TasksDB       |            |  ProjectsDB     |
+                             |   (existing)    |            |  TasksDB        |
+                             +-----------------+            |   (extended)    |
+                                     |                      +-----------------+
+                                     v                              v
+                             +-----------------+            +-----------------+
+                             |  tasks table    |            | projects table  |
+                             |  (existing)     |            | tasks table     |
+                             +-----------------+            |  (+ new cols)   |
+                                                            +-----------------+
 ```
 
-### Component Responsibilities
+### Component Boundaries
 
-| Component | Current Responsibility | Problem |
-|-----------|----------------------|---------|
-| `lib/supabase/client.ts` | Browser Supabase client | Fine as-is |
-| `lib/supabase/server.ts` | Server Supabase client (cookie-based) | Fine as-is |
-| `lib/supabase/proxy.ts` | Middleware session refresh + auth redirects | Fine as-is |
-| `lib/db/*.ts` (6 classes) | Data access layer; each wraps Supabase queries | Optional client in constructor -- silent fallback to browser client on server |
-| `lib/validations/*.ts` | Zod schemas for forms | Exist but are NOT used in API routes |
-| `app/api/**` (12 route files) | Auth check + manual validation + DB calls + error handling | Massive duplication, no shared patterns |
-| `lib/cache.ts` | In-memory TTL cache for stats | Unreliable on Vercel serverless (per-instance) |
-| `lib/habits/absence.ts` | Pure function for missed-day computation | Silently caught in dashboard route |
+| Component | Responsibility | Communicates With | New/Modified |
+|-----------|---------------|-------------------|--------------|
+| `ProjectsDB` | CRUD for projects table, sort_order management | Supabase client | **NEW** |
+| `TasksDB` (extended) | Existing task CRUD + new filters for section/status/project_id | Supabase client | **MODIFIED** |
+| `/api/projects/route.ts` | GET/POST for projects | ProjectsDB | **NEW** |
+| `/api/projects/[id]/route.ts` | GET/PATCH/DELETE for single project | ProjectsDB | **NEW** |
+| `/api/tasks/route.ts` (extended) | Extended GET with section/status/project_id filters, new PATCH for bulk status/order updates | TasksDB | **MODIFIED** |
+| `/api/tasks/reorder/route.ts` | Bulk reorder endpoint for drag-and-drop | TasksDB | **NEW** |
+| `useProjects()` | SWR hook for projects list | `/api/projects` | **NEW** |
+| `useTasks()` | SWR hook with extended filters (section, status, project) | `/api/tasks` | **NEW** (replaces inline fetcher in TasksPageContent) |
+| `useKanbanTasks()` | SWR hook for kanban board (tasks grouped by status) | `/api/tasks?view=kanban` | **NEW** |
+| `ProjectsPageContent` | Projects listing page | useProjects() | **NEW** |
+| `KanbanBoard` | Kanban board with drag-and-drop columns | useKanbanTasks(), DnD library | **NEW** |
+| `KanbanColumn` | Single status column (Backlog/Todo/In Progress/Done) | KanbanBoard (parent) | **NEW** |
+| `KanbanCard` | Draggable task card within kanban column | KanbanColumn (parent) | **NEW** |
+| `TasksPageContent` (redesigned) | Section-based task layout (Work/Personal tabs or toggle) | useTasks() | **MODIFIED** |
+| `TaskCard` (extended) | Show project badge, section indicator | Task data | **MODIFIED** |
+| `TaskForm` (extended) | Section, status, and project_id fields | Validation schemas | **MODIFIED** |
+| `AppSidebar` (extended) | Projects nav item in sidebar | Navigation config | **MODIFIED** |
 
-## Critical Issues to Fix (Ordered by Dependency)
+## Data Model Changes
 
-### Issue 1: DB Class Constructor -- Silent Browser Client Fallback
+### New Table: `projects`
 
-**What is broken:**
+```sql
+CREATE TABLE projects (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  name TEXT NOT NULL,
+  section TEXT NOT NULL DEFAULT 'work' CHECK (section IN ('work', 'personal')),
+  color TEXT NOT NULL DEFAULT '#6366f1',  -- hex color for project badge
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+  sort_order FLOAT8 NOT NULL DEFAULT 0,  -- float for efficient drag reorder
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-Every DB class (`HabitsDB`, `TasksDB`, `HabitLogsDB`, `ProfilesDB`) has this pattern:
+CREATE INDEX idx_projects_user_id ON projects(user_id);
+CREATE INDEX idx_projects_user_section ON projects(user_id, section) WHERE status = 'active';
+
+-- RLS
+ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own projects"
+  ON projects FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can create own projects"
+  ON projects FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own projects"
+  ON projects FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own projects"
+  ON projects FOR DELETE USING (auth.uid() = user_id);
+
+-- Trigger
+CREATE TRIGGER update_projects_updated_at
+  BEFORE UPDATE ON projects
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+```
+
+### Modified Table: `tasks` (new columns)
+
+```sql
+-- Add section column (work/personal, independent of category)
+ALTER TABLE tasks ADD COLUMN section TEXT DEFAULT 'personal'
+  CHECK (section IN ('work', 'personal'));
+
+-- Add kanban status column
+ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'todo'
+  CHECK (status IN ('backlog', 'todo', 'in_progress', 'done'));
+
+-- Add project FK (optional -- tasks can exist without a project)
+ALTER TABLE tasks ADD COLUMN project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+
+-- Add sort_order for kanban column ordering
+ALTER TABLE tasks ADD COLUMN sort_order FLOAT8 DEFAULT 0;
+
+-- Indexes for common query patterns
+CREATE INDEX idx_tasks_section ON tasks(user_id, section) WHERE is_completed = false;
+CREATE INDEX idx_tasks_status ON tasks(user_id, status) WHERE is_completed = false;
+CREATE INDEX idx_tasks_project ON tasks(user_id, project_id) WHERE project_id IS NOT NULL;
+CREATE INDEX idx_tasks_kanban ON tasks(user_id, status, sort_order);
+```
+
+**Confidence: HIGH** -- follows the exact same patterns as existing schema migrations in the codebase.
+
+### sort_order Strategy: Float-Based Ordering
+
+Use `FLOAT8` (double precision) for `sort_order` instead of integers because:
+
+1. **Single-row updates on reorder**: When dragging a task between two others, compute midpoint (`(prev.sort_order + next.sort_order) / 2`) and update only the moved task. No need to renumber siblings.
+2. **Cross-column moves**: When moving to a new kanban column, find the midpoint between the target neighbors, update the single task's `status` + `sort_order` in one write.
+3. **Edge cases**: Insert at top = `first_item.sort_order - 1.0`. Insert at bottom = `last_item.sort_order + 1.0`.
+4. **Periodic normalization**: After ~50 reorders in the same neighborhood, precision degrades. Add a background normalization that reassigns integer sort_orders (1.0, 2.0, 3.0...) when gap between adjacent items < 0.001. This is a future optimization, not a launch blocker.
+
+**Confidence: MEDIUM** -- float ordering is a well-established pattern for drag-and-drop, but the normalization threshold (0.001) is a heuristic that should be validated in practice.
+
+## New DB Classes
+
+### `ProjectsDB` (new file: `lib/db/projects.ts`)
+
+Follow the exact same pattern as `TasksDB` and `HabitsDB`:
 
 ```typescript
-constructor(supabase?: SupabaseClient) {
-  this.supabase = supabase || createClient(); // createClient() = BROWSER client
-}
-```
-
-If an API route forgets to pass the server client, the class silently falls back to the browser client. On the server, `createBrowserClient()` from `@supabase/ssr` does NOT have access to the user's cookies, so auth context is lost. Queries will either fail silently (return empty due to RLS) or throw opaque errors.
-
-Additionally, each DB file exports a singleton at module scope:
-```typescript
-export const habitsDB = new HabitsDB(); // Browser client, always
-```
-
-These singletons are correct for client-side use only, but their existence alongside the optional constructor creates confusion about when to use which.
-
-**Two inconsistent patterns across DB classes:**
-
-| Class | Constructor | Exported Singleton | Notes |
-|-------|------------|-------------------|-------|
-| `HabitsDB` | `supabase?: SupabaseClient` | `habitsDB` | Falls back to browser |
-| `TasksDB` | `supabase?: SupabaseClient` | `tasksDB` | Falls back to browser |
-| `HabitLogsDB` | `supabase?: SupabaseClient` | `habitLogsDB` | Falls back to browser; also instantiates internal `HabitsDB` |
-| `ProfilesDB` | `supabase?: SupabaseClient` | `profilesDB` | Falls back to browser |
-| `InsightsDB` | `supabase: SupabaseClient` (required!) | None | Correct pattern |
-| `HabitMilestonesDB` | `supabase: SupabaseClient` (required!) | None | Correct pattern |
-
-**Fix:** Make `supabase` parameter **required** in all DB class constructors. Remove browser-fallback. Keep client-side singletons but construct them explicitly. This is what `InsightsDB` and `HabitMilestonesDB` already do correctly.
-
-**Recommended pattern:**
-```typescript
-export class HabitsDB {
-  constructor(private supabase: SupabaseClient) {}
-  // ...methods
-}
-
-// Client-side singleton (explicit, documented)
 import { createClient } from '@/lib/supabase/client';
-export const habitsDB = new HabitsDB(createClient());
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Project, ProjectInsert, ProjectUpdate, ProjectFilters } from './types';
+
+export class ProjectsDB {
+  constructor(private supabase: SupabaseClient) {}
+
+  async getUserProjects(userId: string, filters?: ProjectFilters): Promise<Project[]> {
+    let query = this.supabase
+      .from('projects')
+      .select('*')
+      .eq('user_id', userId)
+      .order('sort_order', { ascending: true });
+
+    if (filters?.status) query = query.eq('status', filters.status);
+    if (filters?.section) query = query.eq('section', filters.section);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getProject(projectId: string, userId: string): Promise<Project | null> {
+    const { data, error } = await this.supabase
+      .from('projects')
+      .select('*')
+      .eq('id', projectId)
+      .eq('user_id', userId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+    return data;
+  }
+
+  async createProject(project: ProjectInsert): Promise<Project> {
+    const { data, error } = await this.supabase
+      .from('projects')
+      .insert(project)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async updateProject(projectId: string, userId: string, updates: ProjectUpdate): Promise<Project> {
+    const { data, error } = await this.supabase
+      .from('projects')
+      .update(updates)
+      .eq('id', projectId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async deleteProject(projectId: string, userId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('projects')
+      .delete()
+      .eq('id', projectId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+  }
+}
+
+export const projectsDB = new ProjectsDB(createClient());
 ```
 
-**Data flow impact:** Every API route already passes the server client explicitly (`new HabitsDB(supabase)`). This change only breaks code that relies on the fallback, which is a bug you want to find at compile time, not runtime.
+### `TasksDB` Extensions
 
-**Build order:** Fix FIRST. It is a foundational change that makes all DB usage explicit. Low risk because API routes already pass the client.
-
----
-
-### Issue 2: Duplicated Auth + Validation Boilerplate in API Routes
-
-**What is broken:**
-
-Every API route repeats identical boilerplate:
+Add these methods to the existing `TasksDB` class:
 
 ```typescript
-// This exact pattern appears in ALL 12 route files
-const supabase = await createClient();
-const { data: { user } } = await supabase.auth.getUser();
-if (!user) {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+// In lib/db/tasks.ts -- add to existing class
+
+/**
+ * Get tasks grouped by status for kanban view
+ */
+async getKanbanTasks(userId: string, filters?: { section?: string; project_id?: string }): Promise<Task[]> {
+  let query = this.supabase
+    .from('tasks')
+    .select('*, projects:project_id(id, name, color)')
+    .eq('user_id', userId)
+    .order('sort_order', { ascending: true });
+
+  if (filters?.section) query = query.eq('section', filters.section);
+  if (filters?.project_id) query = query.eq('project_id', filters.project_id);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Bulk update sort_order for drag-and-drop reorder
+ * Accepts array of { id, sort_order, status? }
+ */
+async reorderTasks(
+  userId: string,
+  updates: Array<{ id: string; sort_order: number; status?: string }>
+): Promise<void> {
+  // Use a transaction-like approach: update each task
+  // Supabase doesn't support multi-row update in one call,
+  // so batch with Promise.all (RLS ensures user_id scoping)
+  const promises = updates.map(({ id, sort_order, status }) => {
+    const updateData: Record<string, unknown> = { sort_order };
+    if (status) updateData.status = status;
+
+    return this.supabase
+      .from('tasks')
+      .update(updateData)
+      .eq('id', id)
+      .eq('user_id', userId);
+  });
+
+  const results = await Promise.all(promises);
+  const failed = results.find(r => r.error);
+  if (failed?.error) throw failed.error;
+}
+
+/**
+ * Get tasks for a specific project
+ */
+async getProjectTasks(userId: string, projectId: string): Promise<Task[]> {
+  const { data, error } = await this.supabase
+    .from('tasks')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('project_id', projectId)
+    .order('sort_order', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
 }
 ```
 
-Additionally, validation is done with hand-written imperative checks instead of using the Zod schemas that already exist in `lib/validations/`:
+**Note on `reorderTasks`**: Supabase JS client does not support multi-row upsert with different values per row. The `Promise.all` approach works but is N+1 writes. For a typical drag operation, N=1 (move one task, update one row). Batch reorder (normalizing all tasks in a column) could be N=20-50. This is acceptable at the scale of a personal productivity app. If it becomes a bottleneck, use a Supabase Edge Function with raw SQL for batch updates.
+
+**Confidence: HIGH** -- follows existing patterns exactly. The `select('*, projects:project_id(...)')` join syntax is standard Supabase.
+
+## New Type Definitions
+
+Add to `lib/db/types.ts`:
 
 ```typescript
-// API route: manual validation (habits route.ts)
-if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
-  return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+// =============================================================================
+// PROJECTS
+// =============================================================================
+
+export type ProjectSection = 'work' | 'personal';
+export type ProjectStatus = 'active' | 'archived';
+
+export interface Project {
+  id: string;
+  user_id: string;
+  name: string;
+  section: ProjectSection;
+  color: string;
+  status: ProjectStatus;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
-// Existing but unused Zod schema (lib/validations/habit.ts)
-export const habitFormSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100),
-  // ...full validation
+export type ProjectInsert = Omit<Project, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+};
+
+export type ProjectUpdate = Partial<Omit<Project, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
+export interface ProjectFilters {
+  status?: ProjectStatus;
+  section?: ProjectSection;
+}
+
+// =============================================================================
+// TASK EXTENSIONS
+// =============================================================================
+
+export type TaskSection = 'work' | 'personal';
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
+
+// Extend TaskFilters with new fields
+export interface TaskFilters {
+  is_completed?: boolean;
+  priority?: Priority;
+  due_date?: string;
+  has_due_date?: boolean;
+  section?: TaskSection;      // NEW
+  status?: TaskStatus;        // NEW
+  project_id?: string;        // NEW
+}
+
+// Task with joined project data (for kanban view)
+export interface TaskWithProject extends Task {
+  projects: Pick<Project, 'id' | 'name' | 'color'> | null;
+}
+```
+
+## New Validation Schemas
+
+Add to `lib/validations/task.ts` (extend existing schemas):
+
+```typescript
+// Extend taskFormSchema
+export const taskFormSchema = z.object({
+  title: z.string().trim().min(1).max(100),
+  description: z.string().max(500).optional().nullable(),
+  intention: z.string().max(200).optional().nullable(),
+  priority: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).optional(),
+  category: z.enum(["work", "personal", "shopping", "other"]).nullable().optional(),
+  due_date: z.string().nullable().optional(),
+  due_time: z.string().nullable().optional(),
+  completion_difficulty: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
+  section: z.enum(["work", "personal"]).optional(),           // NEW
+  status: z.enum(["backlog", "todo", "in_progress", "done"]).optional(),  // NEW
+  project_id: z.string().uuid().nullable().optional(),        // NEW
 });
 ```
 
-The `isValidFrequency()` function is duplicated verbatim in both `app/api/habits/route.ts` and `app/api/habits/[id]/route.ts`.
+New file `lib/validations/project.ts`:
 
-**Fix:** Create a `withAuth()` wrapper function and use Zod schemas for API validation.
-
-**Recommended `withAuth` pattern:**
 ```typescript
-// lib/api/with-auth.ts
-import { createClient } from '@/lib/supabase/server';
-import { NextRequest, NextResponse } from 'next/server';
-import type { SupabaseClient, User } from '@supabase/supabase-js';
+import { z } from "zod";
 
-interface AuthContext {
-  user: User;
-  supabase: SupabaseClient;
-}
+export const projectFormSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(50, "Name must be 50 characters or less"),
+  section: z.enum(["work", "personal"]),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color"),
+});
 
-type AuthenticatedHandler = (
-  request: NextRequest,
-  context: AuthContext & { params?: Record<string, string> }
-) => Promise<NextResponse>;
+export type ProjectFormValues = z.infer<typeof projectFormSchema>;
 
-export function withAuth(handler: AuthenticatedHandler) {
-  return async (request: NextRequest, routeContext?: { params: Promise<Record<string, string>> }) => {
-    try {
-      const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+export const projectUpdateSchema = projectFormSchema.partial().extend({
+  status: z.enum(["active", "archived"]).optional(),
+  sort_order: z.number().optional(),
+}).refine((data) => Object.keys(data).length > 0, {
+  message: "At least one field must be provided",
+});
+```
 
-      if (!user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
+New file `lib/validations/reorder.ts`:
 
-      const params = routeContext?.params ? await routeContext.params : undefined;
-      return await handler(request, { user, supabase, params });
-    } catch (error) {
-      console.error(`${request.method} ${request.nextUrl.pathname} error:`, error);
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-    }
+```typescript
+import { z } from "zod";
+
+export const reorderSchema = z.object({
+  updates: z.array(z.object({
+    id: z.string().uuid(),
+    sort_order: z.number(),
+    status: z.enum(["backlog", "todo", "in_progress", "done"]).optional(),
+  })).min(1).max(100),  // Cap at 100 to prevent abuse
+});
+
+export type ReorderValues = z.infer<typeof reorderSchema>;
+```
+
+## New API Routes
+
+### `/api/projects/route.ts`
+
+```
+GET  /api/projects                    -> List user's projects (with filters)
+POST /api/projects                    -> Create project
+```
+
+### `/api/projects/[id]/route.ts`
+
+```
+GET    /api/projects/[id]             -> Get single project
+PATCH  /api/projects/[id]             -> Update project
+DELETE /api/projects/[id]             -> Delete project (tasks get project_id = NULL)
+```
+
+### `/api/tasks/route.ts` (extended)
+
+```
+GET /api/tasks?view=kanban&section=work     -> Kanban view with project joins
+GET /api/tasks?section=work                 -> Filter by section
+GET /api/tasks?project_id=uuid             -> Filter by project
+GET /api/tasks?status=in_progress          -> Filter by kanban status
+```
+
+### `/api/tasks/reorder/route.ts` (new)
+
+```
+POST /api/tasks/reorder               -> Bulk update sort_order (and optionally status)
+```
+
+This is a dedicated endpoint rather than overloading PATCH on individual tasks because:
+1. Drag-and-drop moves may update 1-3 tasks atomically (moved task + neighbors for normalization)
+2. Cross-column moves need to update both `status` and `sort_order`
+3. Keeps the existing PATCH endpoint's validation clean
+
+## New SWR Hooks
+
+### `lib/hooks/use-projects.ts`
+
+```typescript
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
+import type { Project, ProjectSection } from "@/lib/db/types";
+
+export function useProjects(filters?: { section?: ProjectSection }) {
+  const params = new URLSearchParams();
+  if (filters?.section) params.set("section", filters.section);
+
+  const { data, error, isLoading, mutate } = useSWR<{ projects: Project[] }>(
+    `/api/projects?${params}`,
+    fetcher,
+    { revalidateOnFocus: true }
+  );
+
+  return {
+    projects: data?.projects ?? [],
+    error,
+    isLoading,
+    mutate,
   };
 }
 ```
 
-**Recommended Zod validation helper:**
-```typescript
-// lib/api/validate.ts
-import { ZodSchema, ZodError } from 'zod';
-import { NextResponse } from 'next/server';
+### `lib/hooks/use-tasks.ts` (new, replaces inline fetcher)
 
-export function parseBody<T>(schema: ZodSchema<T>, body: unknown):
-  | { success: true; data: T }
-  | { success: false; response: NextResponse } {
-  const result = schema.safeParse(body);
-  if (!result.success) {
-    const errors = result.error.flatten().fieldErrors;
-    return {
-      success: false,
-      response: NextResponse.json(
-        { error: 'Validation failed', details: errors },
-        { status: 400 }
-      ),
-    };
-  }
-  return { success: true, data: result.data };
+```typescript
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
+import type { Task, TaskWithProject, TaskSection, TaskStatus } from "@/lib/db/types";
+
+interface UseTasksOptions {
+  section?: TaskSection;
+  status?: TaskStatus;
+  project_id?: string;
+  view?: "kanban";
+}
+
+export function useTasks(options?: UseTasksOptions) {
+  const params = new URLSearchParams();
+  if (options?.section) params.set("section", options.section);
+  if (options?.status) params.set("status", options.status);
+  if (options?.project_id) params.set("project_id", options.project_id);
+  if (options?.view) params.set("view", options.view);
+
+  const { data, error, isLoading, mutate } = useSWR<{ tasks: TaskWithProject[] }>(
+    `/api/tasks?${params}`,
+    fetcher,
+    { revalidateOnFocus: true, keepPreviousData: true }
+  );
+
+  return {
+    tasks: data?.tasks ?? [],
+    error,
+    isLoading,
+    mutate,
+  };
 }
 ```
 
-**API route after refactor:**
-```typescript
-// app/api/habits/route.ts (after)
-import { withAuth } from '@/lib/api/with-auth';
-import { parseBody } from '@/lib/api/validate';
-import { habitFormSchema } from '@/lib/validations/habit';
+## Drag-and-Drop Architecture
 
-export const POST = withAuth(async (request, { user, supabase }) => {
-  const body = await request.json();
-  const parsed = parseBody(habitFormSchema, body);
-  if (!parsed.success) return parsed.response;
+### Library Choice: `@dnd-kit/react` (new rewrite)
 
-  const habitsDB = new HabitsDB(supabase);
-  const habit = await habitsDB.createHabit({
-    user_id: user.id,
-    ...parsed.data,
-    status: 'active',
-  });
-  return NextResponse.json({ habit }, { status: 201 });
-});
+**Recommendation: `@dnd-kit/react` v0.3.x** because:
+
+1. **React 19 compatible**: Peer dependencies explicitly declare `react: '^18.0.0 || ^19.0.0'` (verified via npm registry).
+2. **Ground-up rewrite**: The new `@dnd-kit/react` is a complete rewrite built on `@dnd-kit/dom`, designed for modern React. The legacy `@dnd-kit/core` v6.x has open issues with React 19 (GitHub issue #1511).
+3. **Sortable built-in**: Ships with `@dnd-kit/react/sortable` for kanban column reordering.
+4. **Lightweight**: ~10kB, zero external dependencies.
+5. **Accessibility**: Built-in keyboard navigation and screen reader announcements.
+6. **Tailwind + shadcn/ui compatible**: The library is headless -- it provides behavior, not styles. Works perfectly with the existing design system.
+
+**Alternative considered: `@atlaskit/pragmatic-drag-and-drop`**
+- Also React 19 compatible (wide peer deps: `^16.8 || ^17 || ^18 || ^19`).
+- Framework-agnostic (vanilla JS core), which is overkill for a React-only app.
+- Requires importing from `@atlaskit/*` packages (Atlassian's monorepo), adding more dependencies.
+- Fewer community examples with shadcn/ui + Tailwind.
+
+**Alternative considered: `@dnd-kit/core` (legacy)**
+- Does not officially support React 19. Works with `--legacy-peer-deps` or overrides, but this is a workaround, not a solution.
+- More community examples exist, but the library is being superseded by `@dnd-kit/react`.
+
+**Risk: `@dnd-kit/react` is pre-1.0 (v0.3.x)**
+- The API may change before 1.0.
+- Mitigation: Isolate all dnd-kit usage behind an internal abstraction layer (`lib/kanban/dnd-provider.tsx`, `lib/kanban/use-kanban-dnd.ts`). If the API changes, only these files need updating.
+- The existing `@dnd-kit/core` can be used as a fallback if `@dnd-kit/react` proves unstable.
+
+**Confidence: MEDIUM** -- `@dnd-kit/react` is the correct choice for React 19, but its pre-1.0 status means API instability is possible. The abstraction layer mitigation is sound.
+
+### Installation
+
+```bash
+pnpm add @dnd-kit/react @dnd-kit/helpers
 ```
 
-**Data flow impact:** No change to data flow. Request lifecycle stays the same. Error responses become more consistent (structured JSON with `details` field for validation errors).
-
-**Build order:** Fix SECOND, after DB constructors. Depends on Issue 1 (DB classes with required client) to be clean. Can also create the Zod validation schemas for routes that don't have them yet (e.g., profile preferences PATCH has no schema).
-
----
-
-### Issue 3: In-Memory Cache Unreliable on Vercel Serverless
-
-**What is broken:**
-
-`lib/cache.ts` implements a `TTLCache` using an in-memory `Map`. On Vercel serverless:
-- Each cold start gets an empty cache
-- Concurrent requests may hit different Lambda instances (no shared memory)
-- The cache has a 1000-entry max size but no per-user isolation
-
-The cache is currently used only for habit stats (`/api/habits/[id]/stats`). The comment in the code acknowledges this limitation:
-
-```typescript
-// Note: This cache is per-instance and will be cleared on server restart.
-// For serverless environments, each cold start will have an empty cache.
-// This is acceptable for short-lived caches as a performance optimization.
-```
-
-**Assessment:** The current approach is actually reasonable for this use case. Stats are expensive to compute (multiple Supabase queries) but not critical to be perfectly fresh. A hit rate of even 20-30% on warm instances is beneficial. The cache is correctly invalidated on writes (toggle, update, delete).
-
-**Fix (minimal -- keep current approach, document and harden):**
-1. Add `Cache-Control: private, max-age=300, stale-while-revalidate=60` headers to stats responses (already partially done with `max-age=300`)
-2. Add `stale-while-revalidate` to allow CDN-level caching on Vercel
-3. Do NOT migrate to Redis/external cache -- overkill for this app's scale
-
-**Fix (if cache becomes unreliable at scale):**
-- Use Vercel's Data Cache via `fetch()` with `next.revalidate` option
-- Or use `unstable_cache` (now `"use cache"` in Next.js 15+) for server-side caching
-
-**Data flow impact:** None for minimal fix. HTTP headers add CDN-layer caching.
-
-**Build order:** Fix THIRD. Low priority since the current implementation is adequate. Can be done independently.
-
----
-
-### Issue 4: Silent Error Swallowing in Dashboard
-
-**What is broken:**
-
-The dashboard route has two layers of silent error handling:
-
-1. **Supplementary queries swallow errors silently:**
-```typescript
-habitLogsDB.getAllUserLogs(...).catch((err) => {
-  console.error('Failed to fetch habit logs for absence:', err);
-  return [] as Pick<HabitLog, 'habit_id' | 'logged_date' | 'completed'>[];
-}),
-```
-
-2. **Per-habit computeMissedDays failures are silently caught:**
-```typescript
-try {
-  const { missed_scheduled_periods, previous_streak } = computeMissedDays(...);
-  return { ...habit, missed_scheduled_periods, previous_streak };
-} catch (err) {
-  console.error('computeMissedDays failed for habit', habit.id, err);
-  return { ...habit, missed_scheduled_periods: 0, previous_streak: 0 };
-}
-```
-
-**Assessment:** This is actually a deliberate and defensible pattern. The dashboard route separates "core queries" (habits, tasks -- which WILL throw on failure) from "supplementary queries" (logs for absence, milestones -- which degrade gracefully). The user sees their dashboard with slightly less enrichment rather than a 500 error.
-
-**Improvement:** Surface degradation to the client so the UI can show a subtle indicator.
-
-**Recommended pattern:**
-```typescript
-// Add a warnings array to the response
-const warnings: string[] = [];
-
-const [allLogs, milestonesToday] = await Promise.all([
-  habitLogsDB.getAllUserLogs(...).catch((err) => {
-    console.error('Failed to fetch habit logs for absence:', err);
-    warnings.push('absence_data_unavailable');
-    return [];
-  }),
-  // ...
-]);
-
-// In response:
-return NextResponse.json({
-  ...dashboardData,
-  ...(warnings.length > 0 && { _warnings: warnings }),
-});
-```
-
-**Data flow impact:** Adds optional `_warnings` field to dashboard response. Client can show a degraded-data indicator.
-
-**Build order:** Fix FOURTH. Low risk. Independent of other changes.
-
----
-
-### Issue 5: Profile Creation Trigger Fallback
-
-**What is broken:**
-
-The `handle_new_user` trigger (PostgreSQL) auto-creates profiles on signup. But the habits POST route has an application-level fallback:
-
-```typescript
-// In POST /api/habits
-const { data: profile } = await supabase
-  .from('profiles')
-  .select('id')
-  .eq('id', user.id)
-  .single();
-
-if (!profile) {
-  // Auto-create profile if missing (trigger may have failed during signup)
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .insert({
-      id: user.id,
-      email: user.email!,
-      // ...
-    });
-}
-```
-
-This is a known Supabase pattern -- triggers can fail due to permission issues, race conditions, or configuration drift. The fallback is correct but is only in the habits POST route. Other routes that need a profile (e.g., preferences update) will fail with a confusing "Profile not found" error.
-
-**Fix:** Centralize the "ensure profile exists" logic.
-
-**Recommended pattern:**
-```typescript
-// lib/db/profiles.ts -- add method
-async ensureProfile(user: User): Promise<Profile> {
-  const existing = await this.getProfile(user.id);
-  if (existing) return existing;
-
-  // Profile missing -- trigger may have failed
-  const { data, error } = await this.supabase
-    .from('profiles')
-    .upsert({
-      id: user.id,
-      email: user.email!,
-      full_name: user.user_metadata?.full_name || null,
-      avatar_url: user.user_metadata?.avatar_url || null,
-    }, { onConflict: 'id' })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-```
-
-Use `upsert` with `onConflict: 'id'` to handle race conditions (two requests hitting simultaneously).
-
-**Data flow impact:** Profile creation moves from scattered API route logic to a centralized DB method. Called in `withAuth` or in specific routes that need a profile.
-
-**Build order:** Fix with Issue 2 (withAuth wrapper). The `ensureProfile` method can be called inside `withAuth` for write operations, or in specific routes.
-
----
-
-### Issue 6: Validation Schema Gaps
-
-**What exists vs. what is needed:**
-
-| Schema | Exists | Used in API Route | Notes |
-|--------|--------|-------------------|-------|
-| `habitFormSchema` | Yes | No (manual validation) | Missing `status` field for updates |
-| `taskFormSchema` | Yes | No (manual validation) | Missing `is_completed` for updates |
-| `profileFormSchema` | Yes | No (manual validation) | Only for form, not API |
-| Preferences schema | No | Manual per-field validation | Needs creation |
-| Date format validation | No | Inline regex per route | `YYYY-MM-DD` validated 4 different ways |
-
-**Fix:** Create API-specific schemas (extend form schemas where appropriate) and a shared date validator.
-
-**Recommended schemas:**
-```typescript
-// lib/validations/shared.ts
-export const dateSchema = z.string().regex(
-  /^\d{4}-\d{2}-\d{2}$/,
-  'Invalid date format. Use YYYY-MM-DD'
-);
-
-// lib/validations/habit.ts (add API schemas)
-export const createHabitSchema = habitFormSchema.extend({
-  // API may receive additional fields
-});
-
-export const updateHabitSchema = habitFormSchema.partial().extend({
-  status: z.enum(['active', 'paused', 'archived']).optional(),
-});
-
-// lib/validations/profile.ts (add preferences schema)
-export const preferencesSchema = z.object({
-  date_format: z.string().optional(),
-  week_start_day: z.number().min(0).max(6).optional(),
-  theme: z.enum(['system', 'light', 'dark']).optional(),
-}).refine(obj => Object.keys(obj).length > 0, {
-  message: 'At least one preference must be provided',
-});
-```
-
-**Data flow impact:** Validation moves from inline imperative checks to declarative schemas. Error response format becomes consistent across all routes.
-
-**Build order:** Fix with Issue 2. Schemas must exist before `withAuth` + `parseBody` can use them.
-
----
-
-## Recommended Fix Order (Dependency-Based)
+### DnD Component Architecture
 
 ```
-Phase 1: Foundation
-  Issue 1: DB constructor (required client)  <-- No dependencies
-  Issue 6: Validation schemas                <-- No dependencies
-  (These can be done in parallel)
-
-Phase 2: API Layer
-  Issue 2: withAuth wrapper + parseBody      <-- Depends on Phase 1
-  Issue 5: ensureProfile centralization      <-- Part of Phase 2
-
-Phase 3: Polish
-  Issue 3: Cache headers improvement        <-- Independent
-  Issue 4: Dashboard warnings                <-- Independent
-  (These can be done in parallel)
+KanbanBoard (page-level component)
+  |-- DragDropProvider (from @dnd-kit/react)
+  |     |-- KanbanColumn (status="backlog", droppable)
+  |     |     |-- SortableContext
+  |     |     |     |-- KanbanCard (draggable + sortable)
+  |     |     |     |-- KanbanCard
+  |     |     |     |-- ...
+  |     |-- KanbanColumn (status="todo", droppable)
+  |     |     |-- SortableContext
+  |     |     |     |-- KanbanCard
+  |     |-- KanbanColumn (status="in_progress", droppable)
+  |     |-- KanbanColumn (status="done", droppable)
+  |     |-- DragOverlay (floating card during drag)
 ```
 
-## Architectural Patterns
+### DnD State Management Pattern
 
-### Pattern 1: Required Dependency Injection (DB Classes)
+The kanban drag-and-drop follows this data flow:
 
-**What:** Constructor requires `SupabaseClient` parameter. No optional fallback.
-**When to use:** Always for server-side DB access classes.
-**Trade-offs:** Slightly more verbose instantiation, but prevents silent auth failures.
+```
+1. DRAG START
+   - User grabs a KanbanCard
+   - Set activeTaskId in local state
+   - DragOverlay renders a ghost card
 
-```typescript
-// GOOD: Fails at compile time if client forgotten
-export class HabitsDB {
-  constructor(private supabase: SupabaseClient) {}
-}
+2. DRAG OVER (cross-column)
+   - User drags card over a different KanbanColumn
+   - Optimistically move card to new column in local state
+   - This gives immediate visual feedback
 
-// BAD: Silently uses wrong client at runtime
-export class HabitsDB {
-  constructor(supabase?: SupabaseClient) {
-    this.supabase = supabase || createClient(); // which createClient??
-  }
-}
+3. DRAG END
+   - User drops card
+   - Compute new sort_order (midpoint between neighbors)
+   - SWR optimistic update:
+     mutate(
+       reorderOnServer([{ id, sort_order, status }]),
+       {
+         optimisticData: (current) => reorderedTasks,
+         rollbackOnError: true,
+         populateCache: false,
+         revalidate: false,
+       }
+     )
+   - API call: POST /api/tasks/reorder
+
+4. ERROR ROLLBACK
+   - If API fails, SWR automatically rolls back to previous state
+   - Toast error notification
 ```
 
-### Pattern 2: Wrapper Function for Cross-Cutting Concerns
+**Key design decision**: The kanban board derives its column data from SWR cache, NOT from separate local state. This means:
+- Single source of truth (SWR cache)
+- Optimistic updates use SWR's `mutate()` with `optimisticData`
+- No state synchronization bugs between local state and server state
+- `rollbackOnError: true` handles failures automatically
 
-**What:** Higher-order function that wraps API route handlers with auth, error handling, and optionally validation.
-**When to use:** Every API route handler.
-**Trade-offs:** One extra level of nesting, but eliminates 8-12 lines of boilerplate per handler. Error format becomes consistent.
+The one exception is during an active drag (`dragOver` events), where a local `useState` temporarily holds the "in-flight" column assignment. On `dragEnd`, this local state is flushed to SWR via `mutate()`.
 
-The Next.js App Router team explicitly recommends this pattern over trying to use middleware-style `NextResponse.next()` inside route handlers.
+**Confidence: HIGH** -- this is the exact same optimistic update pattern already used in `dashboard-content.tsx` for habit and task toggles.
 
-### Pattern 3: Graceful Degradation with Warnings
+### New Component Files
 
-**What:** Non-critical queries use `.catch()` to return defaults, with failure info surfaced to the client.
-**When to use:** Dashboard-style aggregation routes where partial data is better than a 500 error.
-**Trade-offs:** Client must handle optional `_warnings` field. Adds complexity to response type. Worth it for user experience.
+```
+components/
+  projects/
+    projects-page-content.tsx     # Projects listing page
+    project-card.tsx              # Project card in listing
+    project-form.tsx              # Create/edit project form
+    project-selector.tsx          # Dropdown to pick project in task form
+  kanban/
+    kanban-board.tsx              # Main kanban board with DragDropProvider
+    kanban-column.tsx             # Single status column (droppable)
+    kanban-card.tsx               # Draggable task card
+    kanban-empty-column.tsx       # Empty state for a column
+  tasks/
+    task-card.tsx                 # MODIFIED: add project badge, section indicator
+    task-form.tsx                 # MODIFIED: add section, status, project_id fields
+    task-list.tsx                 # MODIFIED: section-based filtering
+    tasks-page-content.tsx        # MODIFIED: section tabs, kanban view toggle
+    task-section-toggle.tsx       # NEW: Work/Personal toggle control
+    task-view-toggle.tsx          # NEW: List/Kanban view toggle
+```
 
-### Pattern 4: Defensive Profile Upsert
+### New Route Pages
 
-**What:** Use `upsert` with `onConflict` instead of check-then-insert for profile creation.
-**When to use:** Any "ensure exists" pattern, especially with Supabase triggers that may fail.
-**Trade-offs:** One extra DB round-trip vs. a race condition. Use upsert to handle both cases atomically.
+```
+app/
+  projects/
+    page.tsx                      # Projects listing
+    new/page.tsx                  # Create project
+    [id]/
+      page.tsx                    # Project detail (shows project's tasks in kanban)
+      edit/page.tsx               # Edit project
+  tasks/
+    page.tsx                      # MODIFIED: section-based layout
+    kanban/
+      page.tsx                    # Dedicated kanban board page (alternative to /tasks?view=kanban)
+```
 
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Optional Dependencies with Silent Fallbacks
-
-**What people do:** `constructor(dep?: Type) { this.dep = dep || defaultImpl(); }`
-**Why it's wrong:** On the server, the default (browser client) has no auth context. Queries silently return empty results or throw RLS errors. Debugging is extremely difficult because the error appears to come from Supabase, not from the missing dependency injection.
-**Do this instead:** Make the dependency required. Use explicit singletons for client-side usage.
-
-### Anti-Pattern 2: Duplicating Validation Logic Across Routes
-
-**What people do:** Copy-paste `isValidFrequency()` into every route file; write imperative checks instead of using schemas.
-**Why it's wrong:** Validation rules drift. One route accepts a value another rejects. Updates must be applied in multiple places. No shared error format.
-**Do this instead:** Define Zod schemas in `lib/validations/`. Use `safeParse()` in a shared helper. Return consistent error format.
-
-### Anti-Pattern 3: In-Memory Cache as Source of Truth
-
-**What people do:** Rely on in-memory cache for data that must be consistent.
-**Why it's wrong:** On Vercel serverless, each Lambda instance has its own memory. Cache hits are probabilistic, not guaranteed. Different users may see different data depending on which instance serves their request.
-**Do this instead:** Treat in-memory cache as a performance optimization only. Always have a fallback to the database. Use HTTP `Cache-Control` headers for client-side caching. The current codebase handles this correctly for stats.
-
-### Anti-Pattern 4: String Matching for Error Types
-
-**What people do:** `if (message.includes('not found'))` to detect error types.
-**Why it's wrong:** Fragile -- depends on exact error message wording. Breaks if Supabase changes error messages. Can match unintended substrings.
-**Do this instead:** Use error codes (`error.code === 'PGRST116'` for Supabase "not found") or throw typed errors with explicit codes (like `EDIT_WINDOW_EXCEEDED` which is already done well in the toggle route).
+**Decision**: The kanban view can be either a separate page (`/tasks/kanban`) or a view toggle within the existing `/tasks` page. Recommending **view toggle within `/tasks`** because:
+- Fewer pages to maintain
+- User preference can be persisted in a query param or localStorage
+- Consistent with how the existing tasks page already uses tabs (pending/completed)
 
 ## Data Flow
 
-### Current Request Flow (API Route)
+### Kanban Board Data Flow (Detailed)
 
 ```
-Browser Request
-    |
-    v
-Next.js Middleware (proxy.ts)
-    |-- Refresh session cookies
-    |-- Redirect unauthed users to /login
-    |-- Redirect authed / to /dashboard
-    v
-API Route Handler
-    |-- await createClient() (server)
-    |-- await supabase.auth.getUser()  [REPEATED IN EVERY ROUTE]
-    |-- if (!user) return 401           [REPEATED IN EVERY ROUTE]
-    |-- Manual validation               [DIFFERENT IN EVERY ROUTE]
-    |-- new XxxDB(supabase)
-    |-- await db.someMethod()
-    |-- return NextResponse.json()
-    v
-Supabase (RLS enforces user_id check at DB level)
+1. Page Load: /tasks?view=kanban&section=work
+   |
+   v
+2. TasksPage (Server Component)
+   - Read searchParams.view and searchParams.section
+   - Pass to KanbanBoard client component
+   |
+   v
+3. KanbanBoard (Client Component)
+   - useTasks({ view: "kanban", section: "work" })
+   - SWR fetches: GET /api/tasks?view=kanban&section=work
+   |
+   v
+4. API Route: GET /api/tasks?view=kanban&section=work
+   - createClient() -> fresh server Supabase client
+   - const tasksDB = new TasksDB(supabase)
+   - tasksDB.getKanbanTasks(userId, { section: "work" })
+   - Returns tasks with joined project data
+   |
+   v
+5. KanbanBoard receives tasks
+   - Groups tasks by status: { backlog: [...], todo: [...], in_progress: [...], done: [...] }
+   - Renders 4 KanbanColumn components
+   - Each column wraps its cards in SortableContext
+   |
+   v
+6. User drags card from "todo" to "in_progress"
+   - onDragEnd fires
+   - Compute new sort_order for moved card
+   - Call SWR mutate() with optimistic data
+   - POST /api/tasks/reorder with [{ id, sort_order, status: "in_progress" }]
+   |
+   v
+7. API Route: POST /api/tasks/reorder
+   - Validate with reorderSchema
+   - tasksDB.reorderTasks(userId, updates)
+   - Each update: supabase.from('tasks').update({ sort_order, status }).eq('id', id).eq('user_id', userId)
+   - Return success
 ```
 
-### Proposed Request Flow (After Hardening)
+### Task Creation with Project Assignment
 
 ```
-Browser Request
-    |
-    v
-Next.js Middleware (proxy.ts) -- unchanged
-    |
-    v
-withAuth(handler)
-    |-- await createClient()
-    |-- await supabase.auth.getUser()
-    |-- if (!user) return 401
-    |-- Pass { user, supabase } to handler
-    v
-Handler Function
-    |-- parseBody(schema, body)  -- Zod validation
-    |-- if (!parsed.success) return 400 with details
-    |-- new XxxDB(supabase)     -- required client, no fallback
-    |-- await db.someMethod()
-    |-- return NextResponse.json()
-    v
-Supabase (unchanged)
+1. User clicks "New Task" (within a project context or standalone)
+   |
+   v
+2. TaskForm renders with optional project_id pre-selected
+   - If created from project page: project_id pre-filled
+   - If created from tasks page: project_id is a dropdown (optional)
+   - Section defaults to project's section (if project selected)
+   - Status defaults to "todo"
+   |
+   v
+3. Form submission: POST /api/tasks
+   - Body includes: { title, ..., section, status, project_id }
+   - Validation: extended taskFormSchema
+   - TasksDB.createTask() with new fields
+   |
+   v
+4. SWR cache invalidation
+   - mutate() on tasks list
+   - mutate() on kanban view (if open)
+   - mutate() on project tasks (if viewing project)
 ```
 
-### State Management (Client-Side, Unchanged)
+### is_completed vs status Relationship
 
+**Critical design decision**: The `is_completed` boolean and the `status` enum are related but distinct:
+
+- `is_completed = true` implies `status = 'done'` (auto-set when toggling complete)
+- `status = 'done'` implies `is_completed = true` (auto-set when dragging to Done column)
+- Moving OUT of "Done" column sets `is_completed = false`
+- The toggle API (`POST /api/tasks/:id/toggle`) must also update `status` to/from 'done'
+
+This bidirectional sync happens in the API layer, not the database (no triggers), to keep logic explicit and testable:
+
+```typescript
+// In PATCH /api/tasks/[id] handler
+if (updates.is_completed !== undefined) {
+  updates.status = updates.is_completed ? 'done' : 'todo';
+}
+if (updates.status !== undefined) {
+  updates.is_completed = updates.status === 'done';
+  updates.completed_at = updates.status === 'done' ? new Date().toISOString() : null;
+}
 ```
-SWR Cache (keyed by date)
-    |
-    v
-React Components <--> SWR hooks --> fetch('/api/...') --> API Routes
-    |                                                        |
-    |-- keepPreviousData: true                               |
-    |-- mutate() on user action                              v
-    v                                                   Supabase
-UI renders optimistically, SWR revalidates
+
+**Confidence: HIGH** -- this is the simplest correct approach. Database triggers would hide logic and make testing harder.
+
+## Patterns to Follow
+
+### Pattern 1: DB Class Per Entity
+
+**What:** Each database entity (projects, tasks, habits) has its own DB class with constructor-injected Supabase client.
+**When:** Always, for any new database entity.
+**Example:** `ProjectsDB` follows the exact same pattern as `HabitsDB` and `TasksDB`.
+
+### Pattern 2: SWR Hook Per View
+
+**What:** Each distinct data view gets its own SWR hook with typed response.
+**When:** Any component that fetches data from an API route.
+**Example:**
+```typescript
+// lib/hooks/use-projects.ts
+export function useProjects(filters?: { section?: ProjectSection }) {
+  const params = new URLSearchParams();
+  if (filters?.section) params.set("section", filters.section);
+  const { data, error, isLoading, mutate } = useSWR<{ projects: Project[] }>(
+    `/api/projects?${params}`, fetcher, { revalidateOnFocus: true }
+  );
+  return { projects: data?.projects ?? [], error, isLoading, mutate };
+}
 ```
 
-## Component Boundaries: What Changes, What Doesn't
+### Pattern 3: Optimistic Updates for Mutations
 
-| Component | Change? | Why |
-|-----------|---------|-----|
-| `lib/supabase/client.ts` | No | Correct as-is |
-| `lib/supabase/server.ts` | No | Correct as-is |
-| `lib/supabase/proxy.ts` | No | Correct as-is |
-| `lib/db/*.ts` constructors | Yes | Make `supabase` required |
-| `lib/db/*.ts` methods | No | Query logic is correct |
-| `lib/db/*.ts` singletons | Yes | Make construction explicit |
-| `lib/validations/*.ts` | Yes | Add API schemas, shared date validator |
-| `app/api/**` route handlers | Yes | Wrap with `withAuth`, use `parseBody` |
-| `lib/cache.ts` | Minor | Add `stale-while-revalidate` header |
-| `lib/habits/absence.ts` | No | Pure function, correct |
-| `app/api/dashboard/route.ts` | Minor | Add `_warnings` to response |
+**What:** Use SWR's `mutate()` with `optimisticData` for user-facing mutations.
+**When:** Any action that modifies data and should feel instant (drag-drop, toggles, creates).
+**Example:** See the existing `handleToggleHabit` in `dashboard-content.tsx` -- the kanban reorder follows this exact pattern.
 
-## Scaling Considerations
+### Pattern 4: Zod Validation at API Boundaries
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| 0-1k users (current) | Current architecture is fine. In-memory cache provides modest benefit. |
-| 1k-10k users | Move stats cache to Vercel Data Cache or `"use cache"`. Consider connection pooling (Supavisor). |
-| 10k+ users | Supabase connection pooler (transaction mode) becomes essential. Consider read replicas for stats queries. Dashboard endpoint may need pagination or lazy-loading of absence data. |
+**What:** Every API route validates input with a Zod schema before processing.
+**When:** Every POST/PATCH/PUT handler.
+**Example:** `validateRequestBody(body, reorderSchema)` in the reorder endpoint.
 
-### Scaling Priorities
+### Pattern 5: Float-Based Sort Order
 
-1. **First bottleneck:** Dashboard endpoint (5 parallel Supabase queries per request). Already optimized with `Promise.all` and bulk log fetch. Next step would be `"use cache"` for stats aggregation.
-2. **Second bottleneck:** Stats endpoint (3 parallel count queries). Already has in-memory cache + HTTP cache headers. Next step would be background recomputation on toggle.
+**What:** Use float values for sort_order to enable single-row updates on reorder.
+**When:** Any orderable list that supports drag-and-drop.
+**Example:**
+```typescript
+function computeSortOrder(prevOrder: number | null, nextOrder: number | null): number {
+  if (prevOrder === null && nextOrder === null) return 1.0;
+  if (prevOrder === null) return nextOrder! - 1.0;
+  if (nextOrder === null) return prevOrder + 1.0;
+  return (prevOrder + nextOrder) / 2;
+}
+```
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Dual Source of Truth for Kanban State
+
+**What:** Maintaining both local React state AND SWR cache for the same task list in the kanban board.
+**Why bad:** State synchronization bugs. Stale data after mutations. Race conditions between local state updates and SWR revalidation.
+**Instead:** Use SWR cache as the single source of truth. Derive kanban columns from SWR data. Use `optimisticData` in `mutate()` for instant UI updates.
+
+### Anti-Pattern 2: Integer Sort Order with Full Renumbering
+
+**What:** Using integer `sort_order` (1, 2, 3, ...) and renumbering all items in a column after every drag.
+**Why bad:** N writes per drag operation. Conflicts if two users (or tabs) reorder simultaneously. Slow for columns with many items.
+**Instead:** Use float `sort_order` with midpoint calculation. Only 1 write per drag.
+
+### Anti-Pattern 3: Separate API Call Per Drag Event (dragOver)
+
+**What:** Calling the API on every `onDragOver` event as the user drags a card.
+**Why bad:** Generates dozens of API calls per second during a drag. Server overload. Flickering on rollback.
+**Instead:** Only call the API on `onDragEnd`. Use local state for the in-flight visual position during drag.
+
+### Anti-Pattern 4: Database Triggers for is_completed/status Sync
+
+**What:** Using PostgreSQL triggers to auto-sync `is_completed` and `status` fields.
+**Why bad:** Hidden logic that's hard to test. Makes unit testing DB classes require a live database. Can cause unexpected behavior when updating one field.
+**Instead:** Handle the sync explicitly in API route handlers. Easy to test, easy to reason about.
+
+### Anti-Pattern 5: Overloading the Existing Task PATCH Endpoint for Reorder
+
+**What:** Using `PATCH /api/tasks/:id` for drag-and-drop reorder operations.
+**Why bad:** Reorder may need to update multiple tasks atomically. The existing PATCH is designed for single-task updates with full validation. Mixing concerns makes the endpoint harder to maintain.
+**Instead:** Create a dedicated `POST /api/tasks/reorder` endpoint with its own validation schema.
+
+## Scalability Considerations
+
+| Concern | At 50 tasks | At 500 tasks | At 5000 tasks |
+|---------|-------------|--------------|---------------|
+| Kanban load | Single query, instant | Single query, fast | Paginate per column (limit 50 per status) |
+| Drag reorder | 1 write, instant | 1 write, instant | 1 write, instant (float sort_order) |
+| Sort normalization | Never needed | Rarely needed | May need periodic normalization |
+| Project list | Single query | Single query | Single query (personal app, unlikely to have 100+ projects) |
+
+BetterR.Me is a personal productivity app. A single user is unlikely to have more than a few hundred tasks total. The architecture is designed for this scale and does not over-engineer for multi-tenant or collaborative scenarios.
+
+## Migration Strategy
+
+### Backward Compatibility
+
+The new columns on `tasks` have defaults:
+- `section DEFAULT 'personal'` -- existing tasks get assigned to "personal"
+- `status DEFAULT 'todo'` -- existing incomplete tasks get "todo" status
+- `project_id DEFAULT NULL` -- existing tasks have no project (which is valid)
+- `sort_order DEFAULT 0` -- existing tasks all start at 0 (will be normalized on first kanban load)
+
+A data migration should set `status = 'done'` for all tasks where `is_completed = true`:
+
+```sql
+UPDATE tasks SET status = 'done' WHERE is_completed = true;
+```
+
+And normalize sort_order for existing tasks:
+
+```sql
+WITH ranked AS (
+  SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id, status ORDER BY created_at) AS rn
+  FROM tasks
+)
+UPDATE tasks SET sort_order = ranked.rn
+FROM ranked WHERE tasks.id = ranked.id;
+```
+
+### sidebar counts update
+
+The existing `useSidebarCounts()` hook and `/api/sidebar/counts` endpoint do not need changes. The "tasks due" badge already counts incomplete tasks by due date, which is independent of section/status/project.
+
+**When Projects nav item is added to sidebar**, a project count badge can optionally be added using the same pattern.
+
+## Files Summary: New vs Modified
+
+### New Files (create)
+
+| File | Purpose |
+|------|---------|
+| `lib/db/projects.ts` | ProjectsDB class |
+| `lib/validations/project.ts` | Project Zod schemas |
+| `lib/validations/reorder.ts` | Reorder Zod schema |
+| `lib/hooks/use-projects.ts` | SWR hook for projects |
+| `lib/hooks/use-tasks.ts` | SWR hook for tasks (replaces inline fetcher) |
+| `app/api/projects/route.ts` | Projects list/create API |
+| `app/api/projects/[id]/route.ts` | Project CRUD API |
+| `app/api/tasks/reorder/route.ts` | Bulk reorder API |
+| `app/projects/page.tsx` | Projects listing page |
+| `app/projects/new/page.tsx` | Create project page |
+| `app/projects/[id]/page.tsx` | Project detail/kanban page |
+| `app/projects/[id]/edit/page.tsx` | Edit project page |
+| `components/projects/projects-page-content.tsx` | Projects page client component |
+| `components/projects/project-card.tsx` | Project card |
+| `components/projects/project-form.tsx` | Project create/edit form |
+| `components/projects/project-selector.tsx` | Project dropdown for task form |
+| `components/kanban/kanban-board.tsx` | Kanban board with DnD |
+| `components/kanban/kanban-column.tsx` | Kanban column (droppable) |
+| `components/kanban/kanban-card.tsx` | Kanban card (draggable) |
+| `components/kanban/kanban-empty-column.tsx` | Empty column state |
+| `components/tasks/task-section-toggle.tsx` | Work/Personal toggle |
+| `components/tasks/task-view-toggle.tsx` | List/Kanban view toggle |
+| `supabase/migrations/YYYYMMDD_create_projects_table.sql` | Projects table + RLS |
+| `supabase/migrations/YYYYMMDD_add_task_kanban_fields.sql` | New task columns + indexes |
+| `i18n/messages/en.json` (sections) | New i18n strings for projects/kanban |
+| `i18n/messages/zh.json` (sections) | Chinese translations |
+| `i18n/messages/zh-TW.json` (sections) | Traditional Chinese translations |
+
+### Modified Files (edit)
+
+| File | What Changes |
+|------|-------------|
+| `lib/db/types.ts` | Add Project types, TaskSection, TaskStatus, extend TaskFilters |
+| `lib/db/tasks.ts` | Add getKanbanTasks(), reorderTasks(), getProjectTasks(), extend getUserTasks() filters |
+| `lib/db/index.ts` | Export ProjectsDB |
+| `lib/validations/task.ts` | Add section, status, project_id to taskFormSchema |
+| `app/api/tasks/route.ts` | Handle section/status/project_id filters, kanban view |
+| `app/api/tasks/[id]/route.ts` | Sync is_completed/status in PATCH handler |
+| `components/tasks/tasks-page-content.tsx` | Section tabs, view toggle, redesigned layout |
+| `components/tasks/task-card.tsx` | Show project badge and section indicator |
+| `components/tasks/task-form.tsx` | Add section, status, project_id fields |
+| `components/tasks/task-list.tsx` | Support section-based filtering |
+| `components/layouts/app-sidebar.tsx` | Add Projects nav item |
+| `app/tasks/page.tsx` | Pass view/section from searchParams |
+
+## Suggested Build Order
+
+Based on dependencies:
+
+1. **Database migration** (projects table + task column additions) -- everything depends on this
+2. **Type definitions** (`lib/db/types.ts`) -- everything depends on types
+3. **ProjectsDB class** + **TasksDB extensions** -- API routes depend on these
+4. **Validation schemas** (project, reorder, extended task) -- API routes depend on these
+5. **API routes** (projects CRUD, extended tasks, reorder) -- hooks depend on these
+6. **SWR hooks** (useProjects, useTasks) -- components depend on these
+7. **Project CRUD components** (form, card, page) -- standalone, no DnD dependency
+8. **Task form/card extensions** (section, status, project_id fields) -- standalone
+9. **Tasks page redesign** (section toggle, view toggle) -- depends on extended task form
+10. **Kanban board** (DnD components) -- depends on everything above
+11. **Sidebar update** -- cosmetic, can be done anytime after step 7
+12. **i18n strings** -- should be added alongside each component (not as a separate step)
 
 ## Sources
 
-- Direct codebase analysis (all files in `lib/db/`, `app/api/`, `lib/validations/`, `lib/cache.ts`)
-- [Next.js: Building APIs with App Router](https://nextjs.org/blog/building-apis-with-nextjs) -- withAuth pattern recommendation (HIGH confidence)
-- [Dub.co: Zod API Validation in Next.js](https://dub.co/blog/zod-api-validation) -- schema.parse pattern (HIGH confidence)
-- [Vercel: Caching Serverless Function Responses](https://vercel.com/docs/functions/serverless-functions/edge-caching) -- stale-while-revalidate (HIGH confidence)
-- [Supabase: Troubleshooting User Creation Errors](https://supabase.com/docs/guides/troubleshooting/dashboard-errors-when-managing-users-N1ls4A) -- trigger failure patterns (HIGH confidence)
-- [GitHub Discussion: Vercel Serverless Cache Behavior](https://github.com/vercel/next.js/discussions/87842) -- in-memory cache limitations (MEDIUM confidence)
-- [Supabase GitHub Discussion #6518](https://github.com/orgs/supabase/discussions/6518) -- handle_new_user trigger failures (HIGH confidence)
+- Existing codebase analysis (all files referenced above) -- **HIGH confidence**
+- [@dnd-kit/react npm registry](https://www.npmjs.com/package/@dnd-kit/react) -- version 0.3.2, peer deps verified -- **HIGH confidence**
+- [@dnd-kit/core npm registry](https://www.npmjs.com/package/@dnd-kit/core) -- version 6.3.1 -- **HIGH confidence**
+- [dnd-kit React 19 support issue #1511](https://github.com/clauderic/dnd-kit/issues/1511) -- **HIGH confidence**
+- [SWR mutation docs](https://swr.vercel.app/docs/mutation) -- optimistic update pattern -- **HIGH confidence**
+- [Basedash: Implementing Re-Ordering at the Database Level](https://www.basedash.com/blog/implementing-re-ordering-at-the-database-level-our-experience) -- float sort_order pattern -- **MEDIUM confidence**
+- [Georgegriff/react-dnd-kit-tailwind-shadcn-ui](https://github.com/Georgegriff/react-dnd-kit-tailwind-shadcn-ui) -- reference kanban implementation -- **MEDIUM confidence**
+- [Top 5 Drag-and-Drop Libraries for React in 2026](https://puckeditor.com/blog/top-5-drag-and-drop-libraries-for-react) -- ecosystem overview -- **MEDIUM confidence**
 
 ---
-*Architecture research for: BetterR.Me codebase hardening*
-*Researched: 2026-02-15*
+
+*Architecture analysis: 2026-02-18*

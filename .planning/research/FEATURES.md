@@ -1,181 +1,202 @@
-# Feature Research: Codebase Hardening
+# Feature Landscape
 
-**Domain:** Codebase hardening for a production habit tracking web app (Next.js 16 + Supabase)
-**Researched:** 2026-02-15
-**Confidence:** HIGH
+**Domain:** Personal kanban task management with project containers (single-user, not team collaboration)
+**Researched:** 2026-02-18
+**Overall confidence:** MEDIUM-HIGH
 
-This document maps the 20 identified codebase concerns into table stakes, differentiators, and anti-features for a hardening milestone. The ordering rationale follows industry consensus: security vulnerabilities first, then correctness bugs, then validation/type safety, then performance, then code quality, then test coverage.
+## Context: What Exists Today
 
-## Feature Landscape
+BetterR.Me already has a working task system with:
+- Tasks with title, description, intention, priority (0-3), category (work/personal/shopping/other), due date/time
+- Binary completion state (`is_completed` boolean + `completed_at` timestamp)
+- Completion reflection (`completion_difficulty`: 1=easy, 2=good, 3=hard) -- shown on task detail and dashboard
+- Recurring tasks (7 patterns: daily/weekly/monthly/yearly with interval, day-of-week, day-of-month, etc.)
+- Flat task list with pending/completed tabs, search, and card grid layout
+- SWR-based data fetching with `keepPreviousData`
 
-### Table Stakes (Must Fix -- Users or System Are at Risk)
+The milestone adds: Work/Personal sections, projects as named containers, 4-column kanban per project, new `status` field, tasks page redesign, task form changes, and data migration.
 
-These are non-negotiable fixes. Leaving any of these unfixed means users see wrong data, the API accepts bad input, or errors are silently lost.
+---
 
-| # | Fix | Category | Why Must-Fix | Complexity | Files Affected |
-|---|-----|----------|--------------|------------|----------------|
-| T1 | Wire Zod schemas into all API routes | Security + Validation | API routes perform manual validation that diverges from Zod schemas. No length limits server-side (name: 100, description: 500). Prototype pollution possible via unvalidated body properties. Zod schemas already exist -- they just need wiring. | MEDIUM | `app/api/habits/route.ts`, `app/api/habits/[id]/route.ts`, `app/api/tasks/route.ts`, `app/api/tasks/[id]/route.ts`, `app/api/profile/route.ts` |
-| T2 | Fix non-null assertion on `user.email!` | Security | `app/api/habits/route.ts:145` uses `user.email!` in profile auto-creation. If a user authenticates without an email (anonymous auth, edge cases), this inserts `undefined` into the database. | LOW | `app/api/habits/route.ts:145` |
-| T3 | Fix `times_per_week` frequency logic | Correctness Bug | `shouldTrackOnDate()` returns `true` for every day when frequency is `times_per_week`. This inflates the denominator in `computePerHabitRates()`, making completion percentages wrong. A user completing a "3x/week" habit 3 of 7 days sees 43% instead of 100%. Tracked as issue #98. | HIGH | `lib/habits/format.ts:88`, `lib/db/habit-logs.ts:308-311`, `lib/db/insights.ts:248`, `tests/lib/db/habit-logs.test.ts` |
-| T4 | Fix `weekly` frequency hardcoded to Monday | Correctness Bug | `shouldTrackOnDate()` hardcodes `dayOfWeek === 1` for weekly habits. Users who track a weekly habit on Wednesdays only get credit on Mondays. Streaks and completion rates are wrong. | HIGH | `lib/habits/format.ts:87`, `lib/db/habit-logs.ts:308`, needs schema change (add `day` field to frequency object or derive from `created_at`) |
-| T5 | Fix 2 pre-existing test failures | Correctness Bug | Tests for `times_per_week getDetailedHabitStats` fail. These are symptoms of T3 -- fixing the frequency logic fixes these tests. No independent work needed beyond T3. | LOW (covered by T3) | `tests/lib/db/habit-logs.test.ts:285-320` |
-| T6 | Fix `computeMissedDays` silent error swallowing | Fragility | Dashboard route catches all errors in `computeMissedDays` and silently returns `missed_scheduled_periods: 0`. A bug in absence computation produces silently incorrect data with no observable failure. At minimum, errors must be logged. | LOW | `app/api/dashboard/route.ts:107-110` |
-| T7 | Fix `WeeklyInsight` non-discriminated union type | Type Safety | `WeeklyInsight` uses a flat interface with `params: Record<string, string | number>`. Consumer code cannot narrow by `type`, requiring unsafe property access. This is a correctness risk as new insight types are added. | MEDIUM | `lib/db/insights.ts:7-18`, `components/dashboard/weekly-insight-card.tsx` |
-| T8 | Fix profile auto-creation reliability | Fragility | Only `app/api/habits/route.ts` has the auto-create-profile fallback. Other routes (tasks, export, profile) do not. If the Supabase signup trigger fails, those routes hit FK constraint violations. Need to either fix the trigger or extract a shared `ensureProfile()` helper used consistently. | MEDIUM | `app/api/habits/route.ts:133-157`, potentially all API routes that insert user data |
+## Table Stakes
 
-### Differentiators (Nice to Have -- Improve Quality Beyond Baseline)
+Features users expect from ANY app that calls itself "project-based kanban." Missing any of these would make the feature feel broken or incomplete.
 
-These improve the codebase but are not blocking users or creating security risk. Valuable for long-term maintainability.
+| Feature | Why Expected | Complexity | Dependencies | Notes |
+|---------|--------------|------------|--------------|-------|
+| **4-status workflow** (Backlog / To Do / In Progress / Done) | Every kanban tool from Trello to Linear uses this pattern. 3 columns feels too simple; 5+ is team-oriented overkill for personal use. | Low | New `status` field on tasks table | Linear, Todoist, Trello all default to ~4 columns. BetterR.Me's proposed 4-column model matches industry standard exactly. |
+| **Drag-and-drop between columns** | THE defining kanban interaction. Without it, the board is just a grouped list view. Users expect to grab a card and slide it across columns. | High | dnd-kit library, optimistic UI state, position tracking | dnd-kit is the clear choice for React in 2025/2026 -- accessible, modular, ~10kb. The deprecated react-beautiful-dnd should NOT be used. |
+| **Card ordering within columns** | Users expect to arrange cards vertically within a column. Without this, drag-and-drop feels incomplete -- cards snap to fixed positions. | Medium | `sort_order` field on tasks, reorder logic on drag | Use sequential integer reassignment (not fractional indexing) per the marmelab pattern -- simpler and avoids precision issues. |
+| **Project as a named container** | Users need to group related tasks. Todoist has "Projects" with sections; Trello has "Boards"; Linear has "Projects" -- all use named containers. | Medium | New `projects` table (id, user_id, name, color, section, status, sort_order) | Keep it simple: name + preset color. No sub-projects, no nested hierarchy. |
+| **Work / Personal section separation** | Todoist's most popular organizational pattern is work vs personal separation. Users want mental context switching between life areas. | Low | New `section` field on tasks/projects ('work' / 'personal') | Todoist uses projects + filters for this; BetterR.Me uses structural sections. Simpler and more opinionated -- good for a personal app. |
+| **Status-driven completion** (status=done implies is_completed=true) | Once a task reaches "Done" column, it should be complete. Having separate "Done" status and "completed" checkbox creates confusion. | Low | Derive `is_completed` from `status === 'done'`, set `completed_at` on transition to done | Critical: existing code reads `is_completed` everywhere. Must be backward-compatible. Keep `is_completed` as a computed/derived field, not user-editable. |
+| **Task form: section selector** | When creating a task, user must choose Work or Personal. This replaces the current category toggle row (work/personal/shopping/other). | Low | Replace category UI with section selector in task-form.tsx | Section is required (not optional). Default to last-used section. |
+| **Task form: project selector** | When creating a task, user can optionally assign it to a project. Tasks without a project are "standalone." | Low | New optional `project_id` field on tasks, project dropdown in form | Filter project dropdown by selected section. Show "No project" as default. |
+| **Tasks page: section-based layout** | The tasks page needs to show Work and Personal as top-level tabs/sections, with project cards inside each. Todoist and Notion both organize this way. | Medium | Redesign tasks-page-content.tsx | Current flat list with pending/completed tabs must evolve into section > project > kanban hierarchy. |
+| **Project color presets** | Every competitor (Trello labels, Todoist project colors, Linear team colors) uses color to distinguish projects visually. | Low | 8-12 preset color values stored as enum/string, render as left-border or background tint | Do NOT build a custom color picker -- presets only. Trello uses ~10 colors; Todoist uses ~20. 8-12 is the sweet spot. |
+| **Data migration** (existing tasks get section=personal, status from is_completed) | Existing users must not lose data or see broken UI after upgrade. | Medium | Supabase migration SQL | Non-negotiable. All existing tasks: section='personal', project_id=null, status = is_completed ? 'done' : 'todo'. |
 
-| # | Fix | Category | Value Proposition | Complexity | Files Affected |
-|---|-----|----------|-------------------|------------|----------------|
-| D1 | Remove in-memory `statsCache` | Code Quality | On Vercel serverless, each cold start has an empty cache and concurrent workers maintain separate caches. `invalidateStatsCache` only clears the calling worker. The cache provides zero benefit in production. HTTP `Cache-Control` headers already handle client caching. Removing dead code reduces cognitive load. | LOW | `lib/cache.ts`, `app/api/habits/[id]/toggle/route.ts:52`, references in stats route |
-| D2 | Remove debug `console.log` statements | Code Quality | Three `console.log` calls in `theme-switcher.tsx` leak theme state to browser devtools in production. One `console.log('callback')` fires on every OAuth callback. Noise in server logs, unprofessional in devtools. | LOW | `components/theme-switcher.tsx:39-41`, `app/auth/callback/route.ts:6` |
-| D3 | Fix theme-switcher DOM workaround | Code Quality | Component manually adds/removes `dark`/`light` CSS classes on `document.documentElement`, bypassing `next-themes` normal class management. This could cause race conditions if `next-themes` updates. Should investigate root cause and remove workaround. | MEDIUM | `components/theme-switcher.tsx:26-36`, `app/layout.tsx` (ThemeProvider config) |
-| D4 | Replace `getUserTasks()` with `COUNT(*)` in dashboard | Performance | Dashboard fetches ALL task rows just to get `allTasks.length` for the `total_tasks` stat. With many tasks, this transfers unnecessary data. A `COUNT(*)` query is O(1) on PostgreSQL. | LOW | `app/api/dashboard/route.ts:65`, `lib/db/tasks.ts` (add `countUserTasks` method) |
-| D5 | Optimize streak calculation lookback | Performance | `calculateStreak()` always fetches 365 days of logs regardless of streak length. For a 3-day streak, this fetches 362 unnecessary rows. Could cap lookback or use incremental calculation. | MEDIUM | `lib/db/habit-logs.ts:163-224` |
-| D6 | Make `HabitLogsDB` constructor require Supabase client in server contexts | Type Safety | `new HabitLogsDB()` (no argument) silently falls back to the browser client. If an API route omits the server client after a refactor, it fails silently. Making the parameter required prevents this class of bugs. | LOW | `lib/db/habit-logs.ts:36-39` |
-| D7 | Add redirect path allowlist to auth callback | Security (defense-in-depth) | Current relative-URL guard (`!next.startsWith('/')`) is functional and prevents external redirects. An allowlist of valid paths adds a second layer. Not urgent since the existing guard works. | LOW | `app/auth/callback/route.ts:10-14` |
-| D8 | Add unit tests for `GET /api/habits/[id]/logs` | Test Coverage | Route exists with no test file. Date range filtering, authorization, pagination, and error handling are untested. Regressions go undetected. | MEDIUM | New file: `tests/app/api/habits/[id]/logs/route.test.ts` |
-| D9 | Add habit count limit enforcement (20 per user) | Completeness | Engineering plan specified 20-habit limit for V1 performance, but no enforcement exists in POST handler. Not an immediate production issue but grows linearly. | LOW | `app/api/habits/route.ts` POST handler |
-| D10 | Add tests for Zod validation paths in API routes | Test Coverage | Once T1 wires Zod schemas, the new validation paths need test coverage for edge cases (oversized payloads, missing fields, malformed frequency objects). | MEDIUM | Test files for all API routes modified in T1 |
+---
 
-### Anti-Features (Things to Deliberately NOT Do During Hardening)
+## Differentiators
 
-| Anti-Feature | Why Requested | Why Problematic | What to Do Instead |
-|--------------|---------------|-----------------|-------------------|
-| Migrate to Redis/Upstash for caching | Seems like the "proper" fix for ineffective in-memory cache | Adds a new dependency, operational complexity, and cost for a problem that does not exist (HTTP caching already works). The cache provides no measurable benefit even when it works. | Remove the cache entirely (D1). Zero dependencies, zero cost. |
-| Rewrite DB layer architecture | The optional-constructor pattern in `HabitLogsDB` suggests broader architectural issues | This is a hardening milestone, not a rewrite. The constructor issue is isolated to `HabitLogsDB` and can be fixed narrowly (D6). A full DB layer rewrite risks introducing new bugs while fixing theoretical ones. | Make the constructor parameter required in `HabitLogsDB` only. Other DB classes already follow the correct pattern. |
-| Add structured logging framework | `console.error` in catch blocks is not "production-grade" | Adding Winston/Pino/etc adds complexity, config, and a new dependency. The app runs on Vercel which captures `console.error` in function logs. The real problem is silent error swallowing (T6), not the logging framework. | Fix T6 (add `console.error` to the silent catch). Keep `console.error` for now. |
-| Upgrade major dependencies | "While we're at it" temptation to bump Next.js, Supabase, etc. | Dependency upgrades introduce new behavior and potential breaking changes. Mixing upgrades with bug fixes makes it impossible to isolate regressions. | Defer all major upgrades to a separate milestone. |
-| Add comprehensive E2E tests for all fixed bugs | Sounds thorough, but E2E tests are slow and expensive for logic bugs | The bugs being fixed (T3, T4) are in pure functions (`shouldTrackOnDate`) and API routes. Unit tests are the right level -- faster, more precise, easier to maintain. E2E tests should cover user flows, not implementation details. | Add unit tests (T5, D8, D10). Existing E2E suite covers user-visible flows. |
-| Add new features alongside hardening | "Since we're touching the habit form, let's add goal tracking" | Feature work and hardening have conflicting goals. Features add new surface area; hardening reduces existing surface area. Mixing them makes it impossible to know if a regression came from the fix or the feature. | Complete all 20 hardening items. Start features in the next milestone. |
+Features that set BetterR.Me apart from generic kanban tools. Not expected, but valued -- especially given BetterR.Me's focus on self-improvement and reflection.
+
+| Feature | Value Proposition | Complexity | Dependencies | Notes |
+|---------|-------------------|------------|--------------|-------|
+| **Completion reflection on drag-to-Done** | BetterR.Me already has `completion_difficulty` (easy/good/hard). Triggering the reflection prompt when a card is dragged to the Done column turns routine task completion into a mindfulness moment. NO other kanban tool does this. | Medium | Intercept drag-end event when target is Done column, show reflection dialog before confirming move | This bridges kanban mechanics with BetterR.Me's self-improvement philosophy. The dashboard already shows these reflections. Unique differentiator. |
+| **Intention display on kanban cards** | BetterR.Me's "Your Why" field is unique to the app. Showing the intention as a subtle quote on kanban cards reminds users WHY they're doing the task -- not just WHAT. | Low | Render `task.intention` on card UI if present | Keeps the self-improvement angle visible even in kanban view. No competitor shows "why" on task cards. |
+| **Project progress visualization** | Show a simple progress bar on the project card in the tasks page (e.g., "5 of 12 tasks done"). Gives a quick sense of momentum without opening the kanban. | Low | Count tasks by status per project | Todoist shows task counts; Linear shows progress bars. Both patterns work. Simple fraction is sufficient for v1. |
+| **Active/Archived project status** | Let users archive completed projects to reduce clutter without deleting. Archived projects hidden by default, available via filter. | Low | `status` field on projects ('active' / 'archived') | Trello's archive pattern. Simple toggle. No "deleted" state -- use actual delete for that. |
+| **Standalone tasks section** | Tasks not assigned to any project still appear in each section (Work/Personal) as a "loose tasks" area. Prevents orphan tasks. | Low | Query tasks where project_id IS NULL, group by section | Todoist's "Inbox" serves this purpose. BetterR.Me just shows them inline. |
+| **Keyboard-accessible drag-and-drop** | dnd-kit supports keyboard sensors natively. Making the kanban fully keyboard-navigable is an accessibility win and differentiator vs many web kanban tools. | Low | Configure KeyboardSensor in dnd-kit setup | Already supported by dnd-kit -- just needs proper ARIA labels and keyboard shortcuts. Aligns with existing vitest-axe accessibility testing. |
+
+---
+
+## Anti-Features
+
+Features to explicitly NOT build. Either wrong for the personal-use context, premature, or scope creep.
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Custom columns / user-defined statuses** | Massively increases complexity (dynamic schema, column CRUD, validation). Linear/ClickUp need this for teams; BetterR.Me's personal-use context does not. The 4 fixed columns (Backlog/To Do/In Progress/Done) cover all personal workflow needs. | Keep 4 fixed statuses. Users who need custom workflows are using the wrong tool. |
+| **WIP (Work-in-Progress) limits** | Team kanban feature. In personal use, the user IS the bottleneck -- they know their own capacity. WIP limits add friction without value for solo users. | Omit entirely. No column card limits. |
+| **Sub-projects / nested project hierarchy** | Todoist supports 3-level sub-projects. This adds navigation complexity, parent-child state management, and confusing breadcrumbs. Personal users rarely need more than flat projects within sections. | Keep projects flat within Work/Personal sections. One level only. |
+| **Multiple board views** (list, calendar, timeline, gallery) | Notion and ClickUp offer 5+ views. Each view is a separate component with its own data fetching and state management. Massive scope for little value in v1. | Kanban is the only project view. The existing task list page shows all tasks. |
+| **Task labels / tags** | Current `category` field serves as a lightweight tag. Adding a full labels system (create, edit, multi-assign, color, filter) is a separate feature. | Keep using section (work/personal) as the primary organizer. Drop the old category field once sections ship. |
+| **Subtasks / checklists on task cards** | Trello and Notion support subtasks. Adding nested task trees requires recursive data structures, UI for collapsing/expanding, completion rollup logic. | Keep tasks flat. Use description field for checklist-like notes if needed. |
+| **Automations / rules** (e.g., auto-move on due date) | Trello Butler, ClickUp automations -- these are power-user features requiring a rule engine. Way out of scope. | Manual drag-and-drop only. |
+| **Time tracking** | KanbanFlow and ClickUp have built-in time tracking. Requires timer UI, time entry storage, reporting. Separate product domain. | Omit. Not aligned with BetterR.Me's self-improvement focus. |
+| **Card cover images / attachments** | Visual noise for personal task management. Trello supports card covers but they're rarely used for personal kanban. | Omit. Keep cards text-focused. |
+| **Swimlanes** (sub-grouping within board) | Linear uses swimlanes for priority/label grouping on boards. Useful for teams, overkill for personal kanban with <50 tasks per project. | Single flat list per column. Use card priority indicators for visual grouping. |
+| **Collaborative features** (assignees, comments, sharing) | BetterR.Me is explicitly single-user. Adding collaboration changes the entire auth model, data access patterns, and UI complexity. | Omit completely. No assignees, no comments, no sharing. |
+| **Drag-and-drop for project reordering** | While nice, dragging to reorder projects within sections is lower priority than the kanban board DnD itself. Adds complexity to an already DnD-heavy milestone. | Use manual sort_order field, editable via project settings. Add DnD project reorder in a future polish milestone. |
+
+---
 
 ## Feature Dependencies
 
 ```
-T1 (Zod validation wiring)
+Section field (work/personal) on tasks table
     |
-    +---> T2 (email guard) -- T2 touches the same profile auto-creation code, merge with T8
+    +--> Projects table (each project belongs to a section)
+    |       |
+    |       +--> Kanban board per project (reads tasks by project_id + status)
+    |       |       |
+    |       |       +--> Drag-and-drop between columns (dnd-kit)
+    |       |       |       |
+    |       |       |       +--> Completion reflection on drag-to-Done
+    |       |       |
+    |       |       +--> Card ordering within columns (sort_order field)
+    |       |
+    |       +--> Project color presets
+    |       |
+    |       +--> Active/Archived status
+    |       |
+    |       +--> Project progress visualization
     |
-    +---> D10 (Zod validation tests) -- tests must cover the new Zod paths from T1
+    +--> Task form redesign (section selector + project selector)
     |
-    +---> D9 (habit count limit) -- best added inside the Zod-validated POST handler from T1
+    +--> Tasks page redesign (section tabs > project cards > kanban)
+    |
+    +--> Standalone tasks section (tasks with no project_id)
 
-T3 (times_per_week fix)
+Status field (backlog/todo/in_progress/done) on tasks table
     |
-    +---> T5 (test failures) -- T5 is a symptom of T3, resolves automatically
+    +--> is_completed derived from status === 'done'
     |
-    +---> T7 (WeeklyInsight type) -- insights consume shouldTrackOnDate; fix T3 first so insight computation is correct before changing the type
-
-T4 (weekly frequency fix)
+    +--> completed_at set/cleared on status transitions to/from done
     |
-    +---> T3 -- both touch shouldTrackOnDate; fix together to avoid double-modifying the same function
+    +--> Kanban column mapping (status -> column position)
 
-T6 (error logging) -- independent, no deps
-T8 (ensureProfile helper) -- depends on T2 (email guard fix, same code area)
-
-D1 (remove cache) -- independent
-D2 (remove debug logs) -- independent
-D3 (theme-switcher fix) -- independent, but do after D2 (same file)
-D4 (COUNT query) -- independent
-D5 (streak optimization) -- depends on T3/T4 (frequency logic must be correct first)
-D6 (constructor fix) -- independent
-D7 (redirect allowlist) -- independent
-D8 (logs route tests) -- independent
+Data migration (must run BEFORE any new UI deploys)
+    |
+    +--> All existing tasks get section='personal', status derived from is_completed
 ```
 
-### Dependency Notes
+**Critical path:** Data migration -> Status field -> Section field -> Projects table -> Kanban board -> DnD -> Tasks page redesign
 
-- **T3 requires T4 to be done together:** Both modify `shouldTrackOnDate()` in `lib/habits/format.ts` and the copy in `lib/db/habit-logs.ts`. Doing them separately means touching the same function twice, risking merge conflicts and double-testing.
-- **T5 resolves automatically with T3:** The 2 pre-existing test failures are testing `times_per_week` behavior that T3 fixes. No independent work needed.
-- **D10 requires T1:** Cannot test Zod validation paths until they exist in the API routes.
-- **D5 requires T3+T4:** Streak calculation optimization depends on `shouldTrackOnDate` being correct first. Optimizing an incorrect function wastes effort.
-- **T2 and T8 share code area:** The `user.email!` assertion (T2) is inside the profile auto-creation block (T8). Fix both at once.
-- **D3 depends on D2:** Both touch `components/theme-switcher.tsx`. Remove debug logs (D2) first, then fix the DOM workaround (D3) in the same pass.
+**The migration must happen first** because all subsequent features depend on the new fields existing.
 
-## Prioritized Fix Order
+---
 
-### Phase 1: Security and Validation (P1 -- do first)
+## MVP Recommendation
 
-Rationale: Security gaps are the highest-risk items. Wiring Zod schemas (T1) is also the single highest-leverage fix because it resolves the security concern (no server-side length limits), the code quality concern (parallel validation paths), and enables D10 (validation tests) later.
+**Phase 1 -- Foundation (must ship together):**
+1. Database migration: add `status`, `section`, `sort_order` to tasks table; create `projects` table
+2. Data migration: existing tasks get section='personal', status derived from is_completed
+3. Status field logic: derive `is_completed` from status, update all API routes and DB methods
+4. Backward compatibility: ensure dashboard, task detail, and existing task list still work with new fields
 
-- [x] **T1** -- Wire Zod schemas into all API routes (removes hand-rolled validators, adds length limits)
-- [x] **T2** -- Fix `user.email!` non-null assertion (folded into T8)
-- [x] **T8** -- Fix profile auto-creation (extract `ensureProfile()` helper, fix email guard)
-- [x] **D7** -- Add redirect path allowlist to auth callback (quick, while touching auth code)
+**Phase 2 -- Projects & Sections:**
+5. Projects CRUD (API + DB layer): create, read, update, archive projects
+6. Section selector in task form (replace old category toggles)
+7. Project selector in task form
+8. Tasks page redesign: section tabs with project cards and standalone tasks
 
-### Phase 2: Correctness Bugs (P1 -- do second)
+**Phase 3 -- Kanban Board:**
+9. Kanban board component (4-column layout, reads from status field)
+10. Drag-and-drop between columns (dnd-kit)
+11. Card ordering within columns
+12. Completion reflection dialog on drag-to-Done
 
-Rationale: Users see wrong data. This is the most user-visible problem. Both frequency bugs touch the same function, so they must be done together.
+**Defer to future milestones:**
+- Project progress visualization: Nice-to-have, add after core kanban works
+- Keyboard DnD: dnd-kit supports it, but thorough ARIA labeling needs dedicated testing
+- Project drag-to-reorder: Manual sort_order is fine for v1
 
-- [x] **T3** -- Fix `times_per_week` frequency logic (resolves issue #98)
-- [x] **T4** -- Fix `weekly` frequency hardcoded to Monday
-- [x] **T5** -- Fix 2 pre-existing test failures (resolved by T3)
-- [x] **T7** -- Fix `WeeklyInsight` discriminated union type (insights consume fixed frequency logic)
+---
 
-### Phase 3: Fragility and Code Quality (P2 -- do third)
+## Competitor Analysis Summary
 
-Rationale: These do not cause user-visible bugs but make the system unreliable or harder to debug. Low complexity, high leverage for maintainability.
+### Todoist (closest competitor for personal productivity)
+- **Projects + Sections model:** Projects are top-level containers; sections divide them into phases. Board view shows sections as columns. This is exactly the pattern BetterR.Me is adopting.
+- **View switching:** Users can toggle between list and board view per project. BetterR.Me only needs board view for projects (existing task list handles the flat view).
+- **Color:** Projects have color presets (~20 options). Clean, no custom picker.
+- **What to learn:** Section-as-column is intuitive. Quick-add with `#Project /Section` is powerful but out of scope for v1.
 
-- [x] **T6** -- Add error logging to `computeMissedDays` catch block
-- [x] **D1** -- Remove in-memory `statsCache` (dead code on serverless)
-- [x] **D2** -- Remove debug `console.log` statements
-- [x] **D3** -- Fix theme-switcher DOM workaround
-- [x] **D6** -- Make `HabitLogsDB` constructor require Supabase client
+### Trello (kanban-first, visual)
+- **Board = Project:** Each board is its own kanban. Lists are columns. Cards are tasks.
+- **Labels for context:** Color-coded labels add metadata without hierarchy. BetterR.Me's section + priority already covers this.
+- **Archive pattern:** Cards move to archive, not delete. Keeps history. BetterR.Me should archive Done tasks periodically or on project archive.
+- **What to learn:** Keep DnD fast and smooth. Card details should be accessible in one click (not a new page load). Consider a slide-over panel for task detail in future.
 
-### Phase 4: Performance (P2 -- do fourth)
+### Linear (developer-focused, opinionated)
+- **Fixed status workflow:** Triage -> Backlog -> Todo -> In Progress -> In Review -> Done. Opinionated, not customizable per-project. BetterR.Me's 4-column approach follows this philosophy.
+- **Time-in-status tracking:** Shows how long a task sat in each status. Interesting for future analytics but out of scope.
+- **Status-as-source-of-truth:** Status drives everything; completed is derived. Exactly the pattern BetterR.Me should adopt.
+- **What to learn:** Opinionated > customizable for personal tools. Don't let users create custom columns.
 
-Rationale: Performance fixes depend on correctness fixes being done first (D5 depends on T3+T4). These are optimizations, not bugs -- users are not blocked.
+### Notion (flexible, database-driven)
+- **Database views:** Same data shown as board, list, calendar, gallery. Powerful but complex. BetterR.Me should NOT try to replicate this flexibility.
+- **Relations:** Notion links databases (tasks <-> projects). BetterR.Me's `project_id` FK is the simplified version of this.
+- **Sub-groups:** Board view supports sub-grouping (e.g., by priority within status). Overkill for personal use.
+- **What to learn:** The board view of a database is a "view," not a "feature." Keep data model clean and let the UI be a projection of it.
 
-- [x] **D4** -- Replace `getUserTasks()` with `COUNT(*)` query in dashboard
-- [x] **D5** -- Optimize streak calculation lookback window
-
-### Phase 5: Test Coverage (P3 -- do last)
-
-Rationale: Tests validate all the fixes above. Writing tests last ensures they cover the final corrected behavior, not intermediate states. D10 specifically requires T1 to be complete.
-
-- [x] **D8** -- Add unit tests for `GET /api/habits/[id]/logs` route
-- [x] **D9** -- Add habit count limit enforcement (20 per user)
-- [x] **D10** -- Add tests for Zod validation paths in API routes
-
-## Feature Prioritization Matrix
-
-| # | Fix | User Value | Implementation Cost | Risk if Skipped | Priority |
-|---|-----|------------|---------------------|-----------------|----------|
-| T1 | Zod validation wiring | HIGH | MEDIUM | HIGH (security) | P1 |
-| T2 | Email guard | MEDIUM | LOW | MEDIUM (edge case crash) | P1 |
-| T3 | times_per_week fix | HIGH | HIGH | HIGH (wrong data) | P1 |
-| T4 | weekly frequency fix | HIGH | HIGH | HIGH (wrong data) | P1 |
-| T5 | Test failures fix | LOW | LOW | LOW (symptom of T3) | P1 |
-| T6 | Error logging | MEDIUM | LOW | MEDIUM (silent bugs) | P2 |
-| T7 | WeeklyInsight type | MEDIUM | MEDIUM | MEDIUM (type safety) | P1 |
-| T8 | Profile reliability | MEDIUM | MEDIUM | MEDIUM (FK violations) | P1 |
-| D1 | Remove cache | LOW | LOW | LOW (dead code) | P2 |
-| D2 | Remove debug logs | LOW | LOW | LOW (noise) | P2 |
-| D3 | Theme-switcher fix | LOW | MEDIUM | LOW (race condition risk) | P2 |
-| D4 | COUNT query | MEDIUM | LOW | LOW (perf at scale) | P2 |
-| D5 | Streak optimization | MEDIUM | MEDIUM | LOW (perf at scale) | P2 |
-| D6 | Constructor fix | LOW | LOW | LOW (refactor safety) | P2 |
-| D7 | Redirect allowlist | LOW | LOW | LOW (defense-in-depth) | P2 |
-| D8 | Logs route tests | MEDIUM | MEDIUM | MEDIUM (untested route) | P3 |
-| D9 | Habit count limit | LOW | LOW | LOW (future perf) | P3 |
-| D10 | Validation tests | MEDIUM | MEDIUM | MEDIUM (coverage gap) | P3 |
-
-**Priority key:**
-- P1: Must fix -- users see wrong data or system is at security risk
-- P2: Should fix -- improves reliability, performance, or maintainability
-- P3: Nice to have -- test coverage and limits
+---
 
 ## Sources
 
-- Codebase audit: `/home/xingdi/code/betterr_me/.planning/codebase/CONCERNS.md` (2026-02-15)
-- Project definition: `/home/xingdi/code/betterr_me/.planning/PROJECT.md` (2026-02-15)
-- Architecture analysis: `/home/xingdi/code/betterr_me/.planning/codebase/ARCHITECTURE.md` (2026-02-15)
-- Testing patterns: `/home/xingdi/code/betterr_me/.planning/codebase/TESTING.md` (2026-02-15)
-- Source code inspection: `lib/habits/format.ts`, `lib/cache.ts`, `lib/validations/habit.ts`, `app/api/habits/route.ts`, `app/api/tasks/route.ts`, `app/api/dashboard/route.ts`, `lib/db/habit-logs.ts`, `lib/db/insights.ts`, `components/theme-switcher.tsx`, `app/auth/callback/route.ts`
-- Industry consensus on remediation order: [Atlassian Technical Debt Guide](https://www.atlassian.com/agile/software-development/technical-debt), [SEI/CMU Technical Debt Recommendations](https://www.sei.cmu.edu/blog/5-recommendations-to-help-your-organization-manage-technical-debt/), [Code Hardening in CI/CD](https://www.appsecengineer.com/blog/the-hard-truth-about-code-hardening-in-ci-cd)
+### Competitor & Feature Research (MEDIUM confidence -- web search verified across multiple sources)
+- [Zapier: The 5 best Kanban tools in 2026](https://zapier.com/blog/best-kanban-apps/)
+- [Any.do: Best Kanban Apps for Personal and Team Use in 2026](https://www.any.do/blog/best-kanban-apps-for-personal-and-team-use-in-2026/)
+- [Todoist: Introducing Boards](https://www.todoist.com/inspiration/kanban-board)
+- [Todoist: Use the board layout](https://www.todoist.com/help/articles/use-the-board-layout-in-todoist-AiAVsyEI)
+- [Todoist: Introduction to sections](https://www.todoist.com/help/articles/introduction-to-sections-rOrK0aEn)
+- [Todoist: Introduction to projects](https://www.todoist.com/help/articles/introduction-to-projects-TLTjNftLM)
+- [Linear Docs: Board layout](https://linear.app/docs/board-layout)
+- [Linear Docs: Concepts](https://linear.app/docs/conceptual-model)
+- [Notion: Board view](https://www.notion.com/help/boards)
+- [Notion: Getting started with projects and tasks](https://www.notion.com/help/guides/getting-started-with-projects-and-tasks)
 
----
-*Feature research for: BetterR.Me Codebase Hardening*
-*Researched: 2026-02-15*
+### Technical Implementation (HIGH confidence -- verified implementations)
+- [GitHub: Georgegriff/react-dnd-kit-tailwind-shadcn-ui](https://github.com/Georgegriff/react-dnd-kit-tailwind-shadcn-ui) -- reference Kanban with dnd-kit + Tailwind + shadcn/ui
+- [marmelab: Building a Kanban board with shadcn (Jan 2026)](https://marmelab.com/blog/2026/01/15/building-a-kanban-board-with-shadcn.html) -- optimistic update patterns
+- [LogRocket: Build a Kanban board with dnd-kit](https://blog.logrocket.com/build-kanban-board-dnd-kit-react/)
+- [Puck: Top 5 Drag-and-Drop Libraries for React in 2026](https://puckeditor.com/blog/top-5-drag-and-drop-libraries-for-react)
+
+### UX Patterns (MEDIUM confidence -- synthesized from multiple blog posts and guides)
+- [Atlassian: What is a kanban board?](https://www.atlassian.com/agile/kanban/boards)
+- [Atlassian: Kanban](https://www.atlassian.com/agile/kanban)
+- [ProKanban: Defining Workflow in Kanban](https://www.prokanban.org/blog/www-prokanban-org-blog-defining-workflow-in-kanban-key-elements-for-success)
+- [Brisqi: Offline-first Personal Kanban App](https://brisqi.com/)
