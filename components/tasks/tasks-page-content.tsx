@@ -53,13 +53,15 @@ export function TasksPageContent() {
 
   const handleToggleTask = async (taskId: string) => {
     try {
-      await fetch(`/api/tasks/${taskId}/toggle`, {
+      const response = await fetch(`/api/tasks/${taskId}/toggle`, {
         method: "POST",
       });
+      if (!response.ok) throw new Error(`Failed to toggle task: ${response.status}`);
       mutate();
       revalidateSidebarCounts();
     } catch (err) {
       console.error("Failed to toggle task:", err);
+      toast.error(t("error.toggleTaskFailed"));
     }
   };
 
