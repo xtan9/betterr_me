@@ -26,6 +26,7 @@ import { AbsenceCard } from "./absence-card";
 import { toast } from "sonner";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
+import { shouldTrackOnDate } from "@/lib/habits/format";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import type { DashboardData } from "@/lib/db/types";
@@ -392,7 +393,7 @@ export function DashboardContent({
       <div className="grid gap-card-gap xl:grid-cols-2">
         {/* Habits Checklist */}
         <HabitChecklist
-          habits={data.habits}
+          habits={data.habits.filter(h => shouldTrackOnDate(h.frequency, new Date()))}
           onToggle={handleToggleHabit}
           onCreateHabit={handleCreateHabit}
           togglingHabitIds={togglingHabitIds}

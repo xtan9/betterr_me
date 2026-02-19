@@ -57,6 +57,7 @@ export default async function DashboardPage() {
     ...h,
     missed_scheduled_days: 0,
     previous_streak: 0,
+    absence_unit: 'days' as const,
   }));
 
   const initialData: DashboardData = {
