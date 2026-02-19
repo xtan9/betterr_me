@@ -9,8 +9,8 @@ Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
 
 ### Data Foundation
 
-- [ ] **DATA-01**: User's existing tasks receive `section=personal` and `status` derived from `is_completed` via migration
-- [ ] **DATA-02**: Task `status` field supports backlog, todo, in_progress, and done values
+- [x] **DATA-01**: User's existing tasks receive `section=personal` and `status` derived from `is_completed` via migration
+- [x] **DATA-02**: Task `status` field supports backlog, todo, in_progress, and done values
 - [ ] **DATA-03**: `is_completed` is derived from `status=done` — setting status to done marks task complete (with `completed_at`), moving away from done clears completion
 - [ ] **DATA-04**: Dashboard, recurring tasks, and all existing task features continue to work unchanged after migration
 
@@ -83,8 +83,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | Phase 13 | Pending |
-| DATA-02 | Phase 13 | Pending |
+| DATA-01 | Phase 13 | Complete |
+| DATA-02 | Phase 13 | Complete |
 | DATA-03 | Phase 13 | Pending |
 | DATA-04 | Phase 13 | Pending |
 | PROJ-01 | Phase 14 | Pending |

@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 13 (first of 3 in v3.0)
-Plan: 2 plans (13-01, 13-02) in 2 waves
-Status: Ready to execute
-Last activity: 2026-02-18 — Phase 13 planned
+Plan: 1 of 2 complete (13-01 done, 13-02 next)
+Status: Executing
+Last activity: 2026-02-19 — Completed 13-01 (types, sync, sort-order, migration SQL)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [..........] 0% v3.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [#.........] 10% v3.0
 
 ## Performance Metrics
 
@@ -31,6 +31,9 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - Total plans completed: 6
 - Execution time: ~63min
 
+**v3.0 Velocity:**
+- 13-01: 5min (3 tasks, 7 files)
+
 ## Accumulated Context
 
 ### Decisions
@@ -42,6 +45,10 @@ Recent decisions affecting current work:
 - API-layer is_completed/status sync preferred over DB trigger (testability)
 - Float-based sort_order for kanban reordering (single-row updates)
 - SWR as single source of truth for kanban state (no dual local+server state)
+- TaskStatus: exactly 4 values (backlog, todo, in_progress, done)
+- syncTaskUpdate: status wins when both status and is_completed provided
+- Reopened tasks always reset to status=todo
+- Migration defaults is_completed=false to status=todo (not backlog)
 
 ### Pending Todos
 
@@ -55,7 +62,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-18
-Stopped at: Phase 13 planned (2 plans, 2 waves)
-Resume file: .planning/phases/13-data-foundation-migration/13-01-PLAN.md
-Resume: Execute Phase 13 (Data Foundation & Migration)
+Last session: 2026-02-19
+Stopped at: Completed 13-01-PLAN.md
+Resume file: .planning/phases/13-data-foundation-migration/13-02-PLAN.md
+Resume: Execute Phase 13 Plan 02 (wire sync into DB/API layer)

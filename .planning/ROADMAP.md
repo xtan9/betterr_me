@@ -110,6 +110,6 @@ Plans:
 | 10. Token Consistency | v2.1 | 3/3 | Complete | 2026-02-18 |
 | 11. Sidebar Polish | v2.1 | 2/2 | Complete | 2026-02-18 |
 | 12. Component Fixes | v2.1 | 1/1 | Complete | 2026-02-18 |
-| 13. Data Foundation & Migration | v3.0 | 0/? | Not started | - |
+| 13. Data Foundation & Migration | 1/2 | In Progress|  | - |
 | 14. Projects & Sections | v3.0 | 0/? | Not started | - |
 | 15. Kanban Board | v3.0 | 0/? | Not started | - |
