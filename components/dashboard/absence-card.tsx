@@ -10,7 +10,12 @@ import type { HabitWithAbsence } from "@/lib/db/types";
 
 type AbsenceVariant = "recovery" | "lapse" | "hiatus";
 
-function getVariant(missed: number): AbsenceVariant {
+function getVariant(missed: number, unit: 'days' | 'weeks'): AbsenceVariant {
+  if (unit === 'weeks') {
+    if (missed <= 1) return "recovery";
+    if (missed <= 3) return "lapse";
+    return "hiatus";
+  }
   if (missed <= 2) return "recovery";
   if (missed <= 6) return "lapse";
   return "hiatus";
@@ -51,9 +56,11 @@ export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
   const [isCompleting, setIsCompleting] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
 
-  const variant = getVariant(habit.missed_scheduled_days);
+  const unit = habit.absence_unit ?? 'days';
+  const variant = getVariant(habit.missed_scheduled_days, unit);
   const config = variantConfig[variant];
   const Icon = config.icon;
+  const titleSuffix = unit === 'weeks' ? 'Weeks' : '';
 
   const handleComplete = async () => {
     setIsCompleting(true);
@@ -89,12 +96,12 @@ export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
       <Icon className={cn("size-5 shrink-0 mt-0.5", config.iconColor)} />
       <div className="flex-1 min-w-0">
         <p className={cn("text-sm font-medium", config.titleColor)}>
-          {t(`${variant}Title`, { name: habit.name, days: habit.missed_scheduled_days })}
+          {t(`${variant}Title${titleSuffix}`, { name: habit.name, days: habit.missed_scheduled_days })}
         </p>
 
         {variant === "lapse" && habit.previous_streak > 0 && (
           <p className="text-xs text-muted-foreground mt-0.5">
-            {t("previousStreak", { days: habit.previous_streak })}
+            {t(unit === 'weeks' ? "previousStreakWeeks" : "previousStreak", { days: habit.previous_streak })}
           </p>
         )}
 

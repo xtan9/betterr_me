@@ -10,7 +10,11 @@ const messages = {
       recoveryTitle: "{name} — missed {days} day(s)",
       lapseTitle: "{name} — {days} days since last check-in",
       hiatusTitle: "{name} — it's been {days} days",
+      recoveryTitleWeeks: "{name} — missed {days} week(s)",
+      lapseTitleWeeks: "{name} — {days} weeks since last check-in",
+      hiatusTitleWeeks: "{name} — it's been {days} weeks",
       previousStreak: "You had a {days}-day streak before",
+      previousStreakWeeks: "You had a {days}-week streak before",
       markComplete: "Complete today",
       completed: "{name} — welcome back!",
       resume: "Resume today",
@@ -45,6 +49,7 @@ function makeHabit(overrides: Partial<HabitWithAbsence> = {}): HabitWithAbsence 
     monthly_completion_rate: 50,
     missed_scheduled_days: 1,
     previous_streak: 5,
+    absence_unit: "days",
     ...overrides,
   };
 }
@@ -208,5 +213,46 @@ describe("AbsenceCard", () => {
     expect(screen.getByRole("checkbox")).toBeDisabled();
     resolveToggle();
     await waitFor(() => expect(screen.getByText(/welcome back/)).toBeInTheDocument());
+  });
+
+  // --- Week-based absence display tests ---
+
+  it("renders week-based text for weekly habits (recovery: 1 missed week)", () => {
+    const habit = makeHabit({
+      frequency: { type: "times_per_week", count: 3 },
+      missed_scheduled_days: 1,
+      absence_unit: "weeks",
+    });
+    renderWithIntl(
+      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+    );
+    expect(screen.getByText(/missed 1 week/)).toBeInTheDocument();
+  });
+
+  it("renders week-based lapse variant for 2-3 missed weeks", () => {
+    const habit = makeHabit({
+      frequency: { type: "weekly" },
+      missed_scheduled_days: 2,
+      previous_streak: 4,
+      absence_unit: "weeks",
+    });
+    renderWithIntl(
+      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+    );
+    expect(screen.getByText(/2 weeks since last check-in/)).toBeInTheDocument();
+    expect(screen.getByText("You had a 4-week streak before")).toBeInTheDocument();
+  });
+
+  it("renders week-based hiatus variant for 4+ missed weeks", () => {
+    const habit = makeHabit({
+      frequency: { type: "weekly" },
+      missed_scheduled_days: 5,
+      absence_unit: "weeks",
+    });
+    renderWithIntl(
+      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+    );
+    expect(screen.getByText(/it's been 5 weeks/)).toBeInTheDocument();
+    expect(screen.getByText("Resume today")).toBeInTheDocument();
   });
 });
