@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 13 (first of 3 in v3.0)
-Plan: 1 of 2 complete (13-01 done, 13-02 next)
-Status: Executing
-Last activity: 2026-02-19 — Completed 13-01 (types, sync, sort-order, migration SQL)
+Plan: 2 of 2 complete (13-01 done, 13-02 done)
+Status: Phase 13 Complete
+Last activity: 2026-02-19 — Completed 13-02 (sync integration into DB/API layer)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [#.........] 10% v3.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [###.......] 33% v3.0
 
 ## Performance Metrics
 
@@ -33,6 +33,7 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 
 **v3.0 Velocity:**
 - 13-01: 5min (3 tasks, 7 files)
+- 13-02: 6min (2 tasks, 7 files)
 
 ## Accumulated Context
 
@@ -49,6 +50,8 @@ Recent decisions affecting current work:
 - syncTaskUpdate: status wins when both status and is_completed provided
 - Reopened tasks always reset to status=todo
 - Migration defaults is_completed=false to status=todo (not backlog)
+- Every task mutation goes through sync layer before DB write (sync-at-mutation-point pattern)
+- POST creates compute sort_order from max existing value per user
 
 ### Pending Todos
 
@@ -57,12 +60,11 @@ None.
 ### Blockers/Concerns
 
 - Vitest picks up .worktrees/ test files causing spurious failures (pre-existing, not blocking)
-- is_completed/status bidirectional sync touches 94+ test assertions — needs careful migration testing
+- is_completed/status bidirectional sync migration testing complete — all 1166 tests pass
 - @dnd-kit/core v6 + React 19 peer dep mismatch requires pnpm config (cosmetic, works correctly)
 
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Completed 13-01-PLAN.md
-Resume file: .planning/phases/13-data-foundation-migration/13-02-PLAN.md
-Resume: Execute Phase 13 Plan 02 (wire sync into DB/API layer)
+Stopped at: Completed 13-02-PLAN.md (Phase 13 fully complete)
+Resume: Phase 14 planning (Kanban API)
