@@ -52,8 +52,9 @@ describe("GET /api/sidebar/counts", () => {
       { id: "h3", completed_today: false },
     ]);
     mockGetTodayTasks.mockResolvedValue([
-      { id: "t1", title: "Task 1" },
-      { id: "t2", title: "Task 2" },
+      { id: "t1", title: "Task 1", is_completed: false },
+      { id: "t2", title: "Task 2", is_completed: false },
+      { id: "t3", title: "Task 3", is_completed: true },
     ]);
 
     const { GET } = await import("@/app/api/sidebar/counts/route");

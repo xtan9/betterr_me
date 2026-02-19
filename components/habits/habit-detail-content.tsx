@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
+import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -240,6 +241,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
         },
       );
       mutateHabit();
+      revalidateSidebarCounts();
     } catch (err) {
       console.error("Failed to toggle habit date:", err);
       toast.error(t("toast.updateError"));
@@ -261,6 +263,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       });
       if (!response.ok) throw new Error("Failed to update");
       mutateHabit();
+      revalidateSidebarCounts();
       toast.success(
         isPausing ? t("toast.pauseSuccess") : t("toast.resumeSuccess"),
       );
@@ -278,6 +281,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to archive");
+      revalidateSidebarCounts();
       toast.success(t("toast.archiveSuccess"));
       router.push("/habits");
     } catch (err) {
@@ -294,6 +298,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to delete");
+      revalidateSidebarCounts();
       toast.success(t("toast.deleteSuccess"));
       router.push("/habits");
     } catch (err) {

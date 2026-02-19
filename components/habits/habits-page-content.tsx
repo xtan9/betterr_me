@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
 import { getLocalDateString } from "@/lib/utils";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
+import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { HabitList } from "./habit-list";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
@@ -80,6 +81,7 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
           revalidate: false,
         },
       );
+      revalidateSidebarCounts();
     } catch (err) {
       console.error("Failed to toggle habit:", err);
       toast.error(t("error.toggleHabitFailed"));

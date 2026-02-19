@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
       (h) => !h.completed_today
     ).length;
 
-    // Tasks due = incomplete tasks due today or overdue (getTodayTasks already filters this)
-    const tasksDue = tasksDueToday.length;
+    // Count incomplete tasks due today or overdue
+    const tasksDue = tasksDueToday.filter((t) => !t.is_completed).length;
 
     return NextResponse.json({
       habits_incomplete: habitsIncomplete,

@@ -19,6 +19,10 @@ vi.mock("swr", () => ({
   default: (...args: unknown[]) => mockUseSWR(...args),
 }));
 
+vi.mock("@/lib/hooks/use-sidebar-counts", () => ({
+  revalidateSidebarCounts: vi.fn(),
+}));
+
 // Mock sonner
 const { mockToast } = vi.hoisted(() => ({
   mockToast: { success: vi.fn(), error: vi.fn() },

@@ -12,6 +12,10 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+vi.mock("@/lib/hooks/use-sidebar-counts", () => ({
+  revalidateSidebarCounts: vi.fn(),
+}));
+
 // Mock sonner
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();

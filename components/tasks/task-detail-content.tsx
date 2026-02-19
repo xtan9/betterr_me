@@ -40,6 +40,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EditScopeDialog } from "@/components/tasks/edit-scope-dialog";
+import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import type { Task, TaskCategory, RecurringTask } from "@/lib/db/types";
 import type { EditScope } from "@/lib/validations/recurring-task";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
@@ -129,6 +130,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
       });
       if (!response.ok) throw new Error("Failed to toggle");
       mutate();
+      revalidateSidebarCounts();
     } catch {
       toast.error(t("toast.toggleError"));
     }
@@ -161,6 +163,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
           method: "DELETE",
         });
         if (!response.ok) throw new Error("Failed to delete");
+        revalidateSidebarCounts();
         toast.success(t("delete.success"));
         router.push("/tasks");
       } catch {
@@ -178,6 +181,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to delete");
+      revalidateSidebarCounts();
       toast.success(t("delete.success"));
       router.push("/tasks");
     } catch {

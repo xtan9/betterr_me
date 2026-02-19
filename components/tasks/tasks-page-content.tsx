@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
+import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
 import { TaskList } from "./task-list";
 import type { Task, RecurringTask } from "@/lib/db/types";
@@ -52,12 +53,15 @@ export function TasksPageContent() {
 
   const handleToggleTask = async (taskId: string) => {
     try {
-      await fetch(`/api/tasks/${taskId}/toggle`, {
+      const response = await fetch(`/api/tasks/${taskId}/toggle`, {
         method: "POST",
       });
+      if (!response.ok) throw new Error(`Failed to toggle task: ${response.status}`);
       mutate();
+      revalidateSidebarCounts();
     } catch (err) {
       console.error("Failed to toggle task:", err);
+      toast.error(t("error.toggleTaskFailed"));
     }
   };
 
@@ -75,6 +79,7 @@ export function TasksPageContent() {
       if (!res.ok) throw new Error("Failed");
       mutatePaused();
       mutate(); // refresh tasks list — resumed template may generate new instances
+      revalidateSidebarCounts();
       toast.success(t("paused.resumeSuccess"));
     } catch (err) {
       console.error("Failed to resume recurring task:", templateId, err);

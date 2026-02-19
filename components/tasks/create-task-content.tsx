@@ -12,6 +12,7 @@ import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import { TaskForm } from "@/components/tasks/task-form";
 import type { RecurrenceConfig } from "@/components/tasks/task-form";
 import type { TaskFormValues } from "@/lib/validations/task";
+import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { getLocalDateString } from "@/lib/utils";
 
 export function CreateTaskContent() {
@@ -74,6 +75,7 @@ export function CreateTaskContent() {
           typeof key === "string" && key.startsWith("/api/tasks"),
         undefined,
       );
+      revalidateSidebarCounts();
 
       toast.success(t("toast.createSuccess"));
       router.push("/tasks");
