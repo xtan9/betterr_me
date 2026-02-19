@@ -47,7 +47,7 @@ export default defineConfig({
     // Desktop browsers
     {
       name: 'chromium',
-      dependencies: ['setup', 'visual-regression'],
+      dependencies: ['setup'],
       testIgnore: /visual-regression\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
     },
