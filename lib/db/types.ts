@@ -201,8 +201,9 @@ export interface HabitWithTodayStatus extends Habit {
 
 /** Absence enrichment data — only meaningful in the dashboard context. */
 export interface AbsenceData {
-  missed_scheduled_days: number; // consecutive scheduled-but-missed days before today
+  missed_scheduled_days: number; // consecutive scheduled-but-missed days (or weeks) before today
   previous_streak: number; // streak length before the current absence gap
+  absence_unit: 'days' | 'weeks'; // what missed_scheduled_days counts
 }
 
 /** Habit with absence enrichment, used only in dashboard responses. */
