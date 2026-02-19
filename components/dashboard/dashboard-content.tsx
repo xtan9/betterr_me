@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
+import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import type { DashboardData } from "@/lib/db/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -172,6 +173,7 @@ export function DashboardContent({
           revalidate: false,
         },
       );
+      revalidateSidebarCounts();
     } catch (err) {
       console.error("Failed to toggle habit:", err);
       toast.error(t("error.toggleHabitFailed"));
@@ -227,6 +229,7 @@ export function DashboardContent({
           revalidate: false,
         },
       );
+      revalidateSidebarCounts();
     } catch (err) {
       console.error("Failed to toggle task:", err);
       toast.error(t("error.toggleTaskFailed"));

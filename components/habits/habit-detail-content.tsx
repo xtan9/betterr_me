@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
+import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -240,6 +241,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
         },
       );
       mutateHabit();
+      revalidateSidebarCounts();
     } catch (err) {
       console.error("Failed to toggle habit date:", err);
       toast.error(t("toast.updateError"));

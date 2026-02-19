@@ -1,10 +1,16 @@
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { getLocalDateString } from "@/lib/utils";
 
 interface SidebarCounts {
   habits_incomplete: number;
   tasks_due: number;
+}
+
+/** Revalidate sidebar counts from anywhere (e.g. after toggling a habit/task). */
+export function revalidateSidebarCounts() {
+  const date = getLocalDateString();
+  mutate(`/api/sidebar/counts?date=${date}`);
 }
 
 export function useSidebarCounts() {
