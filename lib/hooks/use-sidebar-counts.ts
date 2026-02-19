@@ -10,7 +10,7 @@ interface SidebarCounts {
 /** Revalidate sidebar counts from anywhere (e.g. after toggling a habit/task). */
 export function revalidateSidebarCounts() {
   const date = getLocalDateString();
-  mutate(`/api/sidebar/counts?date=${date}`);
+  mutate(`/api/sidebar/counts?date=${date}`).catch(() => {});
 }
 
 export function useSidebarCounts() {
