@@ -1,614 +1,649 @@
-# BetterR.Me - Product Requirements Document (PRD)
-## V2.0 - Current State & Next Horizons
+# BetterR.Me - Product Requirements Document
+
+## V2.0 - Consolidated Master PRD
 
 **Date:** February 18, 2026
-**Status:** Living Document
 **Version:** 2.0
-**Previous:** `BETTERR_ME_PRD_V1.2.md` (V1 era), `FEATURE_VERTICAL_DEPTH_STRATEGY.md`, `FEATURE_RECURRING_TASKS.md`
+**Status:** Living Document
+**Supersedes:** `BETTERR_ME_PRD_V1.md` (Feb 2, 2026), `BETTERR_ME_PRD_V1.2.md` (Feb 3, 2026)
 
 ---
 
-## REVISION HISTORY
+## Revision History
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0 | Feb 2, 2026 | Initial PRD — lean V1 scope |
-| 1.2 | Feb 3, 2026 | Added Mood Check-ins spec (V1.5), user personas, accessibility |
-| 2.0 | Feb 18, 2026 | Reflects shipped reality: V1.0-V2.1 milestones, vertical depth features, recurring tasks, UI redesign |
-
-### What Changed Since V1.2
-- **Shipped 4 milestones** (v1.0 Codebase Hardening, v1.1 Dashboard Task Fixes, v2.0 UI Style Redesign, v2.1 UI Polish & Refinement)
-- **Shipped all 6 Vertical Depth features** (intention field, task horizon, absence-aware recovery, streak milestones, completion reflection, weekly insights)
-- **Shipped Recurring Tasks** (hybrid template + on-demand instance model)
-- **UI redesign** — sidebar navigation, design tokens, card-on-gray layouts
-- **Tech stack** — upgraded to Next.js 16
-- **Test suite** — grown to 1084+ tests (86 Vitest files + 11 Playwright specs)
-- **Feature PRDs** renamed: `PRD_V2_*` → `FEATURE_*` to distinguish from master PRD
+| 1.0 | Feb 2, 2026 | Initial PRD — lean V1 scope, competitive landscape, retention strategy |
+| 1.2 | Feb 3, 2026 | Added Mood Check-ins spec, 4th persona, competitive positioning matrix |
+| 2.0 | Feb 18, 2026 | **Consolidated master PRD.** Reflects shipped reality (V1.0 through V2.1), removes engineering content, adds roadmap options and CEO open questions. Supersedes all prior versions. |
 
 ---
 
-## 1. EXECUTIVE SUMMARY
+## 1. Executive Summary
 
-BetterR.Me is a **daily operating system for self-improvement and productivity** that helps anyone become a better version of themselves through consistent habit building, task execution, and behavioral self-coaching.
+BetterR.Me is a **daily operating system for self-improvement** that helps anyone become a better version of themselves through consistent habit building, task execution, and behavioral self-coaching.
 
 **Core Thesis:** Users return daily when the app creates an addictive daily ritual around tracking habits, seeing streaks, receiving behavioral insights, and feeling emotionally guided — not just checked off.
 
-**Current State:** BetterR.Me is a fully functional, shipped product with:
-- Habit tracking with 5 frequency types, streaks, milestones, heatmaps
-- Task management with priorities, categories, intentions, recurring tasks
-- Self-coaching: absence-aware recovery, completion reflections, weekly insights
-- Sidebar navigation, dark mode, 56 semantic design tokens
-- Three locales (en, zh, zh-TW)
-- 1084+ automated tests
+**Where We Are Today:**
+
+| Vital Sign | Status |
+|------------|--------|
+| Product stage | Fully functional, shipped to production |
+| Features shipped | Habits, Tasks, Recurring Tasks, Dashboard, Weekly Insights, Streak Milestones, Absence Recovery |
+| Milestones completed | 6 (V1.0 through Recurring Tasks) |
+| Automated tests | 1,084+ |
+| Locales supported | 3 (English, Simplified Chinese, Traditional Chinese) |
+| Dark mode | Full support with 56 semantic design tokens |
+| Mobile | Responsive web (no native app yet) |
+
+**What's Next:** Mood Check-ins, notifications, habit templates, and mobile — pending CEO prioritization (see Section 14).
 
 ---
 
-## 2. MARKET CONTEXT
-
-*(Unchanged from V1.2 — see Section 2 in `BETTERR_ME_PRD_V1.2.md` for competitive landscape and market opportunity.)*
-
-**Updated Competitive Edge:**
-- Self-coaching features (absence recovery, insights, reflections) — no competitor does this
-- Recurring tasks with full scope editing (this/following/all) — Google Calendar-level control
-- Multilingual from day one (EN, 中文, 繁體中文)
-- Retention-first design with behavioral psychology principles
-
----
-
-## 3. PRODUCT VISION & VALUES
+## 2. Vision, Mission, and Values
 
 ### Vision
+
 "BetterR.Me is where users go every day to become the best version of themselves — through building consistent habits, executing on daily priorities, receiving behavioral insights, and feeling guided through the ups and downs of self-improvement."
 
-### User Personas
+### Mission
 
-**Persona 1: The Consistency Builder**
-- Goal: Build sustainable habits (meditation, exercise, reading)
-- Motivation: Streaks, seeing long-term patterns
-- Frequency: Daily, 2-3 minutes
-- Served by: Habit system, streak milestones, heatmaps, absence recovery
-
-**Persona 2: The Productivity Warrior**
-- Goal: Execute priorities and get work done
-- Motivation: Completing tasks, clearing backlog
-- Frequency: 2-3x daily
-- Served by: Task system, recurring tasks, intentions, completion reflections
-
-**Persona 3: The Data Junkie**
-- Goal: Track everything and understand patterns
-- Motivation: Dashboard metrics, trends, insights
-- Frequency: Daily + weekly reviews
-- Served by: Weekly insights, habit stats, task horizon
-
-**Persona 4: The Self-Awareness Seeker** *(Future — V2.5+)*
-- Goal: Understand emotional patterns and triggers
-- Motivation: Mental health improvement, therapy support
-- Served by: Mood Check-ins *(not yet built — see Section 18)*
+Build the most retention-focused self-improvement platform in the market. Not the most features — the deepest engagement.
 
 ### Core Values
-1. **Simplicity First** - No friction between intention and action
-2. **Progress Visible** - Make it impossible to ignore your improvement
-3. **Compassionate** - Streaks break; we don't shame users
-4. **Multi-lingual** - Support EN, 中文, 繁體中文 equally
+
+| Value | What It Means |
+|-------|---------------|
+| **Simplicity First** | No friction between intention and action. Checking off a habit is one tap. |
+| **Progress Visible** | Make it impossible to ignore your improvement. Streaks, heatmaps, insights. |
+| **Compassionate** | Streaks break. We don't shame users. We help them recover. |
+| **Multi-lingual** | English, Simplified Chinese, and Traditional Chinese are first-class citizens. |
 
 ---
 
-## 4. SHIPPED FEATURES
+## 3. Market Context and Competitive Positioning
 
-### 4.1 HABIT SYSTEM
+### Market Opportunity
 
-**Create Habit:**
-- Name (required, max 100 chars), description (optional, max 500 chars)
-- Category: Health, Wellness, Learning, Productivity, Other
-- Frequency: Daily, Weekdays (Mon-Fri), Weekly (any day counts), Times per week (2x or 3x), Custom days
-- Status: Active, Paused, Archived
-- 20-habit limit per user
+- **TAM (2026):** $14.94 billion globally (habit tracking + personal productivity)
+- **Key Insight:** 52% of users drop off within 30 days across ALL habit apps. Retention, not features, is the unsolved problem.
+- **Key Gaps in Market:**
+  - No competitor wins on retention/engagement
+  - True AI personalization is nascent
+  - Cross-platform excellence is rare
+  - Coaching integration (not just tracking) is unexplored
 
-**Habit Tracking:**
-- 1-click toggle from dashboard to log completion for today
-- Edit past logs (add missed days, undo mistakes) — limited to 7 days back
-- Habit detail page with:
-  - Current streak + personal best streak
-  - Completion percentage (this week, this month, all-time)
-  - 30-day calendar heatmap (green = done, gray = missed)
-  - Next milestone indicator ("X days to your Y-day milestone!")
+### Competitive Landscape
 
-**Streak Calculation:**
-- Frequency-aware: streaks count scheduled days only, not calendar days
-- Adaptive lookback: 30→60→120→240→365 days based on streak length
-- Paused habits freeze streak (days while paused don't count as missed)
-- Single `shouldTrackOnDate()` source of truth in `lib/habits/format.ts`
+| Competitor | Strength | Weakness | Audience |
+|-----------|----------|----------|----------|
+| **Habitica** | Gamification, community | Niche appeal (RPG-heavy) | Gamers |
+| **Streaks** | Beautiful design | iOS-only | Apple devotees |
+| **Loop** | Privacy-first, free | No engagement hooks | Privacy enthusiasts |
+| **Habitify** | Most integrations + AI | Over-featured, less polished | Feature lovers |
+| **Strides** | Goals + habit combo | Limited social features | Goal-setters |
 
-**Streak Milestones & Celebrations:**
-- Milestone thresholds: 7, 14, 30, 50, 100, 200, 365 days
-- Celebration card on dashboard when a habit hits a milestone
-- Next milestone indicator on habit detail page
-- Milestone history stored in `habit_milestones` table
+### BetterR.Me's Differentiators
 
-**Absence-Aware Recovery (3-Tier):**
-- Recovery (1 missed day): Amber card — "Never miss twice"
-- Lapse (2-6 missed days): Blue card — "No judgment — restart today"
-- Hiatus (7+ missed days): Warm card — "Welcome back! Resume, pause, or change frequency?"
+| Dimension | BetterR.Me | Habitica | Streaks | Loop | Habitify |
+|-----------|-----------|---------|---------|------|----------|
+| Simplicity | +++++ | +++ | +++++ | +++++ | ++++ |
+| Habits + Tasks | +++++ | +++++ | ++++ | +++ | ++++ |
+| Design | ++++ | +++ | +++++ | ++++ | ++++ |
+| Retention mechanics | +++++ | ++++ | +++ | +++ | +++ |
+| Self-coaching | +++++ | + | + | + | + |
+| Cross-platform | ++++ | ++++ | ++ | +++ | ++++ |
+| Multilingual | +++++ | +++ | ++ | ++ | +++ |
+| Accessibility | ++++ | ++ | +++ | +++ | +++ |
+
+**Our edge:** Self-coaching features (absence recovery, weekly insights, completion reflections, intention setting) — no competitor does this. We also have recurring tasks with full scope editing (this/following/all instances) comparable to Google Calendar.
+
+---
+
+## 4. User Personas
+
+### Persona 1: The Consistency Builder
+
+| | |
+|---|---|
+| **Goal** | Build sustainable habits (meditation, exercise, reading) |
+| **Motivation** | Streaks, seeing long-term patterns |
+| **Usage** | Daily, 2-3 minutes |
+| **Quote** | "I want a 365-day meditation streak" |
+| **Served by** | Habit system, streak milestones, 30-day heatmaps, absence recovery |
+
+### Persona 2: The Productivity Warrior
+
+| | |
+|---|---|
+| **Goal** | Execute priorities and get work done |
+| **Motivation** | Completing tasks, clearing backlog |
+| **Usage** | 2-3x daily |
+| **Quote** | "I want to ship my best work every day" |
+| **Served by** | Task system, recurring tasks, intention field, completion reflections |
+
+### Persona 3: The Data Junkie
+
+| | |
+|---|---|
+| **Goal** | Track everything and understand patterns |
+| **Motivation** | Dashboard metrics, trends, insights |
+| **Usage** | Daily + weekly reviews |
+| **Quote** | "I want to know if better sleep correlates with productivity" |
+| **Served by** | Weekly insights, habit stats, task horizon |
+
+### Persona 4: The Self-Awareness Seeker *(Future)*
+
+| | |
+|---|---|
+| **Goal** | Understand emotional patterns and triggers |
+| **Motivation** | Mental health improvement, therapy support |
+| **Usage** | As-needed (during emotional moments) + weekly review |
+| **Quote** | "I want to track when I feel anxious so I can discuss patterns with my therapist" |
+| **Served by** | Mood Check-ins *(not yet built — see Appendix A)* |
+
+---
+
+## 5. What We've Built
+
+This is the centerpiece — everything below is shipped and in production.
+
+### Habits
+
+| Capability | Details |
+|-----------|---------|
+| **Create habits** | Name, description, category (Health / Wellness / Learning / Productivity / Other), 5 frequency types, 20-habit limit per user |
+| **Frequency types** | Daily, Weekdays (Mon-Fri), Weekly (any day counts), Times per week (2x or 3x), Custom days |
+| **1-click tracking** | Toggle completion from dashboard; edit past logs up to 7 days back |
+| **Streak system** | Frequency-aware calculation (counts only scheduled days), adaptive lookback (30-365 days based on streak length), paused habits freeze streak |
+| **30-day heatmap** | Calendar visualization on habit detail page (green = done, gray = missed) |
+| **Status management** | Active, Paused, Archived |
+
+### Streak Milestones and Celebrations
+
+| Capability | Details |
+|-----------|---------|
+| **Milestone thresholds** | 7, 14, 30, 50, 100, 200, 365 days |
+| **Celebration cards** | Appear on dashboard when a habit hits a milestone |
+| **Next milestone indicator** | Shown on habit detail page ("X days to your Y-day milestone!") |
+| **Milestone history** | Stored for long-term tracking |
+
+### Absence-Aware Recovery (3-Tier)
+
+| Tier | Trigger | Tone | Message |
+|------|---------|------|---------|
+| **Recovery** | 1 missed scheduled day | Amber, light | "Never miss twice" |
+| **Lapse** | 2-6 missed scheduled days | Blue, honest | "No judgment — restart today" |
+| **Hiatus** | 7+ missed scheduled days | Warm, welcoming | "Welcome back! Resume, pause, or change frequency?" |
+
 - Max 3 cards on dashboard, prioritized by severity
-- Frequency-aware calculation (uses `shouldTrackOnDate()`)
+- Frequency-aware: counts only scheduled days as missed (a weekly habit with no log for 3 calendar days is not a miss)
+- Based on James Clear's "Never Miss Twice" rule and the "what-the-hell effect" (abandonment spiral) research
 
-### 4.2 TASK SYSTEM
+### Tasks
 
-**Create Task:**
-- Title (required), description (optional)
-- Priority: None (0), Low (1), Medium (2), High (3)
-- Due date (required), due time (optional)
-- Category: Work, Personal, Shopping, Other (optional)
-- Intention field: "Why does this matter to you?" (optional, max 200 chars)
-- Status: Not started, In progress, Completed
+| Capability | Details |
+|-----------|---------|
+| **Create tasks** | Title, description, priority (None / Low / Medium / High), due date, due time, category (Work / Personal / Shopping / Other) |
+| **Intention field** | Optional "Why does this matter to you?" prompt — based on implementation intention research (Gollwitzer, 1999) |
+| **Completion reflection** | For high-priority tasks or tasks with an intention: inline emoji strip (Easy / Good / Hard), 3-second auto-dismiss |
+| **Task horizon** | "Coming Up (Tomorrow)" section on dashboard shows up to 3 upcoming tasks; auto-expands when today's tasks are done |
 
-**Task Management:**
-- View all tasks with filter/sort by priority, due date, status
-- Mark complete with optional reflection (for P3 or tasks with intention)
-- Quick stats: X/Y tasks completed today
+### Recurring Tasks
 
-**Completion Reflection:**
-- Triggered for Priority 3 tasks or tasks with an intention
-- Inline emoji strip: Easy / Good / Hard
-- 3-second auto-dismiss if user doesn't engage
-- Saved as `completion_difficulty` (1-3) on the task
+| Capability | Details |
+|-----------|---------|
+| **Supported patterns** | Daily, Every N days, Weekly on specific days, Biweekly, Monthly by date, Monthly by weekday, Yearly |
+| **End conditions** | Never, After N times, On specific date |
+| **Edit/delete scope** | This instance only, This and following, All instances (Google Calendar style) |
+| **Generation model** | 7-day rolling window, no background jobs — instances appear automatically when the user opens the app |
+| **Full feature parity** | Recurring instances support all task features (reflection, intention, priority, categories) |
 
-**Task Horizon (Dashboard):**
-- "Coming Up (Tomorrow)" section shows up to 3 upcoming tasks
-- Auto-expands when all today's tasks are complete: "Get a head start on tomorrow"
-- "View all tasks" link at bottom
+See `FEATURE_RECURRING_TASKS.md` for the full feature specification.
 
-**Recurring Tasks:**
-- Hybrid template + on-demand instance model
-- Supported frequencies: Daily, Every N days, Weekly on specific days, Biweekly, Monthly by date, Monthly by weekday, Yearly
-- End conditions: Never, After N times, On specific date
-- Edit/delete scope: This instance only, This and following, All instances (Google Calendar style)
-- 7-day rolling window generation, no cron jobs
-- Instances are real task rows — all features (reflection, intention) work on recurring instances
-- See `FEATURE_RECURRING_TASKS.md` for full spec
+### Dashboard
 
-### 4.3 DAILY DASHBOARD
+| Element | Details |
+|---------|---------|
+| **Daily snapshot** | Habits completed, tasks completed, best streak |
+| **Absence cards** | Up to 3 recovery/lapse/hiatus cards for missed habits |
+| **Milestone celebrations** | Cards when a habit hits a streak milestone |
+| **Weekly insight card** | One behavioral insight per week on the configured week start day |
+| **Habit checklist** | All active habits with 1-click toggle |
+| **Tasks today** | Today's tasks + "Coming Up" tomorrow preview |
+| **Motivational message** | Priority-based, contextual encouragement with colored background |
+| **Time-based greeting** | Good Morning / Good Afternoon / Good Evening |
 
-**Layout:**
-- Sidebar navigation (collapsible, 224px expanded / 60px collapsed)
-- Card-on-gray layout with semantic design tokens
-- Greeting with time-based message
-- Motivational message (priority-based, styled with colored background)
+### Weekly Insights
 
-**Sections:**
-- Daily snapshot: habits completed, tasks completed, best streak
-- Absence cards (up to 3, for missed habits)
-- Milestone celebration cards (when a habit hits a milestone)
-- Weekly insight card (on configured week start day)
-- Habit checklist: all active habits with 1-click toggle
-- Tasks today: today's tasks + "Coming Up" tomorrow preview
+| Capability | Details |
+|-----------|---------|
+| **Insight types** | Streak proximity, best week, best habit, worst day, improvement trend, decline warning |
+| **Priority ranking** | Urgent (streak proximity) > celebration > correction > generic |
+| **Frequency** | One insight per week on the user's configured week start day |
+| **Dismissible** | Stores dismissal locally; shows only once per week |
 
-**Weekly Insight Card:**
-- Surfaces one behavioral insight per week on the configured week start day
-- Insight types: streak proximity, best week, best habit, worst day, improvement, decline
-- Priority-ranked: urgent (streak proximity) > celebration > correction > generic
-- Dismissible, stores dismissal in localStorage
+Based on behavioral self-awareness research — reflecting on patterns (not just data) helps users understand their behavior and make intentional adjustments.
 
-### 4.4 SETTINGS & PREFERENCES
-- Week start day (Monday vs Sunday)
-- Theme (Light/Dark/System)
-- Language (English, 中文, 繁體中文)
-- Data export (ZIP of habits + tasks)
+### Design System
 
-### 4.5 NAVIGATION & UI
+| Capability | Details |
+|-----------|---------|
+| **Navigation** | Collapsible sidebar with icon containers, teal hover/active states, user footer |
+| **Layout** | Card-on-gray pattern throughout |
+| **Design tokens** | 56 semantic CSS tokens for categories, priorities, status indicators |
+| **Dark mode** | Full support across all pages |
+| **Responsive** | Desktop-first with mobile web support |
 
-**Sidebar Navigation:**
-- Flat navigation: Dashboard, Habits, Tasks
-- Icon containers with teal hover/active states
-- Collapse/expand with state persistence
-- User footer with profile avatar and logout
-- Badge counts for habits and tasks
+### Internationalization
 
-**Design System:**
-- 56 semantic CSS design tokens (categories, priorities, status indicators)
-- Full light/dark mode support
-- Card grid spacing with `gap-card-gap` semantic token
-- Consistent spacing and padding throughout
+| Locale | Status |
+|--------|--------|
+| English (en) | Full coverage |
+| Simplified Chinese (zh) | Full coverage |
+| Traditional Chinese (zh-TW) | Full coverage |
 
-### 4.6 INTERNATIONALIZATION
-- English (en), Simplified Chinese (zh), Traditional Chinese (zh-TW)
-- All UI strings translated across 7 namespaces: common, home, dashboard, habits, auth, tasks, settings
-- Known limitation: `describeRecurrence()` returns English-only descriptions
+All UI strings translated across 7 namespaces. Known limitation: recurrence descriptions (e.g., "Every week on Mon, Wed, Fri") are English-only for now.
 
 ---
 
-## 5. TECHNOLOGY STACK
+## 6. Retention Mechanics
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 16 (App Router, React 19) |
-| Auth & DB | Supabase SSR (`@supabase/ssr`) |
-| UI | shadcn/ui + Radix UI (unified `radix-ui` package) + Tailwind CSS 3 |
-| Forms | react-hook-form + zod |
-| Data fetching | SWR (client), fetch (server) |
-| i18n | next-intl |
-| Theming | next-themes (class-based dark mode) |
-| Testing | Vitest + Testing Library + vitest-axe + Playwright |
-| Package manager | pnpm 10.11 |
-| Deployment | Vercel (frontend) + Supabase (backend/DB) |
-
----
-
-## 6. DATABASE SCHEMA
-
-### 6.1 Tables
-
-| Table | Purpose | Key Columns |
-|-------|---------|-------------|
-| `profiles` | User identity & preferences | `id`, `email`, `name`, `avatar_url`, `week_start_day`, `locale` |
-| `habits` | Habit definitions | `id`, `user_id`, `name`, `description`, `category`, `frequency` (JSONB), `status`, `best_streak`, `paused_at` |
-| `habit_logs` | Daily completion records | `id`, `habit_id`, `user_id`, `logged_date`, `completed` |
-| `habit_milestones` | Streak milestone achievements | `id`, `habit_id`, `user_id`, `milestone`, `achieved_at` |
-| `tasks` | One-off and recurring task instances | `id`, `user_id`, `title`, `description`, `intention`, `priority`, `category`, `due_date`, `due_time`, `is_completed`, `completion_difficulty`, `recurring_task_id`, `is_exception`, `original_date` |
-| `recurring_tasks` | Recurring task templates | `id`, `user_id`, `title`, `recurrence_rule` (JSONB), `start_date`, `end_type`, `status`, `next_generate_date`, `instances_generated` |
-
-All tables have RLS policies scoping data to `auth.uid()`.
-
-### 6.2 Frequency JSONB Schema
-
-```typescript
-type HabitFrequency =
-  | { type: 'daily' }
-  | { type: 'weekdays' }
-  | { type: 'weekly' }
-  | { type: 'times_per_week'; count: 2 | 3 }
-  | { type: 'custom'; days: DayOfWeek[] };
-```
-
-### 6.3 Recurrence Rule JSONB Schema
-
-```typescript
-interface RecurrenceRule {
-  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  interval: number;
-  days_of_week?: number[];
-  day_of_month?: number;
-  week_position?: 'first' | 'second' | 'third' | 'fourth' | 'last';
-  day_of_week_monthly?: number;
-  month_of_year?: number;
-}
-```
+| Hook | Feature | Behavioral Principle | Status |
+|------|---------|---------------------|--------|
+| Daily Ritual | Time-based greeting, progress comparison | Habit loop (Duhigg) | Shipped |
+| Quick Wins | 1-click habit completion, instant visual feedback | Dopamine loop, variable reward | Shipped |
+| Streak Loss Aversion | Large streak counter, 30-day heatmap | Loss aversion (Kahneman) | Shipped |
+| Milestone Celebrations | Cards at 7/14/30/50/100/200/365 days | Variable reward scheduling | Shipped |
+| Absence Recovery | 3-tier recovery cards ("never miss twice") | Implementation intention (Clear) | Shipped |
+| Completion Reflection | Post-task reflection for meaningful tasks | Selective metacognitive reflection | Shipped |
+| Weekly Insights | Behavioral pattern recognition | Self-awareness coaching | Shipped |
+| Task Horizon | Tomorrow preview, anxiety reduction | Zeigarnik effect | Shipped |
+| Intention Setting | "Why This Matters" prompt for tasks | Implementation intention (Gollwitzer) | Shipped |
 
 ---
 
-## 7. API ROUTES
+## 7. User Flows
 
-### 7.1 Habits
+### Flow 1: Onboarding (~5 minutes)
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/api/habits` | List habits (filter by status) |
-| POST | `/api/habits` | Create habit (20 max limit) |
-| GET | `/api/habits/[id]` | Get habit detail |
-| PUT | `/api/habits/[id]` | Update habit |
-| DELETE | `/api/habits/[id]` | Delete habit |
-| POST | `/api/habits/[id]/toggle` | Toggle completion for a date |
-| GET | `/api/habits/[id]/stats` | Streak, completion rates |
-| GET | `/api/habits/[id]/logs` | Completion log history |
+1. Sign up / Log in
+2. Set basic preferences (theme, language, week start day)
+3. Create first habit (e.g., "Meditate 10 min")
+4. Create first task (e.g., "Check email")
+5. See dashboard with habit + task
+6. Check off habit — see streak appear
+7. Mark task complete — see dashboard update
+8. Done! User has first-day momentum
 
-### 7.2 Tasks
+### Flow 2: Daily Usage (~2-3 minutes)
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/api/tasks` | List tasks (filter/sort) |
-| POST | `/api/tasks` | Create task |
-| GET | `/api/tasks/[id]` | Get task detail |
-| PUT | `/api/tasks/[id]` | Update task (supports `?scope=` for recurring) |
-| DELETE | `/api/tasks/[id]` | Delete task (supports `?scope=` for recurring) |
-| POST | `/api/tasks/[id]/toggle` | Toggle completion |
+1. Open app — see dashboard with greeting
+2. Check off completed habits (1-click each)
+3. Review and address any absence recovery cards
+4. Mark priority tasks done / adjust priorities
+5. (Optional) View streaks / weekly stats
+6. Come back tomorrow
 
-### 7.3 Recurring Tasks
+### Flow 3: Weekly Reflection (~5 minutes)
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/api/recurring-tasks` | List templates |
-| POST | `/api/recurring-tasks` | Create template + generate instances |
-| GET | `/api/recurring-tasks/[id]` | Get template |
-| PUT | `/api/recurring-tasks/[id]` | Update template (supports `?action=pause\|resume`) |
-| DELETE | `/api/recurring-tasks/[id]` | Delete template + future instances |
+1. See weekly insight card on configured week start day
+2. Review which habits are thriving vs struggling
+3. Adjust next week's focus (pause struggling habits, add new ones)
+4. Dismiss insight card
 
-### 7.4 Dashboard & Insights
+### Flow 4: Missed Day Recovery
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/api/dashboard` | Full dashboard data (habits, tasks, absence, milestones) |
-| GET | `/api/insights/weekly` | Weekly behavioral insights |
-| GET | `/api/sidebar/counts` | Badge counts for nav |
+1. Return after missing one or more days
+2. See absence card(s) on dashboard — tone adapts to how long you've been away
+3. **Recovery (1 day):** Complete habit to get back on track
+4. **Lapse (2-6 days):** Restart with encouragement, see previous streak as motivation
+5. **Hiatus (7+ days):** Choose to resume, pause, or change frequency — warm welcome, no guilt
 
-### 7.5 Profile & Settings
+### Flow 5: Recurring Task Management
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET/PUT | `/api/profile` | User profile |
-| GET/PUT | `/api/profile/preferences` | Theme, locale, week start day |
-| GET | `/api/export` | Data export (ZIP) |
-
-All endpoints require authentication. All data scoped via middleware + RLS.
-All POST/PATCH routes validate with Zod `.safeParse()`.
+1. Create a task with a recurrence pattern (daily, weekly, etc.)
+2. Instances appear automatically on the dashboard each day
+3. Complete today's instance — tomorrow's is already waiting
+4. Need to change one instance? Edit "this instance only"
+5. Need to change the schedule? Edit "this and following" or "all instances"
+6. Need to stop? Pause or delete with scope options
 
 ---
 
-## 8. FRONTEND ARCHITECTURE
+## 8. Milestones Shipped
 
-### 8.1 Pages
+| Milestone | Date | Highlights |
+|-----------|------|------------|
+| **V1.0 Codebase Hardening** | Feb 16, 2026 | 5 phases, 116 files changed, +13K lines. Fixed frequency accuracy, wired validation, added adaptive streak lookback, backfilled 71 tests. |
+| **V1.1 Dashboard Task Fixes** | Feb 17, 2026 | Fixed timezone-based task duplication. Dashboard completed tasks now included in counts. |
+| **V2.0 UI Style Redesign** | Feb 17, 2026 | 9 phases. Sidebar navigation, card-on-gray layouts, design token foundation. |
+| **V2.1 UI Polish & Refinement** | Feb 18, 2026 | 3 phases. 56 semantic design tokens, spacing standardization, sidebar refinement. |
+| **Vertical Depth Features** | Feb 18, 2026 | All 6 self-coaching features shipped: intention field, task horizon, absence recovery, streak milestones, completion reflection, weekly insights. |
+| **Recurring Tasks** | Feb 18, 2026 | Template + on-demand instance model. Full scope editing (this/following/all). 7 recurrence patterns, 3 end conditions. |
 
-| Route | Type | Purpose |
-|-------|------|---------|
-| `/` | Server | Landing page (hero, features) |
-| `/dashboard` | Server + Client | Daily dashboard (hero feature) |
-| `/habits` | Client | Habit list with filters |
-| `/habits/new` | Client | Create habit |
-| `/habits/[id]` | Client | Habit detail (streaks, heatmap, milestones) |
-| `/habits/[id]/edit` | Client | Edit habit |
-| `/tasks` | Client | Task list with filters |
-| `/tasks/new` | Client | Create task (with recurrence picker) |
-| `/tasks/[id]` | Client | Task detail |
-| `/tasks/[id]/edit` | Client | Edit task |
-| `/dashboard/settings` | Client | User preferences |
-| `/auth/*` | Client | Login, signup, password reset, etc. |
-
-### 8.2 Key Components
-
-**Dashboard:** `dashboard-content`, `daily-snapshot`, `habit-checklist`, `tasks-today`, `motivation-message`, `absence-card`, `weekly-insight-card`
-
-**Habits:** `habit-form`, `frequency-selector`, `habit-list`, `habit-card`, `habit-row`, `habit-detail-content`, `heatmap`, `streak-counter`, `milestone-card`, `next-milestone`
-
-**Tasks:** `task-form`, `recurrence-picker`, `task-list`, `task-card`, `task-detail-content`, `edit-scope-dialog`
-
-**Layout:** `sidebar-shell`, `app-sidebar`, `sidebar-layout`, `sidebar-user-footer`, `page-header`, `page-breadcrumbs`
+This represents significant velocity — 6 milestones in 3 days of development.
 
 ---
 
-## 9. TESTING
+## 9. Key Strategic Decisions
 
-- **Vitest:** 86 test files, 1084+ tests, 50% coverage threshold
-- **Playwright:** 11 E2E spec files
-- **Accessibility:** vitest-axe for component-level a11y testing
-- **Known pre-existing:** 2 failures in `habit-logs.test.ts` (issue #98)
-
----
-
-## 10. RETENTION MECHANICS (Shipped)
-
-| Hook | Feature | Status |
-|------|---------|--------|
-| Daily Ritual | Time-based greeting, progress comparison | Shipped |
-| Quick Wins | 1-click habit completion, instant visual feedback | Shipped |
-| Streak Loss Aversion | Large streak counter, 30-day heatmap | Shipped |
-| Milestone Celebrations | Celebration cards at 7/14/30/50/100/200/365 days | Shipped |
-| Absence Recovery | 3-tier recovery cards (never miss twice) | Shipped |
-| Completion Reflection | Post-task reflection for meaningful tasks | Shipped |
-| Weekly Insights | Behavioral pattern recognition, one insight per week | Shipped |
-| Task Horizon | Tomorrow preview, anxiety reduction | Shipped |
-| Intention Setting | "Why This Matters" for tasks | Shipped |
+| # | Decision | Rationale | Outcome |
+|---|----------|-----------|---------|
+| 1 | **Lean V1, iterate fast** | Retention is driven by daily ritual, not features. 52% drop-off happens regardless of feature count. | Good — shipped fast, iterated based on findings. |
+| 2 | **Retention-first, not feature-first** | Competitors fail because they optimize for feature count. We optimize for "Will this get users to open the app tomorrow?" | Good — 9 retention hooks shipped. |
+| 3 | **Defer mobile apps to V2+** | Web works on mobile browsers. Native apps don't unlock core value yet. | Good — avoided 2-3 months of mobile dev. |
+| 4 | **No leaderboards in V1** | Social comparison can feel toxic. Establish individual streaks first, layer social later with care. | Good — individual focus creates safety. |
+| 5 | **Defer AI to V3+** | V1-2 collect behavioral data. V3 uses that data for personalization. Premature personalization = poor recommendations. | Good — collecting data now. |
+| 6 | **7-day edit window for habit logs** | Balance between allowing mistake corrections and preventing streak gaming. Fix yesterday's forgotten log, but can't retroactively build fake streaks. | Good — no abuse reported. |
+| 7 | **Self-coaching over gamification** | Absence recovery, reflections, and insights build genuine self-awareness. Gamification (points, badges, levels) can feel hollow. | Good — differentiator vs competition. |
+| 8 | **Hybrid recurring task model** | No background jobs needed. Works with existing infrastructure. Individual instance editing supported. | Good — zero operational overhead. |
+| 9 | **Client-sent dates** | Server timezone (UTC on deployment platform) doesn't match user timezone. The client knows the correct local date. | Good — eliminated timezone bugs. |
+| 10 | **Selective completion reflection** | Only prompt reflection for high-priority or intentional tasks. Low-priority busywork checks off silently. Avoids nag fatigue. | Good — engagement without annoyance. |
 
 ---
 
-## 11. MILESTONES SHIPPED
+## 10. Quality and Reliability
 
-| Milestone | Date | Key Stats |
-|-----------|------|-----------|
-| v1.0 Codebase Hardening | 2026-02-16 | 5 phases, 11 plans, 116 files, +13K lines |
-| v1.1 Dashboard Task Fixes | 2026-02-17 | 1 phase, timezone/duplication fixes |
-| v2.0 UI Style Redesign | 2026-02-17 | 9 phases, sidebar nav, design tokens, card layouts |
-| v2.1 UI Polish & Refinement | 2026-02-18 | 3 phases, 56 tokens, spacing standardization |
-| Vertical Depth Features | 2026-02-18 | All 6 features (T1, T4, H1, H2, T3, H3) |
-| Recurring Tasks | 2026-02-18 | Template + on-demand model, scope editing |
-
----
-
-## 12. KEY DECISIONS
-
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Lean V1, iterate fast | Retention > features. Ship and measure. | Good |
-| Retention-first design | Competitors fail on feature count, not engagement | Good |
-| Raw HSL for CSS tokens | Matches shadcn/ui pattern, enables opacity modifiers | Good |
-| Flat sidebar nav | Cleaner UX with few items, Chameleon-matched | Good |
-| Adaptive streak lookback | Short streaks need ~30 days, long streaks need more | Good |
-| Hybrid recurring model | No cron, works with existing infra, individual editing | Good |
-| Frequency-aware absence | Only count scheduled days as missed | Good |
-| Selective reflection | Only P3 or intention tasks — avoid nag fatigue | Good |
-| Client-sent dates | Server-local time wrong on Vercel (UTC != user TZ) | Good |
-| 1-query absence calc | Bulk fetch + in-memory filter, no N+1 | Good |
+| Area | Details |
+|------|---------|
+| **Automated tests** | 1,084+ tests across unit, integration, and end-to-end layers |
+| **Input validation** | All user input validated at the boundary before it reaches the database |
+| **Accessibility** | WCAG 2.1 Level AA target. Keyboard navigation, screen reader support, color contrast compliance, automated accessibility testing in component tests |
+| **Error handling** | Consistent error responses, graceful degradation (e.g., one failing recurring task template doesn't block the dashboard) |
+| **Data safety** | Row-level security policies ensure users can only access their own data. No cross-user data leakage possible at the database level. |
+| **Internationalization** | All user-facing strings translated across 3 locales |
 
 ---
 
-## 13. EXPLICITLY OUT OF SCOPE
+## 11. Success Metrics
 
-These are consciously excluded from the current product:
-
-| Feature | Reason |
-|---------|--------|
-| Mobile app | Web-only, works on mobile browsers |
-| Offline support | Requires significant client-side storage work |
-| OAuth/social login | Email/password sufficient for now |
-| Health data integrations | Requires mobile apps (Apple Health, Google Fit) |
-| Leaderboards/comparison | Social comparison can be toxic; individual first |
-| AI suggestions | Need more data before personalization is valuable |
-| Native notifications | Not yet designed; revisit based on user feedback |
-| Real-time chat | Not core to habit tracking |
-| Video posts | Storage/bandwidth costs, not relevant |
-| Habit-task linking | Deferred — complexity without clear V1 value |
-| `describeRecurrence()` i18n | English-only acceptable for now; refactor deferred |
-
----
-
-## 14. ACCESSIBILITY
-
-**Target:** WCAG 2.1 Level AA
-
-| Requirement | Status |
-|-------------|--------|
-| Keyboard navigation | All interactive elements focusable |
-| Screen reader support | Semantic HTML, ARIA labels |
-| Color contrast | 4.5:1 text, 3:1 UI components |
-| Focus indicators | Visible focus rings |
-| Motion preferences | Respects `prefers-reduced-motion` |
-| Automated testing | vitest-axe in component tests |
-
----
-
-## 15. ERROR HANDLING
-
-- Consistent API error response format (`{ error: { code, message, details? } }`)
-- Zod `.safeParse()` at all API boundaries
-- Logger module (replaces `console.error/warn` in server code, Sentry-ready signature)
-- Dashboard `_warnings` array for non-critical issues
-- SWR error states propagated to UI
-- Graceful degradation for recurring task generation failures
-
----
-
-## 16. KNOWN ISSUES & TECH DEBT
-
-| Issue | Impact | Priority |
-|-------|--------|----------|
-| Vitest picks up `.worktrees/` test files | Spurious failures in dev | Low |
-| 2 pre-existing failures in `habit-logs.test.ts` | `times_per_week getDetailedHabitStats` | Low (issue #98) |
-| `describeRecurrence()` English-only | Non-English users see English recurrence descriptions | Medium |
-| `window.confirm()` used for destructive actions | Should use AlertDialog component | Low |
-| Dark mode card-on-gray depth | Needs design decision on dark surface hierarchy | Low |
-
----
-
-## 17. FUTURE ROADMAP
-
-### V2.5 — Next Milestone Candidates
-
-These features have the strongest case for building next:
-
-**Mood Check-ins** *(Full spec in Section 18)*
-- Quick emotional logging (<30 seconds)
-- Stress level (1-5) + body sensation tags + optional notes
-- Trends visualization, therapist PDF/CSV export
-- Crisis resources when stress = 5
-- No gamification (no streaks for mental health)
-
-**Habit Templates Library**
-- 50+ pre-built habits by category
-- "Start tracking" one-click setup
-- Community-submitted templates (V3+)
-
-**Notifications / Reminders**
-- In-app notification center
-- Habit reminders (configurable per habit)
-- Streak at-risk warnings
-- Needs design work — no spec exists yet
-
-**`describeRecurrence()` i18n**
-- Refactor to accept translation function
-- Support all 3 locales for recurrence descriptions
-
-### V3.0+ — Long-term Vision
-
-- Habit-Mood correlation ("On days you meditated, stress was 2.1 vs 3.8")
-- AI-powered habit suggestions
-- Habit-task linking
-- Daily score / Consistency index
-- Health data integrations (requires mobile)
-- Journal/reflection entries
-- Coaching integration
-
----
-
-## 18. MOOD CHECK-INS (Future Feature Specification)
-
-*(Carried forward from V1.2 Section 27 — full spec preserved below for when this feature is built.)*
-
-### 18.1 Overview
-
-**Purpose:** Quick capture of emotional states and physical sensations, creating a log that can be reviewed personally or shared with mental health professionals.
-
-**Design Principles:**
-- <30 second capture — stress level required, everything else optional
-- Pre-built body tags — faster than typing, consistent for analysis
-- No streaks — mental health should not be gamified
-- Compassionate tone — "It's okay to not be okay"
-- Private by default — data never leaves without explicit export
-
-### 18.2 Database Schema
-
-```sql
-CREATE TABLE mood_checkins (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  stress_level INTEGER NOT NULL CHECK (stress_level BETWEEN 1 AND 5),
-  note TEXT,
-  body_sensations TEXT[],
-  logged_at TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE body_sensations (
-  id TEXT PRIMARY KEY,
-  label_en TEXT NOT NULL,
-  label_zh TEXT NOT NULL,
-  label_zh_tw TEXT NOT NULL,
-  category TEXT,
-  sort_order INTEGER DEFAULT 0
-);
-```
-
-### 18.3 API Routes
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/api/mood-checkins` | Create check-in |
-| GET | `/api/mood-checkins` | List check-ins (date range, pagination) |
-| GET | `/api/mood-checkins/[id]` | Single check-in |
-| PATCH | `/api/mood-checkins/[id]` | Update check-in |
-| DELETE | `/api/mood-checkins/[id]` | Delete check-in |
-| GET | `/api/mood-checkins/stats` | Aggregate stats (stress distribution, patterns) |
-| POST | `/api/mood-checkins/export` | PDF/CSV therapist export |
-
-### 18.4 Frontend
-
-**Pages:** `/check-in` (quick form), `/check-ins` (list), `/check-ins/insights` (trends)
-
-**Components:** `MoodCheckinForm`, `StressLevelSelector`, `BodySensationTags`, `MoodCheckinCard`, `MoodCheckinList`, `MoodTrendsChart`, `TherapistExportDialog`
-
-**Dashboard:** Optional "Quick Check-in" button (not prominently featured)
-
-### 18.5 Safety
-
-- Crisis resources displayed when stress = 5 (988 Suicide Prevention, Crisis Text Line)
-- No gamification, no "you haven't checked in" prompts
-- Clear disclaimer: "Not a substitute for professional care"
-- Data encrypted at rest, strict RLS policies
-
-### 18.6 Success Metrics
+### Engagement
 
 | Metric | Target |
 |--------|--------|
-| Check-ins per user per week | 2-5 |
-| Export usage | 10% of check-in users |
-| Feature retention after 2 weeks | 40% |
+| DAU (Daily Active Users) | 50% of signups |
+| Day 1 retention | 90% |
+| Day 3 retention | 60% |
+| Day 7 retention | 45% |
+| Day 30 retention | 25% (industry avg ~15%) |
+| Session duration | 2-3 minutes average |
+| Sessions per day | 1-2 (morning check, evening review) |
+
+### Habit Health
+
+| Metric | Target |
+|--------|--------|
+| Habits per user | 4-7 average |
+| Habit completion rate | 70%+ on active habits |
+| Average streak length | 20+ days |
+| Habit abandonment rate | <20% of created habits paused/deleted |
+
+### Task Health
+
+| Metric | Target |
+|--------|--------|
+| Tasks per user per day | 3-5 |
+| Task completion rate | 75%+ |
+| Recurring task adoption | 30%+ of active users create at least 1 recurring task within 2 weeks |
+
+### Product Health
+
+| Metric | Target |
+|--------|--------|
+| Error-free sessions | >99% |
+| Page load time | <2 seconds |
+| Error rate | <0.1% |
+| Accessibility score | 90+ (Lighthouse) |
+
+### A/B Testing Candidates
+
+- Impact of streak counter on retention
+- Impact of daily comparison (vs yesterday) on retention
+- Impact of celebration messages on retention
+- Impact of 30-day heatmap visualization on retention
+- Impact of absence recovery cards on Day 30 retention
+- Impact of weekly insights on weekly active users
 
 ---
 
-## 19. RELATED DOCUMENTS
+## 12. Risk Mitigation
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| **30-day drop-off** | High | High | 9 retention hooks shipped. A/B test onboarding flow. Early user interviews. Monitor Day 3/7/30 cohorts. |
+| **Feature bloat** | Medium | High | Strict scope discipline — defer to feature PRDs. CEO approves roadmap items. |
+| **No monetization model** | High | Medium | Product-market fit first. Monetization is a V3+ concern. See Open Questions (Section 15). |
+| **Mobile gap** | Medium | Medium | Responsive web works on mobile browsers. Native apps deferred to V2+ (see Open Questions). |
+| **Competitor response** | Low | Medium | Self-coaching features are hard to copy. Multilingual support gives APAC advantage. |
+| **Privacy concerns** | Low | High | Row-level security, data export, transparent privacy policy. Mood data (future) will be extra-sensitive. |
+| **User burnout / notification fatigue** | Medium | Medium | No notifications yet. When added, must be opt-in and configurable per habit. |
+
+---
+
+## 13. Go-to-Market
+
+### Pre-Launch
+
+- Beta testing with 50-100 early users
+- Gather retention data at Day 3, 7, 14, 30
+- Iterate based on feedback
+- Prepare marketing materials (Product Hunt, Reddit, content)
+
+### Launch Channels
+
+- Product Hunt submission
+- Social media campaign
+- Reddit posts (r/productivity, r/getdisciplined, r/selfimprovement)
+- Email outreach to habit tracking communities
+- APAC-specific outreach leveraging multilingual support
+
+### Partner Outreach
+
+- Coaches and wellness professionals
+- Therapists (especially if Mood Check-ins ship)
+- Corporate wellness programs
+
+> **CEO Direction Needed:** Launch timeline, marketing budget, and channel priorities. See Open Questions (Section 15).
+
+---
+
+## 14. Product Roadmap
+
+### V2.5 — Next Milestone Candidates
+
+These are options, not commitments. CEO should prioritize based on business goals.
+
+| Feature | Effort | Value | Primary Persona | Notes |
+|---------|--------|-------|-----------------|-------|
+| **Mood Check-ins** | High | High | Self-Awareness Seeker | Full spec in Appendix A. Quick emotional logging, therapist export, crisis resources. |
+| **Habit Templates Library** | Medium | Medium | Consistency Builder | 50+ pre-built habits by category. "Start tracking" one-click setup. |
+| **Notifications / Reminders** | Medium | High | All | In-app notification center, habit reminders, streak-at-risk warnings. No spec exists yet — needs design work. |
+| **Recurrence description i18n** | Low | Medium | All (non-English) | Recurrence descriptions currently English-only. Refactor needed. |
+
+### V3.0 — Medium-term (Month 2-3)
+
+- Habit-mood correlation ("On days you meditated, stress was 2.1 vs 3.8")
+- AI-powered habit suggestions (using collected behavioral data)
+- Daily score / Consistency index
+- Habit-task linking
+- Advanced analytics dashboard
+- Journal / reflection entries
+
+### V4.0+ — Vision
+
+- Native iOS + Android apps
+- Health data integrations (Apple Health, Google Fit)
+- Wearable integration (Oura Ring, Apple Watch)
+- Anonymous leaderboards ("Better than 73% of users")
+- Coaching integration (connect with real coaches/therapists)
+- Goals system (connect habits to larger life outcomes)
+- AI trigger identification (ML-based pattern detection in mood notes)
+
+---
+
+## 15. Open Questions for CEO
+
+These are strategic decisions that require executive direction. The product team cannot make these calls alone.
+
+| # | Question | Context |
+|---|----------|---------|
+| 1 | **What is our monetization model?** | Free forever? Freemium? Subscription? Which features go behind a paywall? |
+| 2 | **When do we launch publicly?** | Product is functional. What's the launch timeline and marketing budget? |
+| 3 | **Do we build native mobile apps for V3?** | Web works on mobile browsers today. Native apps are 2-3 months of work but unlock push notifications and health integrations. |
+| 4 | **Should we pursue Mood Check-ins for V2.5?** | Full spec ready (Appendix A). High value for differentiation but sensitive (mental health data, privacy, crisis handling). |
+| 5 | **What's our position on AI features?** | We're collecting behavioral data. When do we invest in AI-powered suggestions? What's the privacy stance? |
+| 6 | **Should we pursue social features?** | Leaderboards, shared habits, accountability partners. High engagement potential but risk of toxic comparison. |
+| 7 | **What's our target market — English-first or APAC-first?** | Multilingual support gives us an advantage in APAC. Should we lean into it for launch? |
+| 8 | **Do we want coaching/therapist partnerships?** | Mood Check-ins + therapist export creates a bridge to professional care. Is this a strategic direction? |
+| 9 | **What's the acceptable user data retention policy?** | How long do we keep user data? What's our privacy policy stance? GDPR compliance needed for EU launch? |
+| 10 | **What's the team growth plan?** | Currently AI-assisted solo development. When do we hire? What roles first — design, mobile, marketing? |
+
+---
+
+## 16. Out of Scope
+
+These are consciously excluded from the current product.
+
+| Feature | Rationale |
+|---------|-----------|
+| Mobile app | Web-only; responsive design works on mobile browsers |
+| Offline support | Requires significant client-side storage work; revisit based on demand |
+| OAuth / social login | Email/password sufficient for now |
+| Health data integrations | Requires native mobile apps (Apple Health, Google Fit) |
+| Leaderboards / comparison | Social comparison can be toxic; establish individual habits first |
+| AI suggestions | Need more behavioral data before personalization is valuable |
+| Native notifications | Not yet designed; must be opt-in and configurable when added |
+| Workout tracking | Not core to habit tracking; better served by specialized apps |
+| Real-time chat | Not relevant to self-improvement tracking |
+| Habit-task linking | Deferred — complexity without clear current value |
+
+---
+
+## 17. Related Documents
 
 | Document | Purpose |
 |----------|---------|
-| `BETTERR_ME_PRD_V1.md` | Original V1 PRD (historical) |
-| `BETTERR_ME_PRD_V1.2.md` | V1 era master PRD with mood check-ins spec (historical) |
-| `FEATURE_VERTICAL_DEPTH_STRATEGY.md` | Feature PRD: 6 vertical depth features (all shipped) |
-| `FEATURE_RECURRING_TASKS.md` | Feature PRD: recurring tasks (shipped) |
+| `FEATURE_VERTICAL_DEPTH_STRATEGY.md` | Feature PRD: 6 self-coaching features (all shipped) — intention field, task horizon, absence recovery, streak milestones, completion reflection, weekly insights |
+| `FEATURE_RECURRING_TASKS.md` | Feature PRD: recurring tasks (shipped) — recurrence patterns, scope editing, generation model |
 | `ENGINEERING_PLAN_V1.md` | V1 engineering plan (historical) |
 | `ENGINEERING_PLAN_V2.md` | UI design engineering plan (historical) |
 | `ENGINEERING_PLAN_V3.md` | Vertical depth engineering plan |
 | `UI_DESIGN_V1.md` | UI design spec V1 (historical) |
 | `UI_DESIGN_V2.md` | UI design spec V2 (historical) |
 
+For engineering details (database schemas, API specifications, component architecture), see the individual `FEATURE_*.md` and `ENGINEERING_PLAN_*.md` documents.
+
 ---
 
-**Document Version:** 2.0
+## Appendix A: Mood Check-ins Specification
+
+> **Status:** Not yet built. Included here as a product specification for CEO review and prioritization.
+
+### Overview
+
+Quick capture of emotional states and physical sensations, creating a log that can be reviewed personally or shared with mental health professionals. Designed for real-time emotional capture — when you're feeling anxious with a tight chest, you want to log it in under 30 seconds, not write a journal entry.
+
+**Target Persona:** The Self-Awareness Seeker (Persona 4)
+
+### Product Logic
+
+**Quick Check-in Flow:**
+
+```
+How are you feeling right now?
+
+Stress Level:  [1]  [2]  [3]  [4]  [5]
+               Calm              Overwhelmed
+
+What's going on? (optional text)
+
+Body sensations (tap to select):
+[Tight chest] [Racing heart] [Tense shoulders]
+[Headache] [Fatigue] [Restless] [Nausea]
+[Shortness of breath] [+ Add custom]
+
+                [Save Check-in]
+```
+
+**Design Principles:**
+- Under 30 seconds to capture — stress level is required, everything else optional
+- Pre-built body sensation tags — faster than typing, consistent for pattern analysis
+- No streaks — mental health should not be gamified
+- Compassionate tone — "It's okay to not be okay"
+- Private by default — data never leaves without explicit user action
+
+### Wireframes
+
+**Dashboard Integration:** Optional "Quick Check-in" button — accessible via navigation, not prominently featured (avoid over-prompting about emotions).
+
+**Check-in Pages:**
+- Quick check-in form (optimized for speed)
+- History list with date filters
+- Trends and patterns visualization (stress over time, common sensations)
+
+### Therapist Export
+
+PDF/CSV report formatted for clinical review:
+- Summary: total check-ins, average stress, highest stress day, most common sensation
+- Stress distribution chart
+- Detailed chronological log with notes and body sensations
+- Observed patterns (peak stress times, day-of-week trends, recurring themes)
+- Clear disclaimer: "For informational purposes — review with a qualified mental health professional"
+
+### Safety
+
+| Concern | Mitigation |
+|---------|-----------|
+| Crisis situations | If stress level = 5, display crisis resources (988 Suicide Prevention, Crisis Text Line, international resources) before saving |
+| Over-tracking | No streaks, no gamification, no "you haven't checked in" prompts |
+| Negative reinforcement | Compassionate copy: "Thank you for checking in with yourself" |
+| Professional boundary | Clear disclaimer: "This is not a substitute for professional care" |
+| Sensitive data | Data encrypted at rest, strict access controls, no analytics on mood content |
+| Accidental sharing | Export requires explicit action + confirmation dialog |
+
+### Success Metrics
+
+| Metric | Target |
+|--------|--------|
+| Check-ins per user per week | 2-5 (not too many, not too few) |
+| Export usage | 10% of check-in users export at least once |
+| Feature retention after 2 weeks | 40% of users who try it continue |
+| Crisis resource views | Track for safety awareness (no numeric target) |
+
+### Future Enhancements (V3+)
+
+- Habit-mood correlation: "On days you meditated, average stress was 2.1 vs 3.8"
+- Trigger identification via pattern detection in notes
+- Therapist portal with direct secure sharing
+- Guided check-ins: optional prompts like "What triggered this feeling?"
+- Voice notes for when typing is too much
+
+---
+
+## Appendix B: Glossary
+
+| Term | Definition |
+|------|------------|
+| **Streak** | Consecutive scheduled completions of a habit. Counts only days when the habit is scheduled, not calendar days. |
+| **Scheduled day** | A day when a habit is due based on its frequency setting (e.g., weekdays-only habits aren't scheduled on weekends). |
+| **Completion rate** | Percentage of scheduled days where a habit was completed, over a given time period. |
+| **Heatmap** | 30-day calendar visualization showing habit completion patterns (green = done, gray = missed). |
+| **Milestone** | A streak threshold (7, 14, 30, 50, 100, 200, 365 days) that triggers a celebration. |
+| **Absence recovery** | 3-tier system that shows compassionate messages when a user returns after missing habit days. |
+| **Intention** | An optional "Why does this matter?" field on tasks, shown to increase follow-through. |
+| **Completion reflection** | Brief inline feedback (Easy/Good/Hard) shown after completing a meaningful task. |
+| **Task horizon** | Dashboard section showing tomorrow's tasks, reducing anxiety about what's coming next. |
+| **Weekly insight** | One behavioral observation surfaced per week (e.g., "Your best day was Thursday"). |
+| **Recurring task** | A task that automatically regenerates on a schedule (daily, weekly, monthly, etc.). |
+| **Template** | The recurring task definition that generates individual task instances. |
+| **Instance** | A single occurrence of a recurring task, generated from a template. |
+| **Scope editing** | Editing a recurring task instance with options: "this only," "this and following," or "all instances." |
+| **Design token** | A named, semantic CSS variable (e.g., "category-health") that ensures consistent styling across the app. |
+
+---
+
+**Document Version:** 2.0 (Consolidated Master PRD)
 **Last Updated:** February 18, 2026
 **Status:** Living Document — updated as features ship
