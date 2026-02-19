@@ -1,0 +1,114 @@
+# Requirements: BetterR.Me v3.0 Projects & Kanban
+
+**Defined:** 2026-02-18
+**Core Value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
+
+## v3.0 Requirements
+
+Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
+
+### Data Foundation
+
+- [ ] **DATA-01**: User's existing tasks receive `section=personal` and `status` derived from `is_completed` via migration
+- [ ] **DATA-02**: Task `status` field supports backlog, todo, in_progress, and done values
+- [ ] **DATA-03**: `is_completed` is derived from `status=done` — setting status to done marks task complete (with `completed_at`), moving away from done clears completion
+- [ ] **DATA-04**: Dashboard, recurring tasks, and all existing task features continue to work unchanged after migration
+
+### Projects
+
+- [ ] **PROJ-01**: User can create a project with a name, section (Work/Personal), and preset color
+- [ ] **PROJ-02**: User can edit a project's name, color, and section
+- [ ] **PROJ-03**: User can archive a project (hidden by default, available via filter)
+- [ ] **PROJ-04**: User can delete a project (tasks become standalone within the same section)
+- [ ] **PROJ-05**: User can see project progress (X of Y tasks done) on the tasks page project card
+
+### Task Form
+
+- [ ] **FORM-01**: User can select a section (Work/Personal) when creating or editing a task (required, defaults to Personal)
+- [ ] **FORM-02**: User can optionally assign a task to a project (dropdown filtered by selected section)
+
+### Tasks Page
+
+- [ ] **PAGE-01**: Tasks page shows Work and Personal as top-level sections
+- [ ] **PAGE-02**: Each section displays project cards and a standalone tasks area
+- [ ] **PAGE-03**: Clicking a project card opens the kanban board view for that project
+
+### Kanban Board
+
+- [ ] **KANB-01**: User can view a project's tasks in a 4-column kanban board (Backlog, To Do, In Progress, Done)
+- [ ] **KANB-02**: User can drag and drop tasks between kanban columns to change status
+- [ ] **KANB-03**: User can drag and drop tasks within a column to reorder them
+- [ ] **KANB-04**: Dragging a task to Done triggers completion reflection (emoji strip for high-priority/intentional tasks)
+- [ ] **KANB-05**: Kanban cards display the task's intention ("Your Why") when present
+
+### Internationalization
+
+- [ ] **I18N-01**: All new UI strings are translated in en, zh, and zh-TW
+
+## Future Requirements
+
+Deferred to future milestones. Tracked but not in current roadmap.
+
+### Kanban Polish
+
+- **KANB-06**: Kanban board is fully keyboard-navigable with ARIA labels in all 3 locales
+- **KANB-07**: Touch-optimized drag-and-drop for mobile devices
+
+### Project Enhancements
+
+- **PROJ-06**: User can drag and drop to reorder projects within a section
+- **PROJ-07**: User can view archived projects and restore them
+
+## Out of Scope
+
+Explicitly excluded. Documented to prevent scope creep.
+
+| Feature | Reason |
+|---------|--------|
+| Custom kanban columns / user-defined statuses | Fixed 4-column model matches personal use; custom columns are team-oriented complexity |
+| WIP (Work-in-Progress) limits | Team feature; solo users know their own capacity |
+| Sub-projects / nested hierarchy | Flat projects within sections is sufficient for personal use |
+| Multiple board views (list, calendar, timeline) | Kanban-only for projects; existing task list handles flat view |
+| Subtasks / checklists on task cards | Keep tasks flat; use description for notes |
+| Automations / rules | Power-user feature requiring rule engine; way out of scope |
+| Time tracking | Separate product domain; not aligned with self-improvement focus |
+| Card cover images / attachments | Visual noise for personal task management |
+| Swimlanes | Overkill for personal kanban with <50 tasks per project |
+| Collaborative features (assignees, comments, sharing) | BetterR.Me is single-user |
+| Project drag-to-reorder | Lower priority than kanban DnD; manual sort via settings sufficient |
+
+## Traceability
+
+Which phases cover which requirements. Updated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| DATA-01 | — | Pending |
+| DATA-02 | — | Pending |
+| DATA-03 | — | Pending |
+| DATA-04 | — | Pending |
+| PROJ-01 | — | Pending |
+| PROJ-02 | — | Pending |
+| PROJ-03 | — | Pending |
+| PROJ-04 | — | Pending |
+| PROJ-05 | — | Pending |
+| FORM-01 | — | Pending |
+| FORM-02 | — | Pending |
+| PAGE-01 | — | Pending |
+| PAGE-02 | — | Pending |
+| PAGE-03 | — | Pending |
+| KANB-01 | — | Pending |
+| KANB-02 | — | Pending |
+| KANB-03 | — | Pending |
+| KANB-04 | — | Pending |
+| KANB-05 | — | Pending |
+| I18N-01 | — | Pending |
+
+**Coverage:**
+- v3.0 requirements: 20 total
+- Mapped to phases: 0
+- Unmapped: 20
+
+---
+*Requirements defined: 2026-02-18*
+*Last updated: 2026-02-18 after initial definition*
