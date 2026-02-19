@@ -453,9 +453,8 @@ interface Task {
 
 | PRD | Relationship |
 |-----|-------------|
-| V1.0 (BETTERR_ME_PRD_V1) | Recurring tasks was listed as "deferred to V1.5" in section 4.2 |
-| V1.2 (BETTERR_ME_PRD_V1.2) | Confirmed deferral in section 5 ("V1.0 Explicitly Out of Scope") |
-| V2 (PRD_V2_VERTICAL_DEPTH_STRATEGY) | Recurring tasks builds on Task Deep Features (intention, reflection, horizon) — all V2 features work on recurring instances automatically |
+| Master PRD V2.0 (BETTERR_ME_PRD_V2) | Recurring tasks listed as shipped feature in Section 5; original V1 PRDs deferred it to V1.5 |
+| Vertical Depth (FEATURE_VERTICAL_DEPTH_STRATEGY) | Recurring tasks builds on Task Deep Features (intention, reflection, horizon) — all V2 features work on recurring instances automatically |
 
 ---
 
