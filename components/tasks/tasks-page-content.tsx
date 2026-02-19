@@ -77,6 +77,7 @@ export function TasksPageContent() {
       if (!res.ok) throw new Error("Failed");
       mutatePaused();
       mutate(); // refresh tasks list — resumed template may generate new instances
+      revalidateSidebarCounts();
       toast.success(t("paused.resumeSuccess"));
     } catch (err) {
       console.error("Failed to resume recurring task:", templateId, err);

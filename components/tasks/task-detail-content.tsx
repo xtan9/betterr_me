@@ -163,6 +163,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
           method: "DELETE",
         });
         if (!response.ok) throw new Error("Failed to delete");
+        revalidateSidebarCounts();
         toast.success(t("delete.success"));
         router.push("/tasks");
       } catch {
@@ -180,6 +181,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to delete");
+      revalidateSidebarCounts();
       toast.success(t("delete.success"));
       router.push("/tasks");
     } catch {

@@ -21,6 +21,10 @@ vi.mock('swr', () => ({
   }),
 }));
 
+vi.mock('@/lib/hooks/use-sidebar-counts', () => ({
+  revalidateSidebarCounts: vi.fn(),
+}));
+
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 

@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/layouts/page-header";
 import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import { HabitForm } from "@/components/habits/habit-form";
+import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import type { HabitFormValues } from "@/lib/validations/habit";
 
 export function CreateHabitContent() {
@@ -37,6 +38,7 @@ export function CreateHabitContent() {
       // Revalidate caches so dashboard and habits list show the new habit
       mutate("/api/dashboard");
       mutate("/api/habits?with_today=true");
+      revalidateSidebarCounts();
 
       toast.success(t("toast.createSuccess"));
       router.push("/habits");

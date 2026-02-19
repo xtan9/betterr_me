@@ -263,6 +263,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       });
       if (!response.ok) throw new Error("Failed to update");
       mutateHabit();
+      revalidateSidebarCounts();
       toast.success(
         isPausing ? t("toast.pauseSuccess") : t("toast.resumeSuccess"),
       );
@@ -280,6 +281,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to archive");
+      revalidateSidebarCounts();
       toast.success(t("toast.archiveSuccess"));
       router.push("/habits");
     } catch (err) {
@@ -296,6 +298,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to delete");
+      revalidateSidebarCounts();
       toast.success(t("toast.deleteSuccess"));
       router.push("/habits");
     } catch (err) {
