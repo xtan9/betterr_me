@@ -55,7 +55,19 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ### Active
 
-(No active milestone — planning next)
+## Current Milestone: v3.0 Projects & Kanban
+
+**Goal:** Transform the flat task list into a structured project-based system with Work/Personal sections, project containers, and 4-column kanban boards.
+
+**Target features:**
+- Work/Personal section separation (structural, replaces category-based distinction)
+- Projects as named containers within sections (name, color preset, status)
+- 4-column kanban boards per project (Backlog → To Do → In Progress → Done)
+- New task `status` field (backlog/todo/in_progress/done), `is_completed` derived from status=done
+- Drag-and-drop between kanban columns, triggers completion reflection on Done
+- Tasks page redesign: section-based layout with project cards + standalone tasks
+- Task form: Section selector (required), Project selector (optional)
+- Migration: existing tasks → section=personal, status derived from is_completed
 
 ### Out of Scope
 
@@ -102,4 +114,4 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | Sidebar width 224px with 60px collapsed rail | Matched Chameleon reference measurements | ✓ Good — pixel-matched design reference |
 
 ---
-*Last updated: 2026-02-18 after v2.1 milestone shipped*
+*Last updated: 2026-02-18 after v3.0 milestone started*

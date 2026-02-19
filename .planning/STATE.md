@@ -5,15 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Planning next milestone
+**Current focus:** v3.0 Projects & Kanban
 
 ## Current Position
 
-Phase: None (between milestones)
-Status: v2.1 shipped
-Last activity: 2026-02-18 — Completed v2.1 UI Polish & Refinement milestone
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-18 — Milestone v3.0 started
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [..........] 0% v3.0
 
 ## Performance Metrics
 
@@ -47,5 +48,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: v2.1 milestone archived and tagged
-Resume: Ready for next milestone planning via /gsd:new-milestone
+Stopped at: Milestone v3.0 started, defining requirements
+Resume: Continue requirements definition and roadmap creation
