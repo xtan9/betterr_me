@@ -533,7 +533,12 @@
     },
     "page": {
       "title": "我的任务",
-      "createButton": "创建任务"
+      "createButton": "创建任务",
+      "createProject": "创建项目"
+    },
+    "sections": {
+      "personal": "个人",
+      "work": "工作"
     },
     "list": {
       "searchPlaceholder": "搜索任务...",
@@ -735,6 +740,9 @@
     "more": "更多",
     "openBoard": "打开看板",
     "noTasks": "暂无任务",
+    "menuEdit": "编辑",
+    "menuArchive": "归档",
+    "menuDelete": "删除",
     "sections": {
       "personal": "个人",
       "work": "工作"
@@ -757,7 +765,8 @@
       "title": "已归档项目",
       "empty": "没有已归档的项目",
       "restore": "恢复",
-      "restoreSuccess": "项目已恢复"
+      "restoreSuccess": "项目已恢复",
+      "backToTasks": "返回任务"
     }
   }
 }

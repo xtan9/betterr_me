@@ -533,7 +533,12 @@
     },
     "page": {
       "title": "My Tasks",
-      "createButton": "Create Task"
+      "createButton": "Create Task",
+      "createProject": "Create Project"
+    },
+    "sections": {
+      "personal": "Personal",
+      "work": "Work"
     },
     "list": {
       "searchPlaceholder": "Search tasks...",
@@ -735,6 +740,9 @@
     "more": "more",
     "openBoard": "Open Board",
     "noTasks": "No tasks yet",
+    "menuEdit": "Edit",
+    "menuArchive": "Archive",
+    "menuDelete": "Delete",
     "sections": {
       "personal": "Personal",
       "work": "Work"
@@ -757,7 +765,8 @@
       "title": "Archived Projects",
       "empty": "No archived projects",
       "restore": "Restore",
-      "restoreSuccess": "Project restored"
+      "restoreSuccess": "Project restored",
+      "backToTasks": "Back to Tasks"
     }
   }
 }

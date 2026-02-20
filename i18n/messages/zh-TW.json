@@ -533,7 +533,12 @@
     },
     "page": {
       "title": "我的任務",
-      "createButton": "建立任務"
+      "createButton": "建立任務",
+      "createProject": "建立專案"
+    },
+    "sections": {
+      "personal": "個人",
+      "work": "工作"
     },
     "list": {
       "searchPlaceholder": "搜尋任務...",
@@ -735,6 +740,9 @@
     "more": "更多",
     "openBoard": "開啟看板",
     "noTasks": "暫無任務",
+    "menuEdit": "編輯",
+    "menuArchive": "封存",
+    "menuDelete": "刪除",
     "sections": {
       "personal": "個人",
       "work": "工作"
@@ -757,7 +765,8 @@
       "title": "已封存專案",
       "empty": "沒有已封存的專案",
       "restore": "還原",
-      "restoreSuccess": "專案已還原"
+      "restoreSuccess": "專案已還原",
+      "backToTasks": "返回任務"
     }
   }
 }
