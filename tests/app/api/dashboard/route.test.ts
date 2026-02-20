@@ -102,6 +102,8 @@ describe('GET /api/dashboard', () => {
     expect(data.habits[0]).toHaveProperty('previous_streak');
     expect(typeof data.habits[0].missed_scheduled_periods).toBe('number');
     expect(typeof data.habits[0].previous_streak).toBe('number');
+    expect(data.habits[0]).toHaveProperty('absence_unit');
+    expect(data.habits[0].absence_unit).toBe('days'); // daily frequency → days
   });
 
   it('should compute absence data from bulk logs', async () => {
