@@ -24,8 +24,8 @@ Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
 
 ### Task Form
 
-- [ ] **FORM-01**: User can select a section (Work/Personal) when creating or editing a task (required, defaults to Personal)
-- [ ] **FORM-02**: User can optionally assign a task to a project (dropdown filtered by selected section)
+- [x] **FORM-01**: User can select a section (Work/Personal) when creating or editing a task (required, defaults to Personal)
+- [x] **FORM-02**: User can optionally assign a task to a project (dropdown filtered by selected section)
 
 ### Tasks Page
 
@@ -92,8 +92,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROJ-03 | Phase 14 | Complete |
 | PROJ-04 | Phase 14 | Complete |
 | PROJ-05 | Phase 14 | Pending |
-| FORM-01 | Phase 14 | Pending |
-| FORM-02 | Phase 14 | Pending |
+| FORM-01 | Phase 14 | Complete |
+| FORM-02 | Phase 14 | Complete |
 | PAGE-01 | Phase 14 | Pending |
 | PAGE-02 | Phase 14 | Pending |
 | PAGE-03 | Phase 15 | Pending |
