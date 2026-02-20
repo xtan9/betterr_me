@@ -39,7 +39,7 @@ export type ProfileUpdate = Partial<
 export type TaskCategory = "work" | "personal" | "shopping" | "other";
 
 export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
-export type TaskSection = string; // 'personal' for Phase 13, extensible in Phase 14
+export type TaskSection = 'personal' | 'work';
 
 export interface Task {
   id: string; // UUID
@@ -57,6 +57,7 @@ export interface Task {
   status: TaskStatus;
   section: TaskSection;
   sort_order: number;
+  project_id: string | null; // UUID, link to projects table
   recurring_task_id: string | null; // UUID, link to recurring_tasks template
   is_exception: boolean; // true if this instance was individually modified
   original_date: string | null; // DATE (YYYY-MM-DD), the scheduled date from recurrence rule
@@ -64,11 +65,12 @@ export interface Task {
   updated_at: string;
 }
 
-export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'intention' | 'completion_difficulty' | 'recurring_task_id' | 'is_exception' | 'original_date' | 'status' | 'section' | 'sort_order'> & {
+export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'intention' | 'completion_difficulty' | 'project_id' | 'recurring_task_id' | 'is_exception' | 'original_date' | 'status' | 'section' | 'sort_order'> & {
   id?: string;
   category?: TaskCategory | null;
   intention?: string | null;
   completion_difficulty?: 1 | 2 | 3 | null;
+  project_id?: string | null;
   recurring_task_id?: string | null;
   is_exception?: boolean;
   original_date?: string | null;
@@ -81,6 +83,32 @@ export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'comple
 export type TaskUpdate = Partial<
   Omit<Task, "id" | "user_id" | "created_at" | "updated_at">
 >;
+
+// =============================================================================
+// PROJECTS
+// =============================================================================
+
+export type ProjectSection = 'personal' | 'work';
+export type ProjectStatus = 'active' | 'archived';
+
+export interface Project {
+  id: string; // UUID
+  user_id: string; // UUID
+  name: string;
+  section: ProjectSection;
+  color: string;
+  status: ProjectStatus;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProjectInsert = Omit<Project, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+  sort_order?: number;
+};
+
+export type ProjectUpdate = Partial<Pick<Project, 'name' | 'section' | 'color' | 'status' | 'sort_order'>>;
 
 // =============================================================================
 // RECURRING TASKS
@@ -185,6 +213,7 @@ export interface TaskFilters {
   due_date?: string; // YYYY-MM-DD
   has_due_date?: boolean;
   status?: TaskStatus;
+  project_id?: string | null;
 }
 
 // =============================================================================
