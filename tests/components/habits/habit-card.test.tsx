@@ -14,6 +14,7 @@ vi.mock('next-intl', () => ({
         'card.currentStreak': 'Current',
         'card.bestStreak': 'Best',
         'card.streakDays': `${params?.count ?? 0} days`,
+        'card.streakWeeks': `${params?.count ?? 0} weeks`,
         'card.thisMonth': `${params?.percent ?? 0}% this month`,
         'card.completedToday': 'Completed today',
         // Category translations
@@ -110,6 +111,18 @@ describe('HabitCard', () => {
       render(<HabitCard habit={lowStreak} onToggle={mockOnToggle} onClick={mockOnClick} />);
       expect(screen.queryByTestId('icon-flame')).not.toBeInTheDocument();
     });
+
+    it('displays streak in weeks for weekly frequency habits', () => {
+      const weeklyHabit: HabitWithTodayStatus = {
+        ...baseHabit,
+        frequency: { type: 'weekly' },
+        current_streak: 4,
+        best_streak: 8,
+      };
+      render(<HabitCard habit={weeklyHabit} onToggle={mockOnToggle} onClick={mockOnClick} />);
+      expect(screen.getByText('4 weeks')).toBeInTheDocument();
+      expect(screen.getByText('8 weeks')).toBeInTheDocument();
+    });
   });
 
   describe('interactions', () => {
@@ -172,6 +185,16 @@ describe('HabitRow', () => {
     it('renders checkbox', () => {
       render(<HabitRow habit={baseHabit} onToggle={mockOnToggle} onClick={mockOnClick} />);
       expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    });
+
+    it('displays streak in weeks for times_per_week frequency in HabitRow', () => {
+      const tpwHabit: HabitWithTodayStatus = {
+        ...baseHabit,
+        frequency: { type: 'times_per_week', count: 3 },
+        current_streak: 6,
+      };
+      render(<HabitRow habit={tpwHabit} onToggle={mockOnToggle} onClick={mockOnClick} />);
+      expect(screen.getByText('6 weeks')).toBeInTheDocument();
     });
 
     it('checkbox is checked when completed_today is true', () => {
