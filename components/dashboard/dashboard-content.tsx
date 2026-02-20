@@ -332,9 +332,12 @@ export function DashboardContent({
     return top;
   }, null);
 
+  const normalizePeriods = (h: typeof data.habits[number]) =>
+    h.absence_unit === 'weeks' ? h.missed_scheduled_periods * 7 : h.missed_scheduled_periods;
+
   const absenceHabits = data.habits
     .filter((h) => h.missed_scheduled_periods > 0 && !h.completed_today)
-    .sort((a, b) => b.missed_scheduled_periods - a.missed_scheduled_periods)
+    .sort((a, b) => normalizePeriods(b) - normalizePeriods(a))
     .slice(0, 3);
 
   return (
