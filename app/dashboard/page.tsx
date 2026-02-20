@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 import { HabitsDB, TasksDB, HabitMilestonesDB } from "@/lib/db";
 import { getLocalDateString, getNextDateString } from "@/lib/utils";
-import type { DashboardData, HabitMilestone } from "@/lib/db/types";
+import { type DashboardData, type HabitMilestone, ZERO_ABSENCE } from "@/lib/db/types";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -55,8 +55,7 @@ export default async function DashboardPage() {
   // SWR will revalidate with the real values from the API route.
   const habitsWithAbsence = habitsWithStatus.map(h => ({
     ...h,
-    missed_scheduled_days: 0,
-    previous_streak: 0,
+    ...ZERO_ABSENCE,
   }));
 
   const initialData: DashboardData = {

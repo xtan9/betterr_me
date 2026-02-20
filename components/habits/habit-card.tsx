@@ -66,14 +66,24 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
             <div className="flex items-center justify-center gap-1">
               {habit.current_streak >= 7 && <Flame className="size-4 text-status-streak" aria-hidden="true" />}
               <span className="font-semibold text-sm">
-                {t("card.streakDays", { count: habit.current_streak })}
+                {t(
+                  habit.frequency.type === 'times_per_week' || habit.frequency.type === 'weekly'
+                    ? "card.streakWeeks"
+                    : "card.streakDays",
+                  { count: habit.current_streak }
+                )}
               </span>
             </div>
             <p className="text-xs text-muted-foreground">{t("card.currentStreak")}</p>
           </div>
           <div className="flex-1 rounded-lg border p-2 text-center">
             <span className="font-semibold text-sm">
-              {t("card.streakDays", { count: habit.best_streak })}
+              {t(
+                habit.frequency.type === 'times_per_week' || habit.frequency.type === 'weekly'
+                  ? "card.streakWeeks"
+                  : "card.streakDays",
+                { count: habit.best_streak }
+              )}
             </span>
             <p className="text-xs text-muted-foreground">{t("card.bestStreak")}</p>
           </div>

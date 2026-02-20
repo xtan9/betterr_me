@@ -26,6 +26,7 @@ import { AbsenceCard } from "./absence-card";
 import { toast } from "sonner";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
+import { shouldTrackOnDate } from "@/lib/habits/format";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import type { DashboardData } from "@/lib/db/types";
@@ -331,9 +332,12 @@ export function DashboardContent({
     return top;
   }, null);
 
+  const normalizePeriods = (h: typeof data.habits[number]) =>
+    h.absence_unit === 'weeks' ? h.missed_scheduled_periods * 7 : h.missed_scheduled_periods;
+
   const absenceHabits = data.habits
-    .filter((h) => h.missed_scheduled_days > 0 && !h.completed_today)
-    .sort((a, b) => b.missed_scheduled_days - a.missed_scheduled_days)
+    .filter((h) => h.missed_scheduled_periods > 0 && !h.completed_today)
+    .sort((a, b) => normalizePeriods(b) - normalizePeriods(a))
     .slice(0, 3);
 
   return (
@@ -392,7 +396,7 @@ export function DashboardContent({
       <div className="grid gap-card-gap xl:grid-cols-2">
         {/* Habits Checklist */}
         <HabitChecklist
-          habits={data.habits}
+          habits={data.habits.filter(h => { try { return shouldTrackOnDate(h.frequency, new Date()); } catch (err) { console.error('shouldTrackOnDate failed, showing habit as fallback', { habitId: h.id, frequency: h.frequency, err }); return true; } })}
           onToggle={handleToggleHabit}
           onCreateHabit={handleCreateHabit}
           togglingHabitIds={togglingHabitIds}
