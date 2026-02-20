@@ -232,4 +232,17 @@ describe('computeMissedDays', () => {
     expect(result.missed_scheduled_periods).toBe(0);
     expect(result.absence_unit).toBe('weeks');
   });
+
+  it('ignores malformed date strings in completedDatesSet for weekly path', () => {
+    const weekly: HabitFrequency = { type: 'weekly' };
+    // Mix of valid and malformed dates. Valid: Jan 20 falls in Jan 18-24 week.
+    const completed = new Set(['2026-01-20', 'not-a-date', '', '2026-13-99']);
+    const result = computeMissedDays(weekly, completed, '2026-02-09', '2026-01-01');
+
+    // Jan 18-24 week has 1 valid completion → met → previous_streak = 1
+    // Jan 25-31 and Feb 1-7 → 0 completions → 2 missed weeks
+    expect(result.missed_scheduled_periods).toBe(2);
+    expect(result.previous_streak).toBe(1);
+    expect(result.absence_unit).toBe('weeks');
+  });
 });

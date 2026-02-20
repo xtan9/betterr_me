@@ -71,7 +71,9 @@ export function computeMissedDays(
     const weekCompletions = new Map<string, number>();
     for (const dateStr of completedDatesSet) {
       const [y, m, d] = dateStr.split('-').map(Number);
+      if (isNaN(y) || isNaN(m) || isNaN(d)) continue;
       const date = new Date(y, m - 1, d);
+      if (isNaN(date.getTime())) continue;
       const wk = getWeekKey(date, weekStartDay);
       weekCompletions.set(wk, (weekCompletions.get(wk) || 0) + 1);
     }
