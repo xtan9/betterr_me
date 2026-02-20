@@ -255,4 +255,16 @@ describe("AbsenceCard", () => {
     expect(screen.getByText(/it's been 5 weeks/)).toBeInTheDocument();
     expect(screen.getByText("Resume today")).toBeInTheDocument();
   });
+
+  it("falls back to day-based rendering when absence_unit is undefined", () => {
+    const habit = makeHabit({
+      missed_scheduled_periods: 3,
+      absence_unit: undefined as unknown as 'days',
+    });
+    renderWithIntl(
+      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+    );
+    // Should use day-based lapse variant (3-6 missed = lapse)
+    expect(screen.getByText(/3 days since last check-in/)).toBeInTheDocument();
+  });
 });
