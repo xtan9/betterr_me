@@ -206,6 +206,13 @@ export interface AbsenceData {
   absence_unit: 'days' | 'weeks'; // what missed_scheduled_days counts
 }
 
+/** Default zero-absence data for SSR fallback and error paths. */
+export const ZERO_ABSENCE: AbsenceData = {
+  missed_scheduled_days: 0,
+  previous_streak: 0,
+  absence_unit: 'days',
+};
+
 /** Habit with absence enrichment, used only in dashboard responses. */
 export type HabitWithAbsence = HabitWithTodayStatus & AbsenceData;
 

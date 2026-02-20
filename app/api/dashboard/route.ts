@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
-import type { DashboardData, HabitLog, HabitMilestone } from '@/lib/db/types';
+import { type DashboardData, type HabitLog, type HabitMilestone, ZERO_ABSENCE } from '@/lib/db/types';
 import { getLocalDateString, getNextDateString } from '@/lib/utils';
 import { computeMissedDays } from '@/lib/habits/absence';
 import { ensureRecurringInstances } from '@/lib/recurring-tasks';
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
         log.error('computeMissedDays failed', err, { userId: user.id, habitId: habit.id, date, dateRange: `${thirtyDaysAgoStr} to ${date}` });
         warnings.push(`Absence data unavailable for habit ${habit.id}`);
         // Zeros as fallback: no prior cached value available (see RESEARCH.md Pitfall 5)
-        return { ...habit, missed_scheduled_days: 0, previous_streak: 0, absence_unit: 'days' as const };
+        return { ...habit, ...ZERO_ABSENCE };
       }
     });
 

@@ -1,4 +1,4 @@
-import type { HabitFrequency } from '@/lib/db/types';
+import { type HabitFrequency, ZERO_ABSENCE } from '@/lib/db/types';
 import { shouldTrackOnDate } from '@/lib/habits/format';
 import { getWeekStart, getWeekKey } from '@/lib/habits/week-utils';
 import { getLocalDateString } from '@/lib/utils';
@@ -47,17 +47,17 @@ export function computeMissedDays(
   dataStartStr?: string,
 ): { missed_scheduled_days: number; previous_streak: number; absence_unit: 'days' | 'weeks' } {
   if (!createdAtStr) {
-    return { missed_scheduled_days: 0, previous_streak: 0, absence_unit: 'days' };
+    return { ...ZERO_ABSENCE };
   }
 
   const today = parseDate(todayStr);
   if (isNaN(today.getTime())) {
-    return { missed_scheduled_days: 0, previous_streak: 0, absence_unit: 'days' };
+    return { ...ZERO_ABSENCE };
   }
 
   const createdDate = parseDate(createdAtStr.substring(0, 10));
   if (isNaN(createdDate.getTime())) {
-    return { missed_scheduled_days: 0, previous_streak: 0, absence_unit: 'days' };
+    return { ...ZERO_ABSENCE };
   }
 
   const dataStart = dataStartStr ? parseDate(dataStartStr) : null;
