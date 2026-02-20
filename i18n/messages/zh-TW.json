@@ -479,6 +479,10 @@
       "intentionPlaceholder": "這件事對你來說為什麼重要？",
       "repeatLabel": "重複"
     },
+    "sectionLabel": "分區",
+    "projectLabel": "專案",
+    "projectPlaceholder": "選擇專案",
+    "noProject": "無專案",
     "categories": {
       "work": "工作",
       "personal": "個人",
@@ -708,6 +712,52 @@
     },
     "toast": {
       "saveError": "儲存設定失敗"
+    }
+  },
+  "projects": {
+    "createTitle": "建立專案",
+    "editTitle": "編輯專案",
+    "nameLabel": "專案名稱",
+    "namePlaceholder": "輸入專案名稱",
+    "sectionLabel": "分區",
+    "colorLabel": "顏色",
+    "createButton": "建立專案",
+    "saveButton": "儲存變更",
+    "deleteTitle": "刪除專案",
+    "deleteDescription": "確定要刪除「{name}」嗎？專案中的任務將變為同一分區中的獨立任務。",
+    "confirmDelete": "刪除專案",
+    "cancel": "取消",
+    "archiveSuccess": "專案已封存",
+    "deleteSuccess": "專案已刪除",
+    "createSuccess": "專案已建立",
+    "updateSuccess": "專案已更新",
+    "done": "已完成",
+    "more": "更多",
+    "openBoard": "開啟看板",
+    "noTasks": "暫無任務",
+    "sections": {
+      "personal": "個人",
+      "work": "工作"
+    },
+    "colors": {
+      "blue": "藍色",
+      "red": "紅色",
+      "green": "綠色",
+      "orange": "橘色",
+      "purple": "紫色",
+      "pink": "粉色",
+      "teal": "青色",
+      "yellow": "黃色",
+      "indigo": "靛藍",
+      "cyan": "青藍",
+      "slate": "石板灰",
+      "emerald": "翡翠綠"
+    },
+    "archived": {
+      "title": "已封存專案",
+      "empty": "沒有已封存的專案",
+      "restore": "還原",
+      "restoreSuccess": "專案已還原"
     }
   }
 }

@@ -479,6 +479,10 @@
       "intentionPlaceholder": "这件事对你来说为什么重要？",
       "repeatLabel": "重复"
     },
+    "sectionLabel": "分区",
+    "projectLabel": "项目",
+    "projectPlaceholder": "选择项目",
+    "noProject": "无项目",
     "categories": {
       "work": "工作",
       "personal": "个人",
@@ -708,6 +712,52 @@
     },
     "toast": {
       "saveError": "保存设置失败"
+    }
+  },
+  "projects": {
+    "createTitle": "创建项目",
+    "editTitle": "编辑项目",
+    "nameLabel": "项目名称",
+    "namePlaceholder": "输入项目名称",
+    "sectionLabel": "分区",
+    "colorLabel": "颜色",
+    "createButton": "创建项目",
+    "saveButton": "保存更改",
+    "deleteTitle": "删除项目",
+    "deleteDescription": "确定要删除「{name}」吗？项目中的任务将变为同一分区中的独立任务。",
+    "confirmDelete": "删除项目",
+    "cancel": "取消",
+    "archiveSuccess": "项目已归档",
+    "deleteSuccess": "项目已删除",
+    "createSuccess": "项目已创建",
+    "updateSuccess": "项目已更新",
+    "done": "已完成",
+    "more": "更多",
+    "openBoard": "打开看板",
+    "noTasks": "暂无任务",
+    "sections": {
+      "personal": "个人",
+      "work": "工作"
+    },
+    "colors": {
+      "blue": "蓝色",
+      "red": "红色",
+      "green": "绿色",
+      "orange": "橙色",
+      "purple": "紫色",
+      "pink": "粉色",
+      "teal": "青色",
+      "yellow": "黄色",
+      "indigo": "靛蓝",
+      "cyan": "青蓝",
+      "slate": "石板灰",
+      "emerald": "翡翠绿"
+    },
+    "archived": {
+      "title": "已归档项目",
+      "empty": "没有已归档的项目",
+      "restore": "恢复",
+      "restoreSuccess": "项目已恢复"
     }
   }
 }

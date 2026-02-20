@@ -479,6 +479,10 @@
       "intentionPlaceholder": "Why does this matter to you?",
       "repeatLabel": "Repeat"
     },
+    "sectionLabel": "Section",
+    "projectLabel": "Project",
+    "projectPlaceholder": "Select a project",
+    "noProject": "No Project",
     "categories": {
       "work": "Work",
       "personal": "Personal",
@@ -708,6 +712,52 @@
     },
     "toast": {
       "saveError": "Failed to save settings"
+    }
+  },
+  "projects": {
+    "createTitle": "Create Project",
+    "editTitle": "Edit Project",
+    "nameLabel": "Project Name",
+    "namePlaceholder": "Enter project name",
+    "sectionLabel": "Section",
+    "colorLabel": "Color",
+    "createButton": "Create Project",
+    "saveButton": "Save Changes",
+    "deleteTitle": "Delete Project",
+    "deleteDescription": "Are you sure you want to delete \"{name}\"? Tasks in this project will become standalone tasks in the same section.",
+    "confirmDelete": "Delete Project",
+    "cancel": "Cancel",
+    "archiveSuccess": "Project archived",
+    "deleteSuccess": "Project deleted",
+    "createSuccess": "Project created",
+    "updateSuccess": "Project updated",
+    "done": "done",
+    "more": "more",
+    "openBoard": "Open Board",
+    "noTasks": "No tasks yet",
+    "sections": {
+      "personal": "Personal",
+      "work": "Work"
+    },
+    "colors": {
+      "blue": "Blue",
+      "red": "Red",
+      "green": "Green",
+      "orange": "Orange",
+      "purple": "Purple",
+      "pink": "Pink",
+      "teal": "Teal",
+      "yellow": "Yellow",
+      "indigo": "Indigo",
+      "cyan": "Cyan",
+      "slate": "Slate",
+      "emerald": "Emerald"
+    },
+    "archived": {
+      "title": "Archived Projects",
+      "empty": "No archived projects",
+      "restore": "Restore",
+      "restoreSuccess": "Project restored"
     }
   }
 }

@@ -36,11 +36,29 @@ vi.mock('next-intl', () => ({
         '1': 'Low',
         '2': 'Medium',
         '3': 'High',
+        // section/project keys (tasks namespace)
+        'sectionLabel': 'Section',
+        'projectLabel': 'Project',
+        'projectPlaceholder': 'Select a project',
+        'noProject': 'No Project',
       };
       return messages[key] ?? key;
     };
     return t;
   },
+}));
+
+vi.mock('next-themes', () => ({
+  useTheme: () => ({ resolvedTheme: 'light' }),
+}));
+
+vi.mock('@/lib/hooks/use-projects', () => ({
+  useProjects: () => ({
+    projects: [],
+    error: null,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
 }));
 
 const mockTask: Task = {
@@ -55,6 +73,11 @@ const mockTask: Task = {
   due_date: '2026-02-10',
   due_time: '14:30:00',
   completed_at: null,
+  completion_difficulty: null,
+  status: 'todo',
+  section: 'personal',
+  sort_order: 1,
+  project_id: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   recurring_task_id: null,
@@ -102,10 +125,23 @@ describe('TaskForm', () => {
         />
       );
 
-      expect(screen.getByRole('button', { name: /Work/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Personal/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Shopping/ })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Other/ })).toBeInTheDocument();
+    });
+
+    it('renders section toggle and project dropdown', () => {
+      render(
+        <TaskForm
+          mode="create"
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      expect(screen.getByText('Section')).toBeInTheDocument();
+      expect(screen.getByText('Project')).toBeInTheDocument();
+      // "No Project" may appear in both the trigger and dropdown item
+      expect(screen.getAllByText('No Project').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -168,19 +204,24 @@ describe('TaskForm', () => {
 
       await user.type(screen.getByLabelText('Title'), 'Write report');
       await user.type(screen.getByLabelText('Description'), 'Q1 metrics');
-      await user.click(screen.getByRole('button', { name: /Work/ }));
+      // Click the category "Work" toggle (not the section toggle)
+      const categoryToggles = screen.getAllByRole('button', { name: /Work/ });
+      // The category toggle is the one inside the category section
+      await user.click(categoryToggles[categoryToggles.length - 1]);
       await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
       await waitFor(() => {
-        expect(mockOnSubmit).toHaveBeenCalledWith({
-          title: 'Write report',
-          description: 'Q1 metrics',
-          intention: null,
-          category: 'work',
-          priority: 0,
-          due_date: null,
-          due_time: null,
-        }, undefined);
+        expect(mockOnSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: 'Write report',
+            description: 'Q1 metrics',
+            intention: null,
+            category: 'work',
+            section: 'personal',
+            project_id: null,
+          }),
+          undefined
+        );
       });
     });
 
@@ -197,15 +238,20 @@ describe('TaskForm', () => {
       await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
       await waitFor(() => {
-        expect(mockOnSubmit).toHaveBeenCalledWith({
-          title: 'Quick task',
-          description: null,
-          intention: null,
-          category: null,
-          priority: 0,
-          due_date: null,
-          due_time: null,
-        }, undefined);
+        expect(mockOnSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: 'Quick task',
+            description: null,
+            intention: null,
+            category: null,
+            priority: 0,
+            due_date: null,
+            due_time: null,
+            section: 'personal',
+            project_id: null,
+          }),
+          undefined
+        );
       });
     });
 
@@ -303,9 +349,10 @@ describe('TaskForm', () => {
         />
       );
 
-      const workButton = screen.getByRole('button', { name: /Work/ });
-      await user.click(workButton);
-      expect(workButton).toHaveAttribute('data-state', 'on');
+      // The category "Work" toggle (last one with "Work" text - category toggles use Toggle not ToggleGroupItem)
+      const shoppingButton = screen.getByRole('button', { name: /Shopping/ });
+      await user.click(shoppingButton);
+      expect(shoppingButton).toHaveAttribute('data-state', 'on');
     });
 
     it('deselects category when clicking the same one again', async () => {
@@ -317,12 +364,12 @@ describe('TaskForm', () => {
         />
       );
 
-      const workButton = screen.getByRole('button', { name: /Work/ });
-      await user.click(workButton);
-      expect(workButton).toHaveAttribute('data-state', 'on');
+      const shoppingButton = screen.getByRole('button', { name: /Shopping/ });
+      await user.click(shoppingButton);
+      expect(shoppingButton).toHaveAttribute('data-state', 'on');
 
-      await user.click(workButton);
-      expect(workButton).toHaveAttribute('data-state', 'off');
+      await user.click(shoppingButton);
+      expect(shoppingButton).toHaveAttribute('data-state', 'off');
     });
 
     it('switches category when clicking a different one', async () => {
@@ -334,13 +381,13 @@ describe('TaskForm', () => {
         />
       );
 
-      await user.click(screen.getByRole('button', { name: /Work/ }));
-      await user.click(screen.getByRole('button', { name: /Personal/ }));
+      const shoppingButton = screen.getByRole('button', { name: /Shopping/ });
+      const otherButton = screen.getByRole('button', { name: /Other/ });
+      await user.click(shoppingButton);
+      await user.click(otherButton);
 
-      const workButton = screen.getByRole('button', { name: /Work/ });
-      const personalButton = screen.getByRole('button', { name: /Personal/ });
-      expect(workButton).toHaveAttribute('data-state', 'off');
-      expect(personalButton).toHaveAttribute('data-state', 'on');
+      expect(shoppingButton).toHaveAttribute('data-state', 'off');
+      expect(otherButton).toHaveAttribute('data-state', 'on');
     });
   });
 

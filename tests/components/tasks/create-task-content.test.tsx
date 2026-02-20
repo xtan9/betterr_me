@@ -35,10 +35,27 @@ vi.mock('sonner', () => ({
   },
 }));
 
+vi.mock('next-themes', () => ({
+  useTheme: () => ({ resolvedTheme: 'light' }),
+}));
+
+vi.mock('@/lib/hooks/use-projects', () => ({
+  useProjects: () => ({
+    projects: [],
+    error: null,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+}));
+
 const allTranslations: Record<string, Record<string, string>> = {
   'tasks': {
     'toast.createSuccess': 'Task created successfully',
     'toast.createError': 'Failed to create task',
+    'sectionLabel': 'Section',
+    'projectLabel': 'Project',
+    'projectPlaceholder': 'Select a project',
+    'noProject': 'No Project',
   },
   'tasks.form': {
     'createTitle': 'Create New Task',

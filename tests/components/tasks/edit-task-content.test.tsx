@@ -23,6 +23,19 @@ vi.mock('sonner', () => ({
   },
 }));
 
+vi.mock('next-themes', () => ({
+  useTheme: () => ({ resolvedTheme: 'light' }),
+}));
+
+vi.mock('@/lib/hooks/use-projects', () => ({
+  useProjects: () => ({
+    projects: [],
+    error: null,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+}));
+
 // Namespace-aware mock matching next-intl's useTranslations behavior
 const allTranslations: Record<string, Record<string, string>> = {
   'tasks': {
@@ -30,6 +43,10 @@ const allTranslations: Record<string, Record<string, string>> = {
     'edit.error': 'Failed to update task',
     'error.title': 'Failed to load task',
     'error.retry': 'Try again',
+    'sectionLabel': 'Section',
+    'projectLabel': 'Project',
+    'projectPlaceholder': 'Select a project',
+    'noProject': 'No Project',
   },
   'tasks.form': {
     'createTitle': 'Create New Task',
@@ -92,14 +109,23 @@ const mockTask = {
   user_id: 'user-1',
   title: 'Buy groceries',
   description: 'Milk, eggs, bread',
+  intention: null,
   is_completed: false,
   priority: 2 as const,
   category: 'shopping' as const,
   due_date: '2026-02-10',
   due_time: '14:30:00',
   completed_at: null,
+  completion_difficulty: null,
+  status: 'todo' as const,
+  section: 'personal' as const,
+  sort_order: 1,
+  project_id: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+  recurring_task_id: null,
+  is_exception: false,
+  original_date: null,
 };
 
 describe('EditTaskContent', () => {
