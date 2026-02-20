@@ -1,4 +1,4 @@
-import { type HabitFrequency, ZERO_ABSENCE } from '@/lib/db/types';
+import { type AbsenceData, type HabitFrequency, ZERO_ABSENCE } from '@/lib/db/types';
 import { shouldTrackOnDate } from '@/lib/habits/format';
 import { getWeekStart, getWeekKey } from '@/lib/habits/week-utils';
 import { getLocalDateString } from '@/lib/utils';
@@ -45,7 +45,7 @@ export function computeMissedDays(
   todayStr: string,
   createdAtStr: string,
   dataStartStr?: string,
-): { missed_scheduled_periods: number; previous_streak: number; absence_unit: 'days' | 'weeks' } {
+): AbsenceData {
   if (!createdAtStr) {
     return { ...ZERO_ABSENCE };
   }
@@ -71,9 +71,15 @@ export function computeMissedDays(
     const weekCompletions = new Map<string, number>();
     for (const dateStr of completedDatesSet) {
       const [y, m, d] = dateStr.split('-').map(Number);
-      if (isNaN(y) || isNaN(m) || isNaN(d)) continue;
+      if (isNaN(y) || isNaN(m) || isNaN(d)) {
+        console.warn('Skipping malformed date in completedDatesSet:', dateStr);
+        continue;
+      }
       const date = new Date(y, m - 1, d);
-      if (isNaN(date.getTime())) continue;
+      if (isNaN(date.getTime())) {
+        console.warn('Skipping unparseable date in completedDatesSet:', dateStr);
+        continue;
+      }
       const wk = getWeekKey(date, weekStartDay);
       weekCompletions.set(wk, (weekCompletions.get(wk) || 0) + 1);
     }

@@ -174,6 +174,7 @@ const mockDashboardData = {
       monthly_completion_rate: 80,
       missed_scheduled_periods: 0,
       previous_streak: 0,
+      absence_unit: "days" as const,
     },
     {
       id: "2",
@@ -192,6 +193,7 @@ const mockDashboardData = {
       monthly_completion_rate: 40,
       missed_scheduled_periods: 0,
       previous_streak: 0,
+      absence_unit: "days" as const,
     },
   ],
   milestones_today: [],

@@ -396,7 +396,7 @@ export function DashboardContent({
       <div className="grid gap-card-gap xl:grid-cols-2">
         {/* Habits Checklist */}
         <HabitChecklist
-          habits={data.habits.filter(h => { try { return shouldTrackOnDate(h.frequency, new Date()); } catch { return true; } })}
+          habits={data.habits.filter(h => { try { return shouldTrackOnDate(h.frequency, new Date()); } catch (err) { console.error('shouldTrackOnDate failed, showing habit as fallback', { habitId: h.id, frequency: h.frequency, err }); return true; } })}
           onToggle={handleToggleHabit}
           onCreateHabit={handleCreateHabit}
           togglingHabitIds={togglingHabitIds}
