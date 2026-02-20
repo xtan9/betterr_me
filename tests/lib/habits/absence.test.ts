@@ -11,7 +11,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-02-08']); // yesterday
     const result = computeMissedDays(daily, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_periods).toBe(0);
     expect(result.previous_streak).toBe(1);
     expect(result.absence_unit).toBe('days');
   });
@@ -22,7 +22,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-02-05', '2026-02-04', '2026-02-03']);
     const result = computeMissedDays(daily, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(3);
+    expect(result.missed_scheduled_periods).toBe(3);
     expect(result.previous_streak).toBe(3);
     expect(result.absence_unit).toBe('days');
   });
@@ -34,7 +34,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-02-06']); // Friday
     const result = computeMissedDays(weekdays, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_periods).toBe(0);
     expect(result.previous_streak).toBe(1);
     expect(result.absence_unit).toBe('days');
   });
@@ -45,7 +45,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-02-05', '2026-02-04']);
     const result = computeMissedDays(weekdays, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(1);
+    expect(result.missed_scheduled_periods).toBe(1);
     expect(result.previous_streak).toBe(2);
     expect(result.absence_unit).toBe('days');
   });
@@ -62,7 +62,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-02-04', '2026-02-02']);
     const result = computeMissedDays(custom, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(1);
+    expect(result.missed_scheduled_periods).toBe(1);
     expect(result.previous_streak).toBe(2);
     expect(result.absence_unit).toBe('days');
   });
@@ -70,14 +70,14 @@ describe('computeMissedDays', () => {
   it('returns 0 missed for brand new habit (created today)', () => {
     const result = computeMissedDays(daily, new Set(), '2026-02-09', '2026-02-09');
 
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_periods).toBe(0);
     expect(result.previous_streak).toBe(0);
   });
 
   it('returns 1 missed day for habit created yesterday with no logs', () => {
     const result = computeMissedDays(daily, new Set(), '2026-02-09', '2026-02-08');
 
-    expect(result.missed_scheduled_days).toBe(1);
+    expect(result.missed_scheduled_periods).toBe(1);
     expect(result.previous_streak).toBe(0);
   });
 
@@ -88,7 +88,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-01-30', '2026-01-29']);
     const result = computeMissedDays(daily, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(9);
+    expect(result.missed_scheduled_periods).toBe(9);
     expect(result.previous_streak).toBe(2);
   });
 
@@ -97,7 +97,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-02-08']);
     const result = computeMissedDays(daily, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_periods).toBe(0);
   });
 
   it('stops at habit creation date', () => {
@@ -105,7 +105,7 @@ describe('computeMissedDays', () => {
     // Only Feb 7 and Feb 8 are missable (2 days)
     const result = computeMissedDays(daily, new Set(), '2026-02-09', '2026-02-07');
 
-    expect(result.missed_scheduled_days).toBe(2);
+    expect(result.missed_scheduled_periods).toBe(2);
     expect(result.previous_streak).toBe(0);
   });
 
@@ -114,7 +114,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-02-08']);
     const result = computeMissedDays(daily, completed, '2026-02-09', '2026-02-07T14:30:00Z');
 
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_periods).toBe(0);
     expect(result.previous_streak).toBe(1);
   });
 
@@ -131,7 +131,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-02-02']);
     const result = computeMissedDays(weekly, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_periods).toBe(0);
     expect(result.previous_streak).toBe(1);
     expect(result.absence_unit).toBe('weeks');
   });
@@ -145,7 +145,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-01-20']);
     const result = computeMissedDays(weekly, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(2);
+    expect(result.missed_scheduled_periods).toBe(2);
     expect(result.previous_streak).toBe(1);
     expect(result.absence_unit).toBe('weeks');
   });
@@ -159,7 +159,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-02-03', '2026-02-04', '2026-02-05']);
     const result = computeMissedDays(timesPerWeek, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_periods).toBe(0);
     expect(result.previous_streak).toBe(1);
     expect(result.absence_unit).toBe('weeks');
   });
@@ -172,7 +172,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-02-03', '2026-01-27', '2026-01-28', '2026-01-29']);
     const result = computeMissedDays(timesPerWeek, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(1);
+    expect(result.missed_scheduled_periods).toBe(1);
     expect(result.previous_streak).toBe(1);
     expect(result.absence_unit).toBe('weeks');
   });
@@ -186,7 +186,7 @@ describe('computeMissedDays', () => {
     const completed = new Set(['2026-01-26', '2026-01-19', '2026-01-20']);
     const result = computeMissedDays(timesPerWeek, completed, '2026-02-09', '2026-01-01');
 
-    expect(result.missed_scheduled_days).toBe(2);
+    expect(result.missed_scheduled_periods).toBe(2);
     expect(result.previous_streak).toBe(1);
     expect(result.absence_unit).toBe('weeks');
   });
@@ -200,13 +200,13 @@ describe('computeMissedDays', () => {
 
   it('returns 0 for invalid createdAtStr', () => {
     const result = computeMissedDays(daily, new Set(), '2026-02-09', 'not-a-date');
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_periods).toBe(0);
     expect(result.previous_streak).toBe(0);
   });
 
   it('returns 0 for empty createdAtStr', () => {
     const result = computeMissedDays(daily, new Set(), '2026-02-09', '');
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_periods).toBe(0);
     expect(result.previous_streak).toBe(0);
   });
 
@@ -217,7 +217,7 @@ describe('computeMissedDays', () => {
     // With dataStartStr Feb 5: only Feb 5,6,7,8 = 4 missed.
     const result = computeMissedDays(daily, new Set(), '2026-02-09', '2026-01-01', '2026-02-05');
 
-    expect(result.missed_scheduled_days).toBe(4);
+    expect(result.missed_scheduled_periods).toBe(4);
     expect(result.previous_streak).toBe(0);
   });
 
@@ -229,7 +229,7 @@ describe('computeMissedDays', () => {
     //   Week start (Feb 1) is before creation date (Feb 5), so this week is skipped.
     const result = computeMissedDays(weekly, new Set(), '2026-02-09', '2026-02-05');
 
-    expect(result.missed_scheduled_days).toBe(0);
+    expect(result.missed_scheduled_periods).toBe(0);
     expect(result.absence_unit).toBe('weeks');
   });
 });

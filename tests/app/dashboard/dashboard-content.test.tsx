@@ -168,7 +168,7 @@ const mockDashboardData = {
       updated_at: "2024-01-01T00:00:00Z",
       completed_today: true,
       monthly_completion_rate: 80,
-      missed_scheduled_days: 0,
+      missed_scheduled_periods: 0,
       previous_streak: 0,
     },
     {
@@ -186,7 +186,7 @@ const mockDashboardData = {
       updated_at: "2024-01-01T00:00:00Z",
       completed_today: false,
       monthly_completion_rate: 40,
-      missed_scheduled_days: 0,
+      missed_scheduled_periods: 0,
       previous_streak: 0,
     },
   ],
@@ -516,7 +516,7 @@ describe("DashboardContent", () => {
     global.fetch = originalFetch;
   });
 
-  it("renders up to 3 absence cards sorted by missed_scheduled_days descending", async () => {
+  it("renders up to 3 absence cards sorted by missed_scheduled_periods descending", async () => {
     const baseFields = {
       user_id: "user-1",
       description: null,
@@ -536,7 +536,7 @@ describe("DashboardContent", () => {
         ...baseFields,
         id: "a",
         name: "A",
-        missed_scheduled_days: 2,
+        missed_scheduled_periods: 2,
         previous_streak: 0,
         completed_today: false,
       },
@@ -544,7 +544,7 @@ describe("DashboardContent", () => {
         ...baseFields,
         id: "b",
         name: "B",
-        missed_scheduled_days: 8,
+        missed_scheduled_periods: 8,
         previous_streak: 3,
         completed_today: false,
       },
@@ -552,7 +552,7 @@ describe("DashboardContent", () => {
         ...baseFields,
         id: "c",
         name: "C",
-        missed_scheduled_days: 0,
+        missed_scheduled_periods: 0,
         previous_streak: 0,
         completed_today: false,
       },
@@ -560,7 +560,7 @@ describe("DashboardContent", () => {
         ...baseFields,
         id: "d",
         name: "D",
-        missed_scheduled_days: 5,
+        missed_scheduled_periods: 5,
         previous_streak: 1,
         completed_today: false,
       },
@@ -568,7 +568,7 @@ describe("DashboardContent", () => {
         ...baseFields,
         id: "e",
         name: "E",
-        missed_scheduled_days: 1,
+        missed_scheduled_periods: 1,
         previous_streak: 0,
         completed_today: true,
       },

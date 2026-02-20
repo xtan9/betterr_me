@@ -117,14 +117,14 @@ export async function GET(request: NextRequest) {
     const enrichedHabits = habitsWithStatus.map(habit => {
       try {
         const completedDates = logsByHabit.get(habit.id) || new Set<string>();
-        const { missed_scheduled_days, previous_streak, absence_unit } = computeMissedDays(
+        const { missed_scheduled_periods, previous_streak, absence_unit } = computeMissedDays(
           habit.frequency,
           completedDates,
           date,
           habit.created_at,
           thirtyDaysAgoStr,
         );
-        return { ...habit, missed_scheduled_days, previous_streak, absence_unit };
+        return { ...habit, missed_scheduled_periods, previous_streak, absence_unit };
       } catch (err) {
         log.error('computeMissedDays failed', err, { userId: user.id, habitId: habit.id, date, dateRange: `${thirtyDaysAgoStr} to ${date}` });
         warnings.push(`Absence data unavailable for habit ${habit.id}`);

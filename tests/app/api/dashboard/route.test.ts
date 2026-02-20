@@ -98,9 +98,9 @@ describe('GET /api/dashboard', () => {
     expect(data.stats.tasks_completed_today).toBe(1);
     expect(data.stats.tasks_due_today).toBe(2);
     // Absence fields should be present
-    expect(data.habits[0]).toHaveProperty('missed_scheduled_days');
+    expect(data.habits[0]).toHaveProperty('missed_scheduled_periods');
     expect(data.habits[0]).toHaveProperty('previous_streak');
-    expect(typeof data.habits[0].missed_scheduled_days).toBe('number');
+    expect(typeof data.habits[0].missed_scheduled_periods).toBe('number');
     expect(typeof data.habits[0].previous_streak).toBe('number');
   });
 
@@ -128,7 +128,7 @@ describe('GET /api/dashboard', () => {
     const data = await response.json();
 
     // Feb 6, 7, 8 missed (3 days), previous streak = 2 (Feb 5, Feb 4)
-    expect(data.habits[0].missed_scheduled_days).toBe(3);
+    expect(data.habits[0].missed_scheduled_periods).toBe(3);
     expect(data.habits[0].previous_streak).toBe(2);
   });
 
@@ -252,8 +252,8 @@ describe('GET /api/dashboard', () => {
     expect(data.habits).toHaveLength(1);
     expect(data.habits[0].name).toBe('Run');
     // Absence fields should be present (graceful fallback with empty logs)
-    expect(data.habits[0]).toHaveProperty('missed_scheduled_days');
-    expect(typeof data.habits[0].missed_scheduled_days).toBe('number');
+    expect(data.habits[0]).toHaveProperty('missed_scheduled_periods');
+    expect(typeof data.habits[0].missed_scheduled_periods).toBe('number');
     expect(data.habits[0]).toHaveProperty('previous_streak');
     expect(typeof data.habits[0].previous_streak).toBe('number');
     expect(data.stats).toBeDefined();

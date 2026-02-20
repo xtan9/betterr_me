@@ -215,7 +215,7 @@ For each active habit scheduled today:
 - **Success state transformation**: When user completes a habit from any card, the card transforms to a brief success message before fading away.
 
 **Implementation:**
-- Backend: Extend `GET /api/dashboard` to include `missed_scheduled_days` per habit (computed from logs using `shouldTrackOnDate()` + last completed log date)
+- Backend: Extend `GET /api/dashboard` to include `missed_scheduled_periods` per habit (computed from logs using `shouldTrackOnDate()` + last completed log date)
 - New component: `AbsenceCard` — single component with 3 visual variants (recovery/lapse/hiatus) driven by `missedDays` prop
 - Hiatus variant includes action buttons for pause/frequency change (reuses existing PATCH `/api/habits/[id]` endpoint)
 - Dashboard renders up to 3 `AbsenceCard` components between motivation message and stat cards

@@ -57,7 +57,7 @@ export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
   const [justCompleted, setJustCompleted] = useState(false);
 
   const unit = habit.absence_unit ?? 'days';
-  const variant = getVariant(habit.missed_scheduled_days, unit);
+  const variant = getVariant(habit.missed_scheduled_periods, unit);
   const config = variantConfig[variant];
   const Icon = config.icon;
   const titleSuffix = unit === 'weeks' ? 'Weeks' : '';
@@ -96,7 +96,7 @@ export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
       <Icon className={cn("size-5 shrink-0 mt-0.5", config.iconColor)} />
       <div className="flex-1 min-w-0">
         <p className={cn("text-sm font-medium", config.titleColor)}>
-          {t(`${variant}Title${titleSuffix}`, { name: habit.name, days: habit.missed_scheduled_days })}
+          {t(`${variant}Title${titleSuffix}`, { name: habit.name, days: habit.missed_scheduled_periods })}
         </p>
 
         {variant === "lapse" && habit.previous_streak > 0 && (

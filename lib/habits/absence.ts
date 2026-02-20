@@ -35,7 +35,7 @@ function parseDate(s: string): Date {
  * @param createdAtStr - Habit creation date; accepts YYYY-MM-DD or full ISO timestamp
  * @param dataStartStr - Optional earliest date with reliable log data (caps backward walk)
  * @returns An object with:
- *   - `missed_scheduled_days`: consecutive scheduled-but-uncompleted days (or weeks)
+ *   - `missed_scheduled_periods`: consecutive scheduled-but-uncompleted days (or weeks)
  *   - `previous_streak`: streak length before the gap started
  *   - `absence_unit`: 'days' for daily/weekdays/custom, 'weeks' for weekly/times_per_week
  */
@@ -45,7 +45,7 @@ export function computeMissedDays(
   todayStr: string,
   createdAtStr: string,
   dataStartStr?: string,
-): { missed_scheduled_days: number; previous_streak: number; absence_unit: 'days' | 'weeks' } {
+): { missed_scheduled_periods: number; previous_streak: number; absence_unit: 'days' | 'weeks' } {
   if (!createdAtStr) {
     return { ...ZERO_ABSENCE };
   }
@@ -111,7 +111,7 @@ export function computeMissedDays(
       checkWeekStart.setDate(checkWeekStart.getDate() - 7);
     }
 
-    return { missed_scheduled_days: missed, previous_streak: previousStreak, absence_unit: 'weeks' };
+    return { missed_scheduled_periods: missed, previous_streak: previousStreak, absence_unit: 'weeks' };
   }
 
   // Day-based path for daily/weekdays/custom
@@ -151,5 +151,5 @@ export function computeMissedDays(
     checkDate.setDate(checkDate.getDate() - 1);
   }
 
-  return { missed_scheduled_days: missed, previous_streak: previousStreak, absence_unit: 'days' };
+  return { missed_scheduled_periods: missed, previous_streak: previousStreak, absence_unit: 'days' };
 }

@@ -333,8 +333,8 @@ export function DashboardContent({
   }, null);
 
   const absenceHabits = data.habits
-    .filter((h) => h.missed_scheduled_days > 0 && !h.completed_today)
-    .sort((a, b) => b.missed_scheduled_days - a.missed_scheduled_days)
+    .filter((h) => h.missed_scheduled_periods > 0 && !h.completed_today)
+    .sort((a, b) => b.missed_scheduled_periods - a.missed_scheduled_periods)
     .slice(0, 3);
 
   return (

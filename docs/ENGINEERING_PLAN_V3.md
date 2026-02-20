@@ -182,7 +182,7 @@ const remainingTomorrow = (tasksTomorrow?.length ?? 0) - (tomorrowToShow?.length
 
 ### 1C. Feature H1: Absence-Aware Recovery
 
-**Migration:** None. Uses existing `habit_logs` table. The `missed_scheduled_days` count is computed at query time, not stored.
+**Migration:** None. Uses existing `habit_logs` table. The `missed_scheduled_periods` count is computed at query time, not stored.
 
 **DB layer:** `lib/db/habit-logs.ts`
 
@@ -240,7 +240,7 @@ const habitsWithAbsence = habits.map(habit => {
   const absence = computeMissedDays(habit.id, habit.frequency, habitLogs);
   return {
     ...habit,
-    missed_scheduled_days: absence.missedDays,
+    missed_scheduled_periods: absence.missedDays,
     previous_streak: absence.previousStreak,
   };
 });
@@ -254,7 +254,7 @@ const habitsWithAbsence = habits.map(habit => {
 // Extend HabitWithTodayStatus:
 interface HabitWithTodayStatus {
   // ...existing fields
-  missed_scheduled_days: number;
+  missed_scheduled_periods: number;
   previous_streak: number;
 }
 ```
@@ -266,7 +266,7 @@ interface AbsenceCardProps {
   habit: {
     id: string;
     name: string;
-    missed_scheduled_days: number;
+    missed_scheduled_periods: number;
     previous_streak: number;
     current_streak: number;
   };
@@ -276,7 +276,7 @@ interface AbsenceCardProps {
   isToggling?: boolean;
 }
 
-// Tier derived from missed_scheduled_days:
+// Tier derived from missed_scheduled_periods:
 // 1 → "recovery" (amber)
 // 2-6 → "lapse" (blue)
 // 7+ → "hiatus" (warm/welcoming)
@@ -295,8 +295,8 @@ interface AbsenceCardProps {
 ```typescript
 // Filter habits needing absence cards:
 const absenceHabits = data.habits
-  .filter(h => h.missed_scheduled_days > 0 && !h.completed_today)
-  .sort((a, b) => b.missed_scheduled_days - a.missed_scheduled_days) // Hiatus first
+  .filter(h => h.missed_scheduled_periods > 0 && !h.completed_today)
+  .sort((a, b) => b.missed_scheduled_periods - a.missed_scheduled_periods) // Hiatus first
   .slice(0, 3); // Cap at 3
 
 // Render between MotivationMessage and DailySnapshot
