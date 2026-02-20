@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v3.0 Projects & Kanban — Phase 13 (Data Foundation & Migration)
+**Current focus:** v3.0 Projects & Kanban — Phase 14 (Projects & Sections)
 
 ## Current Position
 
-Phase: 13 (first of 3 in v3.0)
-Plan: 2 of 2 complete (13-01 done, 13-02 done)
-Status: Phase 13 Complete
-Last activity: 2026-02-19 — Completed 13-02 (sync integration into DB/API layer)
+Phase: 14 (second of 3 in v3.0)
+Plan: 1 of 3 complete (14-01 done)
+Status: In Progress
+Last activity: 2026-02-20 — Completed 14-01 (projects data foundation: SQL, types, DB class, API routes)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [###.......] 33% v3.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [#####.....] 50% v3.0
 
 ## Performance Metrics
 
@@ -34,6 +34,7 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 **v3.0 Velocity:**
 - 13-01: 5min (3 tasks, 7 files)
 - 13-02: 6min (2 tasks, 7 files)
+- 14-01: 2min (2 tasks, 13 files)
 
 ## Accumulated Context
 
@@ -52,6 +53,9 @@ Recent decisions affecting current work:
 - Migration defaults is_completed=false to status=todo (not backlog)
 - Every task mutation goes through sync layer before DB write (sync-at-mutation-point pattern)
 - POST creates compute sort_order from max existing value per user
+- ProjectSection narrowed to 'personal' | 'work' union type (from generic string)
+- Task validation section field narrowed to enum matching ProjectSection
+- ON DELETE SET NULL for project_id FK - deleted projects orphan tasks as standalone
 
 ### Pending Todos
 
@@ -65,6 +69,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-19
-Stopped at: Completed 13-02-PLAN.md (Phase 13 fully complete)
-Resume: Phase 14 planning (Kanban API)
+Last session: 2026-02-20
+Stopped at: Completed 14-01-PLAN.md (projects data foundation)
+Resume: Phase 14-02 execution (Project CRUD UI, task form extensions)
