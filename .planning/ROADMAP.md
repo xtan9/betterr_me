@@ -43,7 +43,7 @@
 **Milestone Goal:** Transform the flat task list into a structured project-based system with Work/Personal sections, project containers, and 4-column kanban boards with drag-and-drop.
 
 - [x] **Phase 13: Data Foundation & Migration** - Status field, is_completed sync, migration of existing tasks, backward compatibility (completed 2026-02-19)
-- [ ] **Phase 14: Projects & Sections** - Project CRUD, task form extensions, tasks page redesign with section-based layout
+- [x] **Phase 14: Projects & Sections** - Project CRUD, task form extensions, tasks page redesign with section-based layout (completed 2026-02-20)
 - [ ] **Phase 15: Kanban Board** - 4-column kanban with drag-and-drop, completion reflection, intention display
 
 ## Phase Details
@@ -111,5 +111,5 @@ Plans:
 | 11. Sidebar Polish | v2.1 | 2/2 | Complete | 2026-02-18 |
 | 12. Component Fixes | v2.1 | 1/1 | Complete | 2026-02-18 |
 | 13. Data Foundation & Migration | 2/2 | Complete    | 2026-02-19 | - |
-| 14. Projects & Sections | 2/3 | In Progress|  | - |
+| 14. Projects & Sections | 3/3 | Complete   | 2026-02-20 | - |
 | 15. Kanban Board | v3.0 | 0/? | Not started | - |

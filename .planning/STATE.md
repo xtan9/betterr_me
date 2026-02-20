@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 14 (second of 3 in v3.0)
-Plan: 2 of 3 complete (14-01, 14-02 done)
-Status: In Progress
-Last activity: 2026-02-20 — Completed 14-02 (project CRUD UI, task form extensions, i18n)
+Plan: 3 of 3 complete (14-01, 14-02, 14-03 done)
+Status: Phase Complete
+Last activity: 2026-02-20 — Completed 14-03 (tasks page redesign with section layout, archived projects)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [#####.....] 50% v3.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [######....] 67% v3.0
 
 ## Performance Metrics
 
@@ -36,6 +36,7 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - 13-02: 6min (2 tasks, 7 files)
 - 14-01: 2min (2 tasks, 13 files)
 - 14-02: 7min (2 tasks, 11 files)
+- 14-03: 9min (2 tasks, 9 files)
 
 ## Accumulated Context
 
@@ -60,6 +61,10 @@ Recent decisions affecting current work:
 - Section toggle placed right after title in task form (per locked decision)
 - Section change silently clears project_id (no confirmation needed)
 - useProjects fetches all active projects, filters by section client-side
+- Lifted pending/completed tabs and search from TaskList to tasks-page-content parent for section layout
+- ProjectCard uses inline style for dynamic color accent (borderLeftColor + backgroundColor with opacity)
+- Task previews sorted by status priority: in_progress > todo > backlog
+- Added menuEdit/menuArchive/menuDelete i18n keys for project card menu actions
 
 ### Pending Todos
 
@@ -74,5 +79,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 14-02-PLAN.md (project CRUD UI, task form extensions, i18n)
-Resume: Phase 14-03 execution (tasks page redesign with section layout)
+Stopped at: Completed 14-03-PLAN.md (tasks page redesign with section layout, archived projects)
+Resume: Phase 15 planning (Kanban Board)

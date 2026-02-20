@@ -20,7 +20,7 @@ Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
 - [x] **PROJ-02**: User can edit a project's name, color, and section
 - [x] **PROJ-03**: User can archive a project (hidden by default, available via filter)
 - [x] **PROJ-04**: User can delete a project (tasks become standalone within the same section)
-- [ ] **PROJ-05**: User can see project progress (X of Y tasks done) on the tasks page project card
+- [x] **PROJ-05**: User can see project progress (X of Y tasks done) on the tasks page project card
 
 ### Task Form
 
@@ -29,8 +29,8 @@ Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
 
 ### Tasks Page
 
-- [ ] **PAGE-01**: Tasks page shows Work and Personal as top-level sections
-- [ ] **PAGE-02**: Each section displays project cards and a standalone tasks area
+- [x] **PAGE-01**: Tasks page shows Work and Personal as top-level sections
+- [x] **PAGE-02**: Each section displays project cards and a standalone tasks area
 - [ ] **PAGE-03**: Clicking a project card opens the kanban board view for that project
 
 ### Kanban Board
@@ -91,11 +91,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROJ-02 | Phase 14 | Complete |
 | PROJ-03 | Phase 14 | Complete |
 | PROJ-04 | Phase 14 | Complete |
-| PROJ-05 | Phase 14 | Pending |
+| PROJ-05 | Phase 14 | Complete |
 | FORM-01 | Phase 14 | Complete |
 | FORM-02 | Phase 14 | Complete |
-| PAGE-01 | Phase 14 | Pending |
-| PAGE-02 | Phase 14 | Pending |
+| PAGE-01 | Phase 14 | Complete |
+| PAGE-02 | Phase 14 | Complete |
 | PAGE-03 | Phase 15 | Pending |
 | KANB-01 | Phase 15 | Pending |
 | KANB-02 | Phase 15 | Pending |
