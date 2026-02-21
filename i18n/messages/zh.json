@@ -147,7 +147,8 @@
       "perfectDay": "完美的一天！",
       "allCompletedDesc": "你今天完成了所有 {count} 个习惯。",
       "noHabits": "还没有习惯",
-      "createFirst": "创建你的第一个习惯"
+      "createFirst": "创建你的第一个习惯",
+      "viewAll": "查看所有习惯"
     },
     "tasks": {
       "title": "今日任务",

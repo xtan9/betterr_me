@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Plus, PartyPopper } from "lucide-react";
+import Link from "next/link";
+import { Plus, PartyPopper, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { HabitRow } from "@/components/habits/habit-row";
@@ -90,6 +91,13 @@ export function HabitChecklist({
                 </p>
               )}
             </div>
+            <Link
+              href="/habits"
+              className="flex items-center justify-center gap-1 mt-3 text-xs text-primary hover:underline transition-colors duration-150 motion-reduce:transition-none"
+            >
+              {t("viewAll")}
+              <ChevronRight className="size-3" />
+            </Link>
           </>
         )}
       </CardContent>

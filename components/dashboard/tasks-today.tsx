@@ -310,6 +310,15 @@ export function TasksToday({
                 t("completed", { completed: completedCount, total: totalCount })
               )}
             </div>
+            {visibleTomorrow.length === 0 && (
+              <Link
+                href="/tasks"
+                className="flex items-center justify-center gap-1 mt-3 text-xs text-primary hover:underline transition-colors duration-150 motion-reduce:transition-none"
+              >
+                {t("viewAll")}
+                <ChevronRight className="size-3" />
+              </Link>
+            )}
           </>
         )}
 

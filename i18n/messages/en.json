@@ -147,7 +147,8 @@
       "perfectDay": "Perfect day!",
       "allCompletedDesc": "You completed all {count} habits today.",
       "noHabits": "No habits yet",
-      "createFirst": "Create your first habit"
+      "createFirst": "Create your first habit",
+      "viewAll": "View all habits"
     },
     "tasks": {
       "title": "Today's Tasks",
