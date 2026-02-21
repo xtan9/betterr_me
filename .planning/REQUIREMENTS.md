@@ -13,9 +13,9 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 - [x] **FOUN-02**: All money amounts stored as integer cents (BIGINT), with `lib/money/arithmetic.ts` for cents-to-display conversion using decimal.js
 - [x] **FOUN-03**: Service-role Supabase admin client (`lib/supabase/admin.ts`) for cron jobs and webhook handlers that bypass RLS
 - [x] **FOUN-04**: `resolveHousehold()` helper derives household_id server-side from authenticated user — never from client input
-- [ ] **FOUN-05**: Sidebar navigation includes "Money" top-level item with sub-navigation to money pages
-- [ ] **FOUN-06**: Calm Finance design tokens (`--money-*` CSS variables) for money views — muted teal/amber palette, no aggressive red/green
-- [ ] **FOUN-07**: i18n `money.*` namespace with all money UI strings in en, zh, zh-TW
+- [x] **FOUN-05**: Sidebar navigation includes "Money" top-level item with sub-navigation to money pages
+- [x] **FOUN-06**: Calm Finance design tokens (`--money-*` CSS variables) for money views — muted teal/amber palette, no aggressive red/green
+- [x] **FOUN-07**: i18n `money.*` namespace with all money UI strings in en, zh, zh-TW
 - [x] **FOUN-08**: Default household auto-created for each user on first money feature access (lazy creation)
 
 ### Plaid Integration
@@ -148,9 +148,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FOUN-02 | Phase 18 | Complete |
 | FOUN-03 | Phase 18 | Complete |
 | FOUN-04 | Phase 18 | Complete |
-| FOUN-05 | Phase 18 | Pending |
-| FOUN-06 | Phase 18 | Pending |
-| FOUN-07 | Phase 18 | Pending |
+| FOUN-05 | Phase 18 | Complete |
+| FOUN-06 | Phase 18 | Complete |
+| FOUN-07 | Phase 18 | Complete |
 | FOUN-08 | Phase 18 | Complete |
 | PLAD-01 | Phase 19 | Pending |
 | PLAD-02 | Phase 19 | Pending |
