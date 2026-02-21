@@ -31,7 +31,7 @@ import { RecurrencePicker } from "@/components/tasks/recurrence-picker";
 import { useProjects } from "@/lib/hooks/use-projects";
 import { getProjectColor } from "@/lib/projects/colors";
 import { taskFormSchema, type TaskFormValues } from "@/lib/validations/task";
-import type { Task, TaskCategory, RecurrenceRule, EndType } from "@/lib/db/types";
+import type { Task, TaskCategory, TaskSection, RecurrenceRule, EndType } from "@/lib/db/types";
 
 export interface RecurrenceConfig {
   rule: RecurrenceRule | null;
@@ -48,6 +48,7 @@ interface TaskFormProps {
   isLoading?: boolean;
   hideChrome?: boolean;
   id?: string;
+  defaultSection?: TaskSection;
   showRecurrence?: boolean;
   initialRecurrence?: RecurrenceConfig;
 }
@@ -94,6 +95,7 @@ export function TaskForm({
   isLoading = false,
   hideChrome = false,
   id,
+  defaultSection,
   showRecurrence = true,
   initialRecurrence,
 }: TaskFormProps) {
@@ -114,7 +116,7 @@ export function TaskForm({
       category: initialData?.category ?? null,
       due_date: initialData?.due_date ?? null,
       due_time: initialData?.due_time?.slice(0, 5) ?? null,
-      section: initialData?.section ?? "personal",
+      section: initialData?.section ?? defaultSection ?? "personal",
       project_id: initialData?.project_id ?? null,
     },
   });

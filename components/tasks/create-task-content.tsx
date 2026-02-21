@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useSWRConfig } from "swr";
 import { toast } from "sonner";
@@ -12,11 +12,14 @@ import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import { TaskForm } from "@/components/tasks/task-form";
 import type { RecurrenceConfig } from "@/components/tasks/task-form";
 import type { TaskFormValues } from "@/lib/validations/task";
+import type { TaskSection } from "@/lib/db/types";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { getLocalDateString } from "@/lib/utils";
 
 export function CreateTaskContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const defaultSection = searchParams.get("section") as TaskSection | null;
   const t = useTranslations("tasks");
   const tBreadcrumb = useTranslations("tasks.breadcrumb");
   const tForm = useTranslations("tasks.form");
@@ -126,6 +129,7 @@ export function CreateTaskContent() {
             onCancel={handleCancel}
             isLoading={isLoading}
             hideChrome
+            defaultSection={defaultSection ?? undefined}
           />
         </CardContent>
       </Card>
