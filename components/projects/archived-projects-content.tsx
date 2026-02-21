@@ -27,9 +27,8 @@ export function ArchivedProjectsContent() {
       if (!res.ok) throw new Error("Failed to restore project");
       toast.success(t("restoreSuccess"));
       mutate();
-    } catch (err) {
-      console.error("Failed to restore project:", err);
-      toast.error("Failed to restore project");
+    } catch {
+      toast.error(t("restoreError"));
     }
   };
 
@@ -94,8 +93,8 @@ function ArchivedProjectCard({ project, onRestore }: ArchivedProjectCardProps) {
       style={{
         borderLeftColor: colorHsl,
         backgroundColor: isDark
-          ? `${colorHsl.replace(")", " / 0.06)")}`
-          : `${colorHsl.replace(")", " / 0.04)")}`,
+          ? colorHsl.replace("hsl(", "hsla(").replace(")", ", 0.06)")
+          : colorHsl.replace("hsl(", "hsla(").replace(")", ", 0.04)"),
       }}
     >
       <CardContent className="p-4">

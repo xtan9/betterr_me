@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { PROJECT_COLORS } from "@/lib/projects/colors";
 
 export const projectSectionSchema = z.enum(['personal', 'work']);
+
+const validColorKeys = PROJECT_COLORS.map((c) => c.key) as [string, ...string[]];
 
 export const projectFormSchema = z.object({
   name: z
@@ -9,7 +12,7 @@ export const projectFormSchema = z.object({
     .min(1, "Name is required")
     .max(50, "Name must be 50 characters or less"),
   section: projectSectionSchema,
-  color: z.string().min(1, "Color is required"),
+  color: z.enum(validColorKeys, { message: "Invalid color" }),
 });
 
 export type ProjectFormValues = z.infer<typeof projectFormSchema>;

@@ -734,6 +734,7 @@
     "confirmDelete": "Delete Project",
     "cancel": "Cancel",
     "archiveSuccess": "Project archived",
+    "archiveError": "Failed to archive project",
     "deleteSuccess": "Project deleted",
     "createSuccess": "Project created",
     "updateSuccess": "Project updated",
@@ -767,6 +768,7 @@
       "empty": "No archived projects",
       "restore": "Restore",
       "restoreSuccess": "Project restored",
+      "restoreError": "Failed to restore project",
       "backToTasks": "Back to Tasks"
     }
   },

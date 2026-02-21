@@ -90,8 +90,8 @@ export function ProjectCard({
       style={{
         borderLeftColor: colorHsl,
         backgroundColor: isDark
-          ? `${colorHsl.replace(")", " / 0.06)")}`
-          : `${colorHsl.replace(")", " / 0.04)")}`,
+          ? colorHsl.replace("hsl(", "hsla(").replace(")", ", 0.06)")
+          : colorHsl.replace("hsl(", "hsla(").replace(")", ", 0.04)"),
       }}
       onClick={handleCardClick}
     >
