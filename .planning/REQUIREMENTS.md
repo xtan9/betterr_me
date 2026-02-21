@@ -144,13 +144,78 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated during roadmap creation) | | |
+| FOUN-01 | Phase 18 | Pending |
+| FOUN-02 | Phase 18 | Pending |
+| FOUN-03 | Phase 18 | Pending |
+| FOUN-04 | Phase 18 | Pending |
+| FOUN-05 | Phase 18 | Pending |
+| FOUN-06 | Phase 18 | Pending |
+| FOUN-07 | Phase 18 | Pending |
+| FOUN-08 | Phase 18 | Pending |
+| PLAD-01 | Phase 19 | Pending |
+| PLAD-02 | Phase 19 | Pending |
+| PLAD-03 | Phase 19 | Pending |
+| PLAD-04 | Phase 19 | Pending |
+| PLAD-05 | Phase 19 | Pending |
+| PLAD-06 | Phase 19 | Pending |
+| PLAD-07 | Phase 19 | Pending |
+| PLAD-08 | Phase 19 | Pending |
+| TXNS-01 | Phase 20 | Pending |
+| TXNS-02 | Phase 20 | Pending |
+| TXNS-03 | Phase 20 | Pending |
+| TXNS-04 | Phase 20 | Pending |
+| TXNS-05 | Phase 20 | Pending |
+| TXNS-06 | Phase 20 | Pending |
+| TXNS-07 | Phase 20 | Pending |
+| TXNS-08 | Phase 20 | Pending |
+| CATG-01 | Phase 20 | Pending |
+| CATG-02 | Phase 20 | Pending |
+| CATG-03 | Phase 20 | Pending |
+| BUDG-01 | Phase 21 | Pending |
+| BUDG-02 | Phase 21 | Pending |
+| BUDG-03 | Phase 21 | Pending |
+| BUDG-04 | Phase 21 | Pending |
+| BUDG-05 | Phase 21 | Pending |
+| BUDG-06 | Phase 21 | Pending |
+| BILL-01 | Phase 22 | Pending |
+| BILL-02 | Phase 22 | Pending |
+| BILL-03 | Phase 22 | Pending |
+| BILL-04 | Phase 22 | Pending |
+| GOAL-01 | Phase 22 | Pending |
+| GOAL-02 | Phase 22 | Pending |
+| GOAL-03 | Phase 22 | Pending |
+| GOAL-04 | Phase 22 | Pending |
+| GOAL-05 | Phase 22 | Pending |
+| NTWT-01 | Phase 22 | Pending |
+| NTWT-02 | Phase 22 | Pending |
+| NTWT-03 | Phase 22 | Pending |
+| HOUS-01 | Phase 23 | Pending |
+| HOUS-02 | Phase 23 | Pending |
+| HOUS-03 | Phase 23 | Pending |
+| HOUS-04 | Phase 23 | Pending |
+| HOUS-05 | Phase 23 | Pending |
+| HOUS-06 | Phase 23 | Pending |
+| HOUS-07 | Phase 23 | Pending |
+| DASH-01 | Phase 24 | Pending |
+| DASH-02 | Phase 24 | Pending |
+| DASH-03 | Phase 24 | Pending |
+| DASH-04 | Phase 24 | Pending |
+| DASH-05 | Phase 24 | Pending |
+| DASH-06 | Phase 24 | Pending |
+| DASH-07 | Phase 24 | Pending |
+| AIML-01 | Phase 24 | Pending |
+| AIML-02 | Phase 24 | Pending |
+| AIML-03 | Phase 24 | Pending |
+| AIML-04 | Phase 24 | Pending |
+| AIML-05 | Phase 24 | Pending |
+| MGMT-01 | Phase 25 | Pending |
+| MGMT-02 | Phase 25 | Pending |
 
 **Coverage:**
-- v4.0 requirements: 55 total
-- Mapped to phases: 0
-- Unmapped: 55
+- v4.0 requirements: 66 total
+- Mapped to phases: 66
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-21*
-*Last updated: 2026-02-21 after initial definition*
+*Last updated: 2026-02-21 after roadmap creation*
