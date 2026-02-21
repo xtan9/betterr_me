@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Plus, PartyPopper } from "lucide-react";
+import Link from "next/link";
+import { Plus, PartyPopper, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { HabitRow } from "@/components/habits/habit-row";
@@ -24,6 +25,10 @@ export function HabitChecklist({
   const t = useTranslations("dashboard.habits");
   const router = useRouter();
 
+  const sortedHabits = [...habits].sort(
+    (a, b) => Number(a.completed_today) - Number(b.completed_today),
+  );
+
   const completedCount = habits.filter((h) => h.completed_today).length;
   const totalCount = habits.length;
   const remaining = totalCount - completedCount;
@@ -36,7 +41,10 @@ export function HabitChecklist({
   return (
     <Card className="flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <h2 className="font-display text-lg font-semibold">{t("title")}</h2>
+        <Link href="/habits" className="group flex items-center gap-1">
+          <h2 className="font-display text-lg font-semibold">{t("title")}</h2>
+          <ChevronRight className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150 motion-reduce:transition-none" />
+        </Link>
         <Button
           variant="outline"
           size="sm"
@@ -56,7 +64,7 @@ export function HabitChecklist({
         ) : (
           <>
             <div className="space-y-1">
-              {habits.map((habit) => (
+              {sortedHabits.map((habit) => (
                 <HabitRow
                   key={habit.id}
                   habit={habit}

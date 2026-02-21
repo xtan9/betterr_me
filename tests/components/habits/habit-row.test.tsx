@@ -94,6 +94,18 @@ describe('HabitRow', () => {
       expect(checkbox).toBeChecked();
     });
 
+    it('dims habit name when completed today', () => {
+      render(<HabitRow {...defaultProps} habit={makeHabit({ completed_today: true })} />);
+      const nameSpan = screen.getByText('Morning Run');
+      expect(nameSpan.className).toContain('text-muted-foreground');
+    });
+
+    it('does not dim habit name when not completed', () => {
+      render(<HabitRow {...defaultProps} habit={makeHabit({ completed_today: false })} />);
+      const nameSpan = screen.getByText('Morning Run');
+      expect(nameSpan.className).not.toContain('text-muted-foreground');
+    });
+
     it('disables checkbox when isToggling is true', () => {
       render(<HabitRow {...defaultProps} isToggling />);
       const checkbox = screen.getByRole('checkbox');
