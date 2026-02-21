@@ -6,7 +6,7 @@
 - ✅ **v1.1 Dashboard Task Fixes** — Phase 6 (shipped 2026-02-17)
 - ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
 - ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
-- 🚧 **v3.0 Projects & Kanban** — Phases 13-15 (in progress)
+- 🚧 **v3.0 Projects & Kanban** — Phases 13-16 (in progress)
 
 ## Phases
 
@@ -45,6 +45,7 @@
 - [x] **Phase 13: Data Foundation & Migration** - Status field, is_completed sync, migration of existing tasks, backward compatibility (completed 2026-02-19)
 - [x] **Phase 14: Projects & Sections** - Project CRUD, task form extensions, tasks page redesign with section-based layout (completed 2026-02-20)
 - [x] **Phase 15: Kanban Board** - 4-column kanban with cross-column drag-and-drop, detail modal, quick-add (completed 2026-02-20)
+- [ ] **Phase 16: Integration Bug Fixes** - Fix API wiring for section/project_id, kanban SWR cache, archived projects nav (gap closure)
 
 ## Phase Details
 
@@ -97,6 +98,24 @@ Plans:
 - [x] 15-03-PLAN.md — Interactions: Monday.com-style detail modal + column quick-add
 - [x] 15-04-PLAN.md — Documentation gap closure: mark KANB-03/04/05 as deferred in REQUIREMENTS.md and ROADMAP.md
 
+### Phase 16: Integration Bug Fixes
+**Goal**: All cross-phase API wiring works correctly — task creation/editing persists section and project_id, kanban drag-drop doesn't corrupt SWR cache, production build passes, and archived projects are discoverable
+**Depends on**: Phases 13-15 (gap closure phase)
+**Requirements**: FORM-01, FORM-02, PROJ-01, PROJ-03, PAGE-01, PAGE-02, KANB-02
+**Gap Closure**: Closes gaps from v3.0 milestone audit
+**Success Criteria** (what must be TRUE):
+  1. Creating a task with section=work via POST /api/tasks stores section='work' in the database
+  2. Creating a task with project_id via POST /api/tasks stores the project_id FK in the database
+  3. Editing a task's project_id via PATCH /api/tasks/[id] persists the change
+  4. `pnpm build` succeeds without TypeScript errors in the projects API route
+  5. Dragging a kanban card between columns persists the change AND the board remains fully populated (no empty columns after drag)
+  6. Users can navigate to the archived projects page from the tasks page UI
+**Plans**: 2 plans
+
+Plans:
+- [ ] 16-01-PLAN.md — Task & project API wiring: forward section + project_id in POST/PATCH handlers, fix ProjectInsert type error
+- [ ] 16-02-PLAN.md — Kanban SWR cache fix + archived projects navigation link
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -113,3 +132,4 @@ Plans:
 | 13. Data Foundation & Migration | 2/2 | Complete    | 2026-02-19 | - |
 | 14. Projects & Sections | 3/3 | Complete    | 2026-02-20 | - |
 | 15. Kanban Board | 4/4 | Complete    | 2026-02-21 | - |
+| 16. Integration Bug Fixes | 0/2 | Planned | - | - |

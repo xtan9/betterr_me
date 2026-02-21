@@ -16,27 +16,27 @@ Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
 
 ### Projects
 
-- [x] **PROJ-01**: User can create a project with a name, section (Work/Personal), and preset color
+- [ ] **PROJ-01**: User can create a project with a name, section (Work/Personal), and preset color
 - [x] **PROJ-02**: User can edit a project's name, color, and section
-- [x] **PROJ-03**: User can archive a project (hidden by default, available via filter)
+- [ ] **PROJ-03**: User can archive a project (hidden by default, available via filter)
 - [x] **PROJ-04**: User can delete a project (tasks become standalone within the same section)
 - [x] **PROJ-05**: User can see project progress (X of Y tasks done) on the tasks page project card
 
 ### Task Form
 
-- [x] **FORM-01**: User can select a section (Work/Personal) when creating or editing a task (required, defaults to Personal)
-- [x] **FORM-02**: User can optionally assign a task to a project (dropdown filtered by selected section)
+- [ ] **FORM-01**: User can select a section (Work/Personal) when creating or editing a task (required, defaults to Personal)
+- [ ] **FORM-02**: User can optionally assign a task to a project (dropdown filtered by selected section)
 
 ### Tasks Page
 
-- [x] **PAGE-01**: Tasks page shows Work and Personal as top-level sections
-- [x] **PAGE-02**: Each section displays project cards and a standalone tasks area
+- [ ] **PAGE-01**: Tasks page shows Work and Personal as top-level sections
+- [ ] **PAGE-02**: Each section displays project cards and a standalone tasks area
 - [x] **PAGE-03**: Clicking a project card opens the kanban board view for that project
 
 ### Kanban Board
 
 - [x] **KANB-01**: User can view a project's tasks in a 4-column kanban board (Backlog, To Do, In Progress, Done)
-- [x] **KANB-02**: User can drag and drop tasks between kanban columns to change status
+- [ ] **KANB-02**: User can drag and drop tasks between kanban columns to change status
 
 ### Internationalization
 
@@ -87,18 +87,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-02 | Phase 13 | Complete |
 | DATA-03 | Phase 13 | Complete |
 | DATA-04 | Phase 13 | Complete |
-| PROJ-01 | Phase 14 | Complete |
+| PROJ-01 | Phase 16 | Pending |
 | PROJ-02 | Phase 14 | Complete |
-| PROJ-03 | Phase 14 | Complete |
+| PROJ-03 | Phase 16 | Pending |
 | PROJ-04 | Phase 14 | Complete |
 | PROJ-05 | Phase 14 | Complete |
-| FORM-01 | Phase 14 | Complete |
-| FORM-02 | Phase 14 | Complete |
-| PAGE-01 | Phase 14 | Complete |
-| PAGE-02 | Phase 14 | Complete |
+| FORM-01 | Phase 16 | Pending |
+| FORM-02 | Phase 16 | Pending |
+| PAGE-01 | Phase 16 | Pending |
+| PAGE-02 | Phase 16 | Pending |
 | PAGE-03 | Phase 15 | Complete |
 | KANB-01 | Phase 15 | Complete |
-| KANB-02 | Phase 15 | Complete |
+| KANB-02 | Phase 16 | Pending |
 | KANB-03 | Phase 15 | Deferred |
 | KANB-04 | Phase 15 | Deferred |
 | KANB-05 | Phase 15 | Deferred |
@@ -106,6 +106,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 **Coverage:**
 - v3.0 requirements: 17 active (3 deferred to future)
+- Satisfied: 10 | Pending (Phase 16 gap closure): 7
 - Mapped to phases: 17
 - Deferred: 3 (KANB-03, KANB-04, KANB-05)
 
@@ -113,4 +114,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-18*
-*Last updated: 2026-02-20 — KANB-03, KANB-04, KANB-05 moved to deferred (user decisions from Phase 15 context discussion)*
+*Last updated: 2026-02-20 — Phase 16 gap closure: FORM-01, FORM-02, PROJ-01, PROJ-03, PAGE-01, PAGE-02, KANB-02 reset to Pending*
