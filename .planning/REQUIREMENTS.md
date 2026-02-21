@@ -37,9 +37,6 @@ Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
 
 - [x] **KANB-01**: User can view a project's tasks in a 4-column kanban board (Backlog, To Do, In Progress, Done)
 - [x] **KANB-02**: User can drag and drop tasks between kanban columns to change status
-- [ ] **KANB-03**: User can drag and drop tasks within a column to reorder them
-- [ ] **KANB-04**: Dragging a task to Done triggers completion reflection (emoji strip for high-priority/intentional tasks)
-- [ ] **KANB-05**: Kanban cards display the task's intention ("Your Why") when present
 
 ### Internationalization
 
@@ -51,6 +48,9 @@ Deferred to future milestones. Tracked but not in current roadmap.
 
 ### Kanban Polish
 
+- **KANB-03**: User can drag and drop tasks within a column to reorder — deferred; user decided cards auto-sort by priority (high to low), no manual reorder needed (Phase 15 context decision)
+- **KANB-04**: Completion reflection on drag-to-Done — deferred; user decided tasks move to Done silently with no emoji prompt (Phase 15 context decision)
+- **KANB-05**: Kanban cards display task intention ("Your Why") — deferred; user decided no intention display on cards (Phase 15 context decision)
 - **KANB-06**: Kanban board is fully keyboard-navigable with ARIA labels in all 3 locales
 - **KANB-07**: Touch-optimized drag-and-drop for mobile devices
 
@@ -99,18 +99,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PAGE-03 | Phase 15 | Complete |
 | KANB-01 | Phase 15 | Complete |
 | KANB-02 | Phase 15 | Complete |
-| KANB-03 | Phase 15 | Pending |
-| KANB-04 | Phase 15 | Pending |
-| KANB-05 | Phase 15 | Pending |
+| KANB-03 | Phase 15 | Deferred |
+| KANB-04 | Phase 15 | Deferred |
+| KANB-05 | Phase 15 | Deferred |
 | I18N-01 | Phase 15 | Complete |
 
 **Coverage:**
-- v3.0 requirements: 20 total
-- Mapped to phases: 20
-- Unmapped: 0
+- v3.0 requirements: 17 active (3 deferred to future)
+- Mapped to phases: 17
+- Deferred: 3 (KANB-03, KANB-04, KANB-05)
 
 **I18N-01 note:** Mapped to Phase 15 for final verification, but i18n strings are added alongside each feature in every phase. Each phase's success criteria includes translation of strings built in that phase.
 
 ---
 *Requirements defined: 2026-02-18*
-*Last updated: 2026-02-18 after roadmap creation*
+*Last updated: 2026-02-20 — KANB-03, KANB-04, KANB-05 moved to deferred (user decisions from Phase 15 context discussion)*
