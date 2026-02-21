@@ -103,8 +103,9 @@ export interface Project {
   updated_at: string;
 }
 
-export type ProjectInsert = Omit<Project, 'id' | 'created_at' | 'updated_at'> & {
+export type ProjectInsert = Omit<Project, 'id' | 'created_at' | 'updated_at' | 'status' | 'sort_order'> & {
   id?: string;
+  status?: ProjectStatus;
   sort_order?: number;
 };
 

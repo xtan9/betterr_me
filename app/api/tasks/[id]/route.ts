@@ -134,6 +134,9 @@ export async function PATCH(
     if (validation.data.sort_order !== undefined) {
       updates.sort_order = validation.data.sort_order;
     }
+    if (validation.data.project_id !== undefined) {
+      updates.project_id = validation.data.project_id;
+    }
 
     // Apply sync to keep status/is_completed consistent
     const syncedUpdates = syncTaskUpdate(updates);

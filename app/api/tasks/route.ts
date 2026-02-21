@@ -165,6 +165,8 @@ export async function POST(request: NextRequest) {
       due_date: validation.data.due_date || null,
       due_time: validation.data.due_time || null,
       status: validation.data.status,
+      section: validation.data.section,
+      project_id: validation.data.project_id ?? null,
       sort_order: getBottomSortOrder(maxRow?.sort_order ?? null),
     };
 
