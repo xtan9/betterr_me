@@ -768,5 +768,42 @@
       "restoreSuccess": "Project restored",
       "backToTasks": "Back to Tasks"
     }
+  },
+  "kanban": {
+    "backToTasks": "Back to Tasks",
+    "taskCount": "{count, plural, =0 {No tasks} =1 {1 task} other {# tasks}}",
+    "columns": {
+      "backlog": "Backlog",
+      "todo": "To Do",
+      "in_progress": "In Progress",
+      "done": "Done"
+    },
+    "emptyColumn": "No tasks in this column",
+    "quickAdd": {
+      "placeholder": "Add a task..."
+    },
+    "dragError": "Failed to update task status",
+    "createError": "Failed to create task",
+    "detail": {
+      "detailsTab": "Details",
+      "activityTab": "Activity",
+      "status": "Status",
+      "priority": "Priority",
+      "section": "Section",
+      "project": "Project",
+      "dueDate": "Due Date",
+      "description": "Description",
+      "noDescription": "No description",
+      "noDueDate": "No due date",
+      "commentsPlaceholder": "Comments and updates coming soon",
+      "activityPlaceholder": "Activity log coming soon",
+      "editTask": "Edit Task"
+    },
+    "priority": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "none": "None"
+    }
   }
 }

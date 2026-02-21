@@ -768,5 +768,42 @@
       "restoreSuccess": "项目已恢复",
       "backToTasks": "返回任务"
     }
+  },
+  "kanban": {
+    "backToTasks": "返回任务",
+    "taskCount": "{count, plural, =0 {没有任务} other {# 个任务}}",
+    "columns": {
+      "backlog": "待办池",
+      "todo": "待办",
+      "in_progress": "进行中",
+      "done": "已完成"
+    },
+    "emptyColumn": "此列暂无任务",
+    "quickAdd": {
+      "placeholder": "添加任务..."
+    },
+    "dragError": "更新任务状态失败",
+    "createError": "创建任务失败",
+    "detail": {
+      "detailsTab": "详情",
+      "activityTab": "动态",
+      "status": "状态",
+      "priority": "优先级",
+      "section": "分区",
+      "project": "项目",
+      "dueDate": "截止日期",
+      "description": "描述",
+      "noDescription": "暂无描述",
+      "noDueDate": "暂无截止日期",
+      "commentsPlaceholder": "评论和更新功能即将上线",
+      "activityPlaceholder": "活动日志功能即将上线",
+      "editTask": "编辑任务"
+    },
+    "priority": {
+      "high": "高",
+      "medium": "中",
+      "low": "低",
+      "none": "无"
+    }
   }
 }
