@@ -112,4 +112,4 @@ Plans:
 | 12. Component Fixes | v2.1 | 1/1 | Complete | 2026-02-18 |
 | 13. Data Foundation & Migration | 2/2 | Complete    | 2026-02-19 | - |
 | 14. Projects & Sections | 3/3 | Complete    | 2026-02-20 | - |
-| 15. Kanban Board | 4/4 | Complete   | 2026-02-21 | - |
+| 15. Kanban Board | 4/4 | Complete    | 2026-02-21 | - |
