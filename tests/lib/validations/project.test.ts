@@ -27,7 +27,7 @@ describe('projectFormSchema', () => {
   const validProject = {
     name: 'My Project',
     section: 'personal',
-    color: '#3b82f6',
+    color: 'blue',
   };
 
   it('accepts valid project data', () => {
@@ -38,7 +38,7 @@ describe('projectFormSchema', () => {
   it('rejects missing name', () => {
     const result = projectFormSchema.safeParse({
       section: 'personal',
-      color: '#3b82f6',
+      color: 'blue',
     });
     expect(result.success).toBe(false);
   });
@@ -62,7 +62,7 @@ describe('projectFormSchema', () => {
   it('rejects missing section', () => {
     const result = projectFormSchema.safeParse({
       name: 'Test',
-      color: '#3b82f6',
+      color: 'blue',
     });
     expect(result.success).toBe(false);
   });
@@ -79,6 +79,14 @@ describe('projectFormSchema', () => {
     const result = projectFormSchema.safeParse({
       name: 'Test',
       section: 'personal',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects invalid color key', () => {
+    const result = projectFormSchema.safeParse({
+      ...validProject,
+      color: '#3b82f6',
     });
     expect(result.success).toBe(false);
   });
@@ -101,7 +109,7 @@ describe('projectUpdateSchema', () => {
   });
 
   it('accepts color-only update', () => {
-    const result = projectUpdateSchema.safeParse({ color: '#ef4444' });
+    const result = projectUpdateSchema.safeParse({ color: 'red' });
     expect(result.success).toBe(true);
   });
 

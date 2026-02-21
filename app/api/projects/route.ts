@@ -5,6 +5,7 @@ import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { projectFormSchema } from '@/lib/validations/project';
 import { ensureProfile } from '@/lib/db/ensure-profile';
+import type { ProjectSection, ProjectStatus } from '@/lib/db/types';
 
 /**
  * GET /api/projects
@@ -28,12 +29,17 @@ export async function GET(request: NextRequest) {
     const projectsDB = new ProjectsDB(supabase);
     const searchParams = request.nextUrl.searchParams;
 
-    const filters: { section?: string; status?: string } = {};
-    if (searchParams.has('section')) {
-      filters.section = searchParams.get('section')!;
+    const validSections: string[] = ['personal', 'work'];
+    const validStatuses: string[] = ['active', 'archived'];
+
+    const filters: { section?: ProjectSection; status?: ProjectStatus } = {};
+    const sectionParam = searchParams.get('section');
+    if (sectionParam && validSections.includes(sectionParam)) {
+      filters.section = sectionParam as ProjectSection;
     }
-    if (searchParams.has('status')) {
-      filters.status = searchParams.get('status')!;
+    const statusParam = searchParams.get('status');
+    if (statusParam && validStatuses.includes(statusParam)) {
+      filters.status = statusParam as ProjectStatus;
     }
 
     const projects = await projectsDB.getUserProjects(user.id, filters);

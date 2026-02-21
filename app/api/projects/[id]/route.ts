@@ -70,7 +70,10 @@ export async function PATCH(
     const project = await projectsDB.updateProject(id, user.id, validation.data);
 
     return NextResponse.json({ project });
-  } catch (error) {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'PGRST116') {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
     log.error('PATCH /api/projects/[id] error', error);
     return NextResponse.json(
       { error: 'Failed to update project' },

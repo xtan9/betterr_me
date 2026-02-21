@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Project, ProjectInsert, ProjectUpdate } from './types';
+import type { Project, ProjectInsert, ProjectUpdate, ProjectSection, ProjectStatus } from './types';
 
 export class ProjectsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -10,7 +10,7 @@ export class ProjectsDB {
    */
   async getUserProjects(
     userId: string,
-    filters?: { section?: string; status?: string }
+    filters?: { section?: ProjectSection; status?: ProjectStatus }
   ): Promise<Project[]> {
     let query = this.supabase
       .from('projects')

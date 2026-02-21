@@ -1,4 +1,4 @@
-import type { TaskUpdate, TaskInsert, TaskStatus } from '@/lib/db/types';
+import type { TaskUpdate, TaskInsert, TaskStatus, TaskSection } from '@/lib/db/types';
 
 /**
  * Synchronize status <-> is_completed for task creation.
@@ -7,7 +7,7 @@ import type { TaskUpdate, TaskInsert, TaskStatus } from '@/lib/db/types';
  */
 export function syncTaskCreate(
   input: TaskInsert
-): TaskInsert & { status: TaskStatus; section: string; is_completed: boolean; completed_at: string | null } {
+): TaskInsert & { status: TaskStatus; section: TaskSection; is_completed: boolean; completed_at: string | null } {
   const status: TaskStatus = input.status ?? 'todo';
   const is_completed = status === 'done';
   const completed_at = is_completed ? new Date().toISOString() : null;

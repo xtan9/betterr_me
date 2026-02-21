@@ -734,6 +734,7 @@
     "confirmDelete": "刪除專案",
     "cancel": "取消",
     "archiveSuccess": "專案已封存",
+    "archiveError": "封存專案失敗",
     "deleteSuccess": "專案已刪除",
     "createSuccess": "專案已建立",
     "updateSuccess": "專案已更新",
@@ -767,6 +768,7 @@
       "empty": "沒有已封存的專案",
       "restore": "還原",
       "restoreSuccess": "專案已還原",
+      "restoreError": "還原專案失敗",
       "backToTasks": "返回任務"
     }
   },

@@ -71,6 +71,7 @@ export function TasksPageContent() {
   // Projects SWR
   const {
     projects,
+    error: projectsError,
     isLoading: projectsLoading,
     mutate: projectsMutate,
   } = useProjects();
@@ -133,12 +134,13 @@ export function TasksPageContent() {
 
   const handleToggleTask = async (taskId: string) => {
     try {
-      await fetch(`/api/tasks/${taskId}/toggle`, {
+      const res = await fetch(`/api/tasks/${taskId}/toggle`, {
         method: "POST",
       });
+      if (!res.ok) throw new Error("Toggle failed");
       mutate();
-    } catch (err) {
-      console.error("Failed to toggle task:", err);
+    } catch {
+      toast.error(t("toggleError"));
     }
   };
 
@@ -167,9 +169,8 @@ export function TasksPageContent() {
       toast.success(tProjects("archiveSuccess"));
       projectsMutate();
       mutate(); // tasks may have changed sections
-    } catch (err) {
-      console.error("Failed to archive project:", err);
-      toast.error("Failed to archive project");
+    } catch {
+      toast.error(tProjects("archiveError"));
     }
   };
 
@@ -230,13 +231,13 @@ export function TasksPageContent() {
     return <TasksPageSkeleton />;
   }
 
-  if (error) {
+  if (error || projectsError) {
     return (
       <div className="flex flex-col items-center justify-center py-16 space-y-4">
         <p className="text-lg font-medium text-destructive">
           {t("error.title")}
         </p>
-        <Button onClick={() => mutate()} variant="outline">
+        <Button onClick={() => { mutate(); projectsMutate(); }} variant="outline">
           <RefreshCw className="size-4 mr-2" />
           {t("error.retry")}
         </Button>
