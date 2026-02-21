@@ -14,8 +14,11 @@ export const projectFormSchema = z.object({
 
 export type ProjectFormValues = z.infer<typeof projectFormSchema>;
 
+export const projectStatusSchema = z.enum(['active', 'archived']);
+
 export const projectUpdateSchema = projectFormSchema
   .partial()
+  .extend({ status: projectStatusSchema.optional() })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
   });
