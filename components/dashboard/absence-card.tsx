@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { AlertCircle, Clock, Heart, Check } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { AlertCircle, Clock, Heart, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { HabitWithAbsence } from "@/lib/db/types";
@@ -47,43 +45,18 @@ const variantConfig = {
 
 interface AbsenceCardProps {
   habit: HabitWithAbsence;
-  onToggle: (habitId: string) => Promise<void>;
+  onDismiss: (habitId: string) => void;
   onNavigate: (path: string) => void;
 }
 
-export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
+export function AbsenceCard({ habit, onDismiss, onNavigate }: AbsenceCardProps) {
   const t = useTranslations("dashboard.absence");
-  const [isCompleting, setIsCompleting] = useState(false);
-  const [justCompleted, setJustCompleted] = useState(false);
 
   const unit = habit.absence_unit ?? 'days';
   const variant = getVariant(habit.missed_scheduled_periods, unit);
   const config = variantConfig[variant];
   const Icon = config.icon;
   const titleSuffix = unit === 'weeks' ? 'Weeks' : '';
-
-  const handleComplete = async () => {
-    setIsCompleting(true);
-    try {
-      await onToggle(habit.id);
-      setJustCompleted(true);
-    } catch (err) {
-      console.error("Failed to complete habit:", err);
-    } finally {
-      setIsCompleting(false);
-    }
-  };
-
-  if (justCompleted) {
-    return (
-      <div className="flex items-center gap-3 p-4 rounded-lg border-l-4 border-l-primary bg-highlight">
-        <Check className="size-5 text-primary shrink-0" />
-        <p className="text-sm font-medium text-primary">
-          {t("completed", { name: habit.name })}
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -105,44 +78,35 @@ export function AbsenceCard({ habit, onToggle, onNavigate }: AbsenceCardProps) {
           </p>
         )}
 
-        {/* Recovery / Lapse: inline checkbox */}
-        {variant !== "hiatus" && (
-          <div className="flex items-center gap-2 mt-2">
-            <Checkbox
-              checked={false}
-              onCheckedChange={handleComplete}
-              disabled={isCompleting}
-              className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-            />
-            <span className="text-xs text-muted-foreground">
-              {t("markComplete")}
-            </span>
-          </div>
-        )}
-
-        {/* Hiatus: CTAs */}
-        {variant === "hiatus" && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              onClick={handleComplete}
-              disabled={isCompleting}
-            >
-              {t("resume")}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 text-xs"
-              onClick={() => onNavigate(`/habits/${habit.id}/edit`)}
-            >
-              {t("changeFrequency")}
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+            onClick={() => onNavigate(`/habits/${habit.id}`)}
+          >
+            {t("viewHabit")}
+          </button>
+          {variant === "hiatus" && (
+            <>
+              <span className="text-xs text-muted-foreground">·</span>
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+                onClick={() => onNavigate(`/habits/${habit.id}/edit`)}
+              >
+                {t("changeFrequency")}
+              </button>
+            </>
+          )}
+        </div>
       </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onDismiss(habit.id)}
+        className="shrink-0 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+        aria-label={t("dismiss")}
+      >
+        <X className="size-4" />
+      </Button>
     </div>
   );
 }

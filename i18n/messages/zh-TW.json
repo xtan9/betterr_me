@@ -200,10 +200,9 @@
       "hiatusTitleWeeks": "{name} — 已經 {days} 週沒有紀錄了",
       "previousStreak": "之前你保持了 {days} 天的連續紀錄",
       "previousStreakWeeks": "之前你保持了 {days} 週的連續紀錄",
-      "markComplete": "今天完成",
-      "completed": "{name} — 歡迎回來！",
-      "resume": "今天恢復",
-      "changeFrequency": "更改頻率"
+      "viewHabit": "查看習慣",
+      "changeFrequency": "更改頻率",
+      "dismiss": "關閉"
     }
   },
   "habits": {

@@ -200,10 +200,9 @@
       "hiatusTitleWeeks": "{name} — it's been {days, plural, one {# week} other {# weeks}}",
       "previousStreak": "You had a {days}-day streak before",
       "previousStreakWeeks": "You had a {days}-week streak before",
-      "markComplete": "Complete today",
-      "completed": "{name} — welcome back!",
-      "resume": "Resume today",
-      "changeFrequency": "Change frequency"
+      "viewHabit": "View habit",
+      "changeFrequency": "Change frequency",
+      "dismiss": "Dismiss"
     }
   },
   "habits": {
