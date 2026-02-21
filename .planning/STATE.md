@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking
+**Current focus:** v4.0 Money Tracking — Phase 18 (Database Foundation & Household Schema)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-21 — Milestone v4.0 started
+Phase: 18 of 25 (Database Foundation & Household Schema)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-02-21 — Roadmap created for v4.0 (8 phases, 66 requirements)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0
+Progress: [░░░░░░░░░░] 0% v4.0
 
 ## Performance Metrics
 
@@ -42,6 +42,14 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 ### Decisions
 
 See PROJECT.md Key Decisions table for full log with outcomes.
+Recent decisions affecting current work:
+
+- Keep Supabase for money features (no Better Auth+Drizzle+Neon)
+- Plaid for bank connections (12,000+ US institutions)
+- decimal.js for money arithmetic (integer cents in DB)
+- Calm Finance design for money views only (muted teal/amber)
+- No billing in v4.0 (build features first)
+- Couples/household from day one (household_id in schema from first migration)
 
 ### Pending Todos
 
@@ -51,13 +59,17 @@ None.
 
 - Vitest picks up .worktrees/ test files causing spurious failures (pre-existing, not blocking)
 - @dnd-kit/core v6 + React 19 peer dep mismatch requires pnpm config (cosmetic, works correctly)
-- v3.0 DB migrations must be applied to Supabase before features work in production
 - Plaid API costs ~$1-2/connected account/month — monitor unit economics
 - Plaid access tokens must be encrypted at rest from first migration
 - Household data isolation (RLS + application-layer) critical for couples feature
+- Supabase `numeric` type causes silent float precision loss — use BIGINT cents only
+- Plaid webhook endpoint bypasses Supabase auth — needs service-role client + JWT verification
+- Phase 19 (Plaid) flagged HIGH for research before planning
+- Phase 23 (Household/Couples) flagged MEDIUM for research (invite token strategy)
+- Phase 24 (Dashboard/AI) flagged HIGH for research (cash flow projections, constrained LLM)
 
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Defining v4.0 requirements
-Resume: Continue new-milestone workflow (research → requirements → roadmap)
+Stopped at: Roadmap created for v4.0 Money Tracking
+Resume: `/gsd:plan-phase 18` to begin Phase 18 planning
