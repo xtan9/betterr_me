@@ -45,7 +45,7 @@
 - [x] **Phase 13: Data Foundation & Migration** - Status field, is_completed sync, migration of existing tasks, backward compatibility (completed 2026-02-19)
 - [x] **Phase 14: Projects & Sections** - Project CRUD, task form extensions, tasks page redesign with section-based layout (completed 2026-02-20)
 - [x] **Phase 15: Kanban Board** - 4-column kanban with cross-column drag-and-drop, detail modal, quick-add (completed 2026-02-20)
-- [ ] **Phase 16: Integration Bug Fixes** - Fix API wiring for section/project_id, kanban SWR cache, archived projects nav (gap closure)
+- [x] **Phase 16: Integration Bug Fixes** - Fix API wiring for section/project_id, kanban SWR cache, archived projects nav (gap closure) (completed 2026-02-21)
 
 ## Phase Details
 
@@ -132,4 +132,4 @@ Plans:
 | 13. Data Foundation & Migration | 2/2 | Complete    | 2026-02-19 | - |
 | 14. Projects & Sections | 3/3 | Complete    | 2026-02-20 | - |
 | 15. Kanban Board | 4/4 | Complete    | 2026-02-21 | - |
-| 16. Integration Bug Fixes | 0/2 | Planned | - | - |
+| 16. Integration Bug Fixes | 2/2 | Complete   | 2026-02-21 | - |

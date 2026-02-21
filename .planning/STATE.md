@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v3.0 Projects & Kanban — Phase 15 (Kanban Board)
+**Current focus:** v3.0 Integration Bug Fixes — Phase 16
 
 ## Current Position
 
-Phase: 15 (third of 3 in v3.0) -- COMPLETE
-Plan: 4 of 4 complete (15-01, 15-02, 15-03, 15-04 done)
+Phase: 16 (integration-bug-fixes) -- COMPLETE
+Plan: 2 of 2 complete (16-01, 16-02 done)
 Status: Phase Complete
-Last activity: 2026-02-21 — Completed 15-04 (documentation gap closure: KANB-03/04/05 deferred in REQUIREMENTS.md and ROADMAP.md)
+Last activity: 2026-02-21 — Completed 16-02 (kanban SWR cache fix + archived projects link)
 
 Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0
 
@@ -41,6 +41,8 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - 15-02: 6min (2 tasks, 6 files)
 - 15-03: 4min (2 tasks, 4 files)
 - 15-04: 2min (2 tasks, 2 files)
+- 16-01: 1min (2 tasks, 5 files)
+- 16-02: 2min (2 tasks, 5 files)
 
 ## Accumulated Context
 
@@ -78,6 +80,9 @@ Recent decisions affecting current work:
 - Quick-add renders inside ScrollArea after last card, hover state controls visibility
 - Dialog open controlled by nullable selectedTask state with null guard for early return
 - KANB-03/04/05 moved to Future Requirements > Kanban Polish (not deleted) with Phase 15 context decision as reason
+- Fix ProjectInsert at type level (Omit+re-add) rather than handler level to prevent same bug in future callers
+- SWR mutate async returns mapped {tasks: Task[]} instead of raw res.json() to match GET cache shape
+- Ghost variant for Archived link to maintain visual hierarchy (primary actions remain dominant)
 
 ### Pending Todos
 
@@ -92,5 +97,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 15-04-PLAN.md (Phase 15 fully complete with documentation gap closure)
-Resume: All v3.0 milestone phases complete
+Stopped at: Completed 16-02-PLAN.md (Phase 16 fully complete)
+Resume: All Phase 16 integration bug fixes complete
