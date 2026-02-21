@@ -26,7 +26,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
+import {
+  PageHeader,
+  PageHeaderSkeleton,
+} from "@/components/layouts/page-header";
 import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import {
   AlertDialog,
@@ -114,13 +117,16 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
 
   // Fetch recurring task template if this is a recurring instance
   const { data: recurringTemplate } = useSWR<RecurringTask>(
-    task?.recurring_task_id ? `/api/recurring-tasks/${task.recurring_task_id}` : null,
+    task?.recurring_task_id
+      ? `/api/recurring-tasks/${task.recurring_task_id}`
+      : null,
     async (url: string) => {
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`Failed to fetch recurring template: ${res.status}`);
+      if (!res.ok)
+        throw new Error(`Failed to fetch recurring template: ${res.status}`);
       const data = await res.json();
       return data.recurring_task;
-    }
+    },
   );
 
   const handleToggle = async () => {
@@ -231,10 +237,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
         <PageHeader
           title={task.title}
           actions={
-            <Button
-              onClick={handleEditClick}
-              className="gap-2"
-            >
+            <Button onClick={handleEditClick} className="gap-2">
               <Edit className="size-4" />
               {t("detail.edit")}
             </Button>
@@ -289,7 +292,9 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
           {task.recurring_task_id && recurringTemplate && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Repeat className="size-4" />
-              <span>{describeRecurrence(recurringTemplate.recurrence_rule)}</span>
+              <span>
+                {describeRecurrence(recurringTemplate.recurrence_rule, t)}
+              </span>
             </div>
           )}
 
@@ -318,7 +323,10 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
                 </p>
                 <div className="flex items-center gap-2 mt-1">
                   <CategoryIcon
-                    className={cn("size-4 text-white rounded p-0.5", categoryColor)}
+                    className={cn(
+                      "size-4 text-white rounded p-0.5",
+                      categoryColor,
+                    )}
                   />
                   <span className="font-medium">
                     {task.category ? categoryT(task.category) : "---"}
@@ -395,7 +403,9 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>{t("detail.deleteCancel")}</AlertDialogCancel>
+                    <AlertDialogCancel>
+                      {t("detail.deleteCancel")}
+                    </AlertDialogCancel>
                     <AlertDialogAction
                       onClick={handleDelete}
                       disabled={isDeleting}

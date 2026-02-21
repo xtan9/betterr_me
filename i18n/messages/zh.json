@@ -592,7 +592,55 @@
       "endNever": "永不",
       "endAfter": "在",
       "endTimes": "次后",
-      "endOn": "在日期"
+      "endOn": "在日期",
+      "describe": {
+        "everyDay": "每天",
+        "everyNDays": "每 {interval} 天",
+        "everyWeek": "每周",
+        "everyNWeeks": "每 {interval} 周",
+        "weeklyOnDays": "{prefix}（{days}）",
+        "everyMonth": "每月",
+        "everyNMonths": "每 {interval} 个月",
+        "monthlyOnOrdinal": "{prefix}{ordinal}号",
+        "monthlyOnWeekday": "{prefix}{position}{day}",
+        "everyYear": "每年",
+        "everyNYears": "每 {interval} 年",
+        "yearlyOnDate": "{prefix}{month}{day}日",
+        "dayName": {
+          "0": "周日",
+          "1": "周一",
+          "2": "周二",
+          "3": "周三",
+          "4": "周四",
+          "5": "周五",
+          "6": "周六"
+        },
+        "monthName": {
+          "1": "1月",
+          "2": "2月",
+          "3": "3月",
+          "4": "4月",
+          "5": "5月",
+          "6": "6月",
+          "7": "7月",
+          "8": "8月",
+          "9": "9月",
+          "10": "10月",
+          "11": "11月",
+          "12": "12月"
+        },
+        "ordinal_other": "{n}",
+        "ordinal_one": "{n}",
+        "ordinal_two": "{n}",
+        "ordinal_few": "{n}",
+        "position": {
+          "first": "第一个",
+          "second": "第二个",
+          "third": "第三个",
+          "fourth": "第四个",
+          "last": "最后一个"
+        }
+      }
     },
     "scope": {
       "editTitle": "编辑重复任务",

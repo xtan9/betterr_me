@@ -18,20 +18,25 @@ export interface Profile {
 export interface ProfilePreferences {
   date_format: string;
   week_start_day: number;
-  theme: 'system' | 'light' | 'dark';
+  theme: "system" | "light" | "dark";
 }
 
-export type ProfileInsert = Omit<Profile, 'id' | 'created_at' | 'updated_at'> & {
+export type ProfileInsert = Omit<
+  Profile,
+  "id" | "created_at" | "updated_at"
+> & {
   id?: string;
 };
 
-export type ProfileUpdate = Partial<Omit<Profile, 'id' | 'email' | 'created_at' | 'updated_at'>>;
+export type ProfileUpdate = Partial<
+  Omit<Profile, "id" | "email" | "created_at" | "updated_at">
+>;
 
 // =============================================================================
 // TASKS
 // =============================================================================
 
-export type TaskCategory = 'work' | 'personal' | 'shopping' | 'other';
+export type TaskCategory = "work" | "personal" | "shopping" | "other";
 
 export interface Task {
   id: string; // UUID
@@ -53,7 +58,19 @@ export interface Task {
   updated_at: string;
 }
 
-export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'intention' | 'completion_difficulty' | 'recurring_task_id' | 'is_exception' | 'original_date'> & {
+export type TaskInsert = Omit<
+  Task,
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "completed_at"
+  | "category"
+  | "intention"
+  | "completion_difficulty"
+  | "recurring_task_id"
+  | "is_exception"
+  | "original_date"
+> & {
   id?: string;
   category?: TaskCategory | null;
   intention?: string | null;
@@ -63,25 +80,54 @@ export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'comple
   original_date?: string | null;
 };
 
-export type TaskUpdate = Partial<Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+export type TaskUpdate = Partial<
+  Omit<Task, "id" | "user_id" | "created_at" | "updated_at">
+>;
 
 // =============================================================================
 // RECURRING TASKS
 // =============================================================================
 
-export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
-export type WeekPosition = 'first' | 'second' | 'third' | 'fourth' | 'last';
-export type EndType = 'never' | 'after_count' | 'on_date';
+export type RecurrenceFrequency = "daily" | "weekly" | "monthly" | "yearly";
+export type WeekPosition = "first" | "second" | "third" | "fourth" | "last";
+export type EndType = "never" | "after_count" | "on_date";
 
-export interface RecurrenceRule {
-  frequency: RecurrenceFrequency;
+interface BaseRule {
   interval: number; // e.g., every 2 weeks
-  days_of_week?: number[]; // 0-6 (Sun=0), for weekly
-  day_of_month?: number; // 1-31, for monthly by date
-  week_position?: WeekPosition; // for monthly by weekday
-  day_of_week_monthly?: number; // 0-6, for monthly by weekday
-  month_of_year?: number; // 1-12, for yearly
 }
+
+export interface DailyRule extends BaseRule {
+  frequency: "daily";
+}
+
+export interface WeeklyRule extends BaseRule {
+  frequency: "weekly";
+  days_of_week: number[]; // 0-6 (Sun=0)
+}
+
+export interface MonthlyByDateRule extends BaseRule {
+  frequency: "monthly";
+  day_of_month: number; // 1-31
+}
+
+export interface MonthlyByWeekdayRule extends BaseRule {
+  frequency: "monthly";
+  week_position: WeekPosition;
+  day_of_week_monthly: number; // 0-6
+}
+
+export interface YearlyRule extends BaseRule {
+  frequency: "yearly";
+  month_of_year: number; // 1-12
+  day_of_month: number; // 1-31
+}
+
+export type RecurrenceRule =
+  | DailyRule
+  | WeeklyRule
+  | MonthlyByDateRule
+  | MonthlyByWeekdayRule
+  | YearlyRule;
 
 export interface RecurringTask {
   id: string;
@@ -99,24 +145,41 @@ export interface RecurringTask {
   end_count: number | null;
   instances_generated: number;
   next_generate_date: string | null;
-  status: 'active' | 'paused' | 'archived';
+  status: "active" | "paused" | "archived";
   created_at: string;
   updated_at: string;
 }
 
-export type RecurringTaskInsert = Omit<RecurringTask, 'id' | 'created_at' | 'updated_at' | 'instances_generated' | 'next_generate_date'> & {
+export type RecurringTaskInsert = Omit<
+  RecurringTask,
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "instances_generated"
+  | "next_generate_date"
+> & {
   id?: string;
   instances_generated?: number;
   next_generate_date?: string | null;
 };
 
-export type RecurringTaskUpdate = Partial<Omit<RecurringTask, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'instances_generated' | 'next_generate_date'>>;
+export type RecurringTaskUpdate = Partial<
+  Omit<
+    RecurringTask,
+    | "id"
+    | "user_id"
+    | "created_at"
+    | "updated_at"
+    | "instances_generated"
+    | "next_generate_date"
+  >
+>;
 
 // =============================================================================
 // HELPER TYPES
 // =============================================================================
 
-export type Priority = Task['priority'];
+export type Priority = Task["priority"];
 
 export interface TaskFilters {
   is_completed?: boolean;
@@ -129,17 +192,22 @@ export interface TaskFilters {
 // HABITS
 // =============================================================================
 
-export type HabitCategory = 'health' | 'wellness' | 'learning' | 'productivity' | 'other';
+export type HabitCategory =
+  | "health"
+  | "wellness"
+  | "learning"
+  | "productivity"
+  | "other";
 
-export type HabitStatus = 'active' | 'paused' | 'archived';
+export type HabitStatus = "active" | "paused" | "archived";
 
 // Discriminated union for habit frequency
 export type HabitFrequency =
-  | { type: 'daily' }
-  | { type: 'weekdays' }
-  | { type: 'weekly' }
-  | { type: 'times_per_week'; count: 2 | 3 }
-  | { type: 'custom'; days: number[] }; // 0=Sunday, 1=Monday, etc.
+  | { type: "daily" }
+  | { type: "weekdays" }
+  | { type: "weekly" }
+  | { type: "times_per_week"; count: 2 | 3 }
+  | { type: "custom"; days: number[] }; // 0=Sunday, 1=Monday, etc.
 
 export interface Habit {
   id: string; // UUID
@@ -156,14 +224,24 @@ export interface Habit {
   updated_at: string;
 }
 
-export type HabitInsert = Omit<Habit, 'id' | 'created_at' | 'updated_at' | 'current_streak' | 'best_streak' | 'paused_at'> & {
+export type HabitInsert = Omit<
+  Habit,
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "current_streak"
+  | "best_streak"
+  | "paused_at"
+> & {
   id?: string;
   current_streak?: number;
   best_streak?: number;
   paused_at?: string | null;
 };
 
-export type HabitUpdate = Partial<Omit<Habit, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+export type HabitUpdate = Partial<
+  Omit<Habit, "id" | "user_id" | "created_at" | "updated_at">
+>;
 
 export interface HabitFilters {
   status?: HabitStatus;
@@ -184,11 +262,14 @@ export interface HabitLog {
   updated_at: string;
 }
 
-export type HabitLogInsert = Omit<HabitLog, 'id' | 'created_at' | 'updated_at'> & {
+export type HabitLogInsert = Omit<
+  HabitLog,
+  "id" | "created_at" | "updated_at"
+> & {
   id?: string;
 };
 
-export type HabitLogUpdate = Partial<Pick<HabitLog, 'completed'>>;
+export type HabitLogUpdate = Partial<Pick<HabitLog, "completed">>;
 
 // =============================================================================
 // HABIT WITH LOGS (for joined queries)
@@ -203,14 +284,14 @@ export interface HabitWithTodayStatus extends Habit {
 export interface AbsenceData {
   missed_scheduled_periods: number; // consecutive missed periods (days or weeks) before today
   previous_streak: number; // streak length before the current absence gap
-  absence_unit: 'days' | 'weeks'; // what missed_scheduled_periods counts
+  absence_unit: "days" | "weeks"; // what missed_scheduled_periods counts
 }
 
 /** Default zero-absence data for SSR fallback and error paths. */
 export const ZERO_ABSENCE: AbsenceData = {
   missed_scheduled_periods: 0,
   previous_streak: 0,
-  absence_unit: 'days',
+  absence_unit: "days",
 };
 
 /** Habit with absence enrichment, used only in dashboard responses. */
@@ -224,7 +305,7 @@ export interface HabitWithLogs extends Habit {
 // HABIT MILESTONES
 // =============================================================================
 
-import type { MilestoneThreshold } from '@/lib/habits/milestones';
+import type { MilestoneThreshold } from "@/lib/habits/milestones";
 
 export interface HabitMilestone {
   id: string; // UUID

@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GET, PATCH, DELETE } from '@/app/api/tasks/[id]/route';
-import { NextRequest } from 'next/server';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { GET, PATCH, DELETE } from "@/app/api/tasks/[id]/route";
+import { NextRequest } from "next/server";
 
 // Mock dependencies
-vi.mock('@/lib/supabase/server', () => ({
+vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({
     auth: {
-      getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })),
+      getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })),
     },
   })),
 }));
@@ -17,64 +17,79 @@ const mockTasksDB = {
   deleteTask: vi.fn(),
 };
 
-vi.mock('@/lib/db', () => ({
+const mockRecurringTasksDB = {
+  updateInstanceWithScope: vi.fn(),
+  deleteInstanceWithScope: vi.fn(),
+};
+
+vi.mock("@/lib/db", () => ({
   TasksDB: class {
-    constructor() { return mockTasksDB; }
+    constructor() {
+      return mockTasksDB;
+    }
+  },
+  RecurringTasksDB: class {
+    constructor() {
+      return mockRecurringTasksDB;
+    }
   },
 }));
 
-describe('GET /api/tasks/[id]', () => {
+describe("GET /api/tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should return task by ID', async () => {
-    const mockTask = { id: 'task-1', user_id: 'user-123', title: 'Task 1' };
+  it("should return task by ID", async () => {
+    const mockTask = { id: "task-1", user_id: "user-123", title: "Task 1" };
     vi.mocked(mockTasksDB.getTask).mockResolvedValue(mockTask as any);
 
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1');
-    const response = await GET(request, { params: Promise.resolve({ id: 'task-1' }) });
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1");
+    const response = await GET(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
     const data = await response.json();
 
     expect(response.status).toBe(200);
     expect(data.task).toEqual(mockTask);
-    expect(mockTasksDB.getTask).toHaveBeenCalledWith('task-1', 'user-123');
+    expect(mockTasksDB.getTask).toHaveBeenCalledWith("task-1", "user-123");
   });
 
-  it('should return 404 if task not found', async () => {
+  it("should return 404 if task not found", async () => {
     vi.mocked(mockTasksDB.getTask).mockResolvedValue(null);
 
-    const request = new NextRequest('http://localhost:3000/api/tasks/nonexistent');
+    const request = new NextRequest(
+      "http://localhost:3000/api/tasks/nonexistent",
+    );
     const response = await GET(request, {
-      params: Promise.resolve({ id: 'nonexistent' }),
+      params: Promise.resolve({ id: "nonexistent" }),
     });
 
     expect(response.status).toBe(404);
   });
 });
 
-describe('PATCH /api/tasks/[id]', () => {
+describe("PATCH /api/tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
   });
 
-  it('should update task', async () => {
+  it("should update task", async () => {
     const updatedTask = {
-      id: 'task-1',
-      user_id: 'user-123',
-      title: 'Updated',
+      id: "task-1",
+      user_id: "user-123",
+      title: "Updated",
       priority: 3,
     };
     vi.mocked(mockTasksDB.updateTask).mockResolvedValue(updatedTask as any);
 
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'PATCH',
-      body: JSON.stringify({ title: 'Updated', priority: 3 }),
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "Updated", priority: 3 }),
     });
 
     const response = await PATCH(request, {
-      params: Promise.resolve({ id: 'task-1' }),
+      params: Promise.resolve({ id: "task-1" }),
     });
     const data = await response.json();
 
@@ -82,168 +97,336 @@ describe('PATCH /api/tasks/[id]', () => {
     expect(data.task).toEqual(updatedTask);
   });
 
-  it('should return 400 if no valid updates', async () => {
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'PATCH',
+  it("should return 400 if no valid updates", async () => {
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
       body: JSON.stringify({}),
     });
 
     const response = await PATCH(request, {
-      params: Promise.resolve({ id: 'task-1' }),
+      params: Promise.resolve({ id: "task-1" }),
     });
 
     expect(response.status).toBe(400);
   });
 
-  it('should update intention', async () => {
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({ id: 'task-1', intention: 'Be healthy' } as any);
-
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'PATCH',
-      body: JSON.stringify({ intention: 'Be healthy' }),
-    });
-
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: 'task-1' }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123', { intention: 'Be healthy' });
-  });
-
-  it('should clear intention when set to empty string', async () => {
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({ id: 'task-1', intention: null } as any);
-
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'PATCH',
-      body: JSON.stringify({ intention: '' }),
-    });
-
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: 'task-1' }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123', { intention: null });
-  });
-
-  it('should update completion_difficulty with valid value', async () => {
+  it("should update intention", async () => {
     vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
-      id: 'task-1',
+      id: "task-1",
+      intention: "Be healthy",
+    } as any);
+
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
+      body: JSON.stringify({ intention: "Be healthy" }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith("task-1", "user-123", {
+      intention: "Be healthy",
+    });
+  });
+
+  it("should clear intention when set to empty string", async () => {
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+      id: "task-1",
+      intention: null,
+    } as any);
+
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
+      body: JSON.stringify({ intention: "" }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith("task-1", "user-123", {
+      intention: null,
+    });
+  });
+
+  it("should update completion_difficulty with valid value", async () => {
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+      id: "task-1",
       completion_difficulty: 2,
     } as any);
 
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'PATCH',
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
       body: JSON.stringify({ completion_difficulty: 2 }),
     });
 
     const response = await PATCH(request, {
-      params: Promise.resolve({ id: 'task-1' }),
+      params: Promise.resolve({ id: "task-1" }),
     });
 
     expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123', {
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith("task-1", "user-123", {
       completion_difficulty: 2,
     });
   });
 
-  it('should accept null to clear completion_difficulty', async () => {
+  it("should accept null to clear completion_difficulty", async () => {
     vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
-      id: 'task-1',
+      id: "task-1",
       completion_difficulty: null,
     } as any);
 
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'PATCH',
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
       body: JSON.stringify({ completion_difficulty: null }),
     });
 
     const response = await PATCH(request, {
-      params: Promise.resolve({ id: 'task-1' }),
+      params: Promise.resolve({ id: "task-1" }),
     });
 
     expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123', {
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith("task-1", "user-123", {
       completion_difficulty: null,
     });
   });
 
-  it('should return 400 if completion_difficulty is out of range', async () => {
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'PATCH',
+  it("should return 400 if completion_difficulty is out of range", async () => {
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
       body: JSON.stringify({ completion_difficulty: 5 }),
     });
 
     const response = await PATCH(request, {
-      params: Promise.resolve({ id: 'task-1' }),
+      params: Promise.resolve({ id: "task-1" }),
     });
 
     expect(response.status).toBe(400);
     const data = await response.json();
-    expect(data.error).toBe('Validation failed');
+    expect(data.error).toBe("Validation failed");
   });
 
-  it('should return 400 if completion_difficulty is 0', async () => {
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'PATCH',
+  it("should return 400 if completion_difficulty is 0", async () => {
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
       body: JSON.stringify({ completion_difficulty: 0 }),
     });
 
     const response = await PATCH(request, {
-      params: Promise.resolve({ id: 'task-1' }),
+      params: Promise.resolve({ id: "task-1" }),
     });
 
     expect(response.status).toBe(400);
   });
 
-  it('should return 400 if completion_difficulty is a non-numeric string', async () => {
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'PATCH',
-      body: JSON.stringify({ completion_difficulty: 'abc' }),
+  it("should return 400 if completion_difficulty is a non-numeric string", async () => {
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
+      body: JSON.stringify({ completion_difficulty: "abc" }),
     });
 
     const response = await PATCH(request, {
-      params: Promise.resolve({ id: 'task-1' }),
+      params: Promise.resolve({ id: "task-1" }),
     });
 
     expect(response.status).toBe(400);
   });
 
-  it('should return 400 if title is empty', async () => {
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'PATCH',
-      body: JSON.stringify({ title: '  ' }),
+  it("should return 400 if title is empty", async () => {
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
+      body: JSON.stringify({ title: "  " }),
     });
 
     const response = await PATCH(request, {
-      params: Promise.resolve({ id: 'task-1' }),
+      params: Promise.resolve({ id: "task-1" }),
     });
 
     expect(response.status).toBe(400);
   });
 });
 
-describe('DELETE /api/tasks/[id]', () => {
+describe("DELETE /api/tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
   });
 
-  it('should delete task', async () => {
+  it("should delete task", async () => {
     vi.mocked(mockTasksDB.deleteTask).mockResolvedValue();
 
-    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
-      method: 'DELETE',
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "DELETE",
     });
 
     const response = await DELETE(request, {
-      params: Promise.resolve({ id: 'task-1' }),
+      params: Promise.resolve({ id: "task-1" }),
     });
     const data = await response.json();
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockTasksDB.deleteTask).toHaveBeenCalledWith('task-1', 'user-123');
+    expect(mockTasksDB.deleteTask).toHaveBeenCalledWith("task-1", "user-123");
+  });
+});
+
+describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should delegate scope=this to updateInstanceWithScope", async () => {
+    vi.mocked(mockRecurringTasksDB.updateInstanceWithScope).mockResolvedValue();
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/tasks/task-1?scope=this",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ title: "Modified" }),
+      },
+    );
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(mockRecurringTasksDB.updateInstanceWithScope).toHaveBeenCalledWith(
+      "task-1",
+      "user-123",
+      "this",
+      expect.objectContaining({ title: "Modified" }),
+    );
+  });
+
+  it("should delegate scope=following to updateInstanceWithScope", async () => {
+    vi.mocked(mockRecurringTasksDB.updateInstanceWithScope).mockResolvedValue();
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/tasks/task-1?scope=following",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ title: "Following update" }),
+      },
+    );
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockRecurringTasksDB.updateInstanceWithScope).toHaveBeenCalledWith(
+      "task-1",
+      "user-123",
+      "following",
+      expect.objectContaining({ title: "Following update" }),
+    );
+  });
+
+  it("should delegate scope=all to updateInstanceWithScope", async () => {
+    vi.mocked(mockRecurringTasksDB.updateInstanceWithScope).mockResolvedValue();
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/tasks/task-1?scope=all",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ title: "All update" }),
+      },
+    );
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockRecurringTasksDB.updateInstanceWithScope).toHaveBeenCalledWith(
+      "task-1",
+      "user-123",
+      "all",
+      expect.objectContaining({ title: "All update" }),
+    );
+  });
+
+  it("should return 400 for invalid scope", async () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/tasks/task-1?scope=invalid",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ title: "X" }),
+      },
+    );
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toMatch(/invalid scope/i);
+  });
+});
+
+describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should delegate scope=this to deleteInstanceWithScope", async () => {
+    vi.mocked(mockRecurringTasksDB.deleteInstanceWithScope).mockResolvedValue();
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/tasks/task-1?scope=this",
+      { method: "DELETE" },
+    );
+
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(mockRecurringTasksDB.deleteInstanceWithScope).toHaveBeenCalledWith(
+      "task-1",
+      "user-123",
+      "this",
+    );
+  });
+
+  it("should delegate scope=all to deleteInstanceWithScope", async () => {
+    vi.mocked(mockRecurringTasksDB.deleteInstanceWithScope).mockResolvedValue();
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/tasks/task-1?scope=all",
+      { method: "DELETE" },
+    );
+
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockRecurringTasksDB.deleteInstanceWithScope).toHaveBeenCalledWith(
+      "task-1",
+      "user-123",
+      "all",
+    );
+  });
+
+  it("should return 400 for invalid delete scope", async () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/tasks/task-1?scope=wrong",
+      { method: "DELETE" },
+    );
+
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+
+    expect(response.status).toBe(400);
   });
 });
