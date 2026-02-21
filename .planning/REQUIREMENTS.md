@@ -31,7 +31,7 @@ Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
 
 - [x] **PAGE-01**: Tasks page shows Work and Personal as top-level sections
 - [x] **PAGE-02**: Each section displays project cards and a standalone tasks area
-- [ ] **PAGE-03**: Clicking a project card opens the kanban board view for that project
+- [x] **PAGE-03**: Clicking a project card opens the kanban board view for that project
 
 ### Kanban Board
 
@@ -43,7 +43,7 @@ Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
 
 ### Internationalization
 
-- [ ] **I18N-01**: All new UI strings are translated in en, zh, and zh-TW
+- [x] **I18N-01**: All new UI strings are translated in en, zh, and zh-TW
 
 ## Future Requirements
 
@@ -96,13 +96,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FORM-02 | Phase 14 | Complete |
 | PAGE-01 | Phase 14 | Complete |
 | PAGE-02 | Phase 14 | Complete |
-| PAGE-03 | Phase 15 | Pending |
+| PAGE-03 | Phase 15 | Complete |
 | KANB-01 | Phase 15 | Pending |
 | KANB-02 | Phase 15 | Pending |
 | KANB-03 | Phase 15 | Pending |
 | KANB-04 | Phase 15 | Pending |
 | KANB-05 | Phase 15 | Pending |
-| I18N-01 | Phase 15 | Pending |
+| I18N-01 | Phase 15 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 20 total

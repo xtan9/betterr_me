@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v3.0 Projects & Kanban — Phase 14 (Projects & Sections)
+**Current focus:** v3.0 Projects & Kanban — Phase 15 (Kanban Board)
 
 ## Current Position
 
-Phase: 14 (second of 3 in v3.0)
-Plan: 3 of 3 complete (14-01, 14-02, 14-03 done)
-Status: Phase Complete
-Last activity: 2026-02-20 — Completed 14-03 (tasks page redesign with section layout, archived projects)
+Phase: 15 (third of 3 in v3.0)
+Plan: 1 of 3 complete (15-01 done)
+Status: In Progress
+Last activity: 2026-02-21 — Completed 15-01 (kanban foundation: @dnd-kit, project_id API, page route, i18n)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [######....] 67% v3.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [#######...] 78% v3.0
 
 ## Performance Metrics
 
@@ -37,6 +37,7 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - 14-01: 2min (2 tasks, 13 files)
 - 14-02: 7min (2 tasks, 11 files)
 - 14-03: 9min (2 tasks, 9 files)
+- 15-01: 3min (2 tasks, 11 files)
 
 ## Accumulated Context
 
@@ -65,6 +66,8 @@ Recent decisions affecting current work:
 - ProjectCard uses inline style for dynamic color accent (borderLeftColor + backgroundColor with opacity)
 - Task previews sorted by status priority: in_progress > todo > backlog
 - Added menuEdit/menuArchive/menuDelete i18n keys for project card menu actions
+- next/dynamic with ssr:false for KanbanBoard to avoid hydration issues with drag-and-drop
+- project_id=null query param maps to SQL IS NULL filter for standalone tasks
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-20
-Stopped at: Phase 15 context gathered
-Resume: /gsd:plan-phase 15
+Last session: 2026-02-21
+Stopped at: Completed 15-01-PLAN.md
+Resume: /gsd:execute-phase 15 (plan 02 next)
