@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 Phase: None — between milestones
 Plan: N/A
 Status: Milestone v3.0 complete
-Last activity: 2026-02-21 — Completed v3.0 Projects & Kanban milestone
+Last activity: 2026-02-21 - Completed quick task 1: Fix Create Task button to default section based on context (Work vs Personal)
 
 Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0
 
@@ -53,6 +53,12 @@ None.
 - Vitest picks up .worktrees/ test files causing spurious failures (pre-existing, not blocking)
 - @dnd-kit/core v6 + React 19 peer dep mismatch requires pnpm config (cosmetic, works correctly)
 - v3.0 DB migrations must be applied to Supabase before features work in production
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Fix Create Task button to default section based on context (Work vs Personal) | 2026-02-21 | f484f8e | [1-fix-create-task-button-to-default-sectio](./quick/1-fix-create-task-button-to-default-sectio/) |
 
 ## Session Continuity
 
