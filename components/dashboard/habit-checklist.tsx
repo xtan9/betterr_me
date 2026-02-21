@@ -25,6 +25,13 @@ export function HabitChecklist({
   const t = useTranslations("dashboard.habits");
   const router = useRouter();
 
+  const sortedHabits = [...habits].sort((a, b) => {
+    if (a.completed_today !== b.completed_today) {
+      return a.completed_today ? 1 : -1;
+    }
+    return 0;
+  });
+
   const completedCount = habits.filter((h) => h.completed_today).length;
   const totalCount = habits.length;
   const remaining = totalCount - completedCount;
@@ -57,7 +64,7 @@ export function HabitChecklist({
         ) : (
           <>
             <div className="space-y-1">
-              {habits.map((habit) => (
+              {sortedHabits.map((habit) => (
                 <HabitRow
                   key={habit.id}
                   habit={habit}

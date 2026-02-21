@@ -43,7 +43,7 @@ export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps
         className="flex-1 text-left min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
         onClick={() => onClick(habit.id)}
       >
-        <span className="font-medium truncate block">{habit.name}</span>
+        <span className={cn("font-medium truncate block", habit.completed_today && "text-muted-foreground")}>{habit.name}</span>
       </button>
       <span className={cn("text-xs px-2 py-0.5 rounded-full shrink-0", categoryColorClass)}>
         {categoryLabel}

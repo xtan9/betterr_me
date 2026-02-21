@@ -125,7 +125,7 @@ describe("HabitChecklist", () => {
     );
 
     const checkboxes = screen.getAllByRole("checkbox");
-    fireEvent.click(checkboxes[1]); // Click on "Daily Exercise" checkbox
+    fireEvent.click(checkboxes[0]); // Click on "Daily Exercise" checkbox (first after sort — incomplete habits come first)
 
     expect(onToggle).toHaveBeenCalledWith("2");
   });
@@ -197,6 +197,27 @@ describe("HabitChecklist", () => {
     fireEvent.click(addButton);
 
     expect(onCreateHabit).toHaveBeenCalled();
+  });
+
+  it("sorts completed habits to the bottom", () => {
+    const onToggle = vi.fn();
+    const onCreateHabit = vi.fn();
+
+    renderWithIntl(
+      <HabitChecklist
+        habits={mockHabits}
+        onToggle={onToggle}
+        onCreateHabit={onCreateHabit}
+      />,
+    );
+
+    // Verify habits render in sorted order: incomplete first, completed last
+    const allText = document.body.textContent ?? "";
+    const exerciseIdx = allText.indexOf("Daily Exercise");
+    const readIdx = allText.indexOf("Read 30 min");
+    const meditationIdx = allText.indexOf("Morning Meditation");
+    expect(exerciseIdx).toBeLessThan(readIdx);
+    expect(readIdx).toBeLessThan(meditationIdx);
   });
 
   it("disables checkboxes when toggling", () => {
