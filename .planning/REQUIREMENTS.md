@@ -35,8 +35,8 @@ Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
 
 ### Kanban Board
 
-- [ ] **KANB-01**: User can view a project's tasks in a 4-column kanban board (Backlog, To Do, In Progress, Done)
-- [ ] **KANB-02**: User can drag and drop tasks between kanban columns to change status
+- [x] **KANB-01**: User can view a project's tasks in a 4-column kanban board (Backlog, To Do, In Progress, Done)
+- [x] **KANB-02**: User can drag and drop tasks between kanban columns to change status
 - [ ] **KANB-03**: User can drag and drop tasks within a column to reorder them
 - [ ] **KANB-04**: Dragging a task to Done triggers completion reflection (emoji strip for high-priority/intentional tasks)
 - [ ] **KANB-05**: Kanban cards display the task's intention ("Your Why") when present
@@ -97,8 +97,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PAGE-01 | Phase 14 | Complete |
 | PAGE-02 | Phase 14 | Complete |
 | PAGE-03 | Phase 15 | Complete |
-| KANB-01 | Phase 15 | Pending |
-| KANB-02 | Phase 15 | Pending |
+| KANB-01 | Phase 15 | Complete |
+| KANB-02 | Phase 15 | Complete |
 | KANB-03 | Phase 15 | Pending |
 | KANB-04 | Phase 15 | Pending |
 | KANB-05 | Phase 15 | Pending |
