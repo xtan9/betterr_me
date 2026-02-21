@@ -95,7 +95,7 @@ Plans:
 - [x] 15-01-PLAN.md — Foundation: install @dnd-kit, project_id API filter, kanban page route, i18n strings
 - [x] 15-02-PLAN.md — Core board: KanbanBoard + KanbanColumn + KanbanCard + drag-and-drop with SWR
 - [x] 15-03-PLAN.md — Interactions: Monday.com-style detail modal + column quick-add
-- [ ] 15-04-PLAN.md — Documentation gap closure: mark KANB-03/04/05 as deferred in REQUIREMENTS.md and ROADMAP.md
+- [x] 15-04-PLAN.md — Documentation gap closure: mark KANB-03/04/05 as deferred in REQUIREMENTS.md and ROADMAP.md
 
 ## Progress
 
