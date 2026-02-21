@@ -1,202 +1,409 @@
 # Feature Landscape
 
-**Domain:** Personal kanban task management with project containers (single-user, not team collaboration)
-**Researched:** 2026-02-18
-**Overall confidence:** MEDIUM-HIGH
+**Domain:** Personal finance management added to an existing habit/task tracking app (BetterR.Me v4.0)
+**Researched:** 2026-02-21
+**Overall confidence:** HIGH
+
+Research adapted from standalone moneyy.me feature research (2026-02-20), competitor analysis (Monarch Money, YNAB, Copilot Money, Honeydue, Rocket Money, PocketGuard), and Plaid integration documentation. Adjusted for the reality that this is a feature module within an existing app, not a standalone finance product.
+
+---
 
 ## Context: What Exists Today
 
-BetterR.Me already has a working task system with:
-- Tasks with title, description, intention, priority (0-3), category (work/personal/shopping/other), due date/time
-- Binary completion state (`is_completed` boolean + `completed_at` timestamp)
-- Completion reflection (`completion_difficulty`: 1=easy, 2=good, 3=hard) -- shown on task detail and dashboard
-- Recurring tasks (7 patterns: daily/weekly/monthly/yearly with interval, day-of-week, day-of-month, etc.)
-- Flat task list with pending/completed tabs, search, and card grid layout
-- SWR-based data fetching with `keepPreviousData`
+BetterR.Me is a working habit tracking and task management app with:
 
-The milestone adds: Work/Personal sections, projects as named containers, 4-column kanban per project, new `status` field, tasks page redesign, task form changes, and data migration.
+- **Auth:** Email/password signup, login, logout (Supabase Auth) -- single-user per account
+- **Dashboard:** Habits overview with streaks, tasks due today/tomorrow, milestones
+- **Habits:** Create/edit/delete with 5 frequency types, daily completion tracking, streaks, monthly stats
+- **Tasks:** Work/Personal sections, named projects with color presets, 4-column kanban boards, drag-and-drop, recurring tasks
+- **Settings:** Profile (name, avatar), preferences (week start day, theme, locale)
+- **Data export:** Habit data as ZIP
+- **i18n:** Three locales (en, zh, zh-TW) using next-intl
+- **UI:** shadcn/ui + Radix + Tailwind CSS 3, dark mode via next-themes, semantic design tokens
+- **Data layer:** Supabase (Postgres + auth), SWR for client data fetching, DB class pattern with per-request client instances
+- **Testing:** 1207+ tests (Vitest + Playwright), 50% coverage threshold
+
+The v4.0 milestone adds an entirely new product domain -- personal finance -- alongside the existing habit and task domains.
+
+### Key Integration Points
+
+| Existing System | How Money Features Touch It |
+|---|---|
+| **Sidebar navigation** | Add "Money" nav item (or sub-items) to the 3-item flat nav (Dashboard, Habits, Tasks) |
+| **Dashboard** | Either extend existing dashboard with a money summary card, or create a separate Money Dashboard page |
+| **User profile (profiles table)** | Add money-related preferences (currency, default view, household_id) |
+| **Supabase Auth** | Reuse existing auth for money features; add household/couples invitation flow |
+| **SWR data fetching** | Extend pattern to money endpoints with appropriate stale times |
+| **i18n (3 locales)** | All money UI strings must exist in en, zh, zh-TW |
+| **Design tokens** | Money views use existing tokens + "Calm Finance" palette additions |
+| **API route pattern** | Money API routes follow same try/catch + Zod validation + DB class pattern |
+| **Test infrastructure** | Money features need Vitest unit tests + Playwright e2e, same mocking patterns |
 
 ---
 
 ## Table Stakes
 
-Features users expect from ANY app that calls itself "project-based kanban." Missing any of these would make the feature feel broken or incomplete.
+Features users expect once BetterR.Me claims to offer money tracking. Missing any of these makes the finance section feel broken.
 
-| Feature | Why Expected | Complexity | Dependencies | Notes |
-|---------|--------------|------------|--------------|-------|
-| **4-status workflow** (Backlog / To Do / In Progress / Done) | Every kanban tool from Trello to Linear uses this pattern. 3 columns feels too simple; 5+ is team-oriented overkill for personal use. | Low | New `status` field on tasks table | Linear, Todoist, Trello all default to ~4 columns. BetterR.Me's proposed 4-column model matches industry standard exactly. |
-| **Drag-and-drop between columns** | THE defining kanban interaction. Without it, the board is just a grouped list view. Users expect to grab a card and slide it across columns. | High | dnd-kit library, optimistic UI state, position tracking | dnd-kit is the clear choice for React in 2025/2026 -- accessible, modular, ~10kb. The deprecated react-beautiful-dnd should NOT be used. |
-| **Card ordering within columns** | Users expect to arrange cards vertically within a column. Without this, drag-and-drop feels incomplete -- cards snap to fixed positions. | Medium | `sort_order` field on tasks, reorder logic on drag | Use sequential integer reassignment (not fractional indexing) per the marmelab pattern -- simpler and avoids precision issues. |
-| **Project as a named container** | Users need to group related tasks. Todoist has "Projects" with sections; Trello has "Boards"; Linear has "Projects" -- all use named containers. | Medium | New `projects` table (id, user_id, name, color, section, status, sort_order) | Keep it simple: name + preset color. No sub-projects, no nested hierarchy. |
-| **Work / Personal section separation** | Todoist's most popular organizational pattern is work vs personal separation. Users want mental context switching between life areas. | Low | New `section` field on tasks/projects ('work' / 'personal') | Todoist uses projects + filters for this; BetterR.Me uses structural sections. Simpler and more opinionated -- good for a personal app. |
-| **Status-driven completion** (status=done implies is_completed=true) | Once a task reaches "Done" column, it should be complete. Having separate "Done" status and "completed" checkbox creates confusion. | Low | Derive `is_completed` from `status === 'done'`, set `completed_at` on transition to done | Critical: existing code reads `is_completed` everywhere. Must be backward-compatible. Keep `is_completed` as a computed/derived field, not user-editable. |
-| **Task form: section selector** | When creating a task, user must choose Work or Personal. This replaces the current category toggle row (work/personal/shopping/other). | Low | Replace category UI with section selector in task-form.tsx | Section is required (not optional). Default to last-used section. |
-| **Task form: project selector** | When creating a task, user can optionally assign it to a project. Tasks without a project are "standalone." | Low | New optional `project_id` field on tasks, project dropdown in form | Filter project dropdown by selected section. Show "No project" as default. |
-| **Tasks page: section-based layout** | The tasks page needs to show Work and Personal as top-level tabs/sections, with project cards inside each. Todoist and Notion both organize this way. | Medium | Redesign tasks-page-content.tsx | Current flat list with pending/completed tabs must evolve into section > project > kanban hierarchy. |
-| **Project color presets** | Every competitor (Trello labels, Todoist project colors, Linear team colors) uses color to distinguish projects visually. | Low | 8-12 preset color values stored as enum/string, render as left-border or background tint | Do NOT build a custom color picker -- presets only. Trello uses ~10 colors; Todoist uses ~20. 8-12 is the sweet spot. |
-| **Data migration** (existing tasks get section=personal, status from is_completed) | Existing users must not lose data or see broken UI after upgrade. | Medium | Supabase migration SQL | Non-negotiable. All existing tasks: section='personal', project_id=null, status = is_completed ? 'done' : 'todo'. |
+| Feature | Why Expected | Complexity | Dependencies on Existing App | Notes |
+|---------|--------------|------------|------------------------------|-------|
+| **Plaid bank account connection** | Every modern finance tool syncs automatically. Manual-only feels broken in 2026. Core data pipeline for everything else. | HIGH | Reuse Supabase Auth user_id. New plaid_items, accounts tables. New API routes for link-token and exchange-token. | Plaid free tier = 200 Items. OAuth required for major banks. Need webhook endpoint on Vercel. Cost: ~$0.30-$1.50/connected-account/month at scale. |
+| **Transaction list with search and filter** | Core interaction loop. Users must find, review, and understand their spending. This is the "home screen" of the money section. | MEDIUM | New `/money/transactions` page. SWR for client-side pagination. Reuse existing page layout patterns (sidebar-layout). | Date range, amount range, category, account, keyword search. Cursor-based pagination (not OFFSET) because transaction tables grow fast. |
+| **Auto-categorization with manual override** | Mint trained a generation to expect this. Without it, users categorize hundreds of transactions by hand and abandon the product. | MEDIUM | Depends on Plaid transaction data being present. New categories table (system defaults + user custom). | Use Plaid PFCv2 (shipped Dec 2025, claims >90% primary accuracy) as base. Build merchant-name rule system: user corrects "AMZN MKTP US" to Shopping, all future AMZN MKTP US auto-categorize. No custom ML in v4.0. |
+| **Custom categories** | Auto-categorization is never perfect. Users need "Dining Out" separate from "Groceries", or domain-specific categories like "Dog expenses." | LOW | New user_categories table with household_id scoping. | Allow creation + editing. System categories cannot be deleted, only hidden. Custom categories are household-scoped (shared between partners). |
+| **Monthly budgets per category with progress bars** | Core budgeting loop. YNAB, Monarch, Copilot all have this. Without budgets, transaction data has no context. | MEDIUM | Depends on working categorization. New budgets table. New `/money/budgets` page. | Show spent vs. remaining per category. Support rollover (unused budget carries to next month) as a per-budget toggle. Budget period = calendar month. |
+| **Spending breakdown charts** | The primary "aha moment" -- visual spending by category is what convinces users the tool is valuable. Every competitor has this. | MEDIUM | Depends on categorized transactions. Chart library needed (recharts or similar). Reuse existing Tailwind/shadcn styling. | Donut chart by category. Bar chart over time. Category drill-down to individual transactions. Month-over-month comparison. Compute server-side (SQL aggregations), not client-side. |
+| **Bill and subscription auto-detection** | Rocket Money popularized this. Monarch, Copilot, Simplifi all detect recurring charges. Users expect to see "Netflix $15.99/mo" without manually entering it. | MEDIUM | Depends on 2-3 months of transaction history for pattern detection. Algorithm runs server-side after each sync. | Detect recurring charges by merchant name + similar amount + regular interval. Show due dates, amounts, frequency. Start detection after ~60 days of data. False positive handling: user can dismiss/confirm detected bills. |
+| **Savings goals with progress** | Monarch, Copilot, YNAB all have goals. Users want to save for a vacation, emergency fund, or down payment and see progress. | MEDIUM | New goals table. Optional link to specific account balance. New `/money/goals` page. | Target amount + optional deadline. Visual progress bar/ring. "At current pace, you'll reach this by [date]" projection. Goals can be individual or shared (household). |
+| **Net worth tracking** | Once accounts are connected, summing assets minus liabilities is trivial and expected. Monarch, Copilot, Fina all show this. | LOW | Depends on connected accounts with balance data. Simple aggregation. | Sum all account balances (checking + savings + investment = assets; credit cards + loans = liabilities). Track over time with a line chart. Updates automatically on each Plaid sync. |
+| **CSV/manual transaction import** | Fallback for institutions Plaid doesn't cover. Critical for users uncomfortable connecting banks. Also the free-tier-friendly path (no Plaid cost per user). | MEDIUM | New import flow in UI. Duplicate detection against existing transactions. Reuse existing data-export component patterns. | CSV column mapping with auto-detect for common formats (Mint export, bank CSV). Manual single-transaction entry form for cash purchases. Source field on transactions: 'plaid' vs 'manual' vs 'csv'. |
+| **Account management page** | Users need to see which accounts are connected, their balances, sync status, and the ability to disconnect. | LOW | New `/money/accounts` page. Reads from accounts + plaid_items tables. | Show: institution name, account mask (last 4 digits), type, balance, last sync time, health status. Actions: disconnect, re-authenticate (Plaid Update Mode), manual refresh. |
+| **Money section in sidebar** | Users need to navigate to money features. Current sidebar has Dashboard, Habits, Tasks. Money needs its own entry point. | LOW | Modify `app-sidebar.tsx` to add money nav items. Add i18n keys. | Single "Money" top-level nav item expanding to sub-pages (Overview, Transactions, Budgets, etc.) or just a Money link leading to a money dashboard with sub-navigation. |
+| **Data export for transactions** | Users must own their data. BetterR.Me already exports habit data as ZIP; transaction export follows naturally. | LOW | Extend existing export infrastructure (`lib/export/`). Add money data to export options. | CSV export of transactions with all fields. Period selectable. Include categories and account names. |
 
 ---
 
 ## Differentiators
 
-Features that set BetterR.Me apart from generic kanban tools. Not expected, but valued -- especially given BetterR.Me's focus on self-improvement and reflection.
+Features that set BetterR.Me apart. Not expected in a finance module, but high-value. Aligned with "Calm Finance" philosophy and couples-first positioning from the moneyy.me vision.
 
-| Feature | Value Proposition | Complexity | Dependencies | Notes |
-|---------|-------------------|------------|--------------|-------|
-| **Completion reflection on drag-to-Done** | BetterR.Me already has `completion_difficulty` (easy/good/hard). Triggering the reflection prompt when a card is dragged to the Done column turns routine task completion into a mindfulness moment. NO other kanban tool does this. | Medium | Intercept drag-end event when target is Done column, show reflection dialog before confirming move | This bridges kanban mechanics with BetterR.Me's self-improvement philosophy. The dashboard already shows these reflections. Unique differentiator. |
-| **Intention display on kanban cards** | BetterR.Me's "Your Why" field is unique to the app. Showing the intention as a subtle quote on kanban cards reminds users WHY they're doing the task -- not just WHAT. | Low | Render `task.intention` on card UI if present | Keeps the self-improvement angle visible even in kanban view. No competitor shows "why" on task cards. |
-| **Project progress visualization** | Show a simple progress bar on the project card in the tasks page (e.g., "5 of 12 tasks done"). Gives a quick sense of momentum without opening the kanban. | Low | Count tasks by status per project | Todoist shows task counts; Linear shows progress bars. Both patterns work. Simple fraction is sufficient for v1. |
-| **Active/Archived project status** | Let users archive completed projects to reduce clutter without deleting. Archived projects hidden by default, available via filter. | Low | `status` field on projects ('active' / 'archived') | Trello's archive pattern. Simple toggle. No "deleted" state -- use actual delete for that. |
-| **Standalone tasks section** | Tasks not assigned to any project still appear in each section (Work/Personal) as a "loose tasks" area. Prevents orphan tasks. | Low | Query tasks where project_id IS NULL, group by section | Todoist's "Inbox" serves this purpose. BetterR.Me just shows them inline. |
-| **Keyboard-accessible drag-and-drop** | dnd-kit supports keyboard sensors natively. Making the kanban fully keyboard-navigable is an accessibility win and differentiator vs many web kanban tools. | Low | Configure KeyboardSensor in dnd-kit setup | Already supported by dnd-kit -- just needs proper ARIA labels and keyboard shortcuts. Aligns with existing vitest-axe accessibility testing. |
+| Feature | Value Proposition | Complexity | Dependencies on Existing App | Notes |
+|---------|-------------------|------------|------------------------------|-------|
+| **Couples/household multi-user** | Honeydue is the only couples-first finance app and it is feature-weak (no desktop, poor auto-categorization). Monarch bolts couples on. Copilot has no partner support. Ground-up household architecture is the core differentiator of this entire feature set. | HIGH | Requires household_id on ALL money tables. New households table. Invitation flow (email). Two separate Supabase Auth users linked by household_id. Existing BetterR.Me features (habits, tasks) remain single-user -- household only applies to money. | Each partner has own login. Shared household view for combined spending/budgets/net-worth. Per-account privacy: "mine" (only I see), "ours" (both see), "hidden" (partner sees balance only). Individual + shared budgets. Partner 1 can use the app solo; Partner 2 joins asynchronously. |
+| **Future-first dashboard** | No competitor defaults to forward-looking. All show "where money went." Answering "Am I going to be okay this month?" is genuinely novel. | HIGH | Depends on: bill detection (recurring outflows), income detection (recurring inflows), projection engine (extrapolate spending pace). New `/money` overview page replacing or augmenting the standard dashboard. | Show: available money until next paycheck, upcoming bills for next 30 days, projected end-of-month balance. Calendar-based cash flow visualization. This is the signature feature -- the money "home page" should default to this. |
+| **Contextual AI insights (not a chatbot)** | Monarch/Copilot added chatbot-style AI. Surface-level. Proactive insights woven into the UI are more valuable: they appear where relevant, not in a separate chat window. | HIGH | Depends on: sufficient transaction history (2+ months), working categorization, spending trend data. LLM API calls (OpenAI/Anthropic) for natural language generation. | Examples: "Your grocery spending is up 15% vs your 3-month average" on the spending chart. "This Netflix subscription increased $3 since last year" on the bills page. "At your current savings rate, you'll hit your vacation goal 2 weeks early" on the goals page. Embedded, not chatbot. |
+| **"Calm Finance" design language** | No competitor explicitly addresses financial anxiety in their design. Red/green color coding and deficit-focused language trigger stress. This is a UX differentiator, not a feature. | MEDIUM | Extend existing BetterR.Me design tokens with Calm Finance palette. Add new semantic tokens for money views. All money UI components follow these principles. | Warm amber/slate instead of aggressive red/green for over/under-budget. Forward-looking language: "You have $X remaining" not "You overspent by $X." Progress framing: "You've saved 60% of your goal" not "You still need $Y." Gentle notifications. This applies across ALL money UI, not a single component. |
+| **Smart bill calendar** | Beyond listing upcoming bills: a calendar view with projected balance overlaid, highlighting days where balance dips dangerously low. Combines bill tracking + cash flow. | MEDIUM | Depends on: bill detection, future-first projection engine. Calendar UI component. | Calendar with bill markers. Balance projection line drawn across the month. "Danger zone" highlighting when projected balance drops below a configurable threshold. This is the visual form of the future-first dashboard concept. |
+| **Integrated life dashboard** | BetterR.Me uniquely combines habits + tasks + money. No competitor has all three. A unified dashboard showing "habits on track, tasks due today, money healthy" is genuinely novel. | MEDIUM | Extends existing dashboard with money summary card(s). Reuse DashboardData pattern with money fields. | Existing dashboard shows habits + tasks. Add a money summary: available balance, upcoming bills, budget status. Not a replacement -- an augmentation. The full money dashboard is a separate page; the integrated dashboard shows highlights. |
+| **Partner spending comparisons** | Unique to couples apps. "You spent $X on dining, your partner spent $Y" with neutral, informational framing (not competitive). | LOW | Depends on: couples household, categorized transactions. Simple query grouping by user_id within household. | Side-by-side category breakdowns. Neutral tone aligned with Calm Finance. Only available in household view, not individual view. |
+| **Anxiety-aware onboarding** | Finance apps throw users into a full dashboard immediately. Step-by-step, one-thing-at-a-time onboarding that shows value before asking for bank credentials. | MEDIUM | New onboarding flow for money features. Could be a guided wizard or progressive disclosure. | "Connect one account first" then "Here's your spending breakdown" then "Want to set a budget?" then "Invite your partner." Each step demonstrates value before requesting more. |
 
 ---
 
 ## Anti-Features
 
-Features to explicitly NOT build. Either wrong for the personal-use context, premature, or scope creep.
+Features to explicitly NOT build. Either wrong for BetterR.Me's context, premature, legally risky, or scope creep.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| **Custom columns / user-defined statuses** | Massively increases complexity (dynamic schema, column CRUD, validation). Linear/ClickUp need this for teams; BetterR.Me's personal-use context does not. The 4 fixed columns (Backlog/To Do/In Progress/Done) cover all personal workflow needs. | Keep 4 fixed statuses. Users who need custom workflows are using the wrong tool. |
-| **WIP (Work-in-Progress) limits** | Team kanban feature. In personal use, the user IS the bottleneck -- they know their own capacity. WIP limits add friction without value for solo users. | Omit entirely. No column card limits. |
-| **Sub-projects / nested project hierarchy** | Todoist supports 3-level sub-projects. This adds navigation complexity, parent-child state management, and confusing breadcrumbs. Personal users rarely need more than flat projects within sections. | Keep projects flat within Work/Personal sections. One level only. |
-| **Multiple board views** (list, calendar, timeline, gallery) | Notion and ClickUp offer 5+ views. Each view is a separate component with its own data fetching and state management. Massive scope for little value in v1. | Kanban is the only project view. The existing task list page shows all tasks. |
-| **Task labels / tags** | Current `category` field serves as a lightweight tag. Adding a full labels system (create, edit, multi-assign, color, filter) is a separate feature. | Keep using section (work/personal) as the primary organizer. Drop the old category field once sections ship. |
-| **Subtasks / checklists on task cards** | Trello and Notion support subtasks. Adding nested task trees requires recursive data structures, UI for collapsing/expanding, completion rollup logic. | Keep tasks flat. Use description field for checklist-like notes if needed. |
-| **Automations / rules** (e.g., auto-move on due date) | Trello Butler, ClickUp automations -- these are power-user features requiring a rule engine. Way out of scope. | Manual drag-and-drop only. |
-| **Time tracking** | KanbanFlow and ClickUp have built-in time tracking. Requires timer UI, time entry storage, reporting. Separate product domain. | Omit. Not aligned with BetterR.Me's self-improvement focus. |
-| **Card cover images / attachments** | Visual noise for personal task management. Trello supports card covers but they're rarely used for personal kanban. | Omit. Keep cards text-focused. |
-| **Swimlanes** (sub-grouping within board) | Linear uses swimlanes for priority/label grouping on boards. Useful for teams, overkill for personal kanban with <50 tasks per project. | Single flat list per column. Use card priority indicators for visual grouping. |
-| **Collaborative features** (assignees, comments, sharing) | BetterR.Me is explicitly single-user. Adding collaboration changes the entire auth model, data access patterns, and UI complexity. | Omit completely. No assignees, no comments, no sharing. |
-| **Drag-and-drop for project reordering** | While nice, dragging to reorder projects within sections is lower priority than the kanban board DnD itself. Adds complexity to an already DnD-heavy milestone. | Use manual sort_order field, editable via project settings. Add DnD project reorder in a future polish milestone. |
+| **AI chatbot for financial advice** | SEC/FINRA compliance risk. LLM hallucinations with financial advice cause real harm. Liability exposure. Conflicts with the "contextual insights" differentiator. | Contextual AI insights embedded in the UI. Show what is happening and why. Never recommend specific financial actions. "Your utility bill spiked" not "You should switch providers." |
+| **Bill negotiation / cancellation service** | Rocket Money charges 35-60% of savings. Requires human agents or complex integrations. Legal liability. Not a software feature, it is a service business. | Surface the insight: "This subscription increased $3/month since you signed up." Let users act on it themselves. |
+| **Investment advisory / robo-advisor** | SEC/FINRA registration required. Different product category entirely. Massive compliance burden. | Read-only investment account tracking via Plaid. Show portfolio value and allocation for net worth. No buy/sell recommendations. |
+| **Real-time chat between partners** | Turns a finance tool into a messaging app. Massive scope (notifications, message storage, read receipts). Partners already have iMessage/WhatsApp. | Transaction commenting or emoji reactions. Shared notes on budget categories. Lightweight, asynchronous. |
+| **Gamification (streaks, badges, leaderboards for money)** | BetterR.Me has habit streaks, but applying gamification to finances conflicts with Calm Finance philosophy. "7-day spending streak!" creates anxiety. Financial competition between partners is toxic. | Gentle progress celebrations. "You're ahead of your savings goal this month." Milestone acknowledgments, not performance scores. Notably, habit streaks stay -- they make sense for habits, not money. |
+| **Multi-currency support** | Massive complexity: exchange rates, conversion timing, reporting currency, edge cases multiply with couples in different countries. | US-focused for v4.0. Plaid's US institution coverage is the constraint. Add later if demand warrants it. |
+| **Automatic bill payment / money movement** | Money transmitter licensing required. ACH integration complexity. Liability for failed/wrong payments. Entirely different risk profile from read-only finance tracking. | Bill reminders and due date alerts. Link to pay at the biller's site. "Your electric bill of $127 is due in 3 days." |
+| **Social features / financial community** | Privacy nightmare. Financial comparison triggers anxiety. Moderation burden. | None. Possibly anonymous aggregated benchmarks in far future: "Households like yours typically spend X on groceries." |
+| **Native mobile apps (iOS/Android)** | Doubles development effort. BetterR.Me is web-only. PWA capabilities cover most mobile use cases. | Responsive web that feels native on mobile. Optimize for mobile Safari and Chrome. Same approach as existing habit/task features. |
+| **Separate "moneyy.me" branding/domain** | The original plan was a standalone app. But maintaining two codebases, two auth systems, two deployments is wasteful. BetterR.Me already has the infrastructure. | Money features live inside BetterR.Me as a first-class section alongside Habits and Tasks. Single codebase, single deployment, single auth. |
+| **Envelope budgeting (YNAB-style)** | "Give every dollar a job" methodology requires fundamentally different UX -- users assign income to categories before spending. High complexity, niche audience. Most users want category limits, not income allocation. | Standard category-limit budgeting. Set a target per category per month. Show progress. Support rollover. This is what Monarch, Copilot, and most competitors do. |
+| **Receipt scanning / OCR** | Monarch added this in 2026 but it is a specialized feature requiring camera integration, OCR pipeline, and transaction matching. Out of scope. | Manual transaction entry form for cash purchases not covered by Plaid. |
+| **Stripe/freemium billing** | PROJECT.md explicitly states: "No billing in v4.0." Build features first, validate them, add monetization in a future milestone. | All v4.0 features are free. Household sharing, AI insights, and unlimited accounts are natural future upgrade triggers. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-Section field (work/personal) on tasks table
-    |
-    +--> Projects table (each project belongs to a section)
-    |       |
-    |       +--> Kanban board per project (reads tasks by project_id + status)
-    |       |       |
-    |       |       +--> Drag-and-drop between columns (dnd-kit)
-    |       |       |       |
-    |       |       |       +--> Completion reflection on drag-to-Done
-    |       |       |
-    |       |       +--> Card ordering within columns (sort_order field)
-    |       |
-    |       +--> Project color presets
-    |       |
-    |       +--> Active/Archived status
-    |       |
-    |       +--> Project progress visualization
-    |
-    +--> Task form redesign (section selector + project selector)
-    |
-    +--> Tasks page redesign (section tabs > project cards > kanban)
-    |
-    +--> Standalone tasks section (tasks with no project_id)
+[Supabase Auth (existing)] --------> [All money features]
 
-Status field (backlog/todo/in_progress/done) on tasks table
+[New DB schema: households, plaid_items, accounts, transactions, categories, budgets, goals, bills]
     |
-    +--> is_completed derived from status === 'done'
+    +--> [Plaid Link integration] (connect bank accounts)
+    |       |
+    |       +--> [Plaid webhook handler + transaction sync]
+    |               |
+    |               +--> [Transaction list with search/filter]
+    |               |       |
+    |               |       +--> [Auto-categorization (Plaid PFCv2 + merchant rules)]
+    |               |       |       |
+    |               |       |       +--> [Monthly budgets per category]
+    |               |       |       |       |
+    |               |       |       |       +--> [Budget progress tracking + charts]
+    |               |       |       |       +--> [Spending breakdown charts]
+    |               |       |       |
+    |               |       |       +--> [Spending trends / reports]
+    |               |       |
+    |               |       +--> [Bill & subscription auto-detection]
+    |               |       |       |
+    |               |       |       +--> [Bill calendar & reminders]
+    |               |       |       +--> [Future-first dashboard] (also needs income detection)
+    |               |       |
+    |               |       +--> [Net worth tracking]
+    |               |
+    |               +--> [Account management page]
     |
-    +--> completed_at set/cleared on status transitions to/from done
+    +--> [CSV/manual import] (alternative data input, no Plaid dependency)
+    |       |
+    |       +--> [Same downstream: transaction list, categorization, budgets, etc.]
     |
-    +--> Kanban column mapping (status -> column position)
+    +--> [Household/couples multi-user]
+    |       |
+    |       +--> [Partner invitation flow]
+    |       +--> [Privacy controls (mine/theirs/ours per account)]
+    |       +--> [Shared + individual budgets]
+    |       +--> [Shared savings goals]
+    |       +--> [Partner spending comparisons]
+    |
+    +--> [Savings goals] (needs account balances OR manual tracking)
 
-Data migration (must run BEFORE any new UI deploys)
+[Auto-categorization] + [Spending trends] + [2+ months of data]
     |
-    +--> All existing tasks get section='personal', status derived from is_completed
+    +--> [Contextual AI insights]
+
+[Bill detection] + [Income detection]
+    |
+    +--> [Cash flow projection engine]
+          |
+          +--> [Future-first dashboard]
+          +--> [Smart bill calendar with balance overlay]
+
+[Existing dashboard]
+    |
+    +--> [Money summary card on integrated dashboard] (needs account balances + budget status)
 ```
 
-**Critical path:** Data migration -> Status field -> Section field -> Projects table -> Kanban board -> DnD -> Tasks page redesign
+### Dependency Notes
 
-**The migration must happen first** because all subsequent features depend on the new fields existing.
+1. **DB schema is the foundation.** Everything depends on the money-specific tables existing. The schema must include `household_id` on every money table from the first migration -- retrofitting multi-tenancy is extremely painful.
+
+2. **Two parallel data input paths.** Plaid and CSV/manual import feed the same transaction table. The rest of the app should not care where a transaction came from. Design the `transactions` table with a `source` field ('plaid' | 'csv' | 'manual') but the downstream features (budgets, charts, bills) are source-agnostic.
+
+3. **Categorization unlocks the entire budgeting stack.** Without categorized transactions, budgets and spending charts require manual entry for every transaction, which kills engagement. Plaid PFCv2 + merchant rules is the minimum viable categorization.
+
+4. **Bill detection enables the future-first dashboard.** The signature differentiator requires detecting recurring outflows AND income patterns to project forward. This is why bill detection is table stakes but the dashboard is a differentiator.
+
+5. **Household must be in the schema from day one.** Even if the UI for couples is built in a later phase, every money table must have `household_id` from the first migration. Adding it retroactively requires migrating every row of every table.
+
+6. **AI insights require data maturity.** Contextual insights are meaningless with only 2 weeks of transaction data. Ship this feature last, after users have accumulated 2+ months of history.
+
+7. **Existing features are unaffected.** Habits and tasks remain single-user. Household scope applies only to money tables. The existing `profiles` table gains a `household_id` FK but existing queries are unchanged.
+
+---
+
+## Integration with Existing BetterR.Me Features
+
+### Navigation Structure
+
+Current sidebar: Dashboard | Habits | Tasks
+
+Recommended addition:
+```
+Dashboard    (existing -- add money summary card)
+Habits       (existing -- unchanged)
+Tasks        (existing -- unchanged)
+Money        (new top-level -- click to expand/navigate)
+  Overview   (future-first dashboard / money home)
+  Transactions
+  Budgets
+  Bills
+  Goals
+  Accounts
+```
+
+The sidebar currently supports 3 items with badge counts. Adding "Money" as a 4th top-level item fits naturally. The sub-navigation within Money can be handled as secondary nav within the money layout (tab bar or left sub-nav), keeping the sidebar clean.
+
+### Dashboard Integration
+
+Two approaches, recommend both:
+
+1. **Existing dashboard gets a money summary card** alongside habit and task cards. Shows: total available balance, budget status (on track / over in N categories), upcoming bills this week. This is low complexity and high value.
+
+2. **Money Overview page is the dedicated money dashboard** with the future-first view, detailed charts, and full financial picture. This is the full-featured money home.
+
+### Shared UI Patterns
+
+| Pattern | Existing Usage | Money Usage |
+|---|---|---|
+| Card grid layout | Habit cards, project cards | Account cards, budget category cards, goal cards |
+| Progress bars | Habit monthly completion rate | Budget spent/remaining, savings goal progress |
+| SWR + keepPreviousData | Habit/task data with date in key | Transaction data with date filters in key |
+| Zod validation at API boundary | All existing POST/PATCH routes | All money API routes (transactions, budgets, goals) |
+| DB class pattern | HabitsDB, TasksDB, ProjectsDB | TransactionsDB, BudgetsDB, AccountsDB, GoalsDB, BillsDB |
+| i18n message keys | common.nav, habits.*, tasks.* | money.* namespace for all money strings |
+| Design tokens | bg-card, text-muted-foreground, etc. | Same tokens + Calm Finance additions (warm amber for over-budget, muted green for healthy) |
+
+### Data Layer Integration
+
+Money features follow the exact same pattern as habits and tasks:
+
+```typescript
+// API route pattern (same as existing)
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const transactionsDB = new TransactionsDB(supabase);
+    const transactions = await transactionsDB.getTransactions(user.household_id, filters);
+    return NextResponse.json(transactions);
+  } catch (error) {
+    console.error("Failed to fetch transactions:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+```
+
+Key difference from existing patterns: money queries filter by `household_id` (from the user's profile), not `user_id` directly. This enables the couples/household feature.
 
 ---
 
 ## MVP Recommendation
 
-**Phase 1 -- Foundation (must ship together):**
-1. Database migration: add `status`, `section`, `sort_order` to tasks table; create `projects` table
-2. Data migration: existing tasks get section='personal', status derived from is_completed
-3. Status field logic: derive `is_completed` from status, update all API routes and DB methods
-4. Backward compatibility: ensure dashboard, task detail, and existing task list still work with new fields
+Given that this is a feature addition to an existing app (not a standalone launch), the MVP should prioritize getting transaction data visible quickly and demonstrating value before adding complexity.
 
-**Phase 2 -- Projects & Sections:**
-5. Projects CRUD (API + DB layer): create, read, update, archive projects
-6. Section selector in task form (replace old category toggles)
-7. Project selector in task form
-8. Tasks page redesign: section tabs with project cards and standalone tasks
+### Phase 1: Schema + Plaid Pipeline + Accounts
 
-**Phase 3 -- Kanban Board:**
-9. Kanban board component (4-column layout, reads from status field)
-10. Drag-and-drop between columns (dnd-kit)
-11. Card ordering within columns
-12. Completion reflection dialog on drag-to-Done
+Minimum to get financial data flowing:
 
-**Defer to future milestones:**
-- Project progress visualization: Nice-to-have, add after core kanban works
-- Keyboard DnD: dnd-kit supports it, but thorough ARIA labeling needs dedicated testing
-- Project drag-to-reorder: Manual sort_order is fine for v1
+1. Database migration: households, plaid_items, accounts, transactions, categories tables (all with household_id)
+2. Plaid Link integration: create-link-token, exchange-public-token, store encrypted access_token
+3. Plaid webhook receiver + transaction sync (Inngest or Vercel Cron for background processing)
+4. Account management page: see connected accounts, balances, sync status
+5. Sidebar navigation: add "Money" section
+6. CSV import as alternative data input (first-class, not afterthought)
+
+### Phase 2: Transactions + Categorization
+
+The core interaction loop:
+
+7. Transaction list page with search, filter, pagination
+8. Auto-categorization using Plaid PFCv2 + merchant-name rule system
+9. Manual category override (user corrections train future assignments)
+10. Custom category creation
+11. Spending breakdown charts (donut + bar)
+
+### Phase 3: Budgets + Bills + Goals
+
+The "management" layer:
+
+12. Monthly budgets per category with progress bars
+13. Budget rollover toggle
+14. Bill & subscription auto-detection from transaction patterns
+15. Bill list with due dates and amounts
+16. Savings goals with progress visualization
+17. Net worth tracking (aggregate account balances)
+
+### Phase 4: Household/Couples
+
+The differentiator:
+
+18. Household creation and partner invitation flow
+19. Per-account privacy controls (mine / ours / hidden)
+20. Shared household view (combined spending, budgets, net worth)
+21. Individual + shared budgets
+22. Shared savings goals
+
+### Phase 5: Intelligence + Future-First
+
+The advanced layer (requires data maturity):
+
+23. Income pattern detection
+24. Cash flow projection engine
+25. Future-first dashboard (money overview page)
+26. Smart bill calendar with balance overlay
+27. Contextual AI insights embedded in relevant pages
+28. Money summary card on existing dashboard
+
+### Defer to future milestones:
+
+- **Partner spending comparisons:** Needs mature couples usage first
+- **Advanced reporting:** Custom date ranges, YoY, tax categories
+- **Anxiety-aware onboarding wizard:** Optimize after watching real usage
+- **2FA / TOTP:** Add when user base grows
+- **Email notifications for bills/budgets:** Add after bill detection is reliable
+- **Stripe billing / freemium tier:** Separate milestone entirely
 
 ---
 
-## Competitor Analysis Summary
+## Feature Prioritization Matrix
 
-### Todoist (closest competitor for personal productivity)
-- **Projects + Sections model:** Projects are top-level containers; sections divide them into phases. Board view shows sections as columns. This is exactly the pattern BetterR.Me is adopting.
-- **View switching:** Users can toggle between list and board view per project. BetterR.Me only needs board view for projects (existing task list handles the flat view).
-- **Color:** Projects have color presets (~20 options). Clean, no custom picker.
-- **What to learn:** Section-as-column is intuitive. Quick-add with `#Project /Section` is powerful but out of scope for v1.
+| Feature | User Value | Implementation Cost | Priority | Phase |
+|---------|------------|---------------------|----------|-------|
+| DB schema with household_id | Foundation | MEDIUM | P0 | 1 |
+| Plaid bank connection | HIGH | HIGH | P1 | 1 |
+| CSV/manual import | HIGH | MEDIUM | P1 | 1 |
+| Transaction list + search | HIGH | MEDIUM | P1 | 2 |
+| Auto-categorization (Plaid PFCv2 + rules) | HIGH | MEDIUM | P1 | 2 |
+| Spending breakdown charts | HIGH | MEDIUM | P1 | 2 |
+| Monthly budgets per category | HIGH | MEDIUM | P1 | 3 |
+| Net worth tracking | MEDIUM | LOW | P1 | 3 |
+| Bill & subscription detection | HIGH | MEDIUM | P2 | 3 |
+| Savings goals + progress | MEDIUM | MEDIUM | P2 | 3 |
+| Account management page | MEDIUM | LOW | P1 | 1 |
+| Sidebar + money navigation | Foundation | LOW | P0 | 1 |
+| Custom categories | MEDIUM | LOW | P1 | 2 |
+| Couples/household multi-user | HIGH | HIGH | P2 | 4 |
+| Privacy controls (mine/ours/hidden) | MEDIUM | MEDIUM | P2 | 4 |
+| Data export (transactions CSV) | MEDIUM | LOW | P2 | 3 |
+| Future-first dashboard | HIGH | HIGH | P3 | 5 |
+| Contextual AI insights | HIGH | HIGH | P3 | 5 |
+| Smart bill calendar | MEDIUM | MEDIUM | P3 | 5 |
+| Dashboard money summary card | MEDIUM | LOW | P2 | 5 |
+| Calm Finance design tokens | MEDIUM (UX) | LOW | P1 | 1 |
 
-### Trello (kanban-first, visual)
-- **Board = Project:** Each board is its own kanban. Lists are columns. Cards are tasks.
-- **Labels for context:** Color-coded labels add metadata without hierarchy. BetterR.Me's section + priority already covers this.
-- **Archive pattern:** Cards move to archive, not delete. Keeps history. BetterR.Me should archive Done tasks periodically or on project archive.
-- **What to learn:** Keep DnD fast and smooth. Card details should be accessible in one click (not a new page load). Consider a slide-over panel for task detail in future.
+**Priority key:**
+- P0: Foundation -- everything else depends on it
+- P1: Must have for the money feature to feel complete
+- P2: Should have, adds significant value
+- P3: Differentiators, build after core is solid
 
-### Linear (developer-focused, opinionated)
-- **Fixed status workflow:** Triage -> Backlog -> Todo -> In Progress -> In Review -> Done. Opinionated, not customizable per-project. BetterR.Me's 4-column approach follows this philosophy.
-- **Time-in-status tracking:** Shows how long a task sat in each status. Interesting for future analytics but out of scope.
-- **Status-as-source-of-truth:** Status drives everything; completed is derived. Exactly the pattern BetterR.Me should adopt.
-- **What to learn:** Opinionated > customizable for personal tools. Don't let users create custom columns.
+---
 
-### Notion (flexible, database-driven)
-- **Database views:** Same data shown as board, list, calendar, gallery. Powerful but complex. BetterR.Me should NOT try to replicate this flexibility.
-- **Relations:** Notion links databases (tasks <-> projects). BetterR.Me's `project_id` FK is the simplified version of this.
-- **Sub-groups:** Board view supports sub-grouping (e.g., by priority within status). Overkill for personal use.
-- **What to learn:** The board view of a database is a "view," not a "feature." Keep data model clean and let the UI be a projection of it.
+## Calm Finance Design Principles (Cross-Cutting)
+
+These are not a feature -- they are constraints that apply to every money UI component.
+
+| Principle | Implementation | Example |
+|---|---|---|
+| **No aggressive red/green** | Use warm amber/ochre for over-budget, muted teal/sage for on-track. Leverage existing BetterR.Me design token system. | Budget progress bar: sage green when under 80%, warm amber when 80-100%, muted coral when over. Never bright red. |
+| **Forward-looking language** | UI copy emphasizes what's ahead, not what's behind. | "You have $340 remaining this month" not "You've spent $660 of your $1000 budget." |
+| **Progress framing** | Show how far you've come, not how far you have to go. | Savings goal: "You've saved 60% of your vacation fund!" not "You still need $2,000." |
+| **Gentle notifications** | No alarming language or urgent styling for financial alerts. | "Your grocery spending is trending higher than usual this month" not "WARNING: Budget exceeded!" |
+| **No financial judgment** | Especially in couples view -- never frame one partner's spending as "worse." | "Sarah: $120 dining. Alex: $80 dining." Not "Sarah spent 50% more than Alex on dining." |
+
+---
+
+## Competitor Feature Gap Analysis (BetterR.Me Context)
+
+| Feature | Monarch ($15/mo) | YNAB ($15/mo) | Copilot ($13/mo) | Honeydue (Free) | BetterR.Me v4.0 |
+|---------|-------------------|---------------|-------------------|-----------------|-----------------|
+| Habits + Tasks + Money | No | No | No | No | **Yes -- unique** |
+| Bank sync | Yes | Yes | Yes | Yes | Yes (Plaid) |
+| Couples | Bolt-on | Shared budget only | No | Yes (primary) | Ground-up household |
+| Forward-looking dashboard | Spending forecast | "Age of money" | Cash flow chart | No | **Future-first (signature)** |
+| AI insights | Chatbot | No | AI suggestions | No | Contextual, embedded |
+| Calm/anxiety-aware design | No | No | No | No | **Yes (Calm Finance)** |
+| Free tier | No | No (trial only) | No (trial only) | Yes | Yes (no billing in v4.0) |
+| Web app | Yes | Yes | New in 2026 | No (mobile only) | Yes (web-first) |
+
+The unique positioning: **BetterR.Me is the only product that combines habit tracking, task management, and personal finance in one app with ground-up couples support, a forward-looking dashboard, and anxiety-aware design.**
 
 ---
 
 ## Sources
 
-### Competitor & Feature Research (MEDIUM confidence -- web search verified across multiple sources)
-- [Zapier: The 5 best Kanban tools in 2026](https://zapier.com/blog/best-kanban-apps/)
-- [Any.do: Best Kanban Apps for Personal and Team Use in 2026](https://www.any.do/blog/best-kanban-apps-for-personal-and-team-use-in-2026/)
-- [Todoist: Introducing Boards](https://www.todoist.com/inspiration/kanban-board)
-- [Todoist: Use the board layout](https://www.todoist.com/help/articles/use-the-board-layout-in-todoist-AiAVsyEI)
-- [Todoist: Introduction to sections](https://www.todoist.com/help/articles/introduction-to-sections-rOrK0aEn)
-- [Todoist: Introduction to projects](https://www.todoist.com/help/articles/introduction-to-projects-TLTjNftLM)
-- [Linear Docs: Board layout](https://linear.app/docs/board-layout)
-- [Linear Docs: Concepts](https://linear.app/docs/conceptual-model)
-- [Notion: Board view](https://www.notion.com/help/boards)
-- [Notion: Getting started with projects and tasks](https://www.notion.com/help/guides/getting-started-with-projects-and-tasks)
+### Competitor & Market Research (MEDIUM confidence -- web search, multiple sources corroborating)
+- [NerdWallet: Best Budget Apps 2026](https://www.nerdwallet.com/finance/learn/best-budget-apps)
+- [CNBC Select: Best Budgeting Apps 2026](https://www.cnbc.com/select/best-budgeting-apps/)
+- [Monarch Money: What's New](https://www.monarch.com/whats-new)
+- [FinanceBuzz: Monarch Money Review 2026](https://financebuzz.com/monarch-money-review)
+- [NerdWallet: Honeydue Review](https://www.nerdwallet.com/finance/learn/honeydue-app-review)
+- [U.S. News: Best Budget Apps for Couples](https://money.usnews.com/money/personal-finance/articles/best-budget-apps-for-couples)
 
-### Technical Implementation (HIGH confidence -- verified implementations)
-- [GitHub: Georgegriff/react-dnd-kit-tailwind-shadcn-ui](https://github.com/Georgegriff/react-dnd-kit-tailwind-shadcn-ui) -- reference Kanban with dnd-kit + Tailwind + shadcn/ui
-- [marmelab: Building a Kanban board with shadcn (Jan 2026)](https://marmelab.com/blog/2026/01/15/building-a-kanban-board-with-shadcn.html) -- optimistic update patterns
-- [LogRocket: Build a Kanban board with dnd-kit](https://blog.logrocket.com/build-kanban-board-dnd-kit-react/)
-- [Puck: Top 5 Drag-and-Drop Libraries for React in 2026](https://puckeditor.com/blog/top-5-drag-and-drop-libraries-for-react)
+### Technical (HIGH confidence -- official documentation)
+- [Plaid Transactions Documentation](https://plaid.com/docs/transactions/)
+- [Plaid Link Overview](https://plaid.com/docs/link/)
+- [Plaid AI-Enhanced Transaction Categorization (PFCv2)](https://plaid.com/blog/ai-enhanced-transaction-categorization/)
+- [Plaid Pricing](https://plaid.com/pricing/)
 
-### UX Patterns (MEDIUM confidence -- synthesized from multiple blog posts and guides)
-- [Atlassian: What is a kanban board?](https://www.atlassian.com/agile/kanban/boards)
-- [Atlassian: Kanban](https://www.atlassian.com/agile/kanban)
-- [ProKanban: Defining Workflow in Kanban](https://www.prokanban.org/blog/www-prokanban-org-blog-defining-workflow-in-kanban-key-elements-for-success)
-- [Brisqi: Offline-first Personal Kanban App](https://brisqi.com/)
+### Prior Research (HIGH confidence -- direct source)
+- moneyy.me FEATURES.md (2026-02-20) -- standalone finance app feature research, adapted for integration context
+- moneyy.me REQUIREMENTS.md (2026-02-20) -- formal requirements, mapped to phases
+- moneyy.me ARCHITECTURE.md (2026-02-20) -- system architecture patterns
+- moneyy.me PITFALLS.md (2026-02-20) -- domain pitfalls and prevention strategies
+
+---
+*Feature research for: BetterR.Me v4.0 Money Tracking (personal finance as a feature module within existing habit/task app)*
+*Researched: 2026-02-21*
