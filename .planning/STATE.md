@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 
 ## Current Position
 
-Phase: 15 (third of 3 in v3.0)
-Plan: 2 of 3 complete (15-01, 15-02 done)
-Status: In Progress
-Last activity: 2026-02-21 — Completed 15-02 (core kanban board: DndContext, drag-drop, SWR optimistic updates)
+Phase: 15 (third of 3 in v3.0) -- COMPLETE
+Plan: 3 of 3 complete (15-01, 15-02, 15-03 done)
+Status: Phase Complete
+Last activity: 2026-02-21 — Completed 15-03 (task detail modal + quick-add: Monday.com-style overlay, hover input)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [########..] 89% v3.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0
 
 ## Performance Metrics
 
@@ -39,6 +39,7 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - 14-03: 9min (2 tasks, 9 files)
 - 15-01: 3min (2 tasks, 11 files)
 - 15-02: 6min (2 tasks, 6 files)
+- 15-03: 4min (2 tasks, 4 files)
 
 ## Accumulated Context
 
@@ -72,6 +73,9 @@ Recent decisions affecting current work:
 - KanbanBoardLoader client wrapper extracts next/dynamic ssr:false from server page (fixes Next.js 16 build)
 - SWR optimistic mutation with rollbackOnError:true + toast.error for drag-drop status changes
 - useMemo wrapping derived tasks array to prevent unstable deps in useCallback/useMemo
+- Status badge colors in detail modal: backlog=muted, todo=slate-500, in_progress=blue-500, done=green-500
+- Quick-add renders inside ScrollArea after last card, hover state controls visibility
+- Dialog open controlled by nullable selectedTask state with null guard for early return
 
 ### Pending Todos
 
@@ -86,5 +90,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 15-02-PLAN.md
-Resume: /gsd:execute-phase 15 (plan 03 next)
+Stopped at: Completed 15-03-PLAN.md (Phase 15 complete, v3.0 milestone complete)
+Resume: All v3.0 milestone phases complete
