@@ -23,7 +23,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { Task, TaskStatus, TaskSection } from "@/lib/db/types";
+import type { Task, TaskStatus } from "@/lib/db/types";
 
 interface KanbanDetailModalProps {
   task: Task | null;
@@ -55,7 +55,6 @@ const PRIORITY_LABELS: Record<number, string> = {
 
 const STATUS_OPTIONS: TaskStatus[] = ["backlog", "todo", "in_progress", "done"];
 const PRIORITY_OPTIONS = [0, 1, 2, 3] as const;
-const SECTION_OPTIONS: TaskSection[] = ["personal", "work"];
 
 export function KanbanDetailModal({
   task,
@@ -110,21 +109,24 @@ export function KanbanDetailModal({
 
   return (
     <Dialog open={!!task} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[90vw] h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
-        {/* Header area */}
-        <div className="px-6 pt-6 pb-0">
-          <DialogTitle className="text-xl font-semibold pr-8">
-            {task.title}
-          </DialogTitle>
-        </div>
-
-        <Tabs defaultValue="details" className="flex-1 overflow-hidden flex flex-col">
-          <div className="px-6 pt-2">
-            <TabsList>
-              <TabsTrigger value="details">
+      <DialogContent className="sm:max-w-[85vw] h-[85vh] p-0 gap-0 overflow-hidden flex flex-col bg-[#f5f6f8] dark:bg-[#1a1a2e]">
+        <Tabs defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
+          {/* Header area — white bar */}
+          <div className="bg-background border-b px-6 pt-5 pb-0 flex-shrink-0">
+            <DialogTitle className="text-2xl font-semibold pr-8 mb-3">
+              {task.title}
+            </DialogTitle>
+            <TabsList className="h-9 bg-transparent p-0 gap-0 rounded-none">
+              <TabsTrigger
+                value="details"
+                className="relative rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 text-base"
+              >
                 {t("detail.detailsTab")}
               </TabsTrigger>
-              <TabsTrigger value="activity">
+              <TabsTrigger
+                value="activity"
+                className="relative rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 text-base"
+              >
                 {t("detail.activityTab")}
               </TabsTrigger>
             </TabsList>
@@ -134,182 +136,151 @@ export function KanbanDetailModal({
           <TabsContent value="details" className="mt-0 flex-1 overflow-hidden">
             <div className="flex h-full">
               {/* Left column (~60%) - Info + Description */}
-              <div className="flex-[3] p-6 space-y-6 overflow-y-auto border-r">
-                {/* Info section */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold">
-                    {t("detail.infoHeading")}
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Status field */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        {t("detail.status")}
-                      </label>
-                      <Select
-                        value={task.status}
-                        onValueChange={(value) =>
-                          updateField("status", value)
-                        }
-                      >
-                        <SelectTrigger className="w-full border-none shadow-none p-0 h-auto">
-                          <SelectValue>
-                            <Badge
-                              className={`border-transparent ${STATUS_STYLES[task.status]}`}
-                            >
-                              {t(`columns.${task.status}`)}
-                            </Badge>
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STATUS_OPTIONS.map((status) => (
-                            <SelectItem key={status} value={status}>
-                              <Badge
-                                className={`border-transparent ${STATUS_STYLES[status]}`}
-                              >
-                                {t(`columns.${status}`)}
+              <div className="flex-[3] p-5 space-y-4 overflow-y-auto">
+                {/* Info card */}
+                <div className="bg-background rounded-lg border shadow-sm">
+                  <div className="flex items-center justify-between px-4 py-3 border-b">
+                    <h3 className="text-base font-semibold">
+                      {t("detail.infoHeading")}
+                    </h3>
+                  </div>
+                  <div className="p-4">
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+                      {/* Status */}
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                          {t("detail.status")}
+                        </label>
+                        <Select
+                          value={task.status}
+                          onValueChange={(value) => updateField("status", value)}
+                        >
+                          <SelectTrigger className="w-full border-none shadow-none p-0 h-auto">
+                            <SelectValue>
+                              <Badge className={`border-transparent ${STATUS_STYLES[task.status]}`}>
+                                {t(`columns.${task.status}`)}
                               </Badge>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STATUS_OPTIONS.map((status) => (
+                              <SelectItem key={status} value={status}>
+                                <Badge className={`border-transparent ${STATUS_STYLES[status]}`}>
+                                  {t(`columns.${status}`)}
+                                </Badge>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                    {/* Priority field */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        {t("detail.priority")}
-                      </label>
-                      <Select
-                        value={String(task.priority)}
-                        onValueChange={(value) =>
-                          updateField("priority", Number(value))
-                        }
-                      >
-                        <SelectTrigger className="w-full border-none shadow-none p-0 h-auto">
-                          <SelectValue>
-                            <Badge
-                              className={`border-transparent ${PRIORITY_STYLES[task.priority]}`}
-                            >
-                              {t(
-                                `priority.${PRIORITY_LABELS[task.priority]}`
+                      {/* Priority */}
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                          {t("detail.priority")}
+                        </label>
+                        <Select
+                          value={String(task.priority)}
+                          onValueChange={(value) => updateField("priority", Number(value))}
+                        >
+                          <SelectTrigger className="w-full border-none shadow-none p-0 h-auto">
+                            <SelectValue>
+                              <Badge className={`border-transparent ${PRIORITY_STYLES[task.priority]}`}>
+                                {t(`priority.${PRIORITY_LABELS[task.priority]}`)}
+                              </Badge>
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PRIORITY_OPTIONS.map((p) => (
+                              <SelectItem key={p} value={String(p)}>
+                                <Badge className={`border-transparent ${PRIORITY_STYLES[p]}`}>
+                                  {t(`priority.${PRIORITY_LABELS[p]}`)}
+                                </Badge>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Due Date */}
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                          {t("detail.dueDate")}
+                        </label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className="flex items-center gap-2 text-base hover:opacity-80 transition-opacity">
+                              <Calendar className="size-4 text-muted-foreground" />
+                              {task.due_date ? (
+                                <span>{task.due_date}</span>
+                              ) : (
+                                <span className="text-muted-foreground">
+                                  {t("detail.noDueDate")}
+                                </span>
                               )}
-                            </Badge>
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PRIORITY_OPTIONS.map((p) => (
-                            <SelectItem key={p} value={String(p)}>
-                              <Badge
-                                className={`border-transparent ${PRIORITY_STYLES[p]}`}
-                              >
-                                {t(`priority.${PRIORITY_LABELS[p]}`)}
-                              </Badge>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-3" align="start">
+                            <input
+                              type="date"
+                              defaultValue={task.due_date || ""}
+                              onChange={(e) => updateField("due_date", e.target.value || null)}
+                              className="w-full p-2 rounded-md border bg-transparent text-base focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
 
-                    {/* Section field */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        {t("detail.section")}
-                      </label>
-                      <Select
-                        value={task.section}
-                        onValueChange={(value) =>
-                          updateField("section", value)
-                        }
-                      >
-                        <SelectTrigger className="w-full border-none shadow-none p-0 h-auto">
-                          <SelectValue>
-                            <span className="text-sm capitalize">
-                              {task.section}
-                            </span>
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SECTION_OPTIONS.map((section) => (
-                            <SelectItem key={section} value={section}>
-                              <span className="capitalize">{section}</span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Due Date field */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        {t("detail.dueDate")}
-                      </label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="flex items-center gap-1.5 text-sm hover:opacity-80 transition-opacity">
-                            <Calendar className="size-3.5 text-muted-foreground" />
-                            {task.due_date ? (
-                              <span>{task.due_date}</span>
-                            ) : (
-                              <span className="text-muted-foreground">
-                                {t("detail.noDueDate")}
-                              </span>
-                            )}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-3" align="start">
-                          <input
-                            type="date"
-                            defaultValue={task.due_date || ""}
-                            onChange={(e) => {
-                              const value = e.target.value || null;
-                              updateField("due_date", value);
-                            }}
-                            className="w-full p-2 rounded-md border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-
-                    {/* Project field (read-only) */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        {t("detail.project")}
-                      </label>
-                      <p className="text-sm">{projectName || "---"}</p>
+                      {/* Project (read-only) */}
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                          {t("detail.project")}
+                        </label>
+                        <p className="text-base">{projectName || "---"}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Description section */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold">
-                    {t("detail.descriptionHeading")}
-                  </h3>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    onBlur={handleDescriptionBlur}
-                    placeholder={t("detail.descriptionPlaceholder")}
-                    className="w-full min-h-[120px] p-3 rounded-md border bg-transparent text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
+                {/* Description card */}
+                <div className="bg-background rounded-lg border shadow-sm">
+                  <div className="flex items-center justify-between px-4 py-3 border-b">
+                    <h3 className="text-base font-semibold">
+                      {t("detail.descriptionHeading")}
+                    </h3>
+                  </div>
+                  <div className="p-4">
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      onBlur={handleDescriptionBlur}
+                      placeholder={t("detail.descriptionPlaceholder")}
+                      className="w-full min-h-[150px] p-3 rounded-md border-none bg-transparent text-base resize-y focus:outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Right column (~40%) - Item updates */}
-              <div className="flex-[2] p-6 bg-muted/30 flex flex-col">
-                <h3 className="text-sm font-semibold mb-3">
-                  {t("detail.updatesHeading")}
-                </h3>
-                <textarea
-                  placeholder={t("detail.writeUpdate")}
-                  className="w-full min-h-[80px] p-3 rounded-md border bg-transparent text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring mb-4"
-                  readOnly
-                />
-                <div className="flex-1 flex items-center justify-center">
-                  <p className="text-sm text-muted-foreground">
-                    {t("detail.noUpdates")}
-                  </p>
+              {/* Right column (~40%) - Item updates card */}
+              <div className="flex-[2] p-5 overflow-y-auto">
+                <div className="bg-background rounded-lg border shadow-sm h-full flex flex-col">
+                  <div className="flex items-center justify-between px-4 py-3 border-b">
+                    <h3 className="text-base font-semibold">
+                      {t("detail.updatesHeading")}
+                    </h3>
+                  </div>
+                  <div className="p-4 flex flex-col flex-1">
+                    <textarea
+                      placeholder={t("detail.writeUpdate")}
+                      className="w-full min-h-[80px] p-3 rounded-md border bg-transparent text-base resize-y focus:outline-none focus:ring-2 focus:ring-ring mb-4"
+                      readOnly
+                    />
+                    <div className="flex-1 flex items-center justify-center">
+                      <p className="text-base text-muted-foreground">
+                        {t("detail.noUpdates")}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
