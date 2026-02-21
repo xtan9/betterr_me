@@ -1,276 +1,229 @@
 # Project Research Summary
 
-**Project:** BetterR.Me v4.0 -- Fitness Tracking Milestone
-**Domain:** Hevy-inspired workout logging integrated into existing habit/task management app (web-only, single-user)
-**Researched:** 2026-02-23
+**Project:** BetterR.Me v4.0 Money Tracking
+**Domain:** Personal finance module added to an existing habit/task tracking web app
+**Researched:** 2026-02-21
 **Confidence:** HIGH
 
 ## Executive Summary
 
-BetterR.Me v4.0 adds Hevy-inspired workout tracking to a mature habit and task management app. The feature set is well-understood: exercise library with preset and custom exercises, workout session logging (start/finish, add exercises, log sets), routine templates, rest timer, personal records, and progression charts. The reference implementation is Hevy -- a purpose-built workout app -- and the implementation path is clear across all four research areas. The domain is thoroughly documented (Hevy feature pages, API documentation, public exercise databases) and the codebase patterns generalize cleanly to fitness data.
+BetterR.Me v4.0 adds personal finance as a first-class feature module alongside the existing Habits and Tasks domains. Unlike a greenfield finance app, every technology and architectural decision must respect the existing deployed codebase — Next.js 16 App Router, Supabase Postgres + Auth, SWR, shadcn/ui, react-hook-form + Zod, next-intl — which remains unchanged. The only net-new dependencies are six packages: `plaid` and `react-plaid-link` for bank account connectivity, `decimal.js` for safe currency arithmetic, `recharts` (via shadcn Charts) for data visualization, `jose` for Plaid webhook JWT verification, and `papaparse` for CSV import as an alternative data-ingestion path. All new code is additive and parallel to existing features, touching only six existing files (sidebar nav, DB barrel exports, type definitions, three i18n locale files, and global CSS tokens).
 
-The stack addition is minimal: only `recharts` v2 (via the shadcn/ui `chart` component) is a new external dependency. Everything else -- timers, audio feedback, exercise seed data -- is implemented with custom hooks and browser-native APIs (~55 lines of code total). The architecture layers entirely onto the existing `DB class -> API route -> SWR hook -> React component` pattern. New tables follow established Supabase RLS patterns. New DB classes follow the constructor-injected client pattern. New API routes follow existing REST conventions. The single largest structural addition is 5 new Supabase tables and ~65 new/modified files.
+The recommended architecture is a household-scoped data model where every money table carries a `household_id` column with RLS policies that gate access through a `household_members` join table — enabling the couples/shared-household differentiator from day one without retrofitting. Existing habits and tasks tables remain strictly `user_id`-scoped and are never modified. The data pipeline flows from Plaid (bank sync via webhooks and Vercel Cron) or CSV import into a normalized `transactions` table, which drives categorization, budgets, bills, net worth, and projections in sequence. An admin/service-role Supabase client handles background sync contexts where no user session exists. The "Calm Finance" design philosophy — muted color palette, forward-looking language, no anxiety-inducing red/green — is a cross-cutting constraint applied to all money UI components.
 
-The highest-risk areas are the data model decisions in Phase 1 -- particularly the exercise type enum, the weight storage strategy, and the session persistence design -- all of which are expensive to retrofit after users have logged workout data. Phase 1 must lock in the schema before any UI work begins. Secondary risks are workout session state loss on browser refresh (mitigated by dual-write to both server and localStorage from day one) and SWR cache design for deeply nested workout data (mitigated by coarse-grained cache keys per workout session). The feature is well-scoped: no social features, no AI, no cardio distance tracking -- a focused strength training logger that bridges workout tracking with BetterR.Me's self-improvement philosophy.
+The principal risks are all architectural and must be resolved in Phase 1 before any UI is built: the household RLS model must be finalized, money amounts must be stored as integer cents (not PostgreSQL `numeric`) to avoid silent precision loss through the Supabase JavaScript client, and the Plaid webhook endpoint requires a separate security path (service-role client + JWT signature verification) that bypasses the standard Supabase auth guard used by all existing API routes. Deferring any of these three decisions introduces expensive retroactive data migrations and security exposure.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack handles all fitness tracking needs. The only new dependency is the charting library, added via the shadcn/ui CLI.
+The existing stack handles nearly every money feature requirement without additions. Supabase provides auth, Postgres, RLS, Vault (for Plaid token encryption), Realtime (for cross-user household cache invalidation), Edge Functions, and pg_cron (for scheduled transaction sync). SWR handles client-side data fetching with established patterns. shadcn/ui + Radix already has all required UI primitives. The six new packages are targeted additions with no overlap or conflict.
 
-**New dependencies:**
-- `recharts` v2.15.x (via `pnpm dlx shadcn@latest add chart`): SVG-based charting for progression line charts and weekly volume bar charts. The shadcn/ui `chart` component wraps Recharts with automatic dark mode support via CSS custom properties. Recharts v2 is specifically required -- shadcn/ui is not yet compatible with Recharts v3 (PR #8486 open; v3 also adds unnecessary Redux/Immer dependencies).
+**Core new technologies:**
+- `plaid` ^41.1.0 + `react-plaid-link` ^4.1.1 — bank account connectivity via Plaid Link OAuth flow and server-side API; 12,000+ US institutions
+- `decimal.js` ^10.6.0 — all currency arithmetic; integer cents stored in DB, decimal.js used at display/parse boundaries only; avoids the `0.1 + 0.2 !== 0.3` float problem
+- `recharts` ^3.7.0 — charts via shadcn/ui Chart component; dark mode and design tokens already wired up; zero additional theming work
+- `jose` ^6.1.3 — Plaid webhook JWT/ES256 signature verification; works in Vercel Edge and Node.js runtimes (unlike `jsonwebtoken` which requires Node.js `crypto`)
+- `papaparse` ^5.5.3 — CSV import for users unwilling or unable to use Plaid; works in browser and Node.js
+- `nuqs` ^2.x (optional, deferrable to Phase 3) — URL state for transaction list filters; type-safe, batched, Next.js App Router native
 
-**Custom implementations (no new libraries needed):**
-- `useStopwatch` + `useCountdown` hooks (~55 lines total): client-side workout duration and rest timer. Custom hooks give full control for audio integration, optimistic persistence, and Vitest testing with `vi.useFakeTimers()`.
-- `playBeep()` via Web Audio API (~10 lines): rest timer audio alert. No library needed for a single programmatic tone.
-- Exercise seed data as curated JSON (~80-120 exercises): seeded via Supabase migration (global, `user_id IS NULL`), following the same pattern as the existing `categories` table -- except seeded via migration SQL, not lazy application code (see Critical Pitfalls #6).
+Background jobs use Supabase pg_cron + Edge Functions (not Inngest), keeping everything in the existing Supabase ecosystem. Vercel Cron (`vercel.json` cron config) is the simpler starting point. The Plaid Node SDK must run in Node.js runtime routes, not Edge Runtime (Plaid depends on Axios, which does not work in Edge).
 
-**What NOT to add:** Recharts v3, `react-timer-hook`, `react-countdown-circle-timer`, Chart.js, framer-motion, Zustand/Redux, external exercise APIs (ExerciseDB, wger), `howler.js`, `react-query`, `react-beautiful-dnd`.
-
-See: `.planning/research/STACK.md` for full analysis and all alternatives considered.
+For the full stack rationale, alternatives considered, and version compatibility matrix, see `.planning/research/STACK.md`.
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Start / finish a workout session (sticky or dedicated active-workout UI, persisted to DB with `status: "in_progress"`)
-- Exercise library with ~80-120 preset exercises (seeded globally, searchable, filterable by muscle group and equipment)
-- Custom user exercises (name, primary muscle, equipment, exercise type)
-- Exercise search/selection via full-screen modal with client-side filtering (load-all, no server pagination)
-- Set tracking: weight + reps, bodyweight + reps, and duration (covers ~100% of strength exercises)
-- Previous workout values auto-filled on each set row (Hevy-style -- single biggest UX driver for logging speed)
-- Workout history list (reverse chronological, paginated)
-- Workout detail view (all exercises and sets, read-only)
-- Routine templates: create, edit, delete, start workout from routine
-- Rest timer: client-side countdown auto-starts on set completion, configurable duration, audio beep on completion
-- Weight unit preference: kg / lbs (stored in `ProfilePreferences` JSONB, all weights stored as `weight_kg` internally)
-- Workouts page as 4th top-level sidebar section (Dumbbell icon, flat nav following existing pattern)
+The finance module is competitor-benchmarked against Monarch Money, YNAB, Copilot, Honeydue, Rocket Money, and PocketGuard. BetterR.Me's unique positioning is the only product combining habit tracking, task management, and personal finance with ground-up couples support, a forward-looking dashboard, and anxiety-aware design.
 
-**Should have (differentiators):**
-- Personal records (PR) detection: max weight and best set volume per exercise, shown mid-workout as inline banner
-- Per-exercise progression chart: line chart of weight over time (Recharts via shadcn Chart)
-- Set type labels: warmup / normal / drop set / failure (warmup excluded from PR calculations)
-- Workout title and per-exercise notes (freeform)
-- Dashboard integration: last workout date and current week workout count
+**Must have (table stakes) — users expect these or the money section feels broken:**
+- Plaid bank account connection with webhook-driven transaction sync
+- Transaction list with search, filter (date, category, account, keyword), and cursor-based pagination
+- Auto-categorization using Plaid PFCv2 + household merchant-name rule system with manual override
+- Custom categories (household-scoped, shareable between partners)
+- Monthly budgets per category with progress bars and optional rollover
+- Spending breakdown charts (donut by category, bar over time)
+- Bill and subscription auto-detection from transaction patterns
+- Savings goals with visual progress and deadline projections
+- Net worth tracking (assets minus liabilities, updated on each sync)
+- CSV/manual import as an alternative data input path (no Plaid dependency)
+- Account management page (connected accounts, balances, sync status, disconnect)
+- "Money" top-level sidebar navigation item
 
-**Defer to v4.1+:**
-- Superset grouping (include nullable `superset_id` column in schema; defer UI)
-- Muscle group distribution charts (weekly volume per muscle group)
-- Estimated 1RM PR type (requires formula selection and user explanation)
-- Workout streak tracking (reuse habit streak pattern later)
-- Body measurements, plate calculator, video demos, social features, AI generation
+**Should have (differentiators — set BetterR.Me apart):**
+- Couples/household multi-user with partner invitation flow
+- Per-account privacy controls (mine / ours / hidden)
+- Future-first dashboard (forward-looking: available balance until next paycheck, upcoming bills, projected end-of-month balance)
+- Contextual AI insights embedded in relevant pages (not a chatbot)
+- "Calm Finance" design language (muted palette, forward-looking language, no aggressive red/green)
+- Smart bill calendar with projected balance overlay
+- Integrated money summary card on the existing habit/task dashboard
 
-**Critical path:** Exercises table (seed) -> Workouts/Sets tables -> Workout logging UI -> Previous value auto-fill -> Routines -> History/Detail views -> PR detection -> Progression charts
+**Defer to v5+ milestones:**
+- Partner spending comparisons (requires mature couples usage data)
+- Advanced reporting (custom date ranges, year-over-year, tax categories)
+- Anxiety-aware onboarding wizard (optimize after watching real usage)
+- Email notifications for bills and budget alerts
+- Stripe billing / freemium tier (explicitly out of scope per PROJECT.md)
+- Receipt OCR, investment advisory, bill negotiation — explicitly anti-features
 
-See: `.planning/research/FEATURES.md` for the full feature landscape, exercise type taxonomy (8 types), muscle group taxonomy (14 groups), equipment taxonomy (9 types), and anti-features.
+For the full feature dependency graph, prioritization matrix, and competitor comparison table, see `.planning/research/FEATURES.md`.
 
 ### Architecture Approach
 
-The fitness tracking architecture is a clean extension of the existing `DB class -> API route -> SWR hook -> React component` pattern. Five new Supabase tables (`exercises`, `workouts`, `workout_exercises`, `workout_sets`, `routines`/`routine_exercises`), four new DB classes, a new `components/fitness/` component tree, and an `app/workouts/` page hierarchy. No new architectural paradigms are introduced.
+Money tracking is a parallel feature domain, architecturally additive and non-invasive to existing code. The core pattern: new `app/money/*` pages, new `app/api/money/*` and `app/api/plaid/*` routes, new `lib/db/` classes, new `lib/plaid/` and `lib/money/` utility directories, and new Supabase migrations — all following identical conventions to existing HabitsDB/TasksDB/SWR patterns. Existing feature code is not modified except the six files listed in the summary above.
 
 **Major components:**
-1. **ExercisesDB + `/api/exercises`** -- exercise library CRUD; global preset rows (`user_id IS NULL`) plus per-user custom exercises; client-side filtering (load-all, no server pagination required for ~100-120 exercises)
-2. **WorkoutsDB + WorkoutExercisesDB + `/api/workouts`** -- session CRUD, active workout state, set CRUD; unique partial index on `(user_id) WHERE status = 'in_progress'` enforces one active workout per user at the DB level
-3. **RoutinesDB + `/api/routines`** -- routine template CRUD; copy-on-start pattern (routine exercises are copied into the new workout at start time, not referenced live -- `ON DELETE SET NULL` for `routine_id` FK on workouts)
-4. **Workout Logger UI** -- `WorkoutLogger`, `WorkoutExerciseCard`, `WorkoutSetRow`, rest timer; active workout managed in `useReducer` + localStorage dual-write, synced to server on every set mutation via debounced PATCH
-5. **Progress components** -- `ExerciseProgressChart` (Recharts LineChart via shadcn ChartContainer), `PersonalRecordsCard`; exercise history API aggregates per workout with default 3-month limit
-6. **Modified: ProfilesDB + preferences API** -- add `weight_unit: "kg" | "lbs"` to existing JSONB preferences column (zero migration needed, schema-on-write)
-7. **Modified: AppSidebar** -- add "Workouts" nav item; active workout indicator uses client-side state (not sidebar counts API)
+1. **Household model** (`households`, `household_members`, `resolveHousehold()` helper) — authorization bridge between Supabase auth users and household-scoped money data; every money table references `household_id`; lazy-created on first money feature access
+2. **Plaid Integration Layer** (`lib/plaid/`: client, link-token, token-exchange, sync, webhook-verify, encryption) — the only external API integration in the codebase; access tokens encrypted via Supabase Vault or AES-256-GCM before storage; three-phase flow (create link_token, open Plaid Link in browser, exchange public_token server-side)
+3. **Background Sync** (Vercel Cron → `/api/cron/sync-transactions` using service-role admin client) — cursor-based, idempotent, handles interrupted syncs by resuming from stored cursor; transaction sync separated from token exchange to avoid serverless timeout
+4. **Money DB Classes** (`AccountsDB`, `TransactionsDB`, `BudgetsDB`, `BillsDB`, `GoalsDB`, `CategoriesDB`, `PlaidItemsDB`, `HouseholdsDB`, `MerchantRulesDB`) — household-scoped via `household_id` derived from server-side `resolveHousehold()`, never from client input; same constructor pattern as HabitsDB/TasksDB
+5. **Calm Finance design tokens** (`--money-*` CSS variables in `globals.css`) — muted teal/amber palette for money UI, separate from existing `--status-*` tokens used in habits/tasks
+6. **Supabase Admin Client** (`lib/supabase/admin.ts`) — service-role client bypassing RLS; used only in cron routes and webhook handlers, never in user-facing API routes
 
-**Key architectural decisions:**
-- All weights stored as `weight_kg` (canonical kg) in DB; convert to user preference in UI at display/input boundaries only -- prevents data corruption if user switches units
-- Coarse-grained SWR cache: one key per workout (`/api/workouts/[id]` returns full nested workout with exercises and sets); no separate SWR keys for exercises or sets within a workout
-- Active workout state in `useReducer` + localStorage during session, synced to server on each mutation -- prevents state loss on refresh
-- Exercise library: load-all-then-filter-client-side -- ~80-120 exercises fit in one SWR cache entry; `Array.filter()` is instant vs. API roundtrip during workout
-
-**New vs. modified files:** ~55 new files (migrations, DB classes, API routes, hooks, components, pages, validations, utilities) + ~8 modified files (types.ts, sidebar, settings-content, preferences validation, locale files, lib/db/index.ts, lib/constants.ts).
-
-See: `.planning/research/ARCHITECTURE.md` for full SQL schema (all 6 tables with RLS policies and indexes), component file tree, data flow diagrams, SWR hook implementations, validation schemas, and a 17-step build order.
+For the complete new file inventory (~50 new files), full database schema SQL, RLS policy patterns, and detailed build order, see `.planning/research/ARCHITECTURE.md`.
 
 ### Critical Pitfalls
 
-1. **Flat set schema without exercise type semantics** -- A `workout_sets` table with all nullable columns seems fine initially, but volume calculations produce NaN for bodyweight exercises, progression chart code scatters `if (type === 'weight')` everywhere, and DB CHECK constraints cannot enforce required fields per type. **Prevention:** Define `exercise_type` enum on `exercises` table. Centralize field semantics in `lib/fitness/exercise-fields.ts`. Use Zod discriminated unions in `lib/validations/workout.ts`. Address in Phase 1 before any UI work.
+1. **Household RLS model breaks if designed incorrectly** — Existing tables use `auth.uid() = user_id`. Money tables need `household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid())`. Never add `household_id` to existing habit/task tables. Never accept `household_id` from client request parameters. Always derive server-side via `resolveHousehold()`. Verify by logging in as Partner B and confirming they see Partner A's shared data — and only shared data.
 
-2. **In-progress workout state lost on browser refresh** -- Storing workout data only in React state means 20-60 minutes of gym data evaporates on page crash or tab close. This is the single most rage-inducing failure in the domain. **Prevention:** Dual-write on every mutation: PATCH to server (sets `status: "in_progress"`) AND `localStorage.setItem` (synchronous -- survives page teardown). On mount, check both server and localStorage for in-progress workout; show "Resume workout?" banner. Do NOT use IndexedDB in `beforeunload` handlers (async, not guaranteed to flush before page teardown). Must be built into Phase 2 from the start -- not retrofitted.
+2. **Supabase `numeric` type causes silent float precision loss** — PostgREST serializes Postgres `numeric` as JSON floats; `new Decimal(row.amount)` reconstructs from a possibly-corrupted value. Store all money as integer cents (`BIGINT`) in every migration from day one. Convert to/from `Decimal` only at display and parse boundaries via `lib/money/arithmetic.ts`. This is a confirmed Supabase issue (GitHub supabase/cli#582, closed "not planned"). Test with `$10.33`, `$0.07`, `$19.99` round-trips.
 
-3. **Weight unit conversion corrupting historical data** -- Rounding the irrational lb->kg conversion and storing the result means switching unit preferences causes historical weights to drift. Retroactively converting stored data is worse. **Prevention:** Store all weights as `weight_kg` (canonical kg, `NUMERIC(7,2)`). Display by converting on read with intelligent rounding (nearest 0.5 lbs for lbs display). `ProfilePreferences.weight_unit` controls display only; never mutate stored values. Address in Phase 1 schema design.
+3. **Plaid webhook endpoint bypasses Supabase auth** — The webhook receives unauthenticated server-to-server POST requests. The standard `supabase.auth.getUser()` check returns null, blocking all writes. Use service-role Supabase client. Verify Plaid JWT signature via `jose` before processing any payload. Add `/api/plaid/webhooks` to the proxy middleware allowlist or it gets 302-redirected to `/auth/login`.
 
-4. **SWR cache explosion from fine-grained workout data** -- Workout data is hierarchical (workout -> exercises -> sets), unlike flat habit/task entities. Per-entity SWR keys cause cascade invalidation bugs (adding a set must invalidate workout detail, workout list, exercise history, and PRs). **Prevention:** Coarse-grained SWR -- one key per workout returns everything nested. Manage active workout mutations in `useReducer` local state. Use a `revalidateWorkoutData()` utility (mirroring existing `revalidateSidebarCounts()`) for targeted post-mutation invalidation.
+4. **Vercel serverless timeout on initial transaction sync** — Initial Plaid sync for an active bank account can return months of history and take 10-30 seconds. Vercel Hobby plan: 10-second timeout. Token exchange API route must return immediately; delegate sync to a background job. Sync is cursor-based — partial progress is safe.
 
-5. **Exercise library overengineered as a searchable service** -- Adding `tsvector` full-text search, server-side pagination, and GIN indexes to 80-120 exercises is massive overengineering. The entire dataset fits in browser memory (~200KB). **Prevention:** Load all exercises in a single `GET /api/exercises` with long SWR `dedupingInterval` (10+ minutes). Filter client-side. Reserve server-side aggregation for exercise HISTORY (time-series data that grows).
+5. **Money data mixed into existing `/api/dashboard`** — If money widgets are added to the existing dashboard endpoint, Plaid sync latency blocks the entire dashboard. Keep all money API endpoints under `/api/money/*`. Use independent SWR hooks on the dashboard page so habits load instantly even when Plaid is unavailable.
 
-6. **Exercise preset seeding via application code (not migration)** -- The categories "lazy seed" pattern works for 12 rows but would cause 5+ second latency if reused for 80-120 exercises. **Prevention:** Seed preset exercises via Supabase migration SQL (`user_id IS NULL`), not application code. This diverges intentionally from the categories seeding pattern. Address in Phase 1.
+For the full pitfall catalogue (9 critical pitfalls, technical debt patterns, security mistakes, performance traps, UX pitfalls, and recovery strategies with costs), see `.planning/research/PITFALLS.md`.
 
-7. **Rest timer drifting in background tabs** -- `setInterval` tick-counting is throttled by Chrome/Firefox in background tabs (to 1-minute intervals). Timer shows wrong remaining time when user returns from their phone camera. **Prevention:** Timestamp-based elapsed time: `const remaining = Math.max(0, durationMs - (Date.now() - startTime))`. On `visibilitychange`, immediately recalculate from stored `startTime`. Address in Phase 2 timer implementation.
-
-See: `.planning/research/PITFALLS.md` for the full analysis of 14 pitfalls (5 critical, 5 moderate, 4 minor) with detection signals, phase-to-pitfall mapping, and integration-specific warnings for the BetterR.Me codebase.
+---
 
 ## Implications for Roadmap
 
-Based on combined research, the feature decomposes into 4 phases with strict dependency ordering. The schema must be locked before any UI; the exercise library must exist before the workout logger; the workout logger must be functional before routines; history and progression come last because they read from completed workout data.
+Based on the combined research, the dependency chain dictates a clear phase ordering: households before Plaid before transactions before budgets before household UI before intelligence. Every shortcut in this chain introduces an expensive retroactive migration or security exposure.
 
-### Phase 1: Database Foundation & Exercise Library
+### Phase 1: Database Foundation + Household Model
+**Rationale:** Every money table references `household_id`. The RLS model, money column types (integer cents), and the `resolveHousehold()` utility must exist before any feature code is written. This phase has zero user-visible UI but determines security and data correctness for the entire milestone.
+**Delivers:** Supabase migrations for all 9 money tables with RLS policies; `HouseholdsDB` class; `resolveHousehold()` helper; `lib/supabase/admin.ts` service-role client; `lib/money/arithmetic.ts` cents utilities; Calm Finance CSS tokens (`--money-*`); i18n `money.*` namespace (all 3 locales); sidebar nav "Money" item; money layout page shell at `app/money/layout.tsx`. All 1207+ existing tests passing after migrations.
+**Addresses:** DB schema (P0), sidebar navigation (P0), Calm Finance design tokens (P1).
+**Avoids:** Household RLS breakdown (Pitfall 1), numeric precision loss (Pitfall 2), household_id on profiles (Pitfall 8), DB class household scoping gap (Pitfall 5).
+**Research flag:** LOW — patterns are well-documented (Supabase RLS official docs, standard migration patterns, direct codebase review). No external research phase needed. Critical verification: run full test suite after each migration step.
 
-**Rationale:** Every subsequent feature depends on the schema. The exercise type enum, weight storage strategy, and set field semantics must be locked before any UI is built -- retroactively changing these after workout data exists requires a full data migration. The exercise library is the dependency for workout logging, routines, and progression charts.
+### Phase 2: Plaid Bank Connection Pipeline
+**Rationale:** Plaid is the primary data source. Everything downstream (transactions, budgets, bills, net worth) depends on bank data flowing in. The webhook endpoint and background sync infrastructure must be hardened before any transaction display logic is added.
+**Delivers:** `lib/plaid/` module (client, link-token, token-exchange, encryption, sync, webhook-verify); `PlaidItemsDB` + `AccountsDB`; `PlaidLinkButton` component; `/api/plaid/link-token`, `/api/plaid/exchange-token`, `/api/plaid/webhooks` routes; Vercel Cron sync job (`vercel.json` + `/api/cron/sync-transactions`); Account management page (`/money/accounts`); encrypted access token storage. CSV/manual import as a parallel data input path (no Plaid dependency — validates core experience without Plaid costs).
+**Addresses:** Plaid bank connection (P1), account management page (P1), CSV/manual import (P1).
+**Avoids:** Webhook auth bypass (Pitfall 3), Vercel timeout on initial sync (Pitfall 7), plain-text token storage (Pitfall 6).
+**Research flag:** HIGH — Plaid integration has many sharp edges not fully visible in documentation. Run a research-phase sprint specifically covering: Plaid Sandbox vs. Production behavioral differences, OAuth bank re-authentication flow (Update Mode for ITEM_LOGIN_REQUIRED), exact webhook event sequence for initial sync, Plaid Item error codes and recovery paths.
 
-**Delivers:**
-- Supabase migrations: `exercises`, `workouts`, `workout_exercises`, `workout_sets`, `routines`, `routine_exercises` tables with full RLS policies, constraints, and indexes (including unique partial index on active workout per user)
-- Exercise preset seed migration (~80-120 exercises, `user_id IS NULL`, global -- not per-user)
-- TypeScript type definitions for all fitness entities (`Exercise`, `Workout`, `WorkoutSet`, `Routine`, `RoutineExercise`, `PersonalRecord`, `ExerciseHistoryEntry`, `WeightUnit`) in `lib/db/types.ts`
-- DB classes: `ExercisesDB`, `WorkoutsDB`, `WorkoutExercisesDB`, `RoutinesDB`
-- Validation schemas with Zod discriminated unions on `exercise_type`: `lib/validations/exercise.ts`, `lib/validations/workout.ts`, `lib/validations/routine.ts`
-- Fitness utilities: `lib/fitness/units.ts` (kg/lbs conversion), `lib/fitness/exercise-fields.ts` (exercise type to input field mapping)
-- Exercises API: `GET /api/exercises` (load-all, no pagination), `POST /api/exercises` (custom creation), `GET/PATCH/DELETE /api/exercises/[id]`
-- Exercise library UI: browse, search, filter by muscle group and equipment (client-side), create custom exercise form, exercise detail page
-- Weight unit preference: extend `ProfilePreferences` TypeScript type + Zod schema + settings UI selector (kg/lbs toggle following existing WeekStartSelector pattern)
-- Sidebar: add "Workouts" nav item with Dumbbell icon
-- i18n strings for all fitness UI in en/zh/zh-TW (exercise name translations can be incremental -- see Gaps)
+### Phase 3: Transaction Display + Categorization
+**Rationale:** The core user interaction loop. With data flowing from Plaid, users need to see, search, and understand their transactions. Categorization unlocks the entire budgeting stack — without it, budgets and charts require manual labeling per transaction.
+**Delivers:** `TransactionsDB` + `CategoriesDB` + `MerchantRulesDB`; cursor-based paginated transactions API; Plaid PFCv2 auto-categorization at sync time; household merchant-name rule engine (correct once, auto-apply forever); manual category override; custom category creation; transaction list page with date/category/account/keyword filters (using `nuqs` or manual `useSearchParams`); spending breakdown charts (donut + bar via shadcn/Recharts); `useTransactions()` SWR hook with `keepPreviousData: true`.
+**Addresses:** Transaction list + search (P1), auto-categorization (P1), custom categories (P1), spending breakdown charts (P1).
+**Avoids:** SWR cache collision with habit data (Pitfall 4) — separate `useTransactions()` hook under `/api/money/transactions`, never merged with `/api/dashboard`.
+**Research flag:** MEDIUM — `nuqs` for URL-state filter management is less established in Next.js 16. Validate early in the phase before committing to it.
 
-**Addresses features:** Exercise library, custom exercises, exercise search/filter, weight unit preference, workouts nav item
-**Avoids pitfalls:** P1 (flat schema without type semantics), P3 (weight unit corruption), P5 (overengineered search), P6 (lazy seeding at app-code level), P10 (missing discriminated union validation)
+### Phase 4: Budgets, Bills, Goals + Net Worth
+**Rationale:** The "management layer" that gives transaction data context and value. Depends on categorized transactions from Phase 3. These three features share the same data shape (amounts, categories, periods) and can be built together efficiently.
+**Delivers:** `BudgetsDB` + `BillsDB` + `GoalsDB`; budget CRUD with monthly period and optional rollover toggle; bill auto-detection from recurring transaction patterns (merchant + similar amount + regular interval); savings goals with progress rings and deadline projections; net worth aggregation (assets minus liabilities, updates on each sync); data export extending existing export infrastructure (transactions CSV); budget, bills, and goals pages; `/api/money/budgets`, `/api/money/bills`, `/api/money/goals` routes.
+**Addresses:** Monthly budgets (P1), net worth (P1), bill detection (P2), savings goals (P2), data export (P2).
+**Avoids:** Recomputing budget aggregations client-side (performance trap for households with 5K+ transactions) — aggregate server-side with pre-computed monthly totals.
+**Research flag:** LOW — standard CRUD patterns follow existing codebase conventions exactly. Bill detection algorithm is first-principles pattern matching on merchant name + amount + interval; no external research needed.
 
-**Verification:** Confirm all 6 tables exist with correct RLS. Verify preset exercises are queryable by all authenticated users. Create a custom exercise -- confirm it appears only for the creating user. Confirm `weight_unit` updates via existing `PATCH /api/profile/preferences`. Exercise library UI should render with client-side search and muscle group filter working without API calls on keystroke.
+### Phase 5: Household/Couples
+**Rationale:** The primary differentiator. Built after single-user money flow is proven and stable — the DB schema already has `household_id` from Phase 1, so this phase is purely the invitation flow, shared views, and privacy controls, with no data migration required.
+**Delivers:** Partner invitation flow (invite by email, accept link, join existing household); per-account privacy controls (mine / ours / hidden); shared household view combining both partners' transactions/budgets/net-worth; individual vs. shared budget distinction; shared savings goals; Supabase Realtime subscriptions for cross-user cache invalidation (Partner A changes category, Partner B's view updates on next focus event).
+**Addresses:** Couples/household multi-user (P2), privacy controls (P2), shared budgets (P2), shared goals (P2).
+**Avoids:** Partner invitation requiring simultaneous onboarding (async join — Partner 1 uses solo, Partner 2 joins later and data merges); aggressive coloring contradicting Calm Finance on partner spending comparisons.
+**Research flag:** MEDIUM — email-based household invitation requires deciding on the invite token strategy. Research the Supabase Auth invitation API (`supabase.auth.admin.inviteUserByEmail`) vs. a custom `household_invitations` table with magic links before planning this phase.
 
-### Phase 2: Workout Logging (Core Loop)
-
-**Rationale:** The core product loop -- start a workout, add exercises, log sets, finish. This is the feature that all other phases depend on. A user must be able to log a workout end-to-end before routines, history, or progression charts matter. Building this phase proves the schema works, the SWR cache strategy is correct, and the session persistence is reliable.
-
-**Delivers:**
-- Workouts API: `POST /api/workouts` (start session), `GET /api/workouts/active` (404 if none), `PATCH /api/workouts/[id]` (update title/notes/finish), `DELETE /api/workouts/[id]`, exercise CRUD endpoints, set CRUD endpoints
-- SWR hooks: `useActiveWorkout()` (no auto-refresh, manual mutate), `useWorkouts()` (paginated history list)
-- Custom hooks: `useStopwatch` (workout elapsed duration), `useCountdown` (rest timer countdown)
-- Active workout session persistence: `useReducer` local state + `localStorage` dual-write on every mutation + recovery banner on mount
-- Workout logger UI: `WorkoutLogger`, `WorkoutHeader` (elapsed timer, title, finish/discard buttons), `WorkoutExerciseCard` (sets accordion), `WorkoutSetRow` (weight/reps/duration inputs per exercise type), `WorkoutAddExercise` (exercise picker Sheet/Dialog), `WorkoutRestTimer` (countdown with progress bar, +15s/-15s buttons), `WorkoutFinishDialog` (confirmation modal)
-- Previous workout values auto-fill: displayed alongside set input fields (query last workout containing same exercise)
-- Rest timer: configurable default (90s default, per-exercise override), auto-starts on set completion, Web Audio API beep on zero
-- Set completion: checkbox per set with optimistic SWR update
-- Workouts landing page (`/workouts`): "Start Workout" CTA, recent workouts preview, routines preview, active session recovery banner
-- Active workout page (`/workouts/active`): redirects to `/workouts` if no active session
-
-**Addresses features:** Start/finish workout, exercise selection mid-workout, set tracking (all 3 types), previous values auto-fill, rest timer, workout session page
-**Avoids pitfalls:** P2 (state loss on refresh -- dual-write built in from day one), P4 (SWR cache explosion -- coarse-grained keys, `useReducer` for active session), P8 (sidebar crowding -- active workout indicator from client state, not counts API), P6-timer (timestamp-based countdown, not tick-counting)
-
-**Verification:** Log a complete workout (start, 3 exercises, multiple sets of each, finish). Confirm data in Supabase. Refresh mid-workout -- confirm "Resume workout?" banner appears and all sets restore. Switch to another browser tab for 2 minutes, return -- confirm rest timer shows correct remaining time. Try starting a second workout while one is active -- confirm 409 Conflict response.
-
-### Phase 3: Routines & Templates
-
-**Rationale:** Routines depend on a stable workout logging flow. Users build routines after logging a few raw workouts and wanting to repeat them. The copy-on-start pattern must be implemented correctly at the API layer to prevent the routine/workout coupling pitfall.
-
-**Delivers:**
-- Routines API: `POST /api/routines`, `GET /api/routines`, `GET/PATCH/DELETE /api/routines/[id]`, exercise CRUD within routine, `POST /api/routines/from-workout/[workoutId]` (save workout as routine)
-- Copy-on-start enforcement: `POST /api/workouts` with `routine_id` copies all `routine_exercises` into `workout_exercises` + creates empty `workout_sets` for target_sets count; subsequent routine edits do NOT affect the workout; `ON DELETE SET NULL` for `routine_id` FK
-- SWR hooks: `useRoutines()`, `useRoutineDetail()`
-- Routines UI: routines list page, routine card (name, exercise count, last performed date), routine detail (exercise list with targets, "Start Workout" button), routine form (create/edit with drag-to-reorder exercise order), routine exercise row (exercise, target sets/reps/weight, rest timer)
-- "Save as routine" from completed workout detail view
-- Routines section on workouts landing page (`/workouts`)
-- i18n strings for routines in all 3 locales
-
-**Addresses features:** Create/edit/delete routines, start workout from routine, routine exercise ordering with targets
-**Avoids pitfalls:** P7 (template-workout coupling -- copy-on-start enforced in API layer, `ON DELETE SET NULL` for `routine_id`)
-
-**Verification:** Create a routine with 3 exercises and target sets. Start a workout from it -- verify exercises and target sets pre-fill the workout. Edit the routine. Confirm the previously started workout's exercises are unchanged. Delete the routine -- confirm historical workouts that used it retain their exercise data (routine_id becomes NULL, exercises remain).
-
-### Phase 4: History, Personal Records & Progression
-
-**Rationale:** Progression tracking requires workout history to exist. Personal records are computed from historical data. This is the "payoff" phase -- the reward that motivates users to keep logging. It is last because it is primarily read-only (reads from data created in phases 1-3) and does not block any other phase.
-
-**Delivers:**
-- Exercise history API: `GET /api/exercises/[id]/history` -- aggregated per workout (best set weight, total volume, total normal sets); default 3-month limit with date range selector
-- Workout history list page and history cards: paginated reverse chronological list, summary cards (date, title, exercise count, total volume, duration)
-- Workout detail view (`/workouts/[id]`): completed workout read-only view showing all exercises, all sets, PRs achieved, duration, total volume
-- Exercise detail page (`/workouts/exercises/[id]`): exercise info, progression chart, current PRs
-- Personal records: `personal_records` table updated incrementally on workout completion (compare each completed normal set vs. stored best per exercise); PR types: max weight, best set volume (weight x reps)
-- PR detection mid-workout: compare current set against stored best; show congratulatory inline banner on new PR
-- Per-exercise progression chart: Recharts `LineChart` via shadcn `ChartContainer` -- max weight and/or volume over time, date range selector (1m / 3m / 6m / all time), dark mode automatic via CSS custom properties
-- Dashboard integration: last workout date and current week workout count (extends dashboard API query)
-- `useExerciseHistory()` SWR hook with `keepPreviousData: true` (matches existing date-based key pattern)
-
-**Addresses features:** Workout history list, workout detail, PR detection (max weight + best set volume), progression charts, dashboard integration
-**Uses stack:** `recharts` v2 via shadcn `chart` component (`ChartContainer`, `ChartTooltip`, `ChartTooltipContent`)
-**Avoids pitfalls:** P9 (slow chart queries -- 3-month default limit, server-side aggregation, consider `supabase.rpc()` if JOINs across RLS tables are slow), P14 (PR full-scan -- incremental `personal_records` table updated on workout completion)
-
-**Verification:** Log 5 workouts with the same exercise, increasing weight each time. Confirm progression chart shows 5 data points with an upward trend. Beat the previous best weight in workout 6 -- confirm PR banner appears mid-workout and `personal_records` table updates. Delete a workout -- confirm chart and PRs update correctly. Check dashboard shows last workout date and week count.
+### Phase 6: Intelligence + Future-First Dashboard
+**Rationale:** Requires data maturity (2+ months of transaction history) and stable categorization, budgets, and bills from prior phases. The future-first dashboard (the signature feature) depends on the cash flow projection engine, which depends on income pattern detection and bill detection from Phase 4.
+**Delivers:** Income pattern detection (recurring inflows from transaction history); cash flow projection engine (extrapolate spending pace + known upcoming bills); future-first money overview page at `/money` (available balance until next paycheck, upcoming bills, projected month-end balance, calendar-based cash flow); smart bill calendar with projected balance overlay and danger-zone highlighting; contextual rule-based insights embedded in relevant pages ("Your grocery spending is 23% above last month's average"); money summary card on the existing habit/task dashboard; optional LLM-enhanced insights (constrained to factual observations only, legal review required before launch).
+**Addresses:** Future-first dashboard (P3), contextual AI insights (P3), smart bill calendar (P3), dashboard money summary card (P2).
+**Avoids:** AI generating financial advice (Pitfall 9) — rule-based insights first; LLM prompts constrained to prohibit "should," "recommend," "consider," comparative benchmarks, and advisory language; legal review of all insight text before shipping.
+**Research flag:** HIGH — cash flow projection algorithm and income detection have sparse community documentation. Run a research-phase sprint on: projection accuracy approaches, LLM prompt engineering for non-advisory financial observations, and whether off-the-shelf income detection exists or must be built from transaction patterns.
 
 ### Phase Ordering Rationale
 
-- **Schema first** because the exercise type enum, weight storage strategy, and the routine/workout copy-on-start relationship cannot be changed after workout data exists. Phase 1 locks these architectural decisions before any UI is built.
-- **Exercise library before workout logger** because the workout logger's exercise picker requires the exercise library API and UI to be functional. The set input components also require `weight_unit` preference to be in place.
-- **Workout logging (Phase 2) before routines (Phase 3)** because the "start from routine" flow copies exercises into a new workout using the same `POST /api/workouts` endpoint. That endpoint must work correctly before the copy-on-start logic can be tested.
-- **History and progression last (Phase 4)** because progression charts and PRs are pure reads from completed workout data and cannot be meaningfully built or tested until Phase 2 has produced completed workouts.
-- **This ordering avoids the top pitfalls:** Phase 1 locks schema decisions that are expensive to change. Phase 2 builds dual-write session persistence from day one (not retrofitted). Phase 3 enforces copy-on-start at the API level before any UI depends on the relationship. Phase 4 can focus on data visualization without data integrity concerns.
+- Households first because every money table references `household_id` — retrofitting it on populated tables requires migrating every row.
+- Plaid before transactions because the primary data source must be established before display.
+- Transactions before budgets because budgets aggregate categorized transactions; categories must exist first.
+- Budgets/bills/goals before household UI because single-user value must be proven before adding multi-user complexity.
+- Household layer before intelligence because AI insights in a household context require the household model to be stable.
+- Intelligence last because the projection engine and AI insights require 2+ months of accumulated historical data to be meaningful.
 
 ### Research Flags
 
-**Phases likely needing deeper research during planning:**
+Phases needing deeper research during planning:
+- **Phase 2 (Plaid Pipeline):** Complex external integration with many undocumented edge cases (OAuth re-auth flow, ITEM_ERROR recovery, Sandbox vs. Production behavioral differences). Run `/gsd:research-phase` before planning Phase 2.
+- **Phase 5 (Household/Couples):** Supabase Auth invitation API for the household invite flow. The correct approach needs research before architecture is finalized.
+- **Phase 6 (Intelligence):** Cash flow projection algorithm, income pattern detection, and constrained LLM prompting for non-advisory insights all have sparse documentation. Run `/gsd:research-phase` before planning Phase 6.
 
-- **Phase 1 (Schema Design):** The `workout_sets` nullable-column strategy and Zod discriminated union implementation need careful upfront review. Consider running `EXPLAIN ANALYZE` on the planned exercise history query (Phase 4 concern, but plan the schema now) to determine if `supabase.rpc()` will be needed. The weight storage conflict (store as kg vs. store in logged unit) must be resolved before writing the first migration -- see Gaps.
-- **Phase 2 (Workout Logging):** The `useReducer` + localStorage dual-write pattern for active session state is the most novel part relative to the existing codebase. Build a minimal proof-of-concept of the persistence layer first (start workout, add one set, refresh page, verify recovery) before building the full workout logger UI.
-- **Phase 4 (Progression Charts):** The exercise history aggregation query (3-table JOIN across RLS-protected tables) should be validated against Supabase's query planner before building the UI. If the query exceeds ~100ms on realistic data (50+ workouts), implement a `supabase.rpc()` PostgreSQL function.
+Phases with standard, well-documented patterns (can skip research-phase):
+- **Phase 1 (Database Foundation):** Supabase migrations, RLS policies, DB class pattern — thoroughly documented in official Supabase docs and established in the existing codebase.
+- **Phase 3 (Transactions):** SWR hooks with cursor pagination, shadcn/Recharts charts, Zod validation — all established patterns with official documentation.
+- **Phase 4 (Budgets/Bills/Goals):** Standard CRUD following the same DB class pattern used throughout the codebase.
 
-**Phases with standard patterns (skip deep research):**
-
-- **Phase 1 (Exercise Library UI):** Standard CRUD following existing patterns. Load-all-and-filter-client-side is identical to how categories are used in existing task/habit forms. Well-understood shadcn/ui Sheet + search input pattern.
-- **Phase 3 (Routines CRUD):** Standard `DB class -> API -> SWR hook -> component` pattern. Follows `HabitsDB`/`TasksDB` exactly. Copy-on-start logic is ~20-30 lines in the API route.
-- **Phase 4 (Workout History list and detail):** Standard paginated list + detail view. Recharts usage is documented with multiple shadcn chart examples. No novel patterns.
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Recharts v2 via shadcn/ui Chart is officially documented and npm-verified (React 19 peer dep confirmed). Custom hooks are standard React. Exercise seed dataset (free-exercise-db, Unlicense) verified on GitHub. No uncertainty on the single new dependency. |
-| Features | HIGH | Feature scope sourced directly from Hevy's official feature pages and API docs. The 80-120 exercise seed count and 3-exercise-type MVP scope are judgment calls modeled on Hevy's production library. The decision to use max weight + best set volume (not estimated 1RM) as initial PR types is a deliberate simplification with clear rationale. |
-| Architecture | HIGH | All patterns are direct extensions of existing BetterR.Me codebase conventions. Data model follows PostgreSQL best practices (partial unique index for one-active-workout enforcement, nullable columns over separate tables per exercise type). RLS patterns identical to existing tables. The exercise history aggregation query is the one area at MEDIUM confidence -- needs `EXPLAIN ANALYZE` validation with real data in Phase 4. |
-| Pitfalls | HIGH | Verified against existing codebase analysis (not just theory), Hevy API docs, browser timer throttling documentation, localStorage vs. IndexedDB research, and workout tracking post-mortems. 14 pitfalls identified with concrete prevention strategies and detection signals. One research conflict (weight storage strategy) is documented in Gaps. |
+| Stack | HIGH | All package versions verified via npm registry (2025-11 to 2026-02). Official Plaid, Supabase, and shadcn/ui documentation confirms integration patterns. `nuqs` is MEDIUM — newer library with less community precedent in production Next.js 16. |
+| Features | HIGH | Competitor analysis from NerdWallet, CNBC, Monarch, YNAB, Honeydue, Copilot confirmed across multiple sources. Plaid PFCv2 categorization documented officially. Feature dependency graph derived from research, not assumption. |
+| Architecture | HIGH | Integration patterns derived directly from existing BetterR.Me codebase review. All new patterns (household RLS, cursor sync, service-role client) documented in official Supabase and Plaid docs and confirmed by codebase analysis. |
+| Pitfalls | HIGH | 9 critical pitfalls verified against official docs, confirmed GitHub issues (supabase/cli#582 for numeric precision, plaid/plaid-node#604 for Edge Runtime), and direct codebase analysis of all 15+ existing API routes and RLS policies. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Weight storage strategy conflict (must resolve before Phase 1 migration):** ARCHITECTURE.md recommends storing all weights as `weight_kg` (single canonical unit, convert on display). PITFALLS.md recommends storing in the logged unit with a `weight_unit` column per set to avoid rounding drift. Recommendation: store as `weight_kg` (canonical kg, `NUMERIC(7,2)`). Display with intelligent rounding (nearest 0.5 lbs for lbs display). This is the industry standard (Hevy's API exposes both `weight_kg` and `weight_lb` as computed fields, sourced from a canonical stored value). The per-set `weight_unit` column adds overhead and complicates aggregate queries. Accept that `135 lbs -> 61.23 kg -> 135.01 lbs` drift exists but is imperceptible at 2-decimal precision with 0.5 lbs rounding. Validate this decision explicitly before writing the Phase 1 migration.
+- **Plaid OAuth bank re-authentication flow (Update Mode):** Documentation exists but the exact UX and error recovery sequence for major OAuth banks (Chase, Bank of America, Wells Fargo) needs validation during Phase 2 planning. Some banks require a full OAuth redirect; the Plaid Link flow differs meaningfully between OAuth and credential-based institutions.
 
-- **Personal records: table vs. on-demand computation (resolve in Phase 1 schema):** PITFALLS.md recommends a `personal_records` table updated incrementally on workout completion (O(1) lookup). ARCHITECTURE.md defers this, accepting on-demand computation for MVP. Recommendation: implement incremental PR table from the start. At 3-4 workouts per week, a user hits 500 workouts in ~3 years. Adding the table later requires backfilling from all historical data. The table is ~10 lines of SQL and ~30 lines of update logic -- not a significant Phase 1 addition.
+- **Supabase Edge Functions vs. Vercel Cron for background sync:** STACK.md recommends starting with Vercel Cron (simpler, zero new dependencies). If transaction volume per household is high, Edge Functions' 150-second timeout becomes relevant. Validate empirically with realistic transaction volumes before Phase 2 is complete.
 
-- **Exercise history aggregation performance (validate in Phase 4 but plan schema in Phase 1):** The progression chart query joins `workout_sets -> workout_exercises -> workouts` across three RLS-protected tables. Supabase's RLS evaluation on cross-table JOINs can be slow. Validate with `EXPLAIN ANALYZE` on 50+ workouts of seed data before building the chart UI. If it exceeds 100ms, implement `supabase.rpc()` with a PostgreSQL function, or add a `workout_exercise_summaries` computed table (pre-aggregate on workout completion).
+- **`nuqs` integration with SWR for transaction filters:** The pattern of deriving SWR keys from `nuqs` URL state is documented but not widely battle-tested in production Next.js 16 App Router apps. Validate early in Phase 3 before committing.
 
-- **i18n translation volume for exercise names:** Exercise names across 3 locales add 1,200+ translation strings (400 potential exercises x 3 locales). Recommendation: create a separate `exercises` namespace in locale files (`exercises.names.*`). Translate the ~50 most common exercises for v4.0. Block the feature ship on UI string translations (workout logging, routines, settings), not on complete exercise name coverage. Mark untranslated exercise names as falling back to English.
+- **Plaid PFCv2 categorization accuracy in practice:** Plaid claims >90% primary category accuracy. Real-world accuracy varies by institution and transaction type. Budget for a higher-than-expected manual override rate in early user testing; the merchant-name rule engine is the correction mechanism.
 
-- **Mobile workout logging UX:** Web-based workout logging on a phone is inherently harder than a native app (smaller tap targets, keyboard obscures inputs, no haptic feedback). This gap cannot be resolved by research -- it requires UX testing with real users during Phase 2. Ensure large tap targets on set completion checkboxes, minimal scrolling to reach the next set, and the rest timer visible without scrolling.
+- **AI insights legal review scope:** PITFALLS.md flags SEC/FINRA compliance risk for AI-generated financial observations. The boundary between "observation" and "advice" is unclear. A legal review of sample insight text should happen before Phase 6, not during it.
+
+---
 
 ## Sources
 
-### Primary (HIGH confidence)
-- [shadcn/ui Chart docs](https://ui.shadcn.com/docs/components/radix/chart) -- Official chart component, Recharts integration, installation command
-- [Recharts v2.15.4 on npm](https://www.npmjs.com/package/recharts) -- Version, React 19 peer deps confirmed
-- [shadcn/ui Recharts v3 issue #7669](https://github.com/shadcn-ui/ui/issues/7669) -- v3 migration in progress (reason to stay on v2)
-- [Hevy Feature List](https://www.hevyapp.com/features/) -- Authoritative feature scope definition
-- [Hevy Tutorial](https://www.hevyapp.com/hevy-tutorial/) -- UX flow reference for workout logging
-- [Hevy Custom Exercises](https://www.hevyapp.com/features/custom-exercises/) -- Exercise fields and type taxonomy
-- [Hevy Exercise Library](https://www.hevyapp.com/features/exercise-library/) -- Muscle group and equipment categorization
-- [Hevy Exercise Programming Options](https://www.hevyapp.com/features/exercise-programming-options/) -- Exercise type taxonomy (weight_reps, bodyweight_reps, duration, etc.)
-- [Hevy Gym Performance Tracking](https://www.hevyapp.com/features/gym-performance/) -- Progression metrics (max weight, volume, estimated 1RM)
-- [Hevy API Docs](https://api.hevyapp.com/docs/) -- Data model reference for workouts, exercises, sets
-- [Hevy MCP Server](https://github.com/chrisdoc/hevy-mcp) -- Hevy API internal data model
-- BetterR.Me codebase analysis -- `lib/db/`, `app/api/`, `components/`, `lib/hooks/`, `lib/validations/`, `lib/db/types.ts` -- source of extension patterns
-- [free-exercise-db (GitHub)](https://github.com/yuhonas/free-exercise-db) -- 800+ exercises, Unlicense, JSON format (source for curated seed)
+### Primary (HIGH confidence — official documentation)
+- [Plaid Link Web SDK](https://plaid.com/docs/link/web/) — Plaid Link integration, link_token flow
+- [Plaid Transactions Sync](https://plaid.com/docs/transactions/sync-migration/) — cursor-based sync, delta updates
+- [Plaid Webhook Verification](https://plaid.com/docs/api/webhooks/webhook-verification/) — JWT/ES256 verification
+- [Plaid AI-Enhanced Categorization (PFCv2)](https://plaid.com/blog/ai-enhanced-transaction-categorization/) — categorization accuracy claims
+- [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security) — household RLS patterns
+- [Supabase Vault](https://supabase.com/docs/guides/database/vault) — Plaid token encryption at rest
+- [Supabase Realtime](https://supabase.com/docs/guides/realtime) — cross-user household cache invalidation
+- [Supabase Cron](https://supabase.com/docs/guides/cron) — scheduled transaction sync
+- [Supabase Edge Functions Scheduling](https://supabase.com/docs/guides/functions/schedule-functions) — background job execution
+- [shadcn/ui Charts](https://ui.shadcn.com/docs/components/radix/chart) — Recharts integration with design tokens
+- [nuqs docs](https://nuqs.dev) — URL state for transaction filters
+- [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs) — background sync scheduling
+- npm registry — plaid v41.1.0, react-plaid-link v4.1.1, decimal.js v10.6.0, recharts v3.7.0, jose v6.1.3, papaparse v5.5.3
 
-### Secondary (MEDIUM confidence)
-- [react-timer-hook on npm](https://www.npmjs.com/package/react-timer-hook) -- Evaluated and rejected (trivial to build custom, better testability)
-- [Best React chart libraries 2025 (LogRocket)](https://blog.logrocket.com/best-react-chart-libraries-2025/) -- Ecosystem comparison confirming Recharts choice
-- [Why setInterval breaks in inactive tabs](https://pontistechnology.com/learn-why-setinterval-javascript-breaks-when-throttled/) -- Rest timer drift prevention rationale
-- [localStorage vs IndexedDB in beforeunload](https://vaughnroyko.com/offline-storage-indexeddb-and-the-onbeforeunloadunload-problem/) -- Session persistence strategy (use localStorage not IndexedDB)
-- [Designing data structure for workouts (1df.co)](https://1df.co/designing-data-structure-to-track-workouts/) -- Schema design patterns
-- [Dittofi workout data model](https://www.dittofi.com/learn/how-to-design-a-data-model-for-a-workout-tracking-app) -- Schema patterns
-- [Supabase RLS Performance Best Practices](https://supabase.com/docs/guides/troubleshooting/rls-performance-and-best-practices-Z5Jjwv) -- Cross-table JOIN RLS cost and mitigation
-- [Hevy Track Workouts](https://www.hevyapp.com/features/track-workouts/) -- Workout logging UX reference
-- [Hevy Workout Settings](https://www.hevyapp.com/features/workout-settings/) -- Rest timer and preference features
+### Secondary (MEDIUM confidence — community sources, multiple corroborating)
+- [NerdWallet: Best Budget Apps 2026](https://www.nerdwallet.com/finance/learn/best-budget-apps) — competitor feature landscape
+- [CNBC Select: Best Budgeting Apps 2026](https://www.cnbc.com/select/best-budgeting-apps/) — competitor positioning
+- [Multi-tenant RLS on Supabase (AntStack)](https://www.antstack.com/blog/multi-tenant-applications-with-rls-on-supabase-postgress/) — household isolation patterns
+- [Plaid Integration with Next.js 14 (Medium)](https://medium.com/@nazardubovyk/step-by-step-guide-to-integrate-plaid-with-next-js-14-app-router-356b547b5a4a) — integration patterns
+- [Supabase Best Practices (Leanware)](https://www.leanware.co/insights/supabase-best-practices) — RLS and service role patterns
+- BetterR.Me codebase direct review — existing patterns for HabitsDB, TasksDB, SWR hooks, proxy middleware, migrations, and all 15+ existing API routes
 
-### Tertiary (LOW confidence)
-- [Back4App Fitness Database Schema](https://www.back4app.com/tutorials/how-to-build-a-database-schema-for-a-fitness-tracking-application) -- General schema patterns
-- [GeeksforGeeks Fitness DB Design](https://www.geeksforgeeks.org/dbms/how-to-design-a-database-for-health-and-fitness-tracking-applications/) -- General schema patterns
-- [Fitness app UX design principles (Stormotion)](https://stormotion.io/blog/fitness-app-ux/) -- UX reference
-- [SWR cache documentation](https://swr.vercel.app/docs/advanced/cache) -- Cache strategy reference
+### Tertiary (confirmed bugs/issues)
+- [GitHub supabase/cli#582](https://github.com/supabase/cli/issues/582) — `numeric` columns returned as JS float, closed "not planned"
+- [GitHub plaid/plaid-node#604](https://github.com/plaid/plaid-node/issues/604) — Plaid Node SDK incompatible with Edge Runtime due to Axios dependency
+- [GitGuardian: Plaid Access Token Leak Remediation](https://www.gitguardian.com/remediation/plaid-access-token) — token security
 
 ---
-*Research completed: 2026-02-23*
+*Research completed: 2026-02-21*
 *Ready for roadmap: yes*

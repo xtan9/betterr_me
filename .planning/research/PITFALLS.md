@@ -1,596 +1,502 @@
-# Domain Pitfalls
+# Pitfalls Research
 
-**Domain:** Adding Hevy-inspired workout/fitness tracking to an existing habit/task management app (BetterR.Me v4.0)
-**Researched:** 2026-02-23
-**Confidence:** HIGH (verified against existing codebase patterns, Hevy API reference, and community post-mortems)
+**Domain:** Adding money tracking features (Plaid, transactions, household/couples, AI insights) to an existing single-user Supabase habit/task app (BetterR.Me v4.0)
+**Researched:** 2026-02-21
+**Confidence:** HIGH (verified against existing codebase, Plaid official docs, Supabase official docs, moneyy.me research, and community post-mortems)
 
----
+**Scope note:** This document focuses on **integration-specific pitfalls** -- mistakes that arise from adding money tracking to the *existing* BetterR.Me codebase. For general money-app pitfalls (Plaid sandbox confidence, transaction deduplication, categorization accuracy, etc.), see the moneyy.me research at `/home/xingdi/code/moneyy_me/.planning/research/PITFALLS.md`. Those pitfalls remain fully relevant and are referenced here where they intersect with BetterR.Me-specific concerns.
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, data corruption, or major user-facing failures.
-
-### Pitfall 1: Flat Set Schema That Cannot Represent Multiple Exercise Types
+### Pitfall 1: Household Model Breaks Every Existing RLS Policy
 
 **What goes wrong:**
-Developers design a single `sets` table with columns for `weight_kg`, `reps`, `duration_seconds`, and `distance_meters` -- then store `NULL` in whichever columns don't apply to the current exercise type. A bench press set stores weight+reps but NULLs for duration and distance. A plank stores duration but NULLs for weight and reps. A treadmill stores duration+distance but NULLs for weight and reps.
+The entire existing BetterR.Me codebase uses `auth.uid() = user_id` as the RLS pattern. Every table (profiles, tasks, habits, habit_logs, habit_milestones, projects, recurring_tasks) enforces strict single-user isolation: `USING (auth.uid() = user_id)`. When household/couples support is added, money tables need a *different* RLS pattern: some data is shared via `household_id`, some is private to one partner.
 
-This seems fine at first. Then you add features:
-- Volume calculation (`weight * reps * sets`) breaks when `weight_kg` is NULL for bodyweight exercises
-- Progression charts need to know which field to plot, requiring per-exercise-type logic everywhere
-- Validation becomes exercise-type-dependent (reps must be > 0 for weight exercises, duration must be > 0 for timed exercises)
-- UI forms must show/hide fields dynamically, with the schema providing no guidance on which fields are valid
+The critical failure mode: a developer adds money tables with `household_id`-based RLS, then either (a) tries to retrofit existing habit/task tables with `household_id` (breaking everything) or (b) creates two incompatible security models in the same database. If a shared query joins a `household_id`-scoped money table with a `user_id`-scoped habits table, the results are wrong or empty because RLS policies apply independently to each table in a join.
 
 **Why it happens:**
-The "one table to rule them all" approach avoids the complexity of discriminated union types in the database. It looks simpler on day one.
+The codebase has 7+ tables all using identical `auth.uid() = user_id` policies. This pattern is deeply embedded -- every DB class (HabitsDB, TasksDB, ProjectsDB, etc.) passes `user_id` to `.eq('user_id', userId)` in every query. Developers adding money features will pattern-match the existing code and either force money tables into the `user_id` model (breaking household sharing) or introduce a completely different model that does not compose with existing features.
 
-**Consequences:**
-- Every feature that touches sets needs a switch statement on exercise type
-- NULLable columns cannot be validated at the DB level (no CHECK constraint can say "weight_kg is required when exercise type is weight-based")
-- Aggregate queries become littered with COALESCE and CASE WHEN
-- Personal records logic must be duplicated per exercise type
+**How to avoid:**
+1. **Do NOT add `household_id` to existing habit/task tables.** Habits, tasks, projects, recurring tasks remain strictly `user_id`-scoped. The existing RLS policies stay untouched.
+2. **Money tables use a dual-column model:** every money table has both `user_id` (who created/owns the record) AND `household_id` (which household it belongs to). RLS policies on money tables use `household_id` for SELECT (allows both partners to see shared data) but `user_id` for INSERT (only the creator can insert).
+3. **Create a `households` table and a `household_members` join table** as the bridge between Supabase auth users and household membership. RLS on money tables checks `household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid())`.
+4. **The dashboard API route remains single-user.** Money widgets on the dashboard query money data through household-scoped DB classes, but the dashboard route still authenticates via `auth.uid()` and passes the user's `household_id` (looked up from `household_members`) to money queries.
+5. **Write the RLS policy for money tables in the same migration that creates them.** Never create a money table without RLS in the same transaction.
 
-**Prevention:**
-Follow Hevy's model: store ALL possible fields on each set row (weight_kg, reps, duration_seconds, distance_meters, rpe) and let them be nullable. But critically, define an `exercise_type` enum on the exercise template that determines which fields are meaningful. The exercise template declares its type (e.g., `weight_reps`, `bodyweight_reps`, `duration`, `distance_duration`), and the application layer uses this to:
-1. Render the correct input fields in the UI
-2. Validate that the required fields for that type are non-null
-3. Choose the correct progression metric for charts
-4. Calculate volume appropriately
-
-Define the exercise type enum in the Zod validation schema, not just in the database. The existing codebase already uses discriminated unions for `HabitFrequency` -- apply the same pattern to `ExerciseType`.
-
-**Detection:**
-- Progression chart code has `if (exercise.type === 'weight') ... else if (exercise.type === 'duration') ...` scattered across multiple files instead of centralized
-- Volume calculation produces NaN or 0 for bodyweight exercises
-- Form shows weight input for plank exercises
+**Warning signs:**
+- Habit/task tables gaining a `household_id` column
+- Money RLS policies using `auth.uid() = user_id` (too restrictive -- partner cannot see shared data)
+- Joins between `user_id`-scoped tables and `household_id`-scoped tables returning empty results
+- Tests for money features only testing single-user scenarios, never two-partner scenarios
 
 **Phase to address:**
-Phase 1 (Data Model / Schema Design). The exercise type enum and set field semantics must be locked down before any UI is built. Define Zod schemas with discriminated unions first; derive the DB schema from those.
+Phase 1 (Database Schema) -- the household model and money table RLS policies must be designed and tested before any money features are built. This is the architectural foundation that everything else depends on.
 
 ---
 
-### Pitfall 2: In-Progress Workout State Lost on Browser Refresh/Close
+### Pitfall 2: Supabase `numeric` Type Returns JavaScript `number` -- Silent Precision Loss
 
 **What goes wrong:**
-A user is mid-workout (10 minutes in, 4 exercises logged, 12 sets recorded). They accidentally refresh the page, their phone switches apps, or the browser tab crashes. All in-progress data is gone. This is the single most rage-inducing failure in a workout tracking app because the user is physically in a gym with sweaty hands, possibly frustrated, and cannot reconstruct which sets they did.
+The project constraint says "all money arithmetic must use decimal.js, not native JS floats." However, Supabase's JavaScript client (`@supabase/supabase-js`) returns PostgreSQL `numeric` columns as JavaScript `number` type. This means even if you store `100.10` correctly in PostgreSQL `numeric(12,2)`, when you read it back via Supabase client, you get JavaScript `100.1` (a float). For most amounts this is invisible, but amounts like `$0.10 + $0.20` will not equal `$0.30` in JavaScript floats. More critically, the auto-generated TypeScript types from Supabase CLI map `numeric` to `number`, not `string`, so the type system will not warn you.
+
+This is a confirmed Supabase issue (GitHub supabase/cli#582, closed as "not planned" -- PostgREST returns numeric as JavaScript number and the CLI follows suit). The data is stored correctly in PostgreSQL but corrupted on the round trip through the JavaScript client.
 
 **Why it happens:**
-The natural approach with SWR/React state is to keep workout data in component state during the session and POST to the API only when the user taps "Finish Workout." This means 20-60 minutes of data exists only in volatile browser memory.
+PostgREST (which powers Supabase's REST API) serializes PostgreSQL `numeric` as JSON numbers. JSON has no decimal type -- all numbers are IEEE 754 floats. By the time the value reaches your JavaScript code, precision may already be lost. The existing BetterR.Me codebase has no financial data, so this has never been an issue before. Developers will add `decimal.js` for calculations but forget that the data coming FROM Supabase is already a float, making `new Decimal(amount)` reconstruct from a possibly-corrupted value.
 
-**Consequences:**
-- Users lose partially completed workouts (the most painful UX failure in this domain)
-- Users stop trusting the app and switch to pen-and-paper or a native app
-- Support complaints spike for an issue that is architecturally difficult to fix after the fact
-
-**Prevention:**
-Implement a **dual-write strategy** from day one:
-
-1. **Server-side**: Create the workout row in the database when the user starts a workout (status: `in_progress`). Every set addition/modification triggers a debounced PATCH to the server (300ms debounce). The workout has `started_at` but no `completed_at` until the user finishes.
-
-2. **Client-side**: Mirror the current workout state to `localStorage` on every mutation (localStorage.setItem is synchronous and survives page refreshes). Use a `beforeunload` event listener as a last-resort save. Do NOT use IndexedDB for this -- IndexedDB is async and browsers do not guarantee it completes during page teardown.
-
-3. **Recovery**: On mount, check for an `in_progress` workout in both localStorage and the API. If found, restore it and show a "Resume workout?" banner. The server is the source of truth; localStorage is the fast recovery path.
-
-**Important:** Do NOT use IndexedDB in the `beforeunload` handler. IndexedDB is asynchronous and Chrome/Firefox may tear down the page before the write completes. localStorage is synchronous and reliable in this context.
-
-**Detection:**
-- No `beforeunload` handler in the workout logging component
-- Workout data only exists in React state (useState/useReducer) with no persistence layer
-- No "in_progress" status on the workouts table
-- Refreshing the page during a workout loses all data
-
-**Phase to address:**
-Phase 2 (Workout Logging / Real-Time Session). This must be built into the workout logging flow from the start, not retrofitted. The `WorkoutSession` component should persist state on every mutation.
-
----
-
-### Pitfall 3: Weight Unit Conversion Loses Precision and Corrupts Historical Data
-
-**What goes wrong:**
-User logs 135 lbs for bench press. System converts to kg (61.2349...) and stores 61.23 kg. User switches display back to lbs. System shows 135.01 lbs (or 134.99 lbs depending on rounding). Over many conversions, weights drift. Worse: if the user changes their unit preference and the system retroactively converts historical data, previously clean numbers become ugly decimals.
-
-**Why it happens:**
-The 1 lb = 0.453592 kg conversion is irrational -- no finite decimal representation exists. Rounding on store, then rounding again on display, compounds errors. Some implementations convert ALL historical data when the user switches preferences, destroying the original logged values.
-
-**Consequences:**
-- Personal records show wrong weights after unit switching
-- Progression charts have "phantom" weight changes from rounding
-- Users who log in lbs see 135.01 or 134.99 instead of clean 135
-- If historical data is retroactively converted, the original values are permanently lost
-
-**Prevention:**
-Store weight in the **unit the user logged it in**, plus a `weight_unit` column on each set:
-
-```sql
-weight_value NUMERIC(7,2),  -- stores what user typed (e.g., 135.00)
-weight_unit TEXT NOT NULL DEFAULT 'kg'  -- 'kg' or 'lbs'
-```
-
-Display in the user's current preference unit, converting on read with proper rounding (round to nearest 0.5 for lbs, nearest 0.25 for kg). Never modify the stored value. The user preference (`kg` or `lbs` in profile preferences) controls display only.
-
-This matches how Hevy handles it: the API exposes both `weight_kg` and `weight_lb` as computed fields, but the source of truth is a single stored value.
-
-The existing `ProfilePreferences` type in `lib/db/types.ts` should be extended with `weight_unit: 'kg' | 'lbs'`.
-
-**Detection:**
-- Stored weight values have more than 2 decimal places
-- Switching unit preference changes historical workout display numbers by small amounts
-- Personal record for bench press shows 61.23 kg instead of a clean 135 lbs
-- No `weight_unit` column on the sets table
-
-**Phase to address:**
-Phase 1 (Data Model / Schema Design). The unit storage strategy must be decided before any set data is written. Retrofitting after users have logged workouts in the wrong format requires a data migration.
-
----
-
-### Pitfall 4: SWR Cache Explosion from Fine-Grained Workout Data
-
-**What goes wrong:**
-The existing codebase uses SWR with URL-based cache keys (e.g., `/api/dashboard?date=2026-02-23`, `/api/habits`). Workout tracking introduces deeply nested data: a single workout contains multiple exercises, each containing multiple sets. If each entity gets its own SWR key, the cache grows explosively:
-
-- `/api/workouts` (list)
-- `/api/workouts/123` (detail)
-- `/api/workouts/123/exercises` (exercises within workout)
-- `/api/exercises/456/sets` (sets within exercise)
-- `/api/exercises/bench-press/history` (progression data)
-- `/api/exercises/bench-press/personal-records` (PRs)
-
-Mutations cascade: adding a set must invalidate the workout detail, the workout list (volume changed), the exercise history, and possibly the personal records. Forgetting one invalidation = stale data visible to the user.
-
-**Why it happens:**
-The habit/task domain has flat data structures (one habit = one toggle per day). Workout data is hierarchical (workout -> exercises -> sets) and cross-referenced (exercise history spans multiple workouts). The SWR cache patterns that work for flat entities break down for nested ones.
-
-**Consequences:**
-- Stale data after mutations (user adds a set but the workout volume doesn't update)
-- Over-fetching due to aggressive revalidation (every set change refetches the entire workout list)
-- Memory bloat from caching every permutation of exercise history queries
-- Race conditions between optimistic updates on nested entities
-
-**Prevention:**
-Use a **coarse-grained cache strategy** for workout data:
-
-1. **One SWR key per workout session**: `/api/workouts/123` returns the FULL workout including all exercises and sets (joined query). No separate SWR keys for exercises or sets within a workout.
-
-2. **Optimistic local state during active workout**: While a workout is in progress, manage exercises/sets in `useReducer` state (persisted to localStorage per Pitfall 2). Only use SWR for the workout list and historical data.
-
-3. **Targeted invalidation helper**: Create a `revalidateWorkoutData()` function (similar to the existing `revalidateSidebarCounts()`) that invalidates the specific keys affected: workout list, exercise history for affected exercises, and personal records.
-
-4. **Keep date-based keys for history**: Exercise progression data should use SWR keys like `/api/exercises/bench-press/history?period=3m` with `keepPreviousData: true` (matching the existing pattern).
-
-**Detection:**
-- Adding a set triggers 5+ network requests
-- Workout volume in the list view doesn't match the detail view after editing
-- Memory profiler shows thousands of SWR cache entries after a few weeks of use
-- `mutate()` calls scattered across multiple components without a centralized invalidation strategy
-
-**Phase to address:**
-Phase 2 (Workout Logging) for active session state management. Phase 4 (Progression Charts) for historical data caching. Define the API response shapes and SWR key strategy in Phase 1.
-
----
-
-### Pitfall 5: Overengineering the Exercise Library as a Separate Searchable Service
-
-**What goes wrong:**
-Developers treat the exercise library like a product catalog and build full-text search with PostgreSQL `tsvector`, autocomplete with debounced API calls, and virtualized infinite-scroll lists. For 400-600 exercises, this is massive overengineering. The entire Hevy library is ~400 exercises. With muscle group tags, that's maybe 200KB of JSON. It fits in a single SWR cache entry and can be filtered client-side with `Array.filter()` faster than any API roundtrip.
-
-**Why it happens:**
-Engineers extrapolate from e-commerce search patterns (millions of products) to fitness domains (hundreds of exercises). They also conflate the exercise LIBRARY (static reference data) with exercise HISTORY (time-series data that does need server queries).
-
-**Consequences:**
-- Unnecessary API complexity (search endpoint, pagination, filtering)
-- Latency on exercise selection during workout logging (network roundtrip vs. instant client filter)
-- Over-indexing the exercises table (tsvector column, GIN index) for a dataset that fits in browser memory
-- Complex autocomplete component when a simple filtered list suffices
-
-**Prevention:**
-Load the entire exercise library (preset + user custom) in a single API call. Cache it in SWR with a long `dedupingInterval` (10+ minutes). Filter client-side by name, muscle group, and equipment. Only fetch from the server on initial load and after the user creates a custom exercise.
-
-The exercise library endpoint should be: `GET /api/exercises` returning all exercises (preset + user's custom). No pagination, no search parameters. The client does all filtering.
-
-Reserve server-side queries for exercise HISTORY (which exercises were performed on which dates with what weights) -- that data grows over time and genuinely needs server-side aggregation.
-
-**Detection:**
-- Exercise search makes API calls on every keystroke
-- Exercise list endpoint has pagination parameters
-- PostgreSQL migration includes `tsvector` or `GIN` index on exercise names
-- Exercise selection during workout has noticeable latency
-
-**Phase to address:**
-Phase 1 (Data Model + Exercise Library). Design the exercise library as a static reference dataset, not a searchable service.
-
----
-
-## Moderate Pitfalls
-
-Mistakes that cause significant rework or degraded UX but don't require full rewrites.
-
-### Pitfall 6: Rest Timer Stops or Drifts in Background Tabs
-
-**What goes wrong:**
-The rest timer between sets uses `setInterval` to count down. User switches to a different browser tab or locks their phone screen. Chrome throttles `setInterval` in background tabs to once per minute maximum. The timer UI freezes. When the user returns, it shows 58 seconds remaining even though 90 seconds have actually passed.
-
-**Why it happens:**
-Browser vendors throttle timers in background tabs to save battery and CPU. `setInterval` with a 1-second callback gets throttled to 1-minute intervals (or paused entirely) in inactive tabs. `requestAnimationFrame` is completely paused in background tabs.
-
-**Consequences:**
-- Timer shows wrong remaining time when user returns to the tab
-- Timer notification (if any) fires at the wrong time
-- User loses trust in the timer and uses their phone's native timer instead
-- Audio notification fires late or not at all
-
-**Prevention:**
-Use **timestamp-based elapsed time**, not tick-counting:
-
+**How to avoid:**
+1. **Store money amounts as `integer` (cents), not `numeric` or `decimal`.** Store `$10.50` as `1050` (integer cents). This eliminates the Supabase numeric precision issue entirely. PostgreSQL `integer` maps to JavaScript `number` without precision loss (safe for amounts up to ~$90 trillion in cents).
+2. **If you must use `numeric`:** Override the generated Supabase types to use `string` instead of `number` for money columns. Read amounts as strings, then construct `Decimal` from the string: `new Decimal(row.amount_str)`.
+3. **Create a money utility module** (`lib/money/index.ts`) that wraps all conversions:
 ```typescript
-const startTime = Date.now();
-const durationMs = restSeconds * 1000;
-
-// On each tick (setInterval or requestAnimationFrame):
-const elapsed = Date.now() - startTime;
-const remaining = Math.max(0, durationMs - elapsed);
+import Decimal from 'decimal.js';
+// All money stored as integer cents in the database
+export function centsToDecimal(cents: number): Decimal {
+  return new Decimal(cents).div(100);
+}
+export function decimalToCents(amount: Decimal): number {
+  return amount.mul(100).round().toNumber();
+}
+export function formatMoney(cents: number, locale: string): string {
+  return centsToDecimal(cents).toFixed(2);
+}
 ```
+4. **Never pass a Supabase-returned `numeric` value directly to `new Decimal()`.** Always go through the conversion layer.
+5. **Add a lint rule or code review checklist item:** "No `new Decimal(row.amount)` where `amount` came from Supabase without cents conversion."
 
-When the tab regains focus (via `visibilitychange` event), immediately recalculate remaining time from the stored `startTime`. This handles background throttling because the elapsed time calculation doesn't depend on how many ticks fired.
-
-For audio notifications, use the Web Audio API or `Notification` API which can fire even when the tab is backgrounded (with user permission). Consider a Web Worker for the countdown if sub-second accuracy matters.
-
-**Detection:**
-- Timer variable increments/decrements a counter (`remaining--`) instead of computing from wall-clock time
-- `setInterval(callback, 1000)` with no `visibilitychange` compensation
-- Timer shows wrong time after returning from a different tab
-- Rest timer notification fires late
+**Warning signs:**
+- `numeric` or `decimal` column types in money table migrations (should be `integer` for cents)
+- `new Decimal(transaction.amount)` without a cents-to-decimal conversion
+- Unit tests passing because test values happen to be round numbers (test with `$10.33`, `$0.07`, `$19.99`)
+- Budget totals off by 1 cent
 
 **Phase to address:**
-Phase 3 (Rest Timer). This is a one-time architectural decision that must be made correctly at implementation time.
+Phase 1 (Database Schema) -- the money storage format (integer cents) must be decided in the first migration. Changing from `numeric` to `integer` later requires a data migration on every money table.
 
 ---
 
-### Pitfall 7: Workout/Routine Template Coupling Creates Data Integrity Issues
+### Pitfall 3: Plaid Webhook Endpoint Bypasses Supabase Auth -- Needs Separate Security
 
 **What goes wrong:**
-A routine template references exercises by ID. The user modifies the template (adds an exercise, changes set count). Now, should in-progress workouts started from this template be updated? Should completed workouts retroactively change? If the template is deleted, do all historical workouts lose their structure?
-
-This is the same class of problem the existing codebase solved for recurring tasks (ON DELETE SET NULL for `project_id` FK), but workout templates have deeper nesting.
-
-**Why it happens:**
-Developers model routines as live references to workouts. A workout "uses" a routine. But routines are templates, not parents -- they should be copied at workout-start, not referenced.
-
-**Consequences:**
-- Editing a routine retroactively changes how historical workouts display
-- Deleting a routine makes historical workouts lose their exercise structure
-- A workout started from a routine but modified during the session has an inconsistent relationship to its template
-
-**Prevention:**
-**Copy-on-start pattern**: When a user starts a workout from a routine:
-1. Copy all exercise references and set templates into the new workout row
-2. Store `routine_id` as a reference to the source template (for "start this routine again")
-3. The workout is now independent -- editing the routine does NOT affect the workout
-4. Use `ON DELETE SET NULL` for the `routine_id` FK on workouts (matching the existing `project_id` pattern on tasks)
-
-This means workouts and routines share the same `exercises[]` shape (as Hevy's API demonstrates -- both `Workout` and `Routine` contain an `exercises` array), but they are separate copies after creation.
-
-**Detection:**
-- Editing a routine changes how past workouts display
-- Deleting a routine causes errors when viewing historical workouts
-- No `routine_id` field on the workouts table (or it's a hard FK with CASCADE)
-
-**Phase to address:**
-Phase 1 (Data Model). The relationship between routines and workouts must be defined as copy-on-start, not live reference, in the schema design.
-
----
-
-### Pitfall 8: Sidebar Navigation Crowding When Adding a 4th Top-Level Section
-
-**What goes wrong:**
-The current sidebar has 3 items: Dashboard, Habits, Tasks. Adding "Workouts" makes it 4. This seems fine -- 4 items is below the recommended 5-6 max. But the real issue is the badge system. Currently, Dashboard has no badge, Habits shows incomplete count, Tasks shows due count. Workouts might show an "active workout" indicator or "workouts this week" count.
-
-The sidebar counts API (`/api/sidebar/counts`) currently queries habits and tasks. Adding workout counts means a third parallel query, increasing the endpoint's response time and the sidebar's render complexity.
-
-**Why it happens:**
-Each new feature owner adds "just one more" badge/count to the sidebar without considering the aggregate performance cost. The sidebar counts endpoint becomes a God query that touches every major table.
-
-**Consequences:**
-- Sidebar counts endpoint becomes the slowest API call (touches habits, tasks, AND workouts)
-- Badge information overload (too many numbers in the sidebar)
-- The 60px collapsed sidebar rail gets tight with 4 icon+badge combinations
-- Mobile sidebar sheet needs scrolling with more items
-
-**Prevention:**
-1. **Do NOT add workout counts to the existing sidebar counts endpoint.** The sidebar badge for workouts should only show during an active workout session (a simple "in-progress" indicator), not a daily/weekly count.
-
-2. **Use client-side state for the active workout indicator**, not an API call. The workout session state (Pitfall 2) already tracks whether a workout is in progress. The sidebar can check this via a React context or a simple localStorage flag.
-
-3. **Add the Workouts nav item as a 4th flat item** (matching the existing pattern). Use the Dumbbell icon from Lucide. Keep the icon container style consistent with the existing `NavIconContainer`.
-
-4. **Do not group/collapse sidebar items** -- the existing decision was to use a flat sidebar (documented in Key Decisions: "Flat sidebar nav -- remove collapsible groups").
-
-**Detection:**
-- Sidebar counts endpoint response time increases by 50%+ after adding workout queries
-- Sidebar feels cluttered with too many badges
-- Mobile sidebar needs scrolling to see all items
-
-**Phase to address:**
-Phase 2 (Workout Logging) for the sidebar integration. The nav item is trivial; the badge strategy needs intentional design.
-
----
-
-### Pitfall 9: Progression Charts Query Every Set Ever Logged
-
-**What goes wrong:**
-To show a bench press progression chart, the naive approach queries:
-```sql
-SELECT s.weight_value, s.reps, w.started_at
-FROM sets s
-JOIN workout_exercises we ON s.workout_exercise_id = we.id
-JOIN workouts w ON we.workout_id = w.id
-WHERE we.exercise_template_id = 'bench-press'
-AND w.user_id = $1
-ORDER BY w.started_at
-```
-
-For a user who has been training for 2 years, 3x/week, with 5 sets per exercise, that's ~1,560 rows. Not huge, but the JOIN across 3 tables on Supabase (with RLS policies on each table) gets expensive. Add muscle group filtering and the query touches even more rows.
-
-**Why it happens:**
-Progression charts seem simple until you consider:
-- Which metric to chart (max weight? total volume? estimated 1RM?)
-- Time range selection (last month? 3 months? all time?)
-- Aggregation level (per-workout max, weekly average, monthly trend?)
-- Multiple exercise types need different chart metrics
-
-**Consequences:**
-- Progression page takes 2-3 seconds to load
-- Supabase RLS policies on JOINed tables compound query cost
-- The query returns raw sets when the chart only needs aggregated data points (one per workout)
-
-**Prevention:**
-1. **Pre-aggregate on write**: When a workout is completed, compute and store per-exercise summary data: `best_set_weight`, `total_volume`, `estimated_1rm`, `top_set_reps`. Store this in a `workout_exercise_summaries` table (or as computed columns on `workout_exercises`). The progression chart reads from summaries, not raw sets.
-
-2. **Limit default time range**: Default to 3 months of data. Let the user expand. At 3x/week, that's ~36 data points -- fast to query and render.
-
-3. **Index strategically**: Create a composite index on `(exercise_template_id, user_id, completed_at)` for the workouts table to support efficient per-exercise history queries.
-
-4. **Use the same date-based SWR key pattern** as the existing dashboard: `/api/exercises/{id}/history?months=3` with `keepPreviousData: true`.
-
-**Detection:**
-- Progression chart queries JOINing 3+ tables
-- Chart page takes > 1 second to load
-- No indexes on exercise_template_id + user_id combinations
-- Raw set data sent to the client when only aggregated values are needed
-
-**Phase to address:**
-Phase 4 (Progression Charts / Personal Records). But the summary table should be planned in Phase 1 (schema design) and populated in Phase 2 (workout completion).
-
----
-
-### Pitfall 10: Zod Validation Schema Doesn't Match Discriminated Exercise Types
-
-**What goes wrong:**
-The existing codebase uses Zod schemas for all API validation (`lib/validations/`). For workout data, the set validation must vary by exercise type: weight exercises require `weight_value` + `reps`, timed exercises require `duration_seconds`, cardio exercises require `duration_seconds` + `distance_meters`. A flat Zod schema with all fields optional lets through invalid data (a bench press set with no weight, a plank with reps instead of duration).
-
-**Why it happens:**
-Developers create a single `setSchema` with all fields optional and rely on the UI to show the right inputs. But the API should reject invalid combinations regardless of what the UI sends.
-
-**Consequences:**
-- Invalid data in the database (bench press with NULL weight)
-- PRs calculated from garbage data (a "plank" with 999 reps)
-- The API accepts anything, and data quality degrades over time
-- Downstream features (progression charts, volume calculation) produce wrong results
-
-**Prevention:**
-Use Zod discriminated unions (matching the existing `HabitFrequency` pattern):
-
+Every existing API route in BetterR.Me starts with the same pattern:
 ```typescript
-const weightRepsSetSchema = z.object({
-  exercise_type: z.literal('weight_reps'),
-  weight_value: z.number().positive(),
-  weight_unit: z.enum(['kg', 'lbs']),
-  reps: z.number().int().positive(),
-  rpe: z.number().min(6).max(10).step(0.5).optional(),
-});
-
-const durationSetSchema = z.object({
-  exercise_type: z.literal('duration'),
-  duration_seconds: z.number().int().positive(),
-});
-
-const setSchema = z.discriminatedUnion('exercise_type', [
-  weightRepsSetSchema,
-  durationSetSchema,
-  // ... other types
-]);
+const supabase = await createClient();
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 ```
+Plaid webhook endpoints CANNOT use this pattern. Plaid sends webhooks server-to-server with no Supabase auth session -- no cookies, no JWT, no user context. The webhook must authenticate via Plaid's JWT verification (checking the `Plaid-Verification` header), not via Supabase auth.
 
-Wire this into the workout API routes using `.safeParse()` exactly as the existing habit and task routes do.
+The failure mode: a developer creates `/api/plaid/webhook` following the existing API route pattern, adds `getUser()` check, and every webhook returns 401. Or worse, they skip all auth checks to "make it work" and the endpoint accepts any unsigned request, allowing an attacker to inject fake transactions.
 
-**Detection:**
-- Set validation schema has all fields optional
-- API accepts a bench press set with no weight_value
-- No discriminated union on exercise_type in the Zod schemas
-- The `lib/validations/` directory has no workout-related files
+Additionally, the webhook handler needs to write to the database using the Supabase **service role key** (not the anon key), because there is no authenticated user context for RLS to evaluate. If the webhook uses the standard `createClient()` (which uses `NEXT_PUBLIC_SUPABASE_ANON_KEY`), writes will fail because RLS policies require `auth.uid()` which is null for server-to-server calls.
+
+**Why it happens:**
+The existing codebase has exactly one authentication pattern used across all 15+ API routes. Developers will cargo-cult this pattern for new endpoints. Plaid webhooks are the first external integration that calls INTO the app without user context, breaking the assumption that every API call has an authenticated Supabase session.
+
+**How to avoid:**
+1. **Create a separate Supabase client for service-role operations:**
+```typescript
+// lib/supabase/service.ts
+import { createClient } from '@supabase/supabase-js';
+export function createServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!, // NOT the anon key
+    { auth: { persistSession: false } }
+  );
+}
+```
+2. **The webhook route handler must verify Plaid's JWT signature** before processing any data. Use Plaid's `plaid-node` SDK webhook verification utilities.
+3. **Never expose `SUPABASE_SERVICE_ROLE_KEY` to the client.** It must be a server-only env var (no `NEXT_PUBLIC_` prefix). Verify it is in `.env.local` and NOT in any client-side bundle.
+4. **Create explicit RLS bypass policies for service-role operations** OR use the service role client which bypasses RLS entirely. If bypassing RLS, the webhook handler code itself must enforce correct `household_id` scoping.
+5. **Add the webhook route to the proxy middleware allowlist** so it does not get redirected to the login page. Current proxy in `lib/supabase/proxy.ts` redirects unauthenticated requests to `/auth/login` -- this would catch the webhook too.
+
+**Warning signs:**
+- `/api/plaid/webhook` route contains `supabase.auth.getUser()` check
+- Webhook handler uses `createClient()` from `lib/supabase/server.ts` (anon key, session-based)
+- `SUPABASE_SERVICE_ROLE_KEY` appears in any file with `NEXT_PUBLIC_` prefix
+- Webhook endpoint missing from middleware allowlist in `proxy.ts`
+- No Plaid JWT verification in the webhook handler
 
 **Phase to address:**
-Phase 1 (Data Model / Validation Schemas). Create `lib/validations/workout.ts` with discriminated union schemas before building API routes.
+Phase 2 (Plaid Integration) -- the service-role client, webhook verification, and middleware allowlist update must be implemented as the first step of Plaid integration, before any webhook processing logic.
 
 ---
 
-## Minor Pitfalls
-
-Mistakes that cause friction or technical debt but have bounded impact.
-
-### Pitfall 11: Exercise Template Seeding Runs on Every API Call
+### Pitfall 4: SWR Cache Collision Between Money and Habit Data
 
 **What goes wrong:**
-The existing categories feature seeds 12 default categories on the first API call (lazy initialization). If the exercise library uses the same pattern (seed 400+ exercises on first call), the first workout-related API request takes 5+ seconds as it INSERTs hundreds of rows.
+The existing SWR cache uses URL-based keys: `/api/dashboard`, `/api/tasks`, `/api/habits`, `/api/sidebar/counts`. Money features will add new keys: `/api/transactions`, `/api/budgets`, `/api/accounts`, and likely extend `/api/dashboard` to include money widgets. The dashboard API route currently returns `DashboardData` with habits, tasks, stats. Adding money data to this response changes the shape of what every existing SWR consumer expects.
+
+Specific failure scenario: the dashboard is extended to return money summary data alongside habits/tasks. An existing component (`DashboardContent`) destructures the response expecting the current shape. A money-specific mutation (`categorize transaction`) triggers a dashboard revalidation. The dashboard refetches and returns the new shape with money data. An old component fails to render because it doesn't handle the new fields, or worse, renders stale money data because SWR returned the cached (pre-money) response shape.
+
+The project already has centralized SWR invalidation patterns (from the v3.0 kanban work), but money features introduce a new dimension: **household-level data vs. user-level data**. If User A categorizes a transaction in a shared household, User B's SWR cache still shows the old category until they manually refresh. SWR has no built-in mechanism for cross-user cache invalidation.
 
 **Why it happens:**
-The "lazy seed" pattern works for 12 categories but not for 400 exercises. The categories seeding inserts 12 rows; exercise seeding inserts 400+ rows with muscle group tags, equipment references, and exercise type metadata.
+SWR keys are per-browser-session. In a household app, two users look at the same data through different SWR caches. There is no pub/sub mechanism to tell User B's browser that User A changed something. Additionally, adding money data to existing endpoints (like `/api/dashboard`) conflates two caching lifecycles: habit data (changes infrequently) and money data (changes on every Plaid sync).
 
-**Prevention:**
-Seed preset exercises via a **Supabase migration** (SQL INSERT in `supabase/migrations/`), not via application code. Preset exercises should be global (shared across all users) or seeded per-user at signup time, not on first API call.
+**How to avoid:**
+1. **Keep money API endpoints completely separate from habit/task endpoints.** Do NOT add money data to the existing `/api/dashboard` response. Create `/api/money/dashboard` (or `/api/money/summary`) as a separate endpoint.
+2. **The dashboard page composes multiple SWR hooks** -- the existing `useDashboard()` for habits/tasks and a new `useMoneyDashboard()` for money summary. They have independent cache keys, independent loading states, and independent error handling.
+3. **For household cache staleness:** Accept that SWR will not sync across browsers. Add a "last synced" indicator on money views and a manual "Refresh" button. Use `revalidateOnFocus: true` (already the SWR default) so switching tabs triggers a refetch.
+4. **Consider Supabase Realtime** for push-based updates within a household. Subscribe to `transactions` table changes filtered by `household_id`. On receiving an insert/update event, call `mutate()` on the relevant SWR key. This is the only way to get cross-user reactivity without polling.
+5. **Create a money-specific SWR invalidation utility** separate from the existing task invalidation utility.
 
-Recommended approach:
-- Create a global `exercise_templates` table with no `user_id` (shared across all users)
-- Create a `user_exercises` table for custom user-created exercises (with `user_id`)
-- The exercise library API returns the union of both tables
-- Preset exercises are seeded via migration; no lazy initialization
-
-**Detection:**
-- First workout API call takes > 2 seconds
-- `exercise_templates` table has `user_id` column with duplicate rows per user
-- Application code has a `seedExercises()` function called from API routes
+**Warning signs:**
+- Money data added to the existing `/api/dashboard` route response
+- A single SWR hook fetching both habit and money data
+- Partner A makes a change and Partner B does not see it until full page reload
+- Dashboard loading state blocked by slow Plaid sync data
 
 **Phase to address:**
-Phase 1 (Data Model / Schema Migration). Seed exercises in the migration, not in application code.
+Phase 1 (Architecture) -- decide the API boundary between money and habit features before building any money endpoints. Phase 3 (Household) -- add Supabase Realtime subscriptions for cross-user updates.
 
 ---
 
-### Pitfall 12: i18n Translation Volume Underestimated for Fitness Domain
+### Pitfall 5: Existing DB Class Pattern Does Not Support Household Scoping
 
 **What goes wrong:**
-The existing locale files (`en.json`, `zh.json`, `zh-TW.json`) have ~812 lines. Workout tracking adds:
-- ~400 exercise names (3 locales = 1,200 new strings)
-- ~30 muscle group names (90 strings)
-- ~20 equipment type names (60 strings)
-- ~80 UI strings for workout logging, timer, progression, routines
-- Set type labels, chart labels, unit labels
+Every existing DB class follows this pattern:
+```typescript
+export class HabitsDB {
+  constructor(private supabase: SupabaseClient) {}
+  async getUserHabits(userId: string, filters?: HabitFilters): Promise<Habit[]> {
+    // queries use .eq('user_id', userId)
+  }
+}
+```
+Money DB classes need a different scoping model: they query by `household_id`, not `user_id`. The temptation is to create money DB classes that follow the same pattern but with `householdId`:
+```typescript
+export class TransactionsDB {
+  constructor(private supabase: SupabaseClient) {}
+  async getTransactions(householdId: string, filters?: TransactionFilters) {
+    // queries use .eq('household_id', householdId)
+  }
+}
+```
+The problem: the `householdId` must be derived from the authenticated user's membership, NOT from client input. If a developer passes a client-provided `householdId` (e.g., from a URL parameter or request body), an attacker can change the `householdId` to access another household's financial data.
 
-That's 1,400+ new translation strings, nearly doubling the existing translation file size.
-
-**Why it happens:**
-The habit/task domain has maybe 50 entity-specific strings. The fitness domain has hundreds of proper nouns (exercise names) that all need translation. "Barbell Bench Press" must be "杠铃卧推" in zh and "槓鈴臥推" in zh-TW.
-
-**Consequences:**
-- Locale files become unwieldy (2000+ lines)
-- Exercise name translations are missed, showing English in Chinese UI
-- zh and zh-TW translations for exercise names diverge (simplified vs. traditional characters)
-
-**Prevention:**
-1. **Separate exercise translations from UI translations**: Create `i18n/messages/{locale}/exercises.json` (or a nested key in the existing file: `exercises.names.barbell_bench_press`). This keeps exercise-specific translations organized and separate from UI copy.
-
-2. **Use a translation spreadsheet or database approach**: Exercise names across 3 locales are better managed as structured data (CSV or DB rows) than as nested JSON keys.
-
-3. **Prioritize**: Translate the ~50 most common exercises first. Mark the rest as "fallback to English" with a TODO. Do not block the feature on complete translation of 400+ exercises.
-
-4. **Reuse existing next-intl patterns**: The `useTranslations('workouts')` pattern works; just namespace it clearly.
-
-**Detection:**
-- Exercise names appear in English in the Chinese locale
-- Locale files exceed 2000 lines and are hard to review in PRs
-- zh-TW exercise names use simplified characters (copy-pasted from zh)
-
-**Phase to address:**
-Phase 1 (Exercise Library) for the translation structure. Phase 5 (Polish) for complete translation coverage.
-
----
-
-### Pitfall 13: Superset/Circuit Grouping Attempted Too Early
-
-**What goes wrong:**
-Hevy supports supersets (two exercises back-to-back) and the developer tries to implement this in the first iteration. Superset grouping adds significant complexity: exercises need a `superset_id`, the UI needs a grouping visual treatment, the set logging flow changes (alternate between exercises), and the data model must handle N exercises in a group.
+The existing pattern avoids this because `userId` is always derived from `supabase.auth.getUser()` -- a server-side call that cannot be spoofed. But `householdId` has no equivalent server-side derivation in Supabase auth. It must be looked up from the `household_members` table.
 
 **Why it happens:**
-Feature envy -- Hevy has it, so we should have it. But supersets are a power-user feature that maybe 20% of users utilize.
+The existing code pattern of passing `userId` directly to DB methods looks simple and safe. Developers replicate the pattern with `householdId` without realizing that `userId` is trusted (from auth) while `householdId` is untrusted (must be derived). The codebase has no precedent for derived authorization -- every existing check is `auth.uid() = user_id`.
 
-**Consequences:**
-- The exercise ordering logic becomes complex (sort by superset group, then by order within group)
-- UI layout must handle grouped and ungrouped exercises differently
-- The MVP takes 2-3x longer to ship
-
-**Prevention:**
-Defer supersets to a future iteration. The Hevy API includes a `superset_id` field on exercises, but it's nullable -- most exercises aren't in supersets. Include the `superset_id` column in the schema (nullable, defaulting to NULL) so the data model supports it, but don't build the UI for it in v4.0.
-
-**Detection:**
-- Scope includes superset UI in the initial milestone
-- Exercise ordering logic handles group membership
-- The workout form has a "Create Superset" button
-
-**Phase to address:**
-Explicitly defer to v4.1 or v5.0. Add the nullable `superset_id` column in Phase 1 schema design but do not build UI for it.
-
----
-
-### Pitfall 14: Personal Records Not Computed Incrementally
-
-**What goes wrong:**
-Computing personal records (heaviest bench press ever, most reps at a given weight) by scanning all historical workout data on every request. For a user with 500+ workouts, this means aggregating thousands of sets.
-
-**Why it happens:**
-PRs seem simple ("just MAX(weight) WHERE exercise = bench press") but there are multiple PR types: heaviest weight, most reps at a given weight, highest volume in one set, highest estimated 1RM. Each requires a different aggregation.
-
-**Prevention:**
-Maintain a `personal_records` table that is updated incrementally when a workout is completed:
-
+**How to avoid:**
+1. **Create a `resolveHousehold()` utility** that takes a Supabase client (with user session) and returns the user's `household_id`:
+```typescript
+// lib/money/resolve-household.ts
+export async function resolveHousehold(supabase: SupabaseClient): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new AuthError('Not authenticated');
+  const { data } = await supabase
+    .from('household_members')
+    .select('household_id')
+    .eq('user_id', user.id)
+    .single();
+  if (!data) throw new AuthError('No household membership');
+  return data.household_id;
+}
+```
+2. **Money API routes call `resolveHousehold()` once, then pass the result to DB methods.** The `household_id` is NEVER accepted from the client request.
+3. **RLS policies on money tables enforce the same check at the database level** as a safety net:
 ```sql
-CREATE TABLE personal_records (
-  id UUID PRIMARY KEY,
-  user_id UUID REFERENCES profiles(id),
-  exercise_template_id TEXT NOT NULL,
-  record_type TEXT NOT NULL, -- 'max_weight', 'max_reps', 'max_volume', 'max_estimated_1rm'
-  value NUMERIC NOT NULL,
-  achieved_at TIMESTAMPTZ NOT NULL,
-  workout_id UUID REFERENCES workouts(id) ON DELETE SET NULL,
-  UNIQUE(user_id, exercise_template_id, record_type)
-);
+CREATE POLICY "Household members can view their money data"
+  ON transactions FOR SELECT
+  USING (household_id IN (
+    SELECT household_id FROM household_members WHERE user_id = auth.uid()
+  ));
 ```
+4. **Add integration tests that explicitly verify:** a user cannot access money data from a household they do not belong to, even if they know the `household_id`.
 
-When a workout is completed, compare each exercise's best set against the current PR. Update if beaten. This makes PR lookups O(1) instead of scanning all history.
-
-**Detection:**
-- PR display triggers a full-table scan on workout sets
-- PR computation takes > 500ms
-- No `personal_records` table in the schema
+**Warning signs:**
+- Any money API route accepting `household_id` as a query parameter or request body field
+- Money DB classes that take `householdId` as a constructor argument (too easy to pass wrong value)
+- RLS policies on money tables that only check `user_id` (too restrictive) or have no household check (too permissive)
+- No test for cross-household data isolation
 
 **Phase to address:**
-Phase 1 (Schema Design) for the table. Phase 2 (Workout Completion) for the update logic. Phase 4 (Progression) for the display.
+Phase 1 (Database Schema + Auth) -- the `resolveHousehold()` utility and money table RLS policies must be implemented before any money endpoints exist.
 
 ---
 
-## Phase-Specific Warnings
+### Pitfall 6: Plaid Access Token Encryption with Supabase (Not Drizzle/Prisma)
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|---|---|---|
-| Phase 1: Schema Design | Flat set schema (P1), unit storage (P3), template coupling (P7), validation (P10) | Define exercise type enum and discriminated unions FIRST. Store weight in logged unit. Use copy-on-start for routines. |
-| Phase 1: Exercise Library | Overengineered search (P5), seeding cost (P11), translation volume (P12) | Load-all-and-filter-client-side. Seed via migration. Separate exercise translations. |
-| Phase 2: Workout Logging | State loss on refresh (P2), SWR cache explosion (P4), sidebar crowding (P8) | Dual-write (server + localStorage). Coarse-grained SWR keys. Client-side active workout indicator. |
-| Phase 3: Rest Timer | Timer drift in background (P6) | Timestamp-based elapsed time, not tick-counting. Use `visibilitychange` event. |
-| Phase 4: Progression Charts | Slow chart queries (P9), PR full-scan (P14) | Pre-aggregate summaries on workout completion. Maintain incremental PR table. Default 3-month range. |
-| Phase 4: Routines | Scope creep with supersets (P13) | Include nullable `superset_id` in schema but defer UI to future milestone. |
-| All Phases: i18n | Missing translations (P12) | Add workout namespace to all 3 locale files in each phase. Do not defer all translations to the end. |
+**What goes wrong:**
+The moneyy.me research recommends encrypting Plaid access tokens at rest with AES-256. That research assumed a Drizzle ORM + Neon stack where application-level encryption is straightforward (encrypt before insert, decrypt after select). BetterR.Me uses Supabase's JavaScript client, which does not have a middleware/hook layer for automatic encrypt/decrypt. You must manually encrypt before every insert and decrypt after every select.
+
+The failure mode: a developer stores Plaid access tokens as plain text in a `plaid_items` table because "RLS protects it." RLS prevents *other users* from seeing the token, but does NOT protect against database dumps, backup leaks, Supabase dashboard access, or Supabase employees. A database breach exposes permanent read access to every connected user's bank accounts.
+
+**Why it happens:**
+Supabase makes database operations feel safe because of RLS. Developers conflate "only the owner can see this row via the API" with "this data is encrypted at rest." They are not the same thing. Supabase encrypts the disk at rest (infrastructure level), but individual column values are stored in plain text in the database. A `SELECT * FROM plaid_items` in the Supabase SQL Editor shows the token.
+
+The existing BetterR.Me codebase has no encrypted columns and no encryption utilities. There is no pattern to follow.
+
+**How to avoid:**
+1. **Use Supabase Vault** (the `vault` extension) to store Plaid access tokens. Vault provides Authenticated Encryption with Associated Data (AEAD) using libsodium. The encryption key is managed by Supabase and never stored in the database. Store the access token in `vault.secrets` and reference it by ID from your `plaid_items` table.
+2. **Alternative: Application-level encryption** with a key stored in environment variables. Create `lib/crypto/encrypt.ts`:
+```typescript
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+const ALGORITHM = 'aes-256-gcm';
+const KEY = Buffer.from(process.env.PLAID_ENCRYPTION_KEY!, 'hex'); // 32 bytes
+export function encrypt(plaintext: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(ALGORITHM, KEY, iv);
+  let enc = cipher.update(plaintext, 'utf8', 'hex');
+  enc += cipher.final('hex');
+  const tag = cipher.getAuthTag().toString('hex');
+  return iv.toString('hex') + ':' + enc + ':' + tag;
+}
+export function decrypt(ciphertext: string): string {
+  const [ivHex, encHex, tagHex] = ciphertext.split(':');
+  const decipher = createDecipheriv(ALGORITHM, Buffer.from(ivHex, 'hex'), /* ... */);
+  // ... standard AES-256-GCM decryption
+}
+```
+3. **Never store the encryption key in the database or in `NEXT_PUBLIC_` env vars.** Use `PLAID_ENCRYPTION_KEY` as a server-only environment variable.
+4. **The `plaid_items` table should have a `text` column for the encrypted token**, NOT a `varchar` (encrypted values are longer than the original). Column name should be `encrypted_access_token` (not `access_token`) to make it obvious the value is encrypted.
+5. **Add a startup check** that verifies `PLAID_ENCRYPTION_KEY` is set before the app starts processing Plaid operations.
+
+**Warning signs:**
+- A column named `access_token` in any migration SQL (should be `encrypted_access_token`)
+- No `crypto` or `vault` imports in the Plaid service module
+- `PLAID_ENCRYPTION_KEY` missing from `.env.example`
+- Plaid access tokens appearing in application logs (check log scrubbing)
+
+**Phase to address:**
+Phase 2 (Plaid Integration) -- encryption must be implemented in the same PR that creates the `plaid_items` table. Never commit a migration with a plain-text access token column, even "temporarily."
 
 ---
 
-## Integration-Specific Pitfalls (Existing Codebase)
+### Pitfall 7: Vercel Serverless Timeout on Initial Plaid Transaction Sync
 
-These pitfalls are specific to adding fitness features to the existing BetterR.Me codebase patterns.
+**What goes wrong:**
+When a user first connects a bank account via Plaid Link, the app needs to immediately call `/transactions/sync` to fetch initial transaction history. This initial sync can return thousands of transactions and may take 10-30 seconds. Vercel Hobby plan has a 10-second function execution limit; Pro plan has 60 seconds. On the Hobby plan, the initial sync WILL time out for users with active bank accounts.
 
-### Existing Pattern: Fresh Supabase Client Per Request
-The codebase requires `const supabase = await createClient()` in every API route. Workout routes MUST follow this pattern. Do NOT create a singleton `WorkoutsDB` instance -- instantiate it fresh in each handler. The existing pattern is documented in CLAUDE.md and enforced by code review.
+The existing BetterR.Me API routes are designed for fast responses (dashboard loads in <1 second). No route currently takes more than 2-3 seconds. The Plaid sync endpoint breaks this assumption.
 
-### Existing Pattern: Client-Sent Date Parameter
-All time-aware endpoints accept a `date` query param from the client (never trust server-local time on Vercel). Workout logging should use `started_at` and `completed_at` timestamps from the client, but validated server-side to be within reasonable bounds (not in the future, not more than 24 hours in the past).
+**Why it happens:**
+Developers test with Plaid Sandbox, which returns a small set of mock transactions instantly. The first real bank connection returns 6-24 months of transaction history in the initial sync -- potentially thousands of transactions requiring database insertion. On Vercel serverless, there is no persistent process to handle this in the background.
 
-### Existing Pattern: DB Class + Zod Validation Separation
-DB classes (`lib/db/`) handle data access. Zod schemas (`lib/validations/`) handle input validation. API routes wire them together. Workout features must follow this separation: `WorkoutsDB`, `ExercisesDB`, `SetsDB` in `lib/db/`, with matching `lib/validations/workout.ts` schemas.
+**How to avoid:**
+1. **Never perform the initial transaction sync in the API route handler that responds to Plaid Link's `onSuccess`.** The Link success handler should only: (a) exchange the `public_token` for an `access_token`, (b) store the encrypted access token, (c) return success to the client immediately.
+2. **Queue the initial sync as a background job.** Options for Vercel serverless:
+   - **Vercel Cron Jobs** (`vercel.json` cron config): Schedule a periodic sync check every 15-30 minutes. Not ideal for initial sync (too much delay).
+   - **Inngest**: Fire an event on account connection, handle the sync in an Inngest function that runs outside Vercel's execution limit. Inngest's free tier supports 50K function runs/month.
+   - **Supabase Edge Functions**: Run the sync in a Supabase-hosted Deno function with a 150-second timeout.
+   - **Fire-and-forget fetch**: The API route fires a fetch to another API route (`/api/internal/sync`) and does not await the response. The sync route runs until Vercel's timeout, processes what it can, and stores the cursor for the next run.
+3. **Show the user a "Syncing your accounts..." status** immediately after connection. Do not block the UI waiting for transactions to appear.
+4. **Implement cursor-based resumable sync**: If a sync is interrupted (timeout), store the cursor. The next sync attempt picks up where it left off rather than restarting.
 
-### Existing Pattern: SWR Hook Per Feature
-Each feature has a dedicated hook (`use-dashboard.ts`, `use-habits.ts`, `use-projects.ts`). Create `use-workouts.ts`, `use-exercises.ts`, `use-workout-session.ts` following the same pattern. Use the `fetcher` from `lib/fetcher.ts`.
+**Warning signs:**
+- `await plaidClient.transactionsSync()` called in the same API route as `plaidClient.itemPublicTokenExchange()`
+- No background job infrastructure mentioned in the architecture
+- Initial sync tested only with Plaid Sandbox (returns few transactions instantly)
+- Vercel function timeout errors in production logs after real bank connections
 
-### Existing Pattern: Sidebar Counts Revalidation
-The existing `revalidateSidebarCounts()` function is called after habit toggles and task completions. If workout activity should affect sidebar counts (not recommended per Pitfall 8), it would need to call this function too. Prefer client-side state for the active workout indicator instead.
+**Phase to address:**
+Phase 2 (Plaid Integration) -- background job infrastructure (Inngest or Supabase Edge Functions) must be set up before implementing transaction sync. The sync architecture is the foundation of the entire money feature.
 
 ---
+
+### Pitfall 8: Adding `household_id` to Existing User Profile Creates Mandatory Coupling
+
+**What goes wrong:**
+A natural design is to add `household_id` to the existing `profiles` table, making every user belong to a household. This creates a migration problem: all existing users (who signed up for habits/tasks, not money tracking) must now have a `household_id`. Do you create a solo household for each existing user? Do you make `household_id` nullable? Either choice has consequences.
+
+If `household_id` is NOT NULL, the migration must create a household for every existing user and backfill their `household_id`. This couples habit/task features to the household model -- now the `profiles` table (which is the FK target for ALL existing tables) has a dependency on the `households` table.
+
+If `household_id` is nullable, every money query must handle the case where `household_id IS NULL` (user has not set up money features). This adds null checks throughout the money codebase.
+
+Worse, the `profiles` table in BetterR.Me has an auto-creation trigger (`handle_new_user`) that fires on auth signup. If `household_id` is NOT NULL, this trigger must also create a household -- turning a simple auth trigger into a multi-table transaction that can fail.
+
+**Why it happens:**
+The `profiles` table is the natural place to store "user belongs to household" because it already stores user metadata. The existing `handle_new_user` trigger creates a profile row on signup. Extending it to also create a household and a household_members row feels logical but introduces fragile multi-table logic into a trigger.
+
+**How to avoid:**
+1. **Do NOT add `household_id` to the `profiles` table.** Keep profiles exactly as they are -- habits, tasks, and all existing features remain untouched.
+2. **Use a separate `household_members` join table** that links `user_id` (from profiles/auth) to `household_id` (from households). Users who never use money features simply have no row in `household_members`.
+3. **Money feature onboarding creates the household lazily.** When a user first visits `/money` (or connects a bank account), check for household membership. If none exists, create a solo household and membership row. This is an application-level operation, not a database trigger.
+4. **The `handle_new_user` trigger stays unchanged.** New signups get a profile (as before) but no household. Household creation is opt-in via money feature onboarding.
+5. **The `resolveHousehold()` utility (from Pitfall 5) returns null for users without a household.** Money routes check for null and redirect to money onboarding.
+
+**Warning signs:**
+- `ALTER TABLE profiles ADD COLUMN household_id` in any migration
+- `handle_new_user` trigger modified to create household records
+- Existing tests for profile creation breaking due to new household FK constraint
+- Users who never use money features having phantom household records
+
+**Phase to address:**
+Phase 1 (Database Schema) -- the household model must be a separate table graph, not an extension of the existing profile table. This decision affects every subsequent migration.
+
+---
+
+### Pitfall 9: AI Insights Generating Harmful Financial Advice
+
+**What goes wrong:**
+The project spec calls for "contextual AI insights embedded in UI (not a chatbot)." If an LLM generates these insights, there is a real risk of the model producing statements that constitute financial advice -- "You should reduce your dining budget," "Consider moving your savings to a higher-yield account," "Your emergency fund is insufficient." These statements could be legally actionable under SEC/FINRA regulations, factually wrong (the model does not know the user's full financial picture), or anxiety-inducing (contradicting the "Calm Finance" design philosophy).
+
+**Why it happens:**
+LLMs are trained on financial content that is inherently advisory. Even with careful prompting, an LLM asked "what insights can you derive from this spending data?" will generate advice-like statements. The moneyy.me research explicitly flags "AI chatbot for financial advice" as an anti-feature due to SEC/FINRA compliance risk, but "contextual AI insights" exists in a gray area between observation and advice.
+
+**How to avoid:**
+1. **Start with rule-based insights, not LLM-generated insights.** Rule-based examples:
+   - "Your grocery spending this month is 23% higher than last month" (observation, not advice)
+   - "You have 3 subscriptions totaling $45/mo" (fact, not recommendation)
+   - "Your rent is your largest expense at 35% of income" (context, not judgment)
+2. **If using an LLM, constrain output to factual observations only.** System prompt must explicitly prohibit: recommendations, "should" statements, comparisons to benchmarks, and forward-looking predictions about investment returns.
+3. **Add a legal disclaimer** to all AI-generated insights: "This is informational only and not financial advice."
+4. **Review every insight template/prompt for advisory language** before launch. "You might want to..." is advice. "Your spending on X was Y" is not.
+5. **Defer LLM-based insights to the last phase.** Build rule-based insights first, validate that users find them useful without anxiety, then consider adding LLM enhancement.
+
+**Warning signs:**
+- Insight text containing "should," "recommend," "consider," or "try to"
+- Insights comparing user spending to external benchmarks ("average American spends...")
+- No legal review of insight generation prompts
+- Insights generating anxiety ("You overspent by $X this month!" with red styling)
+
+**Phase to address:**
+Phase 5 (AI Insights) -- rule-based insights first, LLM enhancement later. Legal review before any insight text is shown to users.
+
+---
+
+## Technical Debt Patterns
+
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Store money amounts as `numeric` instead of integer cents | Looks cleaner in SQL queries, no cents-to-dollars conversion | Silent precision loss through Supabase JS client, requires type overrides | Never -- integer cents is the correct pattern for Supabase |
+| Skip Plaid access token encryption ("RLS is enough") | Faster development, no crypto code | Database breach exposes permanent bank access credentials | Never -- financial data encryption is non-negotiable |
+| Add money data to existing `/api/dashboard` endpoint | One fetch for all dashboard data | Couples habit/money cache lifecycles, slower dashboard if Plaid data is slow | Never -- keep API boundaries separate |
+| Use Supabase anon key for webhook handlers ("it works in dev") | Simpler code, no service role setup | Webhooks fail because RLS blocks unauthenticated writes | Never -- webhooks require service role from the start |
+| Skip household model, build money features as single-user first | Ship faster, defer multi-user complexity | Retrofitting household_id on populated money tables is a painful data migration | Acceptable ONLY if household features are explicitly deferred to v5.0+ (the project spec includes household in v4.0, so this shortcut is NOT acceptable here) |
+| Use `node-cron` for background sync jobs | Works in local dev | `node-cron` does not work on Vercel serverless (no persistent process) | Never for Vercel deployment |
+| Skip background job infrastructure, do sync in API routes | Simpler architecture | Timeouts on initial sync, unreliable ongoing sync | First 1-2 days of prototyping; must add Inngest/Edge Functions before any real bank connection |
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Supabase + Plaid Webhook | Using `createClient()` from `lib/supabase/server.ts` (session-based, anon key) in webhook handler | Create `lib/supabase/service.ts` with `SUPABASE_SERVICE_ROLE_KEY` for server-to-server operations |
+| Supabase RLS + Household Model | Writing RLS policies that check `auth.uid() = user_id` on money tables (blocks partner access) | Use `household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.uid())` |
+| Supabase Proxy Middleware + Webhook Route | Webhook route gets caught by the unauthenticated redirect in `proxy.ts`, returning 302 instead of processing | Add `/api/plaid/webhook` and `/api/internal/*` to the middleware allowlist |
+| Supabase `numeric` + decimal.js | Reading `numeric` column via Supabase client and passing to `new Decimal()` -- the value is already a JS float | Store as integer cents; or read as text and parse |
+| SWR + Household Shared Data | Assuming SWR cache invalidation in one browser updates another user's browser | Use Supabase Realtime for cross-user updates, or accept stale-until-focus |
+| Plaid Link + Supabase Auth | Running `public_token` exchange on the client side (exposes Plaid secret) | Exchange must happen server-side in an API route; only the `link_token` goes to the client |
+| Supabase + Plaid Access Token Storage | Storing access token as plain text relying on RLS for security | Use Supabase Vault or application-level AES-256-GCM encryption |
+| Vercel Cron + Supabase | Using Vercel Cron to call an API route that uses session-based auth (cron requests have no session) | Cron endpoint uses service role client and verifies a cron secret header |
+| Plaid Node SDK + Vercel Edge Runtime | Using Plaid SDK in an Edge Runtime route (Plaid SDK depends on Axios which does not work in Edge) | Use Node.js runtime (not Edge) for all Plaid API routes |
+| Existing DB Classes + Money DB Classes | Money DB classes inheriting the `user_id`-scoping pattern from HabitsDB/TasksDB | Money DB classes use `household_id` scoping with a separate `resolveHousehold()` utility |
+
+## Performance Traps
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Loading all transactions on dashboard page load | Dashboard load time goes from <1s to 5+ seconds | Separate money summary endpoint; aggregate server-side with pre-computed daily/monthly totals | 500+ transactions per household |
+| OFFSET-based pagination for transaction lists | Slow page loads as user accumulates months of data | Cursor-based (keyset) pagination with composite index on `(household_id, date, transaction_id)` | 10K+ transactions per household (~6 months of active accounts) |
+| SWR refetching money + habit data on every focus event | Excessive API calls on tab switch; Plaid rate limits hit | Separate SWR hooks for money vs habits; longer `dedupingInterval` for money data (30s vs default 2s) | Multiple browser tabs open |
+| N+1 queries for transaction + account + category joins | API response times degrade linearly with transaction count | Eager-load via JOINs or batch queries in the DB layer | 100+ transactions per page |
+| Recomputing budget progress on every budget page load | Budget page slow; DB CPU spikes | Pre-compute aggregations (daily/monthly by category) in a summary table; update on sync | 5K+ transactions per household |
+| Fetching all accounts + balances on every page | Excessive Plaid API calls for balance refresh | Cache account balances with 15-30 minute TTL; refresh only on user request | 10+ connected accounts per household |
+| Running money aggregation queries without household_id index | Full table scans on every money query | Composite indexes with `household_id` as leading column on all money tables | 1K+ total rows across all households |
+
+## Security Mistakes
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Plaid access tokens stored as plain text in Supabase | Database breach exposes permanent read access to every user's bank accounts | Encrypt with AES-256-GCM (app-level) or use Supabase Vault |
+| Webhook endpoint accepts unsigned requests | Attacker injects fake transactions, corrupts financial data | Verify Plaid JWT signature on every webhook; reject unsigned requests with 401 |
+| `household_id` derived from client request parameter | Attacker changes `household_id` to access other household's finances | Always derive `household_id` from authenticated session via `household_members` table lookup |
+| Service role key in client-accessible environment variable | Anyone can bypass RLS and read/write any data in the entire database | Use `SUPABASE_SERVICE_ROLE_KEY` (no `NEXT_PUBLIC_` prefix); only import in server-side files |
+| Missing rate limiting on Plaid Link token creation | Attacker triggers thousands of Link sessions, running up Plaid API costs | Rate limit `/api/plaid/create-link-token` to 5-10 requests per user per hour |
+| Logging financial data (transaction amounts, account numbers, balances) | Application logs become a data breach vector | Create logging middleware that redacts money amounts, account numbers, and access tokens |
+| No Content Security Policy for Plaid Link iframe | XSS attack could intercept bank credentials during Plaid Link flow | Add CSP headers allowing `plaid.com` and `cdn.plaid.com` as frame sources |
+| Money tables created without RLS enabled | Any authenticated user can read any household's financial data via direct Supabase API call | Enable RLS and add policies in the same migration that creates each money table |
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Blocking dashboard load until money data syncs | Users who came for habits/tasks see a loading spinner because Plaid sync is slow | Load habit/task data immediately; money widgets load independently with their own loading state |
+| Requiring bank connection before showing any money value | Users with bank-connection anxiety bounce during money onboarding | Allow manual transaction entry or CSV import first; bank connection is optional enhancement |
+| Showing aggressive red/green colors for budget over/under | Triggers financial anxiety, contradicts "Calm Finance" philosophy | Use muted tones, forward-looking language ("$X remaining this month"), no red for overspending |
+| Money features cluttering the existing habit/task sidebar | Existing users overwhelmed by new navigation items they did not ask for | Money section in sidebar is hidden until user opts into money features; progressive disclosure |
+| Partner invitation requiring simultaneous onboarding | If Partner 2 does not sign up immediately, Partner 1 is stuck | Partner 1 uses money features solo; Partner 2 joins asynchronously; data merges on accept |
+| Exposing raw Plaid transaction descriptions ("POS DEBIT 8923 MCDNLDS") | Ugly, unreadable text undermines trust in the product | Clean up merchant names using Plaid's enriched `merchant_name` field; fall back to cleaned `name` |
+| Mixing money and habit data in notification/alert systems | Habit streak notifications interleaved with bill due dates creates confusion | Separate notification channels for habits vs money; user can opt into each independently |
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **Household RLS:** Often missing the `household_members` lookup in RLS policies -- verify by logging in as Partner B and confirming they see Partner A's shared transactions
+- [ ] **Webhook security:** Often missing JWT signature verification -- verify by sending an unsigned POST to `/api/plaid/webhook` and confirming it returns 401
+- [ ] **Proxy middleware allowlist:** Often missing webhook route -- verify Plaid webhook does not get 302 redirect to `/auth/login`
+- [ ] **Service role client isolation:** Often the service role key leaks into client bundles -- verify `SUPABASE_SERVICE_ROLE_KEY` does NOT appear in the browser's network tab or JS bundles
+- [ ] **Money amount precision:** Often tested with round numbers only -- verify calculations with `$10.33 + $5.67 = $16.00` and `$0.10 + $0.20 = $0.30` using actual database round-trip
+- [ ] **Plaid reconnection flow:** Often missing `ITEM_LOGIN_REQUIRED` handling -- verify by simulating a broken connection and confirming Update Mode Link launches
+- [ ] **Transaction sync cursor persistence:** Often missing cursor storage after interrupted sync -- verify by killing the sync process mid-way and confirming the next sync resumes (not restarts)
+- [ ] **Existing features unbroken:** Often money migrations break habit/task features -- verify ALL existing 1207+ tests pass after money schema migration
+- [ ] **Background sync on Vercel:** Often using `node-cron` which does not work on serverless -- verify transaction sync works on deployed Vercel (not just `pnpm dev`)
+- [ ] **i18n for money strings:** Often forgetting to add translations for all three locales -- verify money UI strings exist in en.json, zh.json, zh-TW.json
+- [ ] **Supabase type generation:** Often `numeric` columns generate as `number` type -- verify money column types are `integer` (cents) and TypeScript types reflect this
+- [ ] **Dashboard independence:** Often money loading blocks habit display -- verify dashboard loads habits instantly even when Plaid API is down
+
+## Recovery Strategies
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Plain-text access tokens in database | HIGH | Generate encryption key, write migration to encrypt all existing tokens in-place, update all read/write code paths simultaneously, rotate any tokens that may have been exposed via Plaid dashboard |
+| `numeric` money columns instead of integer cents | HIGH | Write migration to convert all money columns from `numeric` to `integer` (multiply by 100, round), update every query and display formatter, re-validate all budget/spending calculations |
+| Missing household RLS policies | HIGH | Add RLS policies to all money tables, run audit query to check for any cross-household data reads in access logs, notify users if leakage found |
+| Money data mixed into existing dashboard API | MEDIUM | Create new `/api/money/dashboard` endpoint, update frontend to use separate SWR hook, remove money fields from existing `/api/dashboard` response, update tests |
+| Webhook endpoint with no auth | MEDIUM | Add Plaid JWT verification immediately, audit webhook logs for suspicious payloads, re-sync all Items to ensure no fake transactions were injected |
+| Background sync failing on Vercel | MEDIUM | Add Inngest or Supabase Edge Functions, implement manual "Refresh" button as immediate workaround, re-sync all Items with cursor reset |
+| Household_id added to profiles table | HIGH | Remove column, create separate `household_members` table, write backfill migration to move data, update `handle_new_user` trigger if modified, re-run all profile tests |
+| SWR cache showing stale partner data | LOW | Add `revalidateOnFocus: true` (default), add manual refresh button, consider Supabase Realtime subscription for cross-user updates |
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| Household model breaks existing RLS | Phase 1 (Database Schema) | Create money tables with RLS; run ALL existing 1207+ tests to verify habit/task features unaffected; test two-user household data visibility |
+| Supabase numeric precision loss | Phase 1 (Database Schema) | Money columns use `integer` (cents); unit test with `$10.33`, `$0.07`, `$19.99` round-trip through Supabase client |
+| Plaid webhook bypasses Supabase auth | Phase 2 (Plaid Integration) | Webhook endpoint uses service role client; unsigned requests return 401; middleware does not redirect webhook |
+| SWR cache collision money/habits | Phase 1 (Architecture) | Money endpoints completely separate from habit endpoints; dashboard page uses multiple independent SWR hooks |
+| DB class pattern lacks household scoping | Phase 1 (Database Schema + Auth) | `resolveHousehold()` utility created; money API routes never accept `household_id` from client; cross-household access test fails correctly |
+| Plaid access token encryption | Phase 2 (Plaid Integration) | Token column named `encrypted_access_token`; `PLAID_ENCRYPTION_KEY` env var exists; token unreadable in Supabase SQL Editor |
+| Vercel serverless timeout on initial sync | Phase 2 (Plaid Integration) | Background job infrastructure (Inngest/Edge Functions) handles sync; API route returns immediately; sync completes for accounts with 1000+ transactions |
+| `household_id` on profiles table | Phase 1 (Database Schema) | No `household_id` column on `profiles` table; `handle_new_user` trigger unchanged; separate `household_members` table exists |
+| AI insights generating financial advice | Phase 5 (AI Insights) | All insight text reviewed for advisory language; rule-based insights implemented first; legal disclaimer present |
 
 ## Sources
 
-- Hevy API data model: [Hevy MCP Server](https://github.com/chrisdoc/hevy-mcp), [Hevy API Docs](https://api.hevyapp.com/docs/), [go-hevy package](https://pkg.go.dev/github.com/gregwilson777/go-hevy)
-- Hevy exercise library: [400+ Exercises](https://help.hevyapp.com/hc/en-us/articles/35688251991575-Hevy-Exercise-Library-400-Exercises-and-Custom-Exercises)
-- Hevy exercise types: [Exercise Programming Options](https://www.hevyapp.com/features/exercise-programming-options/)
-- Timer throttling: [Why setInterval breaks in inactive tabs](https://pontistechnology.com/learn-why-setinterval-javascript-breaks-when-throttled/), [Why JavaScript Timer Is Unreliable](https://abhi9bakshi.medium.com/why-javascript-timer-is-unreliable-and-how-can-you-fix-it-9ff5e6d34ee0)
-- State persistence: [localStorage vs IndexedDB in beforeunload](https://vaughnroyko.com/offline-storage-indexeddb-and-the-onbeforeunloadunload-problem/), [Persisting unsaved sessions with localStorage](https://mstflotfy.com/theindiedev/persist-state-localStorage-OneExercise)
-- Unit conversion: [Fitbod unit handling](https://fitbod.zendesk.com/hc/en-us/articles/23560953306263-Unit-of-Measurement)
-- Workout schema patterns: [Designing data structure for workouts](https://1df.co/designing-data-structure-to-track-workouts/), [Dittofi workout data model](https://www.dittofi.com/learn/how-to-design-a-data-model-for-a-workout-tracking-app)
-- Supabase RLS performance: [RLS Performance Best Practices](https://supabase.com/docs/guides/troubleshooting/rls-performance-and-best-practices-Z5Jjwv)
-- Sidebar UX: [Sidebar best practices](https://uxplanet.org/best-ux-practices-for-designing-a-sidebar-9174ee0ecaa2)
-- Workout logging UX: [Fitness app UX design principles](https://stormotion.io/blog/fitness-app-ux/)
-- SWR caching: [SWR cache documentation](https://swr.vercel.app/docs/advanced/cache)
-- Time-series queries: [PostgreSQL time-series design](https://neon.com/guides/timeseries-data)
+### Primary (HIGH confidence)
+- [Supabase Row Level Security (Official Docs)](https://supabase.com/docs/guides/database/postgres/row-level-security)
+- [Supabase API Keys (Official Docs)](https://supabase.com/docs/guides/api/api-keys)
+- [Supabase Vault (Official Docs)](https://supabase.com/docs/guides/database/vault)
+- [Supabase `numeric` type precision issue (GitHub supabase/cli#582)](https://github.com/supabase/cli/issues/582)
+- [Plaid Node SDK Edge Runtime limitation (GitHub plaid/plaid-node#604)](https://github.com/plaid/plaid-node/issues/604)
+- [Plaid Webhook Verification (Official Docs)](https://plaid.com/docs/api/webhooks/webhook-verification/)
+- [Plaid Transactions Sync (Official Docs)](https://plaid.com/docs/transactions/sync-migration/)
+- [Vercel Serverless Function Timeout (Knowledge Base)](https://vercel.com/kb/guide/what-can-i-do-about-vercel-serverless-functions-timing-out)
+- [Vercel Cold Start Performance (Knowledge Base)](https://vercel.com/kb/guide/how-can-i-improve-serverless-function-lambda-cold-start-performance-on-vercel)
+- BetterR.Me codebase analysis: `lib/supabase/server.ts`, `lib/supabase/client.ts`, `lib/supabase/proxy.ts`, `lib/db/types.ts`, `lib/db/habits.ts`, `app/api/tasks/route.ts`, `app/api/dashboard/route.ts`, `supabase/migrations/20260129_initial_schema.sql`, all existing RLS policies
+
+### Secondary (MEDIUM confidence)
+- [Supabase RLS Complete Guide 2026 (DesignRevision)](https://designrevision.com/blog/supabase-row-level-security)
+- [Multi-Tenant Applications with RLS on Supabase (AntStack)](https://www.antstack.com/blog/multi-tenant-applications-with-rls-on-supabase-postgress/)
+- [Supabase Best Practices (Leanware)](https://www.leanware.co/insights/supabase-best-practices)
+- [SWR Mutation & Revalidation (Official Docs)](https://swr.vercel.app/docs/mutation)
+- [SWR Cache (Official Docs)](https://swr.vercel.app/docs/advanced/cache)
+- [Plaid Integration with Next.js 14 Step-by-Step (Medium)](https://medium.com/@nazardubovyk/step-by-step-guide-to-integrate-plaid-with-next-js-14-app-router-356b547b5a4a)
+
+### Tertiary (inherited from moneyy.me research, HIGH confidence)
+- [Plaid Transactions Troubleshooting (Official)](https://plaid.com/docs/transactions/troubleshooting/)
+- [Plaid Link Update Mode (Official)](https://plaid.com/docs/link/update-mode/)
+- [Plaid AI-Enhanced Categorization (Official Blog)](https://plaid.com/blog/ai-enhanced-transaction-categorization/)
+- [AWS Multi-Tenant Data Isolation with PostgreSQL RLS](https://aws.amazon.com/blogs/database/multi-tenant-data-isolation-with-postgresql-row-level-security/)
+- [GitGuardian: Remediating Plaid Access Token Leaks](https://www.gitguardian.com/remediation/plaid-access-token)
+- Full moneyy.me pitfalls research: `/home/xingdi/code/moneyy_me/.planning/research/PITFALLS.md`
+
+---
+*Pitfalls research for: Adding money tracking to BetterR.Me (v4.0)*
+*Researched: 2026-02-21*
