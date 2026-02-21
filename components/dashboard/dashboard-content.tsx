@@ -302,7 +302,7 @@ export function DashboardContent({
       <div className="space-y-6">
         {/* Greeting */}
         <Card>
-          <CardContent className="flex items-center gap-3 py-5">
+          <CardContent className="flex items-center gap-3 py-0">
             <Avatar className="size-10 shrink-0">
               <AvatarImage src={avatarUrl ?? undefined} alt={userName} />
               <AvatarFallback className="text-sm font-medium">
@@ -383,7 +383,7 @@ export function DashboardContent({
     <div className="space-y-6">
       {/* Greeting */}
       <Card>
-        <CardContent className="flex items-center gap-3 py-5">
+        <CardContent className="flex items-center gap-3 py-0">
           <Avatar className="size-10 shrink-0">
             <AvatarImage src={avatarUrl ?? undefined} alt={userName} />
             <AvatarFallback className="text-sm font-medium">
@@ -469,7 +469,7 @@ function DashboardSkeleton() {
     <div className="space-y-6" data-testid="dashboard-skeleton">
       {/* Greeting skeleton */}
       <Card>
-        <CardContent className="flex items-center gap-3 py-5">
+        <CardContent className="flex items-center gap-3 py-0">
           <Skeleton className="size-10 shrink-0 rounded-full" />
           <div>
             <Skeleton className="h-9 w-full max-w-64" />
