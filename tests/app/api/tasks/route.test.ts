@@ -271,6 +271,51 @@ describe('POST /api/tasks', () => {
     );
   });
 
+  it('should create task with section=work when provided', async () => {
+    vi.mocked(mockTasksDB.createTask).mockResolvedValue({ id: 'task-1' } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Test', section: 'work' }),
+    });
+
+    await POST(request);
+
+    expect(mockTasksDB.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ section: 'work' })
+    );
+  });
+
+  it('should create task with project_id when provided', async () => {
+    vi.mocked(mockTasksDB.createTask).mockResolvedValue({ id: 'task-1' } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Test', project_id: '550e8400-e29b-41d4-a716-446655440000' }),
+    });
+
+    await POST(request);
+
+    expect(mockTasksDB.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ project_id: '550e8400-e29b-41d4-a716-446655440000' })
+    );
+  });
+
+  it('should create task with project_id=null when not provided', async () => {
+    vi.mocked(mockTasksDB.createTask).mockResolvedValue({ id: 'task-1' } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Test' }),
+    });
+
+    await POST(request);
+
+    expect(mockTasksDB.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ project_id: null })
+    );
+  });
+
   it('should accept status in request body for forward compatibility', async () => {
     vi.mocked(mockTasksDB.createTask).mockResolvedValue({ id: 'task-1' } as any);
 
