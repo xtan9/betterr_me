@@ -23,6 +23,7 @@ import { fetcher } from "@/lib/fetcher";
 import { getProjectColor } from "@/lib/projects/colors";
 import { KanbanColumn } from "@/components/kanban/kanban-column";
 import { KanbanCardOverlay } from "@/components/kanban/kanban-card-overlay";
+import { KanbanDetailModal } from "@/components/kanban/kanban-detail-modal";
 import { KanbanSkeleton } from "@/components/kanban/kanban-skeleton";
 import { cn } from "@/lib/utils";
 import type { Task, TaskStatus, Project } from "@/lib/db/types";
@@ -182,9 +183,6 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
     );
   }
 
-  // Suppress unused variable warning — selectedTask used by Plan 03 (detail modal)
-  void selectedTask;
-
   return (
     <div className="flex flex-col h-[calc(100vh-theme(spacing.16))]">
       {/* Board header */}
@@ -232,6 +230,9 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
               title={t(`columns.${status}`)}
               tasks={grouped[status]}
               onCardClick={setSelectedTask}
+              projectId={projectId}
+              projectSection={project?.section ?? "personal"}
+              onTaskCreated={() => mutate()}
             />
           ))}
         </div>
@@ -240,6 +241,12 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
           {activeTask ? <KanbanCardOverlay task={activeTask} /> : null}
         </DragOverlay>
       </DndContext>
+
+      <KanbanDetailModal
+        task={selectedTask}
+        onClose={() => setSelectedTask(null)}
+        projectName={project?.name}
+      />
     </div>
   );
 }

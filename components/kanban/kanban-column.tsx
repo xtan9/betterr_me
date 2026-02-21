@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { KanbanCard } from "@/components/kanban/kanban-card";
+import { KanbanQuickAdd } from "@/components/kanban/kanban-quick-add";
 import { cn } from "@/lib/utils";
 import type { Task, TaskStatus } from "@/lib/db/types";
 
@@ -13,6 +15,9 @@ interface KanbanColumnProps {
   title: string;
   tasks: Task[];
   onCardClick: (task: Task) => void;
+  projectId: string;
+  projectSection: string;
+  onTaskCreated: () => void;
 }
 
 export function KanbanColumn({
@@ -20,9 +25,13 @@ export function KanbanColumn({
   title,
   tasks,
   onCardClick,
+  projectId,
+  projectSection,
+  onTaskCreated,
 }: KanbanColumnProps) {
   const t = useTranslations("kanban");
   const { isOver, setNodeRef } = useDroppable({ id: status });
+  const [isHovered, setIsHovered] = useState(false);
 
   return (
     <div
@@ -32,6 +41,8 @@ export function KanbanColumn({
         "transition-colors duration-200",
         isOver && "ring-2 ring-primary/50 bg-primary/5"
       )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Column header */}
       <div className="flex items-center justify-between px-3 py-2.5">
@@ -56,6 +67,14 @@ export function KanbanColumn({
                 onClick={() => onCardClick(task)}
               />
             ))
+          )}
+          {isHovered && (
+            <KanbanQuickAdd
+              status={status}
+              projectId={projectId}
+              projectSection={projectSection}
+              onTaskCreated={onTaskCreated}
+            />
           )}
         </div>
       </ScrollArea>
