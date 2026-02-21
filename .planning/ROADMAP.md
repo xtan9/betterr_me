@@ -46,7 +46,7 @@
 - [x] **Phase 14: Projects & Sections** - Project CRUD, task form extensions, tasks page redesign with section-based layout (completed 2026-02-20)
 - [x] **Phase 15: Kanban Board** - 4-column kanban with cross-column drag-and-drop, detail modal, quick-add (completed 2026-02-20)
 - [x] **Phase 16: Integration Bug Fixes** - Fix API wiring for section/project_id, kanban SWR cache, archived projects nav (gap closure) (completed 2026-02-21)
-- [ ] **Phase 17: Fix Project Archive/Restore Validation** - Extend projectUpdateSchema to accept status field, fixing archive and restore flows (gap closure)
+- [x] **Phase 17: Fix Project Archive/Restore Validation** - Extend projectUpdateSchema to accept status field, fixing archive and restore flows (gap closure) (completed 2026-02-21)
 
 ## Phase Details
 
@@ -148,4 +148,4 @@ Plans:
 | 14. Projects & Sections | 3/3 | Complete    | 2026-02-20 | - |
 | 15. Kanban Board | 4/4 | Complete    | 2026-02-21 | - |
 | 16. Integration Bug Fixes | 2/2 | Complete   | 2026-02-21 | - |
-| 17. Fix Project Archive/Restore Validation | 0/1 | Pending | - | - |
+| 17. Fix Project Archive/Restore Validation | 1/1 | Complete   | 2026-02-21 | - |

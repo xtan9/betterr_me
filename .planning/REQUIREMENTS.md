@@ -18,7 +18,7 @@ Requirements for the Projects & Kanban milestone. Each maps to roadmap phases.
 
 - [x] **PROJ-01**: User can create a project with a name, section (Work/Personal), and preset color
 - [x] **PROJ-02**: User can edit a project's name, color, and section
-- [ ] **PROJ-03**: User can archive a project (hidden by default, available via filter)
+- [x] **PROJ-03**: User can archive a project (hidden by default, available via filter)
 - [x] **PROJ-04**: User can delete a project (tasks become standalone within the same section)
 - [x] **PROJ-05**: User can see project progress (X of Y tasks done) on the tasks page project card
 
@@ -89,7 +89,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-04 | Phase 13 | Complete |
 | PROJ-01 | Phase 16 | Complete |
 | PROJ-02 | Phase 14 | Complete |
-| PROJ-03 | Phase 17 | Pending |
+| PROJ-03 | Phase 17 | Complete |
 | PROJ-04 | Phase 14 | Complete |
 | PROJ-05 | Phase 14 | Complete |
 | FORM-01 | Phase 16 | Complete |

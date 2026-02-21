@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-18)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v3.0 Integration Bug Fixes — Phase 16
+**Current focus:** v3.0 Gap Closure — Phase 17
 
 ## Current Position
 
-Phase: 16 (integration-bug-fixes) -- COMPLETE
-Plan: 2 of 2 complete (16-01, 16-02 done)
+Phase: 17 (fix-archive-restore-validation) -- COMPLETE
+Plan: 1 of 1 complete (17-01 done)
 Status: Phase Complete
-Last activity: 2026-02-21 — Completed 16-02 (kanban SWR cache fix + archived projects link)
+Last activity: 2026-02-21 — Completed 17-01 (fix projectUpdateSchema for archive/restore)
 
 Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0
 
@@ -43,6 +43,7 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - 15-04: 2min (2 tasks, 2 files)
 - 16-01: 1min (2 tasks, 5 files)
 - 16-02: 2min (2 tasks, 5 files)
+- 17-01: 2min (2 tasks, 3 files)
 
 ## Accumulated Context
 
@@ -83,6 +84,7 @@ Recent decisions affecting current work:
 - Fix ProjectInsert at type level (Omit+re-add) rather than handler level to prevent same bug in future callers
 - SWR mutate async returns mapped {tasks: Task[]} instead of raw res.json() to match GET cache shape
 - Ghost variant for Archived link to maintain visual hierarchy (primary actions remain dominant)
+- Used .partial().extend().refine() chain order for Zod schemas (extend before refine, since refine returns ZodEffects not ZodObject)
 
 ### Pending Todos
 
@@ -97,5 +99,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 16-02-PLAN.md (Phase 16 fully complete)
-Resume: All Phase 16 integration bug fixes complete
+Stopped at: Completed 17-01-PLAN.md (Phase 17 fully complete)
+Resume: Archive/restore validation fix complete, all phases through 17 done
