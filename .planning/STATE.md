@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-18)
 ## Current Position
 
 Phase: 15 (third of 3 in v3.0) -- COMPLETE
-Plan: 3 of 3 complete (15-01, 15-02, 15-03 done)
+Plan: 4 of 4 complete (15-01, 15-02, 15-03, 15-04 done)
 Status: Phase Complete
-Last activity: 2026-02-21 — Completed 15-03 (task detail modal + quick-add: Monday.com-style overlay, hover input)
+Last activity: 2026-02-21 — Completed 15-04 (documentation gap closure: KANB-03/04/05 deferred in REQUIREMENTS.md and ROADMAP.md)
 
 Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0
 
@@ -40,6 +40,7 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - 15-01: 3min (2 tasks, 11 files)
 - 15-02: 6min (2 tasks, 6 files)
 - 15-03: 4min (2 tasks, 4 files)
+- 15-04: 2min (2 tasks, 2 files)
 
 ## Accumulated Context
 
@@ -76,6 +77,7 @@ Recent decisions affecting current work:
 - Status badge colors in detail modal: backlog=muted, todo=slate-500, in_progress=blue-500, done=green-500
 - Quick-add renders inside ScrollArea after last card, hover state controls visibility
 - Dialog open controlled by nullable selectedTask state with null guard for early return
+- KANB-03/04/05 moved to Future Requirements > Kanban Polish (not deleted) with Phase 15 context decision as reason
 
 ### Pending Todos
 
@@ -90,5 +92,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 15-03-PLAN.md (Phase 15 complete, v3.0 milestone complete)
+Stopped at: Completed 15-04-PLAN.md (Phase 15 fully complete with documentation gap closure)
 Resume: All v3.0 milestone phases complete
