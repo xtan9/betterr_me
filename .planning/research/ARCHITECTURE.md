@@ -268,11 +268,11 @@ habitLogsDB.getAllUserLogs(...).catch((err) => {
 2. **Per-habit computeMissedDays failures are silently caught:**
 ```typescript
 try {
-  const { missed_scheduled_days, previous_streak } = computeMissedDays(...);
-  return { ...habit, missed_scheduled_days, previous_streak };
+  const { missed_scheduled_periods, previous_streak } = computeMissedDays(...);
+  return { ...habit, missed_scheduled_periods, previous_streak };
 } catch (err) {
   console.error('computeMissedDays failed for habit', habit.id, err);
-  return { ...habit, missed_scheduled_days: 0, previous_streak: 0 };
+  return { ...habit, missed_scheduled_periods: 0, previous_streak: 0 };
 }
 ```
 

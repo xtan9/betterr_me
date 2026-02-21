@@ -189,7 +189,7 @@ constructor(private supabase: SupabaseClient) {}
 **Warning signs:** 2 test failures in `theme-switcher.test.tsx`.
 
 ### Pitfall 5: computeMissedDays Error Fallback Showing Zeros
-**What goes wrong:** The user decision says "show last known good / stale data if available" but the current catch block returns `{ missed_scheduled_days: 0, previous_streak: 0 }` -- which IS zeros.
+**What goes wrong:** The user decision says "show last known good / stale data if available" but the current catch block returns `{ missed_scheduled_periods: 0, previous_streak: 0 }` -- which IS zeros.
 **Why it happens:** There is no cached/previous value available in the current catch block context.
 **How to avoid:** Since there is no prior cached computation available at this point in the code flow, the practical fallback is: (1) keep the zeros as the mathematical identity (no missed days is safer than fake data), (2) add `_warnings` to indicate degraded data, (3) log with full context. The "stale data" aspect would only become meaningful once Sentry/caching is in place. Document this limitation clearly.
 **Warning signs:** User expects to see previous data but there is no mechanism to store/retrieve it yet.
@@ -263,10 +263,10 @@ const warnings: string[] = [];
 const enrichedHabits = habitsWithStatus.map(habit => {
   try {
     const completedDates = logsByHabit.get(habit.id) || new Set<string>();
-    const { missed_scheduled_days, previous_streak } = computeMissedDays(
+    const { missed_scheduled_periods, previous_streak } = computeMissedDays(
       habit.frequency, completedDates, date, habit.created_at, thirtyDaysAgoStr,
     );
-    return { ...habit, missed_scheduled_days, previous_streak };
+    return { ...habit, missed_scheduled_periods, previous_streak };
   } catch (err) {
     log.error('computeMissedDays failed', err, {
       userId: user.id,
@@ -275,7 +275,7 @@ const enrichedHabits = habitsWithStatus.map(habit => {
       dateRange: `${thirtyDaysAgoStr} to ${date}`,
     });
     warnings.push(`Absence data unavailable for habit ${habit.id}`);
-    return { ...habit, missed_scheduled_days: 0, previous_streak: 0 };
+    return { ...habit, missed_scheduled_periods: 0, previous_streak: 0 };
   }
 });
 
