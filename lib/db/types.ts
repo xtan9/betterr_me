@@ -365,3 +365,22 @@ export interface DashboardData {
   /** Non-fatal warnings about degraded data (omitted when empty) */
   _warnings?: string[];
 }
+
+// =============================================================================
+// HOUSEHOLDS
+// =============================================================================
+
+export interface Household {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HouseholdMember {
+  id: string;
+  household_id: string;
+  user_id: string;
+  role: "owner" | "member";
+  created_at: string;
+}
