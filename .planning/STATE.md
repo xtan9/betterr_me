@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 18 of 25 (Database Foundation & Household Schema)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-02-21 — Completed 18-01 (database schema, money arithmetic, household resolution)
+Plan: 2 of 2 in current phase
+Status: Phase 18 complete
+Last activity: 2026-02-21 — Completed 18-02 (UI shell, Calm Finance tokens, sidebar nav, i18n)
 
-Progress: [█░░░░░░░░░] 6% v4.0
+Progress: [█░░░░░░░░░] 12% v4.0
 
 ## Performance Metrics
 
@@ -54,6 +54,9 @@ Recent decisions affecting current work:
 - [18-01] IN-subquery RLS pattern for all money tables (99.78% faster than joins)
 - [18-01] Categories SELECT allows NULL household_id for system defaults
 - [18-01] Intl.NumberFormat("en-US") for consistent money formatting in Node.js
+- [18-02] Wallet icon for Money nav (clean lines, recognizable, matches existing icon style)
+- [18-02] Money nav position: Dashboard > Habits > Tasks > Money
+- [18-02] Empty state designed as welcoming landing page, not error/broken state
 
 ### Pending Todos
 
@@ -75,5 +78,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed 18-01-PLAN.md
-Resume: `/gsd:execute-phase 18` to continue with 18-02-PLAN.md
+Stopped at: Completed 18-02-PLAN.md (Phase 18 complete)
+Resume: `/gsd:plan-phase 19` to begin Phase 19 planning (Plaid Integration)

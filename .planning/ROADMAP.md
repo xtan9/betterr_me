@@ -54,7 +54,7 @@
 - Integer phases (18, 19, 20...): Planned milestone work
 - Decimal phases (19.1, 19.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 18: Database Foundation & Household Schema** - Supabase migrations, household model, money arithmetic, Calm Finance tokens, sidebar nav, i18n namespace
+- [x] **Phase 18: Database Foundation & Household Schema** - Supabase migrations, household model, money arithmetic, Calm Finance tokens, sidebar nav, i18n namespace (completed 2026-02-21)
 - [ ] **Phase 19: Plaid Bank Connection Pipeline** - Plaid Link OAuth, webhook-driven sync, encrypted token storage, account management, CSV/manual import
 - [ ] **Phase 20: Transaction Management & Categorization** - Transaction list with search/filter/pagination, auto-categorization, merchant rules, custom categories, transaction splitting
 - [ ] **Phase 21: Budgets & Spending Analytics** - Monthly budgets per category, progress tracking, spending charts, drill-down, rollover
@@ -214,7 +214,7 @@ Phases execute in numeric order: 18 -> 18.1 -> 19 -> 19.1 -> ... -> 25
 | 15. Kanban Board | v3.0 | 4/4 | Complete | 2026-02-20 |
 | 16. Integration Bug Fixes | v3.0 | 2/2 | Complete | 2026-02-21 |
 | 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |
-| 18. Database Foundation & Household Schema | 1/2 | In Progress|  | - |
+| 18. Database Foundation & Household Schema | 2/2 | Complete   | 2026-02-21 | - |
 | 19. Plaid Bank Connection Pipeline | v4.0 | 0/? | Not started | - |
 | 20. Transaction Management & Categorization | v4.0 | 0/? | Not started | - |
 | 21. Budgets & Spending Analytics | v4.0 | 0/? | Not started | - |
