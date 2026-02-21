@@ -112,21 +112,15 @@ export function KanbanDetailModal({
       <DialogContent className="sm:max-w-[85vw] h-[85vh] p-0 gap-0 overflow-hidden flex flex-col bg-[#f5f6f8] dark:bg-[#1a1a2e]">
         <Tabs defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
           {/* Header area — white bar */}
-          <div className="bg-background border-b px-6 pt-5 pb-0 flex-shrink-0">
+          <div className="bg-background border-b px-6 pt-5 pb-4 flex-shrink-0">
             <DialogTitle className="text-2xl font-semibold pr-8 mb-3">
               {task.title}
             </DialogTitle>
-            <TabsList className="h-9 bg-transparent p-0 gap-0 rounded-none">
-              <TabsTrigger
-                value="details"
-                className="relative rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 text-base"
-              >
+            <TabsList>
+              <TabsTrigger value="details">
                 {t("detail.detailsTab")}
               </TabsTrigger>
-              <TabsTrigger
-                value="activity"
-                className="relative rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 text-base"
-              >
+              <TabsTrigger value="activity">
                 {t("detail.activityTab")}
               </TabsTrigger>
             </TabsList>
