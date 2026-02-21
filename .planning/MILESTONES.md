@@ -64,3 +64,23 @@
 
 ---
 
+
+## v3.0 Projects & Kanban (Shipped: 2026-02-21)
+
+**Phases completed:** 5 phases, 12 plans, 25 tasks
+**Stats:** 97 files changed, +12,769/-156 lines, 24 code commits, 3 days (~49 min execution)
+
+**Key accomplishments:**
+- Added task `status` field (backlog/todo/in_progress/done) with bidirectional `is_completed` sync, section field, sort_order, and migration SQL seeding existing tasks
+- Full project CRUD: create with name/section/color, edit, archive/restore, delete (orphans tasks as standalone)
+- Redesigned tasks page with Work/Personal section-based layout, project cards with X/Y progress bars, and standalone tasks area
+- 4-column kanban board per project with @dnd-kit drag-and-drop, SWR optimistic mutations with rollback, Monday.com-style detail modal, and column quick-add
+- Fixed integration bugs: API field forwarding (section/project_id), SWR cache shape corruption on drag-drop, added archived projects navigation
+- All UI strings translated in en, zh, zh-TW; 3 deferred requirements (KANB-03/04/05) documented with user decisions as rationale
+
+**Requirements:** 17/17 satisfied (DATA-01..04, PROJ-01..05, FORM-01..02, PAGE-01..03, KANB-01..02, I18N-01)
+
+**Tech debt (7 minor items):** Missing Phase 16 VERIFICATION.md, getSortOrderBetween unused export, archiveProject dead code, getUserTasks ordering, comments/activity placeholders, no sidebar nav highlight on kanban, SUMMARY.md missing requirements-completed frontmatter
+
+---
+

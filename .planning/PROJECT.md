@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A habit tracking web app built with Next.js 16, Supabase, and TypeScript. Supports daily/weekdays/weekly/times_per_week/custom frequency habits, task management, streaks, weekly insights, and data export. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
+A habit tracking and project management web app built with Next.js 16, Supabase, and TypeScript. Supports habits (daily/weekdays/weekly/times_per_week/custom), task management with Work/Personal sections and named projects, 4-column kanban boards per project, streaks, weekly insights, and data export. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
 
 ## Core Value
 
@@ -52,22 +52,21 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ Sidebar icons visually refined with icon containers — v2.1
 - ✓ Motivation message restored to colored background style — v2.1
 - ✓ Habit checklist footer sticks to card bottom in grid layout — v2.1
+- ✓ Task status field (backlog/todo/in_progress/done) with bidirectional is_completed sync — v3.0
+- ✓ Existing tasks migrated to section=personal with status derived from is_completed — v3.0
+- ✓ Dashboard, recurring tasks, and existing features unchanged after migration — v3.0
+- ✓ User can create projects with name, section, and preset color — v3.0
+- ✓ User can edit, archive/restore, and delete projects — v3.0
+- ✓ Project progress (X/Y tasks done) displayed on project cards — v3.0
+- ✓ Task form has section selector and optional project dropdown filtered by section — v3.0
+- ✓ Tasks page shows Work/Personal sections with project cards and standalone tasks — v3.0
+- ✓ 4-column kanban board per project with drag-and-drop between columns — v3.0
+- ✓ Monday.com-style detail modal and column quick-add on kanban board — v3.0
+- ✓ All v3.0 UI strings translated in en, zh, zh-TW — v3.0
 
 ### Active
 
-## Current Milestone: v3.0 Projects & Kanban
-
-**Goal:** Transform the flat task list into a structured project-based system with Work/Personal sections, project containers, and 4-column kanban boards.
-
-**Target features:**
-- Work/Personal section separation (structural, replaces category-based distinction)
-- Projects as named containers within sections (name, color preset, status)
-- 4-column kanban boards per project (Backlog → To Do → In Progress → Done)
-- New task `status` field (backlog/todo/in_progress/done), `is_completed` derived from status=done
-- Drag-and-drop between kanban columns, triggers completion reflection on Done
-- Tasks page redesign: section-based layout with project cards + standalone tasks
-- Task form: Section selector (required), Project selector (optional)
-- Migration: existing tasks → section=personal, status derived from is_completed
+(None — next milestone not yet planned)
 
 ### Out of Scope
 
@@ -78,17 +77,27 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - Dark mode card-on-gray depth fix — requires design decision on dark surface hierarchy
 - Custom date/time picker components — native inputs functional, separate effort
 - Mobile sidebar improvements — current mobile sheet works, separate scope
+- Kanban intra-column reorder (KANB-03) — user decided cards auto-sort by priority
+- Completion reflection on drag-to-Done (KANB-04) — user decided tasks move silently
+- Task intention display on kanban cards (KANB-05) — user decided no intention on cards
+- Kanban keyboard navigation (KANB-06) — deferred to future accessibility milestone
+- Touch-optimized drag-and-drop (KANB-07) — deferred to mobile polish
+- Custom kanban columns / user-defined statuses — fixed 4-column model for personal use
+- WIP limits, swimlanes, automations — team-oriented features, not aligned with solo use
+- Subtasks, time tracking, card attachments — scope creep for personal task management
 
 ## Context
 
-- **Codebase:** ~170 files, Next.js 16 App Router, Supabase backend, deployed to Vercel
-- **Test suite:** 1084+ tests (Vitest + Playwright), 50% coverage threshold
+- **Codebase:** ~200+ files, Next.js 16 App Router, Supabase backend, deployed to Vercel
+- **Test suite:** 1207+ tests (Vitest + Playwright), 50% coverage threshold
 - **Shipped:** v1.0 Codebase Hardening (2026-02-16) — 5 phases, 11 plans, 26 requirements
 - **Shipped:** v1.1 Dashboard Task Fixes (2026-02-17) — 1 phase, 1 plan, 3 requirements
 - **Shipped:** v2.0 UI Style Redesign (2026-02-17) — 9 phases, 21 plans, 28 requirements
 - **Shipped:** v2.1 UI Polish & Refinement (2026-02-18) — 3 phases, 6 plans, 8 requirements
+- **Shipped:** v3.0 Projects & Kanban (2026-02-21) — 5 phases, 12 plans, 17 requirements
 - **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit)
-- **Known pre-existing:** Vitest picks up .worktrees/ test files (spurious, not blocking)
+- **Known:** Vitest picks up .worktrees/ test files (spurious, not blocking)
+- **Known:** @dnd-kit/core v6 + React 19 peer dep mismatch (cosmetic, works correctly)
 
 ## Constraints
 
@@ -112,6 +121,13 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | Flat sidebar nav (remove collapsible groups) | Chameleon reference uses flat list, cleaner UX with 3 items | ✓ Good — simpler code, cleaner visual hierarchy |
 | Task categories reuse habit category tokens | Same visual intent (work=learning blue, personal=wellness purple) | ✓ Good — unified token system, no category token duplication |
 | Sidebar width 224px with 60px collapsed rail | Matched Chameleon reference measurements | ✓ Good — pixel-matched design reference |
+| API-layer is_completed/status sync (not DB trigger) | Testable in unit tests, explicit sync points | ✓ Good — 23 TDD tests, sync-at-mutation-point pattern |
+| Float-based sort_order for kanban | Single-row updates for reordering, no renumbering | ✓ Good — 65536.0 gap spacing, infrastructure for future reorder |
+| @dnd-kit/core v6 over @dnd-kit/react v0.3.x | Stable API vs pre-1.0 experimental | ✓ Good — reliable drag-drop, well-documented |
+| SWR as single source of truth for kanban state | No dual local+server state, optimistic mutations with rollback | ✓ Good — clean data flow, rollbackOnError:true handles failures |
+| ON DELETE SET NULL for project_id FK | Deleted projects orphan tasks as standalone, not cascade delete | ✓ Good — preserves task history, user expectation |
+| Section change clears project_id silently | No confirmation needed, natural form behavior | ✓ Good — clean UX, no modal interruption |
+| next/dynamic ssr:false for KanbanBoard | Avoid hydration issues with drag-and-drop library | ✓ Good — fixes Next.js 16 build, clean client-only boundary |
 
 ---
-*Last updated: 2026-02-18 after v3.0 milestone started*
+*Last updated: 2026-02-21 after v3.0 milestone completed*

@@ -6,7 +6,7 @@
 - ✅ **v1.1 Dashboard Task Fixes** — Phase 6 (shipped 2026-02-17)
 - ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
 - ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
-- 🚧 **v3.0 Projects & Kanban** — Phases 13-17 (in progress)
+- ✅ **v3.0 Projects & Kanban** — Phases 13-17 (shipped 2026-02-21)
 
 ## Phases
 
@@ -38,98 +38,12 @@
 
 </details>
 
-### 🚧 v3.0 Projects & Kanban (In Progress)
+<details>
+<summary>✅ v3.0 Projects & Kanban (Phases 13-17) — SHIPPED 2026-02-21</summary>
 
-**Milestone Goal:** Transform the flat task list into a structured project-based system with Work/Personal sections, project containers, and 4-column kanban boards with drag-and-drop.
+5 phases, 12 plans, 17 requirements. See `.planning/milestones/v3.0-ROADMAP.md` for details.
 
-- [x] **Phase 13: Data Foundation & Migration** - Status field, is_completed sync, migration of existing tasks, backward compatibility (completed 2026-02-19)
-- [x] **Phase 14: Projects & Sections** - Project CRUD, task form extensions, tasks page redesign with section-based layout (completed 2026-02-20)
-- [x] **Phase 15: Kanban Board** - 4-column kanban with cross-column drag-and-drop, detail modal, quick-add (completed 2026-02-20)
-- [x] **Phase 16: Integration Bug Fixes** - Fix API wiring for section/project_id, kanban SWR cache, archived projects nav (gap closure) (completed 2026-02-21)
-- [x] **Phase 17: Fix Project Archive/Restore Validation** - Extend projectUpdateSchema to accept status field, fixing archive and restore flows (gap closure) (completed 2026-02-21)
-
-## Phase Details
-
-### Phase 13: Data Foundation & Migration
-**Goal**: Existing tasks migrate safely to the new data model, and the status/is_completed sync works bidirectionally without breaking any existing feature
-**Depends on**: Nothing (first phase of v3.0)
-**Requirements**: DATA-01, DATA-02, DATA-03, DATA-04
-**Success Criteria** (what must be TRUE):
-  1. Existing tasks have `section=personal` and `status` derived from their `is_completed` value after migration
-  2. Setting a task's status to `done` via API automatically sets `is_completed=true` and records `completed_at`; moving status away from `done` clears both
-  3. Dashboard task counts, sidebar counts, recurring task generation, and all existing task features work identically to before the migration
-  4. Task status field accepts exactly four values: backlog, todo, in_progress, done
-**Plans**: 2 plans
-
-Plans:
-- [ ] 13-01-PLAN.md — Types, sync utility, sort-order utility, migration SQL (TDD)
-- [ ] 13-02-PLAN.md — Wire sync into DB layer, API routes, instance generator, update tests
-
-### Phase 14: Projects & Sections
-**Goal**: Users can organize tasks into Work/Personal sections and named projects, and the tasks page displays this structure
-**Depends on**: Phase 13
-**Requirements**: PROJ-01, PROJ-02, PROJ-03, PROJ-04, PROJ-05, FORM-01, FORM-02, PAGE-01, PAGE-02
-**Success Criteria** (what must be TRUE):
-  1. User can create a project with a name, section (Work/Personal), and preset color, and can edit or delete it afterward
-  2. User can archive a project so it is hidden from the default view; deleting a project orphans its tasks into standalone within the same section
-  3. Task create/edit form has a required section selector (defaults to Personal) and an optional project dropdown filtered by the selected section
-  4. Tasks page displays Work and Personal as top-level sections, each showing project cards (with X/Y progress) and a standalone tasks area
-  5. All new UI strings (project names, section labels, form fields, confirmations) are translated in en, zh, and zh-TW
-**Plans**: 3 plans
-
-Plans:
-- [x] 14-01-PLAN.md — Data foundation: SQL migrations, types, ProjectsDB, validation, API routes, tests
-- [ ] 14-02-PLAN.md — Project CRUD UI, task form extensions (section toggle + project dropdown), i18n strings
-- [ ] 14-03-PLAN.md — Tasks page redesign (section layout, project cards) + archived projects page
-
-### Phase 15: Kanban Board
-**Goal**: Users can view and manage a project's tasks on a 4-column kanban board with cross-column drag-and-drop, a detail modal, and column quick-add
-**Depends on**: Phase 14
-**Requirements**: PAGE-03, KANB-01, KANB-02, I18N-01
-**Success Criteria** (what must be TRUE):
-  1. Clicking a project card on the tasks page opens a 4-column kanban board (Backlog, To Do, In Progress, Done) showing that project's tasks
-  2. User can drag a task card between columns to change its status, and the change persists after page reload; if the API fails the card snaps back with an error toast
-  3. Clicking a kanban card opens a Monday.com-style detail modal showing all task fields; hovering a column reveals a quick-add input to create a task in that column
-  4. All kanban UI strings are translated in en, zh, and zh-TW
-**Plans**: 4 plans
-
-Plans:
-- [x] 15-01-PLAN.md — Foundation: install @dnd-kit, project_id API filter, kanban page route, i18n strings
-- [x] 15-02-PLAN.md — Core board: KanbanBoard + KanbanColumn + KanbanCard + drag-and-drop with SWR
-- [x] 15-03-PLAN.md — Interactions: Monday.com-style detail modal + column quick-add
-- [x] 15-04-PLAN.md — Documentation gap closure: mark KANB-03/04/05 as deferred in REQUIREMENTS.md and ROADMAP.md
-
-### Phase 16: Integration Bug Fixes
-**Goal**: All cross-phase API wiring works correctly — task creation/editing persists section and project_id, kanban drag-drop doesn't corrupt SWR cache, production build passes, and archived projects are discoverable
-**Depends on**: Phases 13-15 (gap closure phase)
-**Requirements**: FORM-01, FORM-02, PROJ-01, PROJ-03, PAGE-01, PAGE-02, KANB-02
-**Gap Closure**: Closes gaps from v3.0 milestone audit
-**Success Criteria** (what must be TRUE):
-  1. Creating a task with section=work via POST /api/tasks stores section='work' in the database
-  2. Creating a task with project_id via POST /api/tasks stores the project_id FK in the database
-  3. Editing a task's project_id via PATCH /api/tasks/[id] persists the change
-  4. `pnpm build` succeeds without TypeScript errors in the projects API route
-  5. Dragging a kanban card between columns persists the change AND the board remains fully populated (no empty columns after drag)
-  6. Users can navigate to the archived projects page from the tasks page UI
-**Plans**: 2 plans
-
-Plans:
-- [ ] 16-01-PLAN.md — Task & project API wiring: forward section + project_id in POST/PATCH handlers, fix ProjectInsert type error
-- [ ] 16-02-PLAN.md — Kanban SWR cache fix + archived projects navigation link
-
-### Phase 17: Fix Project Archive/Restore Validation
-**Goal**: Project archive and restore flows complete successfully — PATCH /api/projects/[id] accepts the `status` field
-**Depends on**: Phase 14 (gap closure phase)
-**Requirements**: PROJ-03
-**Gap Closure**: Closes PROJ-03 gap from v3.0 milestone audit (post-Phase 16)
-**Success Criteria** (what must be TRUE):
-  1. PATCH /api/projects/[id] with `{status: "archived"}` succeeds and updates the project status in the database
-  2. PATCH /api/projects/[id] with `{status: "active"}` succeeds and restores an archived project
-  3. Existing project update validations (name, color, section) continue to work unchanged
-**Plans**: 1 plan
-
-Plans:
-- [ ] 17-01-PLAN.md — Extend projectUpdateSchema to include status field, add test coverage
+</details>
 
 ## Progress
 
@@ -144,8 +58,8 @@ Plans:
 | 10. Token Consistency | v2.1 | 3/3 | Complete | 2026-02-18 |
 | 11. Sidebar Polish | v2.1 | 2/2 | Complete | 2026-02-18 |
 | 12. Component Fixes | v2.1 | 1/1 | Complete | 2026-02-18 |
-| 13. Data Foundation & Migration | 2/2 | Complete    | 2026-02-19 | - |
-| 14. Projects & Sections | 3/3 | Complete    | 2026-02-20 | - |
-| 15. Kanban Board | 4/4 | Complete    | 2026-02-21 | - |
-| 16. Integration Bug Fixes | 2/2 | Complete   | 2026-02-21 | - |
-| 17. Fix Project Archive/Restore Validation | 1/1 | Complete    | 2026-02-21 | - |
+| 13. Data Foundation & Migration | v3.0 | 2/2 | Complete | 2026-02-19 |
+| 14. Projects & Sections | v3.0 | 3/3 | Complete | 2026-02-20 |
+| 15. Kanban Board | v3.0 | 4/4 | Complete | 2026-02-20 |
+| 16. Integration Bug Fixes | v3.0 | 2/2 | Complete | 2026-02-21 |
+| 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |
