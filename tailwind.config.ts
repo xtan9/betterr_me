@@ -93,6 +93,16 @@ export default {
             muted: "hsl(var(--category-other-muted))",
           },
         },
+        section: {
+          personal: {
+            DEFAULT: "hsl(var(--section-personal))",
+            muted: "hsl(var(--section-personal-muted))",
+          },
+          work: {
+            DEFAULT: "hsl(var(--section-work))",
+            muted: "hsl(var(--section-work-muted))",
+          },
+        },
         priority: {
           none: "hsl(var(--priority-none))",
           low: "hsl(var(--priority-low))",

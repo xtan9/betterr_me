@@ -63,6 +63,12 @@
     --category-other: 215 15% 55%;
     --category-other-muted: 215 15% 95%;
 
+    /* === Section colors === */
+    --section-personal: 160 55% 45%;
+    --section-personal-muted: 160 55% 93%;
+    --section-work: 215 75% 55%;
+    --section-work-muted: 215 75% 95%;
+
     /* === Priority colors === */
     --priority-none: 0 0% 65%;
     --priority-low: 142 70% 45%;
@@ -203,6 +209,12 @@
     --category-productivity-muted: 40 40% 18%;
     --category-other: 215 10% 55%;
     --category-other-muted: 215 10% 18%;
+
+    /* === Section colors === */
+    --section-personal: 160 45% 55%;
+    --section-personal-muted: 160 30% 18%;
+    --section-work: 215 60% 60%;
+    --section-work-muted: 215 35% 18%;
 
     /* === Priority colors === */
     --priority-none: 0 0% 50%;
