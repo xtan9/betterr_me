@@ -6,7 +6,7 @@
 - ✅ **v1.1 Dashboard Task Fixes** — Phase 6 (shipped 2026-02-17)
 - ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
 - ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
-- 🚧 **v3.0 Projects & Kanban** — Phases 13-16 (in progress)
+- 🚧 **v3.0 Projects & Kanban** — Phases 13-17 (in progress)
 
 ## Phases
 
@@ -46,6 +46,7 @@
 - [x] **Phase 14: Projects & Sections** - Project CRUD, task form extensions, tasks page redesign with section-based layout (completed 2026-02-20)
 - [x] **Phase 15: Kanban Board** - 4-column kanban with cross-column drag-and-drop, detail modal, quick-add (completed 2026-02-20)
 - [x] **Phase 16: Integration Bug Fixes** - Fix API wiring for section/project_id, kanban SWR cache, archived projects nav (gap closure) (completed 2026-02-21)
+- [ ] **Phase 17: Fix Project Archive/Restore Validation** - Extend projectUpdateSchema to accept status field, fixing archive and restore flows (gap closure)
 
 ## Phase Details
 
@@ -116,6 +117,20 @@ Plans:
 - [ ] 16-01-PLAN.md — Task & project API wiring: forward section + project_id in POST/PATCH handlers, fix ProjectInsert type error
 - [ ] 16-02-PLAN.md — Kanban SWR cache fix + archived projects navigation link
 
+### Phase 17: Fix Project Archive/Restore Validation
+**Goal**: Project archive and restore flows complete successfully — PATCH /api/projects/[id] accepts the `status` field
+**Depends on**: Phase 14 (gap closure phase)
+**Requirements**: PROJ-03
+**Gap Closure**: Closes PROJ-03 gap from v3.0 milestone audit (post-Phase 16)
+**Success Criteria** (what must be TRUE):
+  1. PATCH /api/projects/[id] with `{status: "archived"}` succeeds and updates the project status in the database
+  2. PATCH /api/projects/[id] with `{status: "active"}` succeeds and restores an archived project
+  3. Existing project update validations (name, color, section) continue to work unchanged
+**Plans**: 1 plan
+
+Plans:
+- [ ] 17-01-PLAN.md — Extend projectUpdateSchema to include status field, add test coverage
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -133,3 +148,4 @@ Plans:
 | 14. Projects & Sections | 3/3 | Complete    | 2026-02-20 | - |
 | 15. Kanban Board | 4/4 | Complete    | 2026-02-21 | - |
 | 16. Integration Bug Fixes | 2/2 | Complete   | 2026-02-21 | - |
+| 17. Fix Project Archive/Restore Validation | 0/1 | Pending | - | - |
