@@ -136,14 +136,19 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
 
       // Optimistic SWR update
       mutate(
-        async () => {
+        async (current: { tasks: Task[] } | undefined) => {
           const res = await fetch(`/api/tasks/${taskId}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ status: newStatus }),
           });
           if (!res.ok) throw new Error("Failed to update task status");
-          return res.json();
+          const { task: updatedTask } = await res.json();
+          return {
+            tasks: (current?.tasks ?? []).map((t) =>
+              t.id === taskId ? updatedTask : t
+            ),
+          };
         },
         {
           optimisticData: (current: { tasks: Task[] } | undefined) => ({
