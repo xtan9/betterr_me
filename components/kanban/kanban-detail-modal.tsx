@@ -115,7 +115,7 @@ export function KanbanDetailModal({
 
   return (
     <Dialog open={!!task} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[85vw] h-[85vh] p-0 gap-0 overflow-hidden flex flex-col bg-[#f5f6f8] dark:bg-[#1a1a2e]">
+      <DialogContent className="sm:max-w-[85vw] h-[85vh] p-0 gap-0 overflow-hidden flex flex-col bg-[#f5f6f8] dark:bg-[#1a1a2e] data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-4">
         <Tabs defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
           {/* Header area — white bar */}
           <div className="bg-background border-b px-6 pt-5 pb-4 flex-shrink-0">
