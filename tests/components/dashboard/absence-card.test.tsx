@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { AbsenceCard } from "@/components/dashboard/absence-card";
 import type { HabitWithAbsence } from "@/lib/db/types";
@@ -15,10 +15,9 @@ const messages = {
       hiatusTitleWeeks: "{name} — it's been {days} weeks",
       previousStreak: "You had a {days}-day streak before",
       previousStreakWeeks: "You had a {days}-week streak before",
-      markComplete: "Complete today",
-      completed: "{name} — welcome back!",
-      resume: "Resume today",
+      viewHabit: "View habit",
       changeFrequency: "Change frequency",
+      dismiss: "Dismiss",
     },
   },
 };
@@ -55,66 +54,91 @@ function makeHabit(overrides: Partial<HabitWithAbsence> = {}): HabitWithAbsence 
 }
 
 describe("AbsenceCard", () => {
-  it("renders recovery variant for 1-2 missed days", () => {
+  it("renders recovery variant for 1-2 missed days with View habit link", () => {
     const habit = makeHabit({ missed_scheduled_periods: 2 });
 
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
 
     expect(screen.getByText(/Morning Run — missed 2 day/)).toBeInTheDocument();
-    expect(screen.getByText("Complete today")).toBeInTheDocument();
+    expect(screen.getByText("View habit")).toBeInTheDocument();
   });
 
   it("renders lapse variant for 3-6 missed days with previous streak", () => {
     const habit = makeHabit({ missed_scheduled_periods: 4, previous_streak: 7 });
 
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
 
     expect(screen.getByText(/Morning Run — 4 days since last check-in/)).toBeInTheDocument();
     expect(screen.getByText("You had a 7-day streak before")).toBeInTheDocument();
-    expect(screen.getByText("Complete today")).toBeInTheDocument();
+    expect(screen.getByText("View habit")).toBeInTheDocument();
   });
 
-  it("renders hiatus variant for 7+ missed days with CTAs", () => {
+  it("renders hiatus variant for 7+ missed days with View habit and Change frequency links", () => {
     const habit = makeHabit({ missed_scheduled_periods: 10 });
 
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
 
     expect(screen.getByText(/Morning Run — it's been 10 days/)).toBeInTheDocument();
-    expect(screen.getByText("Resume today")).toBeInTheDocument();
+    expect(screen.getByText("View habit")).toBeInTheDocument();
     expect(screen.getByText("Change frequency")).toBeInTheDocument();
-    // Should NOT show checkbox
-    expect(screen.queryByText("Complete today")).not.toBeInTheDocument();
   });
 
-  it("shows success state after completing", async () => {
-    const onToggle = vi.fn().mockResolvedValue(undefined);
+  it("does not show Change frequency link for recovery variant", () => {
     const habit = makeHabit({ missed_scheduled_periods: 1 });
 
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={onToggle} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
 
-    const checkbox = screen.getByRole("checkbox");
-    fireEvent.click(checkbox);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Morning Run — welcome back!/)).toBeInTheDocument();
-    });
-    expect(onToggle).toHaveBeenCalledWith("h1");
+    expect(screen.queryByText("Change frequency")).not.toBeInTheDocument();
   });
 
-  it("navigates to edit page on 'Change frequency' click", () => {
+  it("does not show Change frequency link for lapse variant", () => {
+    const habit = makeHabit({ missed_scheduled_periods: 4 });
+
+    renderWithIntl(
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
+    );
+
+    expect(screen.queryByText("Change frequency")).not.toBeInTheDocument();
+  });
+
+  it("calls onDismiss with habit id when dismiss button is clicked", () => {
+    const onDismiss = vi.fn();
+    const habit = makeHabit({ missed_scheduled_periods: 2 });
+
+    renderWithIntl(
+      <AbsenceCard habit={habit} onDismiss={onDismiss} onNavigate={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(onDismiss).toHaveBeenCalledWith("h1");
+  });
+
+  it("navigates to habit detail page on 'View habit' click", () => {
+    const onNavigate = vi.fn();
+    const habit = makeHabit({ missed_scheduled_periods: 2 });
+
+    renderWithIntl(
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={onNavigate} />
+    );
+
+    fireEvent.click(screen.getByText("View habit"));
+    expect(onNavigate).toHaveBeenCalledWith("/habits/h1");
+  });
+
+  it("navigates to edit page on 'Change frequency' click (hiatus)", () => {
     const onNavigate = vi.fn();
     const habit = makeHabit({ missed_scheduled_periods: 10 });
 
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={onNavigate} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={onNavigate} />
     );
 
     fireEvent.click(screen.getByText("Change frequency"));
@@ -125,7 +149,7 @@ describe("AbsenceCard", () => {
     const habit = makeHabit({ missed_scheduled_periods: 1, previous_streak: 5 });
 
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
 
     expect(screen.queryByText(/streak before/)).not.toBeInTheDocument();
@@ -135,45 +159,17 @@ describe("AbsenceCard", () => {
     const habit = makeHabit({ missed_scheduled_periods: 4, previous_streak: 0 });
 
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
 
     expect(screen.queryByText(/streak before/)).not.toBeInTheDocument();
-  });
-
-  it("does not show success state when onToggle rejects", async () => {
-    const onToggle = vi.fn().mockRejectedValue(new Error("Network error"));
-    const habit = makeHabit({ missed_scheduled_periods: 1 });
-
-    renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={onToggle} onNavigate={vi.fn()} />
-    );
-
-    fireEvent.click(screen.getByRole("checkbox"));
-    await waitFor(() => expect(onToggle).toHaveBeenCalled());
-    expect(screen.queryByText(/welcome back/)).not.toBeInTheDocument();
-  });
-
-  it("calls onToggle and shows success when clicking 'Resume today' (hiatus)", async () => {
-    const onToggle = vi.fn().mockResolvedValue(undefined);
-    const habit = makeHabit({ missed_scheduled_periods: 10 });
-
-    renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={onToggle} onNavigate={vi.fn()} />
-    );
-
-    fireEvent.click(screen.getByText("Resume today"));
-    await waitFor(() => {
-      expect(screen.getByText(/Morning Run — welcome back!/)).toBeInTheDocument();
-    });
-    expect(onToggle).toHaveBeenCalledWith("h1");
   });
 
   it("does not show previous streak for hiatus variant even when previous_streak > 0", () => {
     const habit = makeHabit({ missed_scheduled_periods: 10, previous_streak: 15 });
 
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
 
     expect(screen.queryByText(/streak before/)).not.toBeInTheDocument();
@@ -183,7 +179,7 @@ describe("AbsenceCard", () => {
     const habit = makeHabit({ missed_scheduled_periods: 3 });
 
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
 
     expect(screen.getByText(/3 days since last check-in/)).toBeInTheDocument();
@@ -193,26 +189,11 @@ describe("AbsenceCard", () => {
     const habit = makeHabit({ missed_scheduled_periods: 7 });
 
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
 
     expect(screen.getByText(/it's been 7 days/)).toBeInTheDocument();
-    expect(screen.getByText("Resume today")).toBeInTheDocument();
-  });
-
-  it("disables checkbox while toggle is in flight", async () => {
-    let resolveToggle!: () => void;
-    const onToggle = vi.fn(() => new Promise<void>(r => { resolveToggle = r; }));
-    const habit = makeHabit({ missed_scheduled_periods: 1 });
-
-    renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={onToggle} onNavigate={vi.fn()} />
-    );
-
-    fireEvent.click(screen.getByRole("checkbox"));
-    expect(screen.getByRole("checkbox")).toBeDisabled();
-    resolveToggle();
-    await waitFor(() => expect(screen.getByText(/welcome back/)).toBeInTheDocument());
+    expect(screen.getByText("Change frequency")).toBeInTheDocument();
   });
 
   // --- Week-based absence display tests ---
@@ -224,7 +205,7 @@ describe("AbsenceCard", () => {
       absence_unit: "weeks",
     });
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
     expect(screen.getByText(/missed 1 week/)).toBeInTheDocument();
   });
@@ -237,7 +218,7 @@ describe("AbsenceCard", () => {
       absence_unit: "weeks",
     });
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
     expect(screen.getByText(/2 weeks since last check-in/)).toBeInTheDocument();
     expect(screen.getByText("You had a 4-week streak before")).toBeInTheDocument();
@@ -250,10 +231,10 @@ describe("AbsenceCard", () => {
       absence_unit: "weeks",
     });
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
     expect(screen.getByText(/it's been 5 weeks/)).toBeInTheDocument();
-    expect(screen.getByText("Resume today")).toBeInTheDocument();
+    expect(screen.getByText("Change frequency")).toBeInTheDocument();
   });
 
   it("falls back to day-based rendering when absence_unit is undefined", () => {
@@ -262,7 +243,7 @@ describe("AbsenceCard", () => {
       absence_unit: undefined as unknown as 'days',
     });
     renderWithIntl(
-      <AbsenceCard habit={habit} onToggle={vi.fn()} onNavigate={vi.fn()} />
+      <AbsenceCard habit={habit} onDismiss={vi.fn()} onNavigate={vi.fn()} />
     );
     // Should use day-based lapse variant (3-6 missed = lapse)
     expect(screen.getByText(/3 days since last check-in/)).toBeInTheDocument();
