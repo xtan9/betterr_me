@@ -72,6 +72,21 @@ export function DashboardContent({
 
   const today = getLocalDateString();
 
+  const [dismissedAbsenceIds, setDismissedAbsenceIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    const stored = localStorage.getItem(`absence-dismissed-${today}`);
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  });
+
+  const handleDismissAbsence = useCallback((habitId: string) => {
+    setDismissedAbsenceIds(prev => {
+      const next = new Set(prev);
+      next.add(habitId);
+      localStorage.setItem(`absence-dismissed-${today}`, JSON.stringify([...next]));
+      return next;
+    });
+  }, [today]);
+
   const { data, error, isLoading, mutate } = useSWR<DashboardData>(
     `/api/dashboard?date=${today}`,
     fetcher,
@@ -336,7 +351,7 @@ export function DashboardContent({
     h.absence_unit === 'weeks' ? h.missed_scheduled_periods * 7 : h.missed_scheduled_periods;
 
   const absenceHabits = data.habits
-    .filter((h) => h.missed_scheduled_periods > 0 && !h.completed_today)
+    .filter((h) => h.missed_scheduled_periods > 0 && !h.completed_today && !dismissedAbsenceIds.has(h.id))
     .sort((a, b) => normalizePeriods(b) - normalizePeriods(a))
     .slice(0, 3);
 
@@ -374,7 +389,7 @@ export function DashboardContent({
             <AbsenceCard
               key={habit.id}
               habit={habit}
-              onToggle={handleToggleHabit}
+              onDismiss={handleDismissAbsence}
               onNavigate={router.push}
             />
           ))}
