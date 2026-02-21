@@ -172,8 +172,9 @@ describe("TasksToday", () => {
       />,
     );
 
-    // Task #2 ("Team standup") was completed on a past date so it's filtered
-    // out of the visible list. Only the 2 incomplete tasks are shown.
+    // Task #2 ("Team standup") has completed_at "2024-01-01T10:00:00Z" (a past date),
+    // so it's hidden by the filteredTasks logic. The remaining 2 tasks are both
+    // incomplete, giving "0 of 2 completed".
     expect(screen.getByText(/0 of 2 completed/)).toBeInTheDocument();
   });
 
@@ -704,6 +705,50 @@ describe("TasksToday", () => {
       expect(screen.queryByText("Read documentation")).not.toBeInTheDocument();
       // Only 2 visible tasks (1 incomplete + 1 completed today); past-completed is hidden
       expect(screen.getByText(/1 of 2 completed/)).toBeInTheDocument();
+    });
+
+    it("shows 'all complete' with mix of today and past completed_at", () => {
+      const now = new Date().toISOString();
+      const mixedComplete: Task[] = [
+        {
+          ...mockTasks[0],
+          is_completed: true,
+          completed_at: now, // completed today — visible
+        },
+        {
+          ...mockTasks[1],
+          is_completed: true,
+          completed_at: now, // completed today — visible
+        },
+        {
+          ...mockTasks[2],
+          is_completed: true,
+          completed_at: "2024-01-01T10:00:00Z", // past — hidden
+        },
+      ];
+      renderWithIntl(
+        <TasksToday tasks={mixedComplete} onToggle={vi.fn()} onCreateTask={vi.fn()} />,
+      );
+      // All tasks are complete → celebration banner
+      expect(screen.getByText(/All tasks done!/)).toBeInTheDocument();
+      // Only 2 visible (today-completed); past-completed is hidden
+      expect(screen.getByText("Finish proposal")).toBeInTheDocument();
+      expect(screen.getByText("Team standup")).toBeInTheDocument();
+      expect(screen.queryByText("Read documentation")).not.toBeInTheDocument();
+    });
+
+    it("shows empty state when all tasks completed in the past", () => {
+      const allPastCompleted: Task[] = mockTasks.map((t) => ({
+        ...t,
+        is_completed: true,
+        completed_at: "2024-01-01T10:00:00Z",
+      }));
+      renderWithIntl(
+        <TasksToday tasks={allPastCompleted} onToggle={vi.fn()} onCreateTask={vi.fn()} />,
+      );
+      // All tasks are complete but none visible → empty state shows,
+      // but allComplete is true so todayClear is also true
+      expect(screen.getByText("No tasks for today")).toBeInTheDocument();
     });
   });
 });

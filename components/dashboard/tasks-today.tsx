@@ -252,7 +252,9 @@ export function TasksToday({
 
   const completedCount = sortedTasks.filter((t) => t.is_completed).length;
   const totalCount = sortedTasks.length;
-  // "All complete" checks all tasks (including hidden ones completed on prior days)
+  // "All complete" checks the full tasks array (not just visible ones) so the
+  // celebration state triggers even when some tasks were completed on prior days
+  // and are hidden from the visible list.
   const allComplete = tasks.length > 0 && tasks.every((t) => t.is_completed);
   // For Coming Up section: treat "no today tasks" the same as "all complete"
   const todayClear = tasks.length === 0 || allComplete;
@@ -277,7 +279,7 @@ export function TasksToday({
         </Button>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col">
-        {totalCount === 0 && sortedTasks.length === 0 ? (
+        {totalCount === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p className="font-medium mb-1">{t("noTasks")}</p>
             <p className="text-sm">{t("createFirst")}</p>
