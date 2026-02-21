@@ -17,6 +17,7 @@ export default async function DashboardPage() {
 
   const userName =
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
+  const avatarUrl = user?.user_metadata?.avatar_url ?? null;
 
   // Server-side data fetching — eliminates client-side waterfall
   const habitsDB = new HabitsDB(supabase);
@@ -73,5 +74,5 @@ export default async function DashboardPage() {
     },
   };
 
-  return <DashboardContent userName={userName} initialData={initialData} />;
+  return <DashboardContent userName={userName} avatarUrl={avatarUrl} initialData={initialData} />;
 }

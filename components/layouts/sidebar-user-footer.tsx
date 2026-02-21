@@ -171,10 +171,10 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="min-w-48 rounded-lg"
+            className="w-[var(--radix-dropdown-menu-trigger-width)] rounded-lg"
             side="top"
-            align="end"
-            sideOffset={4}
+            align="start"
+            sideOffset={8}
           >
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
