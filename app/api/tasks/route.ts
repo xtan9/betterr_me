@@ -103,6 +103,10 @@ export async function GET(request: NextRequest) {
     if (searchParams.has('has_due_date')) {
       filters.has_due_date = searchParams.get('has_due_date') === 'true';
     }
+    if (searchParams.has('project_id')) {
+      const projectId = searchParams.get('project_id')!;
+      filters.project_id = projectId === 'null' ? null : projectId;
+    }
 
     const tasks = await tasksDB.getUserTasks(user.id, filters);
     return NextResponse.json({ tasks });

@@ -32,6 +32,13 @@ export class TasksDB {
           ? query.not('due_date', 'is', null)
           : query.is('due_date', null);
       }
+      if (filters.project_id !== undefined) {
+        if (filters.project_id === null) {
+          query = query.is('project_id', null);
+        } else {
+          query = query.eq('project_id', filters.project_id);
+        }
+      }
     }
 
     const { data, error } = await query;

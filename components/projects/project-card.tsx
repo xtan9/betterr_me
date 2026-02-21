@@ -76,7 +76,7 @@ export function ProjectCard({
   const remainingCount = activeCount - previews.length;
 
   const handleCardClick = () => {
-    router.push(`/projects/${project.id}/board`);
+    router.push(`/projects/${project.id}/kanban`);
   };
 
   return (
@@ -189,7 +189,7 @@ export function ProjectCard({
           className="w-full text-xs"
           onClick={(e) => {
             e.stopPropagation();
-            router.push(`/projects/${project.id}/board`);
+            router.push(`/projects/${project.id}/kanban`);
           }}
         >
           {t("openBoard")}
