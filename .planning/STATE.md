@@ -42,6 +42,7 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 ### Decisions
 
 See PROJECT.md Key Decisions table for full log with outcomes.
+- [Phase quick-fix]: Used URL query params (?section=work) for passing section context between tasks page and create task form
 
 ### Pending Todos
 
