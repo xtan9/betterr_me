@@ -2,6 +2,206 @@
 
 Track daily changes and progress on the BetterR.me project.
 
+## 2026-02-21
+### Projects & Kanban, Recurring Tasks Polish, Dashboard Fixes
+
+#### Pull Requests Merged
+- **PR #283**: feat: v3.0 Projects & Kanban — MERGED
+  - Added projects system with Kanban board view
+  - Major feature addition for task organization
+- **PR #284**: fix: address code review issues from PR #283 — MERGED
+  - Follow-up fixes from code review on Projects & Kanban
+- **PR #282**: feat: add View All buttons + sort/gray completed habits — MERGED
+  - Dashboard habits section now has View All navigation
+  - Completed habits sorted to bottom and grayed out
+- **PR #280**: feat: RecurrenceRule types, i18n describeRecurrence, test coverage — MERGED
+  - Refactored RecurrenceRule to TypeScript discriminated union
+  - Added i18n-aware `describeRecurrence()` for all three locales
+  - Added test coverage for recurring tasks (DB, API, components)
+  - Closes issues #269, #270, #271
+- **PR #281**: fix: show completion count for visible tasks only — MERGED
+
+---
+
+## 2026-02-19 – 2026-02-20
+### Dashboard Task Fixes & Absence Tracking Improvements
+
+#### Pull Requests Merged
+- **PR #275**: fix: hide completed tasks from dashboard "Today's Tasks" — MERGED
+- **PR #276**: fix: show tasks completed today in dashboard — MERGED
+  - Follow-up to #275: completed-today tasks still visible but styled differently
+- **PR #277**: fix: sidebar badge counts include completed tasks and don't refresh — MERGED
+- **PR #278**: fix: week-based absence tracking for non-daily habits — MERGED
+  - Fixed absence computation for `times_per_week` and `weekly` habits
+- **PR #279**: refactor: redesign absence card as dismissable reminder — MERGED
+  - Changed absence cards from recovery-focused to gentle dismissable reminders
+- **PR #274**: docs: reorganize PRDs and create master PRD V2 — MERGED
+
+---
+
+## 2026-02-18
+### Recurring Tasks, UI Redesign & Polish
+
+#### Pull Requests Merged
+- **PR #267**: feat: UI style redesign — sidebar, card-on-gray, dark mode polish — MERGED
+  - Replaced top nav with collapsible sidebar navigation
+  - Card-on-gray layout pattern for content areas
+  - Dark mode color refinements
+- **PR #268**: feat: recurring tasks — template + on-demand instance generation — MERGED
+  - Added recurring task system with template-based design
+  - On-demand instance generation (instances created when needed, not upfront)
+- **PR #272**: refactor: remove /tasks/recurring page, inline paused banner — MERGED
+  - Simplified recurring task UX by removing separate page
+- **PR #273**: v2.1 UI Polish & Refinement — MERGED
+  - Follow-up polish pass on UI redesign
+- **PR #266**: fix: stop full page re-render on habit/task toggle — MERGED
+  - Performance fix: isolated re-renders to toggled components only
+
+---
+
+## 2026-02-17
+### Codebase Hardening & Performance
+
+#### Pull Requests Merged
+- **PR #263**: v1.0 Codebase Hardening — MERGED
+  - WeeklyInsight discriminated union refactor
+  - Type safety improvements across codebase
+- **PR #264**: fix: v1.1 Dashboard Task Fixes — MERGED
+  - Bug fixes for dashboard task display
+- **PR #265**: Fix slow habit toggle with optimistic UI and double-click protection — MERGED
+  - Added optimistic updates for instant UI feedback on habit toggle
+  - Double-click protection to prevent duplicate API calls
+
+---
+
+## 2026-02-15 – 2026-02-16
+### Weekly Insights, Code Quality & CI
+
+#### Pull Requests Merged
+- **PR #256**: feat: add weekly insights computation + API route (#232) — MERGED
+  - Behavioral pattern recognition engine for weekly habit/task analysis
+  - API route for weekly insight data
+- **PR #244**: feat: add weekly insight card to dashboard (#232) — MERGED
+  - Dashboard UI card displaying weekly behavioral insights
+  - Closes issue #232
+- **PR #254**: fix: address PR #242 review issues (reflection strip) — MERGED
+- **PR #257**: fix: correct getWeekKey JSDoc — returns YYYY-MM-DD, not YYYY-WW — MERGED
+- **PR #258**: fix: add fallback color for out-of-range task priority — MERGED
+- **PR #259**: refactor: separate AbsenceData from HabitWithTodayStatus — MERGED
+  - Cleaner type separation for absence tracking data
+- **PR #260**: fix: isolate supplementary dashboard queries from core data — MERGED
+  - Milestone/log query failures no longer break core dashboard loading
+- **PR #261**: test: regenerate visual regression baselines, remove skip — MERGED
+- **PR #262**: ci: add concurrency groups to prevent E2E data pollution — MERGED
+
+#### Issues Closed
+- #232: H3 — Weekly insight card with behavioral pattern recognition
+- #246: Regenerate visual regression test baselines
+- #247: Add fallback for priority color lookup
+- #248: SWR fetcher should check res.ok before parsing JSON
+- #249: Separate supplementary queries from core dashboard Promise.all
+- #250: Refactor HabitWithTodayStatus to separate absence fields
+- #251: Fix getWeekKey comment
+- #252: Investigate times_per_week semantics in absence computation
+- #253: Dashboard fetcher doesn't check response.ok
+
+---
+
+## 2026-02-11 – 2026-02-14
+### Vertical Depth Features: Milestones, Reflection, Difficulty
+
+#### Pull Requests Merged
+- **PR #237**: feat: add absence computation to dashboard API (#229) — MERGED
+- **PR #238**: feat: add absence recovery cards to dashboard (#229) — MERGED
+  - "Never miss twice" — recovery cards for habits missed yesterday
+  - Closes issue #229
+- **PR #239**: feat: add milestones table and toggle integration (#230) — MERGED
+  - New `milestones` DB table for streak milestone tracking
+- **PR #240**: feat: add milestone card and next milestone indicator (#230) — MERGED
+  - Dashboard celebration cards when milestones are hit
+  - Closes issue #230
+- **PR #241**: feat: add completion difficulty column to tasks (#231) — MERGED
+  - Backend: difficulty enum on tasks table
+- **PR #242**: feat: add reflection strip UI for task completion (#231) — MERGED
+  - Post-completion reflection UI for meaningful tasks
+  - Closes issue #231
+
+#### Issues Closed
+- #227: T1 — "Why This Matters" intention field for tasks
+- #228: T4 — "Task Horizon" coming up section on dashboard
+- #229: H1 — Absence-aware recovery cards
+- #230: H2 — Streak milestones & celebrations
+- #231: T3 — Completion reflection strip
+
+---
+
+## 2026-02-10
+### Vertical Depth Strategy & Task Enhancements
+
+#### Pull Requests Merged
+- **PR #236**: feat: add Coming Up section for tomorrow tasks (#228) — MERGED
+  - Dashboard section showing tasks due tomorrow
+- **PR #233**: feat: T1 intention field — backend (migration + types + validation) — MERGED
+  - Added `intention` text field to tasks for "Why This Matters"
+- **PR #234**: feat: T1 intention field — frontend (form + detail + dashboard) — MERGED
+  - UI for viewing/editing task intention in forms and detail page
+- **PR #235**: feat: add tomorrow tasks to dashboard API (#228) — MERGED
+- **PR #245**: fix: E2E seed bug + performance optimization — MERGED
+  - Fixed E2E data seeding race condition
+  - SSR data fetching, skeleton loading, preconnect hints
+- **PR #225**: feat: tasks list page, clickable dashboard tasks, nav restructuring — MERGED
+  - Full `/tasks` list page
+  - Dashboard tasks now link to detail pages
+  - Navigation restructured: Tasks replaces Settings in main nav
+  - Closes issues #222, #223, #224
+- **PR #226**: docs: Vertical Depth strategy — PRD and Eng Plan — MERGED
+  - Product requirements and engineering plan for depth-focused features
+
+---
+
+## 2026-02-09
+### Next.js 16 Upgrade, UI/UX Redesign V2 & New Pages
+
+#### Pull Requests Merged
+- **PR #193**: chore: move skills, plugins & hooks to project scope — MERGED
+- **PR #192**: feat: reuse storageState for Playwright auth — MERGED
+  - Performance improvement: auth state reused across E2E tests
+- **PR #197**: fix: resolve E2E test failures with parallel workers — MERGED
+- **PR #196**: fix: add /tasks/new page to resolve 404 — MERGED
+- **PR #199**: refactor: introduce POM, reduce responsive redundancy, add visual regression — MERGED
+  - Page Object Model pattern for E2E tests
+  - Visual regression testing infrastructure
+- **PR #200**: docs: Next.js 16 upgrade engineering plan — MERGED
+- **PR #201**: docs: UI Design V2 and Engineering Plan V2 — MERGED
+- **PR #204**: fix: resolve pre-existing test failures and lint warnings — MERGED
+- **PR #203**: feat: upgrade Next.js from 15.5.8 to 16.1.6 — MERGED
+  - Major framework upgrade with all tests passing
+  - Closes issue #202
+- **PR #216**: feat: UI/UX Redesign V2 — MERGED
+  - Mobile bottom navigation
+  - Lexend display font
+  - Emerald primary color system
+  - Enhanced stat cards with icon circles
+  - Celebration state for all habits complete
+  - Habit card monthly progress bar and micro-interactions
+  - Fixed broken profile dropdown links and duplicate titles
+  - Closes issues #205–#215
+- **PR #220**: feat: Profile editing form (name, avatar) — MERGED
+  - Settings page profile editing with name and avatar upload
+  - Closes issue #218
+- **PR #219**: feat: Task detail and edit pages — MERGED
+  - `/tasks/[id]` detail page and `/tasks/[id]/edit` page
+  - Closes issue #217
+- **PR #221**: fix: update e2e tests for task detail/edit pages and profile form — MERGED
+
+#### Issues Closed
+- #202: Upgrade Next.js from 15.5.8 to 16.1.6
+- #205–#215: UI/UX Redesign V2 sub-issues (mobile nav, font, colors, stat cards, celebrations, progress bar, micro-interactions, profile dropdown fix, duplicate title fix, color alignment)
+- #217: Task detail and edit pages
+- #218: Profile editing form
+
+---
+
 ## 2026-02-08
 ### Bug Fixes & Cleanup
 
