@@ -90,12 +90,12 @@ Plans:
   3. User can drag a task card within a column to reorder it, and the order persists after page reload
   4. Dragging a task to the Done column triggers a completion reflection prompt (emoji strip) for high-priority or intentional tasks
   5. Kanban cards display the task's intention ("Your Why") when present, and all kanban UI strings are translated in en, zh, and zh-TW
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 15-01: TBD
-- [ ] 15-02: TBD
-- [ ] 15-03: TBD
+- [ ] 15-01-PLAN.md — Foundation: install @dnd-kit, project_id API filter, kanban page route, i18n strings
+- [ ] 15-02-PLAN.md — Core board: KanbanBoard + KanbanColumn + KanbanCard + drag-and-drop with SWR
+- [ ] 15-03-PLAN.md — Interactions: Monday.com-style detail modal + column quick-add
 
 ## Progress
 
