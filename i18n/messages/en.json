@@ -534,7 +534,8 @@
     "page": {
       "title": "My Tasks",
       "createButton": "Create Task",
-      "createProject": "Create Project"
+      "createProject": "Create Project",
+      "viewArchived": "Archived"
     },
     "sections": {
       "personal": "Personal",

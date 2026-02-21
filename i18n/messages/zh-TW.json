@@ -534,7 +534,8 @@
     "page": {
       "title": "我的任務",
       "createButton": "建立任務",
-      "createProject": "建立專案"
+      "createProject": "建立專案",
+      "viewArchived": "已封存"
     },
     "sections": {
       "personal": "個人",

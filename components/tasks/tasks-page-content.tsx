@@ -3,8 +3,10 @@
 import { useState, useMemo, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import useSWR from "swr";
 import {
+  Archive,
   FolderPlus,
   Pause,
   Play,
@@ -248,6 +250,12 @@ export function TasksPageContent() {
         title={t("page.title")}
         actions={
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/projects/archived">
+                <Archive className="size-4 mr-2" />
+                {t("page.viewArchived")}
+              </Link>
+            </Button>
             <Button variant="outline" onClick={handleCreateProject}>
               <FolderPlus className="size-4 mr-2" />
               {t("page.createProject")}

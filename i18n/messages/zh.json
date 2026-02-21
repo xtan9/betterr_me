@@ -534,7 +534,8 @@
     "page": {
       "title": "我的任务",
       "createButton": "创建任务",
-      "createProject": "创建项目"
+      "createProject": "创建项目",
+      "viewArchived": "已归档"
     },
     "sections": {
       "personal": "个人",
