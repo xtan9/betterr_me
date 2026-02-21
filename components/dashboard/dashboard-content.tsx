@@ -7,6 +7,7 @@ import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import dynamic from "next/dynamic";
 
 const DailySnapshot = dynamic(() =>
@@ -50,6 +51,7 @@ const EMPTY_DASHBOARD: DashboardData = {
 
 interface DashboardContentProps {
   userName: string;
+  avatarUrl?: string | null;
   initialData?: DashboardData;
 }
 
@@ -65,6 +67,7 @@ function getWeekKey(weekStartDay: number): string {
 
 export function DashboardContent({
   userName,
+  avatarUrl,
   initialData,
 }: DashboardContentProps) {
   const t = useTranslations("dashboard");
@@ -299,11 +302,19 @@ export function DashboardContent({
       <div className="space-y-6">
         {/* Greeting */}
         <Card>
-          <CardContent className="py-5">
-            <h1 className="text-page-title tracking-tight">
-              {getGreeting()}, {userName}! 👋
-            </h1>
-            <p className="mt-1 text-muted-foreground">{t("welcome")}</p>
+          <CardContent className="flex items-center gap-3 py-5">
+            <Avatar className="size-10 shrink-0">
+              <AvatarImage src={avatarUrl ?? undefined} alt={userName} />
+              <AvatarFallback className="text-sm font-medium">
+                {userName.charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h1 className="text-page-title tracking-tight">
+                {getGreeting()}, {userName}! 👋
+              </h1>
+              <p className="mt-1 text-muted-foreground">{t("welcome")}</p>
+            </div>
           </CardContent>
         </Card>
 
@@ -372,11 +383,19 @@ export function DashboardContent({
     <div className="space-y-6">
       {/* Greeting */}
       <Card>
-        <CardContent className="py-5">
-          <h1 className="text-page-title tracking-tight">
-            {getGreeting()}, {userName}! 👋
-          </h1>
-          <p className="mt-1 text-muted-foreground">{t("welcome")}</p>
+        <CardContent className="flex items-center gap-3 py-5">
+          <Avatar className="size-10 shrink-0">
+            <AvatarImage src={avatarUrl ?? undefined} alt={userName} />
+            <AvatarFallback className="text-sm font-medium">
+              {userName.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h1 className="text-page-title tracking-tight">
+              {getGreeting()}, {userName}! 👋
+            </h1>
+            <p className="mt-1 text-muted-foreground">{t("welcome")}</p>
+          </div>
         </CardContent>
       </Card>
 
@@ -450,9 +469,12 @@ function DashboardSkeleton() {
     <div className="space-y-6" data-testid="dashboard-skeleton">
       {/* Greeting skeleton */}
       <Card>
-        <CardContent className="py-5">
-          <Skeleton className="h-9 w-full max-w-64" />
-          <Skeleton className="mt-2 h-5 w-full max-w-96" />
+        <CardContent className="flex items-center gap-3 py-5">
+          <Skeleton className="size-10 shrink-0 rounded-full" />
+          <div>
+            <Skeleton className="h-9 w-full max-w-64" />
+            <Skeleton className="mt-2 h-5 w-full max-w-96" />
+          </div>
         </CardContent>
       </Card>
 
