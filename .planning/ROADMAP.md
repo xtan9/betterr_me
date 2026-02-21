@@ -148,4 +148,4 @@ Plans:
 | 14. Projects & Sections | 3/3 | Complete    | 2026-02-20 | - |
 | 15. Kanban Board | 4/4 | Complete    | 2026-02-21 | - |
 | 16. Integration Bug Fixes | 2/2 | Complete   | 2026-02-21 | - |
-| 17. Fix Project Archive/Restore Validation | 1/1 | Complete   | 2026-02-21 | - |
+| 17. Fix Project Archive/Restore Validation | 1/1 | Complete    | 2026-02-21 | - |
