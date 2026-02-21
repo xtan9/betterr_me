@@ -798,9 +798,14 @@
       "description": "描述",
       "noDescription": "暂无描述",
       "noDueDate": "暂无截止日期",
-      "commentsPlaceholder": "评论和更新功能即将上线",
       "activityPlaceholder": "活动日志功能即将上线",
-      "editTask": "编辑任务"
+      "infoHeading": "信息",
+      "descriptionHeading": "描述",
+      "descriptionPlaceholder": "添加描述...",
+      "updatesHeading": "项目动态",
+      "writeUpdate": "写一条更新...",
+      "noUpdates": "暂无更新",
+      "updateError": "更新任务失败"
     },
     "priority": {
       "high": "高",
