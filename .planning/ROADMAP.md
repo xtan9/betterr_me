@@ -6,6 +6,7 @@
 - ✅ **v1.1 Dashboard Task Fixes** — Phase 6 (shipped 2026-02-17)
 - ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
 - ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
+- ✅ **v3.0 Projects & Kanban** — Phases 13-17 (shipped 2026-02-21)
 
 ## Phases
 
@@ -37,6 +38,13 @@
 
 </details>
 
+<details>
+<summary>✅ v3.0 Projects & Kanban (Phases 13-17) — SHIPPED 2026-02-21</summary>
+
+5 phases, 12 plans, 17 requirements. See `.planning/milestones/v3.0-ROADMAP.md` for details.
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -50,3 +58,8 @@
 | 10. Token Consistency | v2.1 | 3/3 | Complete | 2026-02-18 |
 | 11. Sidebar Polish | v2.1 | 2/2 | Complete | 2026-02-18 |
 | 12. Component Fixes | v2.1 | 1/1 | Complete | 2026-02-18 |
+| 13. Data Foundation & Migration | v3.0 | 2/2 | Complete | 2026-02-19 |
+| 14. Projects & Sections | v3.0 | 3/3 | Complete | 2026-02-20 |
+| 15. Kanban Board | v3.0 | 4/4 | Complete | 2026-02-20 |
+| 16. Integration Bug Fixes | v3.0 | 2/2 | Complete | 2026-02-21 |
+| 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |

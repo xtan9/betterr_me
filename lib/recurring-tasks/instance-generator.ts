@@ -118,6 +118,8 @@ async function generateInstancesForTemplate(
       due_date: date,
       due_time: template.due_time,
       is_completed: false,
+      status: 'todo' as const,     // Phase 13: recurring instances start as todo
+      section: 'personal',          // Phase 13: default section
       recurring_task_id: template.id,
       is_exception: false,
       original_date: date,

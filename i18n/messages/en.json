@@ -479,6 +479,10 @@
       "intentionPlaceholder": "Why does this matter to you?",
       "repeatLabel": "Repeat"
     },
+    "sectionLabel": "Section",
+    "projectLabel": "Project",
+    "projectPlaceholder": "Select a project",
+    "noProject": "No Project",
     "categories": {
       "work": "Work",
       "personal": "Personal",
@@ -529,7 +533,13 @@
     },
     "page": {
       "title": "My Tasks",
-      "createButton": "Create Task"
+      "createButton": "Create Task",
+      "createProject": "Create Project",
+      "viewArchived": "Archived"
+    },
+    "sections": {
+      "personal": "Personal",
+      "work": "Work"
     },
     "list": {
       "searchPlaceholder": "Search tasks...",
@@ -708,6 +718,93 @@
     },
     "toast": {
       "saveError": "Failed to save settings"
+    }
+  },
+  "projects": {
+    "createTitle": "Create Project",
+    "editTitle": "Edit Project",
+    "nameLabel": "Project Name",
+    "namePlaceholder": "Enter project name",
+    "sectionLabel": "Section",
+    "colorLabel": "Color",
+    "createButton": "Create Project",
+    "saveButton": "Save Changes",
+    "deleteTitle": "Delete Project",
+    "deleteDescription": "Are you sure you want to delete \"{name}\"? Tasks in this project will become standalone tasks in the same section.",
+    "confirmDelete": "Delete Project",
+    "cancel": "Cancel",
+    "archiveSuccess": "Project archived",
+    "deleteSuccess": "Project deleted",
+    "createSuccess": "Project created",
+    "updateSuccess": "Project updated",
+    "done": "done",
+    "more": "more",
+    "openBoard": "Open Board",
+    "noTasks": "No tasks yet",
+    "menuEdit": "Edit",
+    "menuArchive": "Archive",
+    "menuDelete": "Delete",
+    "sections": {
+      "personal": "Personal",
+      "work": "Work"
+    },
+    "colors": {
+      "blue": "Blue",
+      "red": "Red",
+      "green": "Green",
+      "orange": "Orange",
+      "purple": "Purple",
+      "pink": "Pink",
+      "teal": "Teal",
+      "yellow": "Yellow",
+      "indigo": "Indigo",
+      "cyan": "Cyan",
+      "slate": "Slate",
+      "emerald": "Emerald"
+    },
+    "archived": {
+      "title": "Archived Projects",
+      "empty": "No archived projects",
+      "restore": "Restore",
+      "restoreSuccess": "Project restored",
+      "backToTasks": "Back to Tasks"
+    }
+  },
+  "kanban": {
+    "backToTasks": "Back to Tasks",
+    "taskCount": "{count, plural, =0 {No tasks} =1 {1 task} other {# tasks}}",
+    "columns": {
+      "backlog": "Backlog",
+      "todo": "To Do",
+      "in_progress": "In Progress",
+      "done": "Done"
+    },
+    "emptyColumn": "No tasks in this column",
+    "quickAdd": {
+      "placeholder": "Add a task..."
+    },
+    "dragError": "Failed to update task status",
+    "createError": "Failed to create task",
+    "detail": {
+      "detailsTab": "Details",
+      "activityTab": "Activity",
+      "status": "Status",
+      "priority": "Priority",
+      "section": "Section",
+      "project": "Project",
+      "dueDate": "Due Date",
+      "description": "Description",
+      "noDescription": "No description",
+      "noDueDate": "No due date",
+      "commentsPlaceholder": "Comments and updates coming soon",
+      "activityPlaceholder": "Activity log coming soon",
+      "editTask": "Edit Task"
+    },
+    "priority": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "none": "None"
     }
   }
 }

@@ -1,250 +1,253 @@
 # Project Research Summary
 
-**Project:** BetterR.Me Codebase Hardening
-**Domain:** Production Next.js 16 + Supabase habit tracking web app
-**Researched:** 2026-02-15
+**Project:** BetterR.Me v3.0 -- Projects & Kanban Milestone
+**Domain:** Personal kanban task management with project containers (single-user)
+**Researched:** 2026-02-18
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This hardening milestone addresses 20 identified concerns in a production habit tracking web app. The project already has a solid foundation (Next.js 16, Supabase, Zod, TypeScript) but has critical correctness bugs, security gaps, and fragile patterns that emerged during rapid feature development. The recommended approach is a phased remediation prioritized by user impact: fix data correctness bugs first (users see wrong completion rates), then wire existing Zod schemas into API routes (security + consistency), then remove dead code and fragile patterns (maintainability).
+BetterR.Me is adding project organization and kanban boards to its existing task management system. The feature set is well-understood: 4-column kanban (Backlog / To Do / In Progress / Done), drag-and-drop between columns, Work/Personal sections replacing category-based distinction, projects as named containers with preset colors, and a completion reflection trigger on drag-to-Done. This is a pattern implemented by Todoist, Trello, and Linear -- the implementation path is clear and the research is convergent across all four areas.
 
-The most critical finding is that `shouldTrackOnDate()` returns incorrect values for `times_per_week` and `weekly` frequency types, causing completion rates to show ~43% when they should show ~100%. This bug ripples through stats, insights, streaks, and missed-day calculations. The function has two copies (one in `lib/habits/format.ts`, one private in `lib/db/habit-logs.ts`) that must be fixed atomically. Additionally, API routes perform manual validation instead of using the existing Zod schemas, leaving the API vulnerable to oversized payloads and creating parallel validation paths that drift over time.
+The stack addition is minimal: only `@dnd-kit/core` v6 + `@dnd-kit/sortable` + `@dnd-kit/utilities` (~15kB combined, 3 packages). Everything else -- UI components, form handling, data fetching, validation, i18n, testing -- is already in the existing stack. The architecture layers cleanly onto the existing `DB class -> API route -> SWR hook -> React component` pattern with no new architectural paradigms. The database changes are additive: a new `projects` table, and four new nullable/defaulted columns on `tasks` (`section`, `status`, `project_id`, `sort_order`).
 
-Key risks are addressed by fixing bugs in dependency order (frequency logic before stats optimization), creating API-specific schemas with `.partial()` for PATCH routes, and adding a database migration for the `weekly` frequency `day` field that preserves backward compatibility. No new dependencies are needed. This is about wiring existing tools correctly, not adding new ones.
+The highest-risk area is the data model migration, not the DnD implementation. Adding a `status` enum alongside the existing `is_completed` boolean creates a dual-source-of-truth that touches the dashboard, sidebar counts, recurring tasks, and 94+ test assertions. The mitigation is a bidirectional sync in the API layer and a careful expand-and-contract migration strategy. Secondary risk is SWR cache fragmentation -- kanban drag operations must invalidate task lists, dashboard, and sidebar caches simultaneously. A centralized cache invalidation utility should be built before any kanban work begins.
 
 ## Key Findings
 
 ### Recommended Stack
 
-**No new dependencies required.** The project already has all necessary tools in place. This hardening milestone is about correct wiring, not adding new packages. Full details in [STACK.md](./STACK.md).
+The existing stack handles 95% of the feature requirements. The only new dependency is the drag-and-drop library.
 
-**Core technologies (already in use):**
-- **Zod 3.25.46**: Schema validation — currently used for forms only; needs wiring into API routes via `.safeParse()`
-- **next-themes 0.4.6**: Dark mode — works correctly but has manual DOM workaround that should be removed
-- **Tailwind CSS 3.4.x**: Class-based dark mode — configured correctly with `darkMode: ["class"]`
-- **Vercel serverless**: Deployment platform — in-memory cache provides zero benefit, HTTP Cache-Control is the correct approach
+**New dependencies (3 packages, ~15kB):**
+- `@dnd-kit/core` v6.3.1: DnD primitives (DndContext, sensors, collision detection) -- battle-tested, hook-based, excellent accessibility with keyboard + screen reader support
+- `@dnd-kit/sortable` v10.0.0: Sortable preset for reordering items within and between kanban columns
+- `@dnd-kit/utilities` v3.2.2: CSS transform utilities for drag animations
 
-**Critical finding:** The in-memory `TTLCache` in `lib/cache.ts` is ineffective on Vercel serverless (each cold start = empty cache, concurrent workers = separate caches). The stats route already sets `Cache-Control: private, max-age=300` headers, which is the correct caching mechanism. The in-memory cache should be removed as dead code.
+**Critical compatibility note:** `@dnd-kit/core` v6 does not declare React 19 in its peer dependencies, but works correctly. Add `pnpm.peerDependencyRules.allowedVersions` to `package.json` (same pattern shadcn/ui uses for React 19).
+
+**DnD library decision (resolving research conflict):** STACK.md and ARCHITECTURE.md disagreed on library choice. STACK.md recommends `@dnd-kit/core` v6 (stable); ARCHITECTURE.md recommends `@dnd-kit/react` v0.3.x (new rewrite). **The recommendation is `@dnd-kit/core` v6 (stable).** Rationale:
+- `@dnd-kit/react` is at v0.3.1 -- pre-1.0, API may break between minor versions
+- `@dnd-kit/react` has a known missing `"use client"` directive issue (GitHub #1654)
+- `@dnd-kit/core` v6 has extensive community examples specifically for kanban + shadcn/ui + Tailwind
+- The React 19 peer dep issue is cosmetic (works correctly, just needs pnpm config)
+- Multiple reference implementations validate this path: Georgegriff/react-dnd-kit-tailwind-shadcn-ui, marmelab kanban tutorial (Jan 2026)
+
+**What NOT to add:** framer-motion (Tailwind transitions sufficient), react-virtualized (premature at personal app scale), Zustand/Redux (SWR + useState covers all state needs), immer (simple spread operators suffice).
+
+See: `.planning/research/STACK.md` for full analysis.
 
 ### Expected Features
 
-Full prioritization matrix in [FEATURES.md](./FEATURES.md).
+**Must have (table stakes):**
+- 4-status workflow: Backlog / To Do / In Progress / Done
+- Drag-and-drop between columns AND card ordering within columns
+- Projects as named containers with preset color palette (8-12 colors)
+- Work / Personal section separation (replaces old category toggles)
+- Status-driven completion: `status=done` implies `is_completed=true` (bidirectional sync)
+- Task form: section selector (required) + project selector (optional)
+- Tasks page redesign: section tabs with project cards and standalone tasks
+- Data migration: existing tasks get `section='personal'`, `status` derived from `is_completed`
 
-**Must fix (table stakes — P1):**
-- **Zod API validation (T1)**: Wire Zod schemas into all 12 API routes, replacing hand-rolled validation
-- **Frequency logic (T3, T4)**: Fix `times_per_week` (shows 43% instead of 100%) and `weekly` (hardcoded to Monday)
-- **Profile reliability (T8)**: Centralize profile auto-creation fallback (currently only in habits POST route)
-- **Non-null assertion (T2)**: Replace `user.email!` with `user.email ?? ''` to handle OAuth edge cases
+**Should have (differentiators):**
+- Completion reflection on drag-to-Done -- bridges kanban mechanics with BetterR.Me's self-improvement philosophy; NO competitor does this
+- Intention ("Your Why") display on kanban cards -- unique to BetterR.Me
+- Project progress visualization (X of Y tasks done)
+- Active/Archived project status
+- Standalone tasks section (tasks without a project)
+- Keyboard-accessible drag-and-drop (native to dnd-kit, needs ARIA labels)
 
-**Should fix (quality improvements — P2):**
-- **Remove cache (D1)**: Delete ineffective in-memory cache, rely on HTTP Cache-Control
-- **Theme-switcher (D3)**: Remove manual DOM class manipulation that fights next-themes
-- **Performance (D4, D5)**: Replace full task fetch with COUNT(*), cap streak lookback window
+**Defer (v2+):**
+- Custom columns / user-defined statuses
+- WIP limits, swimlanes, sub-projects
+- Multiple board views (calendar, timeline, gallery)
+- Subtasks/checklists, labels/tags, automations
+- Collaborative features (single-user app)
+- Drag-to-reorder projects (manual sort_order sufficient for v1)
 
-**Defer (test coverage — P3):**
-- **Test gaps (D8, D10)**: Add unit tests for `/api/habits/[id]/logs` and Zod validation paths
-- **Habit count limit (D9)**: Enforce 20-habit limit per user (planned but not enforced)
+**Critical path:** Data migration -> Status field -> Section field -> Projects table -> Kanban board -> DnD -> Tasks page redesign
+
+See: `.planning/research/FEATURES.md` for full feature landscape and competitor analysis.
 
 ### Architecture Approach
 
-Full component boundaries and data flow in [ARCHITECTURE.md](./ARCHITECTURE.md).
+The architecture extends the existing data flow without introducing new patterns. A new `ProjectsDB` class follows the same constructor-injected Supabase client pattern as `HabitsDB` and `TasksDB`. New API routes (`/api/projects`, `/api/tasks/reorder`) follow existing REST conventions. New SWR hooks (`useProjects`, `useTasks`, `useKanbanTasks`) follow the same typed fetcher pattern. The kanban board is a client component with `"use client"` (or `next/dynamic` with `ssr: false`), while the task list view remains server-renderable.
 
-The codebase follows a clean layered architecture: middleware (session refresh) → API routes (auth + validation) → DB classes (Supabase query wrappers) → Supabase (RLS enforcement). The hardening work focuses on three architectural issues:
+**Major components:**
+1. `ProjectsDB` + `/api/projects` -- CRUD for projects, RLS-protected
+2. `TasksDB` extensions + `/api/tasks/reorder` -- kanban queries, bulk reorder endpoint
+3. `KanbanBoard` + `KanbanColumn` + `KanbanCard` -- DnD components using @dnd-kit
+4. Tasks page redesign -- section tabs (Work/Personal), project cards, standalone tasks
+5. Task form extensions -- section selector, project dropdown, status field
 
-**Major fixes:**
-1. **DB class constructors** — Currently have optional `supabase?: SupabaseClient` parameter that silently falls back to browser client on the server. Fix: make parameter required (like `InsightsDB` and `HabitMilestonesDB` already do correctly)
-2. **API route boilerplate** — Every route repeats identical auth check and manual validation. Fix: extract `withAuth()` wrapper and `parseBody()` helper for consistent error handling
-3. **Validation schema gaps** — Zod schemas exist for forms but not API routes. Forms require all fields; PATCH routes accept partial updates. Fix: create `habitUpdateSchema = habitFormSchema.partial()` for PATCH
+**Key architectural decisions:**
+- **SWR as single source of truth for kanban state** -- no dual local state + server state. Optimistic updates via `mutate()` with `rollbackOnError: true`. Local `useState` only during active drag for in-flight visual position.
+- **Float-based sort_order** -- enables single-row updates on reorder (midpoint calculation). No full column renumbering.
+- **Dedicated reorder endpoint** (`POST /api/tasks/reorder`) -- cross-column moves need atomic status + sort_order updates; keeps existing PATCH endpoint clean.
+- **Application-level is_completed/status sync** (resolving research conflict) -- PITFALLS.md suggested a DB trigger; ARCHITECTURE.md suggested API-layer sync. **Recommendation: API-layer sync.** A DB trigger hides logic and makes unit testing harder. The sync is simple (4 lines of code in PATCH handler) and explicitly testable. If bugs emerge, a DB trigger can be added as a safety net later.
 
-**Patterns to apply:**
-- **Required dependency injection**: No optional constructor parameters with fallbacks
-- **Wrapper functions for cross-cutting concerns**: `withAuth()` replaces 12 copies of auth boilerplate
-- **Graceful degradation with warnings**: Dashboard returns `_warnings` array when supplementary queries fail
+**New files:** ~26 new files (DB classes, API routes, hooks, components, validations, migrations, i18n strings)
+**Modified files:** ~12 existing files (types, task DB, task API, task form, task card, tasks page, sidebar)
+
+See: `.planning/research/ARCHITECTURE.md` for full component boundaries, data model SQL, and data flow diagrams.
 
 ### Critical Pitfalls
 
-Full pitfall details and recovery strategies in [PITFALLS.md](./PITFALLS.md).
+1. **Breaking the `is_completed` boolean contract** -- The existing system has 94+ assertions on `is_completed`. Dashboard, sidebar, recurring tasks, and task list all depend on it. Adding a `status` field without bidirectional sync causes tasks to appear "done" in kanban but "pending" in dashboard. **Prevention:** Keep `is_completed` forever as a denormalized field. Sync bidirectionally in API PATCH handlers. Run all 1084+ existing tests after migration. Never remove `is_completed`.
 
-1. **Frequency logic fix breaks existing stats retroactively** — `shouldTrackOnDate()` has two copies that must be fixed atomically. Eight tests assert the current (incorrect) behavior. Fix all consumers + all tests simultaneously or stats become internally contradictory.
+2. **SWR cache fragmentation** -- Kanban drag must invalidate kanban view, task list, dashboard, AND sidebar counts. Missing any cache causes stale data. **Prevention:** Build a centralized `invalidateTaskCaches()` utility BEFORE the kanban board. Retrofit existing mutation sites (`create-task-content.tsx`, `dashboard-content.tsx`) to use it.
 
-2. **Database migration for weekly frequency day field corrupts existing habits** — Adding `day` to `{"type": "weekly"}` JSONB requires backward-compatible migration. Fix: make `day` optional in TypeScript (`day?: number`), default to 1 (Monday) when absent, use `||` JSONB merge in migration.
+3. **Hydration mismatch with SSR** -- DnD components use browser APIs that do not exist on the server. `"use client"` does NOT prevent server pre-rendering. **Prevention:** Wrap kanban board with `next/dynamic({ ssr: false })`. Provide loading skeleton. Test with production build.
 
-3. **Zod schema wiring creates two incompatible validation paths** — Form schema requires all fields; PATCH route needs partial updates. Fix: use `habitFormSchema.partial()` for PATCH, verify at least one field provided with `Object.keys(result.data).length > 0`.
+4. **Breaking recurring task instance generation** -- `RecurringTasksDB` filters on `is_completed = false` for scope operations. If `project_id` gets a NOT NULL constraint, instance generation breaks. **Prevention:** `project_id` MUST be nullable. Do NOT add `status` or `project_id` to the `recurring_tasks` template table. Add integration test for recurring tasks post-migration.
 
-4. **Tests asserting current (incorrect) behavior block bug fixes** — Multiple tests explicitly assert the wrong behavior as "correct". Fix: write correct tests first (red), then fix production code (green). Update tests atomically with fixes.
+5. **Optimistic update rollback chaos** -- DnD library internal state and SWR cache can diverge on API failure. `revalidateOnFocus` during drag cancels the operation. **Prevention:** Disable `revalidateOnFocus` while `isDragging`. Use local state as visual truth during drag, sync from SWR when not dragging. Batch status + sort_order into single API call.
 
-5. **next-themes manual DOM workaround masks a configuration bug** — Component manually adds/removes CSS classes, fighting next-themes' internal script. Fix: investigate root cause (likely hydration timing), remove workaround only after verifying theme switching works in minimal reproduction.
+See: `.planning/research/PITFALLS.md` for full pitfall analysis, recovery strategies, and phase-to-pitfall mapping.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure follows dependency order and prioritizes user-visible correctness bugs.
+Based on the combined research, the feature decomposes into 4 phases with clear dependency ordering.
 
-### Phase 1: Security and Validation
+### Phase 1: Database Foundation & Migration
 
-**Rationale:** Security gaps are highest risk. Wiring Zod schemas is the single highest-leverage fix because it resolves security (no server-side length limits), code quality (eliminates parallel validation paths), and enables test coverage later.
-
-**Delivers:**
-- All 12 API routes use Zod validation via `parseBody()` helper
-- No server-side length limits gap (name max 100, description max 500)
-- Profile auto-creation centralized in `ensureProfile()` helper
-- Auth callback redirect allowlist added (defense-in-depth)
-
-**Addresses:**
-- T1: Wire Zod schemas into all API routes
-- T2: Fix `user.email!` non-null assertion (folded into T8)
-- T8: Fix profile auto-creation reliability
-- D7: Add redirect path allowlist
-
-**Avoids:** Pitfall 3 (Zod partial update breakage) by creating `habitUpdateSchema = habitFormSchema.partial()`
-
-**Research flag:** Standard pattern, well-documented. No additional research needed.
-
-### Phase 2: Correctness Bugs
-
-**Rationale:** Users see wrong data. Most user-visible problem. Both frequency bugs touch the same function (`shouldTrackOnDate`), so they must be done together. The `weekly` frequency fix requires a database migration, which must be completed in this phase.
+**Rationale:** Everything depends on the data model. The `status`, `section`, `project_id`, and `sort_order` columns must exist before any UI work. The `projects` table must exist before project CRUD. The data migration for existing tasks must run before any new UI deploys.
 
 **Delivers:**
-- `times_per_week` completion rates show 100% when 3 of 3 required completions done (not 43%)
-- `weekly` frequency tracks configurable day (not hardcoded Monday)
-- 2 pre-existing test failures resolved (symptoms of T3)
-- `WeeklyInsight` type uses discriminated union for type-safe narrowing
+- `projects` table with RLS policies
+- New columns on `tasks` table (`section`, `status`, `project_id`, `sort_order`)
+- Data migration: existing tasks get `section='personal'`, `status` derived from `is_completed`, `sort_order` from `ROW_NUMBER()`
+- `ProjectsDB` class + `TasksDB` extensions
+- Type definitions (`Project`, `TaskSection`, `TaskStatus`, `TaskWithProject`)
+- Validation schemas (project, reorder, extended task)
+- Bidirectional `is_completed`/`status` sync in task API PATCH handler
+- Centralized SWR cache invalidation utility (`invalidateTaskCaches()`)
 
-**Addresses:**
-- T3: Fix `times_per_week` frequency logic
-- T4: Fix `weekly` frequency hardcoded to Monday (requires migration)
-- T5: Fix 2 pre-existing test failures
-- T7: Fix `WeeklyInsight` discriminated union type
+**Addresses features:** Data migration, status field, section field, status-driven completion
+**Avoids pitfalls:** #1 (is_completed contract), #4 (SWR fragmentation), #6 (recurring tasks)
 
-**Avoids:**
-- Pitfall 1 (frequency logic fix breaks stats) by fixing both copies of `shouldTrackOnDate` atomically
-- Pitfall 2 (migration corrupts JSONB) by making `day` optional in TypeScript, using `||` merge
-- Pitfall 4 (tests blocking fixes) by updating all 8 tests simultaneously with production code
+**Verification:** Run ALL existing 1084+ tests. Specifically: `tasks.test.ts` (21 is_completed assertions), `dashboard/route.test.ts`, recurring task scope operations. Create a recurring task after migration and verify instances generate correctly.
 
-**Uses:** Zod schemas from Phase 1 (for `weekly` frequency `day` field validation)
+### Phase 2: Projects & Sections
 
-**Research flag:** Needs migration testing on staging. Otherwise standard.
-
-### Phase 3: Fragility and Code Quality
-
-**Rationale:** These don't cause user-visible bugs but make the system unreliable or harder to debug. Low complexity, high leverage for maintainability.
+**Rationale:** Projects and sections are the organizational layer that gives structure to the tasks page. They must exist before the kanban board because the kanban board is scoped to a project. Building project CRUD and the tasks page redesign first validates the data model without DnD complexity.
 
 **Delivers:**
-- In-memory `statsCache` removed (dead code on serverless)
-- Debug `console.log` statements removed (3 in theme-switcher, 1 in auth callback)
-- Theme-switcher manual DOM workaround removed (after verifying next-themes works correctly)
-- `HabitLogsDB` constructor requires Supabase client (prevents silent browser client fallback)
-- Dashboard errors logged (not silently swallowed)
+- Projects API routes (`/api/projects`, `/api/projects/[id]`)
+- `useProjects()` SWR hook
+- Project CRUD UI (create, edit, archive, delete)
+- Project color presets (8-12 hex colors)
+- Section selector in task form (replaces category toggles)
+- Project selector in task form (optional, filtered by section)
+- Tasks page redesign: Work/Personal section tabs with project cards
+- Standalone tasks section (tasks without project_id)
+- Sidebar navigation: Projects nav item
+- i18n strings for all three locales (en, zh, zh-TW)
 
-**Addresses:**
-- T6: Add error logging to `computeMissedDays` catch block
-- D1: Remove in-memory `statsCache`
-- D2: Remove debug `console.log` statements
-- D3: Fix theme-switcher DOM workaround
-- D6: Make `HabitLogsDB` constructor require Supabase client
+**Addresses features:** Projects as named containers, Work/Personal sections, task form redesign, tasks page redesign, project color presets, active/archived status, standalone tasks
+**Avoids pitfalls:** Building DnD on a shifting data model; mixing layout changes with interaction bugs
 
-**Avoids:** Pitfall 3 (cache removal without cleanup) by grepping all import sites and removing atomically
+### Phase 3: Kanban Board & Drag-and-Drop
 
-**Research flag:** Standard patterns. D3 (theme-switcher) may need minimal reproduction to verify root cause.
-
-### Phase 4: Performance
-
-**Rationale:** Performance fixes depend on correctness fixes being done first (D5 depends on T3+T4). These are optimizations, not bugs. Users are not blocked.
+**Rationale:** The kanban board is the most complex interactive component and depends on all prior work. It needs stable project CRUD, the status field, sort_order, and the reorder API. Building it last means the data model, validation, and caching patterns are proven before adding DnD complexity.
 
 **Delivers:**
-- Dashboard COUNT(*) query for total tasks (not full fetch)
-- Streak calculation caps lookback to `current_streak + buffer` days
+- Install `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`
+- pnpm `peerDependencyRules` for React 19 compatibility
+- `KanbanBoard` component with `DndContext` + `DragOverlay`
+- `KanbanColumn` (4 columns: Backlog, To Do, In Progress, Done)
+- `KanbanCard` (draggable task card with `useSortable`)
+- Cross-column drag with status change
+- Within-column reorder with float-based sort_order
+- Optimistic updates via SWR `mutate()` with rollback
+- `POST /api/tasks/reorder` endpoint
+- Completion reflection dialog on drag-to-Done
+- `next/dynamic` SSR-disabled wrapper with loading skeleton
+- Status dropdown on each card (non-DnD fallback for accessibility/mobile)
 
-**Addresses:**
-- D4: Replace `getUserTasks()` with `COUNT(*)` query in dashboard
-- D5: Optimize streak calculation lookback window
+**Addresses features:** Drag-and-drop between columns, card ordering, completion reflection on drag-to-Done
+**Uses stack:** `@dnd-kit/core` v6, `@dnd-kit/sortable`, SWR optimistic updates
+**Avoids pitfalls:** #2 (hydration mismatch), #3 (optimistic rollback), DnD library incompatibility
 
-**Research flag:** Standard SQL patterns. No additional research needed.
+**Verification:** Test with React Strict Mode. Run `pnpm build && pnpm start` and verify no hydration errors. Simulate network failure during drag -- card must return to original position with error toast. Test keyboard-only navigation (arrow keys between columns).
 
-### Phase 5: Test Coverage
+### Phase 4: Polish & Production Readiness
 
-**Rationale:** Tests validate all fixes above. Writing tests last ensures they cover final corrected behavior, not intermediate states. D10 specifically requires T1 (Zod wiring) to be complete.
+**Rationale:** Final phase for edge cases, accessibility, performance, and UX refinement that should not block the core feature delivery.
 
 **Delivers:**
-- Unit tests for `GET /api/habits/[id]/logs` route
-- Habit count limit enforcement (20 per user)
-- Tests for Zod validation paths in all API routes
+- Keyboard-accessible DnD with custom ARIA announcements in all 3 locales
+- Intention ("Your Why") display on kanban cards
+- Project progress visualization (X of Y tasks done)
+- Touch device optimization (grab handle, visual feedback on drag start)
+- Independent column scrolling (`overflow-y: auto`, max-height)
+- Empty column states
+- Delete project confirmation with orphan task handling
+- Mobile responsive kanban layout
+- Full test coverage for new components
 
-**Addresses:**
-- D8: Add unit tests for `GET /api/habits/[id]/logs`
-- D9: Add habit count limit enforcement
-- D10: Add tests for Zod validation paths
-
-**Research flag:** Standard testing patterns. No additional research needed.
+**Addresses features:** Keyboard DnD, intention display, project progress, touch UX
+**Avoids pitfalls:** #5 (mobile DnD), UX pitfalls (DnD-only status change, no scroll, missing empty states)
 
 ### Phase Ordering Rationale
 
-- **Security first**: T1 (Zod validation) is foundational because it creates the API schemas used in later phases
-- **Correctness second**: Bugs must be fixed before optimizations. Optimizing incorrect logic wastes effort
-- **Dependencies respected**: T4 (weekly frequency) requires migration before code that reads `frequency.day` is deployed. D5 (streak optimization) requires T3+T4 (frequency logic correct) first
-- **Atomic updates**: T3+T4 touch the same function and must be done together. T2+T8 touch the same code (profile auto-creation)
-- **Test coverage last**: D10 requires T1 complete. Tests validate final behavior, not intermediate states
+- **Data model first** because both the list view and kanban view depend on `status`, `section`, `project_id`, and `sort_order`. The migration also exercises the `is_completed`/`status` sync.
+- **Projects & sections second** because the kanban board is scoped to a project. Building project CRUD first validates the data model through normal CRUD operations before adding DnD complexity.
+- **Kanban third** because it is the most complex interaction and builds on everything: stable data model, working project/section structure, proven SWR caching patterns, and validated API routes.
+- **Polish last** because accessibility, touch optimization, and progress visualization should not block core feature delivery.
+- **This ordering avoids the top pitfalls:** Phase 1 addresses `is_completed` sync and recurring task safety before any UI changes. Phase 2 validates the data model without DnD. Phase 3 can focus purely on the drag-and-drop interaction.
 
 ### Research Flags
 
-**Phases likely needing deeper research:**
-- **Phase 2 (Correctness)**: Migration testing on staging required. Needs validation that `frequency || '{"day": 1}'::jsonb` preserves existing fields
+**Phases likely needing deeper research during planning:**
+- **Phase 1 (Database Foundation):** The `is_completed`/`status` bidirectional sync needs careful design. Review all existing `is_completed` query sites before writing the migration. May need `/gsd:research-phase` for Supabase migration best practices with existing data.
+- **Phase 3 (Kanban Board):** Build a 2-column, 3-card proof-of-concept prototype FIRST to validate `@dnd-kit/core` v6 works with React 19 + Next.js 16 + React Strict Mode before committing to the full implementation.
 
-**Phases with standard patterns (skip research-phase):**
-- **Phase 1 (Validation)**: Zod `.safeParse()` + `withAuth()` wrapper are documented patterns
-- **Phase 3 (Code Quality)**: Cache removal, console.log cleanup are trivial
-- **Phase 4 (Performance)**: COUNT(*) and lookback cap are standard SQL/algorithmic patterns
-- **Phase 5 (Testing)**: Unit test patterns are well-established
+**Phases with standard patterns (skip deep research):**
+- **Phase 2 (Projects & Sections):** Standard CRUD with existing patterns. Follows `HabitsDB`/`TasksDB` class pattern exactly. Well-understood REST API + SWR hook pattern.
+- **Phase 4 (Polish):** Accessibility and UX refinements follow established dnd-kit documentation and existing vitest-axe testing patterns.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All recommendations verified against official docs. Zod usage confirmed via Dub.co engineering blog + Zod API docs. Vercel Cache-Control behavior from authoritative Vercel docs |
-| Features | HIGH | All 20 features derived from direct codebase analysis. Prioritization follows industry consensus (Atlassian Technical Debt Guide, SEI/CMU recommendations). Dependencies verified via code inspection |
-| Architecture | HIGH | Current architecture analyzed via direct file inspection. Proposed patterns (`withAuth`, required DI) are Next.js community standards. Supabase client patterns verified against official docs |
-| Pitfalls | HIGH | All 6 critical pitfalls derived from actual code structure (two `shouldTrackOnDate` copies, JSONB schema-less nature, Zod form vs API schemas). Supabase trigger failure pattern confirmed via GitHub issue #37497 |
+| Stack | HIGH | Multiple independent sources (npm, GitHub, tutorials, community projects) converge on @dnd-kit/core v6 as the right choice. React 19 compat fix is documented. |
+| Features | MEDIUM-HIGH | Feature scope is clear based on competitor analysis (Todoist, Trello, Linear). User decisions (4 columns, preset colors, Work/Personal sections) are already locked in. Minor uncertainty on edge cases. |
+| Architecture | HIGH | Extends existing patterns exactly. No new architectural paradigms. DB class, API route, SWR hook, React component -- all follow established conventions. |
+| Pitfalls | HIGH | Codebase-specific analysis identified 7 critical pitfalls with concrete file references and line-level impacts. Prevention strategies are actionable. |
 
 **Overall confidence:** HIGH
 
-All research grounded in actual codebase analysis. External sources used to verify patterns (Zod, next-themes, Vercel caching) match established best practices. No speculative recommendations.
-
 ### Gaps to Address
 
-Minor gaps that need attention during planning:
-
-- **next-themes workaround root cause**: Component has manual DOM class manipulation that may or may not be necessary. Needs minimal reproduction to determine if it's a real next-themes bug or a configuration issue. Low risk — worst case is reverting to the current workaround.
-
-- **Weekly frequency UI for day picker**: Once `day` field is added to `{"type": "weekly"}` frequency, the habit form needs a day-of-week picker. i18n required (all 3 locales). Design not researched — assume standard dropdown with "Monday" through "Sunday".
-
-- **Migration rollback strategy**: If the `frequency || '{"day": 1}'::jsonb` migration fails mid-execution on a large dataset, what is the rollback path? Supabase supports point-in-time recovery but bounded to backup retention. Migration should be idempotent (safe to re-run).
-
-- **Zod validation error format consistency**: Currently each route has different error messages. After wiring Zod, all routes will return `{ error: "Validation failed", details: { field: [...messages] } }`. Frontend may need updates to display structured errors instead of single error string.
+- **DnD proof-of-concept:** The `@dnd-kit/core` v6 + React 19 combination needs a hands-on prototype before full build. While multiple sources say it works, a 30-minute POC eliminates the biggest technical risk.
+- **Float sort_order normalization threshold:** The 0.001 gap threshold for re-normalizing sort_order is a heuristic. At personal app scale (dozens of tasks per column) this is unlikely to matter, but should be monitored.
+- **Mobile touch DnD behavior:** `@dnd-kit` supports `TouchSensor` but behavior with the existing mobile viewport breakpoints needs testing on actual devices, not just responsive browser.
+- **i18n for DnD accessibility announcements:** Screen reader announcements for drag operations need translation into zh and zh-TW. CJK screen readers may handle ARIA live regions differently -- needs validation during Phase 4.
+- **Category field deprecation:** FEATURES.md suggests dropping the old `category` field once sections ship. This needs a clear deprecation plan -- which phase removes it, and how to handle existing data with category values.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct codebase analysis: all files in `lib/db/`, `app/api/`, `lib/validations/`, `lib/habits/`, `lib/cache.ts`, `components/theme-switcher.tsx`, `app/layout.tsx`, `tests/`
-- Existing planning docs: `.planning/codebase/CONCERNS.md`, `.planning/PROJECT.md`, `.planning/codebase/ARCHITECTURE.md`, `.planning/codebase/TESTING.md`
-- [Vercel Cache-Control Headers docs](https://vercel.com/docs/headers/cache-control-headers) — authoritative source on `private` vs `s-maxage`, CDN behavior
-- [Supabase issue #37497](https://github.com/supabase/supabase/issues/37497) — trigger failure blocks signup, misleading error
-- [Supabase discussion #6518](https://github.com/orgs/supabase/discussions/6518) — `on_auth_user_created` trigger can block signups
-- [next-themes GitHub README](https://github.com/pacocoursey/next-themes) — `attribute="class"` handles DOM class toggling automatically
-- [shadcn/ui Dark Mode guide](https://ui.shadcn.com/docs/dark-mode/next) — canonical next-themes + Tailwind setup
-- [Zod API docs: discriminatedUnion](https://zod.dev/api) — performance benefit over `z.union`
+- [@dnd-kit/core on npm](https://www.npmjs.com/package/@dnd-kit/core) -- v6.3.1, package details, peer deps
+- [@dnd-kit/sortable on npm](https://www.npmjs.com/package/@dnd-kit/sortable) -- v10.0.0
+- [dnd-kit official docs](https://dndkit.com/) -- API reference, sortable preset, accessibility
+- [pnpm peerDependencyRules docs](https://pnpm.io/settings) -- allowedVersions configuration
+- [SWR Mutation & Revalidation docs](https://swr.vercel.app/docs/mutation) -- optimistic update pattern
+- BetterR.Me codebase analysis -- `lib/db/tasks.ts`, `lib/db/recurring-tasks.ts`, `components/dashboard/dashboard-content.tsx`, `components/tasks/tasks-page-content.tsx`, `app/api/tasks/route.ts`, and 15+ other files
 
 ### Secondary (MEDIUM confidence)
-- [Dub.co: Using Zod to validate Next.js API Route Handlers](https://dub.co/blog/zod-api-validation) — `.safeParse()` pattern with error formatting (verified against Zod docs)
-- [Next.js: Building APIs with App Router](https://nextjs.org/blog/building-apis-with-nextjs) — `withAuth` pattern recommendation
-- [Vercel: Caching Serverless Function Responses](https://vercel.com/docs/functions/serverless-functions/edge-caching) — `stale-while-revalidate` directive
-- [Vercel Fluid Compute blog](https://vercel.com/blog/scale-to-one-how-fluid-solves-cold-starts) — in-memory state preservation on warm instances
-- [Atlassian Technical Debt Guide](https://www.atlassian.com/agile/software-development/technical-debt) — remediation prioritization (security → correctness → performance → tests)
-- [SEI/CMU Technical Debt Recommendations](https://www.sei.cmu.edu/blog/5-recommendations-to-help-your-organization-manage-technical-debt/) — technical debt management strategies
+- [Georgegriff/react-dnd-kit-tailwind-shadcn-ui](https://github.com/Georgegriff/react-dnd-kit-tailwind-shadcn-ui) -- Reference kanban with dnd-kit + shadcn/ui
+- [marmelab: Building a Kanban board with shadcn (Jan 2026)](https://marmelab.com/blog/2026/01/15/building-a-kanban-board-with-shadcn.html) -- Optimistic update patterns
+- [Todoist Board Layout](https://www.todoist.com/help/articles/use-the-board-layout-in-todoist-AiAVsyEI) -- Competitor feature analysis
+- [Linear Board Layout docs](https://linear.app/docs/board-layout) -- Competitor architecture analysis
+- [Top 5 DnD Libraries for React 2026 (Puck)](https://puckeditor.com/blog/top-5-drag-and-drop-libraries-for-react) -- Ecosystem comparison
+- [Basedash: Implementing Re-Ordering at the Database Level](https://www.basedash.com/blog/implementing-re-ordering-at-the-database-level-our-experience) -- Float sort_order pattern
 
 ### Tertiary (LOW confidence)
-- [Zod issue #2106](https://github.com/colinhacks/zod/issues/2106) — `z.switch` proposed but not yet shipped (informational only, does not affect recommendations)
-- [GitHub Discussion: Vercel Serverless Cache Behavior](https://github.com/vercel/next.js/discussions/87842) — in-memory cache limitations (confirmed via Vercel docs)
+- [@dnd-kit/react on npm](https://www.npmjs.com/package/@dnd-kit/react) -- v0.3.1, pre-1.0, evaluated but NOT recommended
+- [GitHub Discussion #1842: @dnd-kit/react vs @dnd-kit/core roadmap](https://github.com/clauderic/dnd-kit/discussions/1842) -- No maintainer response on stability timeline
 
 ---
-*Research completed: 2026-02-15*
+*Research completed: 2026-02-18*
 *Ready for roadmap: yes*

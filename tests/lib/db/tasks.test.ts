@@ -16,6 +16,12 @@ describe('TasksDB', () => {
     due_date: '2026-01-31',
     due_time: '14:00:00',
     completed_at: null,
+    status: 'todo',
+    section: 'personal',
+    sort_order: 65536.0,
+    recurring_task_id: null,
+    is_exception: false,
+    original_date: null,
     created_at: '2026-01-30T10:00:00Z',
     updated_at: '2026-01-30T10:00:00Z',
   };
@@ -196,44 +202,63 @@ describe('TasksDB', () => {
   });
 
   describe('toggleTaskCompletion', () => {
-    it('should mark incomplete task as completed', async () => {
-      // First fetch returns incomplete task
-      mockSupabaseClient.setMockResponse(mockTask);
-
-      // Mock update response
+    it('should mark incomplete task as completed with status=done', async () => {
+      // Mock single() to return incomplete task first (getTask), then completed task (updateTask)
       const completedTask = {
         ...mockTask,
         is_completed: true,
+        status: 'done' as const,
         completed_at: '2026-01-30T15:00:00Z',
       };
-      mockSupabaseClient.setMockResponse(completedTask);
+      mockSupabaseClient.single
+        .mockResolvedValueOnce({ data: mockTask, error: null })
+        .mockResolvedValueOnce({ data: completedTask, error: null });
 
       const result = await tasksDB.toggleTaskCompletion('task-123', mockUserId);
 
       expect(result.is_completed).toBe(true);
       expect(result.completed_at).toBeTruthy();
+      // Verify syncTaskUpdate was applied: update includes status
+      expect(mockSupabaseClient.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          is_completed: true,
+          status: 'done',
+          completed_at: expect.any(String),
+        })
+      );
     });
 
-    it('should mark completed task as incomplete', async () => {
+    it('should mark completed task as incomplete with status=todo', async () => {
       const completedTask = {
         ...mockTask,
         is_completed: true,
+        status: 'done' as const,
         completed_at: '2026-01-30T15:00:00Z',
       };
-
-      mockSupabaseClient.setMockResponse(completedTask);
-
       const incompleteTask = {
         ...mockTask,
         is_completed: false,
+        status: 'todo' as const,
         completed_at: null,
       };
-      mockSupabaseClient.setMockResponse(incompleteTask);
+
+      // Mock single() to return completed task first (getTask), then incomplete task (updateTask)
+      mockSupabaseClient.single
+        .mockResolvedValueOnce({ data: completedTask, error: null })
+        .mockResolvedValueOnce({ data: incompleteTask, error: null });
 
       const result = await tasksDB.toggleTaskCompletion('task-123', mockUserId);
 
       expect(result.is_completed).toBe(false);
       expect(result.completed_at).toBeNull();
+      // Verify syncTaskUpdate was applied: update includes status
+      expect(mockSupabaseClient.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          is_completed: false,
+          status: 'todo',
+          completed_at: null,
+        })
+      );
     });
   });
 
@@ -280,6 +305,7 @@ describe('TasksDB', () => {
         ...mockTask,
         id: 'task-completed',
         is_completed: true,
+        status: 'done',
         completed_at: '2026-01-31T12:00:00Z',
       };
       const incompleteTask: Task = {

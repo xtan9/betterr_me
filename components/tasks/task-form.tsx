@@ -4,12 +4,14 @@ import { useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import { Briefcase, User, ShoppingCart, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Toggle } from "@/components/ui/toggle";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Form,
   FormControl,
@@ -26,6 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RecurrencePicker } from "@/components/tasks/recurrence-picker";
+import { useProjects } from "@/lib/hooks/use-projects";
+import { getProjectColor } from "@/lib/projects/colors";
 import { taskFormSchema, type TaskFormValues } from "@/lib/validations/task";
 import type { Task, TaskCategory, RecurrenceRule, EndType } from "@/lib/db/types";
 
@@ -94,8 +98,11 @@ export function TaskForm({
   initialRecurrence,
 }: TaskFormProps) {
   const t = useTranslations("tasks.form");
+  const tTasks = useTranslations("tasks");
   const categoryT = useTranslations("tasks.categories");
   const priorityT = useTranslations("tasks.priorities");
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
@@ -107,8 +114,16 @@ export function TaskForm({
       category: initialData?.category ?? null,
       due_date: initialData?.due_date ?? null,
       due_time: initialData?.due_time?.slice(0, 5) ?? null,
+      section: initialData?.section ?? "personal",
+      project_id: initialData?.project_id ?? null,
     },
   });
+
+  const watchedSection = form.watch("section") ?? "personal";
+  const { projects } = useProjects({ status: "active" });
+  const filteredProjects = projects.filter(
+    (p) => p.section === watchedSection
+  );
 
   const [recurrence, setRecurrence] = useState<RecurrenceConfig>(
     initialRecurrence ?? {
@@ -172,6 +187,91 @@ export function TaskForm({
                     {...field}
                   />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="section"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{tTasks("sectionLabel")}</FormLabel>
+                <FormControl>
+                  <ToggleGroup
+                    type="single"
+                    variant="outline"
+                    value={field.value ?? "personal"}
+                    onValueChange={(value) => {
+                      if (value) {
+                        field.onChange(value);
+                        // Silently clear project when section changes
+                        form.setValue("project_id", null);
+                      }
+                    }}
+                    className="w-full"
+                  >
+                    <ToggleGroupItem
+                      value="personal"
+                      className="flex-1 gap-1.5"
+                    >
+                      <User className="size-4" />
+                      {categoryT("personal")}
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                      value="work"
+                      className="flex-1 gap-1.5"
+                    >
+                      <Briefcase className="size-4" />
+                      {categoryT("work")}
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="project_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{tTasks("projectLabel")}</FormLabel>
+                <Select
+                  value={field.value ?? "none"}
+                  onValueChange={(val) =>
+                    field.onChange(val === "none" ? null : val)
+                  }
+                  disabled={isLoading}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={tTasks("projectPlaceholder")} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      {tTasks("noProject")}
+                    </SelectItem>
+                    {filteredProjects.map((project) => {
+                      const color = getProjectColor(project.color);
+                      const bgColor = isDark ? color.hslDark : color.hsl;
+                      return (
+                        <SelectItem key={project.id} value={project.id}>
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="inline-block h-3 w-3 rounded-full shrink-0"
+                              style={{ backgroundColor: bgColor }}
+                            />
+                            {project.name}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}

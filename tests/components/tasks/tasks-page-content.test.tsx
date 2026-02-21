@@ -13,6 +13,22 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+// Mock next-themes
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ resolvedTheme: "light", theme: "light" }),
+}));
+
+// Mock useProjects hook
+const mockProjectsMutate = vi.fn();
+vi.mock("@/lib/hooks/use-projects", () => ({
+  useProjects: () => ({
+    projects: [],
+    isLoading: false,
+    error: undefined,
+    mutate: mockProjectsMutate,
+  }),
+}));
+
 // Mock SWR
 const mockUseSWR = vi.fn();
 vi.mock("swr", () => ({
@@ -36,6 +52,7 @@ const messages = {
     page: {
       title: "My Tasks",
       createButton: "Create Task",
+      createProject: "Create Project",
     },
     paused: {
       title: "{count} paused recurring tasks",
@@ -52,6 +69,10 @@ const messages = {
         pending: "Pending",
         completed: "Completed",
       },
+    },
+    sections: {
+      personal: "Personal",
+      work: "Work",
     },
     empty: {
       noTasks: {
@@ -140,6 +161,29 @@ const messages = {
       },
     },
   },
+  projects: {
+    createTitle: "Create Project",
+    editTitle: "Edit Project",
+    menuEdit: "Edit",
+    menuArchive: "Archive",
+    menuDelete: "Delete",
+    archiveSuccess: "Project archived",
+    deleteSuccess: "Project deleted",
+    createSuccess: "Project created",
+    updateSuccess: "Project updated",
+    deleteTitle: "Delete Project",
+    deleteDescription: "Are you sure?",
+    confirmDelete: "Delete Project",
+    cancel: "Cancel",
+    done: "done",
+    more: "more",
+    openBoard: "Open Board",
+    noTasks: "No tasks yet",
+    sections: {
+      personal: "Personal",
+      work: "Work",
+    },
+  },
 };
 
 function renderWithProviders(component: React.ReactElement) {
@@ -161,7 +205,16 @@ const mockTasks = [
     category: "shopping",
     due_date: "2026-02-10",
     due_time: null,
+    intention: null,
+    completion_difficulty: null,
     completed_at: null,
+    status: "todo",
+    section: "personal",
+    sort_order: 1,
+    project_id: null,
+    recurring_task_id: null,
+    is_exception: false,
+    original_date: null,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
   },
@@ -175,7 +228,16 @@ const mockTasks = [
     category: "work",
     due_date: "2026-02-09",
     due_time: "17:00:00",
+    intention: null,
+    completion_difficulty: null,
     completed_at: "2026-02-09T15:00:00Z",
+    status: "done",
+    section: "work",
+    sort_order: 2,
+    project_id: null,
+    recurring_task_id: null,
+    is_exception: false,
+    original_date: null,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
   },
@@ -247,6 +309,7 @@ describe("TasksPageContent", () => {
     renderWithProviders(<TasksPageContent />);
 
     expect(screen.getByText("My Tasks")).toBeInTheDocument();
+    // "Buy groceries" is a pending personal task, should appear in the Personal section
     expect(screen.getByText("Buy groceries")).toBeInTheDocument();
   });
 
@@ -625,5 +688,35 @@ describe("TasksPageContent", () => {
       screen.getByText("Failed to load paused tasks."),
     ).toBeInTheDocument();
     expect(screen.getByText("Try again")).toBeInTheDocument();
+  });
+
+  it("renders section headers for Personal and Work", () => {
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: mockTasks, error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    // Section headers should be present (from tasks.sections namespace)
+    const personalHeadings = screen.getAllByText("Personal");
+    const workHeadings = screen.getAllByText("Work");
+    expect(personalHeadings.length).toBeGreaterThanOrEqual(1);
+    expect(workHeadings.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows Create Project button", () => {
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: mockTasks, error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    expect(screen.getByText("Create Project")).toBeInTheDocument();
   });
 });

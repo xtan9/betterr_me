@@ -247,6 +247,125 @@ describe("PATCH /api/tasks/[id]", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it('should sync status=done to is_completed=true and completed_at', async () => {
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+      id: 'task-1',
+      status: 'done',
+      is_completed: true,
+    } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'done' }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123',
+      expect.objectContaining({
+        status: 'done',
+        is_completed: true,
+        completed_at: expect.any(String),
+      })
+    );
+  });
+
+  it('should sync status=todo to is_completed=false and completed_at=null', async () => {
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+      id: 'task-1',
+      status: 'todo',
+      is_completed: false,
+    } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'todo' }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123',
+      expect.objectContaining({
+        status: 'todo',
+        is_completed: false,
+        completed_at: null,
+      })
+    );
+  });
+
+  it('should update project_id when provided', async () => {
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+      id: 'task-1',
+      project_id: '550e8400-e29b-41d4-a716-446655440000',
+    } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ project_id: '550e8400-e29b-41d4-a716-446655440000' }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123',
+      expect.objectContaining({ project_id: '550e8400-e29b-41d4-a716-446655440000' })
+    );
+  });
+
+  it('should clear project_id when set to null', async () => {
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+      id: 'task-1',
+      project_id: null,
+    } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ project_id: null }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123',
+      expect.objectContaining({ project_id: null })
+    );
+  });
+
+  it('should accept section and sort_order updates', async () => {
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
+      id: 'task-1',
+      section: 'work',
+      sort_order: 32768.0,
+    } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ section: 'work', sort_order: 32768.0 }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith('task-1', 'user-123',
+      expect.objectContaining({
+        section: 'work',
+        sort_order: 32768.0,
+      })
+    );
+  });
 });
 
 describe("DELETE /api/tasks/[id]", () => {

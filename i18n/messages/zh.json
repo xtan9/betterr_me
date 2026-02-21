@@ -479,6 +479,10 @@
       "intentionPlaceholder": "这件事对你来说为什么重要？",
       "repeatLabel": "重复"
     },
+    "sectionLabel": "分区",
+    "projectLabel": "项目",
+    "projectPlaceholder": "选择项目",
+    "noProject": "无项目",
     "categories": {
       "work": "工作",
       "personal": "个人",
@@ -529,7 +533,13 @@
     },
     "page": {
       "title": "我的任务",
-      "createButton": "创建任务"
+      "createButton": "创建任务",
+      "createProject": "创建项目",
+      "viewArchived": "已归档"
+    },
+    "sections": {
+      "personal": "个人",
+      "work": "工作"
     },
     "list": {
       "searchPlaceholder": "搜索任务...",
@@ -708,6 +718,93 @@
     },
     "toast": {
       "saveError": "保存设置失败"
+    }
+  },
+  "projects": {
+    "createTitle": "创建项目",
+    "editTitle": "编辑项目",
+    "nameLabel": "项目名称",
+    "namePlaceholder": "输入项目名称",
+    "sectionLabel": "分区",
+    "colorLabel": "颜色",
+    "createButton": "创建项目",
+    "saveButton": "保存更改",
+    "deleteTitle": "删除项目",
+    "deleteDescription": "确定要删除「{name}」吗？项目中的任务将变为同一分区中的独立任务。",
+    "confirmDelete": "删除项目",
+    "cancel": "取消",
+    "archiveSuccess": "项目已归档",
+    "deleteSuccess": "项目已删除",
+    "createSuccess": "项目已创建",
+    "updateSuccess": "项目已更新",
+    "done": "已完成",
+    "more": "更多",
+    "openBoard": "打开看板",
+    "noTasks": "暂无任务",
+    "menuEdit": "编辑",
+    "menuArchive": "归档",
+    "menuDelete": "删除",
+    "sections": {
+      "personal": "个人",
+      "work": "工作"
+    },
+    "colors": {
+      "blue": "蓝色",
+      "red": "红色",
+      "green": "绿色",
+      "orange": "橙色",
+      "purple": "紫色",
+      "pink": "粉色",
+      "teal": "青色",
+      "yellow": "黄色",
+      "indigo": "靛蓝",
+      "cyan": "青蓝",
+      "slate": "石板灰",
+      "emerald": "翡翠绿"
+    },
+    "archived": {
+      "title": "已归档项目",
+      "empty": "没有已归档的项目",
+      "restore": "恢复",
+      "restoreSuccess": "项目已恢复",
+      "backToTasks": "返回任务"
+    }
+  },
+  "kanban": {
+    "backToTasks": "返回任务",
+    "taskCount": "{count, plural, =0 {没有任务} other {# 个任务}}",
+    "columns": {
+      "backlog": "待办池",
+      "todo": "待办",
+      "in_progress": "进行中",
+      "done": "已完成"
+    },
+    "emptyColumn": "此列暂无任务",
+    "quickAdd": {
+      "placeholder": "添加任务..."
+    },
+    "dragError": "更新任务状态失败",
+    "createError": "创建任务失败",
+    "detail": {
+      "detailsTab": "详情",
+      "activityTab": "动态",
+      "status": "状态",
+      "priority": "优先级",
+      "section": "分区",
+      "project": "项目",
+      "dueDate": "截止日期",
+      "description": "描述",
+      "noDescription": "暂无描述",
+      "noDueDate": "暂无截止日期",
+      "commentsPlaceholder": "评论和更新功能即将上线",
+      "activityPlaceholder": "活动日志功能即将上线",
+      "editTask": "编辑任务"
+    },
+    "priority": {
+      "high": "高",
+      "medium": "中",
+      "low": "低",
+      "none": "无"
     }
   }
 }

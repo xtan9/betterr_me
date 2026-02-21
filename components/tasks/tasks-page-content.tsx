@@ -1,21 +1,41 @@
 "use client";
 
+import { useState, useMemo, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import useSWR from "swr";
-import { Pause, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
+import {
+  Archive,
+  FolderPlus,
+  Pause,
+  Play,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  PageHeader,
-  PageHeaderSkeleton,
-} from "@/components/layouts/page-header";
-import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
-import { TaskList } from "./task-list";
-import type { Task, RecurringTask } from "@/lib/db/types";
+import { useDebounce } from "@/lib/hooks/use-debounce";
+import { useProjects } from "@/lib/hooks/use-projects";
+import { TaskCard } from "./task-card";
+import { TaskEmptyState } from "./task-empty-state";
+import { ProjectCard } from "@/components/projects/project-card";
+import { ProjectModal } from "@/components/projects/project-modal";
+import { ProjectDeleteDialog } from "@/components/projects/project-delete-dialog";
+import type { Task, RecurringTask, Project, TaskSection } from "@/lib/db/types";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -31,19 +51,31 @@ const recurringFetcher = async (url: string) => {
   return data.recurring_tasks;
 };
 
+type StatusTab = "pending" | "completed";
+
 export function TasksPageContent() {
   const t = useTranslations("tasks");
+  const tProjects = useTranslations("projects");
   const router = useRouter();
 
+  // Task SWR
   const { data, error, isLoading, mutate } = useSWR<Task[]>(
     "/api/tasks",
     fetcher,
     {
       revalidateOnFocus: true,
       keepPreviousData: true,
-    },
+    }
   );
 
+  // Projects SWR
+  const {
+    projects,
+    isLoading: projectsLoading,
+    mutate: projectsMutate,
+  } = useProjects();
+
+  // Paused recurring tasks SWR
   const {
     data: pausedTemplates,
     error: pausedError,
@@ -51,21 +83,62 @@ export function TasksPageContent() {
   } = useSWR<RecurringTask[]>(
     "/api/recurring-tasks?status=paused",
     recurringFetcher,
-    { revalidateOnFocus: true },
+    { revalidateOnFocus: true }
   );
+
+  // Tab / search state (lifted from TaskList)
+  const [activeTab, setActiveTab] = useState<StatusTab>("pending");
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Project modal state
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | undefined>(
+    undefined
+  );
+
+  // Project delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+
+  const tasks = useMemo(() => data ?? [], [data]);
+
+  const counts = useMemo(() => {
+    return {
+      pending: tasks.filter((t) => !t.is_completed).length,
+      completed: tasks.filter((t) => t.is_completed).length,
+    };
+  }, [tasks]);
+
+  // Filter tasks by tab and search
+  const filteredTasks = useMemo(() => {
+    let filtered = tasks.filter((t) =>
+      activeTab === "pending" ? !t.is_completed : t.is_completed
+    );
+
+    if (debouncedSearch) {
+      const query = debouncedSearch.toLowerCase();
+      filtered = filtered.filter((t) =>
+        t.title.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [tasks, activeTab, debouncedSearch]);
+
+  const handleTabChange = useCallback((value: string) => {
+    setActiveTab(value as StatusTab);
+    setSearchQuery("");
+  }, []);
 
   const handleToggleTask = async (taskId: string) => {
     try {
-      const response = await fetch(`/api/tasks/${taskId}/toggle`, {
+      await fetch(`/api/tasks/${taskId}/toggle`, {
         method: "POST",
       });
-      if (!response.ok)
-        throw new Error(`Failed to toggle task: ${response.status}`);
       mutate();
-      revalidateSidebarCounts();
     } catch (err) {
       console.error("Failed to toggle task:", err);
-      toast.error(t("error.toggleTaskFailed"));
     }
   };
 
@@ -77,16 +150,61 @@ export function TasksPageContent() {
     router.push("/tasks/new");
   };
 
+  // Project handlers
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project);
+    setProjectModalOpen(true);
+  };
+
+  const handleArchiveProject = async (projectId: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "archived" }),
+      });
+      if (!res.ok) throw new Error("Failed to archive project");
+      toast.success(tProjects("archiveSuccess"));
+      projectsMutate();
+      mutate(); // tasks may have changed sections
+    } catch (err) {
+      console.error("Failed to archive project:", err);
+      toast.error("Failed to archive project");
+    }
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    const project = projects.find((p) => p.id === projectId);
+    if (project) {
+      setDeletingProject(project);
+      setDeleteDialogOpen(true);
+    }
+  };
+
+  const handleProjectSuccess = () => {
+    projectsMutate();
+  };
+
+  const handleDeleteProjectSuccess = () => {
+    projectsMutate();
+    mutate(); // tasks project_id may have been nullified
+  };
+
+  const handleCreateProject = () => {
+    setEditingProject(undefined);
+    setProjectModalOpen(true);
+  };
+
+  // Recurring tasks handlers
   const handleResume = async (templateId: string) => {
     try {
       const res = await fetch(
         `/api/recurring-tasks/${templateId}?action=resume`,
-        { method: "PATCH" },
+        { method: "PATCH" }
       );
       if (!res.ok) throw new Error("Failed");
       mutatePaused();
-      mutate(); // refresh tasks list — resumed template may generate new instances
-      revalidateSidebarCounts();
+      mutate();
       toast.success(t("paused.resumeSuccess"));
     } catch (err) {
       console.error("Failed to resume recurring task:", templateId, err);
@@ -108,7 +226,7 @@ export function TasksPageContent() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || projectsLoading) {
     return <TasksPageSkeleton />;
   }
 
@@ -131,20 +249,84 @@ export function TasksPageContent() {
       <PageHeader
         title={t("page.title")}
         actions={
-          <Button onClick={handleCreateTask}>
-            <Plus className="size-4 mr-2" />
-            {t("page.createButton")}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/projects/archived">
+                <Archive className="size-4 mr-2" />
+                {t("page.viewArchived")}
+              </Link>
+            </Button>
+            <Button variant="outline" onClick={handleCreateProject}>
+              <FolderPlus className="size-4 mr-2" />
+              {t("page.createProject")}
+            </Button>
+            <Button onClick={handleCreateTask}>
+              <Plus className="size-4 mr-2" />
+              {t("page.createButton")}
+            </Button>
+          </div>
         }
       />
 
-      {/* Task List */}
-      <TaskList
-        tasks={data || []}
-        onToggle={handleToggleTask}
-        onTaskClick={handleTaskClick}
-        onCreateTask={handleCreateTask}
-      />
+      {/* Tabs + Search bar */}
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <TabsList>
+            <TabsTrigger value="pending">
+              {t("list.tabs.pending")} ({counts.pending})
+            </TabsTrigger>
+            <TabsTrigger value="completed">
+              {t("list.tabs.completed")} ({counts.completed})
+            </TabsTrigger>
+          </TabsList>
+
+          <div className="relative">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              placeholder={t("list.searchPlaceholder")}
+              aria-label={t("list.searchPlaceholder")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 w-full sm:w-64"
+            />
+          </div>
+        </div>
+
+        <TabsContent value={activeTab} className="mt-6">
+          {/* Section-based layout */}
+          <div className="space-y-8">
+            <SectionBlock
+              section="personal"
+              tasks={filteredTasks}
+              allTasks={tasks}
+              projects={projects}
+              activeTab={activeTab}
+              onToggle={handleToggleTask}
+              onTaskClick={handleTaskClick}
+              onCreateTask={handleCreateTask}
+              onEditProject={handleEditProject}
+              onArchiveProject={handleArchiveProject}
+              onDeleteProject={handleDeleteProject}
+            />
+            <SectionBlock
+              section="work"
+              tasks={filteredTasks}
+              allTasks={tasks}
+              projects={projects}
+              activeTab={activeTab}
+              onToggle={handleToggleTask}
+              onTaskClick={handleTaskClick}
+              onCreateTask={handleCreateTask}
+              onEditProject={handleEditProject}
+              onArchiveProject={handleArchiveProject}
+              onDeleteProject={handleDeleteProject}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Paused recurring tasks load error */}
       {pausedError && (
@@ -206,9 +388,126 @@ export function TasksPageContent() {
           </div>
         </div>
       )}
+
+      {/* Project Modal */}
+      <ProjectModal
+        open={projectModalOpen}
+        onOpenChange={setProjectModalOpen}
+        project={editingProject}
+        onSuccess={handleProjectSuccess}
+      />
+
+      {/* Project Delete Dialog */}
+      {deletingProject && (
+        <ProjectDeleteDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          projectName={deletingProject.name}
+          projectId={deletingProject.id}
+          onSuccess={handleDeleteProjectSuccess}
+        />
+      )}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// SectionBlock — renders a single section (Personal or Work)
+// ---------------------------------------------------------------------------
+
+interface SectionBlockProps {
+  section: TaskSection;
+  tasks: Task[]; // already filtered by tab + search
+  allTasks: Task[]; // unfiltered tasks (for project progress calculations)
+  projects: Project[];
+  activeTab: StatusTab;
+  onToggle: (taskId: string) => Promise<void>;
+  onTaskClick: (taskId: string) => void;
+  onCreateTask: () => void;
+  onEditProject: (project: Project) => void;
+  onArchiveProject: (projectId: string) => void;
+  onDeleteProject: (projectId: string) => void;
+}
+
+function SectionBlock({
+  section,
+  tasks,
+  allTasks,
+  projects,
+  activeTab,
+  onToggle,
+  onTaskClick,
+  onCreateTask,
+  onEditProject,
+  onArchiveProject,
+  onDeleteProject,
+}: SectionBlockProps) {
+  const t = useTranslations("tasks");
+
+  // Filter tasks for this section
+  const sectionTasks = tasks.filter((t) => t.section === section);
+  const standaloneTasks = sectionTasks.filter((t) => !t.project_id);
+  const sectionProjects = projects.filter((p) => p.section === section);
+
+  // All tasks in this section (unfiltered — for project progress)
+  const allSectionTasks = allTasks.filter((t) => t.section === section);
+
+  const isEmpty =
+    standaloneTasks.length === 0 && sectionProjects.length === 0;
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold tracking-tight">
+        {t(`sections.${section}`)}
+      </h2>
+
+      {isEmpty ? (
+        <TaskEmptyState variant="no_tasks" onCreateTask={onCreateTask} />
+      ) : (
+        <div className="space-y-4">
+          {/* Standalone tasks first */}
+          {standaloneTasks.length > 0 && (
+            <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
+              {standaloneTasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onToggle={() => onToggle(task.id)}
+                  onClick={() => onTaskClick(task.id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Project cards below (only in pending tab) */}
+          {activeTab === "pending" && sectionProjects.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {sectionProjects.map((project) => {
+                const projectTasks = allSectionTasks.filter(
+                  (t) => t.project_id === project.id
+                );
+                return (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    tasks={projectTasks}
+                    onEdit={onEditProject}
+                    onArchive={onArchiveProject}
+                    onDelete={onDeleteProject}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton
+// ---------------------------------------------------------------------------
 
 function TasksPageSkeleton() {
   return (
