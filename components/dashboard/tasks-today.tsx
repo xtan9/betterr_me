@@ -250,11 +250,12 @@ export function TasksToday({
     return b.priority - a.priority;
   });
 
-  const completedCount = tasks.filter((t) => t.is_completed).length;
-  const totalCount = tasks.length;
-  const allComplete = totalCount > 0 && completedCount === totalCount;
+  const completedCount = sortedTasks.filter((t) => t.is_completed).length;
+  const totalCount = sortedTasks.length;
+  // "All complete" checks all tasks (including hidden ones completed on prior days)
+  const allComplete = tasks.length > 0 && tasks.every((t) => t.is_completed);
   // For Coming Up section: treat "no today tasks" the same as "all complete"
-  const todayClear = totalCount === 0 || allComplete;
+  const todayClear = tasks.length === 0 || allComplete;
 
   // Show up to 3 tomorrow tasks; auto-expand to full opacity when all today tasks complete
   const maxTomorrowPreview = 3;

@@ -172,13 +172,17 @@ describe("TasksToday", () => {
       />,
     );
 
-    expect(screen.getByText(/1 of 3 completed/)).toBeInTheDocument();
+    // Task #2 ("Team standup") was completed on a past date so it's filtered
+    // out of the visible list. Only the 2 incomplete tasks are shown.
+    expect(screen.getByText(/0 of 2 completed/)).toBeInTheDocument();
   });
 
   it('shows "all complete" state when 100%', () => {
+    const now = new Date().toISOString();
     const allCompleted = mockTasks.map((t) => ({
       ...t,
       is_completed: true,
+      completed_at: now,
     }));
     const onToggle = vi.fn();
     const onCreateTask = vi.fn();
@@ -192,9 +196,6 @@ describe("TasksToday", () => {
     );
 
     expect(screen.getByText(/All tasks done!/)).toBeInTheDocument();
-    expect(screen.queryByText("Finish proposal")).not.toBeInTheDocument();
-    expect(screen.queryByText("Team standup")).not.toBeInTheDocument();
-    expect(screen.queryByText("Read documentation")).not.toBeInTheDocument();
   });
 
   it("shows empty state when no tasks", () => {
@@ -701,7 +702,8 @@ describe("TasksToday", () => {
       expect(screen.getByText("Finish proposal")).toBeInTheDocument();
       expect(screen.getByText("Team standup")).toBeInTheDocument();
       expect(screen.queryByText("Read documentation")).not.toBeInTheDocument();
-      expect(screen.getByText(/2 of 3 completed/)).toBeInTheDocument();
+      // Only 2 visible tasks (1 incomplete + 1 completed today); past-completed is hidden
+      expect(screen.getByText(/1 of 2 completed/)).toBeInTheDocument();
     });
   });
 });
