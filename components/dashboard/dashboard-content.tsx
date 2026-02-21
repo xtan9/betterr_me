@@ -74,8 +74,12 @@ export function DashboardContent({
 
   const [dismissedAbsenceIds, setDismissedAbsenceIds] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
-    const stored = localStorage.getItem(`absence-dismissed-${today}`);
-    return stored ? new Set(JSON.parse(stored)) : new Set();
+    try {
+      const stored = localStorage.getItem(`absence-dismissed-${today}`);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
   });
 
   const handleDismissAbsence = useCallback((habitId: string) => {
