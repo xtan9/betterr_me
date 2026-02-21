@@ -10,6 +10,7 @@
       "tasks": "任務",
       "journal": "日記",
       "workouts": "訓練",
+      "money": "財務",
       "learnMore": "了解更多",
       "profile": "個人資料"
     },
@@ -1182,5 +1183,23 @@
     "addExerciseError": "新增動作失敗",
     "updateExerciseError": "更新動作失敗",
     "removeExerciseError": "移除動作失敗"
+  },
+  "money": {
+    "nav": {
+      "money": "財務"
+    },
+    "page": {
+      "title": "你的財務全景",
+      "subtitle": "平靜地查看你的財務狀況"
+    },
+    "emptyState": {
+      "heading": "你的平靜財務畫面從這裡開始",
+      "description": "連接你的銀行帳戶，在一個安靜的地方查看完整的財務概覽。",
+      "comingSoon": "銀行連接即將推出",
+      "comingSoonDescription": "我們正在構建一種無縫連接帳戶的方式。敬請期待。"
+    },
+    "format": {
+      "currency": "USD"
+    }
   }
 }

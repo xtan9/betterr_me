@@ -10,6 +10,7 @@
       "tasks": "Tasks",
       "journal": "Journal",
       "workouts": "Workouts",
+      "money": "Money",
       "learnMore": "Learn More",
       "profile": "Profile"
     },
@@ -1182,5 +1183,23 @@
     "addExerciseError": "Failed to add exercise",
     "updateExerciseError": "Failed to update exercise",
     "removeExerciseError": "Failed to remove exercise"
+  },
+  "money": {
+    "nav": {
+      "money": "Money"
+    },
+    "page": {
+      "title": "Your Financial Picture",
+      "subtitle": "A calm view of your finances"
+    },
+    "emptyState": {
+      "heading": "Your calm financial picture starts here",
+      "description": "Connect your bank accounts to see your complete financial overview in one peaceful place.",
+      "comingSoon": "Bank connection coming soon",
+      "comingSoonDescription": "We're building a seamless way to connect your accounts. Stay tuned."
+    },
+    "format": {
+      "currency": "USD"
+    }
   }
 }
