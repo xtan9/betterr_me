@@ -268,7 +268,7 @@ export function TasksToday({
     <Card className="flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <Link href="/tasks" className="group flex items-center gap-1">
-          <h2 className="text-lg font-semibold">{t("title")}</h2>
+          <h2 className="font-display text-lg font-semibold">{t("title")}</h2>
           <ChevronRight className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150 motion-reduce:transition-none" />
         </Link>
         <Button

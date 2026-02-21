@@ -212,12 +212,33 @@ describe("HabitChecklist", () => {
     );
 
     // Verify habits render in sorted order: incomplete first, completed last
-    const allText = document.body.textContent ?? "";
-    const exerciseIdx = allText.indexOf("Daily Exercise");
-    const readIdx = allText.indexOf("Read 30 min");
-    const meditationIdx = allText.indexOf("Morning Meditation");
-    expect(exerciseIdx).toBeLessThan(readIdx);
-    expect(readIdx).toBeLessThan(meditationIdx);
+    const habitNames = screen
+      .getAllByRole("button")
+      .map((el) => el.textContent)
+      .filter((text) =>
+        ["Daily Exercise", "Read 30 min", "Morning Meditation"].includes(
+          text ?? "",
+        ),
+      );
+    expect(habitNames).toEqual([
+      "Daily Exercise",
+      "Read 30 min",
+      "Morning Meditation",
+    ]);
+  });
+
+  it("card title links to /habits", () => {
+    renderWithIntl(
+      <HabitChecklist
+        habits={mockHabits}
+        onToggle={vi.fn()}
+        onCreateHabit={vi.fn()}
+      />,
+    );
+
+    const titleLink = screen.getByText("Today's Habits").closest("a");
+    expect(titleLink).toBeInTheDocument();
+    expect(titleLink).toHaveAttribute("href", "/habits");
   });
 
   it("disables checkboxes when toggling", () => {

@@ -81,7 +81,6 @@ const messages = {
       comingUp: "Coming Up Tomorrow",
       headStart: "Get a Head Start",
       moreTomorrow: "+{count} more tomorrow",
-      viewAll: "View all tasks",
     },
     motivation: {
       firstDay: "Welcome! Your journey starts today.",
