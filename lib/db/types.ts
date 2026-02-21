@@ -379,8 +379,7 @@ export interface DashboardData {
 
 // =============================================================================
 // JOURNAL ENTRIES
-// =============================================================================
-
+// ======================================================================
 export type MoodRating = 1 | 2 | 3 | 4 | 5;
 
 export interface JournalEntry {
@@ -473,6 +472,13 @@ export interface Exercise {
   equipment: Equipment;
   exercise_type: ExerciseType;
   is_custom: boolean;
+=======
+// HOUSEHOLDS
+// =============================================================================
+
+export interface Household {
+  id: string;
+  name: string;
   created_at: string;
   updated_at: string;
 }
@@ -496,8 +502,7 @@ export interface ExerciseFilters {
   search?: string;
 }
 
-// =============================================================================
-// FITNESS: WORKOUTS
+// ======================================================================// FITNESS: WORKOUTS
 // =============================================================================
 
 export type WorkoutStatus = (typeof WORKOUT_STATUSES)[number];
@@ -684,3 +689,11 @@ export interface ExerciseHistoryEntry {
 
 /** Weight unit type */
 export type WeightUnit = (typeof WEIGHT_UNITS)[number];
+=======
+export interface HouseholdMember {
+  id: string;
+  household_id: string;
+  user_id: string;
+  role: "owner" | "member";
+  created_at: string;
+}

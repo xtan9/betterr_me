@@ -15,3 +15,4 @@ export * from "./exercises";
 export * from "./workouts";
 export * from "./workout-exercises";
 export * from "./routines";
+export { resolveHousehold } from "./households";
