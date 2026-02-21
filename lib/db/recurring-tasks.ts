@@ -192,7 +192,6 @@ export class RecurringTasksDB {
         const templateUpdates: RecurringTaskUpdate = {};
         if (updates.title !== undefined) templateUpdates.title = updates.title;
         if (updates.description !== undefined) templateUpdates.description = updates.description;
-        if (updates.intention !== undefined) templateUpdates.intention = updates.intention;
         if (updates.priority !== undefined) templateUpdates.priority = updates.priority;
         if (updates.category !== undefined) templateUpdates.category = updates.category as RecurringTask['category'];
         if (updates.due_time !== undefined) templateUpdates.due_time = updates.due_time;
@@ -220,7 +219,6 @@ export class RecurringTasksDB {
         const templateUpdates: RecurringTaskUpdate = {};
         if (updates.title !== undefined) templateUpdates.title = updates.title;
         if (updates.description !== undefined) templateUpdates.description = updates.description;
-        if (updates.intention !== undefined) templateUpdates.intention = updates.intention;
         if (updates.priority !== undefined) templateUpdates.priority = updates.priority;
         if (updates.category !== undefined) templateUpdates.category = updates.category as RecurringTask['category'];
         if (updates.due_time !== undefined) templateUpdates.due_time = updates.due_time;

@@ -74,7 +74,6 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       title: validation.data.title.trim(),
       description: validation.data.description?.trim() || null,
-      intention: validation.data.intention?.trim() || null,
       priority: validation.data.priority ?? 0,
       category: validation.data.category || null,
       due_time: validation.data.due_time || null,

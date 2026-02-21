@@ -112,7 +112,6 @@ async function generateInstancesForTemplate(
       user_id: userId,
       title: template.title,
       description: template.description,
-      intention: template.intention,
       priority: template.priority,
       category: template.category,
       due_date: date,
