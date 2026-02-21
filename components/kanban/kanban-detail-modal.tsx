@@ -23,7 +23,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { Task, TaskStatus } from "@/lib/db/types";
+import type { Task, TaskStatus, TaskUpdate } from "@/lib/db/types";
 
 interface KanbanDetailModalProps {
   task: Task | null;
@@ -78,8 +78,8 @@ export function KanbanDetailModal({
   }
 
   const updateField = useCallback(
-    async (field: string, value: unknown) => {
-      if (!task) return;
+    async <K extends keyof TaskUpdate>(field: K, value: TaskUpdate[K]): Promise<boolean> => {
+      if (!task) return false;
       try {
         const res = await fetch(`/api/tasks/${task.id}`, {
           method: "PATCH",
@@ -87,21 +87,27 @@ export function KanbanDetailModal({
           body: JSON.stringify({ [field]: value }),
         });
         if (!res.ok) {
+          console.error(`Task update failed: field="${String(field)}", status=${res.status}`);
           toast.error(t("detail.updateError"));
-          return;
+          return false;
         }
         onTaskUpdated();
-      } catch {
+        return true;
+      } catch (error) {
+        console.error(`Task update network error: field="${String(field)}"`, error);
         toast.error(t("detail.updateError"));
+        return false;
       }
     },
     [task, onTaskUpdated, t]
   );
 
-  const handleDescriptionBlur = useCallback(() => {
+  const handleDescriptionBlur = useCallback(async () => {
     if (description !== originalDescription) {
-      updateField("description", description || null);
-      setOriginalDescription(description);
+      const success = await updateField("description", description || null);
+      if (success) {
+        setOriginalDescription(description);
+      }
     }
   }, [description, originalDescription, updateField]);
 
@@ -147,7 +153,7 @@ export function KanbanDetailModal({
                         </label>
                         <Select
                           value={task.status}
-                          onValueChange={(value) => updateField("status", value)}
+                          onValueChange={(value) => updateField("status", value as TaskStatus)}
                         >
                           <SelectTrigger className="w-full border-none shadow-none p-0 h-auto">
                             <SelectValue>
@@ -175,7 +181,7 @@ export function KanbanDetailModal({
                         </label>
                         <Select
                           value={String(task.priority)}
-                          onValueChange={(value) => updateField("priority", Number(value))}
+                          onValueChange={(value) => updateField("priority", Number(value) as Task["priority"])}
                         >
                           <SelectTrigger className="w-full border-none shadow-none p-0 h-auto">
                             <SelectValue>
@@ -201,7 +207,7 @@ export function KanbanDetailModal({
                         <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                           {t("detail.dueDate")}
                         </label>
-                        <Popover>
+                        <Popover key={task.id}>
                           <PopoverTrigger asChild>
                             <button className="flex items-center gap-2 text-base hover:opacity-80 transition-opacity">
                               <Calendar className="size-4 text-muted-foreground" />
@@ -266,8 +272,8 @@ export function KanbanDetailModal({
                   <div className="p-4 flex flex-col flex-1">
                     <textarea
                       placeholder={t("detail.writeUpdate")}
-                      className="w-full min-h-[80px] p-3 rounded-md border bg-transparent text-base resize-y focus:outline-none focus:ring-2 focus:ring-ring mb-4"
-                      readOnly
+                      className="w-full min-h-[80px] p-3 rounded-md border bg-transparent text-base resize-none focus:outline-none mb-4 opacity-50 cursor-not-allowed"
+                      disabled
                     />
                     <div className="flex-1 flex items-center justify-center">
                       <p className="text-base text-muted-foreground">
