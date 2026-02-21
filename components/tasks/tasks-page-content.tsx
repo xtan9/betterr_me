@@ -8,7 +8,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header";
+import {
+  PageHeader,
+  PageHeaderSkeleton,
+} from "@/components/layouts/page-header";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
 import { TaskList } from "./task-list";
@@ -38,7 +41,7 @@ export function TasksPageContent() {
     {
       revalidateOnFocus: true,
       keepPreviousData: true,
-    }
+    },
   );
 
   const {
@@ -48,7 +51,7 @@ export function TasksPageContent() {
   } = useSWR<RecurringTask[]>(
     "/api/recurring-tasks?status=paused",
     recurringFetcher,
-    { revalidateOnFocus: true }
+    { revalidateOnFocus: true },
   );
 
   const handleToggleTask = async (taskId: string) => {
@@ -56,7 +59,8 @@ export function TasksPageContent() {
       const response = await fetch(`/api/tasks/${taskId}/toggle`, {
         method: "POST",
       });
-      if (!response.ok) throw new Error(`Failed to toggle task: ${response.status}`);
+      if (!response.ok)
+        throw new Error(`Failed to toggle task: ${response.status}`);
       mutate();
       revalidateSidebarCounts();
     } catch (err) {
@@ -75,7 +79,10 @@ export function TasksPageContent() {
 
   const handleResume = async (templateId: string) => {
     try {
-      const res = await fetch(`/api/recurring-tasks/${templateId}?action=resume`, { method: "PATCH" });
+      const res = await fetch(
+        `/api/recurring-tasks/${templateId}?action=resume`,
+        { method: "PATCH" },
+      );
       if (!res.ok) throw new Error("Failed");
       mutatePaused();
       mutate(); // refresh tasks list — resumed template may generate new instances
@@ -89,7 +96,9 @@ export function TasksPageContent() {
 
   const handleDeleteTemplate = async (templateId: string) => {
     try {
-      const res = await fetch(`/api/recurring-tasks/${templateId}`, { method: "DELETE" });
+      const res = await fetch(`/api/recurring-tasks/${templateId}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error("Failed");
       mutatePaused();
       toast.success(t("paused.deleteSuccess"));
@@ -163,9 +172,11 @@ export function TasksPageContent() {
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-medium truncate text-sm">{template.title}</h4>
+                      <h4 className="font-medium truncate text-sm">
+                        {template.title}
+                      </h4>
                       <p className="text-xs text-muted-foreground">
-                        {describeRecurrence(template.recurrence_rule)}
+                        {describeRecurrence(template.recurrence_rule, t)}
                       </p>
                     </div>
                     <div className="flex gap-1 shrink-0">

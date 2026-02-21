@@ -35,7 +35,7 @@ interface RecurrencePickerProps {
     rule: RecurrenceRule | null,
     endType: EndType,
     endDate: string | null,
-    endCount: number | null
+    endCount: number | null,
   ) => void;
   disabled?: boolean;
   startDate?: string | null;
@@ -49,24 +49,19 @@ function ruleToPreset(rule: RecurrenceRule | null): PresetKey {
   if (
     rule.frequency === "weekly" &&
     rule.interval === 1 &&
-    rule.days_of_week &&
     rule.days_of_week.length === 5 &&
-    [1, 2, 3, 4, 5].every((d) => rule.days_of_week!.includes(d))
+    [1, 2, 3, 4, 5].every((d) => rule.days_of_week.includes(d))
   ) {
     return "weekdays";
   }
   if (
     rule.frequency === "weekly" &&
     rule.interval === 1 &&
-    rule.days_of_week &&
     rule.days_of_week.length > 0
   ) {
     return "weekly";
   }
-  if (
-    rule.frequency === "weekly" &&
-    rule.interval === 2
-  ) {
+  if (rule.frequency === "weekly" && rule.interval === 2) {
     return "biweekly";
   }
   if (rule.frequency === "monthly" && rule.interval === 1) return "monthly";
@@ -76,7 +71,7 @@ function ruleToPreset(rule: RecurrenceRule | null): PresetKey {
 
 function presetToRule(
   preset: PresetKey,
-  startDate: string | null
+  startDate: string | null,
 ): RecurrenceRule | null {
   const getStartDow = () => {
     if (!startDate) return new Date().getDay();
@@ -90,19 +85,42 @@ function presetToRule(
     case "daily":
       return { frequency: "daily", interval: 1 };
     case "weekdays":
-      return { frequency: "weekly", interval: 1, days_of_week: [1, 2, 3, 4, 5] };
+      return {
+        frequency: "weekly",
+        interval: 1,
+        days_of_week: [1, 2, 3, 4, 5],
+      };
     case "weekly":
-      return { frequency: "weekly", interval: 1, days_of_week: [getStartDow()] };
+      return {
+        frequency: "weekly",
+        interval: 1,
+        days_of_week: [getStartDow()],
+      };
     case "biweekly":
-      return { frequency: "weekly", interval: 2, days_of_week: [getStartDow()] };
+      return {
+        frequency: "weekly",
+        interval: 2,
+        days_of_week: [getStartDow()],
+      };
     case "monthly": {
-      const day = startDate ? parseInt(startDate.split("-")[2]) : new Date().getDate();
+      const day = startDate
+        ? parseInt(startDate.split("-")[2])
+        : new Date().getDate();
       return { frequency: "monthly", interval: 1, day_of_month: day };
     }
     case "yearly": {
-      const month = startDate ? parseInt(startDate.split("-")[1]) : new Date().getMonth() + 1;
-      const day = startDate ? parseInt(startDate.split("-")[2]) : new Date().getDate();
-      return { frequency: "yearly", interval: 1, month_of_year: month, day_of_month: day };
+      const month = startDate
+        ? parseInt(startDate.split("-")[1])
+        : new Date().getMonth() + 1;
+      const day = startDate
+        ? parseInt(startDate.split("-")[2])
+        : new Date().getDate();
+      return {
+        frequency: "yearly",
+        interval: 1,
+        month_of_year: month,
+        day_of_month: day,
+      };
     }
     case "custom":
       return { frequency: "daily", interval: 1 };
@@ -128,35 +146,45 @@ export function RecurrencePicker({
       const rule = presetToRule(key, startDate ?? null);
       onChange(rule, endType, endDate, endCount);
     },
-    [startDate, endType, endDate, endCount, onChange]
+    [startDate, endType, endDate, endCount, onChange],
   );
 
   const handleDaysToggle = useCallback(
     (days: string[]) => {
-      if (!value || days.length === 0) return;
+      if (!value || value.frequency !== "weekly" || days.length === 0) return;
       const numDays = days.map(Number).sort();
-      const updated: RecurrenceRule = { ...value, days_of_week: numDays };
-      onChange(updated, endType, endDate, endCount);
+      onChange({ ...value, days_of_week: numDays }, endType, endDate, endCount);
     },
-    [value, endType, endDate, endCount, onChange]
+    [value, endType, endDate, endCount, onChange],
   );
 
   const handleCustomFrequencyChange = useCallback(
     (freq: string) => {
       if (!value) return;
-      const updated: RecurrenceRule = {
-        ...value,
-        frequency: freq as RecurrenceRule["frequency"],
-        // Reset sub-fields when switching frequency
-        days_of_week: freq === "weekly" ? [0] : undefined,
-        day_of_month: freq === "monthly" ? 1 : undefined,
-        week_position: undefined,
-        day_of_week_monthly: undefined,
-        month_of_year: freq === "yearly" ? 1 : undefined,
-      };
+      const { interval } = value;
+      let updated: RecurrenceRule;
+      switch (freq) {
+        case "weekly":
+          updated = { frequency: "weekly", interval, days_of_week: [0] };
+          break;
+        case "monthly":
+          updated = { frequency: "monthly", interval, day_of_month: 1 };
+          break;
+        case "yearly":
+          updated = {
+            frequency: "yearly",
+            interval,
+            month_of_year: 1,
+            day_of_month: 1,
+          };
+          break;
+        default:
+          updated = { frequency: "daily", interval };
+          break;
+      }
       onChange(updated, endType, endDate, endCount);
     },
-    [value, endType, endDate, endCount, onChange]
+    [value, endType, endDate, endCount, onChange],
   );
 
   const handleIntervalChange = useCallback(
@@ -165,18 +193,19 @@ export function RecurrencePicker({
       const interval = Math.max(1, parseInt(intervalStr) || 1);
       onChange({ ...value, interval }, endType, endDate, endCount);
     },
-    [value, endType, endDate, endCount, onChange]
+    [value, endType, endDate, endCount, onChange],
   );
 
   const handleEndTypeChange = useCallback(
     (newEndType: string) => {
       onChange(value, newEndType as EndType, endDate, endCount);
     },
-    [value, endDate, endCount, onChange]
+    [value, endDate, endCount, onChange],
   );
 
   const showDayPicker =
-    value?.frequency === "weekly" && (preset === "weekly" || preset === "biweekly" || preset === "custom");
+    value?.frequency === "weekly" &&
+    (preset === "weekly" || preset === "biweekly" || preset === "custom");
   const showCustomControls = preset === "custom" && value;
   const showEndControls = value !== null;
 
@@ -237,7 +266,7 @@ export function RecurrencePicker({
       )}
 
       {/* Day of week picker */}
-      {showDayPicker && value.days_of_week && (
+      {showDayPicker && value.frequency === "weekly" && (
         <div>
           <Label className="text-sm text-muted-foreground mb-1.5 block">
             {t("onDays")}
@@ -257,8 +286,8 @@ export function RecurrencePicker({
                 disabled={disabled}
                 className={cn(
                   "min-w-[2.5rem]",
-                  value.days_of_week!.includes(i) &&
-                    "bg-primary text-primary-foreground"
+                  value.days_of_week.includes(i) &&
+                    "bg-primary text-primary-foreground",
                 )}
               >
                 {t(`dayShort.${key}`)}
@@ -271,9 +300,7 @@ export function RecurrencePicker({
       {/* End condition */}
       {showEndControls && (
         <div className="space-y-2 pt-1">
-          <Label className="text-sm text-muted-foreground">
-            {t("ends")}
-          </Label>
+          <Label className="text-sm text-muted-foreground">{t("ends")}</Label>
           <RadioGroup
             value={endType}
             onValueChange={handleEndTypeChange}
@@ -301,7 +328,7 @@ export function RecurrencePicker({
                       value,
                       endType,
                       endDate,
-                      Math.max(1, parseInt(e.target.value) || 1)
+                      Math.max(1, parseInt(e.target.value) || 1),
                     )
                   }
                   className="w-20 h-8"

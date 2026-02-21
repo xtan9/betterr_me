@@ -1,11 +1,11 @@
-import type { RecurrenceRule } from '@/lib/db/types';
+import type { RecurrenceRule } from "@/lib/db/types";
 
 /**
  * Parse a YYYY-MM-DD date string into year, month (0-based), day components.
  * Uses manual parsing to avoid timezone issues from Date constructor.
  */
 function parseDateParts(dateStr: string): [number, number, number] {
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const [y, m, d] = dateStr.split("-").map(Number);
   return [y, m - 1, d]; // month is 0-based for Date constructor
 }
 
@@ -13,15 +13,9 @@ function parseDateParts(dateStr: string): [number, number, number] {
 function toDateString(date: Date): string {
   return [
     date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
-/** Get the day of week (0=Sun) for a YYYY-MM-DD string */
-function getDayOfWeek(dateStr: string): number {
-  const [y, m, d] = parseDateParts(dateStr);
-  return new Date(y, m, d).getDay();
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 /** Add N days to a date string */
@@ -45,9 +39,9 @@ function getNthWeekdayOfMonth(
   year: number,
   month: number, // 0-based
   weekPosition: string,
-  dayOfWeek: number
+  dayOfWeek: number,
 ): Date | null {
-  if (weekPosition === 'last') {
+  if (weekPosition === "last") {
     // Start from the last day and work backward
     const lastDay = new Date(year, month + 1, 0);
     for (let d = lastDay.getDate(); d >= 1; d--) {
@@ -86,12 +80,12 @@ export function getOccurrencesInRange(
   rule: RecurrenceRule,
   ruleStartDate: string,
   rangeStart: string,
-  rangeEnd: string
+  rangeEnd: string,
 ): string[] {
   const occurrences: string[] = [];
 
   switch (rule.frequency) {
-    case 'daily': {
+    case "daily": {
       // Every N days from ruleStartDate
       let current = ruleStartDate;
       // Fast-forward to rangeStart if rule starts before range
@@ -100,7 +94,7 @@ export function getOccurrencesInRange(
         const [ry, rm, rd] = parseDateParts(rangeStart);
         const startMs = new Date(sy, sm, sd).getTime();
         const rangeMs = new Date(ry, rm, rd).getTime();
-        const daysDiff = Math.floor((rangeMs - startMs) / (86400000));
+        const daysDiff = Math.floor((rangeMs - startMs) / 86400000);
         const skip = Math.floor(daysDiff / rule.interval) * rule.interval;
         current = addDays(ruleStartDate, skip);
         if (compareDates(current, rangeStart) < 0) {
@@ -116,8 +110,8 @@ export function getOccurrencesInRange(
       break;
     }
 
-    case 'weekly': {
-      const daysOfWeek = rule.days_of_week ?? [getDayOfWeek(ruleStartDate)];
+    case "weekly": {
+      const { days_of_week } = rule;
       // Walk week by week from ruleStartDate
       // Find the Monday of the week containing ruleStartDate
       const [sy, sm, sd] = parseDateParts(ruleStartDate);
@@ -137,7 +131,7 @@ export function getOccurrencesInRange(
       }
 
       while (true) {
-        for (const dow of daysOfWeek) {
+        for (const dow of days_of_week) {
           const dateStr = addDays(currentWeekStart, dow);
           if (
             compareDates(dateStr, ruleStartDate) >= 0 &&
@@ -155,7 +149,7 @@ export function getOccurrencesInRange(
       break;
     }
 
-    case 'monthly': {
+    case "monthly": {
       const [sy, sm] = parseDateParts(ruleStartDate);
       const [ry, rm] = parseDateParts(rangeStart);
       // Start from ruleStartDate's month and iterate
@@ -175,15 +169,19 @@ export function getOccurrencesInRange(
 
         let dateStr: string | null = null;
 
-        if (rule.week_position && rule.day_of_week_monthly !== undefined) {
-          // Monthly by weekday position
-          const result = getNthWeekdayOfMonth(year, month, rule.week_position, rule.day_of_week_monthly);
+        if ("week_position" in rule) {
+          // Monthly by weekday position (MonthlyByWeekdayRule)
+          const result = getNthWeekdayOfMonth(
+            year,
+            month,
+            rule.week_position,
+            rule.day_of_week_monthly,
+          );
           if (result) dateStr = toDateString(result);
         } else {
-          // Monthly by date
-          const dayOfMonth = rule.day_of_month ?? parseInt(ruleStartDate.split('-')[2]);
+          // Monthly by date (MonthlyByDateRule)
           const lastDay = new Date(year, month + 1, 0).getDate();
-          const day = Math.min(dayOfMonth, lastDay);
+          const day = Math.min(rule.day_of_month, lastDay);
           dateStr = toDateString(new Date(year, month, day));
         }
 
@@ -197,16 +195,16 @@ export function getOccurrencesInRange(
           }
         }
         // Safety: if we've gone too far past the range end
-        if (year > parseInt(rangeEnd.split('-')[0]) + 1) break;
+        if (year > parseInt(rangeEnd.split("-")[0]) + 1) break;
       }
       break;
     }
 
-    case 'yearly': {
+    case "yearly": {
       const [sy] = parseDateParts(ruleStartDate);
       const [ry] = parseDateParts(rangeStart);
-      const monthOfYear = (rule.month_of_year ?? parseInt(ruleStartDate.split('-')[1])) - 1; // 0-based
-      const dayOfMonth = rule.day_of_month ?? parseInt(ruleStartDate.split('-')[2]);
+      const monthOfYear = rule.month_of_year - 1; // 0-based
+      const dayOfMonth = rule.day_of_month;
 
       let yearOffset = 0;
       if (ry > sy) {
@@ -227,7 +225,7 @@ export function getOccurrencesInRange(
         ) {
           occurrences.push(dateStr);
         }
-        if (year > parseInt(rangeEnd.split('-')[0]) + 1) break;
+        if (year > parseInt(rangeEnd.split("-")[0]) + 1) break;
       }
       break;
     }
@@ -242,58 +240,102 @@ export function getOccurrencesInRange(
 export function getNextOccurrence(
   rule: RecurrenceRule,
   ruleStartDate: string,
-  afterDate: string
+  afterDate: string,
 ): string | null {
   // Look up to 2 years ahead for the next occurrence
   const searchEnd = addDays(afterDate, 731);
   const nextDay = addDays(afterDate, 1);
-  const occurrences = getOccurrencesInRange(rule, ruleStartDate, nextDay, searchEnd);
+  const occurrences = getOccurrencesInRange(
+    rule,
+    ruleStartDate,
+    nextDay,
+    searchEnd,
+  );
   return occurrences[0] ?? null;
 }
 
-/** Day name abbreviations (0=Sun) */
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+type TranslateFn = (key: string, params?: Record<string, string | number | Date>) => string;
 
 /**
- * Generate a human-readable description of a recurrence rule.
+ * Get the English ordinal category for a number.
+ * Used as the ICU plural selector for ordinal suffixes.
  */
-export function describeRecurrence(rule: RecurrenceRule): string {
-  const interval = rule.interval;
-
-  switch (rule.frequency) {
-    case 'daily':
-      return interval === 1 ? 'Every day' : `Every ${interval} days`;
-
-    case 'weekly': {
-      const days = (rule.days_of_week ?? []).map(d => DAY_NAMES[d]).join(', ');
-      const prefix = interval === 1 ? 'Every week' : `Every ${interval} weeks`;
-      return days ? `${prefix} on ${days}` : prefix;
-    }
-
-    case 'monthly': {
-      const prefix = interval === 1 ? 'Every month' : `Every ${interval} months`;
-      if (rule.week_position && rule.day_of_week_monthly !== undefined) {
-        return `${prefix} on the ${rule.week_position} ${DAY_NAMES[rule.day_of_week_monthly]}`;
-      }
-      if (rule.day_of_month) {
-        return `${prefix} on the ${ordinal(rule.day_of_month)}`;
-      }
-      return prefix;
-    }
-
-    case 'yearly': {
-      const prefix = interval === 1 ? 'Every year' : `Every ${interval} years`;
-      if (rule.month_of_year && rule.day_of_month) {
-        const monthName = new Date(2024, rule.month_of_year - 1, 1).toLocaleDateString('en-US', { month: 'long' });
-        return `${prefix} on ${monthName} ${rule.day_of_month}`;
-      }
-      return prefix;
-    }
-  }
+function ordinalCategory(n: number): "one" | "two" | "few" | "other" {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return "other";
+  if (mod10 === 1) return "one";
+  if (mod10 === 2) return "two";
+  if (mod10 === 3) return "few";
+  return "other";
 }
 
-function ordinal(n: number): string {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+/**
+ * Generate a localized human-readable description of a recurrence rule.
+ * @param rule The recurrence rule to describe
+ * @param t Translation function scoped to 'tasks' namespace (from useTranslations('tasks'))
+ */
+export function describeRecurrence(
+  rule: RecurrenceRule,
+  t: TranslateFn,
+): string {
+  const { interval } = rule;
+
+  switch (rule.frequency) {
+    case "daily":
+      return interval === 1
+        ? t("recurrence.describe.everyDay")
+        : t("recurrence.describe.everyNDays", { interval });
+
+    case "weekly": {
+      const days = rule.days_of_week
+        .map((d) => t(`recurrence.describe.dayName.${d}`))
+        .join(", ");
+      const prefix =
+        interval === 1
+          ? t("recurrence.describe.everyWeek")
+          : t("recurrence.describe.everyNWeeks", { interval });
+      return days
+        ? t("recurrence.describe.weeklyOnDays", { prefix, days })
+        : prefix;
+    }
+
+    case "monthly": {
+      const prefix =
+        interval === 1
+          ? t("recurrence.describe.everyMonth")
+          : t("recurrence.describe.everyNMonths", { interval });
+      if ("week_position" in rule) {
+        const position = t(
+          `recurrence.describe.position.${rule.week_position}`,
+        );
+        const day = t(
+          `recurrence.describe.dayName.${rule.day_of_week_monthly}`,
+        );
+        return t("recurrence.describe.monthlyOnWeekday", {
+          prefix,
+          position,
+          day,
+        });
+      }
+      const cat = ordinalCategory(rule.day_of_month);
+      const ordinal = t(`recurrence.describe.ordinal_${cat}`, {
+        n: rule.day_of_month,
+      });
+      return t("recurrence.describe.monthlyOnOrdinal", { prefix, ordinal });
+    }
+
+    case "yearly": {
+      const prefix =
+        interval === 1
+          ? t("recurrence.describe.everyYear")
+          : t("recurrence.describe.everyNYears", { interval });
+      const month = t(`recurrence.describe.monthName.${rule.month_of_year}`);
+      return t("recurrence.describe.yearlyOnDate", {
+        prefix,
+        month,
+        day: rule.day_of_month,
+      });
+    }
+  }
 }

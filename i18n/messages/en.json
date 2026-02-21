@@ -591,7 +591,55 @@
       "endNever": "Never",
       "endAfter": "After",
       "endTimes": "times",
-      "endOn": "On date"
+      "endOn": "On date",
+      "describe": {
+        "everyDay": "Every day",
+        "everyNDays": "Every {interval} days",
+        "everyWeek": "Every week",
+        "everyNWeeks": "Every {interval} weeks",
+        "weeklyOnDays": "{prefix} on {days}",
+        "everyMonth": "Every month",
+        "everyNMonths": "Every {interval} months",
+        "monthlyOnOrdinal": "{prefix} on the {ordinal}",
+        "monthlyOnWeekday": "{prefix} on the {position} {day}",
+        "everyYear": "Every year",
+        "everyNYears": "Every {interval} years",
+        "yearlyOnDate": "{prefix} on {month} {day}",
+        "dayName": {
+          "0": "Sun",
+          "1": "Mon",
+          "2": "Tue",
+          "3": "Wed",
+          "4": "Thu",
+          "5": "Fri",
+          "6": "Sat"
+        },
+        "monthName": {
+          "1": "January",
+          "2": "February",
+          "3": "March",
+          "4": "April",
+          "5": "May",
+          "6": "June",
+          "7": "July",
+          "8": "August",
+          "9": "September",
+          "10": "October",
+          "11": "November",
+          "12": "December"
+        },
+        "ordinal_other": "{n}th",
+        "ordinal_one": "{n}st",
+        "ordinal_two": "{n}nd",
+        "ordinal_few": "{n}rd",
+        "position": {
+          "first": "first",
+          "second": "second",
+          "third": "third",
+          "fourth": "fourth",
+          "last": "last"
+        }
+      }
     },
     "scope": {
       "editTitle": "Edit Recurring Task",
