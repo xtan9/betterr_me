@@ -44,7 +44,7 @@
 
 - [x] **Phase 13: Data Foundation & Migration** - Status field, is_completed sync, migration of existing tasks, backward compatibility (completed 2026-02-19)
 - [x] **Phase 14: Projects & Sections** - Project CRUD, task form extensions, tasks page redesign with section-based layout (completed 2026-02-20)
-- [x] **Phase 15: Kanban Board** - 4-column kanban with drag-and-drop, completion reflection, intention display (completed 2026-02-21)
+- [x] **Phase 15: Kanban Board** - 4-column kanban with cross-column drag-and-drop, detail modal, quick-add (completed 2026-02-20)
 
 ## Phase Details
 
@@ -81,21 +81,21 @@ Plans:
 - [ ] 14-03-PLAN.md — Tasks page redesign (section layout, project cards) + archived projects page
 
 ### Phase 15: Kanban Board
-**Goal**: Users can view and manage a project's tasks on a 4-column kanban board with drag-and-drop, completion reflection, and intention display
+**Goal**: Users can view and manage a project's tasks on a 4-column kanban board with cross-column drag-and-drop, a detail modal, and column quick-add
 **Depends on**: Phase 14
-**Requirements**: PAGE-03, KANB-01, KANB-02, KANB-03, KANB-04, KANB-05, I18N-01
+**Requirements**: PAGE-03, KANB-01, KANB-02, I18N-01
 **Success Criteria** (what must be TRUE):
   1. Clicking a project card on the tasks page opens a 4-column kanban board (Backlog, To Do, In Progress, Done) showing that project's tasks
-  2. User can drag a task card between columns to change its status, and the change persists after page reload
-  3. User can drag a task card within a column to reorder it, and the order persists after page reload
-  4. Dragging a task to the Done column triggers a completion reflection prompt (emoji strip) for high-priority or intentional tasks
-  5. Kanban cards display the task's intention ("Your Why") when present, and all kanban UI strings are translated in en, zh, and zh-TW
-**Plans**: 3 plans
+  2. User can drag a task card between columns to change its status, and the change persists after page reload; if the API fails the card snaps back with an error toast
+  3. Clicking a kanban card opens a Monday.com-style detail modal showing all task fields; hovering a column reveals a quick-add input to create a task in that column
+  4. All kanban UI strings are translated in en, zh, and zh-TW
+**Plans**: 4 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — Foundation: install @dnd-kit, project_id API filter, kanban page route, i18n strings
-- [ ] 15-02-PLAN.md — Core board: KanbanBoard + KanbanColumn + KanbanCard + drag-and-drop with SWR
-- [ ] 15-03-PLAN.md — Interactions: Monday.com-style detail modal + column quick-add
+- [x] 15-01-PLAN.md — Foundation: install @dnd-kit, project_id API filter, kanban page route, i18n strings
+- [x] 15-02-PLAN.md — Core board: KanbanBoard + KanbanColumn + KanbanCard + drag-and-drop with SWR
+- [x] 15-03-PLAN.md — Interactions: Monday.com-style detail modal + column quick-add
+- [ ] 15-04-PLAN.md — Documentation gap closure: mark KANB-03/04/05 as deferred in REQUIREMENTS.md and ROADMAP.md
 
 ## Progress
 
@@ -112,4 +112,4 @@ Plans:
 | 12. Component Fixes | v2.1 | 1/1 | Complete | 2026-02-18 |
 | 13. Data Foundation & Migration | 2/2 | Complete    | 2026-02-19 | - |
 | 14. Projects & Sections | 3/3 | Complete    | 2026-02-20 | - |
-| 15. Kanban Board | 3/3 | Complete   | 2026-02-21 | - |
+| 15. Kanban Board | 3/4 | In Progress   | 2026-02-20 | - |
