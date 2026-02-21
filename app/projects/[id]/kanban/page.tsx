@@ -1,13 +1,6 @@
-import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { KanbanSkeleton } from "@/components/kanban/kanban-skeleton";
-
-const KanbanBoard = dynamic(
-  () =>
-    import("@/components/kanban/kanban-board").then((m) => m.KanbanBoard),
-  { ssr: false, loading: () => <KanbanSkeleton /> }
-);
+import { KanbanBoardLoader } from "@/components/kanban/kanban-board-loader";
 
 export default async function KanbanPage({
   params,
@@ -21,5 +14,5 @@ export default async function KanbanPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
-  return <KanbanBoard projectId={id} />;
+  return <KanbanBoardLoader projectId={id} />;
 }
