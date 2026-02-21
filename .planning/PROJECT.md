@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A habit tracking and project management web app built with Next.js 16, Supabase, and TypeScript. Supports habits (daily/weekdays/weekly/times_per_week/custom), task management with Work/Personal sections and named projects, 4-column kanban boards per project, streaks, weekly insights, and data export. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
+A habit tracking, project management, and personal finance web app built with Next.js 16, Supabase, and TypeScript. Supports habits (daily/weekdays/weekly/times_per_week/custom), task management with Work/Personal sections and named projects, 4-column kanban boards per project, streaks, weekly insights, and data export. Adding money tracking with Plaid bank connections, transaction management, budgeting, bill tracking, savings goals, net worth, and couples/household support. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
 
 ## Core Value
 
@@ -66,7 +66,21 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ### Active
 
-(None — next milestone not yet planned)
+## Current Milestone: v4.0 Money Tracking
+
+**Goal:** Add personal finance management to BetterR.Me — Plaid bank connections, transaction management, budgeting, bill tracking, savings goals, net worth, couples/household support, future-first dashboard, and contextual AI insights.
+
+**Target features:**
+- Plaid bank account connections with automatic transaction syncing
+- Transaction viewing, searching, filtering, and auto-categorization with manual override
+- Monthly budgets per category with progress tracking and spending charts
+- Bill and subscription auto-detection and tracking with due dates
+- Savings goals with progress visualization
+- Net worth tracking across all accounts
+- Multi-user household/couples support with shared + individual views
+- Future-first dashboard with cash flow projections
+- Contextual AI insights embedded in UI (not a chatbot)
+- Calm Finance design principles for money views (no aggressive red/green, forward-looking framing)
 
 ### Out of Scope
 
@@ -88,6 +102,7 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ## Context
 
+- **Money feature origin:** Brainstormed as separate "moneyy.me" project, incorporated into BetterR.Me. Research at `/home/xingdi/code/moneyy_me/.planning/` (market report, competitor UX, stack/features/architecture/pitfalls research)
 - **Codebase:** ~200+ files, Next.js 16 App Router, Supabase backend, deployed to Vercel
 - **Test suite:** 1207+ tests (Vitest + Playwright), 50% coverage threshold
 - **Shipped:** v1.0 Codebase Hardening (2026-02-16) — 5 phases, 11 plans, 26 requirements
@@ -102,6 +117,10 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 ## Constraints
 
 - **Tech stack:** Next.js 16, Supabase, TypeScript, pnpm
+- **Bank data:** Plaid API for account connections
+- **Money arithmetic:** decimal.js for all currency calculations (never native JS floats)
+- **Design:** Calm Finance principles for money views (muted tones, forward-looking framing)
+- **Billing:** No Stripe/freemium in this milestone — all features free
 - **i18n:** All user-facing strings in en, zh, zh-TW
 - **Test coverage:** Must not decrease from current baseline
 
@@ -129,5 +148,12 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | Section change clears project_id silently | No confirmation needed, natural form behavior | ✓ Good — clean UX, no modal interruption |
 | next/dynamic ssr:false for KanbanBoard | Avoid hydration issues with drag-and-drop library | ✓ Good — fixes Next.js 16 build, clean client-only boundary |
 
+| Keep Supabase for money features | BetterR.Me already uses Supabase auth+DB; no need for Better Auth+Drizzle+Neon from moneyy.me brainstorm | — Pending |
+| Plaid for bank connections | Best US coverage (12,000+ institutions), industry standard | — Pending |
+| Calm Finance for money views only | BetterR.Me design + Calm Finance principles (no red/green, forward framing) for finance UI | — Pending |
+| No billing in v4.0 | Build features first, add Stripe/freemium in future milestone | — Pending |
+| decimal.js for money arithmetic | JavaScript floats break at 0.1 + 0.2; financial data requires exact arithmetic | — Pending |
+| Couples/household from day one | Core differentiator from moneyy.me vision; household_id in schema from first migration | — Pending |
+
 ---
-*Last updated: 2026-02-21 after v3.0 milestone completed*
+*Last updated: 2026-02-21 after v4.0 milestone started*

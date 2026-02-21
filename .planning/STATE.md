@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Planning next milestone
+**Current focus:** v4.0 Money Tracking
 
 ## Current Position
 
-Phase: None — between milestones
-Plan: N/A
-Status: Milestone v3.0 complete
-Last activity: 2026-02-21 — Completed v3.0 Projects & Kanban milestone
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-21 — Milestone v4.0 started
 
 Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0
 
@@ -52,9 +52,12 @@ None.
 - Vitest picks up .worktrees/ test files causing spurious failures (pre-existing, not blocking)
 - @dnd-kit/core v6 + React 19 peer dep mismatch requires pnpm config (cosmetic, works correctly)
 - v3.0 DB migrations must be applied to Supabase before features work in production
+- Plaid API costs ~$1-2/connected account/month — monitor unit economics
+- Plaid access tokens must be encrypted at rest from first migration
+- Household data isolation (RLS + application-layer) critical for couples feature
 
 ## Session Continuity
 
 Last session: 2026-02-21
-Stopped at: Completed v3.0 milestone archival
-Resume: Run `/gsd:new-milestone` to start next milestone
+Stopped at: Defining v4.0 requirements
+Resume: Continue new-milestone workflow (research → requirements → roadmap)
