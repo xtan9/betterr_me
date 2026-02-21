@@ -75,12 +75,11 @@
   3. Sidebar shows "Money" navigation item linking to `/money` page shell; money pages use Calm Finance design tokens (`--money-*` CSS variables) with muted teal/amber palette
   4. A user visiting any money page for the first time gets a household auto-created transparently (lazy creation via `resolveHousehold()`) — no manual setup step
   5. All existing 1207+ tests pass after migrations; money i18n strings exist in all three locale files (en, zh, zh-TW)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 18-01: TBD
-- [ ] 18-02: TBD
-- [ ] 18-03: TBD
+- [ ] 18-01-PLAN.md — Database schema, admin client, money arithmetic, resolveHousehold, API route, tests
+- [ ] 18-02-PLAN.md — Calm Finance design tokens, sidebar nav, i18n money namespace, /money page shell
 
 ### Phase 19: Plaid Bank Connection Pipeline
 **Goal**: Users can connect real bank accounts and see transactions flow in automatically, with CSV/manual entry as a fallback for users without Plaid
