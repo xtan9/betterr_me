@@ -536,7 +536,9 @@
     },
     "sections": {
       "personal": "個人",
-      "work": "工作"
+      "work": "工作",
+      "tasksLabel": "任務",
+      "projectsLabel": "專案"
     },
     "list": {
       "searchPlaceholder": "搜尋任務...",
