@@ -205,7 +205,6 @@ const mockTasks = [
     category: "shopping",
     due_date: "2026-02-10",
     due_time: null,
-    intention: null,
     completion_difficulty: null,
     completed_at: null,
     status: "todo",
@@ -228,7 +227,6 @@ const mockTasks = [
     category: "work",
     due_date: "2026-02-09",
     due_time: "17:00:00",
-    intention: null,
     completion_difficulty: null,
     completed_at: "2026-02-09T15:00:00Z",
     status: "done",
@@ -718,5 +716,41 @@ describe("TasksPageContent", () => {
     renderWithProviders(<TasksPageContent />);
 
     expect(screen.getByText("Create Project")).toBeInTheDocument();
+  });
+
+  it("navigates to create task page with section=work when clicking Create First Task in Work section", () => {
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: [], error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    // Both sections show empty state; DOM order is Personal (index 0), Work (index 1)
+    const createButtons = screen.getAllByText("Create First Task");
+    expect(createButtons).toHaveLength(2);
+    createButtons[1].click();
+
+    expect(mockPush).toHaveBeenCalledWith("/tasks/new?section=work");
+  });
+
+  it("navigates to create task page with section=personal when clicking Create First Task in Personal section", () => {
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return { data: [], error: undefined, isLoading: false, mutate: vi.fn() };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    // Both sections show empty state; DOM order is Personal (index 0), Work (index 1)
+    const createButtons = screen.getAllByText("Create First Task");
+    expect(createButtons).toHaveLength(2);
+    createButtons[0].click();
+
+    expect(mockPush).toHaveBeenCalledWith("/tasks/new?section=personal");
   });
 });

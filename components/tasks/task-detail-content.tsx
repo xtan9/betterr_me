@@ -274,20 +274,6 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
             )}
           </div>
 
-          {/* Your Why */}
-          {task.intention && (
-            <div className="flex items-start gap-3 p-4 rounded-lg border-l-4 border-l-primary bg-highlight">
-              <div>
-                <p className="text-sm font-medium text-primary">
-                  {t("detail.yourWhy")}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1 italic">
-                  {task.intention}
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Recurrence info */}
           {task.recurring_task_id && recurringTemplate && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

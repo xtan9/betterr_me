@@ -45,7 +45,6 @@ const mockTasks: Task[] = [
     user_id: "user-1",
     title: "Finish proposal",
     description: null,
-    intention: null,
     is_completed: false,
     priority: 3,
     category: null,
@@ -61,7 +60,6 @@ const mockTasks: Task[] = [
     user_id: "user-1",
     title: "Team standup",
     description: null,
-    intention: null,
     is_completed: true,
     priority: 2,
     category: null,
@@ -77,7 +75,6 @@ const mockTasks: Task[] = [
     user_id: "user-1",
     title: "Read documentation",
     description: null,
-    intention: null,
     is_completed: false,
     priority: 1,
     category: null,
@@ -265,81 +262,6 @@ describe("TasksToday", () => {
     fireEvent.click(taskTitle);
 
     expect(onTaskClick).toHaveBeenCalledWith("1");
-  });
-
-  it("shows intention subtitle for P3 tasks with intention", () => {
-    const tasksWithIntention: Task[] = [
-      {
-        ...mockTasks[0],
-        intention: "Career growth depends on this",
-      },
-    ];
-
-    renderWithIntl(
-      <TasksToday
-        tasks={tasksWithIntention}
-        onToggle={vi.fn()}
-        onCreateTask={vi.fn()}
-      />,
-    );
-
-    expect(
-      screen.getByText("Career growth depends on this"),
-    ).toBeInTheDocument();
-  });
-
-  it("does not show intention subtitle for non-P3 tasks", () => {
-    const nonP3WithIntention: Task[] = [
-      {
-        ...mockTasks[2], // use incomplete task as base
-        priority: 2,
-        intention: "Should not appear",
-      },
-    ];
-
-    renderWithIntl(
-      <TasksToday
-        tasks={nonP3WithIntention}
-        onToggle={vi.fn()}
-        onCreateTask={vi.fn()}
-      />,
-    );
-
-    expect(screen.queryByText("Should not appear")).not.toBeInTheDocument();
-  });
-
-  it("does not show intention subtitle for P3 tasks with empty string intention", () => {
-    const tasksWithEmptyIntention: Task[] = [
-      {
-        ...mockTasks[0],
-        intention: "",
-      },
-    ];
-
-    renderWithIntl(
-      <TasksToday
-        tasks={tasksWithEmptyIntention}
-        onToggle={vi.fn()}
-        onCreateTask={vi.fn()}
-      />,
-    );
-
-    const taskRow = screen.getByText("Finish proposal").closest("div");
-    expect(taskRow?.parentElement?.querySelector("p.italic")).toBeNull();
-  });
-
-  it("does not show intention subtitle for P3 tasks without intention", () => {
-    renderWithIntl(
-      <TasksToday
-        tasks={[mockTasks[0]]}
-        onToggle={vi.fn()}
-        onCreateTask={vi.fn()}
-      />,
-    );
-
-    // Task 0 is P3 but has null intention - no subtitle should appear
-    const taskRow = screen.getByText("Finish proposal").closest("div");
-    expect(taskRow?.parentElement?.querySelector("p.italic")).toBeNull();
   });
 
   it("applies fallback color class for out-of-range priority in TaskRow", () => {
@@ -538,33 +460,6 @@ describe("TasksToday", () => {
       expect(screen.queryByText("How was it?")).not.toBeInTheDocument();
     });
 
-    it("shows reflection strip for non-P3 task with intention", async () => {
-      const onToggle = vi.fn().mockResolvedValue(undefined);
-      const onCreateTask = vi.fn();
-
-      const p1WithIntention: Task[] = [
-        {
-          ...mockTasks[2], // priority 1
-          intention: "Because it matters",
-        },
-      ];
-
-      renderWithIntl(
-        <TasksToday
-          tasks={p1WithIntention}
-          onToggle={onToggle}
-          onCreateTask={onCreateTask}
-        />,
-      );
-
-      const checkbox = screen.getByRole("checkbox");
-      await act(async () => {
-        fireEvent.click(checkbox);
-      });
-
-      expect(screen.getByText("How was it?")).toBeInTheDocument();
-    });
-
     it("keeps reflecting task visible after SWR revalidation removes it", async () => {
       const onToggle = vi.fn().mockResolvedValue(undefined);
       const onCreateTask = vi.fn();
@@ -760,7 +655,6 @@ const mockTomorrowTasks: Task[] = [
     user_id: "user-1",
     title: "Plan presentation",
     description: null,
-    intention: null,
     is_completed: false,
     priority: 3,
     category: null,
@@ -775,7 +669,6 @@ const mockTomorrowTasks: Task[] = [
     user_id: "user-1",
     title: "Buy groceries",
     description: null,
-    intention: null,
     is_completed: false,
     priority: 1,
     category: null,
@@ -838,7 +731,6 @@ describe("TasksToday — Coming Up section", () => {
       user_id: "user-1",
       title: `Tomorrow task ${i + 1}`,
       description: null,
-      intention: null,
       is_completed: false,
       priority: 1 as const,
       category: null,

@@ -43,7 +43,6 @@ export const recurringTaskCreateSchema = z
   .object({
     title: z.string().trim().min(1, "Title is required").max(100),
     description: z.string().max(500).optional().nullable(),
-    intention: z.string().max(200).optional().nullable(),
     priority: z
       .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)])
       .optional(),
@@ -82,7 +81,6 @@ export const recurringTaskUpdateSchema = z
   .object({
     title: z.string().trim().min(1).max(100).optional(),
     description: z.string().max(500).optional().nullable(),
-    intention: z.string().max(200).optional().nullable(),
     priority: z
       .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)])
       .optional(),

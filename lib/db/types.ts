@@ -51,7 +51,6 @@ export interface Task {
   category: TaskCategory | null;
   due_date: string | null; // DATE (YYYY-MM-DD)
   due_time: string | null; // TIME (HH:MM:SS)
-  intention: string | null;
   completion_difficulty: 1 | 2 | 3 | null;
   completed_at: string | null; // TIMESTAMPTZ
   status: TaskStatus;
@@ -65,10 +64,9 @@ export interface Task {
   updated_at: string;
 }
 
-export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'intention' | 'completion_difficulty' | 'project_id' | 'recurring_task_id' | 'is_exception' | 'original_date' | 'status' | 'section' | 'sort_order'> & {
+export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'completion_difficulty' | 'project_id' | 'recurring_task_id' | 'is_exception' | 'original_date' | 'status' | 'section' | 'sort_order'> & {
   id?: string;
   category?: TaskCategory | null;
-  intention?: string | null;
   completion_difficulty?: 1 | 2 | 3 | null;
   project_id?: string | null;
   recurring_task_id?: string | null;
@@ -161,7 +159,6 @@ export interface RecurringTask {
   user_id: string;
   title: string;
   description: string | null;
-  intention: string | null;
   priority: 0 | 1 | 2 | 3;
   category: TaskCategory | null;
   due_time: string | null;

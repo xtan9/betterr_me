@@ -475,8 +475,6 @@
       "save": "Save Changes",
       "creating": "Creating...",
       "saving": "Saving...",
-      "intentionLabel": "Why This Matters",
-      "intentionPlaceholder": "Why does this matter to you?",
       "repeatLabel": "Repeat"
     },
     "sectionLabel": "Section",
@@ -514,8 +512,7 @@
         "easy": "You rated this: Easy ⚡",
         "good": "You rated this: Good 👌",
         "hard": "You rated this: Hard 💪"
-      },
-      "yourWhy": "Your Why"
+      }
     },
     "edit": {
       "title": "Edit Task",

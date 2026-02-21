@@ -148,8 +148,12 @@ export function TasksPageContent() {
     router.push(`/tasks/${taskId}`);
   };
 
-  const handleCreateTask = () => {
-    router.push("/tasks/new");
+  const handleCreateTask = (section?: TaskSection) => {
+    if (section) {
+      router.push(`/tasks/new?section=${section}`);
+    } else {
+      router.push("/tasks/new");
+    }
   };
 
   // Project handlers
@@ -261,7 +265,7 @@ export function TasksPageContent() {
               <FolderPlus className="size-4 mr-2" />
               {t("page.createProject")}
             </Button>
-            <Button onClick={handleCreateTask}>
+            <Button onClick={() => handleCreateTask()}>
               <Plus className="size-4 mr-2" />
               {t("page.createButton")}
             </Button>
@@ -424,7 +428,7 @@ interface SectionBlockProps {
   activeTab: StatusTab;
   onToggle: (taskId: string) => Promise<void>;
   onTaskClick: (taskId: string) => void;
-  onCreateTask: () => void;
+  onCreateTask: (section?: TaskSection) => void;
   onEditProject: (project: Project) => void;
   onArchiveProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
@@ -463,7 +467,7 @@ function SectionBlock({
       </h2>
 
       {isEmpty ? (
-        <TaskEmptyState variant="no_tasks" onCreateTask={onCreateTask} />
+        <TaskEmptyState variant="no_tasks" onCreateTask={() => onCreateTask(section)} />
       ) : (
         <div className="space-y-4">
           {/* Standalone tasks first */}

@@ -5,12 +5,14 @@ import { CreateTaskContent } from '@/components/tasks/create-task-content';
 
 const mockPush = vi.fn();
 const mockBack = vi.fn();
+let mockSearchParamsValue = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: mockPush,
     back: mockBack,
   }),
+  useSearchParams: () => mockSearchParamsValue,
 }));
 
 const mockGlobalMutate = vi.fn();
@@ -64,8 +66,6 @@ const allTranslations: Record<string, Record<string, string>> = {
     'titlePlaceholder': 'What do you need to do?',
     'descriptionLabel': 'Description',
     'descriptionPlaceholder': 'Add some details...',
-    'intentionLabel': 'Your Why',
-    'intentionPlaceholder': 'Why is this task important to you?',
     'categoryLabel': 'Category',
     'priorityLabel': 'Priority',
     'dueDateLabel': 'Due Date',
@@ -111,6 +111,7 @@ describe('CreateTaskContent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = vi.fn();
+    mockSearchParamsValue = new URLSearchParams();
   });
 
   it('renders the task form', () => {
@@ -290,5 +291,39 @@ describe('CreateTaskContent', () => {
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith('Failed to create task');
     });
+  });
+
+  it('defaults section to work when ?section=work query param is present', () => {
+    mockSearchParamsValue = new URLSearchParams('section=work');
+
+    render(<CreateTaskContent />);
+
+    // The Work toggle should be active (data-state="on")
+    const workToggle = screen.getByRole('radio', { name: /Work/ });
+    const personalToggle = screen.getByRole('radio', { name: /Personal/ });
+    expect(workToggle).toHaveAttribute('data-state', 'on');
+    expect(personalToggle).toHaveAttribute('data-state', 'off');
+  });
+
+  it('defaults section to personal when no section query param', () => {
+    mockSearchParamsValue = new URLSearchParams();
+
+    render(<CreateTaskContent />);
+
+    const personalToggle = screen.getByRole('radio', { name: /Personal/ });
+    const workToggle = screen.getByRole('radio', { name: /Work/ });
+    expect(personalToggle).toHaveAttribute('data-state', 'on');
+    expect(workToggle).toHaveAttribute('data-state', 'off');
+  });
+
+  it('falls back to personal when ?section has an invalid value', () => {
+    mockSearchParamsValue = new URLSearchParams('section=invalid');
+
+    render(<CreateTaskContent />);
+
+    const personalToggle = screen.getByRole('radio', { name: /Personal/ });
+    const workToggle = screen.getByRole('radio', { name: /Work/ });
+    expect(personalToggle).toHaveAttribute('data-state', 'on');
+    expect(workToggle).toHaveAttribute('data-state', 'off');
   });
 });

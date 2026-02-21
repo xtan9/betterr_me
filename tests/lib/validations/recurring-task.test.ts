@@ -85,7 +85,6 @@ describe('recurringTaskCreateSchema', () => {
     const result = recurringTaskCreateSchema.safeParse({
       ...validBase,
       description: 'Morning standup meeting',
-      intention: 'Stay aligned with team',
       priority: 2,
       category: 'work',
       due_time: '09:00:00',

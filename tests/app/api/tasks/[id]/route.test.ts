@@ -110,48 +110,6 @@ describe("PATCH /api/tasks/[id]", () => {
     expect(response.status).toBe(400);
   });
 
-  it("should update intention", async () => {
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
-      id: "task-1",
-      intention: "Be healthy",
-    } as any);
-
-    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
-      method: "PATCH",
-      body: JSON.stringify({ intention: "Be healthy" }),
-    });
-
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: "task-1" }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith("task-1", "user-123", {
-      intention: "Be healthy",
-    });
-  });
-
-  it("should clear intention when set to empty string", async () => {
-    vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
-      id: "task-1",
-      intention: null,
-    } as any);
-
-    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
-      method: "PATCH",
-      body: JSON.stringify({ intention: "" }),
-    });
-
-    const response = await PATCH(request, {
-      params: Promise.resolve({ id: "task-1" }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(mockTasksDB.updateTask).toHaveBeenCalledWith("task-1", "user-123", {
-      intention: null,
-    });
-  });
-
   it("should update completion_difficulty with valid value", async () => {
     vi.mocked(mockTasksDB.updateTask).mockResolvedValue({
       id: "task-1",

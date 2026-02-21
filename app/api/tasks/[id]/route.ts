@@ -101,10 +101,6 @@ export async function PATCH(
       updates.description = validation.data.description?.trim() || null;
     }
 
-    if (validation.data.intention !== undefined) {
-      updates.intention = validation.data.intention?.trim() || null;
-    }
-
     if (validation.data.is_completed !== undefined) {
       updates.is_completed = validation.data.is_completed;
     }

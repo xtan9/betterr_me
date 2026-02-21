@@ -52,7 +52,6 @@ describe('ensureRecurringInstances', () => {
       user_id: 'user-1',
       title: 'Daily standup',
       description: null,
-      intention: null,
       priority: 1,
       category: 'work',
       due_time: '09:00:00',
