@@ -214,14 +214,14 @@ export function TaskForm({
                   >
                     <ToggleGroupItem
                       value="personal"
-                      className="flex-1 gap-1.5"
+                      className="flex-1 gap-1.5 data-[state=on]:bg-section-personal data-[state=on]:text-white"
                     >
                       <User className="size-4" />
                       {categoryT("personal")}
                     </ToggleGroupItem>
                     <ToggleGroupItem
                       value="work"
-                      className="flex-1 gap-1.5"
+                      className="flex-1 gap-1.5 data-[state=on]:bg-section-work data-[state=on]:text-white"
                     >
                       <Briefcase className="size-4" />
                       {categoryT("work")}
