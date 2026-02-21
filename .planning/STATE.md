@@ -79,5 +79,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 14-03-PLAN.md (tasks page redesign with section layout, archived projects)
-Resume: Phase 15 planning (Kanban Board)
+Stopped at: Phase 15 context gathered
+Resume: /gsd:plan-phase 15
