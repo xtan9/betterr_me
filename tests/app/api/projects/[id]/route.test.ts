@@ -145,6 +145,80 @@ describe('PATCH /api/projects/[id]', () => {
     expect(response.status).toBe(400);
   });
 
+  it('should archive a project', async () => {
+    const archivedProject = {
+      id: 'p1',
+      user_id: 'user-123',
+      name: 'Project 1',
+      section: 'personal',
+      color: 'blue',
+      status: 'archived',
+    };
+    vi.mocked(mockProjectsDB.updateProject).mockResolvedValue(archivedProject);
+
+    const request = new NextRequest('http://localhost:3000/api/projects/p1', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'archived' }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'p1' }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.project.status).toBe('archived');
+    expect(mockProjectsDB.updateProject).toHaveBeenCalledWith(
+      'p1',
+      'user-123',
+      { status: 'archived' }
+    );
+  });
+
+  it('should restore an archived project', async () => {
+    const restoredProject = {
+      id: 'p1',
+      user_id: 'user-123',
+      name: 'Project 1',
+      section: 'personal',
+      color: 'blue',
+      status: 'active',
+    };
+    vi.mocked(mockProjectsDB.updateProject).mockResolvedValue(restoredProject);
+
+    const request = new NextRequest('http://localhost:3000/api/projects/p1', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'active' }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'p1' }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.project.status).toBe('active');
+    expect(mockProjectsDB.updateProject).toHaveBeenCalledWith(
+      'p1',
+      'user-123',
+      { status: 'active' }
+    );
+  });
+
+  it('should reject invalid status value', async () => {
+    const request = new NextRequest('http://localhost:3000/api/projects/p1', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'deleted' }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'p1' }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(mockProjectsDB.updateProject).not.toHaveBeenCalled();
+  });
+
   it('should return 401 if not authenticated', async () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
