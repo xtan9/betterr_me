@@ -251,6 +251,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
         task={selectedTask}
         onClose={() => setSelectedTask(null)}
         projectName={project?.name}
+        onTaskUpdated={() => mutate()}
       />
     </div>
   );
