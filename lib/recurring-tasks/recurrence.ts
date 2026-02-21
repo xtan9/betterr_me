@@ -254,7 +254,7 @@ export function getNextOccurrence(
   return occurrences[0] ?? null;
 }
 
-type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
+type TranslateFn = (key: string, params?: Record<string, string | number | Date>) => string;
 
 /**
  * Get the English ordinal category for a number.
