@@ -315,4 +315,15 @@ describe('CreateTaskContent', () => {
     expect(personalToggle).toHaveAttribute('data-state', 'on');
     expect(workToggle).toHaveAttribute('data-state', 'off');
   });
+
+  it('falls back to personal when ?section has an invalid value', () => {
+    mockSearchParamsValue = new URLSearchParams('section=invalid');
+
+    render(<CreateTaskContent />);
+
+    const personalToggle = screen.getByRole('radio', { name: /Personal/ });
+    const workToggle = screen.getByRole('radio', { name: /Work/ });
+    expect(personalToggle).toHaveAttribute('data-state', 'on');
+    expect(workToggle).toHaveAttribute('data-state', 'off');
+  });
 });

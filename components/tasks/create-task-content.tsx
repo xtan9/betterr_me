@@ -19,7 +19,9 @@ import { getLocalDateString } from "@/lib/utils";
 export function CreateTaskContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const defaultSection = searchParams.get("section") as TaskSection | null;
+  const sectionParam = searchParams.get("section");
+  const defaultSection: TaskSection | undefined =
+    sectionParam === "personal" || sectionParam === "work" ? sectionParam : undefined;
   const t = useTranslations("tasks");
   const tBreadcrumb = useTranslations("tasks.breadcrumb");
   const tForm = useTranslations("tasks.form");
@@ -128,7 +130,7 @@ export function CreateTaskContent() {
             onCancel={handleCancel}
             isLoading={isLoading}
             hideChrome
-            defaultSection={defaultSection ?? undefined}
+            defaultSection={defaultSection}
           />
         </CardContent>
       </Card>

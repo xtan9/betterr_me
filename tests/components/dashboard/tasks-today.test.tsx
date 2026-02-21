@@ -731,7 +731,7 @@ describe("TasksToday — Coming Up section", () => {
       user_id: "user-1",
       title: `Tomorrow task ${i + 1}`,
       description: null,
-        is_completed: false,
+      is_completed: false,
       priority: 1 as const,
       category: null,
       due_date: tomorrow,
