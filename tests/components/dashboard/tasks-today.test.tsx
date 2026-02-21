@@ -25,7 +25,6 @@ const messages = {
       comingUp: "Coming Up Tomorrow",
       headStart: "Get a Head Start",
       moreTomorrow: "+{count} more tomorrow",
-      viewAll: "View all tasks",
     },
   },
 };
@@ -871,7 +870,7 @@ describe("TasksToday — Coming Up section", () => {
     expect(moreLink).toHaveAttribute("href", "/tasks");
   });
 
-  it("shows 'View all tasks' link pointing to /tasks", () => {
+  it("card title links to /tasks", () => {
     renderWithIntl(
       <TasksToday
         tasks={mockTasks}
@@ -881,9 +880,9 @@ describe("TasksToday — Coming Up section", () => {
       />,
     );
 
-    const viewAllLink = screen.getByText("View all tasks").closest("a");
-    expect(viewAllLink).toBeInTheDocument();
-    expect(viewAllLink).toHaveAttribute("href", "/tasks");
+    const titleLink = screen.getByText("Today's Tasks").closest("a");
+    expect(titleLink).toBeInTheDocument();
+    expect(titleLink).toHaveAttribute("href", "/tasks");
   });
 
   it("shows 'Get a Head Start' at full opacity when zero today tasks", () => {

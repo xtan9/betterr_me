@@ -147,8 +147,7 @@
       "perfectDay": "完美的一天！",
       "allCompletedDesc": "你今天完成了所有 {count} 个习惯。",
       "noHabits": "还没有习惯",
-      "createFirst": "创建你的第一个习惯",
-      "viewAll": "查看所有习惯"
+      "createFirst": "创建你的第一个习惯"
     },
     "tasks": {
       "title": "今日任务",
@@ -170,7 +169,6 @@
       "comingUp": "明日待办",
       "headStart": "提前准备",
       "moreTomorrow": "明天还有 {count} 项",
-      "viewAll": "查看所有任务",
       "recurring": "重复"
     },
     "motivation": {

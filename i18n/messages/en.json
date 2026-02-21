@@ -147,8 +147,7 @@
       "perfectDay": "Perfect day!",
       "allCompletedDesc": "You completed all {count} habits today.",
       "noHabits": "No habits yet",
-      "createFirst": "Create your first habit",
-      "viewAll": "View all habits"
+      "createFirst": "Create your first habit"
     },
     "tasks": {
       "title": "Today's Tasks",
@@ -170,7 +169,6 @@
       "comingUp": "Coming Up Tomorrow",
       "headStart": "Get a Head Start",
       "moreTomorrow": "+{count} more tomorrow",
-      "viewAll": "View all tasks",
       "recurring": "Repeats"
     },
     "motivation": {

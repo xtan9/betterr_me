@@ -44,7 +44,10 @@ export function HabitChecklist({
   return (
     <Card className="flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <h2 className="font-display text-lg font-semibold">{t("title")}</h2>
+        <Link href="/habits" className="group flex items-center gap-1">
+          <h2 className="font-display text-lg font-semibold">{t("title")}</h2>
+          <ChevronRight className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150 motion-reduce:transition-none" />
+        </Link>
         <Button
           variant="outline"
           size="sm"
@@ -98,13 +101,6 @@ export function HabitChecklist({
                 </p>
               )}
             </div>
-            <Link
-              href="/habits"
-              className="flex items-center justify-center gap-1 mt-3 text-xs text-primary hover:underline transition-colors duration-150 motion-reduce:transition-none"
-            >
-              {t("viewAll")}
-              <ChevronRight className="size-3" />
-            </Link>
           </>
         )}
       </CardContent>
