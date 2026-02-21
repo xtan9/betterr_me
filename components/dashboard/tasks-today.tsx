@@ -13,7 +13,7 @@ import type { Task } from "@/lib/db/types";
 import { getPriorityColor } from "@/lib/tasks/format";
 
 function qualifiesForReflection(task: Task): boolean {
-  return task.priority === 3 || !!task.intention;
+  return task.priority === 3;
 }
 
 interface ReflectionStripProps {
@@ -117,11 +117,6 @@ function TaskRow({
           <ReflectionStrip onReflect={onReflect} />
         ) : (
           <>
-            {task.priority === 3 && task.intention && (
-              <p className="text-xs text-muted-foreground italic mt-0.5">
-                {task.intention}
-              </p>
-            )}
             <div className="text-xs text-muted-foreground mt-0.5">
               {task.due_time
                 ? t("dueAt", { time: formatTime(task.due_time) })
