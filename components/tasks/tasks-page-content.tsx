@@ -358,7 +358,7 @@ export function TasksPageContent() {
                         {template.title}
                       </h4>
                       <p className="text-xs text-muted-foreground">
-                        {describeRecurrence(template.recurrence_rule)}
+                        {describeRecurrence(template.recurrence_rule, t)}
                       </p>
                     </div>
                     <div className="flex gap-1 shrink-0">
