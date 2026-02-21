@@ -171,9 +171,9 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="min-w-48 rounded-lg"
+            className="min-w-56 rounded-lg"
             side="top"
-            align="end"
+            align="start"
             sideOffset={4}
           >
             <DropdownMenuLabel className="p-0 font-normal">
