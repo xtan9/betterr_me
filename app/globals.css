@@ -51,6 +51,16 @@
     /* === Highlight === */
     --highlight: 155 50% 94%;
 
+    /* === Calm Finance tokens === */
+    --money-sage: 155 25% 55%;
+    --money-sage-light: 155 20% 92%;
+    --money-sage-foreground: 155 30% 25%;
+    --money-amber: 35 60% 55%;
+    --money-amber-light: 35 40% 92%;
+    --money-amber-foreground: 35 50% 30%;
+    --money-surface: 155 10% 98%;
+    --money-border: 155 15% 88%;
+
     /* === Category colors === */
     --category-health: 350 80% 55%;
     --category-health-muted: 350 80% 95%;
@@ -191,6 +201,16 @@
 
     /* === Highlight === */
     --highlight: 160 30% 20%;
+
+    /* === Calm Finance tokens === */
+    --money-sage: 155 20% 50%;
+    --money-sage-light: 155 15% 16%;
+    --money-sage-foreground: 155 25% 75%;
+    --money-amber: 35 50% 55%;
+    --money-amber-light: 35 30% 16%;
+    --money-amber-foreground: 35 40% 70%;
+    --money-surface: 155 8% 15%;
+    --money-border: 155 10% 22%;
 
     /* === Category colors === */
     --category-health: 350 65% 60%;

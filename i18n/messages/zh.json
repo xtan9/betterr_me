@@ -8,6 +8,7 @@
       "habits": "习惯",
       "settings": "设置",
       "tasks": "任务",
+      "money": "财务",
       "learnMore": "了解更多",
       "profile": "个人资料"
     },
@@ -805,6 +806,24 @@
       "medium": "中",
       "low": "低",
       "none": "无"
+    }
+  },
+  "money": {
+    "nav": {
+      "money": "财务"
+    },
+    "page": {
+      "title": "你的财务全景",
+      "subtitle": "平静地查看你的财务状况"
+    },
+    "emptyState": {
+      "heading": "你的平静财务画面从这里开始",
+      "description": "连接你的银行账户，在一个安静的地方查看完整的财务概览。",
+      "comingSoon": "银行连接即将推出",
+      "comingSoonDescription": "我们正在构建一种无缝连接账户的方式。敬请期待。"
+    },
+    "format": {
+      "currency": "USD"
     }
   }
 }
