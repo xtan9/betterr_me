@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { getLocalDateString } from "@/lib/utils";
 import { NextIntlClientProvider } from "next-intl";
 import React from "react";
@@ -996,5 +996,100 @@ describe("DashboardContent", () => {
     });
 
     global.fetch = originalFetch;
+  });
+
+  it("filters habits by shouldTrackOnDate (custom with no matching days hidden)", async () => {
+    const habitsWithCustom = [
+      {
+        ...mockDashboardData.habits[0],
+        id: "daily",
+        name: "Daily Habit",
+        frequency: { type: "daily" as const },
+      },
+      {
+        ...mockDashboardData.habits[1],
+        id: "custom",
+        name: "Custom Habit",
+        // Custom with empty days array — never scheduled
+        frequency: { type: "custom" as const, days: [] as number[] },
+      },
+    ];
+
+    mockUseSWR.mockReturnValue({
+      data: {
+        ...mockDashboardData,
+        habits: habitsWithCustom,
+        stats: { ...mockDashboardData.stats, total_habits: 2 },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    await screen.findByText("Today's Habits");
+    // Daily habit always shows
+    expect(screen.getByText("Daily Habit")).toBeInTheDocument();
+    // Custom with empty days array should be filtered out
+    expect(screen.queryByText("Custom Habit")).not.toBeInTheDocument();
+  });
+
+  it("dismissing an absence card hides it from the dashboard", async () => {
+    const baseFields = {
+      user_id: "user-1",
+      description: null,
+      category: "health" as const,
+      frequency: { type: "daily" as const },
+      status: "active" as const,
+      current_streak: 0,
+      best_streak: 0,
+      paused_at: null,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+      monthly_completion_rate: 50,
+    };
+
+    mockUseSWR.mockReturnValue({
+      data: {
+        habits: [
+          {
+            ...baseFields,
+            id: "h1",
+            name: "Missed Habit",
+            missed_scheduled_periods: 3,
+            previous_streak: 5,
+            absence_unit: "days" as const,
+            completed_today: false,
+          },
+        ],
+        tasks_today: [],
+        tasks_tomorrow: [],
+        stats: {
+          total_habits: 1,
+          completed_today: 0,
+          current_best_streak: 0,
+          total_tasks: 0,
+          tasks_due_today: 0,
+          tasks_completed_today: 0,
+        },
+      },
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent userName="Test User" />);
+
+    // Absence card should be visible
+    await waitFor(() => {
+      expect(screen.getByText(/Missed Habit — 3 days since last check-in/)).toBeInTheDocument();
+    });
+
+    // Click dismiss button
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    // Card should disappear
+    expect(screen.queryByText(/Missed Habit — 3 days since last check-in/)).not.toBeInTheDocument();
   });
 });

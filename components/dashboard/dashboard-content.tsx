@@ -359,6 +359,15 @@ export function DashboardContent({
     .sort((a, b) => normalizePeriods(b) - normalizePeriods(a))
     .slice(0, 3);
 
+  const todaysHabits = data.habits.filter(h => {
+    try {
+      return shouldTrackOnDate(h.frequency, new Date());
+    } catch (err) {
+      console.error('shouldTrackOnDate failed, showing habit as fallback', { habitId: h.id, frequency: h.frequency, err });
+      return true;
+    }
+  });
+
   return (
     <div className="space-y-6">
       {/* Greeting */}
@@ -415,7 +424,7 @@ export function DashboardContent({
       <div className="grid gap-card-gap xl:grid-cols-2">
         {/* Habits Checklist */}
         <HabitChecklist
-          habits={data.habits.filter(h => { try { return shouldTrackOnDate(h.frequency, new Date()); } catch (err) { console.error('shouldTrackOnDate failed, showing habit as fallback', { habitId: h.id, frequency: h.frequency, err }); return true; } })}
+          habits={todaysHabits}
           onToggle={handleToggleHabit}
           onCreateHabit={handleCreateHabit}
           togglingHabitIds={togglingHabitIds}
