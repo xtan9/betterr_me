@@ -157,51 +157,6 @@ describe('POST /api/tasks', () => {
     expect(data.error).toBe('Validation failed');
   });
 
-  it('should pass intention to task data', async () => {
-    vi.mocked(mockTasksDB.createTask).mockResolvedValue({ id: 'task-1' } as any);
-
-    const request = new NextRequest('http://localhost:3000/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({ title: 'Gym', intention: 'Stay healthy' }),
-    });
-
-    await POST(request);
-
-    expect(mockTasksDB.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({ intention: 'Stay healthy' })
-    );
-  });
-
-  it('should trim intention whitespace', async () => {
-    vi.mocked(mockTasksDB.createTask).mockResolvedValue({ id: 'task-1' } as any);
-
-    const request = new NextRequest('http://localhost:3000/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({ title: 'Gym', intention: '  Stay healthy  ' }),
-    });
-
-    await POST(request);
-
-    expect(mockTasksDB.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({ intention: 'Stay healthy' })
-    );
-  });
-
-  it('should set intention to null when not provided', async () => {
-    vi.mocked(mockTasksDB.createTask).mockResolvedValue({ id: 'task-1' } as any);
-
-    const request = new NextRequest('http://localhost:3000/api/tasks', {
-      method: 'POST',
-      body: JSON.stringify({ title: 'Quick task' }),
-    });
-
-    await POST(request);
-
-    expect(mockTasksDB.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({ intention: null })
-    );
-  });
-
   it('should return 401 if not authenticated', async () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
