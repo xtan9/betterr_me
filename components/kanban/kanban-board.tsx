@@ -85,7 +85,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
   );
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   // DnD sensors
   const mouseSensor = useSensor(MouseSensor, {
@@ -99,6 +99,11 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
 
   const project = projectData?.project;
   const tasks = useMemo(() => tasksData?.tasks ?? [], [tasksData?.tasks]);
+
+  // Derive selected task from SWR data so it stays fresh after mutations
+  const selectedTask = selectedTaskId
+    ? tasks.find((t) => t.id === selectedTaskId) ?? null
+    : null;
 
   // Group tasks by status with priority sort
   const grouped = useMemo(() => groupByStatus(tasks), [tasks]);
@@ -234,7 +239,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
               status={status}
               title={t(`columns.${status}`)}
               tasks={grouped[status]}
-              onCardClick={setSelectedTask}
+              onCardClick={(task) => setSelectedTaskId(task.id)}
               projectId={projectId}
               projectSection={project?.section ?? "personal"}
               onTaskCreated={() => mutate()}
@@ -249,8 +254,9 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
 
       <KanbanDetailModal
         task={selectedTask}
-        onClose={() => setSelectedTask(null)}
+        onClose={() => setSelectedTaskId(null)}
         projectName={project?.name}
+        onTaskUpdated={() => mutate()}
       />
     </div>
   );

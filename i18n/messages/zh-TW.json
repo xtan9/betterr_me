@@ -789,15 +789,19 @@
       "activityTab": "動態",
       "status": "狀態",
       "priority": "優先順序",
-      "section": "分區",
       "project": "專案",
       "dueDate": "截止日期",
       "description": "描述",
       "noDescription": "暫無描述",
       "noDueDate": "暫無截止日期",
-      "commentsPlaceholder": "評論和更新功能即將上線",
       "activityPlaceholder": "活動日誌功能即將上線",
-      "editTask": "編輯任務"
+      "infoHeading": "資訊",
+      "descriptionHeading": "描述",
+      "descriptionPlaceholder": "新增描述...",
+      "updatesHeading": "項目動態",
+      "writeUpdate": "撰寫更新...",
+      "noUpdates": "暫無更新",
+      "updateError": "更新任務失敗"
     },
     "priority": {
       "high": "高",

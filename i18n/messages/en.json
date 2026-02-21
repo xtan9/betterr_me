@@ -789,15 +789,19 @@
       "activityTab": "Activity",
       "status": "Status",
       "priority": "Priority",
-      "section": "Section",
       "project": "Project",
       "dueDate": "Due Date",
       "description": "Description",
       "noDescription": "No description",
       "noDueDate": "No due date",
-      "commentsPlaceholder": "Comments and updates coming soon",
       "activityPlaceholder": "Activity log coming soon",
-      "editTask": "Edit Task"
+      "infoHeading": "Info",
+      "descriptionHeading": "Description",
+      "descriptionPlaceholder": "Add a description...",
+      "updatesHeading": "Item updates",
+      "writeUpdate": "Write an update...",
+      "noUpdates": "No updates yet",
+      "updateError": "Failed to update task"
     },
     "priority": {
       "high": "High",
