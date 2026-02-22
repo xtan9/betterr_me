@@ -44,7 +44,7 @@ const mockHabit = {
   id: 'habit-1',
   user_id: 'user-123',
   name: 'Morning Run',
-  category: 'health',
+  category_id: null,
   frequency: { type: 'daily' },
   status: 'active',
   current_streak: 5,
@@ -79,13 +79,13 @@ describe('GET /api/habits', () => {
     expect(mockGetUserHabits).toHaveBeenCalledWith('user-123', { status: 'paused' });
   });
 
-  it('should filter by category', async () => {
+  it('should filter by category_id', async () => {
     mockGetUserHabits.mockResolvedValue([]);
 
-    const request = new NextRequest('http://localhost:3000/api/habits?category=health');
+    const request = new NextRequest('http://localhost:3000/api/habits?category_id=cat-123');
     await GET(request);
 
-    expect(mockGetUserHabits).toHaveBeenCalledWith('user-123', { category: 'health' });
+    expect(mockGetUserHabits).toHaveBeenCalledWith('user-123', { category_id: 'cat-123' });
   });
 
   it('should use getHabitsWithTodayStatus when with_today=true', async () => {
@@ -127,7 +127,6 @@ describe('POST /api/habits', () => {
       body: JSON.stringify({
         name: 'Morning Run',
         frequency: { type: 'daily' },
-        category: 'health',
       }),
     });
 
@@ -255,7 +254,6 @@ describe('POST /api/habits', () => {
         name: 'Morning Run',
         description: 'My description',
         frequency: { type: 'daily' },
-        category: 'health',
       }),
     });
 
@@ -266,22 +264,21 @@ describe('POST /api/habits', () => {
     );
   });
 
-  it('should create habit without category (null)', async () => {
-    mockCreateHabit.mockResolvedValue({ ...mockHabit, category: null } as any);
+  it('should create habit without category_id (null)', async () => {
+    mockCreateHabit.mockResolvedValue({ ...mockHabit, category_id: null } as any);
 
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
       body: JSON.stringify({
         name: 'Meditate',
         frequency: { type: 'daily' },
-        category: null,
       }),
     });
 
     const response = await POST(request);
     expect(response.status).toBe(201);
     expect(mockCreateHabit).toHaveBeenCalledWith(
-      expect.objectContaining({ category: null })
+      expect.objectContaining({ category_id: null })
     );
   });
 

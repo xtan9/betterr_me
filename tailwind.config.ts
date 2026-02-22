@@ -71,28 +71,6 @@ export default {
           "active-ring": "hsl(var(--sidebar-active-ring))",
           "icon-bg": "hsl(var(--sidebar-icon-bg))",
         },
-        category: {
-          health: {
-            DEFAULT: "hsl(var(--category-health))",
-            muted: "hsl(var(--category-health-muted))",
-          },
-          wellness: {
-            DEFAULT: "hsl(var(--category-wellness))",
-            muted: "hsl(var(--category-wellness-muted))",
-          },
-          learning: {
-            DEFAULT: "hsl(var(--category-learning))",
-            muted: "hsl(var(--category-learning-muted))",
-          },
-          productivity: {
-            DEFAULT: "hsl(var(--category-productivity))",
-            muted: "hsl(var(--category-productivity-muted))",
-          },
-          other: {
-            DEFAULT: "hsl(var(--category-other))",
-            muted: "hsl(var(--category-other-muted))",
-          },
-        },
         section: {
           personal: {
             DEFAULT: "hsl(var(--section-personal))",

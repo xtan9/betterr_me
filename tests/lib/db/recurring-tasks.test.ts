@@ -28,7 +28,7 @@ const mockTemplate: RecurringTask = {
   title: "Daily standup",
   description: "Morning standup meeting",
   priority: 1,
-  category: "productivity",
+  category_id: null,
   due_time: "09:00",
   recurrence_rule: { frequency: "daily", interval: 1 },
   start_date: "2026-01-01",

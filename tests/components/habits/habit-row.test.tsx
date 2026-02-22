@@ -48,7 +48,6 @@ describe('HabitRow', () => {
     user_id: 'user-1',
     name: 'Morning Run',
     description: null,
-    category: 'health',
     category_id: 'cat-health',
     frequency: { type: 'daily' },
     status: 'active',
@@ -95,12 +94,12 @@ describe('HabitRow', () => {
     });
 
     it('shows correct category when category_id changes', () => {
-      render(<HabitRow {...defaultProps} habit={makeHabit({ category: 'wellness', category_id: 'cat-wellness' })} />);
+      render(<HabitRow {...defaultProps} habit={makeHabit({ category_id: 'cat-wellness' })} />);
       expect(screen.getByText('Wellness')).toBeInTheDocument();
     });
 
     it('shows empty label when category_id is null', () => {
-      render(<HabitRow {...defaultProps} habit={makeHabit({ category: null, category_id: null })} />);
+      render(<HabitRow {...defaultProps} habit={makeHabit({ category_id: null })} />);
       // No category name should be displayed
       expect(screen.queryByText('Health')).not.toBeInTheDocument();
       expect(screen.queryByText('Wellness')).not.toBeInTheDocument();

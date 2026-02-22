@@ -32,7 +32,7 @@ const mockHabit = {
   id: 'habit-1',
   user_id: 'user-123',
   name: 'Morning Run',
-  category: 'health',
+  category_id: null,
   frequency: { type: 'daily' },
   status: 'active',
   current_streak: 5,

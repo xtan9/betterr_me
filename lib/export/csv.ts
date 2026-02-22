@@ -76,7 +76,7 @@ export function exportHabitsToCSV(habits: Habit[]): string {
     { key: "id", header: "id" },
     { key: "name", header: "name" },
     { key: "description", header: "description" },
-    { key: "category", header: "category" },
+    { key: "category_id", header: "category_id" },
     {
       key: "frequency",
       header: "frequency_type",

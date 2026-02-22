@@ -14,7 +14,7 @@ describe("CSV Export Utilities", () => {
       const csv = exportHabitsToCSV(habits);
 
       expect(csv).toBe(
-        "id,name,description,category,frequency_type,frequency_details,status,current_streak,best_streak,created_at"
+        "id,name,description,category_id,frequency_type,frequency_details,status,current_streak,best_streak,created_at"
       );
     });
 
@@ -25,7 +25,7 @@ describe("CSV Export Utilities", () => {
           user_id: "user-1",
           name: "Morning Run",
           description: null,
-          category: "health",
+          category_id: null,
           frequency: { type: "daily" },
           status: "active",
           current_streak: 5,
@@ -41,7 +41,7 @@ describe("CSV Export Utilities", () => {
 
       expect(lines).toHaveLength(2);
       expect(lines[1]).toBe(
-        "habit-1,Morning Run,,health,daily,daily,active,5,10,2026-01-01T00:00:00Z"
+        "habit-1,Morning Run,,,daily,daily,active,5,10,2026-01-01T00:00:00Z"
       );
     });
 
@@ -52,7 +52,7 @@ describe("CSV Export Utilities", () => {
           user_id: "user-1",
           name: "Gym",
           description: "Weight training",
-          category: "wellness",
+          category_id: null,
           frequency: { type: "times_per_week", count: 3 },
           status: "active",
           current_streak: 2,
@@ -77,7 +77,7 @@ describe("CSV Export Utilities", () => {
           user_id: "user-1",
           name: "Weekend Reading",
           description: null,
-          category: "learning",
+          category_id: null,
           frequency: { type: "custom", days: [0, 6] },
           status: "active",
           current_streak: 3,
@@ -102,7 +102,7 @@ describe("CSV Export Utilities", () => {
           user_id: "user-1",
           name: "Read, Write, Learn",
           description: "Multiple activities, daily",
-          category: "learning",
+          category_id: null,
           frequency: { type: "daily" },
           status: "active",
           current_streak: 1,
@@ -127,7 +127,7 @@ describe("CSV Export Utilities", () => {
           user_id: "user-1",
           name: 'Read "The Book"',
           description: null,
-          category: "learning",
+          category_id: null,
           frequency: { type: "daily" },
           status: "active",
           current_streak: 0,

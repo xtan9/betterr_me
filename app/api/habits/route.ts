@@ -6,9 +6,7 @@ import { log } from '@/lib/logger';
 import { habitFormSchema } from '@/lib/validations/habit';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import { MAX_HABITS_PER_USER } from '@/lib/constants';
-import type { HabitInsert, HabitFilters, HabitCategory } from '@/lib/db/types';
-
-const VALID_CATEGORIES: HabitCategory[] = ['health', 'wellness', 'learning', 'productivity', 'other'];
+import type { HabitInsert, HabitFilters } from '@/lib/db/types';
 
 /**
  * GET /api/habits
@@ -16,7 +14,7 @@ const VALID_CATEGORIES: HabitCategory[] = ['health', 'wellness', 'learning', 'pr
  *
  * Query parameters:
  * - status: 'active' | 'paused' | 'archived'
- * - category: 'health' | 'wellness' | 'learning' | 'productivity' | 'other'
+ * - category_id: UUID of user-defined category
  * - with_today: boolean - include today's completion status
  */
 export async function GET(request: NextRequest) {
@@ -51,10 +49,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (searchParams.has('category')) {
-      const category = searchParams.get('category') as HabitCategory;
-      if (VALID_CATEGORIES.includes(category)) {
-        filters.category = category;
+    if (searchParams.has('category_id')) {
+      const categoryId = searchParams.get('category_id');
+      if (categoryId) {
+        filters.category_id = categoryId;
       }
     }
 
@@ -104,7 +102,6 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       name: validation.data.name.trim(),
       description: validation.data.description?.trim() || null,
-      category: null,
       category_id: validation.data.category_id || null,
       frequency: validation.data.frequency,
       status: 'active',

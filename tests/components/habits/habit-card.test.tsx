@@ -72,7 +72,6 @@ const baseHabit: HabitWithTodayStatus = {
   user_id: 'user-1',
   name: 'Morning Run',
   description: 'Run for 30 minutes',
-  category: 'health',
   category_id: 'cat-health',
   frequency: { type: 'daily' },
   status: 'active',

@@ -344,7 +344,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
                 className={cn(
                   habit.status === "active" && "bg-primary",
                   habit.status === "paused" && "bg-status-warning",
-                  habit.status === "archived" && "bg-category-other"
+                  habit.status === "archived" && "bg-muted-foreground"
                 )}
               >
                 {t(`detail.status.${habit.status}`)}

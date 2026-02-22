@@ -109,7 +109,7 @@ describe('syncTaskCreate', () => {
       priority: 2,
       due_date: '2026-03-01',
       due_time: '10:00:00',
-      category: 'work',
+      category_id: null,
     };
     const result = syncTaskCreate(input);
     expect(result.user_id).toBe('user-1');
@@ -118,7 +118,7 @@ describe('syncTaskCreate', () => {
     expect(result.priority).toBe(2);
     expect(result.due_date).toBe('2026-03-01');
     expect(result.due_time).toBe('10:00:00');
-    expect(result.category).toBe('work');
+    expect(result.category_id).toBeNull();
   });
 });
 

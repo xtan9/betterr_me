@@ -173,7 +173,6 @@ const mockHabit = {
   user_id: "user-1",
   name: "Exercise",
   description: null,
-  category: "health" as const,
   category_id: null,
   frequency: { type: "daily" as const },
   status: "active" as const,

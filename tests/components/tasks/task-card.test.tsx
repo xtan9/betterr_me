@@ -57,7 +57,6 @@ const baseTask: Task = {
   description: "Milk, eggs, bread",
   is_completed: false,
   priority: 2,
-  category: "shopping",
   category_id: "cat-shopping",
   due_date: "2026-12-31",
   due_time: null,

@@ -36,7 +36,7 @@ function makeHabit(overrides: Partial<HabitWithAbsence> = {}): HabitWithAbsence 
     user_id: "user-1",
     name: "Morning Run",
     description: null,
-    category: "health",
+    category_id: null,
     frequency: { type: "daily" },
     status: "active",
     current_streak: 0,
