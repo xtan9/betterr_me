@@ -39,7 +39,7 @@ test.describe('Create Habit Flow', () => {
 
     await createPage.fillName('E2E Test - Morning Run');
     await createPage.fillDescription('A test habit created by E2E test suite');
-    await createPage.selectCategory('health');
+    await createPage.selectCategory('Health');
     await createPage.selectFrequency(/every day/i);
     await createPage.submit();
     await createPage.waitForRedirect();
@@ -158,18 +158,19 @@ test.describe('Create Habit Flow', () => {
   });
 
   test('should select different categories', async ({ page }) => {
-    const categories = ['health', 'wellness', 'learning', 'productivity'];
+    // Categories are now user-defined and seeded from lib/categories/seed.ts
+    const categories = ['Health', 'Learning', 'Finance', 'Home'];
     const createPage = new CreateHabitPage(page);
 
     for (const category of categories) {
       await createPage.goto();
       await createPage.fillName(`E2E Test - ${category} category`);
 
-      // Click the category button
+      // Click the category toggle button
       const categoryButton = page.getByRole('button', { name: new RegExp(category, 'i') });
       await categoryButton.click();
 
-      // Verify it's selected (usually has an active/pressed state)
+      // Verify it's selected (Toggle has data-state="on" when pressed)
       await expect(categoryButton).toHaveAttribute('data-state', 'on');
 
       // Don't submit, just verify selection works
