@@ -1,27 +1,38 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Flame } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Flame, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { createElement } from "react";
-import { getFrequencyTranslation, getCategoryColor, getCategoryIcon } from "@/lib/habits/format";
-import type { HabitWithTodayStatus } from "@/lib/db/types";
+import { getFrequencyTranslation } from "@/lib/habits/format";
+import { getProjectColor } from "@/lib/projects/colors";
+import type { HabitWithTodayStatus, Category } from "@/lib/db/types";
 
 interface HabitCardProps {
   habit: HabitWithTodayStatus;
+  categories?: Category[];
   onToggle: (habitId: string, date?: string) => Promise<void>;
   onClick: (habitId: string) => void;
   isToggling?: boolean;
 }
 
-export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardProps) {
+export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: HabitCardProps) {
   const t = useTranslations("habits");
-  const categoryColorClass = getCategoryColor(habit.category);
-  const categoryLabel = habit.category
-    ? t(`categories.${habit.category}`)
-    : t("categories.other");
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+
+  const category = habit.category_id && categories
+    ? categories.find((c) => c.id === habit.category_id) ?? null
+    : null;
+  const categoryColor = category
+    ? getProjectColor(category.color)
+    : null;
+  const bgColor = categoryColor
+    ? (isDark ? categoryColor.hslDark : categoryColor.hsl)
+    : undefined;
+
   const freqTrans = getFrequencyTranslation(habit.frequency);
   const frequencyLabel = t(freqTrans.key, freqTrans.params);
 
@@ -42,13 +53,19 @@ export function HabitCard({ habit, onToggle, onClick, isToggling }: HabitCardPro
             className="flex items-center gap-2 min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
             onClick={() => onClick(habit.id)}
           >
-            <span className={cn("inline-flex items-center justify-center rounded-md p-1.5", categoryColorClass)}>
-              {createElement(getCategoryIcon(habit.category), { className: "size-4", "aria-hidden": "true" })}
+            <span
+              className={cn(
+                "inline-flex items-center justify-center rounded-md p-1.5",
+                !bgColor && "bg-muted"
+              )}
+              style={bgColor ? { backgroundColor: bgColor } : undefined}
+            >
+              <Tag className="size-4 text-white" aria-hidden="true" />
             </span>
             <div className="min-w-0">
               <h3 className="font-display font-medium truncate">{habit.name}</h3>
               <p className="text-xs text-muted-foreground">
-                {categoryLabel} · {frequencyLabel}
+                {category?.name ?? ""}{category?.name ? " · " : ""}{frequencyLabel}
               </p>
             </div>
           </button>

@@ -4,15 +4,12 @@ import { useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import {
   Edit,
   AlertCircle,
-  Heart,
-  Brain,
-  BookOpen,
-  Zap,
-  MoreHorizontal,
+  Tag,
   Pause,
   Play,
   Archive,
@@ -21,6 +18,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
+import { useCategories } from "@/lib/hooks/use-categories";
+import { getProjectColor } from "@/lib/projects/colors";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +36,7 @@ const Heatmap30Day = dynamic(() =>
     default: m.Heatmap30Day,
   })),
 );
-import type { Habit, HabitLog, HabitCategory } from "@/lib/db/types";
+import type { Habit, HabitLog } from "@/lib/db/types";
 
 interface HabitDetailContentProps {
   habitId: string;
@@ -54,22 +53,6 @@ const fetcher = async (url: string) => {
   if (!res.ok) throw new Error("Failed to fetch");
   const data = await res.json();
   return data.habit || data.logs || data;
-};
-
-const CATEGORY_ICONS: Record<HabitCategory, typeof Heart> = {
-  health: Heart,
-  wellness: Brain,
-  learning: BookOpen,
-  productivity: Zap,
-  other: MoreHorizontal,
-};
-
-const CATEGORY_COLORS: Record<HabitCategory, string> = {
-  health: "bg-category-health",
-  wellness: "bg-category-wellness",
-  learning: "bg-category-learning",
-  productivity: "bg-category-productivity",
-  other: "bg-category-other",
 };
 
 function HabitDetailSkeleton() {
@@ -141,6 +124,9 @@ function formatFrequency(
 export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
   const router = useRouter();
   const t = useTranslations("habits");
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const { categories } = useCategories();
 
   const {
     data: habit,
@@ -323,12 +309,13 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     );
   }
 
-  const CategoryIcon = habit.category
-    ? CATEGORY_ICONS[habit.category]
-    : MoreHorizontal;
-  const categoryColor = habit.category
-    ? CATEGORY_COLORS[habit.category]
-    : "bg-category-other";
+  const category = habit.category_id
+    ? categories.find((c) => c.id === habit.category_id) ?? null
+    : null;
+  const catColor = category ? getProjectColor(category.color) : null;
+  const catBgColor = catColor
+    ? (isDark ? catColor.hslDark : catColor.hsl)
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -364,8 +351,16 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
               </Badge>
             </div>
             <div className="flex items-center gap-2 text-muted-foreground mb-2">
-              <CategoryIcon className={cn("size-4 text-white rounded p-0.5", categoryColor)} />
-              <span>{habit.category ? t(`categories.${habit.category}`) : ""}</span>
+              <span
+                className={cn(
+                  "inline-flex items-center justify-center rounded p-0.5",
+                  !catBgColor && "bg-muted"
+                )}
+                style={catBgColor ? { backgroundColor: catBgColor } : undefined}
+              >
+                <Tag className="size-4 text-white" aria-hidden="true" />
+              </span>
+              <span>{category?.name ?? ""}</span>
               <span>•</span>
               <span>{formatFrequency(habit.frequency, t)}</span>
             </div>

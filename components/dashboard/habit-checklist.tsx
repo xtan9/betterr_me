@@ -7,6 +7,7 @@ import { Plus, PartyPopper, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { HabitRow } from "@/components/habits/habit-row";
+import { useCategories } from "@/lib/hooks/use-categories";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
 interface HabitChecklistProps {
@@ -24,6 +25,7 @@ export function HabitChecklist({
 }: HabitChecklistProps) {
   const t = useTranslations("dashboard.habits");
   const router = useRouter();
+  const { categories } = useCategories();
 
   const sortedHabits = [...habits].sort(
     (a, b) => Number(a.completed_today) - Number(b.completed_today),
@@ -68,6 +70,7 @@ export function HabitChecklist({
                 <HabitRow
                   key={habit.id}
                   habit={habit}
+                  categories={categories}
                   onToggle={onToggle}
                   onClick={handleHabitClick}
                   isToggling={togglingHabitIds?.has(habit.id)}

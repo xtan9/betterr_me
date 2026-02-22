@@ -29,6 +29,16 @@ vi.mock("@/lib/hooks/use-projects", () => ({
   }),
 }));
 
+// Mock useCategories hook
+vi.mock("@/lib/hooks/use-categories", () => ({
+  useCategories: () => ({
+    categories: [],
+    error: undefined,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+}));
+
 // Mock SWR
 const mockUseSWR = vi.fn();
 vi.mock("swr", () => ({

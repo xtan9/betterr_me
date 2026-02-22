@@ -1,24 +1,46 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { HabitRow } from '@/components/habits/habit-row';
-import type { HabitWithTodayStatus } from '@/lib/db/types';
+import type { HabitWithTodayStatus, Category } from '@/lib/db/types';
 
 vi.mock('next-intl', () => ({
   useTranslations: () => {
     const t = (key: string, params?: Record<string, unknown>) => {
       const messages: Record<string, string> = {
         'card.streakDays': `${params?.count ?? 0} days`,
-        'categories.health': 'Health',
-        'categories.wellness': 'Wellness',
-        'categories.learning': 'Learning',
-        'categories.productivity': 'Productivity',
-        'categories.other': 'Other',
+        'card.markComplete': 'Mark complete',
       };
       return messages[key] ?? key;
     };
     return t;
   },
 }));
+
+// Mock next-themes
+vi.mock('next-themes', () => ({
+  useTheme: () => ({ resolvedTheme: 'light' }),
+}));
+
+const mockCategories: Category[] = [
+  {
+    id: 'cat-health',
+    user_id: 'user-1',
+    name: 'Health',
+    color: 'red',
+    icon: null,
+    sort_order: 0,
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'cat-wellness',
+    user_id: 'user-1',
+    name: 'Wellness',
+    color: 'blue',
+    icon: null,
+    sort_order: 1,
+    created_at: '2026-01-01T00:00:00Z',
+  },
+];
 
 describe('HabitRow', () => {
   const makeHabit = (overrides: Partial<HabitWithTodayStatus> = {}): HabitWithTodayStatus => ({
@@ -27,6 +49,7 @@ describe('HabitRow', () => {
     name: 'Morning Run',
     description: null,
     category: 'health',
+    category_id: 'cat-health',
     frequency: { type: 'daily' },
     status: 'active',
     current_streak: 5,
@@ -41,6 +64,7 @@ describe('HabitRow', () => {
 
   const defaultProps = {
     habit: makeHabit(),
+    categories: mockCategories,
     onToggle: vi.fn().mockResolvedValue(undefined),
     onClick: vi.fn(),
   };
@@ -60,7 +84,7 @@ describe('HabitRow', () => {
       expect(screen.getByText('Morning Run')).toBeInTheDocument();
     });
 
-    it('renders category label', () => {
+    it('renders category name from categories prop', () => {
       render(<HabitRow {...defaultProps} />);
       expect(screen.getByText('Health')).toBeInTheDocument();
     });
@@ -70,14 +94,16 @@ describe('HabitRow', () => {
       expect(screen.getByText('5 days')).toBeInTheDocument();
     });
 
-    it('capitalizes category correctly', () => {
-      render(<HabitRow {...defaultProps} habit={makeHabit({ category: 'wellness' })} />);
+    it('shows correct category when category_id changes', () => {
+      render(<HabitRow {...defaultProps} habit={makeHabit({ category: 'wellness', category_id: 'cat-wellness' })} />);
       expect(screen.getByText('Wellness')).toBeInTheDocument();
     });
 
-    it('shows "Other" when category is null', () => {
-      render(<HabitRow {...defaultProps} habit={makeHabit({ category: null })} />);
-      expect(screen.getByText('Other')).toBeInTheDocument();
+    it('shows empty label when category_id is null', () => {
+      render(<HabitRow {...defaultProps} habit={makeHabit({ category: null, category_id: null })} />);
+      // No category name should be displayed
+      expect(screen.queryByText('Health')).not.toBeInTheDocument();
+      expect(screen.queryByText('Wellness')).not.toBeInTheDocument();
     });
   });
 
@@ -116,8 +142,7 @@ describe('HabitRow', () => {
   describe('fire emoji for streak', () => {
     it('does not show fire emoji when streak is less than 7', () => {
       render(<HabitRow {...defaultProps} habit={makeHabit({ current_streak: 6 })} />);
-      expect(screen.queryByTestId('flame-icon')).not.toBeInTheDocument();
-      // Also verify by checking the rendered output doesn't have the flame element
+      // Verify by checking the rendered output doesn't have the flame element
       const container = screen.getByText('6 days').parentElement;
       expect(container?.querySelector('svg')).toBeNull();
     });

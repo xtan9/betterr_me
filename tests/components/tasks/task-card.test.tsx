@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TaskCard } from "@/components/tasks/task-card";
-import type { Task } from "@/lib/db/types";
+import type { Task, Category } from "@/lib/db/types";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
@@ -11,10 +11,6 @@ vi.mock("next-intl", () => ({
       "tasks.card.markComplete": "Mark complete",
       "tasks.card.overdue": "Overdue",
       "tasks.card.noDueDate": "No due date",
-      "tasks.categories.work": "Work",
-      "tasks.categories.personal": "Personal",
-      "tasks.categories.shopping": "Shopping",
-      "tasks.categories.other": "Other",
       "tasks.priorities.0": "None",
       "tasks.priorities.1": "Low",
       "tasks.priorities.2": "Medium",
@@ -28,6 +24,32 @@ vi.mock("next-intl", () => ({
   },
 }));
 
+// Mock next-themes
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ resolvedTheme: "light" }),
+}));
+
+const mockCategories: Category[] = [
+  {
+    id: "cat-shopping",
+    user_id: "user-1",
+    name: "Shopping",
+    color: "orange",
+    icon: null,
+    sort_order: 0,
+    created_at: "2026-01-01T00:00:00Z",
+  },
+  {
+    id: "cat-work",
+    user_id: "user-1",
+    name: "Work",
+    color: "blue",
+    icon: null,
+    sort_order: 1,
+    created_at: "2026-01-01T00:00:00Z",
+  },
+];
+
 const baseTask: Task = {
   id: "task-1",
   user_id: "user-1",
@@ -36,9 +58,18 @@ const baseTask: Task = {
   is_completed: false,
   priority: 2,
   category: "shopping",
+  category_id: "cat-shopping",
   due_date: "2026-12-31",
   due_time: null,
   completed_at: null,
+  completion_difficulty: null,
+  status: "todo",
+  section: "personal",
+  sort_order: 0,
+  project_id: null,
+  recurring_task_id: null,
+  is_exception: false,
+  original_date: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };
@@ -57,6 +88,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={baseTask}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -64,10 +96,11 @@ describe("TaskCard", () => {
       expect(screen.getByText("Buy groceries")).toBeInTheDocument();
     });
 
-    it("renders category label", () => {
+    it("renders category label from categories prop", () => {
       render(
         <TaskCard
           task={baseTask}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -79,6 +112,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={baseTask}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -90,6 +124,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={baseTask}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -102,6 +137,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={noDueDate}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -114,6 +150,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={overdueTask}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -130,6 +167,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={completedOverdue}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -142,6 +180,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={completed}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -156,6 +195,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={baseTask}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -168,6 +208,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={baseTask}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -181,6 +222,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={baseTask}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />
@@ -195,6 +237,7 @@ describe("TaskCard", () => {
       render(
         <TaskCard
           task={completed}
+          categories={mockCategories}
           onToggle={mockOnToggle}
           onClick={mockOnClick}
         />

@@ -104,7 +104,8 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       name: validation.data.name.trim(),
       description: validation.data.description?.trim() || null,
-      category: validation.data.category || null,
+      category: null,
+      category_id: validation.data.category_id || null,
       frequency: validation.data.frequency,
       status: 'active',
     };

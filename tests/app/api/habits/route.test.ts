@@ -174,13 +174,13 @@ describe('POST /api/habits', () => {
     expect(response.status).toBe(400);
   });
 
-  it('should return 400 if category is invalid', async () => {
+  it('should return 400 if category_id is invalid', async () => {
     const request = new NextRequest('http://localhost:3000/api/habits', {
       method: 'POST',
       body: JSON.stringify({
         name: 'Test',
         frequency: { type: 'daily' },
-        category: 'invalid',
+        category_id: 'invalid',
       }),
     });
 
