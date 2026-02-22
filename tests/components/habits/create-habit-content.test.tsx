@@ -35,6 +35,19 @@ vi.mock('sonner', () => ({
   },
 }));
 
+vi.mock('next-themes', () => ({
+  useTheme: () => ({ resolvedTheme: 'light' }),
+}));
+
+vi.mock('@/lib/hooks/use-categories', () => ({
+  useCategories: () => ({
+    categories: [],
+    error: null,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+}));
+
 // Namespace-aware mock matching next-intl's useTranslations behavior
 const allTranslations: Record<string, Record<string, string>> = {
   'common.nav': {
@@ -66,12 +79,11 @@ const allTranslations: Record<string, Record<string, string>> = {
     'validation.nameRequired': 'Name is required',
     'validation.nameMax': 'Name must be 100 characters or less',
   },
-  'habits.categories': {
-    'health': 'Health',
-    'wellness': 'Wellness',
-    'learning': 'Learning',
-    'productivity': 'Productivity',
-    'other': 'Other',
+  'categories': {
+    'add': 'Add',
+    'namePlaceholder': 'Category name',
+    'creating': 'Creating...',
+    'create': 'Create',
   },
   'habits.frequency': {
     'daily': 'Every day',
@@ -215,7 +227,6 @@ describe('CreateHabitContent', () => {
     render(<CreateHabitContent />);
 
     await user.type(screen.getByLabelText('Habit Name'), 'Read Books');
-    await user.click(screen.getByRole('button', { name: /Learning/ }));
     await user.click(screen.getByRole('button', { name: 'Create Habit' }));
 
     await waitFor(() => {
@@ -228,7 +239,7 @@ describe('CreateHabitContent', () => {
 
     const callBody = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string);
     expect(callBody.name).toBe('Read Books');
-    expect(callBody.category).toBe('learning');
+    expect(callBody.category_id).toBeNull();
     expect(callBody.frequency).toEqual({ type: 'daily' });
   });
 

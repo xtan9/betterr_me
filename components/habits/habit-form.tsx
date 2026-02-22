@@ -3,12 +3,9 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
-import { Heart, Brain, BookOpen, Zap, MoreHorizontal } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Toggle } from "@/components/ui/toggle";
 import {
   Form,
   FormControl,
@@ -17,9 +14,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { CategoryPicker } from "@/components/categories/category-picker";
 import { FrequencySelector } from "@/components/habits/frequency-selector";
 import { habitFormSchema, type HabitFormValues } from "@/lib/validations/habit";
-import type { Habit, HabitCategory } from "@/lib/db/types";
+import type { Habit } from "@/lib/db/types";
 
 interface HabitFormProps {
   mode: "create" | "edit";
@@ -31,18 +29,6 @@ interface HabitFormProps {
   id?: string;
 }
 
-const CATEGORY_OPTIONS: {
-  value: HabitCategory;
-  icon: React.ComponentType<{ className?: string }>;
-  colorClass: string;
-}[] = [
-  { value: "health", icon: Heart, colorClass: "data-[state=on]:bg-category-health data-[state=on]:text-white" },
-  { value: "wellness", icon: Brain, colorClass: "data-[state=on]:bg-category-wellness data-[state=on]:text-white" },
-  { value: "learning", icon: BookOpen, colorClass: "data-[state=on]:bg-category-learning data-[state=on]:text-white" },
-  { value: "productivity", icon: Zap, colorClass: "data-[state=on]:bg-category-productivity data-[state=on]:text-white" },
-  { value: "other", icon: MoreHorizontal, colorClass: "data-[state=on]:bg-category-other data-[state=on]:text-white" },
-];
-
 export function HabitForm({
   mode,
   initialData,
@@ -53,14 +39,13 @@ export function HabitForm({
   id,
 }: HabitFormProps) {
   const t = useTranslations("habits.form");
-  const categoryT = useTranslations("habits.categories");
 
   const form = useForm<HabitFormValues>({
     resolver: zodResolver(habitFormSchema),
     defaultValues: {
       name: initialData?.name ?? "",
       description: initialData?.description ?? null,
-      category: initialData?.category ?? null,
+      category_id: initialData?.category_id ?? null,
       frequency: initialData?.frequency ?? { type: "daily" },
     },
   });
@@ -121,29 +106,16 @@ export function HabitForm({
 
           <FormField
             control={form.control}
-            name="category"
+            name="category_id"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>{t("categoryLabel")}</FormLabel>
                 <FormControl>
-                  <div className="flex flex-wrap gap-2">
-                    {CATEGORY_OPTIONS.map(({ value, icon: Icon, colorClass }) => (
-                      <Toggle
-                        key={value}
-                        variant="outline"
-                        size="sm"
-                        pressed={field.value === value}
-                        onPressedChange={(pressed) => {
-                          field.onChange(pressed ? value : null);
-                        }}
-                        disabled={isLoading}
-                        className={cn("flex-1 gap-1.5", colorClass)}
-                      >
-                        <Icon className="size-4" />
-                        <span className="text-xs">{categoryT(value)}</span>
-                      </Toggle>
-                    ))}
-                  </div>
+                  <CategoryPicker
+                    value={field.value ?? null}
+                    onChange={field.onChange}
+                    disabled={isLoading}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

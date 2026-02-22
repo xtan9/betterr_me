@@ -5,12 +5,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
-import { Briefcase, User, ShoppingCart, MoreHorizontal } from "lucide-react";
+import { Briefcase, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Form,
@@ -27,11 +26,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CategoryPicker } from "@/components/categories/category-picker";
 import { RecurrencePicker } from "@/components/tasks/recurrence-picker";
 import { useProjects } from "@/lib/hooks/use-projects";
 import { getProjectColor } from "@/lib/projects/colors";
 import { taskFormSchema, type TaskFormValues } from "@/lib/validations/task";
-import type { Task, TaskCategory, TaskSection, RecurrenceRule, EndType } from "@/lib/db/types";
+import type { Task, TaskSection, RecurrenceRule, EndType } from "@/lib/db/types";
 
 export interface RecurrenceConfig {
   rule: RecurrenceRule | null;
@@ -52,33 +52,6 @@ interface TaskFormProps {
   showRecurrence?: boolean;
   initialRecurrence?: RecurrenceConfig;
 }
-
-const CATEGORY_OPTIONS: {
-  value: TaskCategory;
-  icon: React.ComponentType<{ className?: string }>;
-  colorClass: string;
-}[] = [
-  {
-    value: "work",
-    icon: Briefcase,
-    colorClass: "data-[state=on]:bg-category-learning data-[state=on]:text-white",
-  },
-  {
-    value: "personal",
-    icon: User,
-    colorClass: "data-[state=on]:bg-category-wellness data-[state=on]:text-white",
-  },
-  {
-    value: "shopping",
-    icon: ShoppingCart,
-    colorClass: "data-[state=on]:bg-category-productivity data-[state=on]:text-white",
-  },
-  {
-    value: "other",
-    icon: MoreHorizontal,
-    colorClass: "data-[state=on]:bg-category-other data-[state=on]:text-white",
-  },
-];
 
 const PRIORITY_OPTIONS = [
   { value: "0", colorClass: "text-priority-none" },
@@ -101,7 +74,6 @@ export function TaskForm({
 }: TaskFormProps) {
   const t = useTranslations("tasks.form");
   const tTasks = useTranslations("tasks");
-  const categoryT = useTranslations("tasks.categories");
   const priorityT = useTranslations("tasks.priorities");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -112,7 +84,7 @@ export function TaskForm({
       title: initialData?.title ?? "",
       description: initialData?.description ?? null,
       priority: initialData?.priority ?? 0,
-      category: initialData?.category ?? null,
+      category_id: initialData?.category_id ?? null,
       due_date: initialData?.due_date ?? null,
       due_time: initialData?.due_time?.slice(0, 5) ?? null,
       section: initialData?.section ?? defaultSection ?? "personal",
@@ -217,14 +189,14 @@ export function TaskForm({
                       className="flex-1 gap-1.5 data-[state=on]:bg-section-personal data-[state=on]:text-white"
                     >
                       <User className="size-4" />
-                      {categoryT("personal")}
+                      {tTasks("sections.personal")}
                     </ToggleGroupItem>
                     <ToggleGroupItem
                       value="work"
                       className="flex-1 gap-1.5 data-[state=on]:bg-section-work data-[state=on]:text-white"
                     >
                       <Briefcase className="size-4" />
-                      {categoryT("work")}
+                      {tTasks("sections.work")}
                     </ToggleGroupItem>
                   </ToggleGroup>
                 </FormControl>
@@ -298,31 +270,16 @@ export function TaskForm({
 
           <FormField
             control={form.control}
-            name="category"
+            name="category_id"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>{t("categoryLabel")}</FormLabel>
                 <FormControl>
-                  <div className="flex gap-2">
-                    {CATEGORY_OPTIONS.map(
-                      ({ value, icon: Icon, colorClass }) => (
-                        <Toggle
-                          key={value}
-                          variant="outline"
-                          size="sm"
-                          pressed={field.value === value}
-                          onPressedChange={(pressed) => {
-                            field.onChange(pressed ? value : null);
-                          }}
-                          disabled={isLoading}
-                          className={cn("flex-1 gap-1.5", colorClass)}
-                        >
-                          <Icon className="size-4" />
-                          <span className="text-xs">{categoryT(value)}</span>
-                        </Toggle>
-                      ),
-                    )}
-                  </div>
+                  <CategoryPicker
+                    value={field.value ?? null}
+                    onChange={field.onChange}
+                    disabled={isLoading}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

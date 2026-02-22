@@ -50,11 +50,22 @@ vi.mock('@/lib/hooks/use-projects', () => ({
   }),
 }));
 
+vi.mock('@/lib/hooks/use-categories', () => ({
+  useCategories: () => ({
+    categories: [],
+    error: null,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+}));
+
 const allTranslations: Record<string, Record<string, string>> = {
   'tasks': {
     'toast.createSuccess': 'Task created successfully',
     'toast.createError': 'Failed to create task',
     'sectionLabel': 'Section',
+    'sections.personal': 'Personal',
+    'sections.work': 'Work',
     'projectLabel': 'Project',
     'projectPlaceholder': 'Select a project',
     'noProject': 'No Project',
@@ -79,11 +90,11 @@ const allTranslations: Record<string, Record<string, string>> = {
   'tasks.breadcrumb': {
     'newTask': 'New Task',
   },
-  'tasks.categories': {
-    'work': 'Work',
-    'personal': 'Personal',
-    'shopping': 'Shopping',
-    'other': 'Other',
+  'categories': {
+    'add': 'Add',
+    'namePlaceholder': 'Category name',
+    'creating': 'Creating...',
+    'create': 'Create',
   },
   'tasks.priorities': {
     '0': 'None',
@@ -224,7 +235,6 @@ describe('CreateTaskContent', () => {
     render(<CreateTaskContent />);
 
     await user.type(screen.getByLabelText('Title'), 'Buy milk');
-    await user.click(screen.getByRole('button', { name: /Shopping/ }));
     await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => {
@@ -237,7 +247,7 @@ describe('CreateTaskContent', () => {
 
     const callBody = JSON.parse(vi.mocked(global.fetch).mock.calls[0][1]!.body as string);
     expect(callBody.title).toBe('Buy milk');
-    expect(callBody.category).toBe('shopping');
+    expect(callBody.category_id).toBeNull();
     expect(callBody.description).toBeNull();
     expect(callBody.due_time).toBeNull();
   });
