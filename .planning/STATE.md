@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 19 of 25 (Plaid Bank Connection Pipeline)
-Plan: 4 of 6 in current phase
+Plan: 5 of 6 in current phase
 Status: Executing Phase 19
-Last activity: 2026-02-22 — Completed 19-04 (Accounts UI components: Plaid Link, account cards, sync badges, error banner)
+Last activity: 2026-02-22 — Completed 19-05 (Accounts pages, OAuth handler, i18n, component tests)
 
 Progress: [███░░░░░░░] 24% v4.0
 
@@ -42,6 +42,7 @@ Progress: [███░░░░░░░] 24% v4.0
 - 19-02: 5min, 3 tasks (TDD), 3 files
 - 19-03: 5min, 2 tasks, 19 files
 - 19-04: 6min, 2 tasks, 11 files
+- 19-05: 5min, 2 tasks, 10 files
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - [19-04] PlaidLinkButton eager link_token fetch on mount for faster UX
 - [19-04] DisconnectDialog uses two action buttons (keep/delete) for clarity
 - [19-04] Dismissable error banner auto-resets when connections change (new errors detected)
+- [19-05] Server page + client list pattern: server i18n header wrapping client SWR component
+- [19-05] OAuth redirect auto-opens Plaid Link with receivedRedirectUri on mount
+- [19-05] MoneyPageShell shows live net worth summary or empty state (replaced coming-soon)
 
 ### Pending Todos
 
@@ -98,5 +102,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 19-04-PLAN.md
-Resume: `/gsd:execute-phase 19` to continue with 19-05-PLAN.md
+Stopped at: Completed 19-05-PLAN.md
+Resume: `/gsd:execute-phase 19` to continue with 19-06-PLAN.md
