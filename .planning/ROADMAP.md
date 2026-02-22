@@ -82,7 +82,7 @@ Plans:
 - [ ] 18-02-PLAN.md — Calm Finance design tokens, sidebar nav, i18n money namespace, /money page shell
 
 ### Phase 19: Plaid Bank Connection Pipeline
-**Goal**: Users can connect real bank accounts and see transactions flow in automatically, with CSV/manual entry as a fallback for users without Plaid
+**Goal**: Users can connect real bank accounts via Plaid Link OAuth and see transactions flow in automatically via webhooks + Vercel Cron, with manual entry as a fallback for cash purchases
 **Depends on**: Phase 18 (household schema, admin client, money tables)
 **Requirements**: PLAD-01, PLAD-02, PLAD-03, PLAD-04, PLAD-05, PLAD-06, PLAD-07, PLAD-08
 **Success Criteria** (what must be TRUE):
@@ -90,14 +90,15 @@ Plans:
   2. Transactions sync automatically via Plaid webhooks and Vercel Cron background job — user sees new transactions appear without manual action
   3. User can see sync status per account (healthy/stale/error), manually trigger a re-sync, and disconnect a bank connection
   4. Plaid access tokens are encrypted at rest via Supabase Vault; webhook endpoint verifies JWT/ES256 signatures before processing any payload
-  5. User without Plaid can import transactions via CSV upload or manually enter individual transactions (cash purchases)
-**Plans**: TBD
+  5. User can manually enter individual transactions (cash purchases) as a fallback
+**Plans**: 5 plans
 
 Plans:
-- [ ] 19-01: TBD
-- [ ] 19-02: TBD
-- [ ] 19-03: TBD
-- [ ] 19-04: TBD
+- [ ] 19-01-PLAN.md — DB migration (Plaid columns + Vault functions), Plaid server library, DB classes, Zod schemas
+- [ ] 19-02-PLAN.md — TDD: Plaid webhook JWT/ES256 verification with jose
+- [ ] 19-03-PLAN.md — API routes (link-token, exchange, webhook, accounts, sync, disconnect, transactions, cron)
+- [ ] 19-04-PLAN.md — Accounts page UI, Plaid Link button, account cards, sync badges, net worth, i18n
+- [ ] 19-05-PLAN.md — Manual transaction dialog, validation tests, human verification
 
 ### Phase 20: Transaction Management & Categorization
 **Goal**: Users can see, search, filter, and understand all their transactions with accurate auto-categorization and the ability to correct mistakes that stick
