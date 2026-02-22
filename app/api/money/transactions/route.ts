@@ -78,18 +78,25 @@ export async function POST(request: NextRequest) {
     const accountsDB = new MoneyAccountsDB(supabase);
     const transactionsDB = new TransactionsDB(supabase);
 
-    // Verify account belongs to user's household
-    const account = await accountsDB.getById(parsed.data.account_id);
-    if (!account || account.household_id !== householdId) {
-      return NextResponse.json(
-        { error: "Account not found" },
-        { status: 404 }
-      );
+    // Resolve account ID — auto-create Cash account if "cash" is selected
+    let accountId = parsed.data.account_id;
+    if (accountId === "cash") {
+      const cashAccount = await accountsDB.findOrCreateCash(householdId);
+      accountId = cashAccount.id;
+    } else {
+      // Verify account belongs to user's household
+      const account = await accountsDB.getById(accountId);
+      if (!account || account.household_id !== householdId) {
+        return NextResponse.json(
+          { error: "Account not found" },
+          { status: 404 }
+        );
+      }
     }
 
     const transaction = await transactionsDB.create({
       household_id: householdId,
-      account_id: parsed.data.account_id,
+      account_id: accountId,
       amount_cents: toCents(parsed.data.amount),
       description: parsed.data.description,
       merchant_name: null,

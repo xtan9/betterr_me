@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { AlertCircle, ChevronDown, PenLine, X } from "lucide-react";
@@ -19,6 +19,7 @@ import { PlaidLinkButton } from "@/components/money/plaid-link-button";
 import { AccountGroup } from "@/components/money/account-group";
 import { AccountsEmptyState } from "@/components/money/accounts-empty-state";
 import { DisconnectDialog } from "@/components/money/disconnect-dialog";
+import { ManualTransactionDialog } from "@/components/money/manual-transaction-dialog";
 
 export function AccountsList() {
   const t = useTranslations("money");
@@ -26,10 +27,16 @@ export function AccountsList() {
     useAccounts();
 
   const [errorBannerVisible, setErrorBannerVisible] = useState(true);
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [disconnectTarget, setDisconnectTarget] = useState<{
     connectionId: string;
     institutionName: string;
   } | null>(null);
+
+  const allAccounts = useMemo(
+    () => connections.flatMap((c) => c.accounts),
+    [connections]
+  );
 
   // Reset error banner visibility when connections change
   const hasErrors = connections.some((c) => c.sync_status === "error");
@@ -150,7 +157,7 @@ export function AccountsList() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setManualDialogOpen(true)}>
                 <PenLine className="size-4" />
                 {t("accounts.manualEntry")}
               </DropdownMenuItem>
@@ -183,6 +190,14 @@ export function AccountsList() {
           mutate={mutate}
         />
       )}
+
+      {/* Manual transaction dialog */}
+      <ManualTransactionDialog
+        open={manualDialogOpen}
+        onOpenChange={setManualDialogOpen}
+        accounts={allAccounts}
+        onSuccess={() => mutate()}
+      />
     </div>
   );
 }
