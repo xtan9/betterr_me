@@ -9,3 +9,8 @@ export * from "./habit-milestones";
 export * from "./insights";
 export * from "./recurring-tasks";
 export { resolveHousehold } from "./households";
+
+// Money tracking DB classes
+export { BankConnectionsDB } from "./bank-connections";
+export { MoneyAccountsDB } from "./accounts-money";
+export { TransactionsDB } from "./transactions";
