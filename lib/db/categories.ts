@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Category, CategoryInsert, CategoryUpdate } from "./types";
 
+/** CRUD + lazy-seeding for user-defined categories. */
 export class CategoriesDB {
   constructor(private supabase: SupabaseClient) {}
 
+  /** Get all categories for a user, ordered by sort_order. */
   async getUserCategories(userId: string): Promise<Category[]> {
     const { data, error } = await this.supabase
       .from("categories")
@@ -14,6 +16,7 @@ export class CategoriesDB {
     return data ?? [];
   }
 
+  /** Get a single category by id, scoped to the user. Returns null if not found (PGRST116). */
   async getCategory(id: string, userId: string): Promise<Category | null> {
     const { data, error } = await this.supabase
       .from("categories")
@@ -28,6 +31,7 @@ export class CategoriesDB {
     return data;
   }
 
+  /** Create a new category. */
   async createCategory(category: CategoryInsert): Promise<Category> {
     const { data, error } = await this.supabase
       .from("categories")
@@ -38,6 +42,7 @@ export class CategoriesDB {
     return data;
   }
 
+  /** Update a category. Throws PGRST116 if not found (caught by API route as 404). */
   async updateCategory(
     id: string,
     userId: string,
@@ -54,6 +59,7 @@ export class CategoriesDB {
     return data;
   }
 
+  /** Delete a category. Related tasks/habits have category_id set to NULL (ON DELETE SET NULL). */
   async deleteCategory(id: string, userId: string): Promise<void> {
     const { error } = await this.supabase
       .from("categories")
@@ -63,6 +69,7 @@ export class CategoriesDB {
     if (error) throw error;
   }
 
+  /** Idempotent: returns existing categories, or seeds 12 defaults if the user has none. */
   async seedCategories(userId: string): Promise<Category[]> {
     const existing = await this.getUserCategories(userId);
     if (existing.length > 0) return existing;

@@ -1,5 +1,5 @@
-// Database types for betterr.me MVP
-// Based on supabase/migrations/20260129_initial_schema.sql
+// Database types for betterr.me
+// Mirrors the Supabase schema defined across supabase/migrations/
 
 // =============================================================================
 // PROFILES
