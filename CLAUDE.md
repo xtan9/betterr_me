@@ -98,6 +98,6 @@ vi.mock("@/lib/db", () => ({ HabitsDB: class { getUserHabits = mockFn; } }));
 - **Client components:** `"use client"` only when needed
 - **API error handling:** `try/catch` → `console.error` → `NextResponse.json({ error }, { status })`
 - **Validation:** Zod schemas at API boundaries (`lib/validations/`)
-- **Categories:** `"health" | "wellness" | "learning" | "productivity" | "other"`
+- **Categories:** User-defined via `categories` table (`category_id` UUID FK on tasks/habits/recurring_tasks). Seeded with 12 defaults on first API call.
 - **Frequency types:** `"daily" | "weekdays" | "weekly" | "times_per_week" | "custom"`
 - **UI primitives:** Do not edit `components/ui/` directly (shadcn/ui managed)

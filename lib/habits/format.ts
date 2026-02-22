@@ -25,7 +25,7 @@ export function getFrequencyTranslation(freq: HabitFrequency): FrequencyTranslat
   }
 }
 
-// Legacy function for backwards compatibility - returns English strings
+// Locale-independent frequency formatting for CSV export
 export function formatFrequency(freq: HabitFrequency): string {
   const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   switch (freq.type) {
