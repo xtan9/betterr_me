@@ -25,9 +25,9 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 - [x] **PLAD-03**: Plaid access tokens encrypted at rest via Supabase Vault before storage
 - [x] **PLAD-04**: Plaid webhook endpoint verifies JWT/ES256 signatures via jose before processing any payload
 - [x] **PLAD-05**: User can see sync status for each connected account (healthy/stale/error)
-- [ ] **PLAD-06**: User can manually trigger a re-sync for a connected account
-- [ ] **PLAD-07**: User can disconnect a bank connection
-- [ ] **PLAD-08**: Background sync runs via Vercel Cron, cursor-based and idempotent (partial progress safe)
+- [x] **PLAD-06**: User can manually trigger a re-sync for a connected account
+- [x] **PLAD-07**: User can disconnect a bank connection
+- [x] **PLAD-08**: Background sync runs via Vercel Cron, cursor-based and idempotent (partial progress safe)
 
 ### Transactions
 
@@ -157,9 +157,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAD-03 | Phase 19 | Complete |
 | PLAD-04 | Phase 19 | Complete |
 | PLAD-05 | Phase 19 | Complete |
-| PLAD-06 | Phase 19 | Pending |
-| PLAD-07 | Phase 19 | Pending |
-| PLAD-08 | Phase 19 | Pending |
+| PLAD-06 | Phase 19 | Complete |
+| PLAD-07 | Phase 19 | Complete |
+| PLAD-08 | Phase 19 | Complete |
 | TXNS-01 | Phase 20 | Pending |
 | TXNS-02 | Phase 20 | Pending |
 | TXNS-03 | Phase 20 | Pending |
