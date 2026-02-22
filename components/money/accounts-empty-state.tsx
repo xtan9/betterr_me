@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Wallet } from "lucide-react";
+import { PenLine, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PlaidLinkButton } from "@/components/money/plaid-link-button";
+import { ManualTransactionDialog } from "@/components/money/manual-transaction-dialog";
 import type { KeyedMutator } from "swr";
 import type { AccountsResponse } from "@/lib/hooks/use-accounts";
 
@@ -12,6 +15,7 @@ interface AccountsEmptyStateProps {
 
 export function AccountsEmptyState({ mutate }: AccountsEmptyStateProps) {
   const t = useTranslations("money");
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
 
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-money-border bg-money-surface px-6 py-16 text-center">
@@ -27,13 +31,23 @@ export function AccountsEmptyState({ mutate }: AccountsEmptyStateProps) {
         {t("emptyState.description")}
       </p>
 
-      <div className="mt-8">
+      <div className="mt-8 flex items-center gap-3">
         <PlaidLinkButton mutate={mutate} />
+        <Button
+          variant="outline"
+          onClick={() => setManualDialogOpen(true)}
+        >
+          <PenLine className="size-4" />
+          {t("accounts.manualEntry")}
+        </Button>
       </div>
 
-      <p className="mt-4 text-xs text-muted-foreground">
-        {t("emptyState.manualFallback")}
-      </p>
+      <ManualTransactionDialog
+        open={manualDialogOpen}
+        onOpenChange={setManualDialogOpen}
+        accounts={[]}
+        onSuccess={() => mutate?.()}
+      />
     </div>
   );
 }
