@@ -40,7 +40,7 @@ export function CreateTaskContent() {
             title: data.title,
             description: data.description || null,
             priority: data.priority ?? 0,
-            category: data.category || null,
+            category_id: data.category_id || null,
             due_time: data.due_time ? `${data.due_time}:00` : null,
             recurrence_rule: recurrence.rule,
             start_date: data.due_date || getLocalDateString(),

@@ -30,12 +30,13 @@ import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { useProjects } from "@/lib/hooks/use-projects";
+import { useCategories } from "@/lib/hooks/use-categories";
 import { TaskCard } from "./task-card";
 import { TaskEmptyState } from "./task-empty-state";
 import { ProjectCard } from "@/components/projects/project-card";
 import { ProjectModal } from "@/components/projects/project-modal";
 import { ProjectDeleteDialog } from "@/components/projects/project-delete-dialog";
-import type { Task, RecurringTask, Project, TaskSection } from "@/lib/db/types";
+import type { Task, RecurringTask, Project, TaskSection, Category } from "@/lib/db/types";
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -67,6 +68,9 @@ export function TasksPageContent() {
       keepPreviousData: true,
     }
   );
+
+  // Categories SWR
+  const { categories } = useCategories();
 
   // Projects SWR
   const {
@@ -308,6 +312,7 @@ export function TasksPageContent() {
               tasks={filteredTasks}
               allTasks={tasks}
               projects={projects}
+              categories={categories}
               activeTab={activeTab}
               onToggle={handleToggleTask}
               onTaskClick={handleTaskClick}
@@ -321,6 +326,7 @@ export function TasksPageContent() {
               tasks={filteredTasks}
               allTasks={tasks}
               projects={projects}
+              categories={categories}
               activeTab={activeTab}
               onToggle={handleToggleTask}
               onTaskClick={handleTaskClick}
@@ -425,6 +431,7 @@ interface SectionBlockProps {
   tasks: Task[]; // already filtered by tab + search
   allTasks: Task[]; // unfiltered tasks (for project progress calculations)
   projects: Project[];
+  categories: Category[];
   activeTab: StatusTab;
   onToggle: (taskId: string) => Promise<void>;
   onTaskClick: (taskId: string) => void;
@@ -439,6 +446,7 @@ function SectionBlock({
   tasks,
   allTasks,
   projects,
+  categories,
   activeTab,
   onToggle,
   onTaskClick,
@@ -486,6 +494,7 @@ function SectionBlock({
                   <TaskCard
                     key={task.id}
                     task={task}
+                    categories={categories}
                     onToggle={() => onToggle(task.id)}
                     onClick={() => onTaskClick(task.id)}
                   />

@@ -29,6 +29,16 @@ vi.mock("@/lib/hooks/use-projects", () => ({
   }),
 }));
 
+// Mock useCategories hook
+vi.mock("@/lib/hooks/use-categories", () => ({
+  useCategories: () => ({
+    categories: [],
+    error: undefined,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+}));
+
 // Mock SWR
 const mockUseSWR = vi.fn();
 vi.mock("swr", () => ({
@@ -202,7 +212,7 @@ const mockTasks = [
     description: null,
     is_completed: false,
     priority: 2,
-    category: "shopping",
+    category_id: null,
     due_date: "2026-02-10",
     due_time: null,
     completion_difficulty: null,
@@ -224,7 +234,7 @@ const mockTasks = [
     description: null,
     is_completed: true,
     priority: 3,
-    category: "work",
+    category_id: null,
     due_date: "2026-02-09",
     due_time: "17:00:00",
     completion_difficulty: null,

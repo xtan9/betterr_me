@@ -87,7 +87,7 @@ const mockHabit = {
   user_id: "user-1",
   name: "Morning Meditation",
   description: "10 minutes of mindfulness",
-  category: "wellness",
+  category_id: null,
   frequency: { type: "daily" },
   status: "active",
   current_streak: 7,

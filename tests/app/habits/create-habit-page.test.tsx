@@ -19,7 +19,26 @@ vi.mock("next/navigation", () => ({
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ resolvedTheme: "light" }),
+}));
+
+vi.mock("@/lib/hooks/use-categories", () => ({
+  useCategories: () => ({
+    categories: [],
+    error: null,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+}));
+
 const messages = {
+  categories: {
+    add: "Add",
+    namePlaceholder: "Category name",
+    creating: "Creating...",
+    create: "Create",
+  },
   habits: {
     form: {
       createTitle: "Create New Habit",

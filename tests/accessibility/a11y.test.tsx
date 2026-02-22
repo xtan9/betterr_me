@@ -74,6 +74,21 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+// Mock next-themes
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ resolvedTheme: "light" }),
+}));
+
+// Mock useCategories
+vi.mock("@/lib/hooks/use-categories", () => ({
+  useCategories: () => ({
+    categories: [],
+    error: undefined,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+}));
+
 // Mock supabase client
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
@@ -158,7 +173,7 @@ const mockHabit = {
   user_id: "user-1",
   name: "Exercise",
   description: null,
-  category: "health" as const,
+  category_id: null,
   frequency: { type: "daily" as const },
   status: "active" as const,
   current_streak: 5,

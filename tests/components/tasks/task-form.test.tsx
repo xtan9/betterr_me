@@ -4,45 +4,51 @@ import userEvent from '@testing-library/user-event';
 import { TaskForm } from '@/components/tasks/task-form';
 import type { Task } from '@/lib/db/types';
 
+const allTranslations: Record<string, Record<string, string>> = {
+  'tasks.form': {
+    'createTitle': 'Create New Task',
+    'editTitle': 'Edit Task',
+    'titleLabel': 'Title',
+    'titlePlaceholder': 'What do you need to do?',
+    'descriptionLabel': 'Description',
+    'descriptionPlaceholder': 'Add some details...',
+    'categoryLabel': 'Category',
+    'priorityLabel': 'Priority',
+    'dueDateLabel': 'Due Date',
+    'dueTimeLabel': 'Due Time',
+    'cancel': 'Cancel',
+    'create': 'Create Task',
+    'save': 'Save Changes',
+    'creating': 'Creating...',
+    'saving': 'Saving...',
+    'repeatLabel': 'Repeat',
+  },
+  'tasks': {
+    'sectionLabel': 'Section',
+    'sections.personal': 'Personal',
+    'sections.work': 'Work',
+    'projectLabel': 'Project',
+    'projectPlaceholder': 'Select a project',
+    'noProject': 'No Project',
+  },
+  'tasks.priorities': {
+    '0': 'None',
+    '1': 'Low',
+    '2': 'Medium',
+    '3': 'High',
+  },
+  'categories': {
+    'add': 'Add',
+    'namePlaceholder': 'Category name',
+    'creating': 'Creating...',
+    'create': 'Create',
+  },
+};
+
 vi.mock('next-intl', () => ({
-  useTranslations: () => {
-    const t = (key: string) => {
-      const messages: Record<string, string> = {
-        // form keys
-        'createTitle': 'Create New Task',
-        'editTitle': 'Edit Task',
-        'titleLabel': 'Title',
-        'titlePlaceholder': 'What do you need to do?',
-        'descriptionLabel': 'Description',
-        'descriptionPlaceholder': 'Add some details...',
-        'categoryLabel': 'Category',
-        'priorityLabel': 'Priority',
-        'dueDateLabel': 'Due Date',
-        'dueTimeLabel': 'Due Time',
-        'cancel': 'Cancel',
-        'create': 'Create Task',
-        'save': 'Save Changes',
-        'creating': 'Creating...',
-        'saving': 'Saving...',
-        // category keys
-        'work': 'Work',
-        'personal': 'Personal',
-        'shopping': 'Shopping',
-        'other': 'Other',
-        // priority keys
-        '0': 'None',
-        '1': 'Low',
-        '2': 'Medium',
-        '3': 'High',
-        // section/project keys (tasks namespace)
-        'sectionLabel': 'Section',
-        'projectLabel': 'Project',
-        'projectPlaceholder': 'Select a project',
-        'noProject': 'No Project',
-      };
-      return messages[key] ?? key;
-    };
-    return t;
+  useTranslations: (namespace: string) => {
+    const ns = allTranslations[namespace] ?? {};
+    return (key: string) => ns[key] ?? key;
   },
 }));
 
@@ -59,6 +65,15 @@ vi.mock('@/lib/hooks/use-projects', () => ({
   }),
 }));
 
+vi.mock('@/lib/hooks/use-categories', () => ({
+  useCategories: () => ({
+    categories: [],
+    error: null,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+}));
+
 const mockTask: Task = {
   id: 'task-1',
   user_id: 'user-1',
@@ -66,7 +81,8 @@ const mockTask: Task = {
   description: 'Milk, eggs, bread',
   is_completed: false,
   priority: 2,
-  category: 'shopping',
+  category: null,
+  category_id: null,
   due_date: '2026-02-10',
   due_time: '14:30:00',
   completed_at: null,
@@ -113,7 +129,7 @@ describe('TaskForm', () => {
       expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     });
 
-    it('renders all 4 category options', () => {
+    it('renders CategoryPicker with Add button', () => {
       render(
         <TaskForm
           mode="create"
@@ -122,8 +138,8 @@ describe('TaskForm', () => {
         />
       );
 
-      expect(screen.getByRole('button', { name: /Shopping/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Other/ })).toBeInTheDocument();
+      // CategoryPicker renders an "Add" button for creating new categories
+      expect(screen.getByRole('button', { name: /Add/ })).toBeInTheDocument();
     });
 
     it('renders section toggle and project dropdown', () => {
@@ -159,20 +175,6 @@ describe('TaskForm', () => {
       expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
     });
 
-    it('pre-selects the existing category in edit mode', () => {
-      render(
-        <TaskForm
-          mode="edit"
-          initialData={mockTask}
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      const shoppingButton = screen.getByRole('button', { name: /Shopping/ });
-      expect(shoppingButton).toHaveAttribute('data-state', 'on');
-    });
-
     it('populates due date and time from initialData', () => {
       render(
         <TaskForm
@@ -201,10 +203,6 @@ describe('TaskForm', () => {
 
       await user.type(screen.getByLabelText('Title'), 'Write report');
       await user.type(screen.getByLabelText('Description'), 'Q1 metrics');
-      // Click the category "Work" toggle (not the section toggle)
-      const categoryToggles = screen.getAllByRole('button', { name: /Work/ });
-      // The category toggle is the one inside the category section
-      await user.click(categoryToggles[categoryToggles.length - 1]);
       await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
       await waitFor(() => {
@@ -212,7 +210,7 @@ describe('TaskForm', () => {
           expect.objectContaining({
             title: 'Write report',
             description: 'Q1 metrics',
-            category: 'work',
+            category_id: null,
             section: 'personal',
             project_id: null,
           }),
@@ -238,7 +236,7 @@ describe('TaskForm', () => {
           expect.objectContaining({
             title: 'Quick task',
             description: null,
-            category: null,
+            category_id: null,
             priority: 0,
             due_date: null,
             due_time: null,
@@ -331,58 +329,6 @@ describe('TaskForm', () => {
         expect(screen.getByText('Title must be 100 characters or less')).toBeInTheDocument();
       });
       expect(mockOnSubmit).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('category selection', () => {
-    it('selects a category when clicked', async () => {
-      render(
-        <TaskForm
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      // The category "Work" toggle (last one with "Work" text - category toggles use Toggle not ToggleGroupItem)
-      const shoppingButton = screen.getByRole('button', { name: /Shopping/ });
-      await user.click(shoppingButton);
-      expect(shoppingButton).toHaveAttribute('data-state', 'on');
-    });
-
-    it('deselects category when clicking the same one again', async () => {
-      render(
-        <TaskForm
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      const shoppingButton = screen.getByRole('button', { name: /Shopping/ });
-      await user.click(shoppingButton);
-      expect(shoppingButton).toHaveAttribute('data-state', 'on');
-
-      await user.click(shoppingButton);
-      expect(shoppingButton).toHaveAttribute('data-state', 'off');
-    });
-
-    it('switches category when clicking a different one', async () => {
-      render(
-        <TaskForm
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      const shoppingButton = screen.getByRole('button', { name: /Shopping/ });
-      const otherButton = screen.getByRole('button', { name: /Other/ });
-      await user.click(shoppingButton);
-      await user.click(otherButton);
-
-      expect(shoppingButton).toHaveAttribute('data-state', 'off');
-      expect(otherButton).toHaveAttribute('data-state', 'on');
     });
   });
 

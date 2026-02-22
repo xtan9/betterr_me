@@ -10,7 +10,7 @@ describe('HabitsDB', () => {
     user_id: mockUserId,
     name: 'Morning Run',
     description: 'Run 5km every morning',
-    category: 'health',
+    category_id: null,
     frequency: { type: 'daily' },
     status: 'active',
     current_streak: 5,
@@ -43,12 +43,12 @@ describe('HabitsDB', () => {
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('status', 'active');
     });
 
-    it('should filter by category', async () => {
+    it('should filter by category_id', async () => {
       mockSupabaseClient.setMockResponse([mockHabit]);
 
-      await habitsDB.getUserHabits(mockUserId, { category: 'health' });
+      await habitsDB.getUserHabits(mockUserId, { category_id: 'cat-123' });
 
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('category', 'health');
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('category_id', 'cat-123');
     });
 
     it('should handle database errors', async () => {
@@ -112,7 +112,7 @@ describe('HabitsDB', () => {
         user_id: mockUserId,
         name: 'Read Books',
         description: 'Read for 30 minutes',
-        category: 'learning',
+        category_id: null,
         frequency: { type: 'daily' },
         status: 'active',
       };
@@ -133,7 +133,7 @@ describe('HabitsDB', () => {
         user_id: mockUserId,
         name: 'Test',
         description: null,
-        category: null,
+        category_id: null,
         frequency: { type: 'daily' },
         status: 'active',
       };

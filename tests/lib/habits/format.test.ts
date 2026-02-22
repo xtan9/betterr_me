@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   formatFrequency,
-  getCategoryColor,
-  getCategoryIcon,
   shouldTrackOnDate,
 } from '@/lib/habits/format';
 
@@ -39,56 +37,6 @@ describe('formatFrequency', () => {
     expect(formatFrequency({ type: 'custom', days: [0, 1, 2, 3, 4, 5, 6] })).toBe(
       'Sun, Mon, Tue, Wed, Thu, Fri, Sat'
     );
-  });
-});
-
-describe('getCategoryColor', () => {
-  it('returns semantic token classes for health', () => {
-    const color = getCategoryColor('health');
-    expect(color).toContain('category-health');
-  });
-
-  it('returns semantic token classes for wellness', () => {
-    const color = getCategoryColor('wellness');
-    expect(color).toContain('category-wellness');
-  });
-
-  it('returns semantic token classes for learning', () => {
-    const color = getCategoryColor('learning');
-    expect(color).toContain('category-learning');
-  });
-
-  it('returns semantic token classes for productivity', () => {
-    const color = getCategoryColor('productivity');
-    expect(color).toContain('category-productivity');
-  });
-
-  it('returns semantic token classes for other', () => {
-    const color = getCategoryColor('other');
-    expect(color).toContain('category-other');
-  });
-
-  it('returns semantic token classes for null', () => {
-    const color = getCategoryColor(null);
-    expect(color).toContain('category-other');
-  });
-});
-
-describe('getCategoryIcon', () => {
-  it('returns an icon component for each category', () => {
-    expect(getCategoryIcon('health')).toBeDefined();
-    expect(getCategoryIcon('wellness')).toBeDefined();
-    expect(getCategoryIcon('learning')).toBeDefined();
-    expect(getCategoryIcon('productivity')).toBeDefined();
-    expect(getCategoryIcon('other')).toBeDefined();
-  });
-
-  it('returns a default icon for null', () => {
-    expect(getCategoryIcon(null)).toBeDefined();
-  });
-
-  it('returns different icons for different categories', () => {
-    expect(getCategoryIcon('health')).not.toBe(getCategoryIcon('learning'));
   });
 });
 

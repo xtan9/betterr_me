@@ -1,34 +1,22 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { createElement } from "react";
-import { Briefcase, User, ShoppingCart, MoreHorizontal, Calendar, Circle } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Tag, Calendar, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { Task, TaskCategory } from "@/lib/db/types";
+import { getProjectColor } from "@/lib/projects/colors";
+import type { Task, Category } from "@/lib/db/types";
 import { getPriorityColor } from "@/lib/tasks/format";
 
 interface TaskCardProps {
   task: Task;
+  categories?: Category[];
   onToggle: (taskId: string) => Promise<void>;
   onClick: (taskId: string) => void;
   isToggling?: boolean;
 }
-
-const CATEGORY_ICONS: Record<TaskCategory, typeof Briefcase> = {
-  work: Briefcase,
-  personal: User,
-  shopping: ShoppingCart,
-  other: MoreHorizontal,
-};
-
-const CATEGORY_COLORS: Record<TaskCategory, string> = {
-  work: "bg-category-learning-muted text-category-learning",
-  personal: "bg-category-wellness-muted text-category-wellness",
-  shopping: "bg-category-productivity-muted text-category-productivity",
-  other: "bg-category-other-muted text-category-other",
-};
 
 function isOverdue(dueDate: string | null, isCompleted: boolean): boolean {
   if (!dueDate || isCompleted) return false;
@@ -38,20 +26,22 @@ function isOverdue(dueDate: string | null, isCompleted: boolean): boolean {
   return due < today;
 }
 
-export function TaskCard({ task, onToggle, onClick, isToggling }: TaskCardProps) {
+export function TaskCard({ task, categories, onToggle, onClick, isToggling }: TaskCardProps) {
   const t = useTranslations("tasks");
   const cardT = useTranslations("tasks.card");
-  const categoryT = useTranslations("tasks.categories");
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
-  const categoryColor = task.category
-    ? CATEGORY_COLORS[task.category]
-    : CATEGORY_COLORS.other;
-  const categoryLabel = task.category
-    ? categoryT(task.category)
-    : categoryT("other");
-  const CategoryIcon = task.category
-    ? CATEGORY_ICONS[task.category]
-    : MoreHorizontal;
+  const category = task.category_id && categories
+    ? categories.find((c) => c.id === task.category_id) ?? null
+    : null;
+  const categoryColor = category
+    ? getProjectColor(category.color)
+    : null;
+  const bgColor = categoryColor
+    ? (isDark ? categoryColor.hslDark : categoryColor.hsl)
+    : undefined;
+
   const priorityColor = getPriorityColor(task.priority);
   const overdue = isOverdue(task.due_date, task.is_completed);
 
@@ -76,13 +66,11 @@ export function TaskCard({ task, onToggle, onClick, isToggling }: TaskCardProps)
             <span
               className={cn(
                 "inline-flex items-center justify-center rounded-md p-1.5",
-                categoryColor
+                !bgColor && "bg-muted"
               )}
+              style={bgColor ? { backgroundColor: bgColor } : undefined}
             >
-              {createElement(CategoryIcon, {
-                className: "size-4",
-                "aria-hidden": "true",
-              })}
+              <Tag className="size-4 text-white" aria-hidden="true" />
             </span>
             <div className="min-w-0">
               <h3
@@ -93,7 +81,7 @@ export function TaskCard({ task, onToggle, onClick, isToggling }: TaskCardProps)
               >
                 {task.title}
               </h3>
-              <p className="text-xs text-muted-foreground">{categoryLabel}</p>
+              <p className="text-xs text-muted-foreground">{category?.name ?? ""}</p>
             </div>
           </button>
           <Checkbox

@@ -82,6 +82,31 @@ vi.mock("next-intl", () => ({
   },
 }));
 
+// Mock next-themes
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ resolvedTheme: "light" }),
+}));
+
+// Mock useCategories
+vi.mock("@/lib/hooks/use-categories", () => ({
+  useCategories: () => ({
+    categories: [
+      {
+        id: "cat-shopping",
+        user_id: "user-1",
+        name: "Shopping",
+        color: "orange",
+        icon: null,
+        sort_order: 0,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    ],
+    error: undefined,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+}));
+
 // Mock SWR
 const mockMutate = vi.fn();
 vi.mock("swr", () => ({
@@ -98,7 +123,7 @@ const mockTask = {
   description: "Milk, eggs, bread",
   is_completed: false,
   priority: 2 as const,
-  category: "shopping" as const,
+  category_id: "cat-shopping",
   due_date: "2026-02-10",
   due_time: "14:30:00",
   completion_difficulty: null,

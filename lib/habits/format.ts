@@ -1,6 +1,4 @@
-import { Heart, Brain, BookOpen, Zap, MoreHorizontal } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import type { HabitCategory, HabitFrequency } from "@/lib/db/types";
+import type { HabitFrequency } from "@/lib/db/types";
 
 const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
@@ -41,38 +39,6 @@ export function formatFrequency(freq: HabitFrequency): string {
       return `${freq.count}x/week`;
     case "custom":
       return [...freq.days].sort((a, b) => a - b).map((d) => DAY_NAMES[d]).join(", ");
-  }
-}
-
-export function getCategoryColor(category: HabitCategory | null): string {
-  switch (category) {
-    case "health":
-      return "text-category-health bg-category-health-muted";
-    case "wellness":
-      return "text-category-wellness bg-category-wellness-muted";
-    case "learning":
-      return "text-category-learning bg-category-learning-muted";
-    case "productivity":
-      return "text-category-productivity bg-category-productivity-muted";
-    case "other":
-    default:
-      return "text-category-other bg-category-other-muted";
-  }
-}
-
-export function getCategoryIcon(category: HabitCategory | null): LucideIcon {
-  switch (category) {
-    case "health":
-      return Heart;
-    case "wellness":
-      return Brain;
-    case "learning":
-      return BookOpen;
-    case "productivity":
-      return Zap;
-    case "other":
-    default:
-      return MoreHorizontal;
   }
 }
 

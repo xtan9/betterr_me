@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+import { useCategories } from "@/lib/hooks/use-categories";
 import type { Task } from "@/lib/db/types";
 
 interface TaskListProps {
@@ -34,6 +35,7 @@ export function TaskList({
   isLoading = false,
 }: TaskListProps) {
   const t = useTranslations("tasks.list");
+  const { categories } = useCategories();
   const [activeTab, setActiveTab] = useState<StatusTab>("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -128,6 +130,7 @@ export function TaskList({
                 <TaskCard
                   key={task.id}
                   task={task}
+                  categories={categories}
                   onToggle={() => onToggle(task.id)}
                   onClick={() => onTaskClick(task.id)}
                 />

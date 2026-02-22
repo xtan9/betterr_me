@@ -4,15 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import {
   Edit,
   Trash2,
   AlertCircle,
-  Briefcase,
-  User,
-  ShoppingCart,
-  MoreHorizontal,
   CheckCircle2,
   Circle,
   Calendar,
@@ -44,7 +41,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EditScopeDialog } from "@/components/tasks/edit-scope-dialog";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
-import type { Task, TaskCategory, RecurringTask } from "@/lib/db/types";
+import { useCategories } from "@/lib/hooks/use-categories";
+import { getProjectColor } from "@/lib/projects/colors";
+import type { Task, RecurringTask } from "@/lib/db/types";
 import type { EditScope } from "@/lib/validations/recurring-task";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
 import { getPriorityColor } from "@/lib/tasks/format";
@@ -58,20 +57,6 @@ const fetcher = async (url: string) => {
   if (!res.ok) throw new Error("Failed to fetch");
   const data = await res.json();
   return data.task;
-};
-
-const CATEGORY_ICONS: Record<TaskCategory, typeof Briefcase> = {
-  work: Briefcase,
-  personal: User,
-  shopping: ShoppingCart,
-  other: MoreHorizontal,
-};
-
-const CATEGORY_COLORS: Record<TaskCategory, string> = {
-  work: "bg-category-learning",
-  personal: "bg-category-wellness",
-  shopping: "bg-category-productivity",
-  other: "bg-category-other",
 };
 
 function TaskDetailSkeleton() {
@@ -102,8 +87,10 @@ function TaskDetailSkeleton() {
 export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   const router = useRouter();
   const t = useTranslations("tasks");
-  const categoryT = useTranslations("tasks.categories");
   const priorityT = useTranslations("tasks.priorities");
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const { categories } = useCategories();
   const [isDeleting, setIsDeleting] = useState(false);
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
   const [scopeAction, setScopeAction] = useState<"edit" | "delete">("edit");
@@ -222,12 +209,13 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
     );
   }
 
-  const CategoryIcon = task.category
-    ? CATEGORY_ICONS[task.category]
-    : MoreHorizontal;
-  const categoryColor = task.category
-    ? CATEGORY_COLORS[task.category]
-    : "bg-category-other";
+  const category = task.category_id
+    ? categories.find((c) => c.id === task.category_id) ?? null
+    : null;
+  const catColor = category ? getProjectColor(category.color) : null;
+  const catBgColor = catColor
+    ? (isDark ? catColor.hslDark : catColor.hsl)
+    : undefined;
   const priorityColor = getPriorityColor(task.priority);
 
   return (
@@ -308,14 +296,17 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
                   {t("detail.category")}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <CategoryIcon
+                  <span
                     className={cn(
-                      "size-4 text-white rounded p-0.5",
-                      categoryColor,
+                      "inline-flex items-center justify-center rounded p-0.5",
+                      !catBgColor && "bg-muted"
                     )}
-                  />
+                    style={catBgColor ? { backgroundColor: catBgColor } : undefined}
+                  >
+                    <Tag className="size-4 text-white" aria-hidden="true" />
+                  </span>
                   <span className="font-medium">
-                    {task.category ? categoryT(task.category) : "---"}
+                    {category?.name ?? "---"}
                   </span>
                 </div>
               </div>

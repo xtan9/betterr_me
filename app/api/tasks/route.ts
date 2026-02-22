@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
       description: validation.data.description?.trim() || null,
       is_completed: false,
       priority: validation.data.priority ?? 0,
-      category: validation.data.category || null,
+      category_id: validation.data.category_id || null,
       due_date: validation.data.due_date || null,
       due_time: validation.data.due_time || null,
       status: validation.data.status,

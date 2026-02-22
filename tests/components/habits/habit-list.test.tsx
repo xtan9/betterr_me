@@ -59,7 +59,7 @@ describe('HabitList', () => {
     user_id: 'user-1',
     name: 'Test Habit',
     description: null,
-    category: 'health',
+    category_id: null,
     frequency: { type: 'daily' },
     status: 'active',
     current_streak: 5,

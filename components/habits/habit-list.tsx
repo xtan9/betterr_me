@@ -8,6 +8,7 @@ import { HabitEmptyState } from "./habit-empty-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+import { useCategories } from "@/lib/hooks/use-categories";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
 interface HabitListProps {
@@ -26,6 +27,7 @@ export function HabitList({
   togglingHabitIds,
 }: HabitListProps) {
   const t = useTranslations("habits.list");
+  const { categories } = useCategories();
   const [activeTab, setActiveTab] = useState<StatusTab>("active");
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 300);
@@ -112,6 +114,7 @@ export function HabitList({
                 <HabitCard
                   key={habit.id}
                   habit={habit}
+                  categories={categories}
                   onToggle={() => onToggle(habit.id)}
                   onClick={() => onHabitClick(habit.id)}
                   isToggling={togglingHabitIds?.has(habit.id)}

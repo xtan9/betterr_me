@@ -1,25 +1,35 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Flame } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Flame, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getCategoryColor } from "@/lib/habits/format";
-import type { HabitWithTodayStatus } from "@/lib/db/types";
+import { getProjectColor } from "@/lib/projects/colors";
+import type { HabitWithTodayStatus, Category } from "@/lib/db/types";
 
 interface HabitRowProps {
   habit: HabitWithTodayStatus;
+  categories?: Category[];
   onToggle: (habitId: string, date?: string) => Promise<void>;
   onClick: (habitId: string) => void;
   isToggling?: boolean;
 }
 
-export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps) {
+export function HabitRow({ habit, categories, onToggle, onClick, isToggling }: HabitRowProps) {
   const t = useTranslations("habits");
-  const categoryColorClass = getCategoryColor(habit.category);
-  const categoryLabel = habit.category
-    ? t(`categories.${habit.category}`)
-    : t("categories.other");
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+
+  const category = habit.category_id && categories
+    ? categories.find((c) => c.id === habit.category_id) ?? null
+    : null;
+  const categoryColor = category
+    ? getProjectColor(category.color)
+    : null;
+  const bgColor = categoryColor
+    ? (isDark ? categoryColor.hslDark : categoryColor.hsl)
+    : undefined;
 
   const handleCheckboxChange = () => {
     if (!isToggling) {
@@ -52,9 +62,15 @@ export function HabitRow({ habit, onToggle, onClick, isToggling }: HabitRowProps
           {habit.name}
         </span>
       </button>
-      <span className={cn("text-xs px-2 py-0.5 rounded-full shrink-0", categoryColorClass)}>
-        {categoryLabel}
-      </span>
+      {category && (
+        <span
+          className="text-xs px-2 py-0.5 rounded-full shrink-0 inline-flex items-center gap-1"
+          style={bgColor ? { backgroundColor: bgColor, color: "white" } : undefined}
+        >
+          <Tag className="size-3" aria-hidden="true" />
+          {category.name}
+        </span>
+      )}
       <div className="flex items-center gap-1 text-sm text-muted-foreground shrink-0">
         {habit.current_streak >= 7 && <Flame className="size-3.5 text-status-streak" aria-hidden="true" />}
         <span>

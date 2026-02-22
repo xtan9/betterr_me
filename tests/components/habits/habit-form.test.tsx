@@ -4,52 +4,69 @@ import userEvent from '@testing-library/user-event';
 import { HabitForm } from '@/components/habits/habit-form';
 import type { Habit } from '@/lib/db/types';
 
-// Mock next-intl
-vi.mock('next-intl', () => ({
-  useTranslations: () => {
-    const t = (key: string, params?: Record<string, unknown>) => {
-      const messages: Record<string, string> = {
-        // form keys
-        'createTitle': 'Create New Habit',
-        'editTitle': 'Edit Habit',
-        'nameLabel': 'Habit Name',
-        'namePlaceholder': 'e.g., Morning Run, Read 30 mins...',
-        'descriptionLabel': 'Description',
-        'descriptionPlaceholder': 'Optional notes about this habit',
-        'categoryLabel': 'Category',
-        'frequencyLabel': 'How often?',
-        'cancel': 'Cancel',
-        'create': 'Create Habit',
-        'save': 'Save Changes',
-        'creating': 'Creating...',
-        'saving': 'Saving...',
-        'validation.nameRequired': 'Name is required',
-        'validation.nameMax': 'Name must be 100 characters or less',
-        // category keys (habits.categories namespace)
-        'health': 'Health',
-        'wellness': 'Wellness',
-        'learning': 'Learning',
-        'productivity': 'Productivity',
-        'other': 'Other',
-        // frequency keys (habits.frequency namespace)
-        'daily': 'Every day',
-        'weekdays': 'Mon – Fri',
-        'weekly': 'Once a week',
-        'timesPerWeek': `${params?.count ?? ''} times/week`,
-        'custom': 'Custom days',
-        'selectedDays': `Selected: ${params?.days ?? ''}`,
-        'days.sun': 'Sun',
-        'days.mon': 'Mon',
-        'days.tue': 'Tue',
-        'days.wed': 'Wed',
-        'days.thu': 'Thu',
-        'days.fri': 'Fri',
-        'days.sat': 'Sat',
-      };
-      return messages[key] ?? key;
-    };
-    return t;
+// Namespace-aware mock matching next-intl's useTranslations behavior
+const allTranslations: Record<string, Record<string, string>> = {
+  'habits.form': {
+    'createTitle': 'Create New Habit',
+    'editTitle': 'Edit Habit',
+    'nameLabel': 'Habit Name',
+    'namePlaceholder': 'e.g., Morning Run, Read 30 mins...',
+    'descriptionLabel': 'Description',
+    'descriptionPlaceholder': 'Optional notes about this habit',
+    'categoryLabel': 'Category',
+    'frequencyLabel': 'How often?',
+    'cancel': 'Cancel',
+    'create': 'Create Habit',
+    'save': 'Save Changes',
+    'creating': 'Creating...',
+    'saving': 'Saving...',
+    'validation.nameRequired': 'Name is required',
+    'validation.nameMax': 'Name must be 100 characters or less',
   },
+  'habits.frequency': {
+    'daily': 'Every day',
+    'weekdays': 'Mon \u2013 Fri',
+    'weekly': 'Once a week',
+    'custom': 'Custom days',
+    'days.sun': 'Sun',
+    'days.mon': 'Mon',
+    'days.tue': 'Tue',
+    'days.wed': 'Wed',
+    'days.thu': 'Thu',
+    'days.fri': 'Fri',
+    'days.sat': 'Sat',
+  },
+  'categories': {
+    'add': 'Add',
+    'namePlaceholder': 'Category name',
+    'creating': 'Creating...',
+    'create': 'Create',
+  },
+};
+
+vi.mock('next-intl', () => ({
+  useTranslations: (namespace: string) => {
+    const ns = allTranslations[namespace] ?? {};
+    return (key: string, params?: Record<string, unknown>) => {
+      if (ns[key]) return ns[key];
+      if (key === 'timesPerWeek') return `${params?.count ?? ''} times/week`;
+      if (key === 'selectedDays') return `Selected: ${params?.days ?? ''}`;
+      return key;
+    };
+  },
+}));
+
+vi.mock('next-themes', () => ({
+  useTheme: () => ({ resolvedTheme: 'light' }),
+}));
+
+vi.mock('@/lib/hooks/use-categories', () => ({
+  useCategories: () => ({
+    categories: [],
+    error: null,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
 }));
 
 const mockHabit: Habit = {
@@ -57,7 +74,8 @@ const mockHabit: Habit = {
   user_id: 'user-1',
   name: 'Morning Run',
   description: 'Run for 30 minutes every morning',
-  category: 'health',
+  category: null,
+  category_id: null,
   frequency: { type: 'daily' },
   status: 'active',
   current_streak: 5,
@@ -96,7 +114,7 @@ describe('HabitForm', () => {
       expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     });
 
-    it('renders all 5 category options', () => {
+    it('renders CategoryPicker with Add button', () => {
       render(
         <HabitForm
           mode="create"
@@ -105,11 +123,8 @@ describe('HabitForm', () => {
         />
       );
 
-      expect(screen.getByRole('button', { name: /Health/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Wellness/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Learning/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Productivity/ })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Other/ })).toBeInTheDocument();
+      // CategoryPicker renders an "Add" button for creating new categories
+      expect(screen.getByRole('button', { name: /Add/ })).toBeInTheDocument();
     });
 
     it('renders all 6 frequency options', () => {
@@ -160,20 +175,6 @@ describe('HabitForm', () => {
       expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
     });
 
-    it('pre-selects the existing category in edit mode', () => {
-      render(
-        <HabitForm
-          mode="edit"
-          initialData={mockHabit}
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      const healthButton = screen.getByRole('button', { name: /Health/ });
-      expect(healthButton).toHaveAttribute('data-state', 'on');
-    });
-
     it('pre-selects the existing frequency in edit mode', () => {
       render(
         <HabitForm
@@ -222,14 +223,13 @@ describe('HabitForm', () => {
 
       await user.type(screen.getByLabelText('Habit Name'), 'Read Books');
       await user.type(screen.getByLabelText('Description'), 'Read for 30 minutes');
-      await user.click(screen.getByRole('button', { name: /Learning/ }));
       await user.click(screen.getByRole('button', { name: 'Create Habit' }));
 
       await waitFor(() => {
         expect(mockOnSubmit).toHaveBeenCalledWith({
           name: 'Read Books',
           description: 'Read for 30 minutes',
-          category: 'learning',
+          category_id: null,
           frequency: { type: 'daily' },
         });
       });
@@ -251,7 +251,7 @@ describe('HabitForm', () => {
         expect(mockOnSubmit).toHaveBeenCalledWith({
           name: 'Meditate',
           description: null,
-          category: null,
+          category_id: null,
           frequency: { type: 'daily' },
         });
       });
@@ -276,7 +276,7 @@ describe('HabitForm', () => {
         expect(mockOnSubmit).toHaveBeenCalledWith({
           name: 'Evening Walk',
           description: 'Run for 30 minutes every morning',
-          category: 'health',
+          category_id: null,
           frequency: { type: 'daily' },
         });
       });
@@ -341,57 +341,6 @@ describe('HabitForm', () => {
         expect(screen.getByText('Name must be 100 characters or less')).toBeInTheDocument();
       });
       expect(mockOnSubmit).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('category selection', () => {
-    it('selects a category when clicked', async () => {
-      render(
-        <HabitForm
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      const healthButton = screen.getByRole('button', { name: /Health/ });
-      await user.click(healthButton);
-      expect(healthButton).toHaveAttribute('data-state', 'on');
-    });
-
-    it('deselects category when clicking the same one again', async () => {
-      render(
-        <HabitForm
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      const healthButton = screen.getByRole('button', { name: /Health/ });
-      await user.click(healthButton);
-      expect(healthButton).toHaveAttribute('data-state', 'on');
-
-      await user.click(healthButton);
-      expect(healthButton).toHaveAttribute('data-state', 'off');
-    });
-
-    it('switches category when clicking a different one', async () => {
-      render(
-        <HabitForm
-          mode="create"
-          onSubmit={mockOnSubmit}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      await user.click(screen.getByRole('button', { name: /Health/ }));
-      await user.click(screen.getByRole('button', { name: /Learning/ }));
-
-      const healthButton = screen.getByRole('button', { name: /Health/ });
-      const learningButton = screen.getByRole('button', { name: /Learning/ });
-      expect(healthButton).toHaveAttribute('data-state', 'off');
-      expect(learningButton).toHaveAttribute('data-state', 'on');
     });
   });
 

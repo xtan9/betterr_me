@@ -22,8 +22,8 @@ export class HabitsDB {
       if (filters.status !== undefined) {
         query = query.eq('status', filters.status);
       }
-      if (filters.category !== undefined) {
-        query = query.eq('category', filters.category);
+      if (filters.category_id !== undefined) {
+        query = query.eq('category_id', filters.category_id);
       }
     }
 

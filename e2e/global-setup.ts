@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SEED_HABITS = [
-  { name: 'E2E Test - Seed Habit 1', category: 'health' },
-  { name: 'E2E Test - Seed Habit 2', category: 'wellness' },
-  { name: 'E2E Test - Seed Habit 3', category: 'learning' },
+  { name: 'E2E Test - Seed Habit 1' },
+  { name: 'E2E Test - Seed Habit 2' },
+  { name: 'E2E Test - Seed Habit 3' },
 ];
 
 const SEED_TASKS = [
@@ -11,7 +11,6 @@ const SEED_TASKS = [
     title: 'E2E Test - Seed Task 1',
     description: 'Seeded for E2E testing',
     priority: 2,
-    category: 'work',
     is_completed: false,
   },
 ];
@@ -65,7 +64,6 @@ async function globalSetup() {
             user_id: userId,
             name: h.name,
             description: 'Seeded for E2E testing',
-            category: h.category,
             frequency: { type: 'daily' },
           }))
         );
@@ -98,7 +96,6 @@ async function globalSetup() {
             title: t.title,
             description: t.description,
             priority: t.priority,
-            category: t.category,
             is_completed: t.is_completed,
           }))
         );

@@ -255,13 +255,6 @@
       "completedToday": "Completed today",
       "markComplete": "Mark complete:"
     },
-    "categories": {
-      "health": "Health",
-      "wellness": "Wellness",
-      "learning": "Learning",
-      "productivity": "Productivity",
-      "other": "Other"
-    },
     "heatmap": {
       "title": "Last 30 Days",
       "completed": "Completed",
@@ -481,12 +474,6 @@
     "projectLabel": "Project",
     "projectPlaceholder": "Select a project",
     "noProject": "No Project",
-    "categories": {
-      "work": "Work",
-      "personal": "Personal",
-      "shopping": "Shopping",
-      "other": "Other"
-    },
     "priorities": {
       "0": "None",
       "1": "Low",
@@ -811,5 +798,13 @@
       "low": "Low",
       "none": "None"
     }
+  },
+  "categories": {
+    "label": "Category",
+    "add": "Add",
+    "create": "Create",
+    "creating": "Creating...",
+    "namePlaceholder": "Category name",
+    "createError": "Failed to create category"
   }
 }

@@ -6,7 +6,7 @@ describe('taskFormSchema', () => {
     const result = taskFormSchema.safeParse({
       title: 'Buy groceries',
       priority: 0,
-      category: null,
+      category_id: null,
       due_date: null,
       due_time: null,
     });
@@ -18,7 +18,7 @@ describe('taskFormSchema', () => {
       title: 'Weekly report',
       description: 'Compile the weekly metrics report',
       priority: 2,
-      category: 'work',
+      category_id: '550e8400-e29b-41d4-a716-446655440000',
       due_date: '2026-02-10',
       due_time: '14:30',
     });
@@ -29,7 +29,7 @@ describe('taskFormSchema', () => {
     const result = taskFormSchema.safeParse({
       title: '',
       priority: 0,
-      category: null,
+      category_id: null,
       due_date: null,
       due_time: null,
     });
@@ -41,7 +41,7 @@ describe('taskFormSchema', () => {
     const result = taskFormSchema.safeParse({
       title: 'a'.repeat(101),
       priority: 0,
-      category: null,
+      category_id: null,
       due_date: null,
       due_time: null,
     });
@@ -53,7 +53,7 @@ describe('taskFormSchema', () => {
     const result = taskFormSchema.safeParse({
       title: 'a'.repeat(100),
       priority: 0,
-      category: null,
+      category_id: null,
       due_date: null,
       due_time: null,
     });
@@ -65,7 +65,7 @@ describe('taskFormSchema', () => {
       const result = taskFormSchema.safeParse({
         title: 'Test',
         priority,
-        category: null,
+        category_id: null,
         due_date: null,
         due_time: null,
       });
@@ -77,35 +77,44 @@ describe('taskFormSchema', () => {
     const result = taskFormSchema.safeParse({
       title: 'Test',
       priority: 5,
-      category: null,
+      category_id: null,
       due_date: null,
       due_time: null,
     });
     expect(result.success).toBe(false);
   });
 
-  it('accepts all valid category values', () => {
-    for (const category of ['work', 'personal', 'shopping', 'other'] as const) {
-      const result = taskFormSchema.safeParse({
-        title: 'Test',
-        priority: 0,
-        category,
-        due_date: null,
-        due_time: null,
-      });
-      expect(result.success).toBe(true);
-    }
-  });
-
-  it('rejects invalid category value', () => {
+  it('accepts valid category_id (UUID)', () => {
     const result = taskFormSchema.safeParse({
       title: 'Test',
       priority: 0,
-      category: 'invalid',
+      category_id: '550e8400-e29b-41d4-a716-446655440000',
+      due_date: null,
+      due_time: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects invalid category_id (non-UUID string)', () => {
+    const result = taskFormSchema.safeParse({
+      title: 'Test',
+      priority: 0,
+      category_id: 'invalid',
       due_date: null,
       due_time: null,
     });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts null category_id', () => {
+    const result = taskFormSchema.safeParse({
+      title: 'Test',
+      priority: 0,
+      category_id: null,
+      due_date: null,
+      due_time: null,
+    });
+    expect(result.success).toBe(true);
   });
 
   it('accepts nullable description', () => {
@@ -113,7 +122,7 @@ describe('taskFormSchema', () => {
       title: 'Test',
       priority: 0,
       description: null,
-      category: null,
+      category_id: null,
       due_date: null,
       due_time: null,
     });
@@ -125,7 +134,7 @@ describe('taskFormSchema', () => {
       title: 'Test',
       priority: 0,
       description: 'a'.repeat(501),
-      category: null,
+      category_id: null,
       due_date: null,
       due_time: null,
     });

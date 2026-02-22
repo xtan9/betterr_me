@@ -255,13 +255,6 @@
       "completedToday": "今日已完成",
       "markComplete": "標記完成："
     },
-    "categories": {
-      "health": "健康",
-      "wellness": "身心",
-      "learning": "學習",
-      "productivity": "效率",
-      "other": "其他"
-    },
     "heatmap": {
       "title": "最近30天",
       "completed": "已完成",
@@ -481,12 +474,6 @@
     "projectLabel": "專案",
     "projectPlaceholder": "選擇專案",
     "noProject": "無專案",
-    "categories": {
-      "work": "工作",
-      "personal": "個人",
-      "shopping": "購物",
-      "other": "其他"
-    },
     "priorities": {
       "0": "無",
       "1": "低",
@@ -811,5 +798,13 @@
       "low": "低",
       "none": "無"
     }
+  },
+  "categories": {
+    "label": "分類",
+    "add": "新增",
+    "create": "建立",
+    "creating": "建立中...",
+    "namePlaceholder": "分類名稱",
+    "createError": "建立分類失敗"
   }
 }

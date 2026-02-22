@@ -53,7 +53,7 @@ describe('ensureRecurringInstances', () => {
       title: 'Daily standup',
       description: null,
       priority: 1,
-      category: 'work',
+      category_id: null,
       due_time: '09:00:00',
       recurrence_rule: { frequency: 'daily', interval: 1 },
       start_date: '2026-02-17',

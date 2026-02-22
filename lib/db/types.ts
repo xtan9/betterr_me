@@ -33,10 +33,28 @@ export type ProfileUpdate = Partial<
 >;
 
 // =============================================================================
-// TASKS
+// CATEGORIES
 // =============================================================================
 
-export type TaskCategory = "work" | "personal" | "shopping" | "other";
+export interface Category {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  icon: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export type CategoryInsert = Omit<Category, 'id' | 'created_at'> & {
+  id?: string;
+};
+
+export type CategoryUpdate = Partial<Pick<Category, 'name' | 'color' | 'icon' | 'sort_order'>>;
+
+// =============================================================================
+// TASKS
+// =============================================================================
 
 export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
 export type TaskSection = 'personal' | 'work';
@@ -48,7 +66,7 @@ export interface Task {
   description: string | null;
   is_completed: boolean;
   priority: 0 | 1 | 2 | 3; // 0=none, 1=low, 2=medium, 3=high
-  category: TaskCategory | null;
+  category_id: string | null;
   due_date: string | null; // DATE (YYYY-MM-DD)
   due_time: string | null; // TIME (HH:MM:SS)
   completion_difficulty: 1 | 2 | 3 | null;
@@ -64,9 +82,9 @@ export interface Task {
   updated_at: string;
 }
 
-export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category' | 'completion_difficulty' | 'project_id' | 'recurring_task_id' | 'is_exception' | 'original_date' | 'status' | 'section' | 'sort_order'> & {
+export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category_id' | 'completion_difficulty' | 'project_id' | 'recurring_task_id' | 'is_exception' | 'original_date' | 'status' | 'section' | 'sort_order'> & {
   id?: string;
-  category?: TaskCategory | null;
+  category_id?: string | null;
   completion_difficulty?: 1 | 2 | 3 | null;
   project_id?: string | null;
   recurring_task_id?: string | null;
@@ -160,7 +178,7 @@ export interface RecurringTask {
   title: string;
   description: string | null;
   priority: 0 | 1 | 2 | 3;
-  category: TaskCategory | null;
+  category_id: string | null;
   due_time: string | null;
   recurrence_rule: RecurrenceRule;
   start_date: string; // DATE (YYYY-MM-DD)
@@ -218,13 +236,6 @@ export interface TaskFilters {
 // HABITS
 // =============================================================================
 
-export type HabitCategory =
-  | "health"
-  | "wellness"
-  | "learning"
-  | "productivity"
-  | "other";
-
 export type HabitStatus = "active" | "paused" | "archived";
 
 // Discriminated union for habit frequency
@@ -240,7 +251,7 @@ export interface Habit {
   user_id: string; // UUID
   name: string;
   description: string | null;
-  category: HabitCategory | null;
+  category_id: string | null;
   frequency: HabitFrequency;
   status: HabitStatus;
   current_streak: number;
@@ -271,7 +282,7 @@ export type HabitUpdate = Partial<
 
 export interface HabitFilters {
   status?: HabitStatus;
-  category?: HabitCategory;
+  category_id?: string;
 }
 
 // =============================================================================
