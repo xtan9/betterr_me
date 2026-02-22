@@ -193,7 +193,7 @@ export class RecurringTasksDB {
         if (updates.title !== undefined) templateUpdates.title = updates.title;
         if (updates.description !== undefined) templateUpdates.description = updates.description;
         if (updates.priority !== undefined) templateUpdates.priority = updates.priority;
-        if (updates.category !== undefined) templateUpdates.category = updates.category as RecurringTask['category'];
+        if (updates.category_id !== undefined) templateUpdates.category_id = updates.category_id;
         if (updates.due_time !== undefined) templateUpdates.due_time = updates.due_time;
 
         if (Object.keys(templateUpdates).length > 0) {
@@ -220,7 +220,7 @@ export class RecurringTasksDB {
         if (updates.title !== undefined) templateUpdates.title = updates.title;
         if (updates.description !== undefined) templateUpdates.description = updates.description;
         if (updates.priority !== undefined) templateUpdates.priority = updates.priority;
-        if (updates.category !== undefined) templateUpdates.category = updates.category as RecurringTask['category'];
+        if (updates.category_id !== undefined) templateUpdates.category_id = updates.category_id;
         if (updates.due_time !== undefined) templateUpdates.due_time = updates.due_time;
 
         if (Object.keys(templateUpdates).length > 0) {

@@ -113,7 +113,7 @@ async function generateInstancesForTemplate(
       title: template.title,
       description: template.description,
       priority: template.priority,
-      category: template.category,
+      category_id: template.category_id,
       due_date: date,
       due_time: template.due_time,
       is_completed: false,

@@ -75,8 +75,8 @@ export async function PATCH(
       updates.description = validation.data.description?.trim() || null;
     }
 
-    if (validation.data.category !== undefined) {
-      updates.category = validation.data.category;
+    if (validation.data.category_id !== undefined) {
+      updates.category_id = validation.data.category_id;
     }
 
     if (validation.data.frequency !== undefined) {

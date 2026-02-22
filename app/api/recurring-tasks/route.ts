@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       title: validation.data.title.trim(),
       description: validation.data.description?.trim() || null,
       priority: validation.data.priority ?? 0,
-      category: validation.data.category || null,
+      category_id: validation.data.category_id || null,
       due_time: validation.data.due_time || null,
       recurrence_rule: validation.data.recurrence_rule,
       start_date: validation.data.start_date,
