@@ -1,0 +1,17 @@
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
+import type { Category } from "@/lib/db/types";
+
+export function useCategories() {
+  const { data, error, isLoading, mutate } = useSWR<{ categories: Category[] }>(
+    "/api/categories",
+    fetcher
+  );
+
+  return {
+    categories: data?.categories ?? [],
+    error,
+    isLoading,
+    mutate,
+  };
+}
