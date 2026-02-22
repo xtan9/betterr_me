@@ -17,7 +17,10 @@ export const manualTransactionSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format"),
   category: z.string().optional(),
-  account_id: z.string().uuid("Invalid account ID"),
+  account_id: z.union([
+    z.literal("cash"),
+    z.string().uuid("Invalid account ID"),
+  ]),
 });
 
 export type ManualTransactionInput = z.infer<typeof manualTransactionSchema>;

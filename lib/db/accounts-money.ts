@@ -104,4 +104,27 @@ export class MoneyAccountsDB {
     }
     return data;
   }
+
+  /**
+   * Find or create the Cash pseudo-account for a household.
+   * Used when a manual transaction targets "cash" instead of a linked bank account.
+   */
+  async findOrCreateCash(householdId: string): Promise<MoneyAccount> {
+    const existing = await this.getCashAccount(householdId);
+    if (existing) return existing;
+
+    return this.create({
+      household_id: householdId,
+      bank_connection_id: null,
+      name: "Cash",
+      account_type: "other",
+      balance_cents: 0,
+      currency: "USD",
+      is_hidden: false,
+      plaid_account_id: null,
+      official_name: null,
+      mask: null,
+      subtype: null,
+    });
+  }
 }
