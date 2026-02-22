@@ -16,3 +16,8 @@ export * from "./workouts";
 export * from "./workout-exercises";
 export * from "./routines";
 export { resolveHousehold } from "./households";
+
+// Money tracking DB classes
+export { BankConnectionsDB } from "./bank-connections";
+export { MoneyAccountsDB } from "./accounts-money";
+export { TransactionsDB } from "./transactions";

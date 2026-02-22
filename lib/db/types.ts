@@ -697,3 +697,93 @@ export interface HouseholdMember {
   role: "owner" | "member";
   created_at: string;
 }
+
+// =============================================================================
+// BANK CONNECTIONS
+// =============================================================================
+
+export interface BankConnection {
+  id: string;
+  household_id: string;
+  provider: string;
+  status: "pending" | "connected" | "error" | "disconnected";
+  plaid_item_id: string | null;
+  institution_id: string | null;
+  institution_name: string | null;
+  vault_secret_name: string | null;
+  sync_cursor: string | null;
+  last_synced_at: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  connected_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BankConnectionInsert = Omit<
+  BankConnection,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+};
+
+// =============================================================================
+// MONEY ACCOUNTS
+// =============================================================================
+
+/**
+ * Named MoneyAccount to avoid collision with JS global Account / auth Account.
+ * Maps to the `accounts` table in the database.
+ */
+export interface MoneyAccount {
+  id: string;
+  household_id: string;
+  bank_connection_id: string | null;
+  name: string;
+  account_type: string;
+  balance_cents: number;
+  currency: string;
+  is_hidden: boolean;
+  plaid_account_id: string | null;
+  official_name: string | null;
+  mask: string | null;
+  subtype: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MoneyAccountInsert = Omit<
+  MoneyAccount,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+};
+
+// =============================================================================
+// TRANSACTIONS
+// =============================================================================
+
+export interface Transaction {
+  id: string;
+  household_id: string;
+  account_id: string;
+  amount_cents: number;
+  description: string;
+  merchant_name: string | null;
+  category: string | null;
+  transaction_date: string;
+  is_pending: boolean;
+  plaid_transaction_id: string | null;
+  plaid_category_primary: string | null;
+  plaid_category_detailed: string | null;
+  source: "plaid" | "manual";
+  created_at: string;
+  updated_at: string;
+}
+
+export type TransactionInsert = Omit<
+  Transaction,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+};
