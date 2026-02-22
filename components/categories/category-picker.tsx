@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import { Toggle } from "@/components/ui/toggle";
@@ -46,8 +47,9 @@ export function CategoryPicker({ value, onChange, disabled }: CategoryPickerProp
       setNewName("");
       setNewColor("blue");
       setPopoverOpen(false);
-    } catch {
-      // Error handled silently
+    } catch (err) {
+      console.error("Failed to create category:", err);
+      toast.error(t("createError"));
     } finally {
       setIsCreating(false);
     }

@@ -804,6 +804,7 @@
     "add": "新增",
     "create": "建立",
     "creating": "建立中...",
-    "namePlaceholder": "分類名稱"
+    "namePlaceholder": "分類名稱",
+    "createError": "建立分類失敗"
   }
 }

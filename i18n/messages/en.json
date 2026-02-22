@@ -804,6 +804,7 @@
     "add": "Add",
     "create": "Create",
     "creating": "Creating...",
-    "namePlaceholder": "Category name"
+    "namePlaceholder": "Category name",
+    "createError": "Failed to create category"
   }
 }

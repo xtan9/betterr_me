@@ -351,17 +351,21 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
               </Badge>
             </div>
             <div className="flex items-center gap-2 text-muted-foreground mb-2">
-              <span
-                className={cn(
-                  "inline-flex items-center justify-center rounded p-0.5",
-                  !catBgColor && "bg-muted"
-                )}
-                style={catBgColor ? { backgroundColor: catBgColor } : undefined}
-              >
-                <Tag className="size-4 text-white" aria-hidden="true" />
-              </span>
-              <span>{category?.name ?? ""}</span>
-              <span>•</span>
+              {category && (
+                <>
+                  <span
+                    className={cn(
+                      "inline-flex items-center justify-center rounded p-0.5",
+                      !catBgColor && "bg-muted"
+                    )}
+                    style={catBgColor ? { backgroundColor: catBgColor } : undefined}
+                  >
+                    <Tag className="size-4 text-white" aria-hidden="true" />
+                  </span>
+                  <span>{category.name}</span>
+                  <span>•</span>
+                </>
+              )}
               <span>{formatFrequency(habit.frequency, t)}</span>
             </div>
             {habit.description && (

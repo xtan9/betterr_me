@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { CategoriesDB } from '@/lib/db/categories';
+import { validateRequestBody } from '@/lib/validations/api';
+import { categoryUpdateSchema } from '@/lib/validations/category';
 import { log } from '@/lib/logger';
 
 /**
@@ -23,8 +25,11 @@ export async function PUT(
     }
 
     const body = await request.json();
+    const validation = validateRequestBody(body, categoryUpdateSchema);
+    if (!validation.success) return validation.response;
+
     const categoriesDB = new CategoriesDB(supabase);
-    const category = await categoriesDB.updateCategory(id, user.id, body);
+    const category = await categoriesDB.updateCategory(id, user.id, validation.data);
 
     return NextResponse.json({ category });
   } catch (error: unknown) {

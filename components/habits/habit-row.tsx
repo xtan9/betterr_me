@@ -62,16 +62,15 @@ export function HabitRow({ habit, categories, onToggle, onClick, isToggling }: H
           {habit.name}
         </span>
       </button>
-      <span
-        className={cn(
-          "text-xs px-2 py-0.5 rounded-full shrink-0 inline-flex items-center gap-1",
-          !bgColor && "bg-muted text-muted-foreground"
-        )}
-        style={bgColor ? { backgroundColor: bgColor, color: "white" } : undefined}
-      >
-        <Tag className="size-3" aria-hidden="true" />
-        {category?.name ?? ""}
-      </span>
+      {category && (
+        <span
+          className="text-xs px-2 py-0.5 rounded-full shrink-0 inline-flex items-center gap-1"
+          style={bgColor ? { backgroundColor: bgColor, color: "white" } : undefined}
+        >
+          <Tag className="size-3" aria-hidden="true" />
+          {category.name}
+        </span>
+      )}
       <div className="flex items-center gap-1 text-sm text-muted-foreground shrink-0">
         {habit.current_streak >= 7 && <Flame className="size-3.5 text-status-streak" aria-hidden="true" />}
         <span>

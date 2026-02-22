@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { CategoriesDB } from '@/lib/db/categories';
+import { validateRequestBody } from '@/lib/validations/api';
+import { categoryCreateSchema } from '@/lib/validations/category';
 import { log } from '@/lib/logger';
 
 /**
@@ -47,14 +49,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, color, icon } = body;
+    const validation = validateRequestBody(body, categoryCreateSchema);
+    if (!validation.success) return validation.response;
 
-    if (!name || !color) {
-      return NextResponse.json(
-        { error: 'Name and color are required' },
-        { status: 400 }
-      );
-    }
+    const { name, color, icon } = validation.data;
 
     const categoriesDB = new CategoriesDB(supabase);
     const existing = await categoriesDB.getUserCategories(user.id);

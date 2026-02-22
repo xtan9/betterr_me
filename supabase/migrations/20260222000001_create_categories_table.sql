@@ -44,10 +44,18 @@ CREATE POLICY "Users can delete their own categories"
   USING (auth.uid() = user_id);
 
 -- =============================================================================
--- DROP OLD CATEGORY CHECK CONSTRAINT ON TASKS
+-- UNIQUE CONSTRAINT: prevent duplicate category names per user
+-- =============================================================================
+
+CREATE UNIQUE INDEX idx_categories_user_name ON categories(user_id, name);
+
+-- =============================================================================
+-- DROP OLD CATEGORY CHECK CONSTRAINTS
 -- =============================================================================
 
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_category_check;
+ALTER TABLE habits DROP CONSTRAINT IF EXISTS habits_category_check;
+ALTER TABLE recurring_tasks DROP CONSTRAINT IF EXISTS recurring_tasks_category_check;
 
 -- =============================================================================
 -- ADD category_id FK TO TASKS, HABITS, RECURRING_TASKS
@@ -61,3 +69,11 @@ ALTER TABLE habits
 
 ALTER TABLE recurring_tasks
   ADD COLUMN category_id UUID REFERENCES categories(id) ON DELETE SET NULL;
+
+-- =============================================================================
+-- DROP OLD category TEXT COLUMNS (replaced by category_id FK)
+-- =============================================================================
+
+ALTER TABLE tasks DROP COLUMN IF EXISTS category;
+ALTER TABLE habits DROP COLUMN IF EXISTS category;
+ALTER TABLE recurring_tasks DROP COLUMN IF EXISTS category;

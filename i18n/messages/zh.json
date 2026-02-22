@@ -804,6 +804,7 @@
     "add": "添加",
     "create": "创建",
     "creating": "创建中...",
-    "namePlaceholder": "分类名称"
+    "namePlaceholder": "分类名称",
+    "createError": "创建分类失败"
   }
 }
