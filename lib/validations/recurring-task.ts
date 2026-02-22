@@ -46,10 +46,7 @@ export const recurringTaskCreateSchema = z
     priority: z
       .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)])
       .optional(),
-    category: z
-      .enum(["work", "personal", "shopping", "other"])
-      .nullable()
-      .optional(),
+    category_id: z.string().uuid().nullable().optional(),
     due_time: z.string().nullable().optional(),
     recurrence_rule: recurrenceRuleSchema,
     start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
@@ -84,10 +81,7 @@ export const recurringTaskUpdateSchema = z
     priority: z
       .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)])
       .optional(),
-    category: z
-      .enum(["work", "personal", "shopping", "other"])
-      .nullable()
-      .optional(),
+    category_id: z.string().uuid().nullable().optional(),
     due_time: z.string().nullable().optional(),
     recurrence_rule: recurrenceRuleSchema.optional(),
     start_date: z

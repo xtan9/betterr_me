@@ -86,7 +86,7 @@ describe('recurringTaskCreateSchema', () => {
       ...validBase,
       description: 'Morning standup meeting',
       priority: 2,
-      category: 'work',
+      category_id: '550e8400-e29b-41d4-a716-446655440000',
       due_time: '09:00:00',
       end_type: 'after_count',
       end_count: 30,

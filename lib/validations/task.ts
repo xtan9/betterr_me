@@ -10,7 +10,7 @@ export const taskFormSchema = z.object({
     .max(100, "Title must be 100 characters or less"),
   description: z.string().max(500).optional().nullable(),
   priority: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).optional(),
-  category: z.enum(["work", "personal", "shopping", "other"]).nullable().optional(),
+  category_id: z.string().uuid().nullable().optional(),
   due_date: z.string().nullable().optional(),
   due_time: z.string().nullable().optional(),
   completion_difficulty: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),

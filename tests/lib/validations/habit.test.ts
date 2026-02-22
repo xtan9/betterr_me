@@ -159,35 +159,29 @@ describe("habitFormSchema", () => {
     });
   });
 
-  describe("category field", () => {
-    it("accepts all valid category values", () => {
-      for (const category of [
-        "health",
-        "wellness",
-        "learning",
-        "productivity",
-        "other",
-      ] as const) {
-        const result = habitFormSchema.safeParse(validHabit({ category }));
-        expect(result.success).toBe(true);
-      }
-    });
-
-    it("rejects invalid category value", () => {
+  describe("category_id field", () => {
+    it("accepts valid category_id (UUID)", () => {
       const result = habitFormSchema.safeParse(
-        validHabit({ category: "invalid" }),
-      );
-      expect(result.success).toBe(false);
-    });
-
-    it("accepts null category", () => {
-      const result = habitFormSchema.safeParse(
-        validHabit({ category: null }),
+        validHabit({ category_id: "550e8400-e29b-41d4-a716-446655440000" }),
       );
       expect(result.success).toBe(true);
     });
 
-    it("accepts omitted category", () => {
+    it("rejects invalid category_id (non-UUID string)", () => {
+      const result = habitFormSchema.safeParse(
+        validHabit({ category_id: "invalid" }),
+      );
+      expect(result.success).toBe(false);
+    });
+
+    it("accepts null category_id", () => {
+      const result = habitFormSchema.safeParse(
+        validHabit({ category_id: null }),
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it("accepts omitted category_id", () => {
       const result = habitFormSchema.safeParse(validHabit());
       expect(result.success).toBe(true);
     });
@@ -336,8 +330,8 @@ describe("habitUpdateSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("accepts single field update (category)", () => {
-    const result = habitUpdateSchema.safeParse({ category: "health" });
+  it("accepts single field update (category_id)", () => {
+    const result = habitUpdateSchema.safeParse({ category_id: "550e8400-e29b-41d4-a716-446655440000" });
     expect(result.success).toBe(true);
   });
 
@@ -363,7 +357,7 @@ describe("habitUpdateSchema", () => {
   it("accepts multi-field update", () => {
     const result = habitUpdateSchema.safeParse({
       name: "New",
-      category: "health",
+      category_id: "550e8400-e29b-41d4-a716-446655440000",
       status: "active",
     });
     expect(result.success).toBe(true);
@@ -379,8 +373,8 @@ describe("habitUpdateSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects invalid category in update", () => {
-    const result = habitUpdateSchema.safeParse({ category: "bad" });
+  it("rejects invalid category_id in update (non-UUID)", () => {
+    const result = habitUpdateSchema.safeParse({ category_id: "bad" });
     expect(result.success).toBe(false);
   });
 
