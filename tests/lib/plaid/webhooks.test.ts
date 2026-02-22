@@ -5,7 +5,7 @@
  * jsdom's polyfilled Uint8Array causes `payload must be an instance of Uint8Array`.
  * Using node environment avoids this incompatibility.
  */
-import { describe, it, expect, beforeAll, vi } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { createHash } from "crypto";
 import {
   generateKeyPair,
@@ -19,7 +19,7 @@ import { verifyPlaidWebhook } from "@/lib/plaid/webhooks";
 // Helper to create a mock PlaidApi-like object with webhookVerificationKeyGet
 function createMockPlaidClient(jwk: JWK) {
   return {
-    webhookVerificationKeyGet: async (_req: { key_id: string }) => ({
+    webhookVerificationKeyGet: async () => ({
       data: {
         key: jwk,
         request_id: "test-request-id",
