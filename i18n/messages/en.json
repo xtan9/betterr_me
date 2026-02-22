@@ -809,5 +809,12 @@
       "low": "Low",
       "none": "None"
     }
+  },
+  "categories": {
+    "label": "Category",
+    "add": "Add",
+    "create": "Create",
+    "creating": "Creating...",
+    "namePlaceholder": "Category name"
   }
 }

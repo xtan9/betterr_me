@@ -809,5 +809,12 @@
       "low": "低",
       "none": "无"
     }
+  },
+  "categories": {
+    "label": "分类",
+    "add": "添加",
+    "create": "创建",
+    "creating": "创建中...",
+    "namePlaceholder": "分类名称"
   }
 }
