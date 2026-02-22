@@ -20,11 +20,11 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 
 ### Plaid Integration
 
-- [ ] **PLAD-01**: User can connect bank accounts via Plaid Link OAuth flow
-- [ ] **PLAD-02**: Connected accounts sync transactions automatically via Plaid webhooks with cursor-based pagination
-- [ ] **PLAD-03**: Plaid access tokens encrypted at rest via Supabase Vault before storage
+- [x] **PLAD-01**: User can connect bank accounts via Plaid Link OAuth flow
+- [x] **PLAD-02**: Connected accounts sync transactions automatically via Plaid webhooks with cursor-based pagination
+- [x] **PLAD-03**: Plaid access tokens encrypted at rest via Supabase Vault before storage
 - [ ] **PLAD-04**: Plaid webhook endpoint verifies JWT/ES256 signatures via jose before processing any payload
-- [ ] **PLAD-05**: User can see sync status for each connected account (healthy/stale/error)
+- [x] **PLAD-05**: User can see sync status for each connected account (healthy/stale/error)
 - [ ] **PLAD-06**: User can manually trigger a re-sync for a connected account
 - [ ] **PLAD-07**: User can disconnect a bank connection
 - [ ] **PLAD-08**: Background sync runs via Vercel Cron, cursor-based and idempotent (partial progress safe)
@@ -152,11 +152,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FOUN-06 | Phase 18 | Complete |
 | FOUN-07 | Phase 18 | Complete |
 | FOUN-08 | Phase 18 | Complete |
-| PLAD-01 | Phase 19 | Pending |
-| PLAD-02 | Phase 19 | Pending |
-| PLAD-03 | Phase 19 | Pending |
+| PLAD-01 | Phase 19 | Complete |
+| PLAD-02 | Phase 19 | Complete |
+| PLAD-03 | Phase 19 | Complete |
 | PLAD-04 | Phase 19 | Pending |
-| PLAD-05 | Phase 19 | Pending |
+| PLAD-05 | Phase 19 | Complete |
 | PLAD-06 | Phase 19 | Pending |
 | PLAD-07 | Phase 19 | Pending |
 | PLAD-08 | Phase 19 | Pending |

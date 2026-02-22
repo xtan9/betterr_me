@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 18 (Database Foundation & Household Schema)
+**Current focus:** v4.0 Money Tracking — Phase 19 (Plaid Bank Connection Pipeline)
 
 ## Current Position
 
-Phase: 18 of 25 (Database Foundation & Household Schema)
-Plan: 2 of 2 in current phase
-Status: Phase 18 complete
-Last activity: 2026-02-21 — Completed 18-02 (UI shell, Calm Finance tokens, sidebar nav, i18n)
+Phase: 19 of 25 (Plaid Bank Connection Pipeline)
+Plan: 1 of 6 in current phase
+Status: Executing Phase 19
+Last activity: 2026-02-22 — Completed 19-01 (Plaid SDK, migration, server library, DB classes)
 
-Progress: [█░░░░░░░░░] 12% v4.0
+Progress: [██░░░░░░░░] 14% v4.0
 
 ## Performance Metrics
 
@@ -37,6 +37,9 @@ Progress: [█░░░░░░░░░] 12% v4.0
 - Total execution time: ~49min
 - Files changed: 97 (+12,769/-156 lines)
 
+**v4.0 Velocity:**
+- 19-01: 4min, 2 tasks, 14 files
+
 ## Accumulated Context
 
 ### Decisions
@@ -57,6 +60,10 @@ Recent decisions affecting current work:
 - [18-02] Wallet icon for Money nav (clean lines, recognizable, matches existing icon style)
 - [18-02] Money nav position: Dashboard > Habits > Tasks > Money
 - [18-02] Empty state designed as welcoming landing page, not error/broken state
+- [19-01] Vault wrapper functions (SECURITY DEFINER) for PostgREST RPC access to Plaid secrets
+- [19-01] Sign inversion at sync boundary: toCents(-plaidAmount) for Plaid->DB convention
+- [19-01] Liability balance negation during exchange (credit/loan = negative in our system)
+- [19-01] MoneyAccount naming avoids collision with JS Account / auth Account types
 
 ### Pending Todos
 
@@ -77,6 +84,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-21
-Stopped at: Completed 18-02-PLAN.md (Phase 18 complete)
-Resume: `/gsd:plan-phase 19` to begin Phase 19 planning (Plaid Integration)
+Last session: 2026-02-22
+Stopped at: Completed 19-01-PLAN.md
+Resume: `/gsd:execute-phase 19` to continue with 19-02-PLAN.md
