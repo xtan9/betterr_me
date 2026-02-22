@@ -1196,10 +1196,52 @@
       "heading": "Your calm financial picture starts here",
       "description": "Connect your bank accounts to see your complete financial overview in one peaceful place.",
       "comingSoon": "Bank connection coming soon",
-      "comingSoonDescription": "We're building a seamless way to connect your accounts. Stay tuned."
+      "comingSoonDescription": "We're building a seamless way to connect your accounts. Stay tuned.",
+      "manualFallback": "Or enter transactions manually"
     },
     "format": {
       "currency": "USD"
+    },
+    "syncStatus": {
+      "syncing": "Syncing",
+      "synced": "Synced",
+      "stale": "Stale",
+      "error": "Error"
+    },
+    "account": {
+      "mask": "\u2022\u2022\u2022\u2022 {mask}"
+    },
+    "plaid": {
+      "connectBank": "Connect Bank",
+      "connecting": "Connecting...",
+      "tokenError": "Failed to initialize bank connection",
+      "connectSuccess": "Bank account connected successfully",
+      "exchangeError": "Failed to connect bank account",
+      "linkError": "Bank connection failed. Please try again."
+    },
+    "accounts": {
+      "netWorth": "Net Worth",
+      "resync": "Re-sync",
+      "disconnect": "Disconnect",
+      "syncSuccess": "Sync started successfully",
+      "syncError": "Failed to start sync",
+      "errorBanner": "Some accounts have sync errors. Check individual accounts for details.",
+      "errorBannerDismiss": "Dismiss",
+      "loading": "Loading accounts...",
+      "errorTitle": "Failed to load accounts",
+      "retry": "Retry",
+      "otherOptions": "Other options",
+      "manualEntry": "Enter transaction manually",
+      "institutionSubtotal": "Subtotal"
+    },
+    "disconnect": {
+      "title": "Disconnect {name}?",
+      "description": "This will remove the connection to {name}. Choose what to do with your existing transactions.",
+      "keepTransactions": "Keep Transactions",
+      "deleteTransactions": "Delete Transactions",
+      "cancel": "Cancel",
+      "success": "Bank disconnected successfully",
+      "error": "Failed to disconnect bank"
     }
   }
 }
