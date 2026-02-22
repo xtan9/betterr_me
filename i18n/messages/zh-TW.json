@@ -844,9 +844,31 @@
       "linkError": "銀行連接失敗，請重試。"
     },
     "accounts": {
+      "title": "帳戶",
+      "connectBank": "連接銀行帳戶",
+      "otherOptions": "其他選項",
+      "manualEntry": "手動輸入交易",
       "netWorth": "淨資產",
+      "noAccounts": "未連接任何帳戶",
+      "emptyHeading": "連接你的銀行",
+      "emptyDescription": "連接你的銀行帳戶，自動追蹤交易和餘額。",
+      "orManual": "或手動輸入交易",
+      "syncStatus": {
+        "syncing": "同步中",
+        "synced": "已同步",
+        "stale": "過期",
+        "error": "錯誤"
+      },
+      "syncErrors": "部分帳戶同步出錯。請檢查各帳戶了解詳情。",
       "resync": "重新同步",
       "disconnect": "斷開連接",
+      "disconnectTitle": "斷開 {institution}？",
+      "disconnectDescription": "這將撤銷對你銀行帳戶的存取。請選擇如何處理現有交易。",
+      "keepTransactions": "保留交易",
+      "deleteTransactions": "刪除交易",
+      "syncingTransactions": "正在同步交易...",
+      "connectionError": "連接錯誤：{message}",
+      "subtotal": "小計",
       "syncSuccess": "同步已開始",
       "syncError": "啟動同步失敗",
       "errorBanner": "部分帳戶同步出錯。請檢查各帳戶了解詳情。",
@@ -854,10 +876,22 @@
       "loading": "載入帳戶中...",
       "errorTitle": "載入帳戶失敗",
       "retry": "重試",
-      "otherOptions": "其他選項",
-      "manualEntry": "手動輸入交易",
       "institutionSubtotal": "小計",
       "unknownInstitution": "未知機構"
+    },
+    "transactions": {
+      "title": "交易",
+      "manual": {
+        "title": "新增交易",
+        "amount": "金額",
+        "description": "描述",
+        "date": "日期",
+        "category": "分類",
+        "account": "帳戶",
+        "cashAccount": "現金",
+        "submit": "新增交易",
+        "success": "交易已新增"
+      }
     },
     "disconnect": {
       "title": "斷開 {name}？",
