@@ -820,10 +820,52 @@
       "heading": "你的平靜財務畫面從這裡開始",
       "description": "連接你的銀行帳戶，在一個安靜的地方查看完整的財務概覽。",
       "comingSoon": "銀行連接即將推出",
-      "comingSoonDescription": "我們正在構建一種無縫連接帳戶的方式。敬請期待。"
+      "comingSoonDescription": "我們正在構建一種無縫連接帳戶的方式。敬請期待。",
+      "manualFallback": "或手動輸入交易"
     },
     "format": {
       "currency": "USD"
+    },
+    "syncStatus": {
+      "syncing": "同步中",
+      "synced": "已同步",
+      "stale": "過期",
+      "error": "錯誤"
+    },
+    "account": {
+      "mask": "\u2022\u2022\u2022\u2022 {mask}"
+    },
+    "plaid": {
+      "connectBank": "連接銀行",
+      "connecting": "連接中...",
+      "tokenError": "初始化銀行連接失敗",
+      "connectSuccess": "銀行帳戶連接成功",
+      "exchangeError": "銀行帳戶連接失敗",
+      "linkError": "銀行連接失敗，請重試。"
+    },
+    "accounts": {
+      "netWorth": "淨資產",
+      "resync": "重新同步",
+      "disconnect": "斷開連接",
+      "syncSuccess": "同步已開始",
+      "syncError": "啟動同步失敗",
+      "errorBanner": "部分帳戶同步出錯。請檢查各帳戶了解詳情。",
+      "errorBannerDismiss": "關閉",
+      "loading": "載入帳戶中...",
+      "errorTitle": "載入帳戶失敗",
+      "retry": "重試",
+      "otherOptions": "其他選項",
+      "manualEntry": "手動輸入交易",
+      "institutionSubtotal": "小計"
+    },
+    "disconnect": {
+      "title": "斷開 {name}？",
+      "description": "這將斷開與 {name} 的連接。請選擇如何處理現有交易。",
+      "keepTransactions": "保留交易",
+      "deleteTransactions": "刪除交易",
+      "cancel": "取消",
+      "success": "銀行已斷開連接",
+      "error": "斷開銀行連接失敗"
     }
   }
 }
