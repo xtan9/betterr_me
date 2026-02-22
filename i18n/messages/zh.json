@@ -856,7 +856,8 @@
       "retry": "重试",
       "otherOptions": "其他选项",
       "manualEntry": "手动输入交易",
-      "institutionSubtotal": "小计"
+      "institutionSubtotal": "小计",
+      "unknownInstitution": "未知机构"
     },
     "disconnect": {
       "title": "断开 {name}？",

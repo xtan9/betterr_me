@@ -856,7 +856,8 @@
       "retry": "Retry",
       "otherOptions": "Other options",
       "manualEntry": "Enter transaction manually",
-      "institutionSubtotal": "Subtotal"
+      "institutionSubtotal": "Subtotal",
+      "unknownInstitution": "Unknown Institution"
     },
     "disconnect": {
       "title": "Disconnect {name}?",
