@@ -1220,9 +1220,31 @@
       "linkError": "Bank connection failed. Please try again."
     },
     "accounts": {
+      "title": "Accounts",
+      "connectBank": "Connect Bank Account",
+      "otherOptions": "Other options",
+      "manualEntry": "Enter transaction manually",
       "netWorth": "Net Worth",
+      "noAccounts": "No accounts connected",
+      "emptyHeading": "Connect your bank",
+      "emptyDescription": "Link your bank accounts to automatically track transactions and balances.",
+      "orManual": "Or enter transactions manually",
+      "syncStatus": {
+        "syncing": "Syncing",
+        "synced": "Synced",
+        "stale": "Stale",
+        "error": "Error"
+      },
+      "syncErrors": "Some accounts have sync errors. Check individual accounts for details.",
       "resync": "Re-sync",
       "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect {institution}?",
+      "disconnectDescription": "This will revoke access to your bank account. Choose what to do with existing transactions.",
+      "keepTransactions": "Keep Transactions",
+      "deleteTransactions": "Delete Transactions",
+      "syncingTransactions": "Syncing transactions...",
+      "connectionError": "Connection error: {message}",
+      "subtotal": "Subtotal",
       "syncSuccess": "Sync started successfully",
       "syncError": "Failed to start sync",
       "errorBanner": "Some accounts have sync errors. Check individual accounts for details.",
@@ -1230,10 +1252,22 @@
       "loading": "Loading accounts...",
       "errorTitle": "Failed to load accounts",
       "retry": "Retry",
-      "otherOptions": "Other options",
-      "manualEntry": "Enter transaction manually",
       "institutionSubtotal": "Subtotal",
       "unknownInstitution": "Unknown Institution"
+    },
+    "transactions": {
+      "title": "Transactions",
+      "manual": {
+        "title": "Add Transaction",
+        "amount": "Amount",
+        "description": "Description",
+        "date": "Date",
+        "category": "Category",
+        "account": "Account",
+        "cashAccount": "Cash",
+        "submit": "Add Transaction",
+        "success": "Transaction added"
+      }
     },
     "disconnect": {
       "title": "Disconnect {name}?",
