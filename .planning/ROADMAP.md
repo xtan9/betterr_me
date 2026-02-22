@@ -91,14 +91,15 @@ Plans:
   3. User can see sync status per account (healthy/stale/error), manually trigger a re-sync, and disconnect a bank connection
   4. Plaid access tokens are encrypted at rest via Supabase Vault; webhook endpoint verifies JWT/ES256 signatures before processing any payload
   5. User can manually enter individual transactions (cash purchases) as a fallback
-**Plans**: 5 plans
+**Plans**: 6 plans
 
 Plans:
 - [ ] 19-01-PLAN.md — DB migration (Plaid columns + Vault functions), Plaid server library, DB classes, Zod schemas
 - [ ] 19-02-PLAN.md — TDD: Plaid webhook JWT/ES256 verification with jose
 - [ ] 19-03-PLAN.md — API routes (link-token, exchange, webhook, accounts, sync, disconnect, transactions, cron)
-- [ ] 19-04-PLAN.md — Accounts page UI, Plaid Link button, account cards, sync badges, net worth, i18n
-- [ ] 19-05-PLAN.md — Manual transaction dialog, validation tests, human verification
+- [ ] 19-04-PLAN.md — UI components (PlaidLinkButton, AccountCard, AccountGroup, SyncStatusBadge, DisconnectDialog, AccountsList, useAccounts hook)
+- [ ] 19-05-PLAN.md — Accounts page routes, OAuth handler, i18n in 3 locales, component tests
+- [ ] 19-06-PLAN.md — Manual transaction dialog wired to AccountsList, validation tests, human verification
 
 ### Phase 20: Transaction Management & Categorization
 **Goal**: Users can see, search, filter, and understand all their transactions with accurate auto-categorization and the ability to correct mistakes that stick
