@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 22 of 25 (Bills, Goals & Net Worth)
-Plan: 4 of 6 in current phase (COMPLETE)
-Status: Phase 22 plan 04 complete — bills UI components with list, calendar, and page route
-Last activity: 2026-02-23 — Completed 22-04 (Bills list, calendar, form, page)
+Plan: 5 of 6 in current phase (COMPLETE)
+Status: Phase 22 plan 05 complete — goals card grid with progress rings, net worth dashboard with line chart
+Last activity: 2026-02-23 — Completed 22-05 (Goals UI + Net Worth UI)
 
-Progress: [█████░░░░░] 46% v4.0
+Progress: [█████░░░░░] 49% v4.0
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [█████░░░░░] 46% v4.0
 - 22-02: 6min, 2 tasks, 5 files
 - 22-03: 7min, 2 tasks, 9 files
 - 22-04: 6min, 2 tasks, 11 files
+- 22-05: 8min, 2 tasks, 9 files
 
 ## Accumulated Context
 
@@ -148,6 +149,11 @@ Recent decisions affecting current work:
 - [22-04] Calendar projects bills to days using frequency-based calculation from next_due_date
 - [22-04] Tabbed List/Calendar views via BillsPageContent with shared useBills hook
 - [22-04] Dialog modal={false} on BillForm for Radix Select compatibility
+- [22-05] GoalCard reuses BudgetRing SVG with status_color -> ring color mapping (sage/amber/caution)
+- [22-05] GoalGrid sorts active goals first by deadline, completed at bottom
+- [22-05] NetWorthChart default period 6M, period toggle as row of small buttons with active highlighting
+- [22-05] NetWorthAccounts groups by account_type (not Plaid subtype) for cleaner UI sections
+- [22-05] ManualAssetForm includes clarification text per research for user guidance
 
 ### Pending Todos
 
@@ -169,5 +175,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 22-04-PLAN.md (Bills UI - list, calendar, form, page route)
-Resume: Execute 22-05-PLAN.md (Goals & Net Worth UI components)
+Stopped at: Completed 22-05-PLAN.md (Goals card grid + Net worth dashboard)
+Resume: Execute 22-06-PLAN.md (Phase 22 tests/verification)
