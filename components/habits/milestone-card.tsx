@@ -1,13 +1,14 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Card, CardContent } from "@/components/ui/card";
-import { Trophy } from "lucide-react";
+import { Trophy, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { HabitMilestone, Habit } from "@/lib/db/types";
 
 interface MilestoneCardProps {
   milestone: HabitMilestone;
   habitName: string;
+  onDismiss?: (milestoneId: string) => void;
 }
 
 function getCelebrationKey(milestone: number): string | null {
@@ -23,38 +24,46 @@ function getCelebrationKey(milestone: number): string | null {
   return thresholdKeys[milestone] || null;
 }
 
-export function MilestoneCard({ milestone, habitName }: MilestoneCardProps) {
+export function MilestoneCard({ milestone, habitName, onDismiss }: MilestoneCardProps) {
   const t = useTranslations("habits.milestone");
 
   const celebrationKey = getCelebrationKey(milestone.milestone);
 
   return (
-    <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20 dark:from-primary/10 dark:to-primary/20 dark:border-primary/30">
-      <CardContent className="flex items-center gap-4 p-4">
-        <div className="rounded-full bg-primary/10 p-3">
-          <Trophy className="size-6 text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-foreground truncate">
-            {t("celebration", { habit: habitName, count: milestone.milestone })}
+    <div className="flex items-start gap-3 p-4 rounded-lg bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20 border border-primary/20 dark:border-primary/30">
+      <Trophy className="size-5 text-primary shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground truncate">
+          {t("celebration", { habit: habitName, count: milestone.milestone })}
+        </p>
+        {celebrationKey && (
+          <p className="text-sm text-primary">
+            {t(celebrationKey)}
           </p>
-          {celebrationKey && (
-            <p className="text-sm text-primary">
-              {t(celebrationKey)}
-            </p>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+        )}
+      </div>
+      {onDismiss && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onDismiss(milestone.id)}
+          className="shrink-0 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+          aria-label="Dismiss"
+        >
+          <X className="size-4" />
+        </Button>
+      )}
+    </div>
   );
 }
 
 interface MilestoneCardsProps {
   milestones: HabitMilestone[];
   habits: Habit[];
+  onDismiss?: (milestoneId: string) => void;
 }
 
-export function MilestoneCards({ milestones, habits }: MilestoneCardsProps) {
+export function MilestoneCards({ milestones, habits, onDismiss }: MilestoneCardsProps) {
   if (milestones.length === 0) return null;
 
   const habitMap = new Map(habits.map(h => [h.id, h]));
@@ -74,6 +83,7 @@ export function MilestoneCards({ milestones, habits }: MilestoneCardsProps) {
             key={m.id}
             milestone={m}
             habitName={habit.name}
+            onDismiss={onDismiss}
           />
         );
       })}

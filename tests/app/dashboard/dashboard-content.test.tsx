@@ -1083,8 +1083,11 @@ describe("DashboardContent", () => {
       expect(screen.getByText(/Missed Habit — 3 days since last check-in/)).toBeInTheDocument();
     });
 
-    // Click dismiss button
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    // Click the dismiss button that is within the absence card (the one next to the absence text)
+    const absenceText = screen.getByText(/Missed Habit — 3 days since last check-in/);
+    const absenceCard = absenceText.closest("[class*='border-l-']")!;
+    const dismissButton = absenceCard.querySelector("button[aria-label='Dismiss']")!;
+    fireEvent.click(dismissButton);
 
     // Card should disappear
     expect(screen.queryByText(/Missed Habit — 3 days since last check-in/)).not.toBeInTheDocument();

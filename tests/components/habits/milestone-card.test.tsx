@@ -60,7 +60,7 @@ describe("MilestoneCard", () => {
   });
 
   it("renders no sub-message for unknown milestone threshold", () => {
-    const { container } = render(
+    render(
       <MilestoneCard
         milestone={{ ...baseMilestone, milestone: 999 }}
         habitName="Walk"
@@ -68,9 +68,8 @@ describe("MilestoneCard", () => {
     );
     // Primary celebration message should render
     expect(screen.getByText(/celebration.*habit=Walk.*count=999/)).toBeInTheDocument();
-    // No sub-message element with a threshold-specific key
-    const subMessages = container.querySelectorAll("p.text-sm");
-    expect(subMessages.length).toBe(0);
+    // No sub-message with a threshold-specific key (e.g. celebration7, celebration30, etc.)
+    expect(screen.queryByText(/^celebration\d+$/)).not.toBeInTheDocument();
   });
 
   it("has no accessibility violations", async () => {

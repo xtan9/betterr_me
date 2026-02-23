@@ -93,6 +93,39 @@ export function DashboardContent({
     });
   }, [today]);
 
+  const [dismissedMotivation, setDismissedMotivation] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem(`motivation-dismissed-${today}`) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleDismissMotivation = useCallback(() => {
+    setDismissedMotivation(true);
+    localStorage.setItem(`motivation-dismissed-${today}`, "true");
+  }, [today]);
+
+  const [dismissedMilestoneIds, setDismissedMilestoneIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const stored = localStorage.getItem(`milestones-dismissed-${today}`);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const handleDismissMilestone = useCallback((milestoneId: string) => {
+    setDismissedMilestoneIds(prev => {
+      const next = new Set(prev);
+      next.add(milestoneId);
+      localStorage.setItem(`milestones-dismissed-${today}`, JSON.stringify([...next]));
+      return next;
+    });
+  }, [today]);
+
   const { data, error, isLoading, mutate } = useSWR<DashboardData>(
     `/api/dashboard?date=${today}`,
     fetcher,
@@ -408,9 +441,9 @@ export function DashboardContent({
           />
         )}
 
-      {/* Motivation Message — only show when user has habits */}
-      {data.stats.total_habits > 0 && (
-        <MotivationMessage stats={data.stats} topStreakHabit={topStreakHabit} />
+      {/* Motivation Message — only show when user has habits and not dismissed */}
+      {data.stats.total_habits > 0 && !dismissedMotivation && (
+        <MotivationMessage stats={data.stats} topStreakHabit={topStreakHabit} onDismiss={handleDismissMotivation} />
       )}
 
       {/* Absence Recovery Cards — habits with missed scheduled days */}
@@ -433,8 +466,9 @@ export function DashboardContent({
       {/* Milestone celebrations */}
       {data.milestones_today && data.milestones_today.length > 0 && (
         <MilestoneCards
-          milestones={data.milestones_today}
+          milestones={data.milestones_today.filter(m => !dismissedMilestoneIds.has(m.id))}
           habits={data.habits}
+          onDismiss={handleDismissMilestone}
         />
       )}
 

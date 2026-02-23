@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { MotivationMessage } from "@/components/dashboard/motivation-message";
 
@@ -130,5 +130,37 @@ describe("MotivationMessage", () => {
     renderWithIntl(<MotivationMessage stats={stats} />);
 
     expect(screen.getByText(/Ready to start building better habits?/i)).toBeInTheDocument();
+  });
+
+  it("renders dismiss button when onDismiss is provided", () => {
+    const stats = {
+      total_habits: 3,
+      completed_today: 1,
+      current_best_streak: 5,
+      tasks_due_today: 0,
+      tasks_completed_today: 0,
+    };
+
+    const onDismiss = vi.fn();
+    renderWithIntl(<MotivationMessage stats={stats} onDismiss={onDismiss} />);
+
+    const dismissButton = screen.getByRole("button", { name: "Dismiss" });
+    expect(dismissButton).toBeInTheDocument();
+    fireEvent.click(dismissButton);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not render dismiss button when onDismiss is not provided", () => {
+    const stats = {
+      total_habits: 3,
+      completed_today: 1,
+      current_best_streak: 5,
+      tasks_due_today: 0,
+      tasks_completed_today: 0,
+    };
+
+    renderWithIntl(<MotivationMessage stats={stats} />);
+
+    expect(screen.queryByRole("button", { name: "Dismiss" })).not.toBeInTheDocument();
   });
 });
