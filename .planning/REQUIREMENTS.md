@@ -57,24 +57,24 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 
 ### Bills & Subscriptions
 
-- [ ] **BILL-01**: App auto-detects recurring charges from transaction history (merchant + similar amount + regular interval)
-- [ ] **BILL-02**: User can see a list of all detected bills and subscriptions with amounts and frequency
+- [x] **BILL-01**: App auto-detects recurring charges from transaction history (merchant + similar amount + regular interval)
+- [x] **BILL-02**: User can see a list of all detected bills and subscriptions with amounts and frequency
 - [ ] **BILL-03**: User can view a bill calendar showing upcoming charges
-- [ ] **BILL-04**: User can confirm or dismiss auto-detected bills (false positive handling)
+- [x] **BILL-04**: User can confirm or dismiss auto-detected bills (false positive handling)
 
 ### Savings Goals
 
-- [ ] **GOAL-01**: User can create savings goals with target amount and optional deadline
+- [x] **GOAL-01**: User can create savings goals with target amount and optional deadline
 - [ ] **GOAL-02**: User can see visual progress toward each goal (progress bar/ring)
 - [ ] **GOAL-03**: User can track multiple goals simultaneously
-- [ ] **GOAL-04**: Goals can be individual or shared with partner (household-scoped)
+- [x] **GOAL-04**: Goals can be individual or shared with partner (household-scoped)
 - [ ] **GOAL-05**: App shows projected completion date based on current savings rate
 
 ### Net Worth
 
-- [ ] **NTWT-01**: User can see total net worth (assets minus liabilities) across all connected accounts
-- [ ] **NTWT-02**: Net worth is tracked over time with a line chart
-- [ ] **NTWT-03**: Net worth updates automatically as accounts sync
+- [x] **NTWT-01**: User can see total net worth (assets minus liabilities) across all connected accounts
+- [x] **NTWT-02**: Net worth is tracked over time with a line chart
+- [x] **NTWT-03**: Net worth updates automatically as accounts sync
 
 ### Household/Couples
 
@@ -177,18 +177,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUDG-04 | Phase 21 | Complete |
 | BUDG-05 | Phase 21 | Complete |
 | BUDG-06 | Phase 21 | Complete |
-| BILL-01 | Phase 22 | Pending |
-| BILL-02 | Phase 22 | Pending |
+| BILL-01 | Phase 22 | Complete |
+| BILL-02 | Phase 22 | Complete |
 | BILL-03 | Phase 22 | Pending |
-| BILL-04 | Phase 22 | Pending |
-| GOAL-01 | Phase 22 | Pending |
+| BILL-04 | Phase 22 | Complete |
+| GOAL-01 | Phase 22 | Complete |
 | GOAL-02 | Phase 22 | Pending |
 | GOAL-03 | Phase 22 | Pending |
-| GOAL-04 | Phase 22 | Pending |
+| GOAL-04 | Phase 22 | Complete |
 | GOAL-05 | Phase 22 | Pending |
-| NTWT-01 | Phase 22 | Pending |
-| NTWT-02 | Phase 22 | Pending |
-| NTWT-03 | Phase 22 | Pending |
+| NTWT-01 | Phase 22 | Complete |
+| NTWT-02 | Phase 22 | Complete |
+| NTWT-03 | Phase 22 | Complete |
 | HOUS-01 | Phase 23 | Pending |
 | HOUS-02 | Phase 23 | Pending |
 | HOUS-03 | Phase 23 | Pending |

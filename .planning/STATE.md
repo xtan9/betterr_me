@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 21 complete (incl. gap closure), ready for Phase 22
+**Current focus:** v4.0 Money Tracking — Phase 22 in progress (Bills, Goals & Net Worth)
 
 ## Current Position
 
-Phase: 21 of 25 (Budgets & Spending Analytics)
-Plan: 5 of 5 in current phase (COMPLETE)
-Status: Phase 21 complete — all 5 plans executed (incl. gap closure plan 05)
-Last activity: 2026-02-23 — Completed 21-05 (gap closure: trend data + rollover wiring)
+Phase: 22 of 25 (Bills, Goals & Net Worth)
+Plan: 1 of 6 in current phase (COMPLETE)
+Status: Phase 22 plan 01 complete — database foundation for bills, goals, net worth
+Last activity: 2026-02-23 — Completed 22-01 (DB migration, classes, Plaid recurring, Zod schemas)
 
-Progress: [████░░░░░░] 40% v4.0
+Progress: [████░░░░░░] 43% v4.0
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [████░░░░░░] 40% v4.0
 - 21-03: 8min, 2 tasks, 13 files
 - 21-04: 5min, 2 tasks, 4 files
 - 21-05: 4min, 2 tasks, 5 files (gap closure)
+- 22-01: 5min, 2 tasks, 10 files
 
 ## Accumulated Context
 
@@ -127,6 +128,10 @@ Recent decisions affecting current work:
 - [21-04] Month navigation uses startOfMonth comparison (not isFuture) for current-month boundary
 - [21-05] getBudgetTotalsByMonth uses single .in() query for efficiency instead of per-month lookups
 - [21-05] currentMonth prop made optional on RolloverPrompt for backward compatibility
+- [22-01] upsertFromPlaid detects price changes by comparing amount_cents, stores old in previous_amount_cents
+- [22-01] goal_contributions RLS via savings_goals join (nested IN-subquery, same as budget_categories)
+- [22-01] Net worth snapshot uses upsert on (household_id, snapshot_date) for idempotent daily updates
+- [22-01] Bill frequency uses Plaid enum values directly (WEEKLY/BIWEEKLY/SEMI_MONTHLY/MONTHLY/ANNUALLY)
 
 ### Pending Todos
 
@@ -148,5 +153,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 21-05-PLAN.md (Phase 21 gap closure complete)
-Resume: Begin Phase 22 research/planning (Bills, Goals & Net Worth)
+Stopped at: Completed 22-01-PLAN.md (database foundation for bills, goals, net worth)
+Resume: Execute 22-02-PLAN.md (API routes for bills, goals, net worth)
