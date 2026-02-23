@@ -107,6 +107,64 @@ describe("GET /api/money/transactions", () => {
     expect(data.total).toBe(2);
     expect(data.hasMore).toBe(false);
   });
+
+  it("should forward search param to TransactionsDB", async () => {
+    mockGetByHousehold.mockResolvedValue({
+      transactions: [],
+      total: 0,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/money/transactions?search=coffee"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.transactions).toEqual([]);
+    expect(mockGetByHousehold).toHaveBeenCalledWith(
+      "household-abc",
+      expect.objectContaining({ search: "coffee" })
+    );
+  });
+
+  it("should forward category_id filter to TransactionsDB", async () => {
+    mockGetByHousehold.mockResolvedValue({
+      transactions: [],
+      total: 0,
+    });
+
+    const catId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+    const request = new NextRequest(
+      `http://localhost:3000/api/money/transactions?category_id=${catId}`
+    );
+    const response = await GET(request);
+
+    expect(response.status).toBe(200);
+    expect(mockGetByHousehold).toHaveBeenCalledWith(
+      "household-abc",
+      expect.objectContaining({ categoryId: catId })
+    );
+  });
+
+  it("should set hasMore true when more transactions exist", async () => {
+    mockGetByHousehold.mockResolvedValue({
+      transactions: [
+        { id: "txn-1", description: "Item 1", amount_cents: -100 },
+      ],
+      total: 50,
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/money/transactions?limit=1&offset=0"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.hasMore).toBe(true);
+    expect(data.total).toBe(50);
+  });
 });
 
 describe("POST /api/money/transactions", () => {
@@ -136,21 +194,7 @@ describe("POST /api/money/transactions", () => {
     };
     mockCreate.mockResolvedValue(mockTxn);
 
-    const request = new NextRequest(
-      "http://localhost:3000/api/money/transactions",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          amount: 12.50,
-          description: "Lunch",
-          transaction_date: "2026-02-22",
-          account_id: "acc-1",
-        }),
-      }
-    );
-
-    // Need a valid UUID for account_id in the schema
-    // Let's adjust: the schema expects UUID format for account_id
+    // Use valid UUID for account_id (schema requires UUID format)
     const validRequest = new NextRequest(
       "http://localhost:3000/api/money/transactions",
       {
