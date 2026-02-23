@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 ## Current Position
 
 Phase: 22 of 25 (Writing Prompts)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-23 — Completed 22-01 (Prompt data + i18n + editor placeholder)
+Plan: 2 of 2 in current phase (COMPLETE)
+Status: Phase Complete
+Last activity: 2026-02-23 — Completed 22-02 (Prompt browser UI + modal integration)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [####░░░░░░] 44% v4.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [#####░░░░░] 56% v4.0
 
 ## Performance Metrics
 
@@ -61,6 +61,8 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - Journal page follows kanban pattern: server component for auth, client component for interactive state
 - Prompts defined as hardcoded TypeScript constant with i18n keys (not database)
 - Placeholder uses @apply text-muted-foreground/50 for consistent Tailwind theming
+- Used promptKeyRef pattern (same as contentRef) to avoid stale closures in scheduleSave callbacks
+- Sheet sidebar pattern for browsable prompt content with category Tabs
 
 ### Pending Todos
 
@@ -85,5 +87,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 22-01-PLAN.md (Prompt data + i18n + editor placeholder)
-Resume: Continue with 22-02 (Prompt browser UI + modal integration)
+Stopped at: Completed 22-02-PLAN.md (Prompt browser UI + modal integration)
+Resume: Phase 22 complete. Continue with Phase 23.

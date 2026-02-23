@@ -52,7 +52,7 @@
 
 - [x] **Phase 20: Database & API Foundation** - Schema, DB class, API routes, SWR hooks for journal entries (completed 2026-02-23)
 - [x] **Phase 21: Journal Entry CRUD** - Tiptap editor, mood selector, create/edit/delete entry flows (completed 2026-02-23)
-- [ ] **Phase 22: Writing Prompts** - Prompt library with categories and free-form fallback
+- [x] **Phase 22: Writing Prompts** - Prompt library with categories and free-form fallback (completed 2026-02-23)
 - [ ] **Phase 23: Journal Page & Navigation** - Calendar view, timeline feed, sidebar nav entry
 - [ ] **Phase 24: Dashboard & Cross-Feature Integration** - Quick-entry widget, habit/task linking, On This Day, streak
 - [ ] **Phase 25: i18n & Polish** - Full translation coverage and dark mode verification
@@ -170,7 +170,7 @@ Phases execute in numeric order: 20 -> 21 -> 22 -> 23 -> 24 -> 25
 | 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |
 | 20. Database & API Foundation | 2/2 | Complete    | 2026-02-23 | - |
 | 21. Journal Entry CRUD | 2/2 | Complete    | 2026-02-23 | - |
-| 22. Writing Prompts | 1/2 | In Progress|  | - |
+| 22. Writing Prompts | 2/2 | Complete   | 2026-02-23 | - |
 | 23. Journal Page & Navigation | v4.0 | 0/? | Not started | - |
 | 24. Dashboard & Cross-Feature Integration | v4.0 | 0/? | Not started | - |
 | 25. i18n & Polish | v4.0 | 0/? | Not started | - |
