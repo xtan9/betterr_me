@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 20 of 25 (Transaction Management & Categorization)
-Plan: 4 of 5 in current phase
-Status: Executing Phase 20
-Last activity: 2026-02-22 — Completed 20-04 (Transaction detail, category management, sync pipeline, i18n)
+Plan: 5 of 5 in current phase
+Status: Executing Phase 20 — Task 2 (human-verify checkpoint) pending
+Last activity: 2026-02-22 — Completed 20-05 Task 1 (55 automated tests for TransactionList, CategoryBadge, validation schemas)
 
 Progress: [████░░░░░░] 30% v4.0
 
@@ -48,6 +48,7 @@ Progress: [████░░░░░░] 30% v4.0
 - 20-02: 9min, 2 tasks, 9 files
 - 20-03: 11min, 2 tasks, 15 files
 - 20-04: 6min, 2 tasks, 11 files
+- 20-05: 3min, 1 task (checkpoint pending), 3 files
 
 ## Accumulated Context
 
@@ -104,6 +105,8 @@ Recent decisions affecting current work:
 - [20-04] Split form uses react-hook-form useFieldArray with auto-fill remainder for 2-split case
 - [20-04] applyMerchantRules queries merchant_category_rules directly with admin client in sync pipeline
 - [20-04] CategoryManager tracks hidden categories in local state for immediate UI feedback
+- [20-05] Mock sub-components to isolate TransactionList tests from child component concerns
+- [20-05] Combined all 5 Zod validation schemas into single test file for transaction management cohesion
 
 ### Pending Todos
 
@@ -125,5 +128,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 20-04-PLAN.md
-Resume: Continue with 20-05-PLAN.md (final plan in Phase 20)
+Stopped at: 20-05 Task 2 checkpoint (human-verify)
+Resume: Human verification of transaction management flow, then Phase 20 complete
