@@ -12,6 +12,7 @@ import { WeekStartSelector } from "./week-start-selector";
 import { DataExport } from "./data-export";
 import { CheckCircle, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
+import { fetcher } from "@/lib/fetcher";
 
 interface Profile {
   id: string;
@@ -23,8 +24,6 @@ interface Profile {
     theme: "system" | "light" | "dark";
   };
 }
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 interface SettingsContentProps {
   initialProfile?: { profile: Profile };

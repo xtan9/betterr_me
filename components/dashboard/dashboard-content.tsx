@@ -30,9 +30,8 @@ import { getLocalDateString } from "@/lib/utils";
 import { shouldTrackOnDate } from "@/lib/habits/format";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
+import { fetcher } from "@/lib/fetcher";
 import type { DashboardData } from "@/lib/db/types";
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 const EMPTY_DASHBOARD: DashboardData = {
   habits: [],

@@ -23,6 +23,7 @@ import {
   profileFormSchema,
   type ProfileFormValues,
 } from "@/lib/validations/profile";
+import { fetcher } from "@/lib/fetcher";
 
 interface Profile {
   id: string;
@@ -37,8 +38,6 @@ interface Profile {
   created_at: string;
   updated_at: string;
 }
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 function ProfileFormSkeleton() {
   return (
