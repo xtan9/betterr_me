@@ -98,10 +98,11 @@ Plans:
   1. User can browse and select from a library of writing prompts organized into gratitude, reflection, and goals categories
   2. User can start writing without selecting a prompt (free-form is the default state)
   3. Selected prompt text appears in or above the editor area to guide writing, and the prompt key is saved with the entry
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 22-01: TBD
+- [ ] 22-01-PLAN.md — Prompt data structure, i18n strings, Tiptap Placeholder extension + CSS
+- [ ] 22-02-PLAN.md — Prompt browser sheet, prompt banner, modal integration, and unit tests
 
 ### Phase 23: Journal Page & Navigation
 **Goal**: Users can browse their journal history through a calendar and timeline, and access the journal from the sidebar
