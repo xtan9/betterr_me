@@ -36,6 +36,7 @@ const Heatmap30Day = dynamic(() =>
     default: m.Heatmap30Day,
   })),
 );
+import { fetcher } from "@/lib/fetcher";
 import type { Habit, HabitLog } from "@/lib/db/types";
 
 interface HabitDetailContentProps {
@@ -48,10 +49,8 @@ interface HabitStats {
   allTime: { completed: number; total: number; percent: number };
 }
 
-const fetcher = async (url: string) => {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch");
-  const data = await res.json();
+const habitFetcher = async (url: string) => {
+  const data = await fetcher(url);
   return data.habit || data;
 };
 
@@ -133,7 +132,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     error: habitError,
     isLoading: habitLoading,
     mutate: mutateHabit,
-  } = useSWR<Habit>(`/api/habits/${habitId}`, fetcher);
+  } = useSWR<Habit>(`/api/habits/${habitId}`, habitFetcher);
 
   const { data: logsData, mutate: mutateLogs } = useSWR<{ logs: HabitLog[] }>(
     habit ? `/api/habits/${habitId}/logs?days=30` : null,
@@ -145,10 +144,10 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     fetcher,
   );
 
-  const logs = useMemo(() => {
-    const raw = logsData?.logs || logsData;
-    return Array.isArray(raw) ? raw : [];
-  }, [logsData]);
+  const logs = useMemo(
+    () => (Array.isArray(logsData?.logs) ? logsData.logs : []),
+    [logsData],
+  );
 
   const frequencyKey = habit ? JSON.stringify(habit.frequency) : "";
   const frequency = useMemo(() => habit?.frequency, [frequencyKey]); // eslint-disable-line react-hooks/exhaustive-deps

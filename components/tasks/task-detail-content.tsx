@@ -47,15 +47,14 @@ import type { Task, RecurringTask } from "@/lib/db/types";
 import type { EditScope } from "@/lib/validations/recurring-task";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
 import { getPriorityColor } from "@/lib/tasks/format";
+import { fetcher } from "@/lib/fetcher";
 
 interface TaskDetailContentProps {
   taskId: string;
 }
 
-const fetcher = async (url: string) => {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch");
-  const data = await res.json();
+const taskFetcher = async (url: string) => {
+  const data = await fetcher(url);
   return data.task;
 };
 
@@ -100,7 +99,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
     error,
     isLoading,
     mutate,
-  } = useSWR<Task>(`/api/tasks/${taskId}`, fetcher);
+  } = useSWR<Task>(`/api/tasks/${taskId}`, taskFetcher);
 
   // Fetch recurring task template if this is a recurring instance
   const { data: recurringTemplate } = useSWR<RecurringTask>(
@@ -108,10 +107,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
       ? `/api/recurring-tasks/${task.recurring_task_id}`
       : null,
     async (url: string) => {
-      const res = await fetch(url);
-      if (!res.ok)
-        throw new Error(`Failed to fetch recurring template: ${res.status}`);
-      const data = await res.json();
+      const data = await fetcher(url);
       return data.recurring_task;
     },
   );
@@ -124,7 +120,8 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
       if (!response.ok) throw new Error("Failed to toggle");
       mutate();
       revalidateSidebarCounts();
-    } catch {
+    } catch (err) {
+      console.error("Failed to toggle task:", err);
       toast.error(t("toast.toggleError"));
     }
   };
@@ -159,7 +156,8 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
         revalidateSidebarCounts();
         toast.success(t("delete.success"));
         router.push("/tasks");
-      } catch {
+      } catch (err) {
+        console.error("Failed to delete recurring task:", err);
         toast.error(t("delete.error"));
       } finally {
         setIsDeleting(false);
@@ -177,7 +175,8 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
       revalidateSidebarCounts();
       toast.success(t("delete.success"));
       router.push("/tasks");
-    } catch {
+    } catch (err) {
+      console.error("Failed to delete task:", err);
       toast.error(t("delete.error"));
     } finally {
       setIsDeleting(false);
