@@ -26,20 +26,39 @@ export async function GET(request: NextRequest) {
     const transactionsDB = new TransactionsDB(supabase);
 
     const searchParams = request.nextUrl.searchParams;
-    const transactions = await transactionsDB.getByHousehold(householdId, {
-      accountId: searchParams.get("account_id") || undefined,
-      dateFrom: searchParams.get("date_from") || undefined,
-      dateTo: searchParams.get("date_to") || undefined,
-      category: searchParams.get("category") || undefined,
-      limit: searchParams.get("limit")
-        ? parseInt(searchParams.get("limit")!, 10)
-        : undefined,
-      offset: searchParams.get("offset")
-        ? parseInt(searchParams.get("offset")!, 10)
-        : undefined,
-    });
+    const limit = searchParams.get("limit")
+      ? parseInt(searchParams.get("limit")!, 10)
+      : undefined;
+    const offset = searchParams.get("offset")
+      ? parseInt(searchParams.get("offset")!, 10)
+      : undefined;
 
-    return NextResponse.json({ transactions });
+    const { transactions, total } = await transactionsDB.getByHousehold(
+      householdId,
+      {
+        accountId: searchParams.get("account_id") || undefined,
+        dateFrom: searchParams.get("date_from") || undefined,
+        dateTo: searchParams.get("date_to") || undefined,
+        category: searchParams.get("category") || undefined,
+        categoryId: searchParams.get("category_id") || undefined,
+        search: searchParams.get("search") || undefined,
+        amountMin: searchParams.get("amount_min")
+          ? parseInt(searchParams.get("amount_min")!, 10)
+          : undefined,
+        amountMax: searchParams.get("amount_max")
+          ? parseInt(searchParams.get("amount_max")!, 10)
+          : undefined,
+        limit,
+        offset,
+      }
+    );
+
+    const effectiveOffset = offset ?? 0;
+    return NextResponse.json({
+      transactions,
+      total,
+      hasMore: effectiveOffset + transactions.length < total,
+    });
   } catch (error) {
     log.error("GET /api/money/transactions error", error);
     return NextResponse.json(

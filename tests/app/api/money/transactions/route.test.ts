@@ -90,7 +90,10 @@ describe("GET /api/money/transactions", () => {
         source: "plaid",
       },
     ];
-    mockGetByHousehold.mockResolvedValue(mockTransactions);
+    mockGetByHousehold.mockResolvedValue({
+      transactions: mockTransactions,
+      total: 2,
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/money/transactions"
@@ -101,6 +104,8 @@ describe("GET /api/money/transactions", () => {
     expect(response.status).toBe(200);
     expect(data.transactions).toHaveLength(2);
     expect(data.transactions[0].description).toBe("Coffee Shop");
+    expect(data.total).toBe(2);
+    expect(data.hasMore).toBe(false);
   });
 });
 

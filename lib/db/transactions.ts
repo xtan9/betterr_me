@@ -2,6 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Transaction, TransactionInsert } from "./types";
 
 /**
+ * Escape special ILIKE pattern characters (% and _) in user input.
+ */
+export function escapeIlike(input: string): string {
+  return input.replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+/**
  * Options for filtering and paginating transaction queries.
  */
 export interface TransactionQueryOptions {
@@ -13,8 +20,16 @@ export interface TransactionQueryOptions {
   dateFrom?: string;
   /** Filter by date range end (inclusive, YYYY-MM-DD) */
   dateTo?: string;
-  /** Filter by category */
+  /** Filter by category (text column) */
   category?: string;
+  /** Filter by category_id (UUID FK) */
+  categoryId?: string;
+  /** Keyword search across description and merchant_name */
+  search?: string;
+  /** Minimum amount in cents (inclusive) */
+  amountMin?: number;
+  /** Maximum amount in cents (inclusive) */
+  amountMax?: number;
   /** Number of records to return (default 50) */
   limit?: number;
   /** Number of records to skip (default 0) */
@@ -30,14 +45,15 @@ export class TransactionsDB {
 
   /**
    * Get transactions for a household with optional filtering and pagination.
+   * Returns transactions array and total count for pagination.
    */
   async getByHousehold(
     householdId: string,
     options?: TransactionQueryOptions
-  ): Promise<Transaction[]> {
+  ): Promise<{ transactions: Transaction[]; total: number }> {
     let query = this.supabase
       .from("transactions")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("household_id", householdId)
       .order("transaction_date", { ascending: false })
       .order("created_at", { ascending: false });
@@ -57,15 +73,30 @@ export class TransactionsDB {
     if (options?.category) {
       query = query.eq("category", options.category);
     }
+    if (options?.categoryId) {
+      query = query.eq("category_id", options.categoryId);
+    }
+    if (options?.search) {
+      const escaped = escapeIlike(options.search);
+      query = query.or(
+        `description.ilike.%${escaped}%,merchant_name.ilike.%${escaped}%`
+      );
+    }
+    if (options?.amountMin !== undefined) {
+      query = query.gte("amount_cents", options.amountMin);
+    }
+    if (options?.amountMax !== undefined) {
+      query = query.lte("amount_cents", options.amountMax);
+    }
 
     const limit = options?.limit ?? 50;
     const offset = options?.offset ?? 0;
     query = query.range(offset, offset + limit - 1);
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
 
     if (error) throw error;
-    return data || [];
+    return { transactions: data || [], total: count ?? 0 };
   }
 
   /**
@@ -129,5 +160,24 @@ export class TransactionsDB {
       .in("plaid_transaction_id", plaidTransactionIds);
 
     if (error) throw error;
+  }
+
+  /**
+   * Update transaction fields (category_id, notes, category).
+   * Returns the updated transaction.
+   */
+  async update(
+    id: string,
+    data: Partial<Pick<Transaction, "category_id" | "notes" | "category">>
+  ): Promise<Transaction> {
+    const { data: result, error } = await this.supabase
+      .from("transactions")
+      .update(data)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return result;
   }
 }

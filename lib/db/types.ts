@@ -458,6 +458,8 @@ export interface Transaction {
   description: string;
   merchant_name: string | null;
   category: string | null;
+  category_id: string | null;
+  notes: string | null;
   transaction_date: string;
   is_pending: boolean;
   plaid_transaction_id: string | null;
@@ -473,4 +475,69 @@ export type TransactionInsert = Omit<
   "id" | "created_at" | "updated_at"
 > & {
   id?: string;
+  category_id?: string | null;
+  notes?: string | null;
 };
+
+// =============================================================================
+// CATEGORIES (extended for Phase 20)
+// =============================================================================
+
+/** Category (system defaults have household_id = null) */
+export interface Category {
+  id: string;
+  household_id: string | null;
+  name: string;
+  icon: string | null;
+  is_system: boolean;
+  color: string | null;
+  display_name: string | null;
+  created_at: string;
+}
+
+export type CategoryInsert = Omit<Category, "id" | "created_at"> & {
+  id?: string;
+};
+
+// =============================================================================
+// MERCHANT CATEGORY RULES
+// =============================================================================
+
+export interface MerchantCategoryRule {
+  id: string;
+  household_id: string;
+  merchant_name: string;
+  merchant_name_lower: string;
+  category_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MerchantCategoryRuleInsert = Omit<
+  MerchantCategoryRule,
+  "id" | "created_at" | "updated_at"
+>;
+
+// =============================================================================
+// TRANSACTION SPLITS
+// =============================================================================
+
+export interface TransactionSplit {
+  id: string;
+  transaction_id: string;
+  category_id: string;
+  amount_cents: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export type TransactionSplitInsert = Omit<TransactionSplit, "id" | "created_at">;
+
+// =============================================================================
+// HIDDEN CATEGORIES
+// =============================================================================
+
+export interface HiddenCategory {
+  household_id: string;
+  category_id: string;
+}

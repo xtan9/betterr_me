@@ -14,3 +14,6 @@ export { resolveHousehold } from "./households";
 export { BankConnectionsDB } from "./bank-connections";
 export { MoneyAccountsDB } from "./accounts-money";
 export { TransactionsDB } from "./transactions";
+export { CategoriesDB } from "./categories-db";
+export { MerchantRulesDB } from "./merchant-rules";
+export { TransactionSplitsDB } from "./transaction-splits";
