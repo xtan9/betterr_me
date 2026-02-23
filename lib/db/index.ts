@@ -18,3 +18,7 @@ export { CategoriesDB } from "./categories-db";
 export { MerchantRulesDB } from "./merchant-rules";
 export { TransactionSplitsDB } from "./transaction-splits";
 export { BudgetsDB } from "./budgets";
+export { RecurringBillsDB } from "./recurring-bills";
+export { SavingsGoalsDB } from "./savings-goals";
+export { NetWorthSnapshotsDB } from "./net-worth-snapshots";
+export { ManualAssetsDB } from "./manual-assets";

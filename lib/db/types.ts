@@ -577,3 +577,138 @@ export interface BudgetWithCategories extends Budget {
   total_allocated_cents: number;
   total_spent_cents: number;
 }
+
+// =============================================================================
+// RECURRING BILLS
+// =============================================================================
+
+export type BillFrequency = "WEEKLY" | "BIWEEKLY" | "SEMI_MONTHLY" | "MONTHLY" | "ANNUALLY";
+export type BillUserStatus = "auto" | "confirmed" | "dismissed";
+export type BillSource = "plaid" | "manual";
+
+export interface RecurringBill {
+  id: string;
+  household_id: string;
+  plaid_stream_id: string | null;
+  account_id: string | null;
+  name: string;
+  description: string | null;
+  amount_cents: number;
+  frequency: BillFrequency;
+  next_due_date: string | null;
+  user_status: BillUserStatus;
+  is_active: boolean;
+  plaid_status: string | null;
+  category_primary: string | null;
+  previous_amount_cents: number | null;
+  source: BillSource;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RecurringBillInsert = Omit<
+  RecurringBill,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+};
+
+export type RecurringBillUpdate = Partial<
+  Omit<RecurringBill, "id" | "household_id" | "created_at" | "updated_at">
+>;
+
+// =============================================================================
+// SAVINGS GOALS
+// =============================================================================
+
+export type GoalFundingType = "manual" | "linked";
+export type GoalStatus = "active" | "completed" | "archived";
+
+export interface SavingsGoal {
+  id: string;
+  household_id: string;
+  name: string;
+  target_cents: number;
+  current_cents: number;
+  deadline: string | null;
+  funding_type: GoalFundingType;
+  linked_account_id: string | null;
+  icon: string | null;
+  color: string | null;
+  status: GoalStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SavingsGoalInsert = Omit<
+  SavingsGoal,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+};
+
+export type SavingsGoalUpdate = Partial<
+  Omit<SavingsGoal, "id" | "household_id" | "created_at" | "updated_at">
+>;
+
+// =============================================================================
+// GOAL CONTRIBUTIONS
+// =============================================================================
+
+export interface GoalContribution {
+  id: string;
+  goal_id: string;
+  amount_cents: number;
+  note: string | null;
+  contributed_at: string;
+}
+
+export type GoalContributionInsert = Omit<
+  GoalContribution,
+  "id" | "contributed_at"
+> & {
+  id?: string;
+  contributed_at?: string;
+};
+
+// =============================================================================
+// NET WORTH SNAPSHOTS
+// =============================================================================
+
+export interface NetWorthSnapshot {
+  id: string;
+  household_id: string;
+  snapshot_date: string;
+  total_cents: number;
+  assets_cents: number;
+  liabilities_cents: number;
+  created_at: string;
+}
+
+// =============================================================================
+// MANUAL ASSETS
+// =============================================================================
+
+export type ManualAssetType = "property" | "vehicle" | "investment" | "other";
+
+export interface ManualAsset {
+  id: string;
+  household_id: string;
+  name: string;
+  value_cents: number;
+  asset_type: ManualAssetType;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ManualAssetInsert = Omit<
+  ManualAsset,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+};
+
+export type ManualAssetUpdate = Partial<
+  Omit<ManualAsset, "id" | "household_id" | "created_at" | "updated_at">
+>;
