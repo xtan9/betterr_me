@@ -59,7 +59,7 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 
 - [x] **BILL-01**: App auto-detects recurring charges from transaction history (merchant + similar amount + regular interval)
 - [x] **BILL-02**: User can see a list of all detected bills and subscriptions with amounts and frequency
-- [ ] **BILL-03**: User can view a bill calendar showing upcoming charges
+- [x] **BILL-03**: User can view a bill calendar showing upcoming charges
 - [x] **BILL-04**: User can confirm or dismiss auto-detected bills (false positive handling)
 
 ### Savings Goals
@@ -179,7 +179,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUDG-06 | Phase 21 | Complete |
 | BILL-01 | Phase 22 | Complete |
 | BILL-02 | Phase 22 | Complete |
-| BILL-03 | Phase 22 | Pending |
+| BILL-03 | Phase 22 | Complete |
 | BILL-04 | Phase 22 | Complete |
 | GOAL-01 | Phase 22 | Complete |
 | GOAL-02 | Phase 22 | Pending |
