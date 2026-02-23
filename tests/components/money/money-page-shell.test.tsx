@@ -88,6 +88,35 @@ describe("MoneyPageShell", () => {
     expect(screen.getByText("$5000.00")).toBeInTheDocument();
   });
 
+  it("renders Bills, Goals, and Net Worth navigation links", () => {
+    mockUseAccounts.mockReturnValue({
+      connections: [
+        {
+          id: "conn-1",
+          institution_name: "Chase",
+          sync_status: "synced",
+          accounts: [],
+        },
+      ],
+      netWorthCents: 500000,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<MoneyPageShell />);
+
+    // Bills, Goals, Net Worth links should be present
+    const billsLink = screen.getByText("bills.title").closest("a");
+    expect(billsLink).toHaveAttribute("href", "/money/bills");
+
+    const goalsLink = screen.getByText("goals.title").closest("a");
+    expect(goalsLink).toHaveAttribute("href", "/money/goals");
+
+    const netWorthLink = screen.getByText("netWorth.title").closest("a");
+    expect(netWorthLink).toHaveAttribute("href", "/money/net-worth");
+  });
+
   it("renders loading state", () => {
     mockUseAccounts.mockReturnValue({
       connections: [],
@@ -97,9 +126,11 @@ describe("MoneyPageShell", () => {
       mutate: vi.fn(),
     });
 
-    render(<MoneyPageShell />);
+    const { container } = render(<MoneyPageShell />);
 
-    expect(screen.getByText("accounts.loading")).toBeInTheDocument();
+    // Loading state renders skeleton placeholders (no text)
+    const skeletons = container.querySelectorAll(".animate-pulse");
+    expect(skeletons.length).toBeGreaterThan(0);
   });
 
   it("has no accessibility violations", async () => {

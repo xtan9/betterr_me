@@ -2,7 +2,15 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { ArrowRight, PieChart, Receipt, Settings } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarCheck,
+  PieChart,
+  Receipt,
+  Settings,
+  Target,
+  TrendingUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccounts } from "@/lib/hooks/use-accounts";
@@ -73,6 +81,27 @@ export function MoneyPageShell() {
           <Link href="/money/budgets">
             <PieChart className="mr-2 size-4" />
             {t("budgets.title")}
+            <ArrowRight className="ml-auto size-3.5" />
+          </Link>
+        </Button>
+        <Button variant="outline" className="justify-start" asChild>
+          <Link href="/money/bills">
+            <CalendarCheck className="mr-2 size-4" />
+            {t("bills.title")}
+            <ArrowRight className="ml-auto size-3.5" />
+          </Link>
+        </Button>
+        <Button variant="outline" className="justify-start" asChild>
+          <Link href="/money/goals">
+            <Target className="mr-2 size-4" />
+            {t("goals.title")}
+            <ArrowRight className="ml-auto size-3.5" />
+          </Link>
+        </Button>
+        <Button variant="outline" className="justify-start" asChild>
+          <Link href="/money/net-worth">
+            <TrendingUp className="mr-2 size-4" />
+            {t("netWorth.title")}
             <ArrowRight className="ml-auto size-3.5" />
           </Link>
         </Button>
