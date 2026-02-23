@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { getLocalDateString } from "@/lib/utils";
 import { TransactionSearch } from "@/components/money/transaction-search";
 import { TransactionFilterBar } from "@/components/money/transaction-filter-bar";
 import { TransactionRow } from "@/components/money/transaction-row";
+import { TransactionDetail } from "@/components/money/transaction-detail";
 import type { Transaction, Category } from "@/lib/db/types";
 
 interface DateGroup {
@@ -80,9 +81,25 @@ export function TransactionList() {
   const t = useTranslations("money");
   const { filters, activeFilterCount, setFilter, clearAll } =
     useTransactionFilters();
-  const { transactions, total, hasMore, isLoading, isLoadingMore, loadMore } =
+  const { transactions, total, hasMore, isLoading, isLoadingMore, loadMore, mutate } =
     useTransactions(filters);
   const { categories } = useCategories();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Handle Escape key to close expanded detail
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape" && expandedId) {
+        setExpandedId(null);
+      }
+    },
+    [expandedId]
+  );
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   const today = useMemo(() => getLocalDateString(), []);
   const yesterday = useMemo(() => getYesterdayString(), []);
@@ -180,15 +197,30 @@ export function TransactionList() {
                 {/* Transaction rows */}
                 <div className="space-y-0.5">
                   {group.transactions.map((tx) => (
-                    <TransactionRow
-                      key={tx.id}
-                      transaction={tx}
-                      category={
-                        tx.category_id
-                          ? categoryMap.get(tx.category_id)
-                          : null
-                      }
-                    />
+                    <div key={tx.id}>
+                      <TransactionRow
+                        transaction={tx}
+                        category={
+                          tx.category_id
+                            ? categoryMap.get(tx.category_id)
+                            : null
+                        }
+                        isExpanded={tx.id === expandedId}
+                        onClick={() =>
+                          setExpandedId(
+                            tx.id === expandedId ? null : tx.id
+                          )
+                        }
+                      />
+                      {tx.id === expandedId && (
+                        <TransactionDetail
+                          transaction={tx}
+                          categories={categories}
+                          onUpdate={() => mutate()}
+                          onClose={() => setExpandedId(null)}
+                        />
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
