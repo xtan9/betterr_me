@@ -2,8 +2,9 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { ArrowRight, Receipt, Settings } from "lucide-react";
+import { ArrowRight, PieChart, Receipt, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { formatMoney } from "@/lib/money/arithmetic";
 import { AccountsEmptyState } from "@/components/money/accounts-empty-state";
@@ -12,13 +13,15 @@ export function MoneyPageShell() {
   const t = useTranslations("money");
   const { connections, netWorthCents, isLoading } = useAccounts();
 
-  // Loading state
+  // Only show skeleton on initial load (no data yet)
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-money-border bg-money-surface px-6 py-16 text-center">
-        <p className="text-sm text-muted-foreground">
-          {t("accounts.loading")}
-        </p>
+      <div className="space-y-4">
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
       </div>
     );
   }
@@ -58,11 +61,18 @@ export function MoneyPageShell() {
       </div>
 
       {/* Navigation links */}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Button variant="outline" className="justify-start" asChild>
           <Link href="/money/transactions">
             <Receipt className="mr-2 size-4" />
             {t("transactions.title")}
+            <ArrowRight className="ml-auto size-3.5" />
+          </Link>
+        </Button>
+        <Button variant="outline" className="justify-start" asChild>
+          <Link href="/money/budgets">
+            <PieChart className="mr-2 size-4" />
+            {t("budgets.title")}
             <ArrowRight className="ml-auto size-3.5" />
           </Link>
         </Button>
