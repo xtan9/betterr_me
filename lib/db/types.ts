@@ -373,3 +373,60 @@ export interface DashboardData {
   /** Non-fatal warnings about degraded data (omitted when empty) */
   _warnings?: string[];
 }
+
+// =============================================================================
+// JOURNAL ENTRIES
+// =============================================================================
+
+export interface JournalEntry {
+  id: string; // UUID
+  user_id: string; // UUID
+  entry_date: string; // DATE (YYYY-MM-DD)
+  title: string;
+  content: Record<string, unknown>; // Tiptap JSON
+  mood: number; // 1-5
+  word_count: number;
+  tags: string[]; // text[]
+  prompt_key: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type JournalEntryInsert = Omit<
+  JournalEntry,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+};
+
+export type JournalEntryUpdate = Partial<
+  Omit<JournalEntry, "id" | "user_id" | "entry_date" | "created_at" | "updated_at">
+>;
+
+/** Lightweight calendar view data */
+export interface JournalCalendarDay {
+  entry_date: string;
+  mood: number;
+  title: string;
+}
+
+// =============================================================================
+// JOURNAL ENTRY LINKS
+// =============================================================================
+
+export type JournalLinkType = "habit" | "task" | "project";
+
+export interface JournalEntryLink {
+  id: string; // UUID
+  entry_id: string; // UUID
+  link_type: JournalLinkType;
+  link_id: string; // UUID
+  created_at: string;
+}
+
+export type JournalEntryLinkInsert = Omit<
+  JournalEntryLink,
+  "id" | "created_at"
+> & {
+  id?: string;
+};
