@@ -1,6 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createPlaidClient } from "./client";
+import { fetchRecurringTransactions } from "./recurring";
 import { toCents } from "@/lib/money/arithmetic";
+import {
+  RecurringBillsDB,
+  NetWorthSnapshotsDB,
+  ManualAssetsDB,
+  MoneyAccountsDB,
+} from "@/lib/db";
+import { getLocalDateString } from "@/lib/utils";
+import { log } from "@/lib/logger";
 import type { SyncResult } from "./types";
 
 /**
@@ -221,6 +230,100 @@ export async function syncTransactions(
     .eq("id", bankConnectionId);
 
   if (cursorError) throw cursorError;
+
+  // --- Recurring bill sync (non-blocking) ---
+  // Refresh detected recurring charges from Plaid after transaction sync.
+  // Failures here do NOT fail the transaction sync.
+  try {
+    const { outflows } = await fetchRecurringTransactions(accessToken);
+
+    if (outflows.length > 0) {
+      // Map Plaid account_ids to our internal UUIDs (reuse account lookup)
+      const billPlaidIds = [...new Set(outflows.map((b) => b.account_id))];
+      const { data: billAccounts } = await supabaseAdmin
+        .from("accounts")
+        .select("id, plaid_account_id")
+        .eq("bank_connection_id", bankConnectionId)
+        .in("plaid_account_id", billPlaidIds);
+
+      const billAccountMap = new Map(
+        (billAccounts || []).map(
+          (a: { plaid_account_id: string; id: string }) => [
+            a.plaid_account_id,
+            a.id,
+          ]
+        )
+      );
+
+      const validBills = outflows
+        .filter((bill) => billAccountMap.has(bill.account_id))
+        .map((bill) => ({
+          ...bill,
+          account_id: billAccountMap.get(bill.account_id)!,
+        }));
+
+      if (validBills.length > 0) {
+        const billsDB = new RecurringBillsDB(supabaseAdmin);
+        await billsDB.upsertFromPlaid(householdId, validBills);
+      }
+    }
+  } catch (recurringError) {
+    log.warn("Recurring bill sync failed (non-blocking)", {
+      bankConnectionId,
+      error:
+        recurringError instanceof Error
+          ? recurringError.message
+          : String(recurringError),
+    });
+  }
+
+  // --- Net worth snapshot (non-blocking) ---
+  // Capture a daily net worth snapshot after sync completes.
+  // Failures here do NOT fail the transaction sync.
+  try {
+    const accountsDB = new MoneyAccountsDB(supabaseAdmin);
+    const manualAssetsDB = new ManualAssetsDB(supabaseAdmin);
+    const snapshotsDB = new NetWorthSnapshotsDB(supabaseAdmin);
+
+    const allAccounts = await accountsDB.getByHousehold(householdId);
+    const manualAssets = await manualAssetsDB.getByHousehold(householdId);
+
+    // Sum positive account balances + manual asset values = assets
+    // Sum abs(negative account balances) = liabilities
+    let assetsCents = 0;
+    let liabilitiesCents = 0;
+
+    for (const account of allAccounts) {
+      if (account.balance_cents >= 0) {
+        assetsCents += account.balance_cents;
+      } else {
+        liabilitiesCents += Math.abs(account.balance_cents);
+      }
+    }
+
+    for (const asset of manualAssets) {
+      assetsCents += asset.value_cents;
+    }
+
+    const totalCents = assetsCents - liabilitiesCents;
+    const today = getLocalDateString();
+
+    await snapshotsDB.upsert(
+      householdId,
+      today,
+      totalCents,
+      assetsCents,
+      liabilitiesCents
+    );
+  } catch (snapshotError) {
+    log.warn("Net worth snapshot failed (non-blocking)", {
+      bankConnectionId,
+      error:
+        snapshotError instanceof Error
+          ? snapshotError.message
+          : String(snapshotError),
+    });
+  }
 
   return {
     added: validAdded.length,
