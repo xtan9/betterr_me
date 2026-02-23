@@ -1,228 +1,293 @@
-# Technology Stack: Projects & Kanban Features
+# Technology Stack: Journal Feature
 
-**Project:** BetterR.Me - Projects & Kanban Milestone
-**Researched:** 2026-02-18
-**Scope:** Stack ADDITIONS only. Existing stack (Next.js 16, React 19, Supabase, shadcn/ui, etc.) is validated and unchanged.
+**Project:** BetterR.Me - v4.0 Journal Milestone
+**Researched:** 2026-02-22
+**Confidence:** HIGH
+**Scope:** Stack ADDITIONS only. Existing stack (Next.js 16, React 19, Supabase, shadcn/ui, Tailwind CSS 3, SWR, next-intl, etc.) is validated and unchanged.
+
+## Decision Summary
+
+The journal feature needs exactly **two new library groups**: a rich text editor (Tiptap) and an emoji picker (Frimousse). Everything else -- calendar, forms, data fetching, i18n, testing -- is already in the stack and sufficient as-is.
 
 ## Recommended Stack Additions
 
-### Drag-and-Drop: `@dnd-kit/core` + `@dnd-kit/sortable` (Stable v6)
+### Rich Text Editor: Tiptap 3
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| `@dnd-kit/core` | ^6.3.1 | DnD primitives (DndContext, sensors, collision detection) | Battle-tested, hook-based API, ~10kB, zero external deps, excellent accessibility (keyboard + screen reader), massive community adoption for kanban boards |
-| `@dnd-kit/sortable` | ^10.0.0 | Sortable preset (SortableContext, useSortable, vertical list strategy) | Purpose-built for reordering items within and between columns -- exactly what kanban needs |
-| `@dnd-kit/utilities` | ^3.2.2 | CSS transform utilities | Helper for applying drag transforms to DOM elements |
+| `@tiptap/react` | ^3.20.0 | React bindings for the Tiptap editor | Headless WYSIWYG built on ProseMirror. MIT licensed. Outputs structured JSON (ideal for Supabase JSONB storage). Fully supports React 19 (`peerDependencies: ^19.0.0`). Unstyled -- works perfectly with Tailwind CSS and shadcn/ui design tokens. |
+| `@tiptap/pm` | ^3.20.0 | ProseMirror foundation (required peer) | Required peer dependency for `@tiptap/react`. Provides the low-level editing primitives. |
+| `@tiptap/starter-kit` | ^3.20.0 | Bundle of common extensions | Includes paragraph, heading, bold, italic, underline, strike, code, blockquote, bullet list, ordered list, link, hard break, horizontal rule. Covers all formatting a journal entry needs without cherry-picking individual extensions. |
+| `@tiptap/extension-placeholder` | ^3.20.0 | Placeholder text in empty editor | Shows "What's on your mind today?" or writing prompts as placeholder text in the empty editor state. Essential UX for journal entries. |
+| `@tiptap/extension-character-count` | ^3.20.0 | Character/word count display | Shows word count for journal entries. Useful for users tracking writing habits. Low cost, high value for a journaling feature. |
 
-**Why `@dnd-kit/core` v6 (stable) over `@dnd-kit/react` v0.x (new):**
+**Why Tiptap over a plain `<Textarea>`:**
 
-- `@dnd-kit/react` is at v0.3.1 -- experimental, ground-up rewrite, NOT backwards-compatible with stable v5/v6 API. [Source: npm](https://www.npmjs.com/package/@dnd-kit/react)
-- No maintainer response on stability timeline or production-readiness. [Source: GitHub Discussion #1842](https://github.com/clauderic/dnd-kit/discussions/1842)
-- Missing `"use client"` directives for Next.js App Router. [Source: GitHub Issue #1654](https://github.com/clauderic/dnd-kit/issues/1654)
-- The stable v6 API has extensive community examples for kanban boards with React + Tailwind + shadcn/ui. [Source: Georgegriff/react-dnd-kit-tailwind-shadcn-ui](https://github.com/Georgegriff/react-dnd-kit-tailwind-shadcn-ui)
+A journal with "rich text area" (per PROJECT.md requirements) needs at minimum bold, italic, lists, and headings. A plain textarea only supports raw text -- no inline formatting without implementing a custom markdown parser and preview. Tiptap provides:
 
-**Confidence: HIGH** -- Verified across multiple sources: npm, GitHub, multiple tutorials, and community projects all converge on `@dnd-kit/core` v6 as the recommended path for React kanban boards in 2025-2026.
+1. **WYSIWYG editing** -- users see formatted text as they write, no markdown syntax needed
+2. **Structured JSON output** -- stores as `JSONB` in Supabase, enabling future search/filtering/export without parsing HTML
+3. **Extensible** -- add features like task checkboxes, image embeds, or mentions later without replacing the editor
+4. **Headless** -- zero opinions about styling, so it integrates cleanly with the existing Tailwind + shadcn/ui design system
+5. **SSR-safe** -- set `immediatelyRender: false` in `useEditor()` to avoid hydration mismatches in Next.js App Router
 
-### React 19 Compatibility Fix
+**Why NOT markdown + preview:**
 
-`@dnd-kit/core` v6.3.1 declares peer dependencies for React 16-18 but does NOT officially include React 19. The library works correctly with React 19 -- the peer dependency declaration is simply outdated.
+For a personal journal app, markdown syntax creates friction. Users expect to click "B" for bold, not type `**text**`. The audience is general users tracking habits, not developers. WYSIWYG matches the UX expectations set by the rest of the app (forms, selects, toggles).
 
-**Required: Add `peerDependencyRules` to `package.json`:**
+**Confidence: HIGH** -- Tiptap v3 explicitly supports React 19 in peer dependencies. Official Next.js integration docs describe the exact `immediatelyRender: false` pattern needed. Verified via npm and tiptap.dev.
 
-```json
-{
-  "pnpm": {
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "@dnd-kit/core>react": "19",
-        "@dnd-kit/core>react-dom": "19",
-        "@dnd-kit/sortable>react": "19",
-        "@dnd-kit/sortable>react-dom": "19",
-        "@dnd-kit/utilities>react": "19"
-      }
-    }
-  }
-}
+### Emoji Picker: Frimousse
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| `frimousse` | ^0.3.0 | Mood emoji selection for journal entries | 12kB bundle, dependency-free, unstyled and composable, React 18/19 support, has official shadcn/ui integration via `npx shadcn@latest add`. Virtualized with minimal re-renders. Keyboard navigable and screen-reader friendly. |
+
+**Why Frimousse over alternatives:**
+
+| Criteria | Frimousse | emoji-picker-react | emoji-mart |
+|----------|-----------|-------------------|------------|
+| Bundle size | ~12kB | ~90kB+ | ~40kB+ |
+| Styling approach | Unstyled, composable | Pre-styled, opinionated | Pre-styled |
+| shadcn/ui integration | Official (CLI install) | None | None |
+| React 19 support | Yes (`^18 \|\| ^19`) | Yes (`>=16`) | Needs verification |
+| Dependencies | Zero | Multiple | Multiple |
+| Tailwind CSS compat | Native (BYO styles) | Requires overrides | Requires overrides |
+
+Frimousse wins on every dimension that matters for this project: it is the smallest, has zero dependencies, is unstyled (matches our headless component philosophy with shadcn/ui), and has an official shadcn/ui component recipe. The other pickers would fight against our design system.
+
+**Mood selector context:** The journal feature needs a mood picker, not a full emoji keyboard. Frimousse can be constrained to show only a curated set of mood-relevant emojis (e.g., smileys & people category), or we can build a simpler custom grid of 5-8 mood emojis using Frimousse's composable parts. Either approach works cleanly.
+
+**Confidence: HIGH** -- Verified version and peer deps via npm. shadcn/ui integration confirmed at frimousse.liveblocks.io. Liveblocks (the maintainer) uses it in production.
+
+## Existing Stack: Already Sufficient
+
+These existing technologies cover the journal feature's remaining needs with zero additions:
+
+| Existing Technology | Journal Feature Use |
+|---------------------|---------------------|
+| `react-day-picker` v8.10.1 + shadcn/ui `Calendar` | Calendar view showing which days have entries. Use custom modifiers/`modifiersStyles` to highlight days with entries (colored dots or background). Already in `components/ui/calendar.tsx`. |
+| `react-hook-form` + `zod` | Journal entry form (mood, prompt selection, metadata). NOT for the rich text body itself (Tiptap manages its own state), but for the wrapping form fields. |
+| `SWR` | Fetching journal entries by date, timeline pagination, calendar entry-existence queries. Same patterns as habits/tasks. |
+| `lucide-react` | Icons for journal sidebar nav (e.g., `BookOpen`, `Pencil`, `SmilePlus`), toolbar buttons, prompt icons. Already installed, just use new icon names. |
+| `date-fns` v4 | Date formatting for timeline view, "3 days ago" relative dates, grouping entries by week/month. |
+| `sonner` | Toast feedback on save/delete/error. |
+| `next-intl` | i18n for all journal strings in en, zh, zh-TW. |
+| `next-themes` | Dark mode for journal editor and calendar. Tiptap inherits from parent CSS -- style the `.tiptap` class with Tailwind dark: variants. |
+| `shadcn/ui Card` | Entry cards in timeline view. |
+| `shadcn/ui Dialog` | Quick journal entry from dashboard widget. |
+| `shadcn/ui Popover` | Mood emoji picker popover, calendar date picker. |
+| `shadcn/ui Badge` | Mood indicator badges, prompt tags. |
+| `shadcn/ui Tabs` | Calendar view vs timeline view toggle. |
+| `shadcn/ui Textarea` | NOT used for journal body (Tiptap replaces this), but could be used for a simple "prompt response" field if needed. |
+| `Supabase` | New `journal_entries` table with JSONB content column for Tiptap JSON. RLS policies follow existing pattern. |
+| `Tailwind CSS 3` | All journal layout and editor styling. |
+
+## Installation
+
+```bash
+# Rich text editor (Tiptap 3) -- 5 packages
+pnpm add @tiptap/react @tiptap/pm @tiptap/starter-kit @tiptap/extension-placeholder @tiptap/extension-character-count
+
+# Emoji picker
+pnpm add frimousse
 ```
 
-This is the cleanest approach for pnpm -- it suppresses the peer dependency warnings without forcing global version overrides, and it scopes the allowance to only the `@dnd-kit` packages.
+Optionally, install the Frimousse shadcn/ui component recipe:
 
-**Confidence: HIGH** -- This is the officially documented pnpm mechanism for handling outdated peer deps. The shadcn/ui team uses the same pattern for React 19 compatibility. [Source: pnpm docs](https://pnpm.io/settings), [Source: shadcn/ui React 19 guide](https://ui.shadcn.com/docs/react-19)
+```bash
+npx shadcn@latest add https://frimousse.liveblocks.io/r/emoji-picker
+```
 
-### No Additional Libraries Needed
+This creates a styled `EmojiPicker` component in `components/ui/` that uses the project's existing CSS variables.
 
-Everything else required for the kanban/projects feature is already in the stack:
-
-| Existing Technology | How It Serves Kanban/Projects |
-|---------------------|-------------------------------|
-| `shadcn/ui Card` | Task cards within kanban columns |
-| `shadcn/ui Badge` | Status/priority indicators on cards |
-| `shadcn/ui Select` | Project/section selectors in task form |
-| `shadcn/ui Dialog` | Quick-add task modals |
-| `shadcn/ui Tabs` | Switching between list view and kanban view |
-| `shadcn/ui Skeleton` | Loading states for kanban columns |
-| `radix-ui` (unified) | Dropdown menus on project cards, tooltips |
-| `react-hook-form` + `zod` | Task form with new section/project fields |
-| `SWR` | Fetching and caching project/task data, optimistic updates on drag |
-| `lucide-react` | Icons for columns, drag handles, projects |
-| `sonner` | Toast feedback on drag-complete, errors |
-| `next-intl` | i18n for all new kanban/project strings |
-| `date-fns` | Due date formatting on kanban cards |
-| Tailwind CSS 3 | All kanban layout styling (grid, flex, gap) |
-| Supabase | Database for projects, sections, task status fields |
+No new dev dependencies needed -- existing Vitest + Testing Library + Playwright cover all testing needs.
 
 ## Alternatives Considered
 
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
-| DnD Library | `@dnd-kit/core` v6 | `@dnd-kit/react` v0.3.1 | Experimental (v0.x), no stability timeline, missing `"use client"` directives, not production-ready |
-| DnD Library | `@dnd-kit/core` v6 | `@hello-pangea/dnd` v18 | Does NOT support React 19 (peer dep locked to `^18.0.0`), no official React 19 release planned. [Source: GitHub Issue #864](https://github.com/hello-pangea/dnd/issues/863) |
-| DnD Library | `@dnd-kit/core` v6 | `@atlaskit/pragmatic-drag-and-drop` v1.7.7 | Some packages lack React 19 support ([Issue #181](https://github.com/atlassian/pragmatic-drag-and-drop/issues/181)), uses native HTML5 DnD API (less smooth animations), heavier learning curve for headless approach, reported bugs with Next.js + Tailwind ([Issue #92](https://github.com/atlassian/pragmatic-drag-and-drop/issues/92)) |
-| DnD Library | `@dnd-kit/core` v6 | `react-dnd` | Deprecated, no React 19 support ([Issue #3655](https://github.com/react-dnd/react-dnd/issues/3655)), stale maintenance |
-| Kanban Component | Build custom with `@dnd-kit` | `@diceui/kanban` (Dice UI) | Uses `@dnd-kit` under the hood anyway, adds an abstraction layer we do not need given our existing shadcn/ui components, less control over the kanban behavior and styling |
-| Kanban Component | Build custom with `@dnd-kit` | `shadcn-kanban-board` (janhesters) | Zero-dependency approach (pure React DnD) -- interesting but less battle-tested than `@dnd-kit`, smaller community, fewer edge cases handled (touch devices, accessibility sensors, collision detection algorithms) |
-
-## Installation
-
-```bash
-# New dependencies for kanban DnD (3 packages, ~15kB combined)
-pnpm add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
-```
-
-Then add the pnpm peer dependency rules to `package.json`:
-
-```jsonc
-// Add to package.json root level
-{
-  "pnpm": {
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "@dnd-kit/core>react": "19",
-        "@dnd-kit/core>react-dom": "19",
-        "@dnd-kit/sortable>react": "19",
-        "@dnd-kit/sortable>react-dom": "19",
-        "@dnd-kit/utilities>react": "19"
-      }
-    }
-  }
-}
-```
-
-No new dev dependencies are needed -- existing Vitest + Testing Library + Playwright cover all testing needs.
+| Rich text | Tiptap 3 | Plain `<Textarea>` | No formatting support. "Rich text area" requirement demands inline formatting (bold, lists, headings). Building markdown parsing + preview on top of textarea reinvents Tiptap poorly. |
+| Rich text | Tiptap 3 | Lexical (Meta) | Lower-level than Tiptap, requires more boilerplate for the same features. Smaller extension ecosystem. Less community adoption for journal/note-taking use cases. Tiptap's StarterKit gives us 80% of what we need in one import. |
+| Rich text | Tiptap 3 | Plate (shadcn-native) | Plate is built on Slate.js, which has a history of breaking changes and migration pain. Tiptap/ProseMirror has a more stable API surface. Plate's shadcn integration is nice but adds coupling to a specific component library version. |
+| Rich text | Tiptap 3 | TinyMCE / CKEditor | Commercial licenses for advanced features. Opinionated styling that clashes with our Tailwind + shadcn/ui design system. Heavier bundle. Not headless. |
+| Rich text | Tiptap 3 | Markdown textarea + preview | Adds cognitive overhead for non-technical users. Requires building a preview renderer (react-markdown + rehype). Two states to manage (raw markdown + rendered HTML). Not suitable for a mainstream habit tracking app. |
+| Emoji picker | Frimousse | `emoji-picker-react` | 7-8x larger bundle (~90kB). Pre-styled -- fights our design system. No shadcn/ui integration. |
+| Emoji picker | Frimousse | `emoji-mart` | 3-4x larger bundle (~40kB). Pre-styled. No shadcn/ui integration. Overkill for a mood selector. |
+| Emoji picker | Frimousse | Custom hardcoded grid | Viable for MVP (just 5-8 mood buttons), but Frimousse at 12kB gives us search, categories, and accessibility for free. If users want to pick any emoji as their mood, a hardcoded grid cannot satisfy that. Frimousse is the "costs almost nothing, enables everything" choice. |
+| Calendar | Existing `react-day-picker` v8 | `react-calendar` | Already have react-day-picker installed and a shadcn/ui `Calendar` component built. Adding another calendar library is pointless. Custom modifiers in react-day-picker handle "highlight days with entries" perfectly. |
 
 ## What NOT to Add
 
-These were considered and explicitly rejected to avoid bloat:
-
-| Do NOT Add | Why |
-|------------|-----|
-| `@dnd-kit/modifiers` | Only needed for constraining drag to axes or snap-to-grid. Kanban columns use simple vertical sorting -- no modifiers needed. Can add later if requirements change. |
-| `@dnd-kit/accessibility` | `@dnd-kit/core` already includes built-in keyboard and screen reader support via `KeyboardSensor` and `Announcements`. The separate accessibility package is for the old legacy API. |
-| `framer-motion` | No need for a full animation library. Tailwind CSS transitions + `@dnd-kit`'s built-in `DragOverlay` animations are sufficient for smooth kanban interactions. |
-| `react-virtualized` / `react-window` | Premature optimization. A personal habit tracker will have at most dozens of tasks, not thousands. Virtualization adds complexity for no measurable gain at this scale. |
-| Any state management library (Redux, Zustand, Jotai) | SWR already handles server state caching and revalidation. React useState/useReducer handles local drag state. Adding a global state library for this feature would be over-engineering. |
-| `immer` | Drag-and-drop state updates (moving tasks between columns) can be handled with simple spread operators and array methods. Immer adds bundle weight for marginal DX improvement at this scale. |
+| Do NOT Add | Why | What to Use Instead |
+|------------|-----|---------------------|
+| `react-markdown` / `remark` / `rehype` | No markdown parsing needed -- Tiptap handles rich text natively and outputs structured JSON | Tiptap's `editor.getJSON()` for storage, `editor.getHTML()` for read-only rendering |
+| `@tiptap/extension-image` | Images in journal entries add storage complexity (Supabase Storage, upload UI, S3 costs). Out of scope for v4.0. | Defer to future milestone if users request image support |
+| `@tiptap/extension-task-list` | Tempting for "linking tasks to entries", but the journal-task link should be a foreign key reference, not embedded checkboxes in rich text | Use a separate `journal_entry_links` table or JSONB field for habit/task references |
+| `@tiptap/extension-mention` | No @-mention use case in a personal journal app | Simple dropdown/multiselect for linking habits/tasks |
+| `framer-motion` | No complex animations needed for journal. Page transitions and micro-interactions are handled by Tailwind CSS transitions. | Tailwind `transition-*` classes |
+| Any markdown parser | Tiptap stores as JSON, renders as HTML. No markdown intermediate format. | Tiptap JSON in Supabase JSONB column |
+| `react-virtualized` / `react-window` | Timeline view pagination via SWR (load 20 entries, fetch more on scroll) is sufficient. A personal journal will have hundreds of entries, not millions. | SWR cursor-based pagination |
+| `dompurify` / `sanitize-html` | Tiptap's structured JSON output is inherently safe -- no raw HTML injection risk. Only sanitize if rendering user HTML from external sources, which we don't. | Tiptap's JSON-to-HTML rendering via `generateHTML()` |
 
 ## Key Integration Points
 
-### DnD + SWR (Optimistic Updates)
+### Tiptap + Next.js App Router (SSR)
 
-The kanban board will use SWR's `mutate()` with optimistic data for instant feedback on drag:
+All Tiptap components MUST be client components (`"use client"`). Set `immediatelyRender: false` to prevent hydration mismatches:
 
 ```typescript
-// Pattern: optimistic update on drag end
-const handleDragEnd = async (event: DragEndEvent) => {
-  const { active, over } = event;
-  if (!over) return;
+"use client";
 
-  // Optimistic: update local cache immediately
-  mutate(
-    "/api/tasks",
-    (current: Task[]) => reorderTasks(current, active.id, over.id),
-    { revalidate: false }
-  );
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
+import CharacterCount from "@tiptap/extension-character-count";
 
-  // Persist: send update to API
-  try {
-    await fetch(`/api/tasks/${active.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: newStatus, sort_order: newOrder }),
-    });
-  } catch {
-    // Rollback: revalidate from server on failure
-    mutate("/api/tasks");
-    toast.error(t("kanban.dragError"));
-  }
-};
+export function JournalEditor({ content, onChange }: JournalEditorProps) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({ placeholder: "What's on your mind today?" }),
+      CharacterCount,
+    ],
+    content, // Tiptap JSON from database
+    immediatelyRender: false, // CRITICAL: prevents SSR hydration mismatch
+    onUpdate: ({ editor }) => {
+      onChange(editor.getJSON()); // Pass JSON to parent for saving
+    },
+  });
+
+  return <EditorContent editor={editor} className="prose dark:prose-invert" />;
+}
 ```
 
-### DnD + shadcn/ui Card
+### Tiptap + Supabase (Storage)
 
-Existing `TaskCard` component wraps in shadcn `Card`. For DnD, wrap it with `useSortable`:
+Store journal content as **JSONB** in Supabase. Tiptap JSON is the recommended storage format per Tiptap docs -- more flexible than HTML, easier to query, and enables future features (search, analytics) without parsing HTML.
+
+```sql
+CREATE TABLE journal_entries (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  entry_date DATE NOT NULL,
+  content JSONB NOT NULL DEFAULT '{"type":"doc","content":[]}'::jsonb,
+  mood TEXT,          -- emoji character e.g., '😊'
+  prompt_key TEXT,    -- i18n key for which prompt was used, if any
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, entry_date)  -- one entry per day per user
+);
+```
+
+### Tiptap + Tailwind CSS (Styling)
+
+Tiptap renders into a `.tiptap` container. Style it with Tailwind's `@apply` or the `prose` class from `@tailwindcss/typography` (already available via Tailwind CSS 3). Use the project's semantic design tokens for consistent look:
+
+```css
+/* In globals.css or a journal-specific CSS file */
+.tiptap {
+  @apply text-foreground min-h-[200px] outline-none;
+}
+.tiptap p.is-editor-empty:first-child::before {
+  @apply text-muted-foreground pointer-events-none float-left h-0;
+  content: attr(data-placeholder);
+}
+```
+
+### Frimousse + shadcn/ui Popover (Mood Picker)
+
+Combine Frimousse's composable parts with the existing Popover component:
 
 ```typescript
-// Pattern: make existing card draggable
-function DraggableTaskCard({ task, ...props }: TaskCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id });
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { EmojiPicker } from "@/components/ui/emoji-picker"; // from shadcn recipe
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
+export function MoodPicker({ value, onChange }: MoodPickerProps) {
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TaskCard task={task} {...props} />
-    </div>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm">
+          {value || "Pick mood"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[352px] p-0">
+        <EmojiPicker onEmojiSelect={(emoji) => onChange(emoji.emoji)} />
+      </PopoverContent>
+    </Popover>
   );
 }
 ```
 
-### DnD + Next.js App Router
+### Calendar + Custom Modifiers (Entry Indicators)
 
-All DnD components MUST be client components (`"use client"`). The kanban board page can be a server component that renders a client-side `<KanbanBoard />` child. This is the standard Next.js App Router pattern and requires no special configuration.
+Use the existing `Calendar` component with `modifiers` to highlight days with journal entries:
 
-### DnD + Accessibility
+```typescript
+import { Calendar } from "@/components/ui/calendar";
 
-`@dnd-kit/core` provides built-in accessibility via:
-- `KeyboardSensor` -- arrow keys to move items between columns
-- `Announcements` -- screen reader announcements on drag start/over/end
-- ARIA attributes auto-applied via `useSortable` hook
+// datesWithEntries: Date[] fetched via SWR
+<Calendar
+  modifiers={{ hasEntry: datesWithEntries }}
+  modifiersClassNames={{ hasEntry: "bg-primary/20 font-semibold" }}
+  onDayClick={(day) => navigateToEntry(day)}
+/>
+```
 
-Custom announcements should use `next-intl` translations for all three locales (en, zh, zh-TW).
+### SWR Key Pattern (Consistent with Existing Code)
+
+Follow the project's established SWR pattern where keys include the local date:
+
+```typescript
+const { data: entries } = useSWR(
+  `/api/journal?month=${getLocalMonthString(date)}`,
+  fetcher,
+  { keepPreviousData: true }
+);
+```
 
 ## Database Additions (Supabase)
 
-No new libraries needed -- use existing Supabase client. New tables/columns required:
+No new libraries needed -- use existing Supabase client. Schema changes:
 
 | Table/Column | Type | Purpose |
 |--------------|------|---------|
-| `sections` table | New table | Group tasks into sections (e.g., "Work", "Personal Projects") |
-| `projects` table | New table | Projects within sections, with kanban view |
-| `tasks.status` | New column: `text` | Kanban status: `'backlog'`, `'todo'`, `'in_progress'`, `'done'` |
-| `tasks.section_id` | New column: `uuid` (FK) | Link task to a section |
-| `tasks.project_id` | New column: `uuid` (FK, nullable) | Link task to a project |
-| `tasks.sort_order` | New column: `integer` | Position within a kanban column for drag ordering |
+| `journal_entries` table | New table | Stores daily journal entries |
+| `journal_entries.content` | `JSONB` | Tiptap JSON document |
+| `journal_entries.mood` | `TEXT` | Mood emoji character |
+| `journal_entries.prompt_key` | `TEXT` (nullable) | i18n key for writing prompt used |
+| `journal_entries.entry_date` | `DATE` | Entry date (browser-local, per existing timezone convention) |
+| `journal_entry_links` table (optional) | New table | Links entries to habits/tasks via foreign keys |
 
-These are schema changes handled by Supabase migrations, not library additions.
+## Version Compatibility
+
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| `@tiptap/react@^3.20.0` | React ^19.0.0 | Explicitly declared in peer deps. Verified via npm. |
+| `@tiptap/react@^3.20.0` | Next.js 16 | Works with `immediatelyRender: false`. Official Next.js guide on tiptap.dev. |
+| `@tiptap/pm@^3.20.0` | `@tiptap/react@^3.20.0` | Must match major version. Both at 3.20.0. |
+| `@tiptap/starter-kit@^3.20.0` | `@tiptap/react@^3.20.0` | Same version family. |
+| `frimousse@^0.3.0` | React ^18 or ^19 | Explicitly declared. |
+| `frimousse@^0.3.0` | TypeScript >=5.1.0 | Project uses TypeScript ^5. Compatible. |
+| `frimousse@^0.3.0` | shadcn/ui | Official CLI recipe available. |
+
+No peer dependency conflicts with the existing stack. No `peerDependencyRules` overrides needed (unlike `@dnd-kit` in v3.0).
 
 ## Sources
 
-- [@dnd-kit/core on npm](https://www.npmjs.com/package/@dnd-kit/core) -- v6.3.1, package details
-- [@dnd-kit/react on npm](https://www.npmjs.com/package/@dnd-kit/react) -- v0.3.1, experimental status
-- [dnd-kit official docs](https://dndkit.com/) -- API reference, installation guide
-- [GitHub Discussion #1842: @dnd-kit/react vs @dnd-kit/core roadmap](https://github.com/clauderic/dnd-kit/discussions/1842) -- no maintainer response on stability
-- [GitHub Issue #1654: "use client" missing in @dnd-kit/react](https://github.com/clauderic/dnd-kit/issues/1654) -- Next.js App Router compatibility
-- [Georgegriff/react-dnd-kit-tailwind-shadcn-ui](https://github.com/Georgegriff/react-dnd-kit-tailwind-shadcn-ui) -- Accessible kanban with dnd-kit + shadcn/ui
-- [Dice UI Kanban component](https://www.diceui.com/docs/components/kanban) -- shadcn-compatible kanban using @dnd-kit
-- [janhesters/shadcn-kanban-board](https://github.com/janhesters/shadcn-kanban-board) -- Zero-dependency alternative
-- [Top 5 DnD Libraries for React 2026 (Puck)](https://puckeditor.com/blog/top-5-drag-and-drop-libraries-for-react) -- Ecosystem comparison
-- [@hello-pangea/dnd React 19 Issue #864](https://github.com/hello-pangea/dnd/issues/863) -- No React 19 support
-- [pragmatic-drag-and-drop React 19 Issue #181](https://github.com/atlassian/pragmatic-drag-and-drop/issues/181) -- Partial React 19 support
-- [react-dnd React 19 Issue #3655](https://github.com/react-dnd/react-dnd/issues/3655) -- Deprecated, no React 19
-- [pnpm peerDependencyRules docs](https://pnpm.io/settings) -- allowedVersions configuration
-- [shadcn/ui React 19 guide](https://ui.shadcn.com/docs/react-19) -- Precedent for peer dep handling
-- [Build a Kanban board with dnd-kit (LogRocket)](https://blog.logrocket.com/build-kanban-board-dnd-kit-react/) -- Implementation patterns
-- [Build a Kanban Board with shadcn (Marmelab, Jan 2026)](https://marmelab.com/blog/2026/01/15/building-a-kanban-board-with-shadcn.html) -- Recent shadcn kanban tutorial
+- [@tiptap/react on npm](https://www.npmjs.com/package/@tiptap/react) -- v3.20.0, React 19 peer dep support, verified 2026-02-22
+- [Tiptap Next.js Installation Guide](https://tiptap.dev/docs/editor/getting-started/install/nextjs) -- `immediatelyRender: false` pattern, client component requirement
+- [Tiptap Persistence Docs](https://tiptap.dev/docs/editor/core-concepts/persistence) -- JSON storage recommended over HTML
+- [Tiptap Export JSON/HTML](https://tiptap.dev/docs/guides/output-json-html) -- `editor.getJSON()` and `generateHTML()` APIs
+- [Tiptap SSR Hydration Issue #5856](https://github.com/ueberdosis/tiptap/issues/5856) -- Confirms `immediatelyRender: false` fix
+- [Frimousse official site](https://frimousse.liveblocks.io) -- 12kB, dependency-free, shadcn/ui CLI integration
+- [Frimousse on npm](https://www.npmjs.com/package/frimousse) -- v0.3.0, React 18/19 peer deps, verified 2026-02-22
+- [Frimousse GitHub](https://github.com/liveblocks/frimousse) -- Source, composable API, accessibility features
+- [Liveblocks blog: Open-sourced Frimousse](https://liveblocks.io/blog/weve-open-sourced-our-customizable-emoji-picker-for-react) -- Production usage context
+- [shadcn/ui Calendar docs](https://ui.shadcn.com/docs/components/radix/calendar) -- Custom modifiers for react-day-picker v8
+- [react-day-picker Custom Modifiers](https://daypicker.dev/guides/custom-modifiers) -- API for highlighting specific dates
+- [Tiptap Best Practices for Saving JSON vs HTML](https://medium.com/@faisalmujtaba/best-practices-for-saving-tiptap-json-vs-html-in-mongodb-mysql-a5192bd68abc) -- JSON as source of truth recommendation
+
+---
+*Stack research for: BetterR.Me v4.0 Journal Feature*
+*Researched: 2026-02-22*
