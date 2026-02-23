@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Journal — Phase 21 (Journal Entry CRUD)
+**Current focus:** v4.0 Journal — Phase 22 (Writing Prompts)
 
 ## Current Position
 
-Phase: 21 of 25 (Journal Entry CRUD) -- COMPLETE
-Plan: 2 of 2 in current phase
-Status: Phase Complete
-Last activity: 2026-02-23 — Completed 21-02 (Entry modal + page route + 36 unit tests)
+Phase: 22 of 25 (Writing Prompts)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-02-23 — Completed 22-01 (Prompt data + i18n + editor placeholder)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [###░░░░░░░] 33% v4.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [####░░░░░░] 44% v4.0
 
 ## Performance Metrics
 
@@ -59,6 +59,8 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - Mock JournalEditorLoader directly in modal tests (not Tiptap internals) for robust testing
 - Added common.cancel i18n key at root common namespace for reuse across components
 - Journal page follows kanban pattern: server component for auth, client component for interactive state
+- Prompts defined as hardcoded TypeScript constant with i18n keys (not database)
+- Placeholder uses @apply text-muted-foreground/50 for consistent Tailwind theming
 
 ### Pending Todos
 
@@ -83,5 +85,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 21-02-PLAN.md (Entry modal + page route + 36 unit tests)
-Resume: Phase 21 complete. Ready for Phase 22 (Journal Views)
+Stopped at: Completed 22-01-PLAN.md (Prompt data + i18n + editor placeholder)
+Resume: Continue with 22-02 (Prompt browser UI + modal integration)

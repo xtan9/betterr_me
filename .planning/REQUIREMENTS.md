@@ -17,8 +17,8 @@ Requirements for the Journal milestone. Each maps to roadmap phases.
 
 ### Prompts
 
-- [ ] **PRMT-01**: User can choose from a library of writing prompts (gratitude, reflection, goals categories)
-- [ ] **PRMT-02**: User can skip prompts and write free-form
+- [x] **PRMT-01**: User can choose from a library of writing prompts (gratitude, reflection, goals categories)
+- [x] **PRMT-02**: User can skip prompts and write free-form
 
 ### Browsing
 
@@ -76,8 +76,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENTR-03 | Phase 21 | Complete |
 | ENTR-04 | Phase 21 | Complete |
 | ENTR-05 | Phase 20 | Complete |
-| PRMT-01 | Phase 22 | Pending |
-| PRMT-02 | Phase 22 | Pending |
+| PRMT-01 | Phase 22 | Complete |
+| PRMT-02 | Phase 22 | Complete |
 | BRWS-01 | Phase 23 | Pending |
 | BRWS-02 | Phase 23 | Pending |
 | BRWS-03 | Phase 23 | Pending |
