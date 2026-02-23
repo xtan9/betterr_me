@@ -57,7 +57,7 @@
 - [x] **Phase 18: Database Foundation & Household Schema** - Supabase migrations, household model, money arithmetic, Calm Finance tokens, sidebar nav, i18n namespace (completed 2026-02-21)
 - [x] **Phase 19: Plaid Bank Connection Pipeline** - Plaid Link OAuth, webhook-driven sync, encrypted token storage, account management, CSV/manual import (completed 2026-02-22)
 - [x] **Phase 20: Transaction Management & Categorization** - Transaction list with search/filter/pagination, auto-categorization, merchant rules, custom categories, transaction splitting (completed 2026-02-23)
-- [ ] **Phase 21: Budgets & Spending Analytics** - Monthly budgets per category, progress tracking, spending charts, drill-down, rollover
+- [x] **Phase 21: Budgets & Spending Analytics** - Monthly budgets per category, progress tracking, spending charts, drill-down, rollover (completed 2026-02-23)
 - [ ] **Phase 22: Bills, Goals & Net Worth** - Recurring charge detection, bill calendar, savings goals with projections, net worth tracking
 - [ ] **Phase 23: Household & Couples** - Partner invitation, shared views, privacy controls, individual vs shared budgets/goals
 - [ ] **Phase 24: Future-First Dashboard & AI Insights** - Forward-looking dashboard, cash flow projections, income detection, contextual insights, money summary card
@@ -223,7 +223,7 @@ Phases execute in numeric order: 18 -> 18.1 -> 19 -> 19.1 -> ... -> 25
 | 18. Database Foundation & Household Schema | 2/2 | Complete    | 2026-02-21 | - |
 | 19. Plaid Bank Connection Pipeline | 6/6 | Complete    | 2026-02-22 | - |
 | 20. Transaction Management & Categorization | 5/5 | Complete   | 2026-02-23 | - |
-| 21. Budgets & Spending Analytics | 3/4 | In Progress|  | - |
+| 21. Budgets & Spending Analytics | 4/4 | Complete | 2026-02-23 | - |
 | 22. Bills, Goals & Net Worth | v4.0 | 0/? | Not started | - |
 | 23. Household & Couples | v4.0 | 0/? | Not started | - |
 | 24. Future-First Dashboard & AI Insights | v4.0 | 0/? | Not started | - |

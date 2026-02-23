@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 21 in progress
+**Current focus:** v4.0 Money Tracking — Phase 21 complete, ready for Phase 22
 
 ## Current Position
 
 Phase: 21 of 25 (Budgets & Spending Analytics)
-Plan: 3 of 4 in current phase
-Status: Executing Phase 21 — Plan 03 complete
-Last activity: 2026-02-23 — Completed 21-03 (budget UI components, charts, i18n)
+Plan: 4 of 4 in current phase (COMPLETE)
+Status: Phase 21 complete — all 4 plans executed
+Last activity: 2026-02-23 — Completed 21-04 (budget testing, verification, bug fixes)
 
-Progress: [████░░░░░░] 35% v4.0
+Progress: [████░░░░░░] 40% v4.0
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [████░░░░░░] 35% v4.0
 - 21-01: 5min, 2 tasks, 5 files
 - 21-02: 4min, 2 tasks, 8 files
 - 21-03: 8min, 2 tasks, 13 files
+- 21-04: 5min, 2 tasks, 4 files
 
 ## Accumulated Context
 
@@ -121,6 +122,8 @@ Recent decisions affecting current work:
 - [21-03] Donut chart data derived from budget.categories (avoids redundant useSpendingAnalytics API call)
 - [21-03] CategoryDrillDown uses Sheet side panel to preserve budget overview context
 - [21-03] Added --money-caution CSS variable (muted coral) for Calm Finance over-budget states
+- [21-04] Dialog modal={false} pattern when containing Radix Select/Combobox components
+- [21-04] Month navigation uses startOfMonth comparison (not isFuture) for current-month boundary
 
 ### Pending Todos
 
@@ -142,5 +145,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 21-03-PLAN.md
-Resume: Continue with 21-04-PLAN.md (Budget testing)
+Stopped at: Completed 21-04-PLAN.md (Phase 21 complete)
+Resume: Begin Phase 22 research/planning (Bills, Goals & Net Worth)
