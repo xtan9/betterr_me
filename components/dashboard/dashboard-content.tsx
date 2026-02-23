@@ -104,7 +104,11 @@ export function DashboardContent({
 
   const handleDismissMotivation = useCallback(() => {
     setDismissedMotivation(true);
-    localStorage.setItem(`motivation-dismissed-${today}`, "true");
+    try {
+      localStorage.setItem(`motivation-dismissed-${today}`, "true");
+    } catch {
+      // Storage unavailable (private browsing, quota exceeded)
+    }
   }, [today]);
 
   const [dismissedMilestoneIds, setDismissedMilestoneIds] = useState<Set<string>>(() => {
@@ -121,7 +125,11 @@ export function DashboardContent({
     setDismissedMilestoneIds(prev => {
       const next = new Set(prev);
       next.add(milestoneId);
-      localStorage.setItem(`milestones-dismissed-${today}`, JSON.stringify([...next]));
+      try {
+        localStorage.setItem(`milestones-dismissed-${today}`, JSON.stringify([...next]));
+      } catch {
+        // Storage unavailable (private browsing, quota exceeded)
+      }
       return next;
     });
   }, [today]);

@@ -178,7 +178,8 @@
       "almostDone": "Just {remaining} more to go! You've got this! 💪",
       "halfway": "Halfway there! Keep the momentum going. 🚀",
       "gettingStarted": "Every habit completed brings you closer to your best self. ✨",
-      "noHabits": "Ready to start building better habits? Add your first one! 🌱"
+      "noHabits": "Ready to start building better habits? Add your first one! 🌱",
+      "dismiss": "Dismiss"
     },
     "insight": {
       "title": "Your Week in Review",
@@ -388,7 +389,8 @@
       "celebration200": "200 days. This isn't a habit anymore — it's who you are.",
       "celebration365": "One full year. Unbelievable commitment.",
       "nextMilestone": "{days} more days to your {milestone}-day milestone!",
-      "noNextMilestone": "You've passed every milestone. Keep going!"
+      "noNextMilestone": "You've passed every milestone. Keep going!",
+      "dismiss": "Dismiss"
     }
   },
   "auth": {

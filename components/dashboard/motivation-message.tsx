@@ -93,7 +93,7 @@ export function MotivationMessage({
           size="sm"
           onClick={onDismiss}
           className="shrink-0 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-          aria-label="Dismiss"
+          aria-label={t("dismiss")}
         >
           <X className="size-4" />
         </Button>

@@ -44,7 +44,7 @@ describe('fetcher', () => {
       json: () => Promise.resolve({}),
     });
 
-    await expect(realFetcher('/api/habits')).rejects.toThrow('Request failed');
+    await expect(realFetcher('/api/habits')).rejects.toThrow('Failed to fetch /api/habits');
   });
 });
 

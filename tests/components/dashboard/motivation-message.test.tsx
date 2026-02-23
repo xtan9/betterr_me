@@ -13,6 +13,7 @@ const messages = {
       halfway: "Halfway there! Keep the momentum going.",
       gettingStarted: "Every habit completed brings you closer to your best self.",
       noHabits: "Ready to start building better habits? Add your first one!",
+      dismiss: "Dismiss",
     },
   },
 };

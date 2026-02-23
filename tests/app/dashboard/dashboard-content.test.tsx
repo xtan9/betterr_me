@@ -90,6 +90,7 @@ const messages = {
       halfway: "Halfway there!",
       almostDone: "Just {remaining} more to go!",
       streakAtRisk: "Your {habitName} streak is at {count} days!",
+      dismiss: "Dismiss",
     },
     empty: {
       title: "Welcome to BetterR.Me!",
@@ -141,6 +142,7 @@ const messages = {
       celebration100: "Triple digits!",
       celebration200: "200 days!",
       celebration365: "One full year!",
+      dismiss: "Dismiss",
     },
   },
 };
