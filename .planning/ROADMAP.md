@@ -129,11 +129,13 @@ Plans:
   2. User can view spending breakdown as a donut chart by category and bar charts showing month-over-month trends
   3. User can drill down from any category in a chart to see the individual transactions that make up that spending
   4. User can enable budget rollover so unused amounts carry forward to the next month
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 21-01: TBD
-- [ ] 21-02: TBD
+- [ ] 21-01-PLAN.md — Database migration (budgets/budget_categories), BudgetsDB class, Zod validation schemas
+- [ ] 21-02-PLAN.md — Budget CRUD API routes, spending analytics API, SWR hooks, Recharts install
+- [ ] 21-03-PLAN.md — Budget UI (form, progress rings, donut/bar charts, drill-down, rollover prompt, page route, i18n)
+- [ ] 21-04-PLAN.md — Component tests, validation tests, human verification
 
 ### Phase 22: Bills, Goals & Net Worth
 **Goal**: Users can track recurring charges, save toward financial goals, and see their overall net worth
