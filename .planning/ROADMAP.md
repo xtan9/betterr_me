@@ -147,12 +147,15 @@ Plans:
   2. User can view a bill calendar showing upcoming charges for the month
   3. User can create savings goals with target amount and optional deadline, see visual progress (bar/ring), track multiple goals simultaneously, and see projected completion dates based on savings rate
   4. User can see total net worth (assets minus liabilities) as a number and a line chart over time; net worth updates automatically as accounts sync
-**Plans**: TBD
+**Plans**: 6 plans
 
 Plans:
-- [ ] 22-01: TBD
-- [ ] 22-02: TBD
-- [ ] 22-03: TBD
+- [ ] 22-01-PLAN.md — Database migration, DB classes, Plaid recurring fetch, Zod schemas
+- [ ] 22-02-PLAN.md — Bills API routes, Plaid recurring sync, bills SWR hook
+- [ ] 22-03-PLAN.md — Goals & net worth API routes, manual assets, SWR hooks, sync pipeline snapshots
+- [ ] 22-04-PLAN.md — Bills UI (list, calendar, form, summary header, page route)
+- [ ] 22-05-PLAN.md — Goals UI (card grid, progress rings, projections) + Net Worth UI (chart, summary, accounts, manual assets)
+- [ ] 22-06-PLAN.md — Navigation, i18n (3 locales), component tests, validation tests, human verification
 
 ### Phase 23: Household & Couples
 **Goal**: Two partners can share a household with combined and individual financial views while controlling what each sees
