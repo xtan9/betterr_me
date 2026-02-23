@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Milestone v4.0 Journal — defining requirements
+**Current focus:** v4.0 Journal — Phase 20 (Database & API Foundation)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-22 — Milestone v4.0 started
+Phase: 20 of 25 (Database & API Foundation)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-02-22 — Roadmap created for v4.0 Journal
 
 Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [░░░░░░░░░░] 0% v4.0
 
@@ -42,10 +42,10 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 ### Decisions
 
 See PROJECT.md Key Decisions table for full log with outcomes.
-- [Phase quick-fix]: Used URL query params (?section=work) for passing section context between tasks page and create task form
-- [Quick task 2]: Updated qualifiesForReflection to only check priority === 3 after removing intention
-- [Quick task 3]: Used zoom-in-100/zoom-out-100 to neutralize base DialogContent zoom animation via tailwind-merge override
-- [Quick task 4]: Used teal (hue 160) for Personal and blue (hue 215) for Work section toggle colors
+- Research recommends Tiptap JSONB storage over TEXT (STACK.md overrides ARCHITECTURE.md)
+- Dashboard journal widget must be self-contained (own SWR hook, not added to DashboardData)
+- Tiptap loaded via next/dynamic ssr:false + immediatelyRender:false (same pattern as kanban)
+- Debounced autosave (2s) with localStorage draft fallback for content safety
 
 ### Pending Todos
 
@@ -70,5 +70,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Starting milestone v4.0 Journal
-Resume: Defining requirements for journal feature
+Stopped at: Roadmap created for v4.0 Journal milestone
+Resume: Ready to plan Phase 20 (Database & API Foundation)

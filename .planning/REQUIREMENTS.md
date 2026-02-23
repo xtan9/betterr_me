@@ -71,29 +71,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENTR-01 | — | Pending |
-| ENTR-02 | — | Pending |
-| ENTR-03 | — | Pending |
-| ENTR-04 | — | Pending |
-| ENTR-05 | — | Pending |
-| PRMT-01 | — | Pending |
-| PRMT-02 | — | Pending |
-| BRWS-01 | — | Pending |
-| BRWS-02 | — | Pending |
-| BRWS-03 | — | Pending |
-| BRWS-04 | — | Pending |
-| INTG-01 | — | Pending |
-| INTG-02 | — | Pending |
-| INTG-03 | — | Pending |
-| INTG-04 | — | Pending |
-| I18N-01 | — | Pending |
-| I18N-02 | — | Pending |
+| ENTR-01 | Phase 21 | Pending |
+| ENTR-02 | Phase 21 | Pending |
+| ENTR-03 | Phase 21 | Pending |
+| ENTR-04 | Phase 21 | Pending |
+| ENTR-05 | Phase 20 | Pending |
+| PRMT-01 | Phase 22 | Pending |
+| PRMT-02 | Phase 22 | Pending |
+| BRWS-01 | Phase 23 | Pending |
+| BRWS-02 | Phase 23 | Pending |
+| BRWS-03 | Phase 23 | Pending |
+| BRWS-04 | Phase 23 | Pending |
+| INTG-01 | Phase 24 | Pending |
+| INTG-02 | Phase 24 | Pending |
+| INTG-03 | Phase 24 | Pending |
+| INTG-04 | Phase 24 | Pending |
+| I18N-01 | Phase 25 | Pending |
+| I18N-02 | Phase 25 | Pending |
 
 **Coverage:**
 - v4.0 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 ⚠️
+- Mapped to phases: 17
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-22*
-*Last updated: 2026-02-22 after initial definition*
+*Last updated: 2026-02-22 after roadmap creation*
