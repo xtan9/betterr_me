@@ -50,7 +50,7 @@
 
 **Milestone Goal:** Add a reflective journaling layer with free-form + prompted daily entries, mood tracking, optional habit/task links, and calendar + timeline browsing.
 
-- [ ] **Phase 20: Database & API Foundation** - Schema, DB class, API routes, SWR hooks for journal entries
+- [x] **Phase 20: Database & API Foundation** - Schema, DB class, API routes, SWR hooks for journal entries (completed 2026-02-23)
 - [ ] **Phase 21: Journal Entry CRUD** - Tiptap editor, mood selector, create/edit/delete entry flows
 - [ ] **Phase 22: Writing Prompts** - Prompt library with categories and free-form fallback
 - [ ] **Phase 23: Journal Page & Navigation** - Calendar view, timeline feed, sidebar nav entry
@@ -167,7 +167,7 @@ Phases execute in numeric order: 20 -> 21 -> 22 -> 23 -> 24 -> 25
 | 15. Kanban Board | v3.0 | 4/4 | Complete | 2026-02-20 |
 | 16. Integration Bug Fixes | v3.0 | 2/2 | Complete | 2026-02-21 |
 | 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |
-| 20. Database & API Foundation | 1/2 | In Progress|  | - |
+| 20. Database & API Foundation | 2/2 | Complete   | 2026-02-23 | - |
 | 21. Journal Entry CRUD | v4.0 | 0/? | Not started | - |
 | 22. Writing Prompts | v4.0 | 0/? | Not started | - |
 | 23. Journal Page & Navigation | v4.0 | 0/? | Not started | - |
