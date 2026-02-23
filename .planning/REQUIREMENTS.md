@@ -50,8 +50,8 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 
 - [x] **BUDG-01**: User can create monthly budgets with spending limits per category
 - [x] **BUDG-02**: User can see budget progress bars showing spent vs. remaining
-- [ ] **BUDG-03**: User can view spending breakdown charts by category (donut chart)
-- [ ] **BUDG-04**: User can view spending trends over time (bar charts, month-over-month)
+- [x] **BUDG-03**: User can view spending breakdown charts by category (donut chart)
+- [x] **BUDG-04**: User can view spending trends over time (bar charts, month-over-month)
 - [x] **BUDG-05**: User can drill down from a category chart to see individual transactions
 - [x] **BUDG-06**: Unused budget can roll over to the next month (configurable per budget)
 
@@ -173,8 +173,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CATG-03 | Phase 20 | Complete |
 | BUDG-01 | Phase 21 | Complete |
 | BUDG-02 | Phase 21 | Complete |
-| BUDG-03 | Phase 21 | Pending |
-| BUDG-04 | Phase 21 | Pending |
+| BUDG-03 | Phase 21 | Complete |
+| BUDG-04 | Phase 21 | Complete |
 | BUDG-05 | Phase 21 | Complete |
 | BUDG-06 | Phase 21 | Complete |
 | BILL-01 | Phase 22 | Pending |

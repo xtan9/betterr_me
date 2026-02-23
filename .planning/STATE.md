@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 21 of 25 (Budgets & Spending Analytics)
-Plan: 2 of 4 in current phase
-Status: Executing Phase 21 — Plan 02 complete
-Last activity: 2026-02-23 — Completed 21-02 (budget API routes, SWR hooks, Recharts)
+Plan: 3 of 4 in current phase
+Status: Executing Phase 21 — Plan 03 complete
+Last activity: 2026-02-23 — Completed 21-03 (budget UI components, charts, i18n)
 
 Progress: [████░░░░░░] 35% v4.0
 
@@ -51,6 +51,7 @@ Progress: [████░░░░░░] 35% v4.0
 - 20-05: 3min, 1 task (checkpoint pending), 3 files
 - 21-01: 5min, 2 tasks, 5 files
 - 21-02: 4min, 2 tasks, 8 files
+- 21-03: 8min, 2 tasks, 13 files
 
 ## Accumulated Context
 
@@ -116,6 +117,10 @@ Recent decisions affecting current work:
 - [21-02] Rollover route verifies rollover_enabled on source budget before computing
 - [21-02] Budget GET by ID delegates to getByMonth for full spending data (avoids logic duplication)
 - [21-02] SWR hooks derive isLoading from data/error shape (consistent with existing hooks)
+- [21-03] BudgetRing uses custom SVG (~60 lines) instead of charting library for lightweight progress rings
+- [21-03] Donut chart data derived from budget.categories (avoids redundant useSpendingAnalytics API call)
+- [21-03] CategoryDrillDown uses Sheet side panel to preserve budget overview context
+- [21-03] Added --money-caution CSS variable (muted coral) for Calm Finance over-budget states
 
 ### Pending Todos
 
@@ -137,5 +142,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 21-02-PLAN.md
-Resume: Continue with 21-03-PLAN.md (Budget UI components)
+Stopped at: Completed 21-03-PLAN.md
+Resume: Continue with 21-04-PLAN.md (Budget testing)
