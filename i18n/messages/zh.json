@@ -833,6 +833,30 @@
     "wordCount": "{count}个字",
     "pageTitle": "日记",
     "writeToday": "写今天的日记",
-    "emptyState": "你的日记将显示在这里"
+    "emptyState": "你的日记将显示在这里",
+    "prompts": {
+      "title": "Writing Prompts",
+      "trigger": "Need inspiration?",
+      "categories": {
+        "gratitude": "Gratitude",
+        "reflection": "Reflection",
+        "goals": "Goals"
+      },
+      "gratitude01": "What made you smile today?",
+      "gratitude02": "Name three things you're thankful for right now.",
+      "gratitude03": "Who is someone that made your day better?",
+      "gratitude04": "What's a simple pleasure you enjoyed today?",
+      "gratitude05": "What's something you often take for granted?",
+      "reflection01": "What's one thing you'd change about today?",
+      "reflection02": "What did you learn about yourself today?",
+      "reflection03": "What challenged you today and how did you handle it?",
+      "reflection04": "What emotion came up most today?",
+      "reflection05": "What would your future self thank you for doing today?",
+      "goals01": "What's one small step you can take toward a goal tomorrow?",
+      "goals02": "What's something you've been putting off? Why?",
+      "goals03": "Where do you want to be in 6 months?",
+      "goals04": "What skill do you want to develop next?",
+      "goals05": "What would make tomorrow a great day?"
+    }
   }
 }
