@@ -10,7 +10,7 @@ vi.mock("next-intl", () => ({
 
 // Mock the editor loader directly - avoids needing to mock Tiptap internals
 vi.mock("@/components/journal/journal-editor-loader", () => ({
-  JournalEditorLoader: ({ content, onUpdate }: any) =>
+  JournalEditorLoader: ({ onUpdate }: any) =>
     React.createElement("div", {
       "data-testid": "tiptap-editor",
       onClick: () => onUpdate?.({ type: "doc", content: [{ type: "paragraph" }] }, 5),
@@ -21,6 +21,32 @@ vi.mock("@/components/journal/journal-editor-loader", () => ({
 vi.mock("@/components/journal/journal-editor-skeleton", () => ({
   JournalEditorSkeleton: () =>
     React.createElement("div", { "data-testid": "editor-skeleton" }),
+}));
+
+// Mock prompt components to isolate modal logic
+const { mockPromptSheetOnSelect } = vi.hoisted(() => ({
+  mockPromptSheetOnSelect: vi.fn(),
+}));
+vi.mock("@/components/journal/prompt-browser-sheet", () => ({
+  PromptBrowserSheet: ({ open, onSelect, selectedKey }: any) => {
+    // Store onSelect so tests can call it
+    mockPromptSheetOnSelect.mockImplementation(onSelect);
+    return open
+      ? React.createElement("div", {
+          "data-testid": "prompt-browser-sheet",
+          "data-selected-key": selectedKey ?? "",
+        })
+      : null;
+  },
+}));
+
+vi.mock("@/components/journal/prompt-banner", () => ({
+  PromptBanner: ({ promptKey, onDismiss }: any) =>
+    React.createElement("div", {
+      "data-testid": "prompt-banner",
+      "data-prompt-key": promptKey,
+      onClick: onDismiss,
+    }),
 }));
 
 // Mock the hooks
@@ -281,5 +307,114 @@ describe("JournalEntryModal", () => {
 
     // The date "2026-02-23" should be formatted as readable date
     expect(screen.getByText(/February/)).toBeInTheDocument();
+  });
+
+  // Prompt integration tests
+  describe("prompt integration", () => {
+    it("renders 'Need inspiration?' trigger button", () => {
+      mockUseJournalEntry.mockReturnValue({
+        entry: null,
+        isLoading: false,
+        mutate: mockMutate,
+      });
+
+      render(<JournalEntryModal {...defaultProps} />);
+
+      expect(
+        screen.getByText("journal.prompts.trigger")
+      ).toBeInTheDocument();
+    });
+
+    it("trigger button opens prompt sheet", () => {
+      mockUseJournalEntry.mockReturnValue({
+        entry: null,
+        isLoading: false,
+        mutate: mockMutate,
+      });
+
+      render(<JournalEntryModal {...defaultProps} />);
+
+      // Sheet should not be visible initially
+      expect(
+        screen.queryByTestId("prompt-browser-sheet")
+      ).not.toBeInTheDocument();
+
+      // Click trigger button
+      fireEvent.click(screen.getByText("journal.prompts.trigger"));
+
+      // Sheet should now be visible
+      expect(
+        screen.getByTestId("prompt-browser-sheet")
+      ).toBeInTheDocument();
+    });
+
+    it("when entry has prompt_key, prompt banner is rendered", async () => {
+      // Start with no entry, then simulate entry loading
+      const entryWithPrompt = {
+        id: "entry-1",
+        content: { type: "doc" },
+        mood: 3,
+        word_count: 5,
+        prompt_key: "gratitude-01",
+      };
+
+      // First render without entry (simulates loading)
+      mockUseJournalEntry.mockReturnValue({
+        entry: null,
+        isLoading: true,
+        mutate: mockMutate,
+      });
+
+      const { rerender } = render(<JournalEntryModal {...defaultProps} />);
+
+      // Then rerender with entry data (simulates entry loaded)
+      mockUseJournalEntry.mockReturnValue({
+        entry: entryWithPrompt,
+        isLoading: false,
+        mutate: mockMutate,
+      });
+
+      rerender(<JournalEntryModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("prompt-banner")).toBeInTheDocument();
+      });
+
+      const banner = screen.getByTestId("prompt-banner");
+      expect(banner).toHaveAttribute("data-prompt-key", "gratitude-01");
+    });
+
+    it("when entry has no prompt_key, no prompt banner rendered", () => {
+      mockUseJournalEntry.mockReturnValue({
+        entry: {
+          id: "entry-1",
+          content: { type: "doc" },
+          mood: 3,
+          word_count: 5,
+        },
+        isLoading: false,
+        mutate: mockMutate,
+      });
+
+      render(<JournalEntryModal {...defaultProps} />);
+
+      expect(
+        screen.queryByTestId("prompt-banner")
+      ).not.toBeInTheDocument();
+    });
+
+    it("no prompt banner for new entries", () => {
+      mockUseJournalEntry.mockReturnValue({
+        entry: null,
+        isLoading: false,
+        mutate: mockMutate,
+      });
+
+      render(<JournalEntryModal {...defaultProps} />);
+
+      expect(
+        screen.queryByTestId("prompt-banner")
+      ).not.toBeInTheDocument();
+    });
   });
 });
