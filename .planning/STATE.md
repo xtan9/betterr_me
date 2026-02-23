@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-21)
+See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Planning next milestone
+**Current focus:** Milestone v4.0 Journal — defining requirements
 
 ## Current Position
 
-Phase: None — between milestones
-Plan: N/A
-Status: Milestone v3.0 complete
-Last activity: 2026-02-21 - Completed quick task 3: Fix kanban task detail popup animation
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-22 — Milestone v4.0 started
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [░░░░░░░░░░] 0% v4.0
 
 ## Performance Metrics
 
@@ -69,6 +69,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-21
-Stopped at: Completed quick task 3: Fix kanban task detail popup animation
-Resume: Run `/gsd:new-milestone` to start next milestone
+Last session: 2026-02-22
+Stopped at: Starting milestone v4.0 Journal
+Resume: Defining requirements for journal feature

@@ -66,7 +66,20 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ### Active
 
-(None — next milestone not yet planned)
+## Current Milestone: v4.0 Journal
+
+**Goal:** Add a reflective journaling layer with free-form + prompted daily entries, mood tracking, optional habit/task links, and calendar + timeline browsing.
+
+**Target features:**
+- Daily journal entries with rich text area
+- Optional writing prompts (gratitude, reflection, goals)
+- Mood emoji/icon selection per entry
+- Optional linking to habits or tasks (light tags)
+- Calendar view showing which days have entries
+- Timeline feed for chronological reading
+- Sidebar nav entry for full journal page
+- Dashboard widget for quick daily entry
+- i18n support (en, zh, zh-TW) and dark mode
 
 ### Out of Scope
 
@@ -130,4 +143,4 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | next/dynamic ssr:false for KanbanBoard | Avoid hydration issues with drag-and-drop library | ✓ Good — fixes Next.js 16 build, clean client-only boundary |
 
 ---
-*Last updated: 2026-02-21 after v3.0 milestone completed*
+*Last updated: 2026-02-22 after v4.0 milestone started*
