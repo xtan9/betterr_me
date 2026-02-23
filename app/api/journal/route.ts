@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       entry_date: validation.data.entry_date,
       title: validation.data.title,
-      content: validation.data.content,
+      content: validation.data.content ?? { type: 'doc', content: [] },
       mood: validation.data.mood ?? 3,
       word_count: validation.data.word_count ?? 0,
       tags: validation.data.tags ?? [],
