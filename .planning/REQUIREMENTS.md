@@ -13,7 +13,7 @@ Requirements for the Journal milestone. Each maps to roadmap phases.
 - [ ] **ENTR-02**: User can edit and update an existing journal entry
 - [ ] **ENTR-03**: User can delete a journal entry
 - [ ] **ENTR-04**: User can select a mood emoji (5-point scale) for each entry
-- [ ] **ENTR-05**: User sees one entry per day (upsert model — creating for a date with an existing entry opens edit)
+- [x] **ENTR-05**: User sees one entry per day (upsert model — creating for a date with an existing entry opens edit)
 
 ### Prompts
 
@@ -75,7 +75,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENTR-02 | Phase 21 | Pending |
 | ENTR-03 | Phase 21 | Pending |
 | ENTR-04 | Phase 21 | Pending |
-| ENTR-05 | Phase 20 | Pending |
+| ENTR-05 | Phase 20 | Complete |
 | PRMT-01 | Phase 22 | Pending |
 | PRMT-02 | Phase 22 | Pending |
 | BRWS-01 | Phase 23 | Pending |

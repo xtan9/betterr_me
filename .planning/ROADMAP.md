@@ -167,7 +167,7 @@ Phases execute in numeric order: 20 -> 21 -> 22 -> 23 -> 24 -> 25
 | 15. Kanban Board | v3.0 | 4/4 | Complete | 2026-02-20 |
 | 16. Integration Bug Fixes | v3.0 | 2/2 | Complete | 2026-02-21 |
 | 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |
-| 20. Database & API Foundation | v4.0 | 0/? | Not started | - |
+| 20. Database & API Foundation | 1/2 | In Progress|  | - |
 | 21. Journal Entry CRUD | v4.0 | 0/? | Not started | - |
 | 22. Writing Prompts | v4.0 | 0/? | Not started | - |
 | 23. Journal Page & Navigation | v4.0 | 0/? | Not started | - |

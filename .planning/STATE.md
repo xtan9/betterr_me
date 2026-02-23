@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 ## Current Position
 
 Phase: 20 of 25 (Database & API Foundation)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-02-22 — Roadmap created for v4.0 Journal
+Plan: 1 of 2 in current phase
+Status: Executing
+Last activity: 2026-02-23 — Completed 20-01 (journal data layer)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [░░░░░░░░░░] 0% v4.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [#░░░░░░░░░] 8% v4.0
 
 ## Performance Metrics
 
@@ -46,6 +46,9 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - Dashboard journal widget must be self-contained (own SWR hook, not added to DashboardData)
 - Tiptap loaded via next/dynamic ssr:false + immediatelyRender:false (same pattern as kanban)
 - Debounced autosave (2s) with localStorage draft fallback for content safety
+- Supabase .upsert() with onConflict: 'user_id,entry_date' for atomic one-entry-per-day enforcement
+- No user_id on journal_entry_links -- RLS uses EXISTS subquery on journal_entries
+- Calendar query selects only entry_date, mood, title (never full content) for performance
 
 ### Pending Todos
 
@@ -69,6 +72,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-22
-Stopped at: Roadmap created for v4.0 Journal milestone
-Resume: Ready to plan Phase 20 (Database & API Foundation)
+Last session: 2026-02-23
+Stopped at: Completed 20-01-PLAN.md (journal data layer)
+Resume: Ready to execute Phase 20 Plan 02 (API routes + SWR hooks)
