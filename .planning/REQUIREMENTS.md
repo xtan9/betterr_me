@@ -31,20 +31,20 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 
 ### Transactions
 
-- [ ] **TXNS-01**: User can view a cursor-paginated list of all transactions across accounts
+- [x] **TXNS-01**: User can view a cursor-paginated list of all transactions across accounts
 - [ ] **TXNS-02**: User can search transactions by keyword, date range, amount range, and category
 - [ ] **TXNS-03**: User can filter transactions by account
 - [ ] **TXNS-04**: User can manually override the category of any transaction
-- [ ] **TXNS-05**: User can create custom categories (household-scoped, shared between partners)
-- [ ] **TXNS-06**: User can split a transaction across multiple categories
+- [x] **TXNS-05**: User can create custom categories (household-scoped, shared between partners)
+- [x] **TXNS-06**: User can split a transaction across multiple categories
 - [ ] **TXNS-07**: User can import transactions via CSV file upload with column mapping and duplicate detection
 - [ ] **TXNS-08**: User can manually enter individual transactions (for cash purchases)
 
 ### Categorization
 
-- [ ] **CATG-01**: Transactions are auto-categorized using Plaid PFCv2 categories on sync
-- [ ] **CATG-02**: Merchant-name rule engine: user corrections auto-apply to future transactions from the same merchant
-- [ ] **CATG-03**: System default categories cannot be deleted, only hidden; custom categories are household-scoped
+- [x] **CATG-01**: Transactions are auto-categorized using Plaid PFCv2 categories on sync
+- [x] **CATG-02**: Merchant-name rule engine: user corrections auto-apply to future transactions from the same merchant
+- [x] **CATG-03**: System default categories cannot be deleted, only hidden; custom categories are household-scoped
 
 ### Budgets & Spending
 
@@ -160,17 +160,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAD-06 | Phase 19 | Complete |
 | PLAD-07 | Phase 19 | Complete |
 | PLAD-08 | Phase 19 | Complete |
-| TXNS-01 | Phase 20 | Pending |
+| TXNS-01 | Phase 20 | Complete |
 | TXNS-02 | Phase 20 | Pending |
 | TXNS-03 | Phase 20 | Pending |
 | TXNS-04 | Phase 20 | Pending |
-| TXNS-05 | Phase 20 | Pending |
-| TXNS-06 | Phase 20 | Pending |
+| TXNS-05 | Phase 20 | Complete |
+| TXNS-06 | Phase 20 | Complete |
 | TXNS-07 | Phase 20 | Pending |
 | TXNS-08 | Phase 20 | Pending |
-| CATG-01 | Phase 20 | Pending |
-| CATG-02 | Phase 20 | Pending |
-| CATG-03 | Phase 20 | Pending |
+| CATG-01 | Phase 20 | Complete |
+| CATG-02 | Phase 20 | Complete |
+| CATG-03 | Phase 20 | Complete |
 | BUDG-01 | Phase 21 | Pending |
 | BUDG-02 | Phase 21 | Pending |
 | BUDG-03 | Phase 21 | Pending |

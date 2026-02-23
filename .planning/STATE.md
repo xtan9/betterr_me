@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 19 complete, ready for Phase 20
+**Current focus:** v4.0 Money Tracking — Phase 20 in progress
 
 ## Current Position
 
-Phase: 19 of 25 (Plaid Bank Connection Pipeline) -- COMPLETE
-Plan: 6 of 6 in current phase
-Status: Phase 19 complete
-Last activity: 2026-02-22 — Completed 19-06 (Manual transaction dialog, validation tests, human verification)
+Phase: 20 of 25 (Transaction Management & Categorization)
+Plan: 1 of 5 in current phase
+Status: Executing Phase 20
+Last activity: 2026-02-22 — Completed 20-01 (Data layer foundation: migration, DB classes, types, validations)
 
-Progress: [███░░░░░░░] 25% v4.0
+Progress: [████░░░░░░] 28% v4.0
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Progress: [███░░░░░░░] 25% v4.0
 - 19-04: 6min, 2 tasks, 11 files
 - 19-05: 5min, 2 tasks, 10 files
 - 19-06: 2min, 2 tasks, 8 files
+- 20-01: 4min, 2 tasks, 11 files
 
 ## Accumulated Context
 
@@ -86,6 +87,9 @@ Recent decisions affecting current work:
 - [19-06] Cash account option (value: 'cash') in account selector for unbanked transactions
 - [19-06] Manual entry button in AccountsEmptyState alongside Plaid Link for discoverability
 - [19-06] react-plaid-link added as project dependency
+- [20-01] TransactionsDB.getByHousehold returns { transactions, total } for count-based pagination
+- [20-01] escapeIlike helper prevents SQL injection via ILIKE wildcards in user search input
+- [20-01] CategoriesDB.getVisible uses two-step approach: fetch hidden IDs, then exclude via NOT IN
 
 ### Pending Todos
 
@@ -107,5 +111,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 19-06-PLAN.md (Phase 19 complete)
-Resume: `/gsd:execute-phase 20` to start Phase 20 (Transaction Management & Categorization)
+Stopped at: Completed 20-01-PLAN.md
+Resume: Continue with 20-02-PLAN.md (next plan in Phase 20)
