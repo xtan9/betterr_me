@@ -60,6 +60,7 @@
     --money-amber-foreground: 35 50% 30%;
     --money-surface: 155 10% 98%;
     --money-border: 155 15% 88%;
+    --money-caution: 15 65% 55%;
 
     /* === Category colors === */
     --category-health: 350 80% 55%;
@@ -211,6 +212,7 @@
     --money-amber-foreground: 35 40% 70%;
     --money-surface: 155 8% 15%;
     --money-border: 155 10% 22%;
+    --money-caution: 15 55% 45%;
 
     /* === Category colors === */
     --category-health: 350 65% 60%;
