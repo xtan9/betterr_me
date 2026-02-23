@@ -905,6 +905,23 @@
         "clearAll": "清除全部",
         "removeFilter": "移除篩選"
       },
+      "income": "收入",
+      "expense": "支出",
+      "pending": "待處理",
+      "splitTransaction": "拆分交易",
+      "addSplit": "新增拆分",
+      "remaining": "剩餘",
+      "saveSplits": "儲存拆分",
+      "cancelSplits": "取消",
+      "splitsMustEqual": "拆分金額之和必須等於交易總額",
+      "merchantRulePrompt": "總是將「{merchant}」分類為「{category}」？",
+      "merchantRuleConfirm": "是，總是",
+      "merchantRuleSkip": "僅此一次",
+      "notes": "備註",
+      "saveNotes": "儲存",
+      "account": "帳戶",
+      "source": "來源",
+      "plaidCategory": "Plaid 分類",
       "manual": {
         "title": "新增交易",
         "amount": "金額",
@@ -916,6 +933,29 @@
         "submit": "新增交易",
         "success": "交易已新增"
       }
+    },
+    "categories": {
+      "title": "分類",
+      "newCategory": "新建分類",
+      "editCategory": "編輯分類",
+      "deleteCategory": "刪除分類",
+      "hideCategory": "隱藏",
+      "showCategory": "顯示",
+      "systemCategory": "系統",
+      "customCategory": "自訂",
+      "cannotDeleteSystem": "無法刪除系統分類",
+      "name": "名稱",
+      "icon": "圖示",
+      "color": "顏色"
+    },
+    "merchantRules": {
+      "title": "商戶規則",
+      "noRules": "尚無商戶規則。當你重新分類交易時會自動建立規則。",
+      "deleteRule": "刪除規則",
+      "ruleDescription": "{merchant} -> {category}"
+    },
+    "settings": {
+      "title": "財務設定"
     },
     "disconnect": {
       "title": "斷開 {name}？",

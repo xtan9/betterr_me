@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Receipt, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { formatMoney } from "@/lib/money/arithmetic";
@@ -55,6 +55,24 @@ export function MoneyPageShell() {
             ? "connected account"
             : "connected accounts"}
         </div>
+      </div>
+
+      {/* Navigation links */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Button variant="outline" className="justify-start" asChild>
+          <Link href="/money/transactions">
+            <Receipt className="mr-2 size-4" />
+            {t("transactions.title")}
+            <ArrowRight className="ml-auto size-3.5" />
+          </Link>
+        </Button>
+        <Button variant="outline" className="justify-start" asChild>
+          <Link href="/money/settings">
+            <Settings className="mr-2 size-4" />
+            {t("settings.title")}
+            <ArrowRight className="ml-auto size-3.5" />
+          </Link>
+        </Button>
       </div>
     </div>
   );

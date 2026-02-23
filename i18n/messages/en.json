@@ -905,6 +905,23 @@
         "clearAll": "Clear all",
         "removeFilter": "Remove filter"
       },
+      "income": "Income",
+      "expense": "Expense",
+      "pending": "Pending",
+      "splitTransaction": "Split Transaction",
+      "addSplit": "Add Split",
+      "remaining": "Remaining",
+      "saveSplits": "Save Splits",
+      "cancelSplits": "Cancel",
+      "splitsMustEqual": "Split amounts must equal the transaction total",
+      "merchantRulePrompt": "Always categorize \"{merchant}\" as \"{category}\"?",
+      "merchantRuleConfirm": "Yes, always",
+      "merchantRuleSkip": "Just this once",
+      "notes": "Notes",
+      "saveNotes": "Save",
+      "account": "Account",
+      "source": "Source",
+      "plaidCategory": "Plaid Category",
       "manual": {
         "title": "Add Transaction",
         "amount": "Amount",
@@ -916,6 +933,29 @@
         "submit": "Add Transaction",
         "success": "Transaction added"
       }
+    },
+    "categories": {
+      "title": "Categories",
+      "newCategory": "New Category",
+      "editCategory": "Edit Category",
+      "deleteCategory": "Delete Category",
+      "hideCategory": "Hide",
+      "showCategory": "Show",
+      "systemCategory": "System",
+      "customCategory": "Custom",
+      "cannotDeleteSystem": "System categories cannot be deleted",
+      "name": "Name",
+      "icon": "Icon",
+      "color": "Color"
+    },
+    "merchantRules": {
+      "title": "Merchant Rules",
+      "noRules": "No merchant rules yet. Rules are created when you reassign a transaction's category.",
+      "deleteRule": "Delete Rule",
+      "ruleDescription": "{merchant} -> {category}"
+    },
+    "settings": {
+      "title": "Money Settings"
     },
     "disconnect": {
       "title": "Disconnect {name}?",

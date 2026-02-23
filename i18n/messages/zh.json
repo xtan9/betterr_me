@@ -905,6 +905,23 @@
         "clearAll": "清除全部",
         "removeFilter": "移除筛选"
       },
+      "income": "收入",
+      "expense": "支出",
+      "pending": "待处理",
+      "splitTransaction": "拆分交易",
+      "addSplit": "添加拆分",
+      "remaining": "剩余",
+      "saveSplits": "保存拆分",
+      "cancelSplits": "取消",
+      "splitsMustEqual": "拆分金额之和必须等于交易总额",
+      "merchantRulePrompt": "总是将「{merchant}」分类为「{category}」？",
+      "merchantRuleConfirm": "是，总是",
+      "merchantRuleSkip": "仅此一次",
+      "notes": "备注",
+      "saveNotes": "保存",
+      "account": "账户",
+      "source": "来源",
+      "plaidCategory": "Plaid 分类",
       "manual": {
         "title": "添加交易",
         "amount": "金额",
@@ -916,6 +933,29 @@
         "submit": "添加交易",
         "success": "交易已添加"
       }
+    },
+    "categories": {
+      "title": "分类",
+      "newCategory": "新建分类",
+      "editCategory": "编辑分类",
+      "deleteCategory": "删除分类",
+      "hideCategory": "隐藏",
+      "showCategory": "显示",
+      "systemCategory": "系统",
+      "customCategory": "自定义",
+      "cannotDeleteSystem": "无法删除系统分类",
+      "name": "名称",
+      "icon": "图标",
+      "color": "颜色"
+    },
+    "merchantRules": {
+      "title": "商户规则",
+      "noRules": "暂无商户规则。当你重新分类交易时会自动创建规则。",
+      "deleteRule": "删除规则",
+      "ruleDescription": "{merchant} -> {category}"
+    },
+    "settings": {
+      "title": "财务设置"
     },
     "disconnect": {
       "title": "断开 {name}？",

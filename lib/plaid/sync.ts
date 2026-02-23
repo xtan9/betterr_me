@@ -34,6 +34,7 @@ export async function syncTransactions(
     description: string;
     merchant_name: string | null;
     category: string | null;
+    category_id: string | null;
     plaid_category_primary: string | null;
     plaid_category_detailed: string | null;
     transaction_date: string;
@@ -66,6 +67,7 @@ export async function syncTransactions(
         description: txn.name,
         merchant_name: txn.merchant_name ?? null,
         category: txn.personal_finance_category?.primary ?? null,
+        category_id: null, // May be set by applyMerchantRules
         plaid_category_primary:
           txn.personal_finance_category?.primary ?? null,
         plaid_category_detailed:
@@ -86,6 +88,7 @@ export async function syncTransactions(
         description: txn.name,
         merchant_name: txn.merchant_name ?? null,
         category: txn.personal_finance_category?.primary ?? null,
+        category_id: null, // May be set by applyMerchantRules
         plaid_category_primary:
           txn.personal_finance_category?.primary ?? null,
         plaid_category_detailed:
@@ -154,6 +157,13 @@ export async function syncTransactions(
   const validAdded = allAdded.filter((t) => t.account_id);
   const validModified = allModified.filter((t) => t.account_id);
 
+  // Apply merchant category rules before inserting
+  await applyMerchantRules(
+    [...validAdded, ...validModified],
+    householdId,
+    supabaseAdmin
+  );
+
   // Upsert added transactions
   if (validAdded.length > 0) {
     const inserts = validAdded.map(
@@ -218,4 +228,55 @@ export async function syncTransactions(
     removed: allRemovedIds.length,
     cursor: nextCursor!,
   };
+}
+
+/**
+ * Apply merchant category rules to transactions before inserting them.
+ * Looks up household merchant rules by merchant_name and sets category_id.
+ */
+async function applyMerchantRules(
+  transactions: Array<{
+    merchant_name: string | null;
+    category_id: string | null;
+    [key: string]: unknown;
+  }>,
+  householdId: string,
+  supabaseAdmin: SupabaseClient
+): Promise<void> {
+  const merchantNames = [
+    ...new Set(
+      transactions
+        .map((t) => t.merchant_name)
+        .filter((n): n is string => n !== null)
+    ),
+  ];
+
+  if (merchantNames.length === 0) return;
+
+  const { data: rules } = await supabaseAdmin
+    .from("merchant_category_rules")
+    .select("merchant_name_lower, category_id")
+    .eq("household_id", householdId)
+    .in(
+      "merchant_name_lower",
+      merchantNames.map((n) => n.toLowerCase())
+    );
+
+  if (!rules?.length) return;
+
+  const ruleMap = new Map(
+    rules.map((r: { merchant_name_lower: string; category_id: string }) => [
+      r.merchant_name_lower,
+      r.category_id,
+    ])
+  );
+
+  for (const txn of transactions) {
+    if (txn.merchant_name) {
+      const categoryId = ruleMap.get(txn.merchant_name.toLowerCase());
+      if (categoryId) {
+        txn.category_id = categoryId;
+      }
+    }
+  }
 }
