@@ -3,16 +3,17 @@
 import { useRef, useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { CharacterCount } from "@tiptap/extensions";
+import { CharacterCount, Placeholder } from "@tiptap/extensions";
 import { TaskList, TaskItem } from "@tiptap/extension-list";
 import { JournalBubbleMenu } from "./journal-bubble-menu";
 
 interface JournalEditorProps {
   content: Record<string, unknown> | null;
   onUpdate: (json: Record<string, unknown>, wordCount: number) => void;
+  placeholder?: string;
 }
 
-export function JournalEditor({ content, onUpdate }: JournalEditorProps) {
+export function JournalEditor({ content, onUpdate, placeholder }: JournalEditorProps) {
   const onUpdateRef = useRef(onUpdate);
   useEffect(() => {
     onUpdateRef.current = onUpdate;
@@ -24,6 +25,9 @@ export function JournalEditor({ content, onUpdate }: JournalEditorProps) {
       TaskList,
       TaskItem.configure({ nested: true }),
       CharacterCount,
+      Placeholder.configure({
+        placeholder: placeholder ?? "Start writing...",
+      }),
     ],
     content: content ?? undefined,
     immediatelyRender: false,
