@@ -168,7 +168,7 @@ Phases execute in numeric order: 20 -> 21 -> 22 -> 23 -> 24 -> 25
 | 16. Integration Bug Fixes | v3.0 | 2/2 | Complete | 2026-02-21 |
 | 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |
 | 20. Database & API Foundation | 2/2 | Complete    | 2026-02-23 | - |
-| 21. Journal Entry CRUD | v4.0 | 0/2 | Not started | - |
+| 21. Journal Entry CRUD | 1/2 | In Progress|  | - |
 | 22. Writing Prompts | v4.0 | 0/? | Not started | - |
 | 23. Journal Page & Navigation | v4.0 | 0/? | Not started | - |
 | 24. Dashboard & Cross-Feature Integration | v4.0 | 0/? | Not started | - |

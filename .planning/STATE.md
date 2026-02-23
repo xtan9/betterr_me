@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Journal — Phase 20 (Database & API Foundation)
+**Current focus:** v4.0 Journal — Phase 21 (Journal Entry CRUD)
 
 ## Current Position
 
-Phase: 20 of 25 (Database & API Foundation) -- COMPLETE
-Plan: 2 of 2 in current phase (all plans complete)
-Status: Phase Complete
-Last activity: 2026-02-23 — Completed 20-02 (API routes + SWR hooks + tests)
+Phase: 21 of 25 (Journal Entry CRUD)
+Plan: 1 of 2 in current phase
+Status: Executing
+Last activity: 2026-02-23 — Completed 21-01 (Editor UI primitives: Tiptap editor, bubble menu, mood selector, autosave hook)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [##░░░░░░░░] 17% v4.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [###░░░░░░░] 33% v4.0
 
 ## Performance Metrics
 
@@ -52,6 +52,10 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - Timeline mode reuses GET /api/journal with ?mode=timeline param instead of separate route
 - POST /api/journal always returns 201 (upsert semantics, create-or-update)
 - hasMore pagination flag uses entries.length === limit comparison
+- Mood onChange passes null (not 0) for deselect -- cleaner API matching nullable DB column
+- BubbleMenu imported from @tiptap/react/menus (v3 path, not @tiptap/react)
+- Autosave hook uses entryIdRef for POST-to-PATCH transition without stale closures
+- sendBeacon uses Blob with application/json content-type for beforeunload fallback
 
 ### Pending Todos
 
@@ -76,5 +80,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 20-02-PLAN.md (API routes + SWR hooks + tests)
-Resume: Ready to execute Phase 21 (Editor Experience)
+Stopped at: Completed 21-01-PLAN.md (Editor UI primitives: Tiptap editor, bubble menu, mood selector, autosave)
+Resume: Ready to execute 21-02-PLAN.md (Entry modal + page route)
