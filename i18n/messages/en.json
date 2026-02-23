@@ -808,5 +808,27 @@
     "creating": "Creating...",
     "namePlaceholder": "Category name",
     "createError": "Failed to create category"
+  },
+  "journal": {
+    "mood": {
+      "label": "How are you feeling?",
+      "amazing": "Amazing",
+      "good": "Good",
+      "okay": "Okay",
+      "notGreat": "Not great",
+      "awful": "Awful"
+    },
+    "saving": "Saving...",
+    "saved": "Saved",
+    "saveError": "Save failed",
+    "newEntry": "New Entry",
+    "editEntry": "Edit Entry",
+    "delete": "Delete",
+    "deleteConfirm": {
+      "title": "Delete this entry?",
+      "description": "This action cannot be undone. This will permanently delete your journal entry."
+    },
+    "untitled": "Untitled",
+    "wordCount": "{count, plural, one {# word} other {# words}}"
   }
 }

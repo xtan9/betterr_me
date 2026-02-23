@@ -808,5 +808,27 @@
     "creating": "建立中...",
     "namePlaceholder": "分類名稱",
     "createError": "建立分類失敗"
+  },
+  "journal": {
+    "mood": {
+      "label": "你現在感覺如何？",
+      "amazing": "太棒了",
+      "good": "不錯",
+      "okay": "一般",
+      "notGreat": "不太好",
+      "awful": "糟透了"
+    },
+    "saving": "儲存中...",
+    "saved": "已儲存",
+    "saveError": "儲存失敗",
+    "newEntry": "新日記",
+    "editEntry": "編輯日記",
+    "delete": "刪除",
+    "deleteConfirm": {
+      "title": "刪除這篇日記？",
+      "description": "此操作無法撤銷。這將永久刪除你的日記。"
+    },
+    "untitled": "無標題",
+    "wordCount": "{count}個字"
   }
 }
