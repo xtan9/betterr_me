@@ -7,7 +7,6 @@ import {
   subMonths,
   addMonths,
   startOfMonth,
-  isFuture,
 } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -60,8 +59,9 @@ export function BudgetOverview() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showRollover, setShowRollover] = useState(true);
 
-  // Navigation
-  const canGoForward = isFuture(addMonths(currentDate, 1));
+  // Navigation — disable forward when already viewing the current month
+  const now = startOfMonth(new Date());
+  const canGoForward = currentDate < now;
 
   const goToPreviousMonth = () => {
     setCurrentDate((d) => subMonths(d, 1));
@@ -166,7 +166,7 @@ export function BudgetOverview() {
         <Card className="border-money-border bg-money-surface">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <p className="mb-4 text-muted-foreground">{t("noBudget")}</p>
-            <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
+            <Dialog modal={false} open={showCreateForm} onOpenChange={setShowCreateForm}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="mr-2 size-4" />
@@ -246,7 +246,7 @@ export function BudgetOverview() {
 
           {/* Budget actions */}
           <div className="flex gap-2 justify-end">
-            <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+            <Dialog modal={false} open={showEditForm} onOpenChange={setShowEditForm}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Pencil className="mr-1 size-3.5" />

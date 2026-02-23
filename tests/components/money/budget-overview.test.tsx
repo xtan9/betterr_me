@@ -230,28 +230,30 @@ describe("BudgetOverview", () => {
     expect(monthHeading.textContent).not.toBe(initialText);
   });
 
-  it("month navigation: forward arrow respects isFuture boundary", () => {
+  it("month navigation: forward arrow disabled on current month, enabled on past months", () => {
     const budget = makeBudget();
     setupDefaultMocks({ budget });
 
     render(<BudgetOverview />);
 
-    // The component uses isFuture(addMonths(currentDate, 1)) to control forward nav.
-    // From the current month (Feb 2026), the next month (March) is in the future,
-    // so the forward button is enabled.
     const buttons = screen.getAllByRole("button");
+    const prevButton = buttons[0];
     const nextButton = buttons[1];
 
-    // Forward button should be enabled since next month is in the future
+    // Forward button should be disabled when viewing current month
+    expect(nextButton).toBeDisabled();
+
+    // Navigate back to a past month
+    fireEvent.click(prevButton);
+
+    // Now forward button should be enabled (we're viewing a past month)
     expect(nextButton).not.toBeDisabled();
 
-    // Clicking forward should change the month display
+    // Clicking forward should return to current month
     const monthHeading = screen.getByRole("heading", { level: 2 });
-    const initialText = monthHeading.textContent;
-
+    const textAfterBack = monthHeading.textContent;
     fireEvent.click(nextButton);
-
-    expect(monthHeading.textContent).not.toBe(initialText);
+    expect(monthHeading.textContent).not.toBe(textAfterBack);
   });
 
   it("shows over-budget indicator when spending exceeds allocation", () => {
