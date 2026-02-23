@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import * as matchers from "vitest-axe/matchers";
 import { MilestoneCard, MilestoneCards } from "@/components/habits/milestone-card";
@@ -60,7 +60,7 @@ describe("MilestoneCard", () => {
   });
 
   it("renders no sub-message for unknown milestone threshold", () => {
-    const { container } = render(
+    render(
       <MilestoneCard
         milestone={{ ...baseMilestone, milestone: 999 }}
         habitName="Walk"
@@ -68,9 +68,8 @@ describe("MilestoneCard", () => {
     );
     // Primary celebration message should render
     expect(screen.getByText(/celebration.*habit=Walk.*count=999/)).toBeInTheDocument();
-    // No sub-message element with a threshold-specific key
-    const subMessages = container.querySelectorAll("p.text-sm");
-    expect(subMessages.length).toBe(0);
+    // No sub-message with a threshold-specific key (e.g. celebration7, celebration30, etc.)
+    expect(screen.queryByText(/^celebration\d+$/)).not.toBeInTheDocument();
   });
 
   it("has no accessibility violations", async () => {
@@ -78,6 +77,22 @@ describe("MilestoneCard", () => {
       <MilestoneCard milestone={baseMilestone} habitName="Run" />
     );
     expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("renders dismiss button when onDismiss is provided", () => {
+    const onDismiss = vi.fn();
+    render(
+      <MilestoneCard milestone={baseMilestone} habitName="Run" onDismiss={onDismiss} />
+    );
+    const dismissButton = screen.getByRole("button", { name: "dismiss" });
+    expect(dismissButton).toBeInTheDocument();
+    fireEvent.click(dismissButton);
+    expect(onDismiss).toHaveBeenCalledWith("m1");
+  });
+
+  it("does not render dismiss button when onDismiss is not provided", () => {
+    render(<MilestoneCard milestone={baseMilestone} habitName="Run" />);
+    expect(screen.queryByRole("button", { name: "dismiss" })).not.toBeInTheDocument();
   });
 });
 
