@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 20 of 25 (Transaction Management & Categorization)
-Plan: 2 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: Executing Phase 20
-Last activity: 2026-02-22 — Completed 20-02 (API routes: categories, merchant rules, transactions, splits)
+Last activity: 2026-02-22 — Completed 20-03 (Transaction list UI with search, filters, pagination, date grouping)
 
 Progress: [████░░░░░░] 28% v4.0
 
@@ -46,6 +46,7 @@ Progress: [████░░░░░░] 28% v4.0
 - 19-06: 2min, 2 tasks, 8 files
 - 20-01: 4min, 2 tasks, 11 files
 - 20-02: 9min, 2 tasks, 9 files
+- 20-03: 11min, 2 tasks, 15 files
 
 ## Accumulated Context
 
@@ -94,6 +95,10 @@ Recent decisions affecting current work:
 - [20-02] Split POST replaces existing splits atomically (delete + re-create) for idempotent updates
 - [20-02] Split amount validation uses Math.abs comparison for positive/negative transaction amounts
 - [20-02] Hidden category toggle uses POST/DELETE on /categories/hidden sub-route
+- [20-03] Compact card-row layout (not data table) for Calm Finance aesthetic
+- [20-03] Load More button (not infinite scroll) for pagination
+- [20-03] router.replace (not push) for filter changes to avoid filling browser history
+- [20-03] Suspense boundary wraps TransactionList for useSearchParams SSR compatibility
 
 ### Pending Todos
 
@@ -115,5 +120,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 20-02-PLAN.md
-Resume: Continue with 20-03-PLAN.md (next plan in Phase 20)
+Stopped at: Completed 20-03-PLAN.md
+Resume: Continue with 20-04-PLAN.md (next plan in Phase 20)
