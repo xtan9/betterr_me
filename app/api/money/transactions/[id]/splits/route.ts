@@ -102,7 +102,9 @@ export async function POST(
     await splitsDB.deleteByTransaction(id);
     const splits = await splitsDB.create(
       parsed.data.splits.map((s) => ({
-        ...s,
+        category_id: s.category_id,
+        amount_cents: s.amount_cents,
+        notes: s.notes ?? null,
         transaction_id: id,
       }))
     );

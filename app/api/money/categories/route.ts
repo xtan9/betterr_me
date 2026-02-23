@@ -62,7 +62,10 @@ export async function POST(request: NextRequest) {
     const householdId = await resolveHousehold(supabase, user.id);
     const categoriesDB = new CategoriesDB(supabase);
     const category = await categoriesDB.create({
-      ...parsed.data,
+      name: parsed.data.name,
+      icon: parsed.data.icon ?? null,
+      color: parsed.data.color ?? null,
+      display_name: parsed.data.display_name ?? null,
       household_id: householdId,
       is_system: false,
     });

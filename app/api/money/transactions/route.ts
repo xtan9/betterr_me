@@ -120,6 +120,8 @@ export async function POST(request: NextRequest) {
       description: parsed.data.description,
       merchant_name: null,
       category: parsed.data.category || null,
+      category_id: null,
+      notes: null,
       transaction_date: parsed.data.transaction_date,
       is_pending: false,
       plaid_transaction_id: null,
