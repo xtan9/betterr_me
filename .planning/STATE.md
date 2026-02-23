@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 22 of 25 (Bills, Goals & Net Worth)
-Plan: 3 of 6 in current phase (COMPLETE)
-Status: Phase 22 plan 03 complete — goals, net worth, manual assets API routes + SWR hooks
-Last activity: 2026-02-23 — Completed 22-03 (Goals projections, net worth breakdown, manual assets CRUD)
+Plan: 4 of 6 in current phase (COMPLETE)
+Status: Phase 22 plan 04 complete — bills UI components with list, calendar, and page route
+Last activity: 2026-02-23 — Completed 22-04 (Bills list, calendar, form, page)
 
-Progress: [████░░░░░░] 43% v4.0
+Progress: [█████░░░░░] 46% v4.0
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [████░░░░░░] 43% v4.0
 - 22-01: 5min, 2 tasks, 10 files
 - 22-02: 6min, 2 tasks, 5 files
 - 22-03: 7min, 2 tasks, 9 files
+- 22-04: 6min, 2 tasks, 11 files
 
 ## Accumulated Context
 
@@ -142,6 +143,11 @@ Recent decisions affecting current work:
 - [22-03] Status color: green (on track), yellow (within 30d of deadline), red (>30d past deadline)
 - [22-03] Net worth change computed vs latest snapshot for simplicity
 - [22-03] Snapshot API pre-formats label field (MMM yyyy) for direct chart consumption
+- [22-04] Inline confirm/dismiss toggle (no modal) for bill status changes per locked user decision
+- [22-04] Paid-this-month heuristic: bill.is_active + updated_at within current month
+- [22-04] Calendar projects bills to days using frequency-based calculation from next_due_date
+- [22-04] Tabbed List/Calendar views via BillsPageContent with shared useBills hook
+- [22-04] Dialog modal={false} on BillForm for Radix Select compatibility
 
 ### Pending Todos
 
@@ -163,5 +169,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 22-03-PLAN.md (Goals, net worth, manual assets API + SWR hooks)
-Resume: Execute 22-04-PLAN.md (Bills UI components)
+Stopped at: Completed 22-04-PLAN.md (Bills UI - list, calendar, form, page route)
+Resume: Execute 22-05-PLAN.md (Goals & Net Worth UI components)
