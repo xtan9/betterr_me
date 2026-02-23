@@ -220,7 +220,7 @@ Phases execute in numeric order: 18 -> 18.1 -> 19 -> 19.1 -> ... -> 25
 | 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |
 | 18. Database Foundation & Household Schema | 2/2 | Complete    | 2026-02-21 | - |
 | 19. Plaid Bank Connection Pipeline | 6/6 | Complete    | 2026-02-22 | - |
-| 20. Transaction Management & Categorization | 1/5 | In Progress|  | - |
+| 20. Transaction Management & Categorization | 2/5 | In Progress|  | - |
 | 21. Budgets & Spending Analytics | v4.0 | 0/? | Not started | - |
 | 22. Bills, Goals & Net Worth | v4.0 | 0/? | Not started | - |
 | 23. Household & Couples | v4.0 | 0/? | Not started | - |

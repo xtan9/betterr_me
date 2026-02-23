@@ -34,7 +34,7 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 - [x] **TXNS-01**: User can view a cursor-paginated list of all transactions across accounts
 - [ ] **TXNS-02**: User can search transactions by keyword, date range, amount range, and category
 - [ ] **TXNS-03**: User can filter transactions by account
-- [ ] **TXNS-04**: User can manually override the category of any transaction
+- [x] **TXNS-04**: User can manually override the category of any transaction
 - [x] **TXNS-05**: User can create custom categories (household-scoped, shared between partners)
 - [x] **TXNS-06**: User can split a transaction across multiple categories
 - [ ] **TXNS-07**: User can import transactions via CSV file upload with column mapping and duplicate detection
@@ -163,7 +163,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TXNS-01 | Phase 20 | Complete |
 | TXNS-02 | Phase 20 | Pending |
 | TXNS-03 | Phase 20 | Pending |
-| TXNS-04 | Phase 20 | Pending |
+| TXNS-04 | Phase 20 | Complete |
 | TXNS-05 | Phase 20 | Complete |
 | TXNS-06 | Phase 20 | Complete |
 | TXNS-07 | Phase 20 | Pending |

@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 20 of 25 (Transaction Management & Categorization)
-Plan: 1 of 5 in current phase
+Plan: 2 of 5 in current phase
 Status: Executing Phase 20
-Last activity: 2026-02-22 — Completed 20-01 (Data layer foundation: migration, DB classes, types, validations)
+Last activity: 2026-02-22 — Completed 20-02 (API routes: categories, merchant rules, transactions, splits)
 
 Progress: [████░░░░░░] 28% v4.0
 
@@ -45,6 +45,7 @@ Progress: [████░░░░░░] 28% v4.0
 - 19-05: 5min, 2 tasks, 10 files
 - 19-06: 2min, 2 tasks, 8 files
 - 20-01: 4min, 2 tasks, 11 files
+- 20-02: 9min, 2 tasks, 9 files
 
 ## Accumulated Context
 
@@ -90,6 +91,9 @@ Recent decisions affecting current work:
 - [20-01] TransactionsDB.getByHousehold returns { transactions, total } for count-based pagination
 - [20-01] escapeIlike helper prevents SQL injection via ILIKE wildcards in user search input
 - [20-01] CategoriesDB.getVisible uses two-step approach: fetch hidden IDs, then exclude via NOT IN
+- [20-02] Split POST replaces existing splits atomically (delete + re-create) for idempotent updates
+- [20-02] Split amount validation uses Math.abs comparison for positive/negative transaction amounts
+- [20-02] Hidden category toggle uses POST/DELETE on /categories/hidden sub-route
 
 ### Pending Todos
 
@@ -111,5 +115,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 20-01-PLAN.md
-Resume: Continue with 20-02-PLAN.md (next plan in Phase 20)
+Stopped at: Completed 20-02-PLAN.md
+Resume: Continue with 20-03-PLAN.md (next plan in Phase 20)
