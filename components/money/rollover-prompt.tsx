@@ -17,14 +17,13 @@ import type { BudgetWithCategories } from "@/lib/db/types";
 
 interface RolloverPromptProps {
   previousBudget: BudgetWithCategories;
-  currentMonth: string;
+  currentMonth?: string;
   onConfirm: () => void;
   onDismiss: () => void;
 }
 
 export function RolloverPrompt({
   previousBudget,
-  currentMonth,
   onConfirm,
   onDismiss,
 }: RolloverPromptProps) {
@@ -42,21 +41,9 @@ export function RolloverPrompt({
   const handleConfirm = async () => {
     setIsSubmitting(true);
     try {
-      // Find the current month's budget to get its ID for the rollover endpoint
-      const res = await fetch(
-        `/api/money/budgets?month=${currentMonth}`
-      );
-      if (!res.ok) throw new Error("Failed to fetch current budget");
-      const { budget: currentBudget } = await res.json();
-      if (!currentBudget) throw new Error("No budget found for current month");
-
       const rolloverRes = await fetch(
-        `/api/money/budgets/${currentBudget.id}/rollover`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ from_budget_id: previousBudget.id }),
-        }
+        `/api/money/budgets/${previousBudget.id}/rollover`,
+        { method: "POST" }
       );
 
       if (!rolloverRes.ok) {
