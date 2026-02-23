@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 20 of 25 (Transaction Management & Categorization)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: Executing Phase 20
-Last activity: 2026-02-22 — Completed 20-03 (Transaction list UI with search, filters, pagination, date grouping)
+Last activity: 2026-02-22 — Completed 20-04 (Transaction detail, category management, sync pipeline, i18n)
 
-Progress: [████░░░░░░] 28% v4.0
+Progress: [████░░░░░░] 30% v4.0
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Progress: [████░░░░░░] 28% v4.0
 - 20-01: 4min, 2 tasks, 11 files
 - 20-02: 9min, 2 tasks, 9 files
 - 20-03: 11min, 2 tasks, 15 files
+- 20-04: 6min, 2 tasks, 11 files
 
 ## Accumulated Context
 
@@ -99,6 +100,10 @@ Recent decisions affecting current work:
 - [20-03] Load More button (not infinite scroll) for pagination
 - [20-03] router.replace (not push) for filter changes to avoid filling browser history
 - [20-03] Suspense boundary wraps TransactionList for useSearchParams SSR compatibility
+- [20-04] Toast action/cancel pattern for merchant rule prompt (sonner with 10s duration)
+- [20-04] Split form uses react-hook-form useFieldArray with auto-fill remainder for 2-split case
+- [20-04] applyMerchantRules queries merchant_category_rules directly with admin client in sync pipeline
+- [20-04] CategoryManager tracks hidden categories in local state for immediate UI feedback
 
 ### Pending Todos
 
@@ -120,5 +125,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 20-03-PLAN.md
-Resume: Continue with 20-04-PLAN.md (next plan in Phase 20)
+Stopped at: Completed 20-04-PLAN.md
+Resume: Continue with 20-05-PLAN.md (final plan in Phase 20)
