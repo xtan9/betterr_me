@@ -14,6 +14,7 @@ interface CategorySpending {
 interface MonthlyTrend {
   month: string;
   total_cents: number;
+  budget_total_cents: number;
   categories: { category_id: string; total_cents: number }[];
 }
 

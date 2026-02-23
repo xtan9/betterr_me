@@ -293,6 +293,32 @@ export class BudgetsDB {
   }
 
   /**
+   * Get budget totals by month for a given set of months.
+   * Returns a Map of month string (YYYY-MM-01 format) to total_cents.
+   * Used to enrich spending trend data with budget amounts.
+   */
+  async getBudgetTotalsByMonth(
+    householdId: string,
+    months: string[]
+  ): Promise<Map<string, number>> {
+    if (months.length === 0) return new Map();
+
+    const { data, error } = await this.supabase
+      .from("budgets")
+      .select("month, total_cents")
+      .eq("household_id", householdId)
+      .in("month", months);
+
+    if (error) throw error;
+
+    const result = new Map<string, number>();
+    for (const row of data || []) {
+      result.set(row.month, row.total_cents);
+    }
+    return result;
+  }
+
+  /**
    * Get spending trends aggregated by month for the last N months.
    * Used for the bar chart trend view.
    */

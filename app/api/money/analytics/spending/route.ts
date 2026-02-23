@@ -87,7 +87,19 @@ export async function GET(request: NextRequest) {
         a.month.localeCompare(b.month)
       );
 
-      return NextResponse.json({ trends });
+      // Enrich with budget totals per month
+      const monthStrings = trends.map((t) => t.month);
+      const budgetTotals = await budgetsDB.getBudgetTotalsByMonth(
+        householdId,
+        monthStrings
+      );
+
+      const enrichedTrends = trends.map((t) => ({
+        ...t,
+        budget_total_cents: budgetTotals.get(t.month) || 0,
+      }));
+
+      return NextResponse.json({ trends: enrichedTrends });
     }
 
     // Mode 1: Spending by category for a specific month (default)

@@ -89,7 +89,7 @@ export function BudgetOverview() {
   const trendData = useMemo(() => {
     return trends.map((trend) => ({
       month: format(new Date(`${trend.month}-01`), "MMM"),
-      budget: 0, // Will be enriched when we have budget data per month
+      budget: trend.budget_total_cents || 0,
       spent: trend.total_cents,
     }));
   }, [trends]);
