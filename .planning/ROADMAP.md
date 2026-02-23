@@ -68,11 +68,11 @@
   2. API routes at `/api/journal`, `/api/journal/[id]`, and `/api/journal/calendar` accept requests and return correct JSON responses
   3. Creating a second entry for the same date upserts (updates) instead of creating a duplicate
   4. SWR hooks (`useJournalEntry`, `useJournalCalendar`, `useJournalTimeline`) fetch and cache journal data with date-keyed cache keys
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 20-01: TBD
-- [ ] 20-02: TBD
+- [ ] 20-01-PLAN.md — Schema, types, DB classes, validation schemas, preview utility
+- [ ] 20-02-PLAN.md — API routes, SWR hooks, and comprehensive unit tests
 
 ### Phase 21: Journal Entry CRUD
 **Goal**: Users can write, edit, and delete rich-text journal entries with mood tracking through a complete entry form
