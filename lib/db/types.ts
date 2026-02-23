@@ -541,3 +541,39 @@ export interface HiddenCategory {
   household_id: string;
   category_id: string;
 }
+
+// =============================================================================
+// BUDGETS
+// =============================================================================
+
+export interface Budget {
+  id: string;
+  household_id: string;
+  month: string; // '2026-02-01'
+  total_cents: number;
+  rollover_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetCategory {
+  id: string;
+  budget_id: string;
+  category_id: string;
+  allocated_cents: number;
+  rollover_cents: number;
+  created_at: string;
+}
+
+export interface BudgetCategoryWithSpending extends BudgetCategory {
+  spent_cents: number;
+  category_name: string;
+  category_icon: string | null;
+  category_color: string | null;
+}
+
+export interface BudgetWithCategories extends Budget {
+  categories: BudgetCategoryWithSpending[];
+  total_allocated_cents: number;
+  total_spent_cents: number;
+}

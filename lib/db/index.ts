@@ -17,3 +17,4 @@ export { TransactionsDB } from "./transactions";
 export { CategoriesDB } from "./categories-db";
 export { MerchantRulesDB } from "./merchant-rules";
 export { TransactionSplitsDB } from "./transaction-splits";
+export { BudgetsDB } from "./budgets";
