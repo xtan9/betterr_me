@@ -84,11 +84,11 @@ Plans:
   3. User can edit an existing entry (both content and mood) and see the updated version immediately
   4. User can delete a journal entry and it no longer appears anywhere in the app
   5. Editor autosaves with a visible "Saving..."/"Saved" indicator, preventing data loss on navigation
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 21-01: TBD
-- [ ] 21-02: TBD
+- [ ] 21-01-PLAN.md — Install Tiptap 3, create editor with bubble menu, mood selector, save status, autosave hook, CSS styles, i18n strings
+- [ ] 21-02-PLAN.md — Journal entry modal, delete dialog, page route, and unit tests
 
 ### Phase 22: Writing Prompts
 **Goal**: Users have optional writing prompts to reduce blank-page anxiety, organized by category, with the freedom to skip and write free-form
@@ -168,7 +168,7 @@ Phases execute in numeric order: 20 -> 21 -> 22 -> 23 -> 24 -> 25
 | 16. Integration Bug Fixes | v3.0 | 2/2 | Complete | 2026-02-21 |
 | 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |
 | 20. Database & API Foundation | 2/2 | Complete    | 2026-02-23 | - |
-| 21. Journal Entry CRUD | v4.0 | 0/? | Not started | - |
+| 21. Journal Entry CRUD | v4.0 | 0/2 | Not started | - |
 | 22. Writing Prompts | v4.0 | 0/? | Not started | - |
 | 23. Journal Page & Navigation | v4.0 | 0/? | Not started | - |
 | 24. Dashboard & Cross-Feature Integration | v4.0 | 0/? | Not started | - |
