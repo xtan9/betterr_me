@@ -129,13 +129,14 @@ Plans:
   2. User can view spending breakdown as a donut chart by category and bar charts showing month-over-month trends
   3. User can drill down from any category in a chart to see the individual transactions that make up that spending
   4. User can enable budget rollover so unused amounts carry forward to the next month
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
 - [ ] 21-01-PLAN.md — Database migration (budgets/budget_categories), BudgetsDB class, Zod validation schemas
 - [ ] 21-02-PLAN.md — Budget CRUD API routes, spending analytics API, SWR hooks, Recharts install
 - [ ] 21-03-PLAN.md — Budget UI (form, progress rings, donut/bar charts, drill-down, rollover prompt, page route, i18n)
 - [ ] 21-04-PLAN.md — Component tests, validation tests, human verification
+- [ ] 21-05-PLAN.md — Gap closure: trend chart budget data, rollover wiring fix
 
 ### Phase 22: Bills, Goals & Net Worth
 **Goal**: Users can track recurring charges, save toward financial goals, and see their overall net worth
@@ -223,7 +224,7 @@ Phases execute in numeric order: 18 -> 18.1 -> 19 -> 19.1 -> ... -> 25
 | 18. Database Foundation & Household Schema | 2/2 | Complete    | 2026-02-21 | - |
 | 19. Plaid Bank Connection Pipeline | 6/6 | Complete    | 2026-02-22 | - |
 | 20. Transaction Management & Categorization | 5/5 | Complete   | 2026-02-23 | - |
-| 21. Budgets & Spending Analytics | 4/4 | Complete | 2026-02-23 | - |
+| 21. Budgets & Spending Analytics | 4/5 | Gap closure | 2026-02-23 | - |
 | 22. Bills, Goals & Net Worth | v4.0 | 0/? | Not started | - |
 | 23. Household & Couples | v4.0 | 0/? | Not started | - |
 | 24. Future-First Dashboard & AI Insights | v4.0 | 0/? | Not started | - |
