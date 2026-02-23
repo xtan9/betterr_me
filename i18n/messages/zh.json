@@ -29,6 +29,7 @@
       "profileError": "个人资料不可用",
       "signOutError": "退出登录失败"
     },
+    "cancel": "取消",
     "footer": {
       "product": "产品",
       "features": "功能",
@@ -829,6 +830,9 @@
       "description": "此操作无法撤销。这将永久删除你的日记。"
     },
     "untitled": "无标题",
-    "wordCount": "{count}个字"
+    "wordCount": "{count}个字",
+    "pageTitle": "日记",
+    "writeToday": "写今天的日记",
+    "emptyState": "你的日记将显示在这里"
   }
 }
