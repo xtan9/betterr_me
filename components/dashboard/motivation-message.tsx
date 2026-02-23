@@ -1,7 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Lightbulb } from "lucide-react";
+import { Lightbulb, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface MotivationMessageProps {
   stats: {
@@ -17,12 +18,14 @@ interface MotivationMessageProps {
     completed_today?: boolean;
   } | null;
   isFirstDay?: boolean;
+  onDismiss?: () => void;
 }
 
 export function MotivationMessage({
   stats,
   topStreakHabit,
   isFirstDay = false,
+  onDismiss,
 }: MotivationMessageProps) {
   const t = useTranslations("dashboard.motivation");
 
@@ -79,11 +82,22 @@ export function MotivationMessage({
   const message = getMessage();
 
   return (
-    <div className="rounded-xl bg-primary/5 dark:bg-primary/10 border border-primary/10 dark:border-primary/20 px-4 py-4">
-      <div className="flex items-start gap-3">
-        <Lightbulb className="size-5 text-primary shrink-0 mt-0.5" />
-        <p className="text-sm text-foreground/90">{message}</p>
+    <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/5 dark:bg-primary/10 border border-primary/10 dark:border-primary/20">
+      <Lightbulb className="size-5 text-primary shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground/90">{message}</p>
       </div>
+      {onDismiss && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onDismiss}
+          className="shrink-0 h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+          aria-label={t("dismiss")}
+        >
+          <X className="size-4" />
+        </Button>
+      )}
     </div>
   );
 }

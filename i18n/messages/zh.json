@@ -178,7 +178,8 @@
       "almostDone": "还有{remaining}个就完成了！你可以的！💪",
       "halfway": "已完成一半！保持势头。🚀",
       "gettingStarted": "每完成一个习惯都让你更接近最好的自己。✨",
-      "noHabits": "准备开始养成更好的习惯了吗？添加你的第一个！🌱"
+      "noHabits": "准备开始养成更好的习惯了吗？添加你的第一个！🌱",
+      "dismiss": "关闭"
     },
     "insight": {
       "title": "你的一周回顾",
@@ -388,7 +389,8 @@
       "celebration200": "200天。这已经不是习惯了——这就是你。",
       "celebration365": "整整一年。令人难以置信的毅力。",
       "nextMilestone": "再坚持 {days} 天就能达到 {milestone} 天里程碑！",
-      "noNextMilestone": "你已经超越了所有里程碑。继续前进！"
+      "noNextMilestone": "你已经超越了所有里程碑。继续前进！",
+      "dismiss": "关闭"
     }
   },
   "auth": {
