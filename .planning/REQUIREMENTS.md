@@ -65,10 +65,10 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 ### Savings Goals
 
 - [x] **GOAL-01**: User can create savings goals with target amount and optional deadline
-- [ ] **GOAL-02**: User can see visual progress toward each goal (progress bar/ring)
-- [ ] **GOAL-03**: User can track multiple goals simultaneously
+- [x] **GOAL-02**: User can see visual progress toward each goal (progress bar/ring)
+- [x] **GOAL-03**: User can track multiple goals simultaneously
 - [x] **GOAL-04**: Goals can be individual or shared with partner (household-scoped)
-- [ ] **GOAL-05**: App shows projected completion date based on current savings rate
+- [x] **GOAL-05**: App shows projected completion date based on current savings rate
 
 ### Net Worth
 
@@ -182,10 +182,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BILL-03 | Phase 22 | Complete |
 | BILL-04 | Phase 22 | Complete |
 | GOAL-01 | Phase 22 | Complete |
-| GOAL-02 | Phase 22 | Pending |
-| GOAL-03 | Phase 22 | Pending |
+| GOAL-02 | Phase 22 | Complete |
+| GOAL-03 | Phase 22 | Complete |
 | GOAL-04 | Phase 22 | Complete |
-| GOAL-05 | Phase 22 | Pending |
+| GOAL-05 | Phase 22 | Complete |
 | NTWT-01 | Phase 22 | Complete |
 | NTWT-02 | Phase 22 | Complete |
 | NTWT-03 | Phase 22 | Complete |

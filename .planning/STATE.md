@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 22 of 25 (Bills, Goals & Net Worth)
-Plan: 2 of 6 in current phase (COMPLETE)
-Status: Phase 22 plan 02 complete — bills API routes, SWR hook, sync pipeline integration
-Last activity: 2026-02-23 — Completed 22-02 (Bills CRUD API, Plaid recurring sync, net worth snapshots)
+Plan: 3 of 6 in current phase (COMPLETE)
+Status: Phase 22 plan 03 complete — goals, net worth, manual assets API routes + SWR hooks
+Last activity: 2026-02-23 — Completed 22-03 (Goals projections, net worth breakdown, manual assets CRUD)
 
 Progress: [████░░░░░░] 43% v4.0
 
@@ -56,6 +56,7 @@ Progress: [████░░░░░░] 43% v4.0
 - 21-05: 4min, 2 tasks, 5 files (gap closure)
 - 22-01: 5min, 2 tasks, 10 files
 - 22-02: 6min, 2 tasks, 5 files
+- 22-03: 7min, 2 tasks, 9 files
 
 ## Accumulated Context
 
@@ -137,6 +138,10 @@ Recent decisions affecting current work:
 - [22-02] Manual bills auto-set source='manual', user_status='confirmed' (user explicitly created them)
 - [22-02] Post-sync hooks: recurring bill detection + net worth snapshot in independent try/catch blocks
 - [22-02] Sync route uses adminClient for Vault access and cross-table bill upsert operations
+- [22-03] Goal projection uses 3-month rolling window of contributions for monthly savings rate
+- [22-03] Status color: green (on track), yellow (within 30d of deadline), red (>30d past deadline)
+- [22-03] Net worth change computed vs latest snapshot for simplicity
+- [22-03] Snapshot API pre-formats label field (MMM yyyy) for direct chart consumption
 
 ### Pending Todos
 
@@ -158,5 +163,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 22-02-PLAN.md (Bills API routes, SWR hook, sync pipeline integration)
-Resume: Execute 22-03-PLAN.md (Goals & net worth API routes)
+Stopped at: Completed 22-03-PLAN.md (Goals, net worth, manual assets API + SWR hooks)
+Resume: Execute 22-04-PLAN.md (Bills UI components)
