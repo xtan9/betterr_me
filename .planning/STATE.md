@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 21 of 25 (Budgets & Spending Analytics)
-Plan: 1 of 4 in current phase
-Status: Executing Phase 21 — Plan 01 complete
-Last activity: 2026-02-23 — Completed 21-01 (budget schema, BudgetsDB class, validation schemas)
+Plan: 2 of 4 in current phase
+Status: Executing Phase 21 — Plan 02 complete
+Last activity: 2026-02-23 — Completed 21-02 (budget API routes, SWR hooks, Recharts)
 
 Progress: [████░░░░░░] 35% v4.0
 
@@ -50,6 +50,7 @@ Progress: [████░░░░░░] 35% v4.0
 - 20-04: 6min, 2 tasks, 11 files
 - 20-05: 3min, 1 task (checkpoint pending), 3 files
 - 21-01: 5min, 2 tasks, 5 files
+- 21-02: 4min, 2 tasks, 8 files
 
 ## Accumulated Context
 
@@ -111,6 +112,10 @@ Recent decisions affecting current work:
 - [21-01] Spending aggregation filters amount_cents < 0 (negative = outflow), matching project sign convention
 - [21-01] Budget categories atomically replaced on update (delete + re-insert), same pattern as transaction splits
 - [21-01] Rollover can be negative (overspend debt carries forward to next month)
+- [21-02] Dual-mode analytics endpoint: month param for category breakdown, type=trends for multi-month
+- [21-02] Rollover route verifies rollover_enabled on source budget before computing
+- [21-02] Budget GET by ID delegates to getByMonth for full spending data (avoids logic duplication)
+- [21-02] SWR hooks derive isLoading from data/error shape (consistent with existing hooks)
 
 ### Pending Todos
 
@@ -132,5 +137,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 21-01-PLAN.md
-Resume: Continue with 21-02-PLAN.md (Budget API routes)
+Stopped at: Completed 21-02-PLAN.md
+Resume: Continue with 21-03-PLAN.md (Budget UI components)
