@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 
 ## Current Position
 
-Phase: 21 of 25 (Journal Entry CRUD)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-02-23 — Completed 21-01 (Editor UI primitives: Tiptap editor, bubble menu, mood selector, autosave hook)
+Phase: 21 of 25 (Journal Entry CRUD) -- COMPLETE
+Plan: 2 of 2 in current phase
+Status: Phase Complete
+Last activity: 2026-02-23 — Completed 21-02 (Entry modal + page route + 36 unit tests)
 
 Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [###░░░░░░░] 33% v4.0
 
@@ -56,6 +56,9 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - BubbleMenu imported from @tiptap/react/menus (v3 path, not @tiptap/react)
 - Autosave hook uses entryIdRef for POST-to-PATCH transition without stale closures
 - sendBeacon uses Blob with application/json content-type for beforeunload fallback
+- Mock JournalEditorLoader directly in modal tests (not Tiptap internals) for robust testing
+- Added common.cancel i18n key at root common namespace for reuse across components
+- Journal page follows kanban pattern: server component for auth, client component for interactive state
 
 ### Pending Todos
 
@@ -80,5 +83,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 21-01-PLAN.md (Editor UI primitives: Tiptap editor, bubble menu, mood selector, autosave)
-Resume: Ready to execute 21-02-PLAN.md (Entry modal + page route)
+Stopped at: Completed 21-02-PLAN.md (Entry modal + page route + 36 unit tests)
+Resume: Phase 21 complete. Ready for Phase 22 (Journal Views)
