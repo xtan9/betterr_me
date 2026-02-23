@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { Lightbulb } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,8 @@ import { JournalEditorSkeleton } from "./journal-editor-skeleton";
 import { JournalMoodSelector } from "./journal-mood-selector";
 import { JournalSaveStatus } from "./journal-save-status";
 import { JournalDeleteDialog } from "./journal-delete-dialog";
+import { PromptBrowserSheet } from "./prompt-browser-sheet";
+import { PromptBanner } from "./prompt-banner";
 import { useJournalEntry } from "@/lib/hooks/use-journal-entry";
 import { useJournalAutosave } from "@/lib/hooks/use-journal-autosave";
 
@@ -39,11 +42,20 @@ export function JournalEntryModal({
   const [isDirty, setIsDirty] = useState(false);
   const contentRef = useRef<Record<string, unknown> | null>(null);
   const [wordCount, setWordCount] = useState(0);
+  const [promptKey, setPromptKey] = useState<string | null>(null);
+  const [promptSheetOpen, setPromptSheetOpen] = useState(false);
+  const promptKeyRef = useRef<string | null>(null);
 
-  // Sync mood from loaded entry
+  // Keep promptKeyRef in sync to avoid stale closures
+  useEffect(() => {
+    promptKeyRef.current = promptKey;
+  }, [promptKey]);
+
+  // Sync mood and prompt from loaded entry
   useEffect(() => {
     if (entry) {
       setMood(entry.mood ?? null);
+      setPromptKey(entry.prompt_key ?? null);
     }
   }, [entry]);
 
@@ -51,6 +63,7 @@ export function JournalEntryModal({
   useEffect(() => {
     if (open) {
       setIsDirty(false);
+      setPromptKey(null);
     }
   }, [open, date]);
 
@@ -71,7 +84,7 @@ export function JournalEntryModal({
         setIsDirty(true);
       }
 
-      scheduleSave({ content: json, mood, word_count: wc });
+      scheduleSave({ content: json, mood, word_count: wc, prompt_key: promptKeyRef.current });
     },
     [isDirty, entry, mood, scheduleSave]
   );
@@ -85,12 +98,40 @@ export function JournalEntryModal({
           content: contentRef.current ?? entry?.content ?? null,
           mood: newMood,
           word_count: wordCount,
+          prompt_key: promptKeyRef.current,
         });
         if (!isDirty) setIsDirty(true);
       }
     },
     [isDirty, entry, scheduleSave, wordCount]
   );
+
+  const handlePromptSelect = useCallback(
+    (key: string) => {
+      setPromptKey(key);
+      setPromptSheetOpen(false);
+      if (!isDirty) setIsDirty(true);
+      scheduleSave({
+        content: contentRef.current ?? entry?.content ?? null,
+        mood,
+        word_count: wordCount,
+        prompt_key: key,
+      });
+    },
+    [isDirty, entry, scheduleSave, mood, wordCount]
+  );
+
+  const handlePromptDismiss = useCallback(() => {
+    setPromptKey(null);
+    if (isDirty || entry) {
+      scheduleSave({
+        content: contentRef.current ?? entry?.content ?? null,
+        mood,
+        word_count: wordCount,
+        prompt_key: null,
+      });
+    }
+  }, [isDirty, entry, scheduleSave, mood, wordCount]);
 
   const handleDelete = useCallback(async () => {
     if (!entry) return;
@@ -148,10 +189,25 @@ export function JournalEntryModal({
           </div>
         </DialogHeader>
 
-        {/* Mood selector */}
-        <div className="flex-shrink-0 py-2">
+        {/* Mood selector and prompt trigger */}
+        <div className="flex-shrink-0 py-2 flex items-center justify-between">
           <JournalMoodSelector value={mood} onChange={handleMoodChange} />
+          <button
+            type="button"
+            onClick={() => setPromptSheetOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Lightbulb className="size-3.5" />
+            {t("journal.prompts.trigger")}
+          </button>
         </div>
+
+        {/* Prompt banner */}
+        {promptKey && (
+          <div className="flex-shrink-0">
+            <PromptBanner promptKey={promptKey} onDismiss={handlePromptDismiss} />
+          </div>
+        )}
 
         {/* Editor area */}
         <div className="flex-1 overflow-y-auto min-h-0">
@@ -169,6 +225,14 @@ export function JournalEntryModal({
         <div className="flex-shrink-0 pt-2 border-t text-xs text-muted-foreground">
           {t("journal.wordCount", { count: wordCount })}
         </div>
+
+        {/* Prompt browser sheet */}
+        <PromptBrowserSheet
+          open={promptSheetOpen}
+          onOpenChange={setPromptSheetOpen}
+          onSelect={handlePromptSelect}
+          selectedKey={promptKey}
+        />
       </DialogContent>
     </Dialog>
   );
