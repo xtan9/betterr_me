@@ -111,12 +111,14 @@ Plans:
   3. Transactions arriving from Plaid are auto-categorized using PFCv2 categories; user can override any category and the correction auto-applies to future transactions from the same merchant
   4. User can create custom categories (shared across household), split a single transaction across multiple categories, and hide system default categories they do not use
   5. User can import transactions via CSV with column mapping and duplicate detection, and manually enter individual cash transactions
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 20-01: TBD
-- [ ] 20-02: TBD
-- [ ] 20-03: TBD
+- [ ] 20-01-PLAN.md — DB migration (categories/splits/merchant rules tables), DB classes, types, Zod schemas
+- [ ] 20-02-PLAN.md — API routes for categories, merchant rules, transaction detail/update, splits
+- [ ] 20-03-PLAN.md — Transaction list UI, search, filters, hooks, page route
+- [ ] 20-04-PLAN.md — Transaction detail, category override, split form, category manager, sync integration, i18n
+- [ ] 20-05-PLAN.md — Component tests, validation tests, human verification
 
 ### Phase 21: Budgets & Spending Analytics
 **Goal**: Users can set monthly spending limits per category and see where their money goes through visual charts
