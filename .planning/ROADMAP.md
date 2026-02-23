@@ -113,11 +113,11 @@ Plans:
   2. Clicking a calendar day with an entry navigates to view that entry; clicking a day without an entry opens the create form for that date
   3. Timeline feed displays past entries in reverse chronological order with mood, date, and content preview
   4. Sidebar contains a "Journal" navigation item (BookOpen icon) that links to `/journal` with proper active-state highlighting
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 23-01: TBD
-- [ ] 23-02: TBD
+- [ ] 23-01-PLAN.md — Calendar + timeline UI components, sidebar nav item, i18n strings
+- [ ] 23-02-PLAN.md — Page integration (Tabs, modal wiring, data refresh) + unit tests
 
 ### Phase 24: Dashboard & Cross-Feature Integration
 **Goal**: Journal is woven into the daily workflow through a dashboard widget, habit/task linking, historical reflections, and streak tracking
