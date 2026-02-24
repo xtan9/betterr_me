@@ -88,9 +88,9 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 
 ### Future-First Dashboard
 
-- [ ] **DASH-01**: Default money home view shows forward-looking financial picture
-- [ ] **DASH-02**: Dashboard shows available money until next paycheck
-- [ ] **DASH-03**: Dashboard shows upcoming bills for the next 30 days with total amounts
+- [x] **DASH-01**: Default money home view shows forward-looking financial picture
+- [x] **DASH-02**: Dashboard shows available money until next paycheck
+- [x] **DASH-03**: Dashboard shows upcoming bills for the next 30 days with total amounts
 - [x] **DASH-04**: Dashboard shows projected end-of-month balance at current spending pace
 - [x] **DASH-05**: Income patterns auto-detected from transaction history
 - [ ] **DASH-06**: Smart bill calendar with projected balance overlay and danger-zone highlighting
@@ -101,7 +101,7 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 - [x] **AIML-01**: App surfaces spending anomalies with context (e.g., "Groceries up 15% vs 3-month average")
 - [x] **AIML-02**: App detects subscription price increases and alerts user
 - [x] **AIML-03**: App shows progress toward goals with projected completion date
-- [ ] **AIML-04**: Insights are embedded in relevant pages (dashboard, budgets, bills, goals), not in a chatbot
+- [x] **AIML-04**: Insights are embedded in relevant pages (dashboard, budgets, bills, goals), not in a chatbot
 - [ ] **AIML-05**: Insights use anxiety-aware, progress-framing language consistent with Calm Finance
 
 ### Data Management
@@ -196,9 +196,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HOUS-05 | Phase 23 | Complete |
 | HOUS-06 | Phase 23 | Complete |
 | HOUS-07 | Phase 23 | Complete |
-| DASH-01 | Phase 24 | Pending |
-| DASH-02 | Phase 24 | Pending |
-| DASH-03 | Phase 24 | Pending |
+| DASH-01 | Phase 24 | Complete |
+| DASH-02 | Phase 24 | Complete |
+| DASH-03 | Phase 24 | Complete |
 | DASH-04 | Phase 24 | Complete |
 | DASH-05 | Phase 24 | Complete |
 | DASH-06 | Phase 24 | Pending |
@@ -206,7 +206,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AIML-01 | Phase 24 | Complete |
 | AIML-02 | Phase 24 | Complete |
 | AIML-03 | Phase 24 | Complete |
-| AIML-04 | Phase 24 | Pending |
+| AIML-04 | Phase 24 | Complete |
 | AIML-05 | Phase 24 | Pending |
 | MGMT-01 | Phase 25 | Pending |
 | MGMT-02 | Phase 25 | Pending |

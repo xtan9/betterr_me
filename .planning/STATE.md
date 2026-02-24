@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 24 of 25 (Future-First Dashboard & AI Insights)
-Plan: 1 of 5 in current phase (COMPLETE)
-Status: Plan 24-01 complete — computational core built (projections, income detection, insights)
-Last activity: 2026-02-24 — Completed 24-01 (Computational Core)
+Plan: 2 of 5 in current phase (COMPLETE)
+Status: Plan 24-02 complete — API routes and SWR hooks for dashboard, insights, income, and summary
+Last activity: 2026-02-24 — Completed 24-02 (API Routes & SWR Hooks)
 
 Progress: [████████░░] 75% v4.0
 
@@ -65,6 +65,7 @@ Progress: [████████░░] 75% v4.0
 - 23-03: 15min, 3 tasks, 34 files
 - 23-04: ~30min, 2 tasks (1 auto + 1 human-verify), 6 files
 - 24-01: 13min, 2 tasks, 12 files
+- 24-02: 4min, 2 tasks, 7 files
 
 ## Accumulated Context
 
@@ -185,6 +186,10 @@ Recent decisions affecting current work:
 - [24-01] Pure computation modules in lib/money/ with no DB imports — all inputs are typed function args
 - [24-01] Income detection confidence = 1 - (stddev / median), 0.7 threshold, frequency classification by interval range
 - [24-01] Insight IDs are period-scoped deterministic hashes: type:entity:period for dismiss tracking
+- [24-02] Dashboard endpoint aggregates all data server-side in parallel queries to avoid client waterfalls
+- [24-02] Summary endpoint fast-path returns has_accounts: false immediately when no accounts exist
+- [24-02] Income dismiss deletes pattern (absence of confirmation = not confirmed)
+- [24-02] useMoneySummary independent with shouldRetryOnError: false and 5-min refresh interval
 
 ### Pending Todos
 
@@ -206,5 +211,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 24-01-PLAN.md
-Resume: Continue with 24-02 (API routes for dashboard, insights, and income endpoints)
+Stopped at: Completed 24-02-PLAN.md
+Resume: Continue with 24-03 (Dashboard UI components)
