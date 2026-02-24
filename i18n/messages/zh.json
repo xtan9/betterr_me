@@ -855,6 +855,22 @@
     "timeline": "时间线",
     "loadMore": "加载更多",
     "noEntries": "还没有日记。开始写作，在这里查看你的记录。",
+    "links": {
+      "title": "关联项目",
+      "addLink": "关联习惯或任务",
+      "habits": "习惯",
+      "tasks": "任务",
+      "searchPlaceholder": "搜索习惯和任务...",
+      "noResults": "没有匹配的项目",
+      "deleted": "（已删除）"
+    },
+    "onThisDay": {
+      "title": "那年今日",
+      "empty": "坚持写日记，你很快就能在这里看到过去的回忆！",
+      "30_days_ago": "30 天前",
+      "90_days_ago": "90 天前",
+      "1_year_ago": "1 年前"
+    },
     "prompts": {
       "title": "Writing Prompts",
       "trigger": "Need inspiration?",

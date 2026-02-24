@@ -855,6 +855,22 @@
     "timeline": "Timeline",
     "loadMore": "Load More",
     "noEntries": "No journal entries yet. Start writing to see your history here.",
+    "links": {
+      "title": "Linked Items",
+      "addLink": "Link habit or task",
+      "habits": "Habits",
+      "tasks": "Tasks",
+      "searchPlaceholder": "Search habits and tasks...",
+      "noResults": "No matching items",
+      "deleted": "(deleted)"
+    },
+    "onThisDay": {
+      "title": "On This Day",
+      "empty": "Keep journaling -- you'll see reflections here soon!",
+      "30_days_ago": "30 days ago",
+      "90_days_ago": "90 days ago",
+      "1_year_ago": "1 year ago"
+    },
     "prompts": {
       "title": "Writing Prompts",
       "trigger": "Need inspiration?",
