@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import type { SavingsGoal, GoalContribution } from "@/lib/db/types";
+import type { SavingsGoal, GoalContribution, ViewMode } from "@/lib/db/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,11 +23,13 @@ interface GoalWithProjection extends SavingsGoal {
 /**
  * SWR hook for fetching all savings goals with projection data.
  * Uses keepPreviousData to prevent skeleton flash on refetch.
+ *
+ * @param view - Optional view mode for household filtering. Defaults to "mine".
  */
-export function useGoals() {
+export function useGoals(view: ViewMode = "mine") {
   const { data, error, mutate } = useSWR<{
     goals: GoalWithProjection[];
-  }>("/api/money/goals", fetcher, {
+  }>(`/api/money/goals?view=${view}`, fetcher, {
     keepPreviousData: true,
   });
 

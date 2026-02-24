@@ -2,7 +2,7 @@
 
 import useSWRInfinite from "swr/infinite";
 import { fetcher } from "@/lib/fetcher";
-import type { Transaction } from "@/lib/db/types";
+import type { Transaction, ViewMode } from "@/lib/db/types";
 
 const PAGE_SIZE = 50;
 
@@ -22,7 +22,11 @@ interface TransactionPage {
   hasMore: boolean;
 }
 
-export function useTransactions(filters: TransactionFilters) {
+/**
+ * @param filters - Transaction filter criteria
+ * @param view - Optional view mode for household filtering. Defaults to "mine".
+ */
+export function useTransactions(filters: TransactionFilters, view: ViewMode = "mine") {
   const getKey = (
     pageIndex: number,
     previousPageData: TransactionPage | null
@@ -34,21 +38,28 @@ export function useTransactions(filters: TransactionFilters) {
     Object.entries(filters).forEach(([key, value]) => {
       if (value) params.set(key, value);
     });
+    params.set("view", view);
     params.set("limit", String(PAGE_SIZE));
     params.set("offset", String(pageIndex * PAGE_SIZE));
     return `/api/money/transactions?${params.toString()}`;
   };
 
-  const { data, error, size, setSize, isLoading, isValidating, mutate } =
+  // Only destructure data, error, size, setSize, mutate — NOT isLoading or isValidating.
+  // SWR uses getter-based dependency tracking: accessing isLoading/isValidating
+  // registers them as dependencies, causing re-renders on every background
+  // revalidation cycle. By not accessing them, SWR skips those re-renders.
+  const { data, error, size, setSize, mutate } =
     useSWRInfinite<TransactionPage>(getKey, fetcher, {
-      keepPreviousData: true,
       revalidateFirstPage: false,
     });
 
   const transactions = data ? data.flatMap((page) => page.transactions) : [];
   const total = data?.[0]?.total ?? 0;
   const hasMore = transactions.length < total;
-  const isLoadingMore = isValidating && size > 1;
+  // Derive loading states from data shape instead of SWR flags.
+  const isLoading = !data && !error;
+  const isLoadingMore =
+    size > 0 && data ? typeof data[size - 1] === "undefined" : false;
 
   return {
     transactions,

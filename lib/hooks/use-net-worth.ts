@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import type { NetWorthSnapshot } from "@/lib/db/types";
+import type { NetWorthSnapshot, ViewMode } from "@/lib/db/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,10 +31,12 @@ interface SnapshotWithLabel extends NetWorthSnapshot {
 
 /**
  * SWR hook for fetching current net worth with asset/liability breakdown.
+ *
+ * @param view - Optional view mode for household filtering. Defaults to "mine".
  */
-export function useNetWorth() {
+export function useNetWorth(view: ViewMode = "mine") {
   const { data, error, mutate } = useSWR<NetWorthResponse>(
-    "/api/money/net-worth",
+    `/api/money/net-worth?view=${view}`,
     fetcher,
     { keepPreviousData: true }
   );
