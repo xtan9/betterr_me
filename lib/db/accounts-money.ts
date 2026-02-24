@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { MoneyAccount, MoneyAccountInsert } from "./types";
+import type {
+  MoneyAccount,
+  MoneyAccountInsert,
+  AccountVisibility,
+  ViewMode,
+} from "./types";
 
 /**
  * Database access class for accounts table (money accounts).
@@ -126,5 +131,80 @@ export class MoneyAccountsDB {
       mask: null,
       subtype: null,
     });
+  }
+
+  /**
+   * Get accounts for a household filtered by view mode.
+   * - 'mine': returns accounts owned by the user
+   * - 'household': returns accounts with visibility 'ours' or 'hidden'
+   */
+  async getByHouseholdFiltered(
+    householdId: string,
+    userId: string,
+    view: ViewMode
+  ): Promise<MoneyAccount[]> {
+    let query = this.supabase
+      .from("accounts")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("bank_connection_id", { ascending: true, nullsFirst: false })
+      .order("name", { ascending: true });
+
+    if (view === "mine") {
+      query = query.eq("owner_id", userId);
+    } else {
+      // household view: show accounts with visibility 'ours' or 'hidden'
+      query = query.in("visibility", ["ours", "hidden"]);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  /**
+   * Update account visibility.
+   * When changing from 'mine' to 'ours': sets shared_since and bulk-hides
+   * all existing transactions (historical transactions hidden by default).
+   * When changing from 'ours' to 'mine': clears shared_since.
+   */
+  async updateVisibility(
+    accountId: string,
+    visibility: AccountVisibility,
+    householdId: string
+  ): Promise<MoneyAccount> {
+    // Get current account to check current visibility
+    const current = await this.getById(accountId);
+    if (!current) throw new Error("Account not found");
+
+    const updateData: Record<string, unknown> = { visibility };
+
+    if (current.visibility === "mine" && visibility === "ours") {
+      // Sharing for the first time: set shared_since, hide historical transactions
+      updateData.shared_since = new Date().toISOString();
+
+      // Bulk-hide all existing transactions for this account
+      await this.supabase
+        .from("transactions")
+        .update({ is_hidden_from_household: true })
+        .eq("account_id", accountId)
+        .eq("household_id", householdId);
+    } else if (
+      (current.visibility === "ours" || current.visibility === "hidden") &&
+      visibility === "mine"
+    ) {
+      // Unsharing: clear shared_since
+      updateData.shared_since = null;
+    }
+
+    const { data, error } = await this.supabase
+      .from("accounts")
+      .update(updateData)
+      .eq("id", accountId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 }

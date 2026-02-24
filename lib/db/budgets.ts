@@ -4,6 +4,7 @@ import type {
   BudgetCategory,
   BudgetCategoryWithSpending,
   BudgetWithCategories,
+  ViewMode,
 } from "./types";
 
 /**
@@ -95,6 +96,173 @@ export class BudgetsDB {
       total_allocated_cents: totalAllocated,
       total_spent_cents: totalSpent,
     };
+  }
+
+  /**
+   * Get budget for a specific month filtered by view mode.
+   * - 'mine': budget where owner_id = userId AND is_shared = false
+   * - 'household': budget where is_shared = true
+   * For shared budgets, spending is computed from 'ours' accounts only.
+   */
+  async getByMonthFiltered(
+    householdId: string,
+    userId: string,
+    view: ViewMode,
+    month: string
+  ): Promise<BudgetWithCategories | null> {
+    let query = this.supabase
+      .from("budgets")
+      .select("*")
+      .eq("household_id", householdId)
+      .eq("month", month);
+
+    if (view === "mine") {
+      query = query.eq("owner_id", userId).eq("is_shared", false);
+    } else {
+      query = query.eq("is_shared", true);
+    }
+
+    const { data: budget, error: budgetError } = await query.single();
+
+    if (budgetError) {
+      if (budgetError.code === "PGRST116") return null;
+      throw budgetError;
+    }
+
+    // Fetch budget categories with joined category info
+    const { data: budgetCats, error: catError } = await this.supabase
+      .from("budget_categories")
+      .select("*, category:categories(name, icon, color)")
+      .eq("budget_id", budget.id);
+
+    if (catError) throw catError;
+
+    // Compute date range for this month
+    const monthDate = new Date(month + "T00:00:00");
+    const dateFrom = month;
+    const nextMonth = new Date(monthDate);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const dateTo = nextMonth.toISOString().split("T")[0];
+
+    // For shared budgets, compute spending from 'ours' accounts only
+    let spending: { category_id: string; total_cents: number }[];
+    if (view === "household") {
+      spending = await this.getSpendingByCategoryForShared(
+        householdId,
+        dateFrom,
+        dateTo
+      );
+    } else {
+      spending = await this.getSpendingByCategory(householdId, dateFrom, dateTo);
+    }
+
+    const spendingMap = new Map<string, number>();
+    for (const s of spending) {
+      spendingMap.set(s.category_id, s.total_cents);
+    }
+
+    const categories: BudgetCategoryWithSpending[] = (budgetCats || []).map(
+      (bc: BudgetCategory & { category: { name: string; icon: string | null; color: string | null } }) => ({
+        id: bc.id,
+        budget_id: bc.budget_id,
+        category_id: bc.category_id,
+        allocated_cents: bc.allocated_cents,
+        rollover_cents: bc.rollover_cents,
+        created_at: bc.created_at,
+        spent_cents: spendingMap.get(bc.category_id) || 0,
+        category_name: bc.category?.name || "Unknown",
+        category_icon: bc.category?.icon || null,
+        category_color: bc.category?.color || null,
+      })
+    );
+
+    const totalAllocated = categories.reduce(
+      (sum, c) => sum + c.allocated_cents,
+      0
+    );
+    const totalSpent = categories.reduce((sum, c) => sum + c.spent_cents, 0);
+
+    return {
+      ...budget,
+      categories,
+      total_allocated_cents: totalAllocated,
+      total_spent_cents: totalSpent,
+    };
+  }
+
+  /**
+   * Get spending by category from only 'ours' visibility accounts.
+   * Used for shared budget spending calculation.
+   */
+  private async getSpendingByCategoryForShared(
+    householdId: string,
+    dateFrom: string,
+    dateTo: string
+  ): Promise<{ category_id: string; total_cents: number }[]> {
+    // Get 'ours' account IDs
+    const { data: oursAccounts, error: accError } = await this.supabase
+      .from("accounts")
+      .select("id")
+      .eq("household_id", householdId)
+      .eq("visibility", "ours");
+
+    if (accError) throw accError;
+    const oursIds = (oursAccounts || []).map((a: { id: string }) => a.id);
+
+    if (oursIds.length === 0) return [];
+
+    // Fetch outflow transactions from 'ours' accounts only
+    const { data: transactions, error: txError } = await this.supabase
+      .from("transactions")
+      .select("id, amount_cents, category_id")
+      .eq("household_id", householdId)
+      .in("account_id", oursIds)
+      .gte("transaction_date", dateFrom)
+      .lt("transaction_date", dateTo)
+      .lt("amount_cents", 0);
+
+    if (txError) throw txError;
+    if (!transactions || transactions.length === 0) return [];
+
+    const txIds = transactions.map((t: { id: string }) => t.id);
+
+    const { data: splits, error: splitError } = await this.supabase
+      .from("transaction_splits")
+      .select("transaction_id, category_id, amount_cents")
+      .in("transaction_id", txIds);
+
+    if (splitError) throw splitError;
+
+    const splitTxIds = new Set(
+      (splits || []).map((s: { transaction_id: string }) => s.transaction_id)
+    );
+
+    const categoryTotals = new Map<string, number>();
+
+    for (const tx of transactions) {
+      if (splitTxIds.has(tx.id)) continue;
+      if (tx.category_id) {
+        const current = categoryTotals.get(tx.category_id) || 0;
+        categoryTotals.set(tx.category_id, current + Math.abs(tx.amount_cents));
+      }
+    }
+
+    for (const split of splits || []) {
+      if (split.category_id) {
+        const current = categoryTotals.get(split.category_id) || 0;
+        categoryTotals.set(
+          split.category_id,
+          current + Math.abs(split.amount_cents)
+        );
+      }
+    }
+
+    return Array.from(categoryTotals.entries()).map(
+      ([category_id, total_cents]) => ({
+        category_id,
+        total_cents,
+      })
+    );
   }
 
   /**

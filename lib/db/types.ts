@@ -385,6 +385,23 @@ export interface HouseholdMember {
   created_at: string;
 }
 
+export interface HouseholdMemberWithProfile extends HouseholdMember {
+  email: string;
+  full_name: string | null;
+  avatar_url: string | null;
+}
+
+export interface HouseholdInvitation {
+  id: string;
+  household_id: string;
+  invited_by: string;
+  email: string;
+  token: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  expires_at: string;
+  created_at: string;
+}
+
 // =============================================================================
 // BANK CONNECTIONS
 // =============================================================================
@@ -422,6 +439,9 @@ export type BankConnectionInsert = Omit<
  * Named MoneyAccount to avoid collision with JS global Account / auth Account.
  * Maps to the `accounts` table in the database.
  */
+export type AccountVisibility = "mine" | "ours" | "hidden";
+export type ViewMode = "mine" | "household";
+
 export interface MoneyAccount {
   id: string;
   household_id: string;
@@ -431,6 +451,9 @@ export interface MoneyAccount {
   balance_cents: number;
   currency: string;
   is_hidden: boolean;
+  owner_id: string | null;
+  visibility: AccountVisibility;
+  shared_since: string | null;
   plaid_account_id: string | null;
   official_name: string | null;
   mask: string | null;
@@ -462,6 +485,8 @@ export interface Transaction {
   notes: string | null;
   transaction_date: string;
   is_pending: boolean;
+  is_hidden_from_household: boolean;
+  is_shared_to_household: boolean;
   plaid_transaction_id: string | null;
   plaid_category_primary: string | null;
   plaid_category_detailed: string | null;
@@ -552,6 +577,8 @@ export interface Budget {
   month: string; // '2026-02-01'
   total_cents: number;
   rollover_enabled: boolean;
+  owner_id: string | null;
+  is_shared: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -636,6 +663,8 @@ export interface SavingsGoal {
   icon: string | null;
   color: string | null;
   status: GoalStatus;
+  owner_id: string | null;
+  is_shared: boolean;
   created_at: string;
   updated_at: string;
 }

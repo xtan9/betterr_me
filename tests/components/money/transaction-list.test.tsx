@@ -126,6 +126,8 @@ function makeTransaction(overrides: Partial<Transaction> = {}): Transaction {
     notes: null,
     transaction_date: "2026-02-22",
     is_pending: false,
+    is_hidden_from_household: false,
+    is_shared_to_household: false,
     plaid_transaction_id: null,
     plaid_category_primary: null,
     plaid_category_detailed: null,

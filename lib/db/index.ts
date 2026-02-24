@@ -8,7 +8,7 @@ export * from "./habit-logs";
 export * from "./habit-milestones";
 export * from "./insights";
 export * from "./recurring-tasks";
-export { resolveHousehold } from "./households";
+export { HouseholdsDB, resolveHousehold } from "./households";
 
 // Money tracking DB classes
 export { BankConnectionsDB } from "./bank-connections";

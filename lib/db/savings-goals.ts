@@ -5,6 +5,7 @@ import type {
   SavingsGoalUpdate,
   GoalContribution,
   GoalContributionInsert,
+  ViewMode,
 } from "./types";
 
 /**
@@ -25,6 +26,33 @@ export class SavingsGoalsDB {
       .eq("household_id", householdId)
       .order("created_at", { ascending: false });
 
+    if (error) throw error;
+    return data || [];
+  }
+
+  /**
+   * Get goals for a household filtered by view mode.
+   * - 'mine': goals where owner_id = userId AND is_shared = false
+   * - 'household': goals where is_shared = true
+   */
+  async getByHouseholdFiltered(
+    householdId: string,
+    userId: string,
+    view: ViewMode
+  ): Promise<SavingsGoal[]> {
+    let query = this.supabase
+      .from("savings_goals")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("created_at", { ascending: false });
+
+    if (view === "mine") {
+      query = query.eq("owner_id", userId).eq("is_shared", false);
+    } else {
+      query = query.eq("is_shared", true);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   }
