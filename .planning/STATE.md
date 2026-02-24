@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Journal — Phase 22 (Writing Prompts)
+**Current focus:** v4.0 Journal — Phase 23 (Journal Page & Navigation)
 
 ## Current Position
 
-Phase: 22 of 25 (Writing Prompts)
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase Complete
-Last activity: 2026-02-23 — Completed 22-02 (Prompt browser UI + modal integration)
+Phase: 23 of 25 (Journal Page & Navigation)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-02-23 — Completed 23-01 (Journal browsing UI components)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [#####░░░░░] 56% v4.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [######░░░░] 67% v4.0
 
 ## Performance Metrics
 
@@ -63,6 +63,8 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - Placeholder uses @apply text-muted-foreground/50 for consistent Tailwind theming
 - Used promptKeyRef pattern (same as contentRef) to avoid stale closures in scheduleSave callbacks
 - Sheet sidebar pattern for browsable prompt content with category Tabs
+- EntryMapContext pattern for passing entry data to custom DayContent without re-creating component reference
+- Ref-based SWR pagination (pagesRef Map + useMemo) to comply with React 19 set-state-in-effect lint rule
 
 ### Pending Todos
 
@@ -87,5 +89,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 22-02-PLAN.md (Prompt browser UI + modal integration)
-Resume: Phase 22 complete. Continue with Phase 23.
+Stopped at: Completed 23-01-PLAN.md (Journal browsing UI components)
+Resume: Continue with 23-02-PLAN.md (Journal page composition with Tabs and modal integration).
