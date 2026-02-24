@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 22 COMPLETE (Bills, Goals & Net Worth)
+**Current focus:** v4.0 Money Tracking — Phase 23 IN PROGRESS (Household & Couples)
 
 ## Current Position
 
-Phase: 22 of 25 (Bills, Goals & Net Worth) — COMPLETE
-Plan: 6 of 6 in current phase (COMPLETE)
-Status: Phase 22 complete — all bills, goals, and net worth features verified
-Last activity: 2026-02-24 — Completed 22-06 (Navigation, tests, human verification)
+Phase: 23 of 25 (Household & Couples)
+Plan: 1 of 4 in current phase (COMPLETE)
+Status: Plan 23-01 complete — schema, types, DB classes, validation schemas
+Last activity: 2026-02-24 — Completed 23-01 (Schema & DB Classes)
 
-Progress: [██████░░░░] 56% v4.0
+Progress: [██████░░░░] 60% v4.0
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [██████░░░░] 56% v4.0
 - 22-04: 6min, 2 tasks, 11 files
 - 22-05: 8min, 2 tasks, 9 files
 - 22-06: 3min, 3 tasks (2 auto + 1 checkpoint), 6 files
+- 23-01: 9min, 2 tasks, 10 files
 
 ## Accumulated Context
 
@@ -157,6 +158,12 @@ Recent decisions affecting current work:
 - [22-05] ManualAssetForm includes clarification text per research for user guidance
 - [22-06] Mock sub-components to isolate BillsList/GoalGrid/NetWorthChart tests from child concerns
 - [22-06] Combined all 7 Zod schemas into single bills-goals validation test file for cohesion
+- [23-01] ViewMode filter pattern: 'mine' = owner_id match, 'household' = visibility/is_shared match
+- [23-01] Historical transactions bulk-hidden when sharing account (is_hidden_from_household=true)
+- [23-01] AdminClient (service role) for merge/split operations crossing household boundaries
+- [23-01] Category merge uses case-insensitive name deduplication with FK reference remapping
+- [23-01] Shared budget spending computed exclusively from 'ours' visibility accounts
+- [23-01] Household view: 'ours' accounts (not hidden) + individually shared from 'mine' accounts
 
 ### Pending Todos
 
@@ -178,5 +185,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 22-06-PLAN.md (Phase 22 complete)
-Resume: Research and plan Phase 23 (Household & Couples)
+Stopped at: Completed 23-01-PLAN.md
+Resume: Execute 23-02-PLAN.md (API Routes)
