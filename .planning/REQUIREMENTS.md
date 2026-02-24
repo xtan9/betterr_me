@@ -23,7 +23,7 @@ Requirements for the Journal milestone. Each maps to roadmap phases.
 ### Browsing
 
 - [x] **BRWS-01**: User can view a calendar showing which days have journal entries (dot indicators)
-- [ ] **BRWS-02**: User can click a calendar day to view or create that day's entry
+- [x] **BRWS-02**: User can click a calendar day to view or create that day's entry
 - [x] **BRWS-03**: User can scroll a timeline feed of past entries chronologically
 - [x] **BRWS-04**: User can access journal via a sidebar navigation entry
 
@@ -79,7 +79,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PRMT-01 | Phase 22 | Complete |
 | PRMT-02 | Phase 22 | Complete |
 | BRWS-01 | Phase 23 | Complete |
-| BRWS-02 | Phase 23 | Pending |
+| BRWS-02 | Phase 23 | Complete |
 | BRWS-03 | Phase 23 | Complete |
 | BRWS-04 | Phase 23 | Complete |
 | INTG-01 | Phase 24 | Pending |

@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 ## Current Position
 
 Phase: 23 of 25 (Journal Page & Navigation)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-23 — Completed 23-01 (Journal browsing UI components)
+Plan: 2 of 2 in current phase
+Status: Phase Complete
+Last activity: 2026-02-23 — Completed 23-02 (Journal page composition with Tabs and modal integration)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [######░░░░] 67% v4.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [########░░] 78% v4.0
 
 ## Performance Metrics
 
@@ -65,6 +65,8 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - Sheet sidebar pattern for browsable prompt content with category Tabs
 - EntryMapContext pattern for passing entry data to custom DayContent without re-creating component reference
 - Ref-based SWR pagination (pagesRef Map + useMemo) to comply with React 19 set-state-in-effect lint rule
+- refreshKey counter pattern to invalidate sibling SWR caches from parent on modal close
+- userEvent required for Radix Tabs tests (fireEvent.click does not trigger pointer event chain)
 
 ### Pending Todos
 
@@ -89,5 +91,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 23-01-PLAN.md (Journal browsing UI components)
-Resume: Continue with 23-02-PLAN.md (Journal page composition with Tabs and modal integration).
+Stopped at: Completed 23-02-PLAN.md (Journal page composition with Tabs and modal integration)
+Resume: Phase 23 complete. Continue with Phase 24.
