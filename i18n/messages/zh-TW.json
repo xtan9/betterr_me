@@ -205,6 +205,22 @@
       "viewHabit": "查看習慣",
       "changeFrequency": "更改頻率",
       "dismiss": "關閉"
+    },
+    "journal": {
+      "title": "日記",
+      "startWriting": "開始寫作",
+      "viewEntry": "查看日記",
+      "prompt": "今天感覺怎麼樣？",
+      "streak": {
+        "count": "{count, plural, other {連續 # 天}}"
+      },
+      "onThisDay": {
+        "title": "那年今日",
+        "empty": "堅持寫日記，你很快就能在這裡看到過去的回憶！",
+        "30_days_ago": "30 天前",
+        "90_days_ago": "90 天前",
+        "1_year_ago": "1 年前"
+      }
     }
   },
   "habits": {

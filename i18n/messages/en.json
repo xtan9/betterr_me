@@ -205,6 +205,22 @@
       "viewHabit": "View habit",
       "changeFrequency": "Change frequency",
       "dismiss": "Dismiss"
+    },
+    "journal": {
+      "title": "Journal",
+      "startWriting": "Start writing",
+      "viewEntry": "View entry",
+      "prompt": "How are you feeling today?",
+      "streak": {
+        "count": "{count, plural, one {# day streak} other {# day streak}}"
+      },
+      "onThisDay": {
+        "title": "On This Day",
+        "empty": "Keep journaling -- you'll see reflections here soon!",
+        "30_days_ago": "30 days ago",
+        "90_days_ago": "90 days ago",
+        "1_year_ago": "1 year ago"
+      }
     }
   },
   "habits": {

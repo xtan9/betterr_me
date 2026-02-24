@@ -205,6 +205,22 @@
       "viewHabit": "查看习惯",
       "changeFrequency": "更改频率",
       "dismiss": "关闭"
+    },
+    "journal": {
+      "title": "日记",
+      "startWriting": "开始写作",
+      "viewEntry": "查看日记",
+      "prompt": "今天感觉怎么样？",
+      "streak": {
+        "count": "{count, plural, other {连续 # 天}}"
+      },
+      "onThisDay": {
+        "title": "那年今日",
+        "empty": "坚持写日记，你很快就能在这里看到过去的回忆！",
+        "30_days_ago": "30 天前",
+        "90_days_ago": "90 天前",
+        "1_year_ago": "1 年前"
+      }
     }
   },
   "habits": {
