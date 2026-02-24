@@ -233,5 +233,5 @@ Phases execute in numeric order: 18 -> 18.1 -> 19 -> 19.1 -> ... -> 25
 | 21. Budgets & Spending Analytics | 5/5 | Complete    | 2026-02-23 | - |
 | 22. Bills, Goals & Net Worth | 6/6 | Complete    | 2026-02-24 | - |
 | 23. Household & Couples | 4/4 | Complete    | 2026-02-24 | - |
-| 24. Future-First Dashboard & AI Insights | 5/5 | Complete | 2026-02-24 | - |
+| 24. Future-First Dashboard & AI Insights | 5/5 | Complete    | 2026-02-24 | - |
 | 25. Data Management & Polish | v4.0 | 0/? | Not started | - |
