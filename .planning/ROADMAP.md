@@ -167,12 +167,13 @@ Plans:
   3. Both partners can see a combined household view showing merged spending, budgets, net worth, and savings goals
   4. User can set each account as "mine", "ours", or "hidden" (balance-only) for privacy; partner respects these visibility settings
   5. Partner 1 can use the app solo from day one; Partner 2 joins asynchronously at any time
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 23-01: TBD
-- [ ] 23-02: TBD
-- [ ] 23-03: TBD
+- [ ] 23-01-PLAN.md — DB migration (invitations, visibility, ownership columns), HouseholdsDB class, extended DB classes, types, validation schemas
+- [ ] 23-02-PLAN.md — API routes for invite/accept/remove/leave, visibility endpoints, view-mode filtering on all money GET endpoints
+- [ ] 23-03-PLAN.md — UI: HouseholdViewTabs, household settings, invite dialog, members list, account visibility selector, wire tabs into money pages, i18n
+- [ ] 23-04-PLAN.md — Component tests, validation tests, API route tests, human verification
 
 ### Phase 24: Future-First Dashboard & AI Insights
 **Goal**: Users see a forward-looking financial picture with contextual, anxiety-aware insights embedded in the pages they already use
