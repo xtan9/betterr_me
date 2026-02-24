@@ -80,7 +80,9 @@ describe('POST /api/journal', () => {
     expect(response.status).toBe(401);
   });
 
-  it('should return 400 for invalid body (missing title)', async () => {
+  it('should succeed with default empty title when title omitted', async () => {
+    mockJournalDB.upsertEntry.mockResolvedValue(mockEntry);
+
     const request = new NextRequest('http://localhost:3000/api/journal', {
       method: 'POST',
       body: JSON.stringify({
@@ -89,10 +91,11 @@ describe('POST /api/journal', () => {
     });
 
     const response = await POST(request);
-    const data = await response.json();
 
-    expect(response.status).toBe(400);
-    expect(data.error).toBe('Validation failed');
+    expect(response.status).toBe(201);
+    expect(mockJournalDB.upsertEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '' })
+    );
   });
 
   it('should return 400 for invalid date format', async () => {
@@ -140,7 +143,7 @@ describe('POST /api/journal', () => {
     });
   });
 
-  it('should set default mood=3, word_count=0, tags=[]', async () => {
+  it('should set default mood=null, word_count=0, tags=[]', async () => {
     mockJournalDB.upsertEntry.mockResolvedValue(mockEntry);
 
     const request = new NextRequest('http://localhost:3000/api/journal', {
@@ -156,11 +159,31 @@ describe('POST /api/journal', () => {
 
     expect(mockJournalDB.upsertEntry).toHaveBeenCalledWith(
       expect.objectContaining({
-        mood: 3,
+        mood: null,
         word_count: 0,
         tags: [],
         prompt_key: null,
       })
+    );
+  });
+
+  it('should accept mood: null in POST body', async () => {
+    mockJournalDB.upsertEntry.mockResolvedValue({ ...mockEntry, mood: null });
+
+    const request = new NextRequest('http://localhost:3000/api/journal', {
+      method: 'POST',
+      body: JSON.stringify({
+        entry_date: '2026-02-22',
+        content: { type: 'doc', content: [] },
+        mood: null,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+
+    expect(mockJournalDB.upsertEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ mood: null })
     );
   });
 

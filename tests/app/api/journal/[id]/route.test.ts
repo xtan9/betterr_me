@@ -149,6 +149,26 @@ describe('PATCH /api/journal/[id]', () => {
     );
   });
 
+  it('should accept mood: null in PATCH body', async () => {
+    const updatedEntry = { ...mockEntry, mood: null };
+    mockJournalDB.updateEntry.mockResolvedValue(updatedEntry);
+
+    const request = new NextRequest('http://localhost:3000/api/journal/entry-123', {
+      method: 'PATCH',
+      body: JSON.stringify({ mood: null }),
+    });
+    const response = await PATCH(request, { params: makeParams('entry-123') });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.entry.mood).toBeNull();
+    expect(mockJournalDB.updateEntry).toHaveBeenCalledWith(
+      'entry-123',
+      'user-123',
+      { mood: null }
+    );
+  });
+
   it('should return 404 for PGRST116 error', async () => {
     mockJournalDB.updateEntry.mockRejectedValue({ code: 'PGRST116' });
 
