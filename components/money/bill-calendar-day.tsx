@@ -5,6 +5,27 @@ import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/money/arithmetic";
 import type { RecurringBill } from "@/lib/db/types";
 
+/**
+ * Format cents into an abbreviated display string for compact calendar cells.
+ * e.g., 210000 -> "$2.1k", 50000 -> "$500", -150000 -> "-$1.5k"
+ */
+function formatCompactMoney(cents: number): string {
+  const isNegative = cents < 0;
+  const absCents = Math.abs(cents);
+  const dollars = absCents / 100;
+
+  let formatted: string;
+  if (dollars >= 1000) {
+    const k = dollars / 1000;
+    // Show one decimal if not a whole number
+    formatted = k % 1 === 0 ? `$${k}k` : `$${k.toFixed(1)}k`;
+  } else {
+    formatted = `$${Math.round(dollars)}`;
+  }
+
+  return isNegative ? `-${formatted}` : formatted;
+}
+
 interface BillCalendarDayProps {
   date: Date;
   bills: RecurringBill[];
@@ -12,6 +33,10 @@ interface BillCalendarDayProps {
   isToday: boolean;
   isExpanded: boolean;
   onToggle: () => void;
+  /** Danger zone status from projected balance. Optional for backward compat. */
+  balanceStatus?: "safe" | "tight" | "danger";
+  /** Projected balance in cents. Optional for backward compat. */
+  projectedBalanceCents?: number;
 }
 
 export function BillCalendarDay({
@@ -21,6 +46,8 @@ export function BillCalendarDay({
   isToday,
   isExpanded,
   onToggle,
+  balanceStatus,
+  projectedBalanceCents,
 }: BillCalendarDayProps) {
   const dayNumber = format(date, "d");
   const hasBills = bills.length > 0;
@@ -33,7 +60,12 @@ export function BillCalendarDay({
           !isCurrentMonth && "opacity-40",
           isCurrentMonth && "hover:bg-accent/50",
           isToday && "ring-1 ring-[hsl(var(--money-sage))]",
-          isExpanded && "bg-accent"
+          isExpanded && "bg-accent",
+          // Danger zone shading from projected balance
+          balanceStatus === "tight" &&
+            "bg-[hsl(var(--money-amber-light))] border-l-2 border-l-[hsl(var(--money-amber))]",
+          balanceStatus === "danger" &&
+            "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-[hsl(var(--money-caution))]"
         )}
         onClick={onToggle}
         disabled={!hasBills}
@@ -71,6 +103,13 @@ export function BillCalendarDay({
               {bills.length} bills
             </span>
           </div>
+        )}
+
+        {/* Projected balance — compact display at bottom of day cell */}
+        {projectedBalanceCents !== undefined && (
+          <span className="mt-auto text-[10px] text-muted-foreground tabular-nums">
+            {formatCompactMoney(projectedBalanceCents)}
+          </span>
         )}
       </button>
 
