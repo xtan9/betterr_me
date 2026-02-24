@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 ## Current Position
 
 Phase: 24 of 26 (Dashboard Cross-Feature Integration)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In Progress
-Last activity: 2026-02-24 — Completed 24-01 (Journal API layer: today, on-this-day, links)
+Last activity: 2026-02-24 — Completed 24-02 (Dashboard journal widget UI)
 
 Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [#########░] 85% v4.0
 
@@ -73,6 +73,10 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - On This Day uses fixed lookback offsets: 30d, 90d, 1y (not sliding windows)
 - Link name enrichment uses batch queries by type to avoid N+1 pattern
 - Today endpoint returns subset of entry fields (no timestamps) for lightweight responses
+- Widget placed after habits/tasks grid as standalone section (not inside grid)
+- Mood emojis displayed as non-interactive visual cue in no-entry state
+- Streak milestones use Set for O(1) lookup with animate-pulse on Flame icon
+- JournalWidget loaded via next/dynamic consistent with other dashboard widgets
 
 ### Pending Todos
 
@@ -98,5 +102,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 24-01-PLAN.md (Journal API layer)
-Resume: Continue with Phase 24, Plan 02 (dashboard journal widget UI).
+Stopped at: Completed 24-02-PLAN.md (Dashboard journal widget)
+Resume: Continue with Phase 24, Plan 03 (journal page cross-feature integration).
