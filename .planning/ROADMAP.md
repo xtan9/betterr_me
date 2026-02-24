@@ -202,10 +202,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. User can export transactions as CSV with a selectable date range
   2. User can delete all their money data and household membership in a single action, with appropriate confirmation
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 25-01: TBD
+- [ ] 25-01-PLAN.md — CSV export utility, validation schemas, export API route, delete-data API route, tests
+- [ ] 25-02-PLAN.md — Export dialog, delete dialog, page wiring, i18n (3 locales), component tests, human verification
 
 ### Phase 26: CSV Import & Integration Polish
 **Goal**: Users can bulk-import transactions via CSV and all integration gaps from milestone audit are closed
