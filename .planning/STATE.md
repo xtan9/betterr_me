@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 23 IN PROGRESS (Household & Couples)
+**Current focus:** v4.0 Money Tracking — Phase 23 COMPLETE (Household & Couples), ready for Phase 24
 
 ## Current Position
 
-Phase: 23 of 25 (Household & Couples)
-Plan: 3 of 4 in current phase (COMPLETE)
-Status: Plan 23-03 complete — UI components, view tabs, invite flow, i18n
-Last activity: 2026-02-24 — Completed 23-03 (UI Components)
+Phase: 23 of 25 (Household & Couples) COMPLETE
+Plan: 4 of 4 in current phase (COMPLETE)
+Status: Phase 23 complete — all household features tested and human-verified
+Last activity: 2026-02-24 — Completed 23-04 (Tests & Verification)
 
-Progress: [██████░░░░] 60% v4.0
+Progress: [███████░░░] 70% v4.0
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: [██████░░░░] 60% v4.0
 - 23-01: 9min, 2 tasks, 10 files
 - 23-02: 11min, 3 tasks, 18 files
 - 23-03: 15min, 3 tasks, 34 files
+- 23-04: ~30min, 2 tasks (1 auto + 1 human-verify), 6 files
 
 ## Accumulated Context
 
@@ -176,6 +177,9 @@ Recent decisions affecting current work:
 - [23-03] Transaction redaction in UI: hide merchant/description, disable detail expansion
 - [23-03] NetWorthPageContent wrapper coordinates view across 3 independent sub-components
 - [23-03] Sidebar counts intentionally always 'mine' view (habits/tasks, not money)
+- [23-04] Mock sub-components to isolate household component tests (consistent with 20-05, 22-06 pattern)
+- [23-04] Combined all 3 household Zod schemas into single test file for cohesion
+- [23-04] RLS policy fix: household_members and profiles SELECT allow same-household member visibility
 
 ### Pending Todos
 
@@ -197,5 +201,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 23-03-PLAN.md
-Resume: Execute 23-04-PLAN.md (Testing)
+Stopped at: Completed 23-04-PLAN.md (Phase 23 complete)
+Resume: Phase 24 (Future-First Dashboard & AI Insights) needs research and planning
