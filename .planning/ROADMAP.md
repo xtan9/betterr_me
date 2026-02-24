@@ -54,6 +54,7 @@
 - [x] **Phase 21: Journal Entry CRUD** - Tiptap editor, mood selector, create/edit/delete entry flows (completed 2026-02-23)
 - [x] **Phase 22: Writing Prompts** - Prompt library with categories and free-form fallback (completed 2026-02-23)
 - [x] **Phase 23: Journal Page & Navigation** - Calendar view, timeline feed, sidebar nav entry (completed 2026-02-24)
+- [ ] **Phase 26: Fix Journal Entry Validation** - Fix Zod schema breaks (title required, mood null rejected) blocking all entry creation
 - [ ] **Phase 24: Dashboard & Cross-Feature Integration** - Quick-entry widget, habit/task linking, On This Day, streak
 - [ ] **Phase 25: i18n & Polish** - Full translation coverage and dark mode verification
 
@@ -119,9 +120,24 @@ Plans:
 - [ ] 23-01-PLAN.md — Calendar + timeline UI components, sidebar nav item, i18n strings
 - [ ] 23-02-PLAN.md — Page integration (Tabs, modal wiring, data refresh) + unit tests
 
+### Phase 26: Fix Journal Entry Validation
+**Goal**: Fix critical Zod validation breaks that prevent all journal entry creation and editing — title required but not sent, mood null rejected
+**Depends on**: Phase 23
+**Requirements**: ENTR-01, ENTR-02, ENTR-04, ENTR-05
+**Gap Closure:** Closes integration breaks from v4.0 audit
+**Success Criteria** (what must be TRUE):
+  1. Autosave POST to `/api/journal` succeeds without a title field (title defaults to empty string)
+  2. Autosave POST/PATCH to `/api/journal` succeeds when mood is null (mood accepts null or is stripped)
+  3. Creating a journal entry end-to-end works (write content → autosave fires → entry persists)
+  4. Editing an entry with no mood selected works without validation error
+**Plans**: TBD
+
+Plans:
+- [ ] 26-01: TBD
+
 ### Phase 24: Dashboard & Cross-Feature Integration
 **Goal**: Journal is woven into the daily workflow through a dashboard widget, habit/task linking, historical reflections, and streak tracking
-**Depends on**: Phase 23
+**Depends on**: Phase 26
 **Requirements**: INTG-01, INTG-02, INTG-03, INTG-04
 **Success Criteria** (what must be TRUE):
   1. Dashboard displays a journal widget that shows quick mood selector and "Write more..." link when no entry exists for today, or a summary with "View entry" link when one does
@@ -150,7 +166,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 20 -> 21 -> 22 -> 23 -> 24 -> 25
+Phases execute in order: 20 -> 21 -> 22 -> 23 -> 26 (fix) -> 24 -> 25
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -172,5 +188,6 @@ Phases execute in numeric order: 20 -> 21 -> 22 -> 23 -> 24 -> 25
 | 21. Journal Entry CRUD | 2/2 | Complete    | 2026-02-23 | - |
 | 22. Writing Prompts | 2/2 | Complete    | 2026-02-23 | - |
 | 23. Journal Page & Navigation | 2/2 | Complete    | 2026-02-24 | - |
+| 26. Fix Journal Entry Validation | v4.0 | 0/? | Not started | - |
 | 24. Dashboard & Cross-Feature Integration | v4.0 | 0/? | Not started | - |
 | 25. i18n & Polish | v4.0 | 0/? | Not started | - |
