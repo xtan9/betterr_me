@@ -14,11 +14,13 @@ const JournalEditor = dynamic(
 interface JournalEditorLoaderProps {
   content: Record<string, unknown> | null;
   onUpdate: (json: Record<string, unknown>, wordCount: number) => void;
+  placeholder?: string;
 }
 
 export function JournalEditorLoader({
   content,
   onUpdate,
+  placeholder,
 }: JournalEditorLoaderProps) {
-  return <JournalEditor content={content} onUpdate={onUpdate} />;
+  return <JournalEditor content={content} onUpdate={onUpdate} placeholder={placeholder} />;
 }

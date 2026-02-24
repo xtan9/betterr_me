@@ -239,6 +239,7 @@ export function JournalEntryModal({
             <JournalEditorLoader
               content={entry?.content ?? null}
               onUpdate={handleEditorUpdate}
+              placeholder={t("journal.editor.placeholder")}
             />
           )}
         </div>

@@ -26,7 +26,7 @@ export function JournalEditor({ content, onUpdate, placeholder }: JournalEditorP
       TaskItem.configure({ nested: true }),
       CharacterCount,
       Placeholder.configure({
-        placeholder: placeholder ?? "Start writing...",
+        placeholder: placeholder ?? "",
       }),
     ],
     content: content ?? undefined,
