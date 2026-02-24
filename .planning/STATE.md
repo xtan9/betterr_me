@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Journal — Phase 23 (Journal Page & Navigation)
+**Current focus:** v4.0 Journal — Phase 26 (Fix Journal Entry Validation)
 
 ## Current Position
 
-Phase: 23 of 25 (Journal Page & Navigation)
-Plan: 2 of 2 in current phase
+Phase: 26 of 26 (Fix Journal Entry Validation)
+Plan: 1 of 1 in current phase
 Status: Phase Complete
-Last activity: 2026-02-23 — Completed 23-02 (Journal page composition with Tabs and modal integration)
+Last activity: 2026-02-24 — Completed 26-01 (Fix journal entry validation bugs)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [########░░] 78% v4.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [#########░] 85% v4.0
 
 ## Performance Metrics
 
@@ -67,6 +67,8 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - Ref-based SWR pagination (pagesRef Map + useMemo) to comply with React 19 set-state-in-effect lint rule
 - refreshKey counter pattern to invalidate sibling SWR caches from parent on modal close
 - userEvent required for Radix Tabs tests (fireEvent.click does not trigger pointer event chain)
+- Used type assertion (as JournalEntryFormValues) to bridge Zod input/output type gap in validateRequestBody
+- moodDotColor returns muted fallback for null mood (consistent with existing no-match fallback)
 
 ### Pending Todos
 
@@ -78,6 +80,7 @@ None.
 - @dnd-kit/core v6 + React 19 peer dep mismatch requires pnpm config (cosmetic, works correctly)
 - v3.0 DB migrations must be applied to Supabase before features work in production
 - Quick task 2 migration (drop intention column) must be applied to Supabase
+- Phase 26 migration (make mood nullable) must be applied to Supabase
 
 ### Quick Tasks Completed
 
@@ -90,6 +93,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-23
-Stopped at: Completed 23-02-PLAN.md (Journal page composition with Tabs and modal integration)
-Resume: Phase 23 complete. Continue with Phase 24.
+Last session: 2026-02-24
+Stopped at: Completed 26-01-PLAN.md (Fix journal entry validation bugs)
+Resume: Phase 26 complete. Continue with Phase 24.
