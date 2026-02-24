@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 24 of 25 (Future-First Dashboard & AI Insights)
-Plan: 3 of 5 in current phase (COMPLETE)
-Status: Plan 24-03 complete — Forward-looking dashboard UI with hero row, bills, cash flow, income confirmation
-Last activity: 2026-02-24 — Completed 24-03 (Dashboard UI Components)
+Plan: 4 of 5 in current phase (COMPLETE)
+Status: Plan 24-04 complete — Smart calendar, insight cards, and money summary card on main dashboard
+Last activity: 2026-02-24 — Completed 24-04 (Insight Cards & Dashboard Integration)
 
 Progress: [████████░░] 75% v4.0
 
@@ -67,6 +67,7 @@ Progress: [████████░░] 75% v4.0
 - 24-01: 13min, 2 tasks, 12 files
 - 24-02: 4min, 2 tasks, 7 files
 - 24-03: 4min, 2 tasks, 7 files
+- 24-04: 5min, 2 tasks, 10 files
 
 ## Accumulated Context
 
@@ -196,6 +197,11 @@ Recent decisions affecting current work:
 - [24-03] Cash flow uses text trend (no chart) per Calm Finance simplicity principle
 - [24-03] Income confirmation shows top 1-2 highest confidence patterns only
 - [24-03] MoneyDashboard placeholder for InsightList (Plan 04 parallel wave-3 wires it)
+- [24-04] SmartBillCalendar reuses grid logic with balance overlay (progressive enhancement pattern)
+- [24-04] BillCalendarDay optional props for backward compatibility (balanceStatus, projectedBalanceCents)
+- [24-04] MoneySummaryCard returns null silently when loading/no accounts (never blocks dashboard)
+- [24-04] InsightCard uses i18n keys with data interpolation for all messages (no hardcoded English)
+- [24-04] Bills page fetches useDashboardMoney for smart calendar (SWR caching for efficiency)
 
 ### Pending Todos
 
@@ -217,5 +223,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 24-03-PLAN.md
-Resume: Continue with 24-04 (Insight Cards) and 24-05 (Tests & i18n)
+Stopped at: Completed 24-04-PLAN.md
+Resume: Continue with 24-05 (Tests & i18n)

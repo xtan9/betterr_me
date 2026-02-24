@@ -93,8 +93,8 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 - [x] **DASH-03**: Dashboard shows upcoming bills for the next 30 days with total amounts
 - [x] **DASH-04**: Dashboard shows projected end-of-month balance at current spending pace
 - [x] **DASH-05**: Income patterns auto-detected from transaction history
-- [ ] **DASH-06**: Smart bill calendar with projected balance overlay and danger-zone highlighting
-- [ ] **DASH-07**: Money summary card on existing BetterR.Me habit/task dashboard
+- [x] **DASH-06**: Smart bill calendar with projected balance overlay and danger-zone highlighting
+- [x] **DASH-07**: Money summary card on existing BetterR.Me habit/task dashboard
 
 ### AI Insights
 
@@ -102,7 +102,7 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 - [x] **AIML-02**: App detects subscription price increases and alerts user
 - [x] **AIML-03**: App shows progress toward goals with projected completion date
 - [x] **AIML-04**: Insights are embedded in relevant pages (dashboard, budgets, bills, goals), not in a chatbot
-- [ ] **AIML-05**: Insights use anxiety-aware, progress-framing language consistent with Calm Finance
+- [x] **AIML-05**: Insights use anxiety-aware, progress-framing language consistent with Calm Finance
 
 ### Data Management
 
@@ -201,13 +201,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-03 | Phase 24 | Complete |
 | DASH-04 | Phase 24 | Complete |
 | DASH-05 | Phase 24 | Complete |
-| DASH-06 | Phase 24 | Pending |
-| DASH-07 | Phase 24 | Pending |
+| DASH-06 | Phase 24 | Complete |
+| DASH-07 | Phase 24 | Complete |
 | AIML-01 | Phase 24 | Complete |
 | AIML-02 | Phase 24 | Complete |
 | AIML-03 | Phase 24 | Complete |
 | AIML-04 | Phase 24 | Complete |
-| AIML-05 | Phase 24 | Pending |
+| AIML-05 | Phase 24 | Complete |
 | MGMT-01 | Phase 25 | Pending |
 | MGMT-02 | Phase 25 | Pending |
 
