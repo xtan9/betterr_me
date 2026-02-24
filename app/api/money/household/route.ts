@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { resolveHousehold } from "@/lib/db/households";
+import { HouseholdsDB, resolveHousehold } from "@/lib/db/households";
 import { log } from "@/lib/logger";
 
 /**
  * GET /api/money/household
  * Resolve the authenticated user's household_id.
  * Auto-creates a household on first access (lazy creation).
+ * Returns members and pending invitations (owner only).
  */
 export async function GET() {
   try {
@@ -20,7 +21,25 @@ export async function GET() {
     }
 
     const householdId = await resolveHousehold(supabase, user.id);
-    return NextResponse.json({ household_id: householdId });
+    const householdsDB = new HouseholdsDB(supabase);
+
+    const [role, members] = await Promise.all([
+      householdsDB.getMemberRole(householdId, user.id),
+      householdsDB.getMembers(householdId),
+    ]);
+
+    // Only return invitations if user is owner
+    const invitations =
+      role === "owner"
+        ? await householdsDB.getInvitations(householdId)
+        : [];
+
+    return NextResponse.json({
+      household_id: householdId,
+      role,
+      members,
+      invitations,
+    });
   } catch (error) {
     log.error("GET /api/money/household error", error);
     return NextResponse.json(
