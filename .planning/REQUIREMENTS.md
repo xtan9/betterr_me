@@ -106,8 +106,8 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 
 ### Data Management
 
-- [ ] **MGMT-01**: User can export transactions as CSV with selectable date range
-- [ ] **MGMT-02**: User can delete their money data and household membership
+- [x] **MGMT-01**: User can export transactions as CSV with selectable date range
+- [x] **MGMT-02**: User can delete their money data and household membership
 
 ## v5 Requirements
 
@@ -208,8 +208,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AIML-03 | Phase 24 | Complete |
 | AIML-04 | Phase 24 | Complete |
 | AIML-05 | Phase 24 | Complete |
-| MGMT-01 | Phase 25 | Pending |
-| MGMT-02 | Phase 25 | Pending |
+| MGMT-01 | Phase 25 | Complete |
+| MGMT-02 | Phase 25 | Complete |
 
 **Coverage:**
 - v4.0 requirements: 66 total

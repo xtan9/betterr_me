@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 24 COMPLETE (Future-First Dashboard & AI Insights)
+**Current focus:** v4.0 Money Tracking — Phase 25 IN PROGRESS (Data Management & Polish)
 
 ## Current Position
 
-Phase: 24 of 25 (Future-First Dashboard & AI Insights)
-Plan: 5 of 5 in current phase (COMPLETE — Phase 24 done)
-Status: Phase 24 complete — All plans finished, human-verified
-Last activity: 2026-02-24 — Completed 24-05 (Tests, i18n & Human Verification)
+Phase: 25 of 25 (Data Management & Polish)
+Plan: 1 of 2 in current phase (25-01 complete)
+Status: Executing Phase 25 — Plan 01 complete, Plan 02 remaining
+Last activity: 2026-02-24 — Completed 25-01 (Data Management Backend)
 
-Progress: [█████████░] 88% v4.0
+Progress: [█████████░] 94% v4.0
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [█████████░] 88% v4.0
 - 24-03: 4min, 2 tasks, 7 files
 - 24-04: 5min, 2 tasks, 10 files
 - 24-05: 5min, 2 tasks (1 auto + 1 human-verify), 10 files
+- 25-01: 4min, 2 tasks, 6 files
 
 ## Accumulated Context
 
@@ -205,6 +206,10 @@ Recent decisions affecting current work:
 - [24-04] Bills page fetches useDashboardMoney for smart calendar (SWR caching for efficiency)
 - [24-05] Anxiety-aware i18n: progress framing ('up X% from average') instead of judgmental ('you overspent')
 - [24-05] Human verification confirmed all 12 checkpoint steps passed for Phase 24 feature set
+- [25-01] UTF-8 BOM prefix on CSV for Excel compatibility
+- [25-01] Export limited to 10000 transactions to prevent memory issues
+- [25-01] Delete endpoint gracefully handles Plaid revocation failures (log and continue)
+- [25-01] Solo vs multi-member delete: solo deletes household directly, multi-member leaves then deletes
 
 ### Pending Todos
 
@@ -226,5 +231,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 24-05-PLAN.md (Phase 24 complete)
-Resume: Continue with Phase 25 (Data Management & Polish)
+Stopped at: Completed 25-01-PLAN.md
+Resume: Continue with 25-02-PLAN.md (Data Management UI)
