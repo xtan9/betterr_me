@@ -38,13 +38,22 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-// SWR hook mock
+// SWR hook mock for useAccounts (connection detection)
 const { mockUseAccounts } = vi.hoisted(() => ({
   mockUseAccounts: vi.fn(),
 }));
 
 vi.mock("@/lib/hooks/use-accounts", () => ({
   useAccounts: mockUseAccounts,
+}));
+
+// Mock sub-components to isolate MoneyPageShell tests
+vi.mock("@/components/money/money-dashboard", () => ({
+  MoneyDashboard: ({ viewMode }: { viewMode: string }) => (
+    <div data-testid="money-dashboard" data-view-mode={viewMode}>
+      MoneyDashboard
+    </div>
+  ),
 }));
 
 describe("MoneyPageShell", () => {
@@ -66,7 +75,7 @@ describe("MoneyPageShell", () => {
     expect(screen.getByText("emptyState.heading")).toBeInTheDocument();
   });
 
-  it("renders net worth summary when accounts exist", () => {
+  it("renders MoneyDashboard when accounts exist", () => {
     mockUseAccounts.mockReturnValue({
       connections: [
         {
@@ -84,11 +93,11 @@ describe("MoneyPageShell", () => {
 
     render(<MoneyPageShell />);
 
-    expect(screen.getByText("accounts.netWorth")).toBeInTheDocument();
-    expect(screen.getByText("$5000.00")).toBeInTheDocument();
+    expect(screen.getByTestId("money-dashboard")).toBeInTheDocument();
+    expect(screen.getByText("MoneyDashboard")).toBeInTheDocument();
   });
 
-  it("renders Bills, Goals, and Net Worth navigation links", () => {
+  it("passes viewMode to MoneyDashboard", () => {
     mockUseAccounts.mockReturnValue({
       connections: [
         {
@@ -106,15 +115,11 @@ describe("MoneyPageShell", () => {
 
     render(<MoneyPageShell />);
 
-    // Bills, Goals, Net Worth links should be present
-    const billsLink = screen.getByText("bills.title").closest("a");
-    expect(billsLink).toHaveAttribute("href", "/money/bills");
-
-    const goalsLink = screen.getByText("goals.title").closest("a");
-    expect(goalsLink).toHaveAttribute("href", "/money/goals");
-
-    const netWorthLink = screen.getByText("netWorth.title").closest("a");
-    expect(netWorthLink).toHaveAttribute("href", "/money/net-worth");
+    // Default view mode is "mine"
+    expect(screen.getByTestId("money-dashboard")).toHaveAttribute(
+      "data-view-mode",
+      "mine"
+    );
   });
 
   it("renders loading state", () => {

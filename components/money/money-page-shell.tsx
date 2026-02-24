@@ -1,34 +1,29 @@
 "use client";
 
-import { useTranslations } from "next-intl";
-import Link from "next/link";
-import {
-  ArrowRight,
-  CalendarCheck,
-  PieChart,
-  Receipt,
-  Settings,
-  Target,
-  TrendingUp,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { useHousehold } from "@/lib/hooks/use-household";
-import { formatMoney } from "@/lib/money/arithmetic";
 import { AccountsEmptyState } from "@/components/money/accounts-empty-state";
 import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
+import { MoneyDashboard } from "@/components/money/money-dashboard";
 
 export function MoneyPageShell() {
-  const t = useTranslations("money");
   const { viewMode, setViewMode, isMultiMember } = useHousehold();
-  const { connections, netWorthCents, isLoading } = useAccounts(viewMode);
+  const { connections, isLoading } = useAccounts(viewMode);
 
   // Only show skeleton on initial load (no data yet)
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-28 w-full rounded-xl" />
+        {/* Hero skeleton */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl" />
+        </div>
+        {/* Bills skeleton */}
+        <Skeleton className="h-40 w-full rounded-xl" />
+        {/* Nav skeleton */}
         <div className="grid gap-3 sm:grid-cols-2">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
@@ -42,7 +37,7 @@ export function MoneyPageShell() {
     return <AccountsEmptyState />;
   }
 
-  // Quick summary linking to /money/accounts
+  // Connected users see the forward-looking dashboard
   return (
     <div className="space-y-4">
       {/* Mine/Household tabs */}
@@ -52,77 +47,8 @@ export function MoneyPageShell() {
         isMultiMember={isMultiMember}
       />
 
-      <div className="rounded-xl border border-money-border bg-money-surface p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">
-              {t("accounts.netWorth")}
-            </p>
-            <p className="text-2xl font-bold tabular-nums">
-              {formatMoney(netWorthCents)}
-            </p>
-          </div>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/money/accounts">
-              {t("accounts.title")}
-              <ArrowRight className="ml-1 size-3.5" />
-            </Link>
-          </Button>
-        </div>
-
-        <div className="mt-4 text-sm text-muted-foreground">
-          {connections.length}{" "}
-          {connections.length === 1
-            ? "connected account"
-            : "connected accounts"}
-        </div>
-      </div>
-
-      {/* Navigation links */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Button variant="outline" className="justify-start" asChild>
-          <Link href="/money/transactions">
-            <Receipt className="mr-2 size-4" />
-            {t("transactions.title")}
-            <ArrowRight className="ml-auto size-3.5" />
-          </Link>
-        </Button>
-        <Button variant="outline" className="justify-start" asChild>
-          <Link href="/money/budgets">
-            <PieChart className="mr-2 size-4" />
-            {t("budgets.title")}
-            <ArrowRight className="ml-auto size-3.5" />
-          </Link>
-        </Button>
-        <Button variant="outline" className="justify-start" asChild>
-          <Link href="/money/bills">
-            <CalendarCheck className="mr-2 size-4" />
-            {t("bills.title")}
-            <ArrowRight className="ml-auto size-3.5" />
-          </Link>
-        </Button>
-        <Button variant="outline" className="justify-start" asChild>
-          <Link href="/money/goals">
-            <Target className="mr-2 size-4" />
-            {t("goals.title")}
-            <ArrowRight className="ml-auto size-3.5" />
-          </Link>
-        </Button>
-        <Button variant="outline" className="justify-start" asChild>
-          <Link href="/money/net-worth">
-            <TrendingUp className="mr-2 size-4" />
-            {t("netWorth.title")}
-            <ArrowRight className="ml-auto size-3.5" />
-          </Link>
-        </Button>
-        <Button variant="outline" className="justify-start" asChild>
-          <Link href="/money/settings">
-            <Settings className="mr-2 size-4" />
-            {t("settings.title")}
-            <ArrowRight className="ml-auto size-3.5" />
-          </Link>
-        </Button>
-      </div>
+      {/* Dashboard handles its own data fetching via useDashboardMoney */}
+      <MoneyDashboard viewMode={viewMode} />
     </div>
   );
 }
