@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Journal — Phase 26 (Fix Journal Entry Validation)
+**Current focus:** v4.0 Journal — Phase 24 (Dashboard Cross-Feature Integration)
 
 ## Current Position
 
-Phase: 26 of 26 (Fix Journal Entry Validation)
-Plan: 1 of 1 in current phase
-Status: Phase Complete
-Last activity: 2026-02-24 — Completed 26-01 (Fix journal entry validation bugs)
+Phase: 24 of 26 (Dashboard Cross-Feature Integration)
+Plan: 1 of 3 in current phase
+Status: In Progress
+Last activity: 2026-02-24 — Completed 24-01 (Journal API layer: today, on-this-day, links)
 
 Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [#########░] 85% v4.0
 
@@ -69,6 +69,10 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - userEvent required for Radix Tabs tests (fireEvent.click does not trigger pointer event chain)
 - Used type assertion (as JournalEntryFormValues) to bridge Zod input/output type gap in validateRequestBody
 - moodDotColor returns muted fallback for null mood (consistent with existing no-match fallback)
+- Streak starts from yesterday if today has no entry (preserves count during the day)
+- On This Day uses fixed lookback offsets: 30d, 90d, 1y (not sliding windows)
+- Link name enrichment uses batch queries by type to avoid N+1 pattern
+- Today endpoint returns subset of entry fields (no timestamps) for lightweight responses
 
 ### Pending Todos
 
@@ -94,5 +98,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 26-01-PLAN.md (Fix journal entry validation bugs)
-Resume: Phase 26 complete. Continue with Phase 24.
+Stopped at: Completed 24-01-PLAN.md (Journal API layer)
+Resume: Continue with Phase 24, Plan 02 (dashboard journal widget UI).

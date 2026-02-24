@@ -29,10 +29,10 @@ Requirements for the Journal milestone. Each maps to roadmap phases.
 
 ### Integration
 
-- [ ] **INTG-01**: User can write a quick journal entry from a dashboard widget
-- [ ] **INTG-02**: User can optionally link a journal entry to specific habits or tasks
-- [ ] **INTG-03**: User can see "On This Day" past reflections for today's date
-- [ ] **INTG-04**: User can see a journal streak counter (consecutive days with entries)
+- [x] **INTG-01**: User can write a quick journal entry from a dashboard widget
+- [x] **INTG-02**: User can optionally link a journal entry to specific habits or tasks
+- [x] **INTG-03**: User can see "On This Day" past reflections for today's date
+- [x] **INTG-04**: User can see a journal streak counter (consecutive days with entries)
 
 ### i18n
 
@@ -82,10 +82,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BRWS-02 | Phase 23 | Complete |
 | BRWS-03 | Phase 23 | Complete |
 | BRWS-04 | Phase 23 | Complete |
-| INTG-01 | Phase 24 | Pending |
-| INTG-02 | Phase 24 | Pending |
-| INTG-03 | Phase 24 | Pending |
-| INTG-04 | Phase 24 | Pending |
+| INTG-01 | Phase 24 | Complete |
+| INTG-02 | Phase 24 | Complete |
+| INTG-03 | Phase 24 | Complete |
+| INTG-04 | Phase 24 | Complete |
 | I18N-01 | Phase 25 | Pending |
 | I18N-02 | Phase 25 | Pending |
 
