@@ -91,16 +91,16 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 - [ ] **DASH-01**: Default money home view shows forward-looking financial picture
 - [ ] **DASH-02**: Dashboard shows available money until next paycheck
 - [ ] **DASH-03**: Dashboard shows upcoming bills for the next 30 days with total amounts
-- [ ] **DASH-04**: Dashboard shows projected end-of-month balance at current spending pace
-- [ ] **DASH-05**: Income patterns auto-detected from transaction history
+- [x] **DASH-04**: Dashboard shows projected end-of-month balance at current spending pace
+- [x] **DASH-05**: Income patterns auto-detected from transaction history
 - [ ] **DASH-06**: Smart bill calendar with projected balance overlay and danger-zone highlighting
 - [ ] **DASH-07**: Money summary card on existing BetterR.Me habit/task dashboard
 
 ### AI Insights
 
-- [ ] **AIML-01**: App surfaces spending anomalies with context (e.g., "Groceries up 15% vs 3-month average")
-- [ ] **AIML-02**: App detects subscription price increases and alerts user
-- [ ] **AIML-03**: App shows progress toward goals with projected completion date
+- [x] **AIML-01**: App surfaces spending anomalies with context (e.g., "Groceries up 15% vs 3-month average")
+- [x] **AIML-02**: App detects subscription price increases and alerts user
+- [x] **AIML-03**: App shows progress toward goals with projected completion date
 - [ ] **AIML-04**: Insights are embedded in relevant pages (dashboard, budgets, bills, goals), not in a chatbot
 - [ ] **AIML-05**: Insights use anxiety-aware, progress-framing language consistent with Calm Finance
 
@@ -199,13 +199,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-01 | Phase 24 | Pending |
 | DASH-02 | Phase 24 | Pending |
 | DASH-03 | Phase 24 | Pending |
-| DASH-04 | Phase 24 | Pending |
-| DASH-05 | Phase 24 | Pending |
+| DASH-04 | Phase 24 | Complete |
+| DASH-05 | Phase 24 | Complete |
 | DASH-06 | Phase 24 | Pending |
 | DASH-07 | Phase 24 | Pending |
-| AIML-01 | Phase 24 | Pending |
-| AIML-02 | Phase 24 | Pending |
-| AIML-03 | Phase 24 | Pending |
+| AIML-01 | Phase 24 | Complete |
+| AIML-02 | Phase 24 | Complete |
+| AIML-03 | Phase 24 | Complete |
 | AIML-04 | Phase 24 | Pending |
 | AIML-05 | Phase 24 | Pending |
 | MGMT-01 | Phase 25 | Pending |
