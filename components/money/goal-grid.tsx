@@ -8,11 +8,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { GoalCard } from "@/components/money/goal-card";
 import { GoalForm } from "@/components/money/goal-form";
 import { useGoals } from "@/lib/hooks/use-goals";
+import { useHousehold } from "@/lib/hooks/use-household";
+import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
 import type { GoalWithProjection } from "@/components/money/goal-card";
 
 export function GoalGrid() {
   const t = useTranslations("money.goals");
-  const { goals, isLoading, mutate } = useGoals();
+  const { viewMode, setViewMode, isMultiMember } = useHousehold();
+  const { goals, isLoading, mutate } = useGoals(viewMode);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit" | "contribute">("create");
@@ -115,6 +118,13 @@ export function GoalGrid() {
 
   return (
     <>
+      {/* Mine/Household tabs */}
+      <HouseholdViewTabs
+        value={viewMode}
+        onValueChange={setViewMode}
+        isMultiMember={isMultiMember}
+      />
+
       {/* Create button */}
       <div className="flex justify-end">
         <Button onClick={handleCreate}>

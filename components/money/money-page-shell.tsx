@@ -14,12 +14,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccounts } from "@/lib/hooks/use-accounts";
+import { useHousehold } from "@/lib/hooks/use-household";
 import { formatMoney } from "@/lib/money/arithmetic";
 import { AccountsEmptyState } from "@/components/money/accounts-empty-state";
+import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
 
 export function MoneyPageShell() {
   const t = useTranslations("money");
-  const { connections, netWorthCents, isLoading } = useAccounts();
+  const { viewMode, setViewMode, isMultiMember } = useHousehold();
+  const { connections, netWorthCents, isLoading } = useAccounts(viewMode);
 
   // Only show skeleton on initial load (no data yet)
   if (isLoading) {
@@ -42,6 +45,13 @@ export function MoneyPageShell() {
   // Quick summary linking to /money/accounts
   return (
     <div className="space-y-4">
+      {/* Mine/Household tabs */}
+      <HouseholdViewTabs
+        value={viewMode}
+        onValueChange={setViewMode}
+        isMultiMember={isMultiMember}
+      />
+
       <div className="rounded-xl border border-money-border bg-money-surface p-6">
         <div className="flex items-center justify-between">
           <div>

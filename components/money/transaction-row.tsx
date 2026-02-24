@@ -10,6 +10,8 @@ interface TransactionRowProps {
   category?: Category | null;
   onClick?: () => void;
   isExpanded?: boolean;
+  /** When true, hide merchant/description (household view: category + amount only). */
+  redacted?: boolean;
 }
 
 export function TransactionRow({
@@ -17,6 +19,7 @@ export function TransactionRow({
   category,
   onClick,
   isExpanded,
+  redacted,
 }: TransactionRowProps) {
   const isIncome = transaction.amount_cents > 0;
   const formattedAmount = formatMoney(Math.abs(transaction.amount_cents));
@@ -26,17 +29,21 @@ export function TransactionRow({
     <button
       type="button"
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors duration-150 hover:bg-accent",
-        isExpanded && "bg-accent"
+        "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors duration-150",
+        !redacted && "hover:bg-accent",
+        isExpanded && "bg-accent",
+        redacted && "cursor-default"
       )}
       onClick={onClick}
     >
       {/* Left: Category badge + description */}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">
-          {transaction.merchant_name || transaction.description}
-        </p>
-        <div className="mt-0.5">
+        {!redacted && (
+          <p className="truncate text-sm font-medium">
+            {transaction.merchant_name || transaction.description}
+          </p>
+        )}
+        <div className={redacted ? "" : "mt-0.5"}>
           <CategoryBadge category={category ?? null} />
         </div>
       </div>

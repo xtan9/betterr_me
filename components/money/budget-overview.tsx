@@ -36,19 +36,22 @@ import { SpendingTrendBar } from "@/components/money/spending-trend-bar";
 import { CategoryDrillDown } from "@/components/money/category-drill-down";
 import { RolloverPrompt } from "@/components/money/rollover-prompt";
 import { useBudget } from "@/lib/hooks/use-budgets";
+import { useHousehold } from "@/lib/hooks/use-household";
 import { useSpendingTrends } from "@/lib/hooks/use-spending-analytics";
 import { formatMoney } from "@/lib/money/arithmetic";
+import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
 
 export function BudgetOverview() {
   const t = useTranslations("money.budgets");
+  const { viewMode, setViewMode, isMultiMember } = useHousehold();
   const [currentDate, setCurrentDate] = useState(() => startOfMonth(new Date()));
   const currentMonth = format(currentDate, "yyyy-MM");
 
-  const { budget, isLoading, mutate } = useBudget(currentMonth);
+  const { budget, isLoading, mutate } = useBudget(currentMonth, viewMode);
 
   // Also fetch previous month budget to check for rollover
   const previousMonth = format(subMonths(currentDate, 1), "yyyy-MM");
-  const { budget: previousBudget } = useBudget(previousMonth);
+  const { budget: previousBudget } = useBudget(previousMonth, viewMode);
 
   // Spending trends for bar chart
   const { trends } = useSpendingTrends(12);
@@ -131,6 +134,13 @@ export function BudgetOverview() {
 
   return (
     <div className="space-y-6">
+      {/* Mine/Household tabs */}
+      <HouseholdViewTabs
+        value={viewMode}
+        onValueChange={setViewMode}
+        isMultiMember={isMultiMember}
+      />
+
       {/* Month navigation */}
       <div className="flex items-center justify-center gap-4">
         <Button variant="ghost" size="icon" onClick={goToPreviousMonth}>

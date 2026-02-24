@@ -18,7 +18,7 @@ import { ManualAssetForm } from "@/components/money/manual-asset-form";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { useNetWorth } from "@/lib/hooks/use-net-worth";
 import { formatMoney } from "@/lib/money/arithmetic";
-import type { ManualAsset } from "@/lib/db/types";
+import type { ManualAsset, ViewMode } from "@/lib/db/types";
 
 // ---------------------------------------------------------------------------
 // Type icon mapping
@@ -63,10 +63,14 @@ interface AccountsByType {
 // Component
 // ---------------------------------------------------------------------------
 
-export function NetWorthAccounts() {
+interface NetWorthAccountsProps {
+  view?: ViewMode;
+}
+
+export function NetWorthAccounts({ view = "mine" }: NetWorthAccountsProps) {
   const t = useTranslations("money.netWorth");
-  const { connections, isLoading: accountsLoading } = useAccounts();
-  const { netWorth, isLoading: netWorthLoading, mutate } = useNetWorth();
+  const { connections, isLoading: accountsLoading } = useAccounts(view);
+  const { netWorth, isLoading: netWorthLoading, mutate } = useNetWorth(view);
 
   const [assetFormOpen, setAssetFormOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<ManualAsset | null>(null);

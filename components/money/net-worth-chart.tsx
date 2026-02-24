@@ -90,9 +90,16 @@ function CustomTooltip({
 // Component
 // ---------------------------------------------------------------------------
 
-export function NetWorthChart() {
+interface NetWorthChartProps {
+  /** Accepted for interface compatibility but snapshots are household-level. */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  view?: string;
+}
+
+export function NetWorthChart({}: NetWorthChartProps) {
   const t = useTranslations("money.netWorth");
   const [period, setPeriod] = useState<Period>("6M");
+  // Note: snapshots are household-level aggregates, not affected by view mode
   const { snapshots, isLoading } = useNetWorthHistory(period);
 
   // Check if we have assets/liabilities data

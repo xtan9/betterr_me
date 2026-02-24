@@ -8,11 +8,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTransactions } from "@/lib/hooks/use-transactions";
 import { useTransactionFilters } from "@/lib/hooks/use-transaction-filters";
 import { useCategories } from "@/lib/hooks/use-categories";
+import { useHousehold } from "@/lib/hooks/use-household";
 import { getLocalDateString } from "@/lib/utils";
 import { TransactionSearch } from "@/components/money/transaction-search";
 import { TransactionFilterBar } from "@/components/money/transaction-filter-bar";
 import { TransactionRow } from "@/components/money/transaction-row";
 import { TransactionDetail } from "@/components/money/transaction-detail";
+import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
 import type { Transaction, Category } from "@/lib/db/types";
 
 interface DateGroup {
@@ -79,12 +81,14 @@ function groupByDate(
 
 export function TransactionList() {
   const t = useTranslations("money");
+  const { viewMode, setViewMode, isMultiMember } = useHousehold();
   const { filters, activeFilterCount, setFilter, clearAll } =
     useTransactionFilters();
   const { transactions, total, hasMore, isLoading, isLoadingMore, loadMore, mutate } =
-    useTransactions(filters);
+    useTransactions(filters, viewMode);
   const { categories } = useCategories();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const isHouseholdView = viewMode === "household";
 
   // Handle Escape key to close expanded detail
   const handleKeyDown = useCallback(
@@ -142,6 +146,13 @@ export function TransactionList() {
 
   return (
     <div className="space-y-4">
+      {/* Mine/Household tabs */}
+      <HouseholdViewTabs
+        value={viewMode}
+        onValueChange={setViewMode}
+        isMultiMember={isMultiMember}
+      />
+
       {/* Search */}
       <TransactionSearch
         value={filters.search ?? ""}
@@ -205,18 +216,22 @@ export function TransactionList() {
                             ? categoryMap.get(tx.category_id)
                             : null
                         }
-                        isExpanded={tx.id === expandedId}
-                        onClick={() =>
-                          setExpandedId(
-                            tx.id === expandedId ? null : tx.id
-                          )
+                        isExpanded={!isHouseholdView && tx.id === expandedId}
+                        onClick={
+                          isHouseholdView
+                            ? undefined
+                            : () =>
+                                setExpandedId(
+                                  tx.id === expandedId ? null : tx.id
+                                )
                         }
+                        redacted={isHouseholdView}
                       />
-                      {tx.id === expandedId && (
+                      {!isHouseholdView && tx.id === expandedId && (
                         <TransactionDetail
                           transaction={tx}
                           categories={categories}
-                          onUpdate={() => mutate()}
+                          onUpdate={() => mutate(undefined, { revalidate: false })}
                           onClose={() => setExpandedId(null)}
                         />
                       )}
