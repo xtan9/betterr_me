@@ -80,10 +80,10 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 
 - [x] **HOUS-01**: User can invite a partner to join their household via email
 - [x] **HOUS-02**: Each partner has their own login and personal view
-- [ ] **HOUS-03**: Both partners can see a combined household spending view
+- [x] **HOUS-03**: Both partners can see a combined household spending view
 - [x] **HOUS-04**: User can set accounts as "mine", "ours", or "hidden" (balance-only) for privacy controls
 - [x] **HOUS-05**: Each partner can have individual budgets alongside shared household budgets
-- [ ] **HOUS-06**: Household view shows combined net worth, spending, and budgets
+- [x] **HOUS-06**: Household view shows combined net worth, spending, and budgets
 - [x] **HOUS-07**: Partner 1 can use the app solo; Partner 2 joins asynchronously without disruption
 
 ### Future-First Dashboard
@@ -191,10 +191,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NTWT-03 | Phase 22 | Complete |
 | HOUS-01 | Phase 23 | Complete |
 | HOUS-02 | Phase 23 | Complete |
-| HOUS-03 | Phase 23 | Pending |
+| HOUS-03 | Phase 23 | Complete |
 | HOUS-04 | Phase 23 | Complete |
 | HOUS-05 | Phase 23 | Complete |
-| HOUS-06 | Phase 23 | Pending |
+| HOUS-06 | Phase 23 | Complete |
 | HOUS-07 | Phase 23 | Complete |
 | DASH-01 | Phase 24 | Pending |
 | DASH-02 | Phase 24 | Pending |

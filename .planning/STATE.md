@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 23 of 25 (Household & Couples)
-Plan: 1 of 4 in current phase (COMPLETE)
-Status: Plan 23-01 complete — schema, types, DB classes, validation schemas
-Last activity: 2026-02-24 — Completed 23-01 (Schema & DB Classes)
+Plan: 2 of 4 in current phase (COMPLETE)
+Status: Plan 23-02 complete — API routes for invitation lifecycle, view-mode filtering
+Last activity: 2026-02-24 — Completed 23-02 (API Routes)
 
 Progress: [██████░░░░] 60% v4.0
 
@@ -61,6 +61,7 @@ Progress: [██████░░░░] 60% v4.0
 - 22-05: 8min, 2 tasks, 9 files
 - 22-06: 3min, 3 tasks (2 auto + 1 checkpoint), 6 files
 - 23-01: 9min, 2 tasks, 10 files
+- 23-02: 11min, 3 tasks, 18 files
 
 ## Accumulated Context
 
@@ -164,6 +165,10 @@ Recent decisions affecting current work:
 - [23-01] Category merge uses case-insensitive name deduplication with FK reference remapping
 - [23-01] Shared budget spending computed exclusively from 'ours' visibility accounts
 - [23-01] Household view: 'ours' accounts (not hidden) + individually shared from 'mine' accounts
+- [23-02] All money GET endpoints accept ?view=mine|household, default 'mine' for backward compat
+- [23-02] Transaction redaction: empty description, null merchant_name/notes in household view
+- [23-02] Owner-only writes: budget/goal mutation endpoints verify owner_id === userId (403 for non-creators)
+- [23-02] Net worth household = ALL accounts; analytics household = 'ours' accounts only
 
 ### Pending Todos
 
@@ -185,5 +190,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 23-01-PLAN.md
-Resume: Execute 23-02-PLAN.md (API Routes)
+Stopped at: Completed 23-02-PLAN.md
+Resume: Execute 23-03-PLAN.md (UI Components)
