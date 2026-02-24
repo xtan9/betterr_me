@@ -159,10 +159,10 @@ Plans:
   1. All journal UI strings (labels, buttons, placeholders, toasts, empty states) exist in en.json, zh.json, and zh-TW.json with no missing keys
   2. Writing prompts are available in all three locales with culturally appropriate translations
   3. All journal components render correctly in dark mode with no hardcoded colors or broken contrast
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 25-01: TBD
+- [ ] 25-01-PLAN.md — Translate prompt keys (zh/zh-TW), fix editor placeholder hardcoded string, add i18n key parity test
 
 ## Progress
 
@@ -191,4 +191,4 @@ Phases execute in order: 20 -> 21 -> 22 -> 23 -> 26 (fix) -> 24 -> 25
 | 23. Journal Page & Navigation | 2/2 | Complete    | 2026-02-24 | - |
 | 26. Fix Journal Entry Validation | 1/1 | Complete    | 2026-02-24 | - |
 | 24. Dashboard & Cross-Feature Integration | 3/3 | Complete    | 2026-02-24 | - |
-| 25. i18n & Polish | v4.0 | 0/? | Not started | - |
+| 25. i18n & Polish | v4.0 | 0/1 | Not started | - |
