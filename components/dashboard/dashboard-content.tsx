@@ -19,6 +19,11 @@ const HabitChecklist = dynamic(() =>
 const TasksToday = dynamic(() =>
   import("./tasks-today").then((m) => ({ default: m.TasksToday })),
 );
+const JournalWidget = dynamic(() =>
+  import("@/components/journal/journal-widget").then((m) => ({
+    default: m.JournalWidget,
+  })),
+);
 import { MotivationMessage } from "./motivation-message";
 import { WeeklyInsightCard } from "./weekly-insight-card";
 import type { WeeklyInsight } from "@/lib/db/insights";
@@ -500,6 +505,9 @@ export function DashboardContent({
           togglingTaskIds={togglingTaskIds}
         />
       </div>
+
+      {/* Journal Widget — self-contained with own SWR hook */}
+      <JournalWidget />
     </div>
   );
 }
