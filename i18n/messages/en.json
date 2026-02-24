@@ -871,6 +871,9 @@
       "90_days_ago": "90 days ago",
       "1_year_ago": "1 year ago"
     },
+    "editor": {
+      "placeholder": "Start writing..."
+    },
     "prompts": {
       "title": "Writing Prompts",
       "trigger": "Need inspiration?",

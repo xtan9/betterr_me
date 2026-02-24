@@ -871,29 +871,32 @@
       "90_days_ago": "90 天前",
       "1_year_ago": "1 年前"
     },
+    "editor": {
+      "placeholder": "開始寫作..."
+    },
     "prompts": {
-      "title": "Writing Prompts",
-      "trigger": "Need inspiration?",
+      "title": "寫作靈感",
+      "trigger": "需要靈感嗎？",
       "categories": {
-        "gratitude": "Gratitude",
-        "reflection": "Reflection",
-        "goals": "Goals"
+        "gratitude": "感恩",
+        "reflection": "反思",
+        "goals": "目標"
       },
-      "gratitude01": "What made you smile today?",
-      "gratitude02": "Name three things you're thankful for right now.",
-      "gratitude03": "Who is someone that made your day better?",
-      "gratitude04": "What's a simple pleasure you enjoyed today?",
-      "gratitude05": "What's something you often take for granted?",
-      "reflection01": "What's one thing you'd change about today?",
-      "reflection02": "What did you learn about yourself today?",
-      "reflection03": "What challenged you today and how did you handle it?",
-      "reflection04": "What emotion came up most today?",
-      "reflection05": "What would your future self thank you for doing today?",
-      "goals01": "What's one small step you can take toward a goal tomorrow?",
-      "goals02": "What's something you've been putting off? Why?",
-      "goals03": "Where do you want to be in 6 months?",
-      "goals04": "What skill do you want to develop next?",
-      "goals05": "What would make tomorrow a great day?"
+      "gratitude01": "今天有什麼讓你開心的事嗎？",
+      "gratitude02": "說出三件你現在感恩的事。",
+      "gratitude03": "今天誰讓你的生活變得更好了？",
+      "gratitude04": "今天你享受了哪些簡單的快樂？",
+      "gratitude05": "有什麼是你經常忽略但其實很珍貴的？",
+      "reflection01": "如果可以重來，今天你會改變什麼？",
+      "reflection02": "今天你對自己有了什麼新的認識？",
+      "reflection03": "今天遇到了什麼挑戰？你是怎麼應對的？",
+      "reflection04": "今天最常出現的情緒是什麼？",
+      "reflection05": "未來的你會感謝今天的你做了什麼？",
+      "goals01": "明天你可以為目標邁出哪一小步？",
+      "goals02": "有什麼事你一直在拖延？為什麼？",
+      "goals03": "六個月後你希望自己在哪裡？",
+      "goals04": "接下來你想培養什麼技能？",
+      "goals05": "怎樣才能讓明天成為美好的一天？"
     }
   }
 }
