@@ -7,7 +7,7 @@
 - ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
 - ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
 - ✅ **v3.0 Projects & Kanban** — Phases 13-17 (shipped 2026-02-21)
-- 🚧 **v4.0 Money Tracking** — Phases 18-25 (in progress)
+- 🚧 **v4.0 Money Tracking** — Phases 18-26 (in progress)
 
 ## Phases
 
@@ -62,6 +62,7 @@
 - [x] **Phase 23: Household & Couples** - Partner invitation, shared views, privacy controls, individual vs shared budgets/goals (completed 2026-02-24)
 - [x] **Phase 24: Future-First Dashboard & AI Insights** - Forward-looking dashboard, cash flow projections, income detection, contextual insights, money summary card (completed 2026-02-24)
 - [ ] **Phase 25: Data Management & Polish** - Transaction CSV export, money data deletion, final integration polish
+- [ ] **Phase 26: CSV Import & Integration Polish** - CSV file upload with column mapping, net worth snapshot wiring, Phase 20 verification
 
 ## Phase Details
 
@@ -206,6 +207,20 @@ Plans:
 Plans:
 - [ ] 25-01: TBD
 
+### Phase 26: CSV Import & Integration Polish
+**Goal**: Users can bulk-import transactions via CSV and all integration gaps from milestone audit are closed
+**Depends on**: Phase 20 (transaction infrastructure), Phase 22 (net worth snapshots)
+**Requirements**: TXNS-07
+**Gap Closure**: Closes gaps from v4.0 milestone audit
+**Success Criteria** (what must be TRUE):
+  1. User can upload a CSV file, map columns to transaction fields, preview rows, and import with duplicate detection
+  2. Manual asset creation/update triggers `NetWorthSnapshotsDB.upsert()` so net worth history stays current for non-Plaid users
+  3. Phase 20 VERIFICATION.md exists and confirms all Phase 20 requirements satisfied
+**Plans**: TBD
+
+Plans:
+- [ ] 26-01: TBD
+
 ## Progress
 
 **Execution Order:**
@@ -235,3 +250,4 @@ Phases execute in numeric order: 18 -> 18.1 -> 19 -> 19.1 -> ... -> 25
 | 23. Household & Couples | 4/4 | Complete    | 2026-02-24 | - |
 | 24. Future-First Dashboard & AI Insights | 5/5 | Complete    | 2026-02-24 | - |
 | 25. Data Management & Polish | v4.0 | 0/? | Not started | - |
+| 26. CSV Import & Integration Polish | v4.0 | 0/? | Not started | - |
