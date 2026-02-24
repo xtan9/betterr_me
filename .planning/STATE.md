@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 25 IN PROGRESS (Data Management & Polish)
+**Current focus:** v4.0 Money Tracking — Phase 25 COMPLETE (Data Management & Polish), Phase 26 remaining
 
 ## Current Position
 
-Phase: 25 of 25 (Data Management & Polish)
-Plan: 1 of 2 in current phase (25-01 complete)
-Status: Executing Phase 25 — Plan 01 complete, Plan 02 remaining
-Last activity: 2026-02-24 — Completed 25-01 (Data Management Backend)
+Phase: 25 of 26 (Data Management & Polish) -- COMPLETE
+Plan: 2 of 2 in current phase (25-01, 25-02 complete)
+Status: Phase 25 complete — Phase 26 (CSV Import & Integration Polish) remaining
+Last activity: 2026-02-24 — Completed 25-02 (Data Management UI)
 
-Progress: [█████████░] 94% v4.0
+Progress: [█████████░] 97% v4.0
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Progress: [█████████░] 94% v4.0
 - 24-04: 5min, 2 tasks, 10 files
 - 24-05: 5min, 2 tasks (1 auto + 1 human-verify), 10 files
 - 25-01: 4min, 2 tasks, 6 files
+- 25-02: 5min, 2 tasks (1 auto + 1 human-verify), 9 files
 
 ## Accumulated Context
 
@@ -210,6 +211,9 @@ Recent decisions affecting current work:
 - [25-01] Export limited to 10000 transactions to prevent memory issues
 - [25-01] Delete endpoint gracefully handles Plaid revocation failures (log and continue)
 - [25-01] Solo vs multi-member delete: solo deletes household directly, multi-member leaves then deletes
+- [25-02] Typed DELETE confirmation pattern for destructive data deletion (exact string match guard)
+- [25-02] Blob download via URL.createObjectURL + programmatic anchor click for CSV export
+- [25-02] Date inputs (type=date) for range selection instead of Calendar+Popover for simplicity
 
 ### Pending Todos
 
@@ -231,5 +235,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 25-01-PLAN.md
-Resume: Continue with 25-02-PLAN.md (Data Management UI)
+Stopped at: Completed 25-02-PLAN.md (Phase 25 complete)
+Resume: Continue with Phase 26 (CSV Import & Integration Polish)
