@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-21)
 ## Current Position
 
 Phase: 24 of 25 (Future-First Dashboard & AI Insights)
-Plan: 2 of 5 in current phase (COMPLETE)
-Status: Plan 24-02 complete — API routes and SWR hooks for dashboard, insights, income, and summary
-Last activity: 2026-02-24 — Completed 24-02 (API Routes & SWR Hooks)
+Plan: 3 of 5 in current phase (COMPLETE)
+Status: Plan 24-03 complete — Forward-looking dashboard UI with hero row, bills, cash flow, income confirmation
+Last activity: 2026-02-24 — Completed 24-03 (Dashboard UI Components)
 
 Progress: [████████░░] 75% v4.0
 
@@ -66,6 +66,7 @@ Progress: [████████░░] 75% v4.0
 - 23-04: ~30min, 2 tasks (1 auto + 1 human-verify), 6 files
 - 24-01: 13min, 2 tasks, 12 files
 - 24-02: 4min, 2 tasks, 7 files
+- 24-03: 4min, 2 tasks, 7 files
 
 ## Accumulated Context
 
@@ -190,6 +191,11 @@ Recent decisions affecting current work:
 - [24-02] Summary endpoint fast-path returns has_accounts: false immediately when no accounts exist
 - [24-02] Income dismiss deletes pattern (absence of confirmation = not confirmed)
 - [24-02] useMoneySummary independent with shouldRetryOnError: false and 5-min refresh interval
+- [24-03] Hero row: three equal-weight cards (available, bills, projected), no single dominant metric
+- [24-03] Upcoming bills shows max 7 soonest-first with overflow link to /money/bills
+- [24-03] Cash flow uses text trend (no chart) per Calm Finance simplicity principle
+- [24-03] Income confirmation shows top 1-2 highest confidence patterns only
+- [24-03] MoneyDashboard placeholder for InsightList (Plan 04 parallel wave-3 wires it)
 
 ### Pending Todos
 
@@ -211,5 +217,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 24-02-PLAN.md
-Resume: Continue with 24-03 (Dashboard UI components)
+Stopped at: Completed 24-03-PLAN.md
+Resume: Continue with 24-04 (Insight Cards) and 24-05 (Tests & i18n)
