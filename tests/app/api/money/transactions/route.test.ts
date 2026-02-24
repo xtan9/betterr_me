@@ -6,8 +6,8 @@ const { mockResolveHousehold } = vi.hoisted(() => ({
   mockResolveHousehold: vi.fn(),
 }));
 
-const { mockGetByHousehold, mockCreate } = vi.hoisted(() => ({
-  mockGetByHousehold: vi.fn(),
+const { mockGetByHouseholdFiltered, mockCreate } = vi.hoisted(() => ({
+  mockGetByHouseholdFiltered: vi.fn(),
   mockCreate: vi.fn(),
 }));
 
@@ -31,11 +31,12 @@ vi.mock("@/lib/db/households", () => ({
 
 vi.mock("@/lib/db", () => ({
   TransactionsDB: class {
-    getByHousehold = mockGetByHousehold;
+    getByHouseholdFiltered = mockGetByHouseholdFiltered;
     create = mockCreate;
   },
   MoneyAccountsDB: class {
     getById = mockGetById;
+    findOrCreateCash = vi.fn();
   },
 }));
 
@@ -90,7 +91,7 @@ describe("GET /api/money/transactions", () => {
         source: "plaid",
       },
     ];
-    mockGetByHousehold.mockResolvedValue({
+    mockGetByHouseholdFiltered.mockResolvedValue({
       transactions: mockTransactions,
       total: 2,
     });
@@ -109,7 +110,7 @@ describe("GET /api/money/transactions", () => {
   });
 
   it("should forward search param to TransactionsDB", async () => {
-    mockGetByHousehold.mockResolvedValue({
+    mockGetByHouseholdFiltered.mockResolvedValue({
       transactions: [],
       total: 0,
     });
@@ -122,14 +123,16 @@ describe("GET /api/money/transactions", () => {
 
     expect(response.status).toBe(200);
     expect(data.transactions).toEqual([]);
-    expect(mockGetByHousehold).toHaveBeenCalledWith(
+    expect(mockGetByHouseholdFiltered).toHaveBeenCalledWith(
       "household-abc",
+      "user-123",
+      "mine",
       expect.objectContaining({ search: "coffee" })
     );
   });
 
   it("should forward category_id filter to TransactionsDB", async () => {
-    mockGetByHousehold.mockResolvedValue({
+    mockGetByHouseholdFiltered.mockResolvedValue({
       transactions: [],
       total: 0,
     });
@@ -141,14 +144,16 @@ describe("GET /api/money/transactions", () => {
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    expect(mockGetByHousehold).toHaveBeenCalledWith(
+    expect(mockGetByHouseholdFiltered).toHaveBeenCalledWith(
       "household-abc",
+      "user-123",
+      "mine",
       expect.objectContaining({ categoryId: catId })
     );
   });
 
   it("should set hasMore true when more transactions exist", async () => {
-    mockGetByHousehold.mockResolvedValue({
+    mockGetByHouseholdFiltered.mockResolvedValue({
       transactions: [
         { id: "txn-1", description: "Item 1", amount_cents: -100 },
       ],

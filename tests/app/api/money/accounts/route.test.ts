@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET } from "@/app/api/money/accounts/route";
+import { NextRequest } from "next/server";
 
 const { mockResolveHousehold } = vi.hoisted(() => ({
   mockResolveHousehold: vi.fn(),
 }));
 
-const { mockGetByHouseholdConnections, mockGetByHouseholdAccounts } =
+const { mockGetByHouseholdConnections, mockGetByHouseholdFiltered } =
   vi.hoisted(() => ({
     mockGetByHouseholdConnections: vi.fn(),
-    mockGetByHouseholdAccounts: vi.fn(),
+    mockGetByHouseholdFiltered: vi.fn(),
   }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -30,7 +31,7 @@ vi.mock("@/lib/db", () => ({
     getByHousehold = mockGetByHouseholdConnections;
   },
   MoneyAccountsDB: class {
-    getByHousehold = mockGetByHouseholdAccounts;
+    getByHouseholdFiltered = mockGetByHouseholdFiltered;
   },
 }));
 
@@ -58,7 +59,10 @@ describe("GET /api/money/accounts", () => {
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
     } as any);
 
-    const response = await GET();
+    const request = new NextRequest(
+      "http://localhost:3000/api/money/accounts"
+    );
+    const response = await GET(request);
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -82,7 +86,7 @@ describe("GET /api/money/accounts", () => {
       },
     ]);
 
-    mockGetByHouseholdAccounts.mockResolvedValue([
+    mockGetByHouseholdFiltered.mockResolvedValue([
       {
         id: "acc-1",
         household_id: "household-abc",
@@ -105,7 +109,10 @@ describe("GET /api/money/accounts", () => {
       },
     ]);
 
-    const response = await GET();
+    const request = new NextRequest(
+      "http://localhost:3000/api/money/accounts"
+    );
+    const response = await GET(request);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -118,9 +125,12 @@ describe("GET /api/money/accounts", () => {
 
   it("should return empty connections when no bank connections exist", async () => {
     mockGetByHouseholdConnections.mockResolvedValue([]);
-    mockGetByHouseholdAccounts.mockResolvedValue([]);
+    mockGetByHouseholdFiltered.mockResolvedValue([]);
 
-    const response = await GET();
+    const request = new NextRequest(
+      "http://localhost:3000/api/money/accounts"
+    );
+    const response = await GET(request);
     const data = await response.json();
 
     expect(response.status).toBe(200);

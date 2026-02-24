@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveHousehold } from "@/lib/db/households";
 import { TransactionsDB, TransactionSplitsDB } from "@/lib/db";
 import { transactionUpdateSchema } from "@/lib/validations/money";
+import { transactionVisibilitySchema } from "@/lib/validations/household";
 import { log } from "@/lib/logger";
 
 /**
@@ -51,7 +52,7 @@ export async function GET(
 
 /**
  * PATCH /api/money/transactions/[id]
- * Update transaction fields (category_id, notes).
+ * Update transaction fields (category_id, notes) and/or household visibility flags.
  */
 export async function PATCH(
   request: NextRequest,
@@ -70,18 +71,44 @@ export async function PATCH(
     const { id } = await params;
 
     const body = await request.json();
-    const parsed = transactionUpdateSchema.safeParse(body);
 
-    if (!parsed.success) {
+    // Try both schemas - visibility fields and normal update fields
+    const visibilityParsed = transactionVisibilitySchema.safeParse(body);
+    const updateParsed = transactionUpdateSchema.safeParse(body);
+
+    // At least one must succeed
+    if (!visibilityParsed.success && !updateParsed.success) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten() },
+        {
+          error: "Validation failed",
+          details: updateParsed.error?.flatten(),
+        },
         { status: 400 }
       );
     }
 
     await resolveHousehold(supabase, user.id);
     const transactionsDB = new TransactionsDB(supabase);
-    const transaction = await transactionsDB.update(id, parsed.data);
+
+    let transaction;
+
+    // Apply visibility updates if present
+    const hasVisibility =
+      visibilityParsed.success &&
+      (visibilityParsed.data.is_hidden_from_household !== undefined ||
+        visibilityParsed.data.is_shared_to_household !== undefined);
+
+    if (hasVisibility) {
+      transaction = await transactionsDB.updateHouseholdVisibility(
+        id,
+        visibilityParsed.data
+      );
+    }
+
+    // Apply normal field updates if present
+    if (updateParsed.success) {
+      transaction = await transactionsDB.update(id, updateParsed.data);
+    }
 
     return NextResponse.json({ transaction });
   } catch (error) {
