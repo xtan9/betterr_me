@@ -36,6 +36,7 @@ export async function GET() {
 
     return NextResponse.json({
       household_id: householdId,
+      user_id: user.id,
       role,
       members,
       invitations,

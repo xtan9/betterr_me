@@ -90,3 +90,49 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * DELETE /api/money/household/invite?id=...
+ * Revoke a pending household invitation (owner only).
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const invitationId = request.nextUrl.searchParams.get("id");
+    if (!invitationId) {
+      return NextResponse.json(
+        { error: "Missing invitation id" },
+        { status: 400 }
+      );
+    }
+
+    const householdId = await resolveHousehold(supabase, user.id);
+    const householdsDB = new HouseholdsDB(supabase);
+
+    // Verify user is owner
+    const role = await householdsDB.getMemberRole(householdId, user.id);
+    if (role !== "owner") {
+      return NextResponse.json(
+        { error: "Only the household owner can revoke invitations" },
+        { status: 403 }
+      );
+    }
+
+    await householdsDB.revokeInvite(invitationId);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    log.error("DELETE /api/money/household/invite error", error);
+    return NextResponse.json(
+      { error: "Failed to revoke invitation" },
+      { status: 500 }
+    );
+  }
+}
