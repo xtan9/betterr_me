@@ -741,3 +741,90 @@ export type ManualAssetInsert = Omit<
 export type ManualAssetUpdate = Partial<
   Omit<ManualAsset, "id" | "household_id" | "created_at" | "updated_at">
 >;
+
+// =============================================================================
+// GOAL PROJECTIONS (consolidated from goal-card.tsx, use-goals.ts, goals/route.ts)
+// =============================================================================
+
+export type StatusColor = "green" | "yellow" | "red";
+
+export interface GoalWithProjection extends SavingsGoal {
+  projected_date: string | null;
+  monthly_rate_cents: number;
+  status_color: StatusColor;
+}
+
+// =============================================================================
+// DISMISSED INSIGHTS
+// =============================================================================
+
+export interface DismissedInsight {
+  id: string;
+  household_id: string;
+  insight_id: string;
+  dismissed_at: string;
+}
+
+// =============================================================================
+// CONFIRMED INCOME PATTERNS
+// =============================================================================
+
+export type IncomeFrequency = "WEEKLY" | "BIWEEKLY" | "SEMI_MONTHLY" | "MONTHLY";
+
+export interface ConfirmedIncomePattern {
+  id: string;
+  household_id: string;
+  merchant_name: string;
+  amount_cents: number;
+  frequency: IncomeFrequency;
+  next_expected_date: string;
+  confirmed_at: string;
+  needs_reconfirmation: boolean;
+}
+
+// =============================================================================
+// INSIGHTS (Phase 24 - Dashboard & AI)
+// =============================================================================
+
+export type InsightType =
+  | "spending_anomaly"
+  | "subscription_increase"
+  | "goal_progress"
+  | "low_balance_warning"
+  | "bill_upcoming";
+
+export type InsightPage = "dashboard" | "budgets" | "bills" | "goals";
+
+export type InsightSeverity = "info" | "attention" | "positive";
+
+export interface Insight {
+  id: string;
+  type: InsightType;
+  page: InsightPage;
+  severity: InsightSeverity;
+  data: Record<string, string | number>;
+}
+
+// =============================================================================
+// DETECTED INCOME (from income pattern detection algorithm)
+// =============================================================================
+
+export interface DetectedIncome {
+  merchant_name: string;
+  amount_cents: number;
+  frequency: string;
+  confidence: number;
+  last_occurrence: string;
+  next_predicted: string;
+}
+
+// =============================================================================
+// DAILY BALANCE (from cash flow projection)
+// =============================================================================
+
+export interface DailyBalance {
+  date: string;
+  projected_balance_cents: number;
+  has_income: boolean;
+  bill_total_cents: number;
+}

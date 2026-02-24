@@ -26,7 +26,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAccounts } from "@/lib/hooks/use-accounts";
 import { centsToDecimal } from "@/lib/money/arithmetic";
-import type { GoalWithProjection } from "@/components/money/goal-card";
+import type { GoalWithProjection } from "@/lib/db/types";
 
 // ---------------------------------------------------------------------------
 // Schemas

@@ -76,3 +76,18 @@ export const transactionSplitSchema = z.object({
     )
     .min(2, "At least 2 splits required"),
 });
+
+// =============================================================================
+// INCOME CONFIRMATION & INSIGHT DISMISS SCHEMAS (Phase 24)
+// =============================================================================
+
+export const incomeConfirmationSchema = z.object({
+  merchant_name: z.string().min(1, "Merchant name required"),
+  amount_cents: z.number().int(),
+  frequency: z.enum(["WEEKLY", "BIWEEKLY", "SEMI_MONTHLY", "MONTHLY"]),
+  next_expected_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+});
+
+export const insightDismissSchema = z.object({
+  insight_id: z.string().min(1, "Insight ID required"),
+});

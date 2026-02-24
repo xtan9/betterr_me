@@ -2,19 +2,7 @@
 
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import type { SavingsGoal, GoalContribution, ViewMode } from "@/lib/db/types";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type StatusColor = "green" | "yellow" | "red";
-
-interface GoalWithProjection extends SavingsGoal {
-  projected_date: string | null;
-  monthly_rate_cents: number;
-  status_color: StatusColor;
-}
+import type { GoalContribution, GoalWithProjection, ViewMode } from "@/lib/db/types";
 
 // ---------------------------------------------------------------------------
 // useGoals

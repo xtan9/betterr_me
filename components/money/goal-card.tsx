@@ -8,19 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BudgetRing } from "@/components/money/budget-ring";
 import { formatMoney } from "@/lib/money/arithmetic";
-import type { SavingsGoal } from "@/lib/db/types";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type StatusColor = "green" | "yellow" | "red";
-
-export interface GoalWithProjection extends SavingsGoal {
-  projected_date: string | null;
-  monthly_rate_cents: number;
-  status_color: StatusColor;
-}
+import type { GoalWithProjection, StatusColor } from "@/lib/db/types";
 
 interface GoalCardProps {
   goal: GoalWithProjection;

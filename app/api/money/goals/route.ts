@@ -6,19 +6,7 @@ import { goalCreateSchema } from "@/lib/validations/goals";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
 import { addMonths, differenceInDays } from "date-fns";
-import type { SavingsGoal, GoalContribution, ViewMode } from "@/lib/db/types";
-
-// ---------------------------------------------------------------------------
-// Projection helpers
-// ---------------------------------------------------------------------------
-
-type StatusColor = "green" | "yellow" | "red";
-
-interface GoalWithProjection extends SavingsGoal {
-  projected_date: string | null;
-  monthly_rate_cents: number;
-  status_color: StatusColor;
-}
+import type { SavingsGoal, GoalContribution, GoalWithProjection, ViewMode } from "@/lib/db/types";
 
 /**
  * Compute monthly savings rate from contributions over the last 3 months.

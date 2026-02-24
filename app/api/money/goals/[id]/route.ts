@@ -6,19 +6,7 @@ import { goalUpdateSchema } from "@/lib/validations/goals";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
 import { addMonths, differenceInDays } from "date-fns";
-import type { SavingsGoal, GoalContribution } from "@/lib/db/types";
-
-// ---------------------------------------------------------------------------
-// Projection helpers (same as goals/route.ts)
-// ---------------------------------------------------------------------------
-
-type StatusColor = "green" | "yellow" | "red";
-
-interface GoalWithProjection extends SavingsGoal {
-  projected_date: string | null;
-  monthly_rate_cents: number;
-  status_color: StatusColor;
-}
+import type { SavingsGoal, GoalContribution, GoalWithProjection } from "@/lib/db/types";
 
 function computeMonthlyRate(contributions: GoalContribution[]): number {
   if (contributions.length === 0) return 0;

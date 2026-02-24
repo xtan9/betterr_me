@@ -10,7 +10,7 @@ import { GoalForm } from "@/components/money/goal-form";
 import { useGoals } from "@/lib/hooks/use-goals";
 import { useHousehold } from "@/lib/hooks/use-household";
 import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
-import type { GoalWithProjection } from "@/components/money/goal-card";
+import type { GoalWithProjection } from "@/lib/db/types";
 
 export function GoalGrid() {
   const t = useTranslations("money.goals");
