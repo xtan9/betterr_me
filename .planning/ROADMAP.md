@@ -144,11 +144,12 @@ Plans:
   2. User can optionally link a journal entry to specific habits or tasks, and those links display as tags on the entry
   3. User can see "On This Day" past reflections showing entries from the same calendar date in previous periods (30 days ago, 1 year ago)
   4. Journal streak counter displays the number of consecutive days with journal entries
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 24-01: TBD
-- [ ] 24-02: TBD
+- [ ] 24-01-PLAN.md — API layer: today endpoint (entry+streak+on-this-day), link CRUD routes, streak utility, tests
+- [ ] 24-02-PLAN.md — Dashboard journal widget, streak badge, On This Day teaser, dashboard integration
+- [ ] 24-03-PLAN.md — Habit/task linking UI, On This Day full view on journal page, journal page integration
 
 ### Phase 25: i18n & Polish
 **Goal**: All journal UI and prompts are fully translated in three locales, dark mode renders correctly across all journal components
