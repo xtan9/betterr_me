@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GoalCard } from "@/components/money/goal-card";
 import { GoalForm } from "@/components/money/goal-form";
+import { InsightList } from "@/components/money/insight-list";
 import { useGoals } from "@/lib/hooks/use-goals";
 import { useHousehold } from "@/lib/hooks/use-household";
 import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
@@ -118,6 +119,9 @@ export function GoalGrid() {
 
   return (
     <>
+      {/* Goal progress insights (AIML-03) */}
+      <InsightList page="goals" className="mb-4" />
+
       {/* Mine/Household tabs */}
       <HouseholdViewTabs
         value={viewMode}

@@ -19,6 +19,7 @@ import { DashboardHero } from "@/components/money/dashboard-hero";
 import { UpcomingBillsList } from "@/components/money/upcoming-bills-list";
 import { CashFlowProjection } from "@/components/money/cash-flow-projection";
 import { IncomeConfirmation } from "@/components/money/income-confirmation";
+import { InsightList } from "@/components/money/insight-list";
 import type { ViewMode } from "@/lib/db/types";
 
 interface MoneyDashboardProps {
@@ -102,7 +103,8 @@ export function MoneyDashboard({ viewMode }: MoneyDashboardProps) {
         dailySpendingRateCents={dashboard.daily_spending_rate_cents}
       />
 
-      {/* 5. InsightList page="dashboard" — wired in Plan 04 */}
+      {/* 5. Contextual insights for the money dashboard */}
+      <InsightList page="dashboard" className="mb-4" />
 
       {/* 6. Quick nav links grid */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

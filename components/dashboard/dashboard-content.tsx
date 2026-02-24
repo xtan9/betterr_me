@@ -23,6 +23,7 @@ import { MotivationMessage } from "./motivation-message";
 import { WeeklyInsightCard } from "./weekly-insight-card";
 import type { WeeklyInsight } from "@/lib/db/insights";
 import { MilestoneCards } from "@/components/habits/milestone-card";
+import { MoneySummaryCard } from "@/components/dashboard/money-summary-card";
 import { AbsenceCard } from "./absence-card";
 import { toast } from "sonner";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
@@ -413,6 +414,9 @@ export function DashboardContent({
       {data.stats.total_habits > 0 && (
         <MotivationMessage stats={data.stats} topStreakHabit={topStreakHabit} />
       )}
+
+      {/* Money Summary — spending pulse, renders null if no accounts */}
+      <MoneySummaryCard />
 
       {/* Absence Recovery Cards — habits with missed scheduled days */}
       {absenceHabits.length > 0 && (

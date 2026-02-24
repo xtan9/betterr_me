@@ -40,6 +40,7 @@ import { useHousehold } from "@/lib/hooks/use-household";
 import { useSpendingTrends } from "@/lib/hooks/use-spending-analytics";
 import { formatMoney } from "@/lib/money/arithmetic";
 import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
+import { InsightList } from "@/components/money/insight-list";
 
 export function BudgetOverview() {
   const t = useTranslations("money.budgets");
@@ -134,6 +135,9 @@ export function BudgetOverview() {
 
   return (
     <div className="space-y-6">
+      {/* Spending anomaly insights (AIML-01) */}
+      <InsightList page="budgets" className="mb-4" />
+
       {/* Mine/Household tabs */}
       <HouseholdViewTabs
         value={viewMode}
