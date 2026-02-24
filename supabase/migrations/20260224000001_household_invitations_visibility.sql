@@ -65,6 +65,46 @@ CREATE POLICY "Household owners can update invitations"
   );
 
 -- =============================================================================
+-- UPDATE HOUSEHOLD MEMBERS RLS
+-- =============================================================================
+
+-- The original Phase 18 policy only allows users to see their OWN membership.
+-- For household features, users need to see ALL members of their household.
+DROP POLICY "Users can view their memberships" ON household_members;
+
+CREATE POLICY "Users can view household memberships"
+  ON household_members FOR SELECT
+  TO authenticated
+  USING (
+    household_id IN (
+      SELECT hm.household_id FROM household_members hm
+      WHERE hm.user_id = (SELECT auth.uid())
+    )
+  );
+
+-- =============================================================================
+-- UPDATE PROFILES RLS
+-- =============================================================================
+
+-- The original policy only allows users to see their OWN profile.
+-- For household features, users need to see profiles of household members.
+DROP POLICY "Users can view own profile" ON profiles;
+
+CREATE POLICY "Users can view own and household member profiles"
+  ON profiles FOR SELECT
+  TO authenticated
+  USING (
+    id = (SELECT auth.uid())
+    OR id IN (
+      SELECT hm.user_id FROM household_members hm
+      WHERE hm.household_id IN (
+        SELECT hm2.household_id FROM household_members hm2
+        WHERE hm2.user_id = (SELECT auth.uid())
+      )
+    )
+  );
+
+-- =============================================================================
 -- ACCOUNT VISIBILITY COLUMNS
 -- =============================================================================
 
