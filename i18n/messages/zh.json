@@ -8,6 +8,7 @@
       "habits": "习惯",
       "settings": "设置",
       "tasks": "任务",
+      "journal": "日记",
       "learnMore": "了解更多",
       "profile": "个人资料"
     },
@@ -834,6 +835,10 @@
     "pageTitle": "日记",
     "writeToday": "写今天的日记",
     "emptyState": "你的日记将显示在这里",
+    "calendar": "日历",
+    "timeline": "时间线",
+    "loadMore": "加载更多",
+    "noEntries": "还没有日记。开始写作，在这里查看你的记录。",
     "prompts": {
       "title": "Writing Prompts",
       "trigger": "Need inspiration?",

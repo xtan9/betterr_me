@@ -8,6 +8,7 @@
       "habits": "Habits",
       "settings": "Settings",
       "tasks": "Tasks",
+      "journal": "Journal",
       "learnMore": "Learn More",
       "profile": "Profile"
     },
@@ -834,6 +835,10 @@
     "pageTitle": "Journal",
     "writeToday": "Write Today",
     "emptyState": "Your journal entries will appear here",
+    "calendar": "Calendar",
+    "timeline": "Timeline",
+    "loadMore": "Load More",
+    "noEntries": "No journal entries yet. Start writing to see your history here.",
     "prompts": {
       "title": "Writing Prompts",
       "trigger": "Need inspiration?",

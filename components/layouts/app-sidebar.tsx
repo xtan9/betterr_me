@@ -7,6 +7,7 @@ import {
   Home,
   ClipboardList,
   ListChecks,
+  BookOpen,
   PanelLeftClose,
   PanelLeft,
 } from "lucide-react";
@@ -51,6 +52,12 @@ const mainNavItems = [
     icon: ListChecks,
     labelKey: "tasks",
     match: (p: string) => p.startsWith("/tasks"),
+  },
+  {
+    href: "/journal",
+    icon: BookOpen,
+    labelKey: "journal",
+    match: (p: string) => p.startsWith("/journal"),
   },
 ];
 

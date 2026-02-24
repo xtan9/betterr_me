@@ -8,6 +8,7 @@
       "habits": "習慣",
       "settings": "設定",
       "tasks": "任務",
+      "journal": "日記",
       "learnMore": "了解更多",
       "profile": "個人資料"
     },
@@ -834,6 +835,10 @@
     "pageTitle": "日記",
     "writeToday": "寫今天的日記",
     "emptyState": "你的日記將顯示在這裡",
+    "calendar": "日曆",
+    "timeline": "時間線",
+    "loadMore": "載入更多",
+    "noEntries": "還沒有日記。開始寫作，在這裡查看你的紀錄。",
     "prompts": {
       "title": "Writing Prompts",
       "trigger": "Need inspiration?",
