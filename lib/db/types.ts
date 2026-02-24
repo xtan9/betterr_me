@@ -384,7 +384,7 @@ export interface JournalEntry {
   entry_date: string; // DATE (YYYY-MM-DD)
   title: string;
   content: Record<string, unknown>; // Tiptap JSON
-  mood: number; // 1-5
+  mood: number | null; // 1-5 or null
   word_count: number;
   tags: string[]; // text[]
   prompt_key: string | null;
@@ -406,7 +406,7 @@ export type JournalEntryUpdate = Partial<
 /** Lightweight calendar view data */
 export interface JournalCalendarDay {
   entry_date: string;
-  mood: number;
+  mood: number | null;
   title: string;
 }
 

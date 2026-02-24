@@ -4,6 +4,7 @@ import { JournalEntriesDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { journalEntryFormSchema } from '@/lib/validations/journal';
+import type { JournalEntryFormValues } from '@/lib/validations/journal';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -95,19 +96,22 @@ export async function POST(request: NextRequest) {
     const validation = validateRequestBody(body, journalEntryFormSchema);
     if (!validation.success) return validation.response;
 
+    // Zod .default() guarantees all fields are present after safeParse
+    const parsed = validation.data as JournalEntryFormValues;
+
     // Ensure user profile exists (required by FK constraint)
     await ensureProfile(supabase, user);
 
     const journalDB = new JournalEntriesDB(supabase);
     const entry = await journalDB.upsertEntry({
       user_id: user.id,
-      entry_date: validation.data.entry_date,
-      title: validation.data.title,
-      content: validation.data.content ?? { type: 'doc', content: [] },
-      mood: validation.data.mood ?? 3,
-      word_count: validation.data.word_count ?? 0,
-      tags: validation.data.tags ?? [],
-      prompt_key: validation.data.prompt_key ?? null,
+      entry_date: parsed.entry_date,
+      title: parsed.title,
+      content: parsed.content,
+      mood: parsed.mood,
+      word_count: parsed.word_count,
+      tags: parsed.tags,
+      prompt_key: parsed.prompt_key ?? null,
     });
 
     return NextResponse.json({ entry }, { status: 201 });

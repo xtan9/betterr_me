@@ -7,10 +7,10 @@ export const journalEntryFormSchema = z.object({
   title: z
     .string()
     .trim()
-    .min(1, "Title is required")
-    .max(200, "Title must be 200 characters or less"),
+    .max(200, "Title must be 200 characters or less")
+    .default(""),
   content: z.record(z.unknown()).default({ type: "doc", content: [] }),
-  mood: z.number().int().min(1).max(5).default(3),
+  mood: z.number().int().min(1).max(5).nullable().default(null),
   word_count: z.number().int().min(0).default(0),
   tags: z.array(z.string().max(50)).max(20).default([]),
   prompt_key: z.string().max(100).nullable().optional(),

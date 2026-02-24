@@ -16,12 +16,13 @@ export const MOOD_COLORS: Record<number, string> = {
 };
 
 /** Returns the Tailwind bg class for a mood value, or a muted fallback. */
-export function moodDotColor(mood: number): string {
+export function moodDotColor(mood: number | null): string {
+  if (mood === null) return "bg-muted-foreground";
   return MOOD_COLORS[mood] ?? "bg-muted-foreground";
 }
 
 interface JournalMoodDotProps {
-  mood: number;
+  mood: number | null;
   className?: string;
 }
 
