@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Journal — Phase 24 (Dashboard Cross-Feature Integration)
+**Current focus:** v4.0 Journal — Phase 25 (i18n & Polish)
 
 ## Current Position
 
-Phase: 24 of 26 (Dashboard Cross-Feature Integration)
-Plan: 3 of 3 in current phase
+Phase: 25 of 26 (i18n & Polish)
+Plan: 1 of 1 in current phase
 Status: Phase Complete
-Last activity: 2026-02-24 — Completed 24-03 (Journal page cross-feature integration)
+Last activity: 2026-02-24 — Completed 25-01 (i18n translations & dark mode verification)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [#########░] 85% v4.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [##########] 92% v4.0
 
 ## Performance Metrics
 
@@ -82,6 +82,8 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - On This Day full view uses responsive card grid (1/2/3 columns)
 - Streak badge placed in PageHeader actions area alongside Write Today button
 - Links section only renders when entry has an ID (not shown for new unsaved entries)
+- Empty string fallback for editor placeholder instead of English text
+- i18n parity test checks both directions (en->zh and zh->en) to catch orphan keys
 
 ### Pending Todos
 
@@ -107,5 +109,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 24-03-PLAN.md (Journal page cross-feature integration)
-Resume: Phase 24 complete. Continue with Phase 25.
+Stopped at: Completed 25-01-PLAN.md (i18n translations & dark mode verification)
+Resume: Phase 25 complete. Continue with Phase 26.

@@ -36,8 +36,8 @@ Requirements for the Journal milestone. Each maps to roadmap phases.
 
 ### i18n
 
-- [ ] **I18N-01**: All journal UI strings translated in en, zh, zh-TW
-- [ ] **I18N-02**: Writing prompts available in all three locales
+- [x] **I18N-01**: All journal UI strings translated in en, zh, zh-TW
+- [x] **I18N-02**: Writing prompts available in all three locales
 
 ## Future Requirements
 
@@ -86,8 +86,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTG-02 | Phase 24 | Complete |
 | INTG-03 | Phase 24 | Complete |
 | INTG-04 | Phase 24 | Complete |
-| I18N-01 | Phase 25 | Pending |
-| I18N-02 | Phase 25 | Pending |
+| I18N-01 | Phase 25 | Complete |
+| I18N-02 | Phase 25 | Complete |
 
 **Coverage:**
 - v4.0 requirements: 17 total
