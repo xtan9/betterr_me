@@ -176,4 +176,56 @@ export class JournalEntriesDB {
     }
     return data || [];
   }
+
+  /**
+   * Lightweight query returning only entry_date values for streak computation.
+   * Fetches dates <= beforeDate, ordered DESC, limited.
+   */
+  async getRecentEntryDates(
+    userId: string,
+    beforeDate: string,
+    limit = 400
+  ): Promise<string[]> {
+    const { data, error } = await this.supabase
+      .from("journal_entries")
+      .select("entry_date")
+      .eq("user_id", userId)
+      .lte("entry_date", beforeDate)
+      .order("entry_date", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      log.error("JournalEntriesDB.getRecentEntryDates failed", error, {
+        beforeDate,
+      });
+      throw error;
+    }
+    return (data || []).map((row: { entry_date: string }) => row.entry_date);
+  }
+
+  /**
+   * Fetch full entries for specific dates (used by On This Day).
+   * Selects id, entry_date, mood, title, content, word_count.
+   */
+  async getEntriesForDates(
+    userId: string,
+    dates: string[]
+  ): Promise<JournalEntry[]> {
+    if (dates.length === 0) return [];
+
+    const { data, error } = await this.supabase
+      .from("journal_entries")
+      .select("id, entry_date, mood, title, content, word_count, user_id, tags, prompt_key, created_at, updated_at")
+      .eq("user_id", userId)
+      .in("entry_date", dates)
+      .order("entry_date", { ascending: false });
+
+    if (error) {
+      log.error("JournalEntriesDB.getEntriesForDates failed", error, {
+        dates,
+      });
+      throw error;
+    }
+    return data || [];
+  }
 }
