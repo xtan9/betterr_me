@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 22 in progress (Bills, Goals & Net Worth)
+**Current focus:** v4.0 Money Tracking — Phase 22 COMPLETE (Bills, Goals & Net Worth)
 
 ## Current Position
 
-Phase: 22 of 25 (Bills, Goals & Net Worth)
-Plan: 5 of 6 in current phase (COMPLETE)
-Status: Phase 22 plan 05 complete — goals card grid with progress rings, net worth dashboard with line chart
-Last activity: 2026-02-23 — Completed 22-05 (Goals UI + Net Worth UI)
+Phase: 22 of 25 (Bills, Goals & Net Worth) — COMPLETE
+Plan: 6 of 6 in current phase (COMPLETE)
+Status: Phase 22 complete — all bills, goals, and net worth features verified
+Last activity: 2026-02-24 — Completed 22-06 (Navigation, tests, human verification)
 
-Progress: [█████░░░░░] 49% v4.0
+Progress: [██████░░░░] 56% v4.0
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [█████░░░░░] 49% v4.0
 - 22-03: 7min, 2 tasks, 9 files
 - 22-04: 6min, 2 tasks, 11 files
 - 22-05: 8min, 2 tasks, 9 files
+- 22-06: 3min, 3 tasks (2 auto + 1 checkpoint), 6 files
 
 ## Accumulated Context
 
@@ -154,6 +155,8 @@ Recent decisions affecting current work:
 - [22-05] NetWorthChart default period 6M, period toggle as row of small buttons with active highlighting
 - [22-05] NetWorthAccounts groups by account_type (not Plaid subtype) for cleaner UI sections
 - [22-05] ManualAssetForm includes clarification text per research for user guidance
+- [22-06] Mock sub-components to isolate BillsList/GoalGrid/NetWorthChart tests from child concerns
+- [22-06] Combined all 7 Zod schemas into single bills-goals validation test file for cohesion
 
 ### Pending Todos
 
@@ -174,6 +177,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-23
-Stopped at: Completed 22-05-PLAN.md (Goals card grid + Net worth dashboard)
-Resume: Execute 22-06-PLAN.md (Phase 22 tests/verification)
+Last session: 2026-02-24
+Stopped at: Completed 22-06-PLAN.md (Phase 22 complete)
+Resume: Research and plan Phase 23 (Household & Couples)
