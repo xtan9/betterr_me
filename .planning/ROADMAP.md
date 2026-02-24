@@ -185,12 +185,14 @@ Plans:
   3. Smart bill calendar shows projected balance overlay with danger-zone highlighting for dates where balance may drop low
   4. Contextual insights appear on relevant pages (spending anomalies on budgets page, subscription price increases on bills page, goal progress on goals page) — no chatbot, embedded in UI
   5. Money summary card appears on the existing BetterR.Me habit/task dashboard, loading independently via its own SWR hook so habits/tasks are never blocked
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 24-01: TBD
-- [ ] 24-02: TBD
-- [ ] 24-03: TBD
+- [ ] 24-01-PLAN.md — DB migration (dismissed_insights, confirmed_income_patterns), pure computation functions (projections, income detection, insights)
+- [ ] 24-02-PLAN.md — API routes (dashboard, summary, insights, income) and SWR hooks
+- [ ] 24-03-PLAN.md — Dashboard UI (hero row, upcoming bills, cash flow projection, income confirmation, MoneyPageShell update)
+- [ ] 24-04-PLAN.md — Smart bill calendar with danger zones, insight cards on existing pages, money summary card on main dashboard
+- [ ] 24-05-PLAN.md — i18n (3 locales), unit/component tests, human verification
 
 ### Phase 25: Data Management & Polish
 **Goal**: Users can export and delete their money data, and the full money feature set works as a cohesive whole
