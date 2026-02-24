@@ -211,6 +211,7 @@
       "startWriting": "开始写作",
       "viewEntry": "查看日记",
       "prompt": "今天感觉怎么样？",
+      "fetchError": "加载数据失败",
       "streak": {
         "count": "{count, plural, other {连续 # 天}}"
       },
@@ -855,6 +856,8 @@
     "timeline": "时间线",
     "loadMore": "加载更多",
     "noEntries": "还没有日记。开始写作，在这里查看你的记录。",
+    "deleteError": "删除日记失败",
+    "fetchError": "加载数据失败",
     "links": {
       "title": "关联项目",
       "addLink": "关联习惯或任务",
@@ -862,7 +865,9 @@
       "tasks": "任务",
       "searchPlaceholder": "搜索习惯和任务...",
       "noResults": "没有匹配的项目",
-      "deleted": "（已删除）"
+      "deleted": "（已删除）",
+      "addError": "关联失败",
+      "removeError": "移除关联失败"
     },
     "onThisDay": {
       "title": "那年今日",

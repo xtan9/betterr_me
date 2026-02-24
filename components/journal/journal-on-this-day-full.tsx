@@ -7,16 +7,7 @@ import { fetcher } from "@/lib/fetcher";
 import { MOODS } from "@/components/journal/journal-mood-selector";
 import { getPreviewText } from "@/lib/journal/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-interface OnThisDayEntry {
-  id: string;
-  entry_date: string;
-  mood: number | null;
-  title: string;
-  content: Record<string, unknown>;
-  word_count: number;
-  period: string;
-}
+import type { MoodRating, OnThisDayEntry } from "@/lib/db/types";
 
 interface OnThisDayResponse {
   entries: OnThisDayEntry[];
@@ -26,7 +17,7 @@ interface JournalOnThisDayFullProps {
   date: string;
 }
 
-function getMoodEmoji(mood: number | null): string {
+function getMoodEmoji(mood: MoodRating | null): string {
   if (mood === null) return "";
   const found = MOODS.find((m) => m.value === mood);
   return found?.emoji ?? "";
@@ -35,7 +26,7 @@ function getMoodEmoji(mood: number | null): string {
 export function JournalOnThisDayFull({ date }: JournalOnThisDayFullProps) {
   const t = useTranslations("journal.onThisDay");
 
-  const { data, isLoading } = useSWR<OnThisDayResponse>(
+  const { data, error, isLoading } = useSWR<OnThisDayResponse>(
     `/api/journal/on-this-day?date=${date}`,
     fetcher,
     { keepPreviousData: true },
@@ -43,7 +34,7 @@ export function JournalOnThisDayFull({ date }: JournalOnThisDayFullProps) {
 
   const entries = data?.entries ?? [];
 
-  if (isLoading) {
+  if (isLoading || error) {
     return null;
   }
 

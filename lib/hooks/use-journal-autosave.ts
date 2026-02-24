@@ -48,7 +48,8 @@ export function useJournalAutosave(
         pendingRef.current = null;
         setSaveStatus("saved");
         return result.entry;
-      } catch {
+      } catch (error) {
+        console.error("Journal autosave failed", { entryId: entryIdRef.current, entryDate, error });
         setSaveStatus("error");
         return null;
       }
@@ -81,18 +82,20 @@ export function useJournalAutosave(
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (pendingRef.current) {
-        const currentId = entryIdRef.current;
-        const url = currentId
-          ? `/api/journal/${currentId}`
-          : "/api/journal";
-        const body = currentId
-          ? pendingRef.current
-          : { ...pendingRef.current, entry_date: entryDate };
-
-        navigator.sendBeacon(
-          url,
+        // sendBeacon always sends POST — use upsert endpoint for both new and existing
+        const body = { ...pendingRef.current, entry_date: entryDate };
+        const queued = navigator.sendBeacon(
+          "/api/journal",
           new Blob([JSON.stringify(body)], { type: "application/json" })
         );
+        if (!queued) {
+          fetch("/api/journal", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            keepalive: true,
+          }).catch(() => {});
+        }
       }
     };
 

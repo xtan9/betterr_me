@@ -62,8 +62,10 @@ export function computeStreak(entryDates: string[], today: string): number {
   return streak;
 }
 
+export type LookbackPeriod = "30_days_ago" | "90_days_ago" | "1_year_ago";
+
 export interface LookbackDate {
-  label: string;
+  label: LookbackPeriod;
   date: string;
 }
 
@@ -97,7 +99,7 @@ export function getLookbackDates(date: string): LookbackDate[] {
  * Used to tag On This Day entries with their lookback period.
  * Returns empty string if the entry doesn't match any lookback date.
  */
-export function getLookbackLabel(today: string, entryDate: string): string {
+export function getLookbackLabel(today: string, entryDate: string): LookbackPeriod | "" {
   const lookbacks = getLookbackDates(today);
   const match = lookbacks.find((lb) => lb.date === entryDate);
   return match?.label ?? "";

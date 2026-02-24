@@ -4,21 +4,13 @@ import { useTranslations } from "next-intl";
 import { CalendarHeart } from "lucide-react";
 import { MOODS } from "@/components/journal/journal-mood-selector";
 import { getPreviewText } from "@/lib/journal/utils";
-
-interface OnThisDayEntry {
-  id: string;
-  entry_date: string;
-  mood: number | null;
-  title: string;
-  content: Record<string, unknown>;
-  period: string;
-}
+import type { MoodRating, OnThisDayEntry } from "@/lib/db/types";
 
 interface JournalOnThisDayProps {
   entries: OnThisDayEntry[];
 }
 
-function getMoodEmoji(mood: number | null): string {
+function getMoodEmoji(mood: MoodRating | null): string {
   if (mood === null) return "";
   const found = MOODS.find((m) => m.value === mood);
   return found?.emoji ?? "";

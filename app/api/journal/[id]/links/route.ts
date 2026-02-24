@@ -26,6 +26,16 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Verify entry ownership
+    const journalDB = new JournalEntriesDB(supabase);
+    const ownerEntry = await journalDB.getEntry(id, user.id);
+    if (!ownerEntry) {
+      return NextResponse.json(
+        { error: "Journal entry not found" },
+        { status: 404 }
+      );
+    }
+
     const linksDB = new JournalEntryLinksDB(supabase);
     const rawLinks = await linksDB.getLinksForEntry(id);
 
@@ -44,30 +54,33 @@ export async function GET(
     const nameMap = new Map<string, string>();
 
     if (habitIds.length > 0) {
-      const { data: habits } = await supabase
+      const { data: habits, error: habitsError } = await supabase
         .from("habits")
         .select("id, name")
         .in("id", habitIds);
+      if (habitsError) log.warn("Failed to enrich habit names", { error: habitsError.message });
       for (const h of habits || []) {
         nameMap.set(h.id, h.name);
       }
     }
 
     if (taskIds.length > 0) {
-      const { data: tasks } = await supabase
+      const { data: tasks, error: tasksError } = await supabase
         .from("tasks")
         .select("id, title")
         .in("id", taskIds);
+      if (tasksError) log.warn("Failed to enrich task names", { error: tasksError.message });
       for (const t of tasks || []) {
         nameMap.set(t.id, t.title);
       }
     }
 
     if (projectIds.length > 0) {
-      const { data: projects } = await supabase
+      const { data: projects, error: projectsError } = await supabase
         .from("projects")
         .select("id, name")
         .in("id", projectIds);
+      if (projectsError) log.warn("Failed to enrich project names", { error: projectsError.message });
       for (const p of projects || []) {
         nameMap.set(p.id, p.name);
       }
@@ -163,6 +176,16 @@ export async function DELETE(
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Verify entry ownership
+    const journalDB = new JournalEntriesDB(supabase);
+    const ownerEntry = await journalDB.getEntry(id, user.id);
+    if (!ownerEntry) {
+      return NextResponse.json(
+        { error: "Journal entry not found" },
+        { status: 404 }
+      );
     }
 
     const linkId = request.nextUrl.searchParams.get("link_id");

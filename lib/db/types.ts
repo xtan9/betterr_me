@@ -378,13 +378,15 @@ export interface DashboardData {
 // JOURNAL ENTRIES
 // =============================================================================
 
+export type MoodRating = 1 | 2 | 3 | 4 | 5;
+
 export interface JournalEntry {
   id: string; // UUID
   user_id: string; // UUID
   entry_date: string; // DATE (YYYY-MM-DD)
   title: string;
   content: Record<string, unknown>; // Tiptap JSON
-  mood: number | null; // 1-5 or null
+  mood: MoodRating | null; // 1-5 or null
   word_count: number;
   tags: string[]; // text[]
   prompt_key: string | null;
@@ -406,8 +408,19 @@ export type JournalEntryUpdate = Partial<
 /** Lightweight calendar view data */
 export interface JournalCalendarDay {
   entry_date: string;
-  mood: number | null;
+  mood: MoodRating | null;
   title: string;
+}
+
+/** On This Day entry used by widget and full page */
+export interface OnThisDayEntry {
+  id: string;
+  entry_date: string;
+  mood: MoodRating | null;
+  title: string;
+  content: Record<string, unknown>;
+  word_count: number;
+  period: string;
 }
 
 // =============================================================================

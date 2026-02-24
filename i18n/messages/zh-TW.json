@@ -211,6 +211,7 @@
       "startWriting": "開始寫作",
       "viewEntry": "查看日記",
       "prompt": "今天感覺怎麼樣？",
+      "fetchError": "載入資料失敗",
       "streak": {
         "count": "{count, plural, other {連續 # 天}}"
       },
@@ -855,6 +856,8 @@
     "timeline": "時間線",
     "loadMore": "載入更多",
     "noEntries": "還沒有日記。開始寫作，在這裡查看你的紀錄。",
+    "deleteError": "刪除日記失敗",
+    "fetchError": "載入資料失敗",
     "links": {
       "title": "關聯項目",
       "addLink": "關聯習慣或任務",
@@ -862,7 +865,9 @@
       "tasks": "任務",
       "searchPlaceholder": "搜尋習慣和任務...",
       "noResults": "沒有符合的項目",
-      "deleted": "（已刪除）"
+      "deleted": "（已刪除）",
+      "addError": "關聯失敗",
+      "removeError": "移除關聯失敗"
     },
     "onThisDay": {
       "title": "那年今日",

@@ -3,23 +3,14 @@
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { getLocalDateString } from "@/lib/utils";
+import type { MoodRating, OnThisDayEntry } from "@/lib/db/types";
 
 interface JournalTodayEntry {
   id: string;
-  mood: number | null;
+  mood: MoodRating | null;
   title: string;
   content: Record<string, unknown>;
   word_count: number;
-}
-
-interface OnThisDayEntry {
-  id: string;
-  entry_date: string;
-  mood: number | null;
-  title: string;
-  content: Record<string, unknown>;
-  word_count: number;
-  period: string;
 }
 
 interface JournalTodayResponse {

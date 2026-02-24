@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Plus, Repeat, ListChecks, Search } from "lucide-react";
 import useSWR from "swr";
 import {
@@ -76,11 +77,12 @@ export function JournalLinkSelector({
         onLinkAdded();
         setOpen(false);
         setSearch("");
-      } catch {
-        // Error handled silently; user can retry
+      } catch (error) {
+        console.error("Failed to add journal link", error);
+        toast.error(t("addError"));
       }
     },
-    [entryId, onLinkAdded],
+    [entryId, onLinkAdded, t],
   );
 
   return (

@@ -211,6 +211,7 @@
       "startWriting": "Start writing",
       "viewEntry": "View entry",
       "prompt": "How are you feeling today?",
+      "fetchError": "Failed to load data",
       "streak": {
         "count": "{count, plural, one {# day streak} other {# day streak}}"
       },
@@ -855,6 +856,8 @@
     "timeline": "Timeline",
     "loadMore": "Load More",
     "noEntries": "No journal entries yet. Start writing to see your history here.",
+    "deleteError": "Failed to delete entry",
+    "fetchError": "Failed to load data",
     "links": {
       "title": "Linked Items",
       "addLink": "Link habit or task",
@@ -862,7 +865,9 @@
       "tasks": "Tasks",
       "searchPlaceholder": "Search habits and tasks...",
       "noResults": "No matching items",
-      "deleted": "(deleted)"
+      "deleted": "(deleted)",
+      "addError": "Failed to link item",
+      "removeError": "Failed to remove link"
     },
     "onThisDay": {
       "title": "On This Day",

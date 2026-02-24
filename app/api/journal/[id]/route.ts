@@ -52,8 +52,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const { id } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -80,6 +80,7 @@ export async function PATCH(
       'code' in error &&
       error.code === 'PGRST116'
     ) {
+      log.warn("PATCH /api/journal/[id]: entry not found", { entryId: id });
       return NextResponse.json(
         { error: 'Journal entry not found' },
         { status: 404 }

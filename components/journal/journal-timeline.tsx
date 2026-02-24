@@ -36,7 +36,7 @@ export function JournalTimeline({
 
   // Always fetch the latest cursor (last page)
   const currentCursor = cursors[cursors.length - 1];
-  const { entries, hasMore, isLoading, mutate } =
+  const { entries, hasMore, error, isLoading, mutate } =
     useJournalTimeline(currentCursor);
 
   // Accumulate entries in a ref keyed by cursor, deduplicate by entry_date
@@ -88,6 +88,15 @@ export function JournalTimeline({
     refreshKey !== prevRefreshKey.current
   ) {
     mutate();
+  }
+
+  // Error state
+  if (error && !isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <p className="text-sm text-muted-foreground">{t("fetchError")}</p>
+      </div>
+    );
   }
 
   // Empty state

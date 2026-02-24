@@ -22,6 +22,7 @@ import { PromptBanner } from "./prompt-banner";
 import { useJournalEntry } from "@/lib/hooks/use-journal-entry";
 import { useJournalAutosave } from "@/lib/hooks/use-journal-autosave";
 import { useJournalLinks, removeLink } from "@/lib/hooks/use-journal-links";
+import type { MoodRating } from "@/lib/db/types";
 
 interface JournalEntryModalProps {
   open: boolean;
@@ -35,15 +36,16 @@ export function JournalEntryModal({
   date,
 }: JournalEntryModalProps) {
   const t = useTranslations();
-  const { entry, isLoading, mutate } = useJournalEntry(date);
+  const { entry, error: entryError, isLoading, mutate } = useJournalEntry(date);
   const { saveStatus, scheduleSave, flushNow } = useJournalAutosave(
     entry?.id ?? null,
     date
   );
 
-  const [mood, setMood] = useState<number | null>(null);
+  const [mood, setMood] = useState<MoodRating | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const contentRef = useRef<Record<string, unknown> | null>(null);
+  const moodRef = useRef<MoodRating | null>(null);
   const [wordCount, setWordCount] = useState(0);
   const [promptKey, setPromptKey] = useState<string | null>(null);
   const [promptSheetOpen, setPromptSheetOpen] = useState(false);
@@ -57,8 +59,9 @@ export function JournalEntryModal({
       try {
         await removeLink(entry.id, linkId);
         await mutateLinks();
-      } catch {
-        // Silently fail; user can retry
+      } catch (error) {
+        console.error("Failed to remove journal link", error);
+        toast.error(t("journal.links.removeError"));
       }
     },
     [entry, mutateLinks],
@@ -68,10 +71,21 @@ export function JournalEntryModal({
     mutateLinks();
   }, [mutateLinks]);
 
-  // Keep promptKeyRef in sync to avoid stale closures
+  // Keep refs in sync to avoid stale closures in Tiptap onUpdate
   useEffect(() => {
     promptKeyRef.current = promptKey;
   }, [promptKey]);
+
+  useEffect(() => {
+    moodRef.current = mood;
+  }, [mood]);
+
+  // Show toast on fetch error
+  useEffect(() => {
+    if (entryError) {
+      toast.error(t("journal.fetchError"));
+    }
+  }, [entryError, t]);
 
   // Sync mood and prompt from loaded entry
   useEffect(() => {
@@ -106,14 +120,14 @@ export function JournalEntryModal({
         setIsDirty(true);
       }
 
-      scheduleSave({ content: json, mood, word_count: wc, prompt_key: promptKeyRef.current });
+      scheduleSave({ content: json, mood: moodRef.current, word_count: wc, prompt_key: promptKeyRef.current });
     },
-    [isDirty, entry, mood, scheduleSave]
+    [isDirty, entry, scheduleSave]
   );
 
   const handleMoodChange = useCallback(
     (newMood: number | null) => {
-      setMood(newMood);
+      setMood(newMood as MoodRating | null);
       // If we have content to save (dirty or existing entry), trigger save
       if (isDirty || entry) {
         scheduleSave({
@@ -165,8 +179,9 @@ export function JournalEntryModal({
       await mutate();
       toast.success(t("journal.deleteConfirm.title"));
       onOpenChange(false);
-    } catch {
-      toast.error(t("journal.saveError"));
+    } catch (error) {
+      console.error("Failed to delete journal entry", error);
+      toast.error(t("journal.deleteError"));
     }
   }, [entry, mutate, onOpenChange, t]);
 

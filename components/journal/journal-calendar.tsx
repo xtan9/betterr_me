@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { DayContent } from "react-day-picker";
@@ -64,7 +65,16 @@ export function JournalCalendar({
 
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth() + 1;
-  const { entries, mutate } = useJournalCalendar(year, month);
+  const { entries, error, mutate } = useJournalCalendar(year, month);
+  const loggedError = useRef(false);
+
+  useEffect(() => {
+    if (error && !loggedError.current) {
+      console.error("Journal calendar fetch error", error);
+      loggedError.current = true;
+    }
+    if (!error) loggedError.current = false;
+  }, [error]);
 
   // Build O(1) lookup map
   const entryMap = useMemo(() => {

@@ -62,6 +62,8 @@ describe("GET /api/journal/[id]/links", () => {
       },
       from: mockFrom,
     } as any);
+    // Ownership check: entry exists by default
+    mockJournalDB.getEntry.mockResolvedValue({ id: "entry-123", user_id: "user-123" });
   });
 
   it("returns 401 when unauthenticated", async () => {
@@ -128,6 +130,15 @@ describe("GET /api/journal/[id]/links", () => {
     const data = await response.json();
 
     expect(data.links).toEqual([]);
+  });
+
+  it("returns 404 when entry not owned by user", async () => {
+    mockJournalDB.getEntry.mockResolvedValue(null);
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links");
+    const response = await GET(request, { params: makeParams("entry-123") });
+
+    expect(response.status).toBe(404);
   });
 });
 
@@ -217,6 +228,8 @@ describe("DELETE /api/journal/[id]/links", () => {
       },
       from: mockFrom,
     } as any);
+    // Ownership check: entry exists by default
+    mockJournalDB.getEntry.mockResolvedValue({ id: "entry-123", user_id: "user-123" });
   });
 
   it("returns 401 when unauthenticated", async () => {
@@ -254,5 +267,16 @@ describe("DELETE /api/journal/[id]/links", () => {
     const response = await DELETE(request, { params: makeParams("entry-123") });
 
     expect(response.status).toBe(400);
+  });
+
+  it("returns 404 when entry not owned by user", async () => {
+    mockJournalDB.getEntry.mockResolvedValue(null);
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links?link_id=link-1", {
+      method: "DELETE",
+    });
+    const response = await DELETE(request, { params: makeParams("entry-123") });
+
+    expect(response.status).toBe(404);
   });
 });

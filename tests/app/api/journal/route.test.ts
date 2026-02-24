@@ -305,4 +305,58 @@ describe('GET /api/journal', () => {
 
     expect(data.hasMore).toBe(true);
   });
+
+  it('should return 500 when getEntryByDate throws', async () => {
+    mockJournalDB.getEntryByDate.mockRejectedValue(new Error('DB error'));
+
+    const request = new NextRequest('http://localhost:3000/api/journal?date=2026-02-22');
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.error).toBe('Failed to fetch journal entry');
+  });
+
+  it('should return 500 when getTimeline throws', async () => {
+    mockJournalDB.getTimeline.mockRejectedValue(new Error('DB error'));
+
+    const request = new NextRequest('http://localhost:3000/api/journal?mode=timeline');
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.error).toBe('Failed to fetch journal entry');
+  });
+});
+
+describe('POST /api/journal - 500 error paths', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockReturnValue({
+      auth: {
+        getUser: vi.fn(() => ({
+          data: { user: { id: 'user-123', email: 'test@example.com' } },
+        })),
+      },
+    } as any);
+    mockEnsureProfile.mockResolvedValue(undefined);
+  });
+
+  it('should return 500 when upsertEntry throws', async () => {
+    mockJournalDB.upsertEntry.mockRejectedValue(new Error('DB error'));
+
+    const request = new NextRequest('http://localhost:3000/api/journal', {
+      method: 'POST',
+      body: JSON.stringify({
+        entry_date: '2026-02-22',
+        title: 'Test',
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(500);
+    const data = await response.json();
+    expect(data.error).toBe('Failed to save journal entry');
+  });
 });

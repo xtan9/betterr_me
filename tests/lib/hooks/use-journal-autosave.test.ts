@@ -308,6 +308,7 @@ describe("useJournalAutosave", () => {
   });
 
   it("beforeunload: navigator.sendBeacon called with pending data", () => {
+    mockSendBeacon.mockReturnValue(true);
     const { result } = renderHook(() =>
       useJournalAutosave(null, "2026-02-23")
     );
@@ -325,6 +326,78 @@ describe("useJournalAutosave", () => {
       "/api/journal",
       expect.any(Blob)
     );
+  });
+
+  it("beforeunload: always uses /api/journal even when entryId exists", () => {
+    mockSendBeacon.mockReturnValue(true);
+    const { result } = renderHook(() =>
+      useJournalAutosave("existing-id", "2026-02-23")
+    );
+
+    act(() => {
+      result.current.scheduleSave({ content: { type: "doc" }, mood: 3 });
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event("beforeunload"));
+    });
+
+    // Should always use upsert endpoint, not /api/journal/existing-id
+    expect(mockSendBeacon).toHaveBeenCalledWith(
+      "/api/journal",
+      expect.any(Blob)
+    );
+  });
+
+  it("beforeunload: sendBeacon body always includes entry_date", async () => {
+    mockSendBeacon.mockReturnValue(true);
+    const { result } = renderHook(() =>
+      useJournalAutosave("existing-id", "2026-02-23")
+    );
+
+    act(() => {
+      result.current.scheduleSave({ content: { type: "doc" }, mood: 3 });
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event("beforeunload"));
+    });
+
+    // Verify sendBeacon was called with upsert endpoint and body includes entry_date
+    expect(mockSendBeacon).toHaveBeenCalledTimes(1);
+    expect(mockSendBeacon).toHaveBeenCalledWith("/api/journal", expect.any(Blob));
+
+    // Also verify via the fallback test that body includes entry_date
+    // (Blob content reading not supported in jsdom — verify via fetch fallback below)
+  });
+
+  it("beforeunload: falls back to fetch with keepalive when sendBeacon returns false", () => {
+    mockSendBeacon.mockReturnValue(false);
+    // Mock fetch to return a rejected promise (the .catch() swallows it)
+    mockFetch.mockReturnValue(Promise.reject(new Error("ignored")));
+
+    const { result } = renderHook(() =>
+      useJournalAutosave("existing-id", "2026-02-23")
+    );
+
+    act(() => {
+      result.current.scheduleSave({ content: { type: "doc" }, mood: 3 });
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event("beforeunload"));
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith("/api/journal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: expect.any(String),
+      keepalive: true,
+    });
+
+    // Verify body includes entry_date even for existing entries
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.entry_date).toBe("2026-02-23");
   });
 
   it("beforeunload: sendBeacon is NOT called without pending data", () => {

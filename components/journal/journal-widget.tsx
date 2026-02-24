@@ -11,8 +11,9 @@ import { JournalStreakBadge } from "@/components/journal/journal-streak-badge";
 import { JournalOnThisDay } from "@/components/journal/journal-on-this-day";
 import { useJournalWidget } from "@/lib/hooks/use-journal-widget";
 import { getPreviewText } from "@/lib/journal/utils";
+import type { MoodRating } from "@/lib/db/types";
 
-function getMoodEmoji(mood: number | null): string {
+function getMoodEmoji(mood: MoodRating | null): string {
   if (mood === null) return "";
   const found = MOODS.find((m) => m.value === mood);
   return found?.emoji ?? "";
@@ -21,7 +22,23 @@ function getMoodEmoji(mood: number | null): string {
 export function JournalWidget() {
   const t = useTranslations("dashboard.journal");
   const router = useRouter();
-  const { entry, streak, onThisDay, isLoading } = useJournalWidget();
+  const { entry, streak, onThisDay, error, isLoading } = useJournalWidget();
+
+  if (error && !isLoading) {
+    return (
+      <Card data-testid="journal-widget-error">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BookOpen className="size-4" aria-hidden="true" />
+            {t("title")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">{t("fetchError")}</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isLoading) {
     return (
