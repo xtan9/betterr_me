@@ -990,8 +990,30 @@
       "deleted": "預算已刪除",
       "rolloverConfirmed": "結轉已確認"
     },
+    "export": {
+      "title": "匯出交易",
+      "description": "將交易記錄下載為 CSV 檔案",
+      "dateFrom": "起始日期",
+      "dateTo": "截止日期",
+      "button": "匯出 CSV",
+      "exporting": "匯出中...",
+      "success": "交易記錄已匯出",
+      "error": "匯出失敗",
+      "noDateNote": "留空則匯出全部交易"
+    },
+    "deleteData": {
+      "title": "刪除財務資料",
+      "description": "永久刪除所有財務資料，包括交易記錄、預算、帳單、目標、淨資產歷史和銀行連接。此操作不可復原。",
+      "confirmLabel": "輸入 DELETE 確認",
+      "confirmPlaceholder": "DELETE",
+      "button": "刪除所有財務資料",
+      "deleting": "刪除中...",
+      "success": "所有財務資料已刪除",
+      "error": "刪除失敗"
+    },
     "settings": {
-      "title": "財務設定"
+      "title": "財務設定",
+      "dataManagement": "資料管理"
     },
     "bills": {
       "title": "帳單",

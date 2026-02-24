@@ -990,8 +990,30 @@
       "deleted": "Budget deleted",
       "rolloverConfirmed": "Rollover confirmed"
     },
+    "export": {
+      "title": "Export Transactions",
+      "description": "Download your transactions as a CSV file",
+      "dateFrom": "From date",
+      "dateTo": "To date",
+      "button": "Export CSV",
+      "exporting": "Exporting...",
+      "success": "Transactions exported",
+      "error": "Failed to export transactions",
+      "noDateNote": "Leave blank to export all transactions"
+    },
+    "deleteData": {
+      "title": "Delete Money Data",
+      "description": "Permanently delete all your money data including transactions, budgets, bills, goals, net worth history, and bank connections. This action cannot be undone.",
+      "confirmLabel": "Type DELETE to confirm",
+      "confirmPlaceholder": "DELETE",
+      "button": "Delete All Money Data",
+      "deleting": "Deleting...",
+      "success": "All money data has been deleted",
+      "error": "Failed to delete money data"
+    },
     "settings": {
-      "title": "Money Settings"
+      "title": "Money Settings",
+      "dataManagement": "Data Management"
     },
     "bills": {
       "title": "Bills",

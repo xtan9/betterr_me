@@ -990,8 +990,30 @@
       "deleted": "预算已删除",
       "rolloverConfirmed": "结转已确认"
     },
+    "export": {
+      "title": "导出交易",
+      "description": "将交易记录下载为 CSV 文件",
+      "dateFrom": "起始日期",
+      "dateTo": "截止日期",
+      "button": "导出 CSV",
+      "exporting": "导出中...",
+      "success": "交易记录已导出",
+      "error": "导出失败",
+      "noDateNote": "留空则导出全部交易"
+    },
+    "deleteData": {
+      "title": "删除财务数据",
+      "description": "永久删除所有财务数据，包括交易记录、预算、账单、目标、净资产历史和银行连接。此操作不可撤销。",
+      "confirmLabel": "输入 DELETE 确认",
+      "confirmPlaceholder": "DELETE",
+      "button": "删除所有财务数据",
+      "deleting": "删除中...",
+      "success": "所有财务数据已删除",
+      "error": "删除失败"
+    },
     "settings": {
-      "title": "财务设置"
+      "title": "财务设置",
+      "dataManagement": "数据管理"
     },
     "bills": {
       "title": "账单",
