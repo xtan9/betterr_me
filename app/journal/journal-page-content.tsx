@@ -9,13 +9,18 @@ import { PageHeader } from "@/components/layouts/page-header";
 import { JournalCalendar } from "@/components/journal/journal-calendar";
 import { JournalTimeline } from "@/components/journal/journal-timeline";
 import { JournalEntryModal } from "@/components/journal/journal-entry-modal";
+import { JournalStreakBadge } from "@/components/journal/journal-streak-badge";
+import { JournalOnThisDayFull } from "@/components/journal/journal-on-this-day-full";
+import { useJournalWidget } from "@/lib/hooks/use-journal-widget";
 import { getLocalDateString } from "@/lib/utils";
 
 export function JournalPageContent() {
   const t = useTranslations("journal");
+  const { streak } = useJournalWidget();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(() => getLocalDateString());
   const [refreshKey, setRefreshKey] = useState(0);
+  const today = getLocalDateString();
 
   const handleDayClick = useCallback((date: string) => {
     setSelectedDate(date);
@@ -44,10 +49,13 @@ export function JournalPageContent() {
       <PageHeader
         title={t("pageTitle")}
         actions={
-          <Button onClick={handleWriteToday}>
-            <PenLine className="size-4 mr-2" />
-            {t("writeToday")}
-          </Button>
+          <div className="flex items-center gap-3">
+            <JournalStreakBadge streak={streak} />
+            <Button onClick={handleWriteToday}>
+              <PenLine className="size-4 mr-2" />
+              {t("writeToday")}
+            </Button>
+          </div>
         }
       />
 
@@ -73,6 +81,8 @@ export function JournalPageContent() {
           <JournalTimeline onEntryClick={handleEntryClick} refreshKey={refreshKey} />
         </TabsContent>
       </Tabs>
+
+      <JournalOnThisDayFull date={today} />
 
       <JournalEntryModal
         open={modalOpen}

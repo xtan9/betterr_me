@@ -15,10 +15,13 @@ import { JournalEditorSkeleton } from "./journal-editor-skeleton";
 import { JournalMoodSelector } from "./journal-mood-selector";
 import { JournalSaveStatus } from "./journal-save-status";
 import { JournalDeleteDialog } from "./journal-delete-dialog";
+import { JournalLinkChips } from "./journal-link-chips";
+import { JournalLinkSelector } from "./journal-link-selector";
 import { PromptBrowserSheet } from "./prompt-browser-sheet";
 import { PromptBanner } from "./prompt-banner";
 import { useJournalEntry } from "@/lib/hooks/use-journal-entry";
 import { useJournalAutosave } from "@/lib/hooks/use-journal-autosave";
+import { useJournalLinks, removeLink } from "@/lib/hooks/use-journal-links";
 
 interface JournalEntryModalProps {
   open: boolean;
@@ -45,6 +48,25 @@ export function JournalEntryModal({
   const [promptKey, setPromptKey] = useState<string | null>(null);
   const [promptSheetOpen, setPromptSheetOpen] = useState(false);
   const promptKeyRef = useRef<string | null>(null);
+
+  const { links, mutate: mutateLinks } = useJournalLinks(entry?.id ?? null);
+
+  const handleRemoveLink = useCallback(
+    async (linkId: string) => {
+      if (!entry) return;
+      try {
+        await removeLink(entry.id, linkId);
+        await mutateLinks();
+      } catch {
+        // Silently fail; user can retry
+      }
+    },
+    [entry, mutateLinks],
+  );
+
+  const handleLinkAdded = useCallback(() => {
+    mutateLinks();
+  }, [mutateLinks]);
 
   // Keep promptKeyRef in sync to avoid stale closures
   useEffect(() => {
@@ -220,6 +242,24 @@ export function JournalEntryModal({
             />
           )}
         </div>
+
+        {/* Linked items */}
+        {entry && (
+          <div className="flex-shrink-0 py-2 space-y-2" data-testid="journal-links-section">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">
+                {t("journal.links.title")}
+              </span>
+              <JournalLinkSelector
+                entryId={entry.id}
+                existingLinks={links}
+                onLinkAdded={handleLinkAdded}
+                onLinkRemoved={handleLinkAdded}
+              />
+            </div>
+            <JournalLinkChips links={links} onRemove={handleRemoveLink} />
+          </div>
+        )}
 
         {/* Word count footer */}
         <div className="flex-shrink-0 pt-2 border-t text-xs text-muted-foreground">
