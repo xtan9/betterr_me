@@ -130,10 +130,10 @@ Plans:
   2. Autosave POST/PATCH to `/api/journal` succeeds when mood is null (mood accepts null or is stripped)
   3. Creating a journal entry end-to-end works (write content → autosave fires → entry persists)
   4. Editing an entry with no mood selected works without validation error
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 26-01: TBD
+- [ ] 26-01-PLAN.md — Fix Zod schemas (title default, mood nullable), update TS types, DB migration, update tests
 
 ### Phase 24: Dashboard & Cross-Feature Integration
 **Goal**: Journal is woven into the daily workflow through a dashboard widget, habit/task linking, historical reflections, and streak tracking
@@ -188,6 +188,6 @@ Phases execute in order: 20 -> 21 -> 22 -> 23 -> 26 (fix) -> 24 -> 25
 | 21. Journal Entry CRUD | 2/2 | Complete    | 2026-02-23 | - |
 | 22. Writing Prompts | 2/2 | Complete    | 2026-02-23 | - |
 | 23. Journal Page & Navigation | 2/2 | Complete    | 2026-02-24 | - |
-| 26. Fix Journal Entry Validation | v4.0 | 0/? | Not started | - |
+| 26. Fix Journal Entry Validation | v4.0 | 0/1 | Not started | - |
 | 24. Dashboard & Cross-Feature Integration | v4.0 | 0/? | Not started | - |
 | 25. i18n & Polish | v4.0 | 0/? | Not started | - |
