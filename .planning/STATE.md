@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 24 IN PROGRESS (Future-First Dashboard & AI Insights)
+**Current focus:** v4.0 Money Tracking — Phase 24 COMPLETE (Future-First Dashboard & AI Insights)
 
 ## Current Position
 
 Phase: 24 of 25 (Future-First Dashboard & AI Insights)
-Plan: 4 of 5 in current phase (COMPLETE)
-Status: Plan 24-04 complete — Smart calendar, insight cards, and money summary card on main dashboard
-Last activity: 2026-02-24 — Completed 24-04 (Insight Cards & Dashboard Integration)
+Plan: 5 of 5 in current phase (COMPLETE — Phase 24 done)
+Status: Phase 24 complete — All plans finished, human-verified
+Last activity: 2026-02-24 — Completed 24-05 (Tests, i18n & Human Verification)
 
-Progress: [████████░░] 75% v4.0
+Progress: [█████████░] 88% v4.0
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: [████████░░] 75% v4.0
 - 24-02: 4min, 2 tasks, 7 files
 - 24-03: 4min, 2 tasks, 7 files
 - 24-04: 5min, 2 tasks, 10 files
+- 24-05: 5min, 2 tasks (1 auto + 1 human-verify), 10 files
 
 ## Accumulated Context
 
@@ -202,6 +203,8 @@ Recent decisions affecting current work:
 - [24-04] MoneySummaryCard returns null silently when loading/no accounts (never blocks dashboard)
 - [24-04] InsightCard uses i18n keys with data interpolation for all messages (no hardcoded English)
 - [24-04] Bills page fetches useDashboardMoney for smart calendar (SWR caching for efficiency)
+- [24-05] Anxiety-aware i18n: progress framing ('up X% from average') instead of judgmental ('you overspent')
+- [24-05] Human verification confirmed all 12 checkpoint steps passed for Phase 24 feature set
 
 ### Pending Todos
 
@@ -223,5 +226,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 24-04-PLAN.md
-Resume: Continue with 24-05 (Tests & i18n)
+Stopped at: Completed 24-05-PLAN.md (Phase 24 complete)
+Resume: Continue with Phase 25 (Data Management & Polish)

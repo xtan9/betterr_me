@@ -60,7 +60,7 @@
 - [x] **Phase 21: Budgets & Spending Analytics** - Monthly budgets per category, progress tracking, spending charts, drill-down, rollover (completed 2026-02-23)
 - [x] **Phase 22: Bills, Goals & Net Worth** - Recurring charge detection, bill calendar, savings goals with projections, net worth tracking (completed 2026-02-24)
 - [x] **Phase 23: Household & Couples** - Partner invitation, shared views, privacy controls, individual vs shared budgets/goals (completed 2026-02-24)
-- [ ] **Phase 24: Future-First Dashboard & AI Insights** - Forward-looking dashboard, cash flow projections, income detection, contextual insights, money summary card
+- [x] **Phase 24: Future-First Dashboard & AI Insights** - Forward-looking dashboard, cash flow projections, income detection, contextual insights, money summary card (completed 2026-02-24)
 - [ ] **Phase 25: Data Management & Polish** - Transaction CSV export, money data deletion, final integration polish
 
 ## Phase Details
@@ -233,5 +233,5 @@ Phases execute in numeric order: 18 -> 18.1 -> 19 -> 19.1 -> ... -> 25
 | 21. Budgets & Spending Analytics | 5/5 | Complete    | 2026-02-23 | - |
 | 22. Bills, Goals & Net Worth | 6/6 | Complete    | 2026-02-24 | - |
 | 23. Household & Couples | 4/4 | Complete    | 2026-02-24 | - |
-| 24. Future-First Dashboard & AI Insights | 4/5 | In Progress|  | - |
+| 24. Future-First Dashboard & AI Insights | 5/5 | Complete | 2026-02-24 | - |
 | 25. Data Management & Polish | v4.0 | 0/? | Not started | - |
