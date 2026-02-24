@@ -84,3 +84,24 @@
 
 ---
 
+
+## v4.0 Journal (Shipped: 2026-02-24)
+
+**Phases completed:** 7 phases, 13 plans, 33 implementation commits
+**Stats:** 126 files changed, +17,573/-74 lines, 1541 tests passing, 2 days (2026-02-22 → 2026-02-24)
+
+**Key accomplishments:**
+- Full reflective journaling layer with Tiptap 3 rich-text editor, mood tracking (5-point emoji scale), and debounced autosave with beforeunload fallback
+- Writing prompts library (15 prompts in 3 categories: gratitude, reflection, goals) with prompt browser sheet reducing blank-page anxiety
+- Calendar view with mood-colored day indicators and timeline feed with cursor-based pagination
+- Dashboard journal widget with streak counter (milestone highlights at 7/30/100 days) and "On This Day" historical reflections
+- Habit/task linking allowing users to connect journal entries to tracked items via colored tag chips
+- Full i18n coverage — all journal strings and 15 prompts translated to zh + zh-TW with automated parity test
+- Gap closure phase (Phase 26) fixed critical Zod validation breaks (title default, mood nullable) discovered during milestone audit
+
+**Requirements:** 17/17 satisfied (ENTR-01..05, PRMT-01..02, BRWS-01..04, INTG-01..04, I18N-01..02)
+
+**Tech debt (4 minor items):** Unused GET /api/journal/[id] caller, dead mutate() in timeline, onLinkRemoved prop declared but unused, extractPlainText only used internally
+
+---
+

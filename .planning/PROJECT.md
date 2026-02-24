@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A habit tracking and project management web app built with Next.js 16, Supabase, and TypeScript. Supports habits (daily/weekdays/weekly/times_per_week/custom), task management with Work/Personal sections and named projects, 4-column kanban boards per project, streaks, weekly insights, and data export. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
+A habit tracking, project management, and reflective journaling web app built with Next.js 16, Supabase, and TypeScript. Supports habits (daily/weekdays/weekly/times_per_week/custom), task management with Work/Personal sections and named projects, 4-column kanban boards per project, daily journal entries with rich-text editing and mood tracking, writing prompts, calendar/timeline browsing, and dashboard integration. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
 
 ## Core Value
 
@@ -63,23 +63,27 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ 4-column kanban board per project with drag-and-drop between columns — v3.0
 - ✓ Monday.com-style detail modal and column quick-add on kanban board — v3.0
 - ✓ All v3.0 UI strings translated in en, zh, zh-TW — v3.0
+- ✓ User can create a journal entry for a specific date with rich text (Tiptap editor) — v4.0
+- ✓ User can edit and update an existing journal entry — v4.0
+- ✓ User can delete a journal entry — v4.0
+- ✓ User can select a mood emoji (5-point scale) for each entry — v4.0
+- ✓ User sees one entry per day (upsert model) — v4.0
+- ✓ User can choose from a library of writing prompts (gratitude, reflection, goals) — v4.0
+- ✓ User can skip prompts and write free-form — v4.0
+- ✓ Calendar view with mood-colored dot indicators — v4.0
+- ✓ Click calendar day to view or create entry — v4.0
+- ✓ Timeline feed for chronological browsing — v4.0
+- ✓ Sidebar navigation entry for journal — v4.0
+- ✓ Dashboard quick-entry journal widget — v4.0
+- ✓ Habit/task linking on journal entries — v4.0
+- ✓ "On This Day" past reflections — v4.0
+- ✓ Journal streak counter — v4.0
+- ✓ All journal UI strings translated in en, zh, zh-TW — v4.0
+- ✓ Writing prompts available in all three locales — v4.0
 
 ### Active
 
-## Current Milestone: v4.0 Journal
-
-**Goal:** Add a reflective journaling layer with free-form + prompted daily entries, mood tracking, optional habit/task links, and calendar + timeline browsing.
-
-**Target features:**
-- Daily journal entries with rich text area
-- Optional writing prompts (gratitude, reflection, goals)
-- Mood emoji/icon selection per entry
-- Optional linking to habits or tasks (light tags)
-- Calendar view showing which days have entries
-- Timeline feed for chronological reading
-- Sidebar nav entry for full journal page
-- Dashboard widget for quick daily entry
-- i18n support (en, zh, zh-TW) and dark mode
+(No active requirements — next milestone not yet planned)
 
 ### Out of Scope
 
@@ -98,19 +102,26 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - Custom kanban columns / user-defined statuses — fixed 4-column model for personal use
 - WIP limits, swimlanes, automations — team-oriented features, not aligned with solo use
 - Subtasks, time tracking, card attachments — scope creep for personal task management
+- AI-generated prompts or summaries — no AI API integration planned; static prompt library sufficient
+- Voice-to-text journal entries — requires speech API, out of scope for web-first
+- Journal entry sharing/export — data export exists for habits; journal export deferred
+- Mood notification reminders — no push notification infrastructure
+- Photo/file uploads to journal — no file storage infrastructure (Supabase Storage not configured)
 
 ## Context
 
 - **Codebase:** ~200+ files, Next.js 16 App Router, Supabase backend, deployed to Vercel
-- **Test suite:** 1207+ tests (Vitest + Playwright), 50% coverage threshold
+- **Test suite:** 1541 tests (Vitest + Playwright), 50% coverage threshold
 - **Shipped:** v1.0 Codebase Hardening (2026-02-16) — 5 phases, 11 plans, 26 requirements
 - **Shipped:** v1.1 Dashboard Task Fixes (2026-02-17) — 1 phase, 1 plan, 3 requirements
 - **Shipped:** v2.0 UI Style Redesign (2026-02-17) — 9 phases, 21 plans, 28 requirements
 - **Shipped:** v2.1 UI Polish & Refinement (2026-02-18) — 3 phases, 6 plans, 8 requirements
 - **Shipped:** v3.0 Projects & Kanban (2026-02-21) — 5 phases, 12 plans, 17 requirements
+- **Shipped:** v4.0 Journal (2026-02-24) — 7 phases, 13 plans, 17 requirements
 - **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit)
 - **Known:** Vitest picks up .worktrees/ test files (spurious, not blocking)
 - **Known:** @dnd-kit/core v6 + React 19 peer dep mismatch (cosmetic, works correctly)
+- **Known:** v3.0 + v4.0 DB migrations must be applied to production Supabase
 
 ## Constraints
 
@@ -131,16 +142,23 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | getTodayTasks accepts client date param | Server-local time wrong on Vercel (UTC ≠ user timezone) | ✓ Good — all 3 call sites pass client date, no duplication |
 | Include completed tasks in getTodayTasks | Removing completed tasks breaks "X of Y" dashboard count | ✓ Good — single array for both total and completed count |
 | Raw HSL convention for CSS custom properties | Matches existing shadcn/ui token pattern, enables opacity modifiers | ✓ Good — 56 tokens defined, all components migrated |
-| Flat sidebar nav (remove collapsible groups) | Chameleon reference uses flat list, cleaner UX with 3 items | ✓ Good — simpler code, cleaner visual hierarchy |
+| Flat sidebar nav (remove collapsible groups) | Chameleon reference uses flat list, cleaner UX with 3→4 items | ✓ Good — simpler code, cleaner visual hierarchy |
 | Task categories reuse habit category tokens | Same visual intent (work=learning blue, personal=wellness purple) | ✓ Good — unified token system, no category token duplication |
-| Sidebar width 224px with 60px collapsed rail | Matched Chameleon reference measurements | ✓ Good — pixel-matched design reference |
 | API-layer is_completed/status sync (not DB trigger) | Testable in unit tests, explicit sync points | ✓ Good — 23 TDD tests, sync-at-mutation-point pattern |
 | Float-based sort_order for kanban | Single-row updates for reordering, no renumbering | ✓ Good — 65536.0 gap spacing, infrastructure for future reorder |
 | @dnd-kit/core v6 over @dnd-kit/react v0.3.x | Stable API vs pre-1.0 experimental | ✓ Good — reliable drag-drop, well-documented |
 | SWR as single source of truth for kanban state | No dual local+server state, optimistic mutations with rollback | ✓ Good — clean data flow, rollbackOnError:true handles failures |
 | ON DELETE SET NULL for project_id FK | Deleted projects orphan tasks as standalone, not cascade delete | ✓ Good — preserves task history, user expectation |
-| Section change clears project_id silently | No confirmation needed, natural form behavior | ✓ Good — clean UX, no modal interruption |
-| next/dynamic ssr:false for KanbanBoard | Avoid hydration issues with drag-and-drop library | ✓ Good — fixes Next.js 16 build, clean client-only boundary |
+| next/dynamic ssr:false for KanbanBoard and Tiptap | Avoid hydration issues with complex client libraries | ✓ Good — fixes Next.js 16 build, clean client-only boundary |
+| Tiptap JSONB storage over TEXT | Rich text needs structure for rendering, not plain text | ✓ Good — lossless round-trip, enables content extraction |
+| Supabase .upsert() with onConflict for journal | One-entry-per-day at DB level, no client-side race conditions | ✓ Good — atomic enforcement, POST always returns 201 |
+| Debounced autosave (2s) with sendBeacon fallback | Balance save frequency vs API load; sendBeacon catches nav-away | ✓ Good — reliable save with minimal network chatter |
+| Hardcoded prompts with i18n keys (not database) | Static content, no admin UI needed, i18n via existing system | ✓ Good — zero runtime overhead, culturally appropriate translations |
+| Dashboard widget routes to /journal (not inline editing) | Keep widget simple, journal page is the writing surface | ✓ Good — clear separation, widget as entry point |
+| Streak starts from yesterday if today has no entry | Preserves count during the day before user writes | ✓ Good — no "streak reset" anxiety during the day |
+| On This Day fixed offsets (30d, 90d, 1y) | Predictable, meaningful reflection intervals | ✓ Good — simple computation, relatable time periods |
+| Link chip colors by type (teal/blue/purple) | GitHub-label-style visual grouping by entity type | ✓ Good — instant visual category recognition |
+| i18n parity test (bidirectional key check) | Catch missing and orphan keys automatically | ✓ Good — prevents locale drift, catches both directions |
 
 ---
-*Last updated: 2026-02-22 after v4.0 milestone started*
+*Last updated: 2026-02-24 after v4.0 Journal milestone*

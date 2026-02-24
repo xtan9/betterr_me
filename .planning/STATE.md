@@ -2,19 +2,18 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-22)
+See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Journal — Phase 25 (i18n & Polish)
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 25 of 26 (i18n & Polish)
-Plan: 1 of 1 in current phase
-Status: Phase Complete
-Last activity: 2026-02-24 — Completed 25-01 (i18n translations & dark mode verification)
+Phase: All milestones complete through v4.0
+Status: Between milestones
+Last activity: 2026-02-24 — Completed v4.0 Journal milestone (7 phases, 13 plans, 17 requirements)
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [##########] 92% v4.0
+Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [##########] 100% v4.0
 
 ## Performance Metrics
 
@@ -37,53 +36,17 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - Total execution time: ~49min
 - Files changed: 97 (+12,769/-156 lines)
 
+**v4.0 Velocity:**
+- Total plans completed: 13
+- Implementation commits: 33
+- Files changed: 126 (+17,573/-74 lines)
+- Timeline: 2 days (2026-02-22 → 2026-02-24)
+
 ## Accumulated Context
 
 ### Decisions
 
 See PROJECT.md Key Decisions table for full log with outcomes.
-- Research recommends Tiptap JSONB storage over TEXT (STACK.md overrides ARCHITECTURE.md)
-- Dashboard journal widget must be self-contained (own SWR hook, not added to DashboardData)
-- Tiptap loaded via next/dynamic ssr:false + immediatelyRender:false (same pattern as kanban)
-- Debounced autosave (2s) with localStorage draft fallback for content safety
-- Supabase .upsert() with onConflict: 'user_id,entry_date' for atomic one-entry-per-day enforcement
-- No user_id on journal_entry_links -- RLS uses EXISTS subquery on journal_entries
-- Calendar query selects only entry_date, mood, title (never full content) for performance
-- Timeline mode reuses GET /api/journal with ?mode=timeline param instead of separate route
-- POST /api/journal always returns 201 (upsert semantics, create-or-update)
-- hasMore pagination flag uses entries.length === limit comparison
-- Mood onChange passes null (not 0) for deselect -- cleaner API matching nullable DB column
-- BubbleMenu imported from @tiptap/react/menus (v3 path, not @tiptap/react)
-- Autosave hook uses entryIdRef for POST-to-PATCH transition without stale closures
-- sendBeacon uses Blob with application/json content-type for beforeunload fallback
-- Mock JournalEditorLoader directly in modal tests (not Tiptap internals) for robust testing
-- Added common.cancel i18n key at root common namespace for reuse across components
-- Journal page follows kanban pattern: server component for auth, client component for interactive state
-- Prompts defined as hardcoded TypeScript constant with i18n keys (not database)
-- Placeholder uses @apply text-muted-foreground/50 for consistent Tailwind theming
-- Used promptKeyRef pattern (same as contentRef) to avoid stale closures in scheduleSave callbacks
-- Sheet sidebar pattern for browsable prompt content with category Tabs
-- EntryMapContext pattern for passing entry data to custom DayContent without re-creating component reference
-- Ref-based SWR pagination (pagesRef Map + useMemo) to comply with React 19 set-state-in-effect lint rule
-- refreshKey counter pattern to invalidate sibling SWR caches from parent on modal close
-- userEvent required for Radix Tabs tests (fireEvent.click does not trigger pointer event chain)
-- Used type assertion (as JournalEntryFormValues) to bridge Zod input/output type gap in validateRequestBody
-- moodDotColor returns muted fallback for null mood (consistent with existing no-match fallback)
-- Streak starts from yesterday if today has no entry (preserves count during the day)
-- On This Day uses fixed lookback offsets: 30d, 90d, 1y (not sliding windows)
-- Link name enrichment uses batch queries by type to avoid N+1 pattern
-- Today endpoint returns subset of entry fields (no timestamps) for lightweight responses
-- Widget placed after habits/tasks grid as standalone section (not inside grid)
-- Mood emojis displayed as non-interactive visual cue in no-entry state
-- Streak milestones use Set for O(1) lookup with animate-pulse on Flame icon
-- JournalWidget loaded via next/dynamic consistent with other dashboard widgets
-- Link chips use GitHub-label-style coloring: teal for habits, blue for tasks, purple for projects
-- Link selector uses Radix Popover with client-side search filtering
-- On This Day full view uses responsive card grid (1/2/3 columns)
-- Streak badge placed in PageHeader actions area alongside Write Today button
-- Links section only renders when entry has an ID (not shown for new unsaved entries)
-- Empty string fallback for editor placeholder instead of English text
-- i18n parity test checks both directions (en->zh and zh->en) to catch orphan keys
 
 ### Pending Todos
 
@@ -109,5 +72,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 25-01-PLAN.md (i18n translations & dark mode verification)
-Resume: Phase 25 complete. Continue with Phase 26.
+Stopped at: Completed v4.0 Journal milestone
+Resume: All milestones complete. Run `/gsd:new-milestone` to start next milestone.
