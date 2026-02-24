@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveHousehold } from "@/lib/db/households";
 import { MoneyAccountsDB, ManualAssetsDB, NetWorthSnapshotsDB } from "@/lib/db";
 import { log } from "@/lib/logger";
+import type { ViewMode } from "@/lib/db/types";
 
 // ---------------------------------------------------------------------------
 // GET /api/money/net-worth
@@ -11,8 +12,11 @@ import { log } from "@/lib/logger";
 /**
  * GET /api/money/net-worth
  * Compute current net worth with asset/liability breakdown by account type.
+ * Supports ?view=mine|household (default: 'mine').
+ * - view=mine: sum of user's owned accounts only
+ * - view=household: sum of ALL accounts in the household (mine + ours + hidden)
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -28,9 +32,15 @@ export async function GET() {
     const manualAssetsDB = new ManualAssetsDB(supabase);
     const snapshotsDB = new NetWorthSnapshotsDB(supabase);
 
-    // 1. Get all accounts and manual assets
+    const view = (request.nextUrl.searchParams.get("view") || "mine") as ViewMode;
+
+    // 1. Get accounts based on view mode and manual assets
+    // Household net worth = ALL accounts (no visibility filter)
+    // Mine net worth = only user's owned accounts
     const [accounts, manualAssets, latestSnapshot] = await Promise.all([
-      accountsDB.getByHousehold(householdId),
+      view === "household"
+        ? accountsDB.getByHousehold(householdId) // All accounts for household net worth
+        : accountsDB.getByHouseholdFiltered(householdId, user.id, "mine"),
       manualAssetsDB.getByHousehold(householdId),
       snapshotsDB.getLatest(householdId),
     ]);

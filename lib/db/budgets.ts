@@ -194,7 +194,7 @@ export class BudgetsDB {
    * Get spending by category from only 'ours' visibility accounts.
    * Used for shared budget spending calculation.
    */
-  private async getSpendingByCategoryForShared(
+  async getSpendingByCategoryForShared(
     householdId: string,
     dateFrom: string,
     dateTo: string

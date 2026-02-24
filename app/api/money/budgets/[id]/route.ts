@@ -62,6 +62,7 @@ export async function GET(
 /**
  * PUT /api/money/budgets/[id]
  * Update a budget's total, rollover setting, and/or category allocations.
+ * Owner-only: only the budget creator can edit (shared budgets are read-only for non-creators).
  */
 export async function PUT(
   request: NextRequest,
@@ -91,10 +92,10 @@ export async function PUT(
 
     const householdId = await resolveHousehold(supabase, user.id);
 
-    // Verify budget belongs to this household
-    const { error: lookupError } = await supabase
+    // Verify budget belongs to this household and check ownership
+    const { data: budgetData, error: lookupError } = await supabase
       .from("budgets")
-      .select("id")
+      .select("id, owner_id")
       .eq("id", id)
       .eq("household_id", householdId)
       .single();
@@ -107,6 +108,14 @@ export async function PUT(
         );
       }
       throw lookupError;
+    }
+
+    // Owner-only write protection
+    if (budgetData.owner_id && budgetData.owner_id !== user.id) {
+      return NextResponse.json(
+        { error: "Only the budget creator can edit shared budgets" },
+        { status: 403 }
+      );
     }
 
     const budgetsDB = new BudgetsDB(supabase);
@@ -141,6 +150,7 @@ export async function PUT(
 /**
  * DELETE /api/money/budgets/[id]
  * Delete a budget and its category allocations.
+ * Owner-only: only the budget creator can delete.
  */
 export async function DELETE(
   _request: NextRequest,
@@ -160,10 +170,10 @@ export async function DELETE(
 
     const householdId = await resolveHousehold(supabase, user.id);
 
-    // Verify budget belongs to this household
-    const { error: lookupError } = await supabase
+    // Verify budget belongs to this household and check ownership
+    const { data: budgetData, error: lookupError } = await supabase
       .from("budgets")
-      .select("id")
+      .select("id, owner_id")
       .eq("id", id)
       .eq("household_id", householdId)
       .single();
@@ -176,6 +186,14 @@ export async function DELETE(
         );
       }
       throw lookupError;
+    }
+
+    // Owner-only write protection
+    if (budgetData.owner_id && budgetData.owner_id !== user.id) {
+      return NextResponse.json(
+        { error: "Only the budget creator can delete shared budgets" },
+        { status: 403 }
+      );
     }
 
     const budgetsDB = new BudgetsDB(supabase);

@@ -6,7 +6,7 @@ import { goalCreateSchema } from "@/lib/validations/goals";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
 import { addMonths, differenceInDays } from "date-fns";
-import type { SavingsGoal, GoalContribution } from "@/lib/db/types";
+import type { SavingsGoal, GoalContribution, ViewMode } from "@/lib/db/types";
 
 // ---------------------------------------------------------------------------
 // Projection helpers
@@ -102,9 +102,12 @@ function computeProjection(
 
 /**
  * GET /api/money/goals
- * List all goals for the household with projection data.
+ * List goals for the household with projection data.
+ * Supports ?view=mine|household (default: 'mine').
+ * - view=mine: goals where owner_id = userId AND is_shared = false
+ * - view=household: goals where is_shared = true
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -118,7 +121,12 @@ export async function GET() {
     const householdId = await resolveHousehold(supabase, user.id);
     const goalsDB = new SavingsGoalsDB(supabase);
 
-    const goals = await goalsDB.getByHousehold(householdId);
+    const view = (request.nextUrl.searchParams.get("view") || "mine") as ViewMode;
+    const goals = await goalsDB.getByHouseholdFiltered(
+      householdId,
+      user.id,
+      view
+    );
 
     // Fetch contributions for all goals to compute projections
     const goalsWithProjections: GoalWithProjection[] = await Promise.all(

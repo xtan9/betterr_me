@@ -7,6 +7,39 @@ import {
   trendQuerySchema,
 } from "@/lib/validations/budget";
 import { log } from "@/lib/logger";
+import type { ViewMode } from "@/lib/db/types";
+
+/**
+ * Get spending trends from 'ours' accounts only (household view).
+ * Mirrors BudgetsDB.getSpendingTrends but uses getSpendingByCategoryForShared.
+ */
+async function getSpendingTrendsForShared(
+  budgetsDB: InstanceType<typeof BudgetsDB>,
+  householdId: string,
+  months: number
+): Promise<{ month: string; category_id: string; total_cents: number }[]> {
+  const results: { month: string; category_id: string; total_cents: number }[] = [];
+  const now = new Date();
+
+  for (let i = 0; i < months; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+
+    const spending = await budgetsDB.getSpendingByCategoryForShared(
+      householdId,
+      monthStr,
+      nextStr
+    );
+
+    for (const s of spending) {
+      results.push({ month: monthStr, ...s });
+    }
+  }
+
+  return results;
+}
 
 /**
  * GET /api/money/analytics/spending
@@ -14,6 +47,10 @@ import { log } from "@/lib/logger";
  * Two modes:
  * 1. ?month=YYYY-MM — Returns spending by category for a specific month.
  * 2. ?type=trends&months=12 — Returns monthly spending totals for last N months.
+ *
+ * Supports ?view=mine|household (default: 'mine').
+ * - view=household: aggregates spending from 'ours' accounts only
+ * - view=mine: uses all user's accounts (default behavior)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -29,6 +66,7 @@ export async function GET(request: NextRequest) {
     const householdId = await resolveHousehold(supabase, user.id);
     const budgetsDB = new BudgetsDB(supabase);
     const searchParams = request.nextUrl.searchParams;
+    const view = (searchParams.get("view") || "mine") as ViewMode;
 
     const type = searchParams.get("type");
 
@@ -45,10 +83,18 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const rawTrends = await budgetsDB.getSpendingTrends(
-        householdId,
-        parsed.data.months
-      );
+      // For household view, get spending from 'ours' accounts only per month
+      const rawTrends =
+        view === "household"
+          ? await getSpendingTrendsForShared(
+              budgetsDB,
+              householdId,
+              parsed.data.months
+            )
+          : await budgetsDB.getSpendingTrends(
+              householdId,
+              parsed.data.months
+            );
 
       // Aggregate into { month, total_cents, categories[] }
       const monthMap = new Map<
@@ -119,11 +165,19 @@ export async function GET(request: NextRequest) {
     nextMonth.setMonth(nextMonth.getMonth() + 1);
     const dateTo = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
 
-    const rawSpending = await budgetsDB.getSpendingByCategory(
-      householdId,
-      dateFrom,
-      dateTo
-    );
+    // For household view, use spending from 'ours' accounts only
+    const rawSpending =
+      view === "household"
+        ? await budgetsDB.getSpendingByCategoryForShared(
+            householdId,
+            dateFrom,
+            dateTo
+          )
+        : await budgetsDB.getSpendingByCategory(
+            householdId,
+            dateFrom,
+            dateTo
+          );
 
     // Enrich with category display info
     const categoriesDB = new CategoriesDB(supabase);

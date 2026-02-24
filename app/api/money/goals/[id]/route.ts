@@ -146,6 +146,7 @@ export async function GET(
 /**
  * PATCH /api/money/goals/[id]
  * Update a savings goal.
+ * Owner-only: only the goal creator can edit (shared goals are read-only for non-creators).
  */
 export async function PATCH(
   request: NextRequest,
@@ -175,10 +176,10 @@ export async function PATCH(
 
     const householdId = await resolveHousehold(supabase, user.id);
 
-    // Verify ownership
-    const { error: lookupError } = await supabase
+    // Verify ownership and check creator
+    const { data: goalData, error: lookupError } = await supabase
       .from("savings_goals")
-      .select("id")
+      .select("id, owner_id")
       .eq("id", id)
       .eq("household_id", householdId)
       .single();
@@ -191,6 +192,14 @@ export async function PATCH(
         );
       }
       throw lookupError;
+    }
+
+    // Owner-only write protection
+    if (goalData.owner_id && goalData.owner_id !== user.id) {
+      return NextResponse.json(
+        { error: "Only the goal creator can edit shared goals" },
+        { status: 403 }
+      );
     }
 
     const goalsDB = new SavingsGoalsDB(supabase);
@@ -228,6 +237,7 @@ export async function PATCH(
 /**
  * DELETE /api/money/goals/[id]
  * Delete a savings goal (cascades to contributions).
+ * Owner-only: only the goal creator can delete.
  */
 export async function DELETE(
   _request: NextRequest,
@@ -246,10 +256,10 @@ export async function DELETE(
     const { id } = await params;
     const householdId = await resolveHousehold(supabase, user.id);
 
-    // Verify ownership
-    const { error: lookupError } = await supabase
+    // Verify ownership and check creator
+    const { data: goalData, error: lookupError } = await supabase
       .from("savings_goals")
-      .select("id")
+      .select("id, owner_id")
       .eq("id", id)
       .eq("household_id", householdId)
       .single();
@@ -262,6 +272,14 @@ export async function DELETE(
         );
       }
       throw lookupError;
+    }
+
+    // Owner-only write protection
+    if (goalData.owner_id && goalData.owner_id !== user.id) {
+      return NextResponse.json(
+        { error: "Only the goal creator can delete shared goals" },
+        { status: 403 }
+      );
     }
 
     const goalsDB = new SavingsGoalsDB(supabase);

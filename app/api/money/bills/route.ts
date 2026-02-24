@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveHousehold } from "@/lib/db/households";
-import { RecurringBillsDB } from "@/lib/db";
+import { RecurringBillsDB, MoneyAccountsDB } from "@/lib/db";
 import { billCreateSchema } from "@/lib/validations/bills";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
-import type { RecurringBill } from "@/lib/db/types";
+import type { RecurringBill, ViewMode } from "@/lib/db/types";
 
 /**
  * Frequency multipliers to normalize any bill frequency to monthly cost.
@@ -48,9 +48,12 @@ function computeSummary(bills: RecurringBill[]) {
 
 /**
  * GET /api/money/bills
- * Get all recurring bills for the household with summary stats.
+ * Get recurring bills for the household with summary stats.
+ * Supports ?view=mine|household (default: 'mine').
+ * - view=household: show all bills for the household
+ * - view=mine: show bills linked to accounts owned by the user, plus manual bills
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -64,7 +67,33 @@ export async function GET() {
     const householdId = await resolveHousehold(supabase, user.id);
     const billsDB = new RecurringBillsDB(supabase);
 
-    const bills = await billsDB.getByHousehold(householdId);
+    const view = (request.nextUrl.searchParams.get("view") || "mine") as ViewMode;
+    const allBills = await billsDB.getByHousehold(householdId);
+
+    let bills: RecurringBill[];
+
+    if (view === "household") {
+      // Household view: show all bills
+      bills = allBills;
+    } else {
+      // Mine view: filter to bills linked to user's accounts or manual bills
+      const accountsDB = new MoneyAccountsDB(supabase);
+      const userAccounts = await accountsDB.getByHouseholdFiltered(
+        householdId,
+        user.id,
+        "mine"
+      );
+      const userAccountIds = new Set(userAccounts.map((a) => a.id));
+
+      bills = allBills.filter((bill) => {
+        // Manual bills without an account always show for all users
+        if (bill.source === "manual" && !bill.account_id) return true;
+        // Bills linked to user's accounts
+        if (bill.account_id && userAccountIds.has(bill.account_id)) return true;
+        return false;
+      });
+    }
+
     const summary = computeSummary(bills);
 
     return NextResponse.json({ bills, summary });

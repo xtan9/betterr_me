@@ -5,10 +5,14 @@ import { BudgetsDB } from "@/lib/db";
 import { budgetCreateSchema } from "@/lib/validations/budget";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
+import type { ViewMode } from "@/lib/db/types";
 
 /**
- * GET /api/money/budgets?month=YYYY-MM
+ * GET /api/money/budgets?month=YYYY-MM&view=mine|household
  * Get budget for a specific month with category spending data.
+ * - view=mine: budget where owner_id = userId AND is_shared = false
+ * - view=household: budget where is_shared = true
+ * Default: 'mine' for backward compatibility.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -32,9 +36,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const view = (request.nextUrl.searchParams.get("view") || "mine") as ViewMode;
+
     // Convert YYYY-MM to YYYY-MM-01 for DB query
     const monthDate = `${month}-01`;
-    const budget = await budgetsDB.getByMonth(householdId, monthDate);
+    const budget = await budgetsDB.getByMonthFiltered(
+      householdId,
+      user.id,
+      view,
+      monthDate
+    );
 
     return NextResponse.json({ budget });
   } catch (error) {
