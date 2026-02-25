@@ -62,7 +62,7 @@
 - [x] **Phase 23: Household & Couples** - Partner invitation, shared views, privacy controls, individual vs shared budgets/goals (completed 2026-02-24)
 - [x] **Phase 24: Future-First Dashboard & AI Insights** - Forward-looking dashboard, cash flow projections, income detection, contextual insights, money summary card (completed 2026-02-24)
 - [x] **Phase 25: Data Management & Polish** - Transaction CSV export, money data deletion, final integration polish (completed 2026-02-24)
-- [ ] **Phase 26: CSV Import & Integration Polish** - CSV file upload with column mapping, net worth snapshot wiring, Phase 20 verification
+- [x] **Phase 26: CSV Import & Integration Polish** - CSV file upload with column mapping, net worth snapshot wiring, Phase 20 verification (completed 2026-02-24)
 
 ## Phase Details
 
@@ -252,4 +252,4 @@ Phases execute in numeric order: 18 -> 18.1 -> 19 -> 19.1 -> ... -> 25
 | 23. Household & Couples | 4/4 | Complete    | 2026-02-24 | - |
 | 24. Future-First Dashboard & AI Insights | 5/5 | Complete    | 2026-02-24 | - |
 | 25. Data Management & Polish | 2/2 | Complete    | 2026-02-24 | - |
-| 26. CSV Import & Integration Polish | 1/2 | In Progress|  | - |
+| 26. CSV Import & Integration Polish | 2/2 | Complete   | 2026-02-24 | - |

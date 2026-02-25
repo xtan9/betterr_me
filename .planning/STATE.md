@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 26 in progress (CSV Import & Integration Polish)
+**Current focus:** v4.0 Money Tracking — Phase 26 COMPLETE (CSV Import & Integration Polish)
 
 ## Current Position
 
 Phase: 26 of 26 (CSV Import & Integration Polish)
-Plan: 1 of 2 in current phase (26-01 complete)
-Status: Phase 26 in progress — Plan 02 (CSV Import UI) remaining
-Last activity: 2026-02-24 — Completed 26-01 (CSV Import Backend)
+Plan: 2 of 2 in current phase (26-02 complete)
+Status: Phase 26 COMPLETE — All plans finished. v4.0 Money Tracking milestone complete.
+Last activity: 2026-02-24 — Completed 26-02 (CSV Import UI)
 
-Progress: [██████████] 99% v4.0
+Progress: [██████████] 100% v4.0
 
 ## Performance Metrics
 
@@ -72,6 +72,7 @@ Progress: [██████████] 99% v4.0
 - 25-01: 4min, 2 tasks, 6 files
 - 25-02: 5min, 2 tasks (1 auto + 1 human-verify), 9 files
 - 26-01: 8min, 2 tasks, 10 files
+- 26-02: 5min, 2 tasks (1 auto + 1 human-verify), 10 files
 
 ## Accumulated Context
 
@@ -218,6 +219,9 @@ Recent decisions affecting current work:
 - [26-01] Deterministic duplicate key: date|amountCents|normalized_description for CSV import dedup
 - [26-01] Non-blocking net worth snapshot pattern replicated from Plaid sync into manual asset CRUD
 - [26-01] Batch insert uses 200-row chunks to avoid Supabase payload limits
+- [26-02] PapaParse for CSV parsing with BOM handling and header auto-detection
+- [26-02] Multi-step wizard dialog (4 steps: upload, map, preview, import) for guided CSV import flow
+- [26-02] Auto column mapping via autoMapColumns() pre-fills mapping step for common CSV formats
 
 ### Pending Todos
 
@@ -239,5 +243,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 26-01-PLAN.md (CSV Import Backend)
-Resume: Continue with 26-02-PLAN.md (CSV Import UI)
+Stopped at: Completed 26-02-PLAN.md (CSV Import UI) — Phase 26 complete, v4.0 milestone complete
+Resume: All phases complete. v4.0 Money Tracking shipped.
