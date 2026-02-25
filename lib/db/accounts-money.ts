@@ -121,6 +121,9 @@ export class MoneyAccountsDB {
     return this.create({
       household_id: householdId,
       bank_connection_id: null,
+      owner_id: null,
+      visibility: "ours",
+      shared_since: null,
       name: "Cash",
       account_type: "other",
       balance_cents: 0,

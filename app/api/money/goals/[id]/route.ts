@@ -6,7 +6,7 @@ import { goalUpdateSchema } from "@/lib/validations/goals";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
 import { addMonths, differenceInDays } from "date-fns";
-import type { SavingsGoal, GoalContribution, GoalWithProjection } from "@/lib/db/types";
+import type { SavingsGoal, GoalContribution, GoalWithProjection, StatusColor } from "@/lib/db/types";
 
 function computeMonthlyRate(contributions: GoalContribution[]): number {
   if (contributions.length === 0) return 0;

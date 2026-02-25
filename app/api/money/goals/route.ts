@@ -6,7 +6,7 @@ import { goalCreateSchema } from "@/lib/validations/goals";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
 import { addMonths, differenceInDays } from "date-fns";
-import type { SavingsGoal, GoalContribution, GoalWithProjection, ViewMode } from "@/lib/db/types";
+import type { SavingsGoal, GoalContribution, GoalWithProjection, StatusColor, ViewMode } from "@/lib/db/types";
 
 /**
  * Compute monthly savings rate from contributions over the last 3 months.
@@ -168,6 +168,8 @@ export async function POST(request: NextRequest) {
 
     const goal = await goalsDB.create({
       household_id: householdId,
+      owner_id: user.id,
+      is_shared: false,
       name: parsed.data.name,
       target_cents: toCents(parsed.data.target_amount),
       current_cents: 0,

@@ -173,6 +173,8 @@ export async function POST(request: NextRequest) {
       plaid_category_primary: null,
       plaid_category_detailed: null,
       source: "manual",
+      is_hidden_from_household: false,
+      is_shared_to_household: false,
     });
 
     return NextResponse.json({ transaction }, { status: 201 });
