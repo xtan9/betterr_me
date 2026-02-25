@@ -833,7 +833,7 @@
       "error": "Error"
     },
     "account": {
-      "mask": "\u2022\u2022\u2022\u2022 {mask}"
+      "mask": "•••• {mask}"
     },
     "plaid": {
       "connectBank": "Connect Bank",
@@ -1000,6 +1000,35 @@
       "success": "Transactions exported",
       "error": "Failed to export transactions",
       "noDateNote": "Leave blank to export all transactions"
+    },
+    "csvImport": {
+      "title": "Import CSV",
+      "description": "Upload a CSV file to import transactions",
+      "selectFile": "Select CSV file",
+      "dragDrop": "or drag and drop",
+      "selectAccount": "Import to account",
+      "flipSign": "Flip transaction signs",
+      "flipSignHelp": "Check if your CSV uses opposite sign convention (positive for expenses)",
+      "step1Title": "Upload File",
+      "step2Title": "Map Columns",
+      "step3Title": "Preview",
+      "step4Title": "Importing",
+      "mapColumn": "Map to CSV column",
+      "required": "Required",
+      "skip": "Skip",
+      "back": "Back",
+      "next": "Next",
+      "import": "Import",
+      "importing": "Importing...",
+      "previewNote": "Showing first {count} of {total} rows",
+      "importingTo": "Importing {count} transactions to {account}",
+      "importSuccess": "{count} transactions imported successfully",
+      "duplicatesSkipped": "{count} duplicate transactions skipped",
+      "importError": "Failed to import transactions",
+      "noRows": "No valid rows found in the CSV file",
+      "tooManyRows": "CSV has {count} rows. Maximum is {max}",
+      "requiredFields": "Date, amount, and description columns must be mapped",
+      "parseError": "Failed to parse CSV file"
     },
     "deleteData": {
       "title": "Delete Money Data",

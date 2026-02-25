@@ -833,7 +833,7 @@
       "error": "错误"
     },
     "account": {
-      "mask": "\u2022\u2022\u2022\u2022 {mask}"
+      "mask": "•••• {mask}"
     },
     "plaid": {
       "connectBank": "连接银行",
@@ -1000,6 +1000,35 @@
       "success": "交易记录已导出",
       "error": "导出失败",
       "noDateNote": "留空则导出全部交易"
+    },
+    "csvImport": {
+      "title": "导入 CSV",
+      "description": "上传 CSV 文件以导入交易记录",
+      "selectFile": "选择 CSV 文件",
+      "dragDrop": "或拖放文件",
+      "selectAccount": "导入到账户",
+      "flipSign": "翻转交易符号",
+      "flipSignHelp": "如果你的 CSV 使用相反的符号规则（正数表示支出），请勾选此项",
+      "step1Title": "上传文件",
+      "step2Title": "映射列",
+      "step3Title": "预览",
+      "step4Title": "正在导入",
+      "mapColumn": "映射到 CSV 列",
+      "required": "必填",
+      "skip": "跳过",
+      "back": "返回",
+      "next": "下一步",
+      "import": "导入",
+      "importing": "正在导入...",
+      "previewNote": "显示 {total} 行中的前 {count} 行",
+      "importingTo": "正在将 {count} 笔交易导入到 {account}",
+      "importSuccess": "成功导入 {count} 笔交易",
+      "duplicatesSkipped": "跳过 {count} 笔重复交易",
+      "importError": "导入交易失败",
+      "noRows": "CSV 文件中未找到有效行",
+      "tooManyRows": "CSV 有 {count} 行，最大限制为 {max}",
+      "requiredFields": "日期、金额和描述列必须映射",
+      "parseError": "解析 CSV 文件失败"
     },
     "deleteData": {
       "title": "删除财务数据",

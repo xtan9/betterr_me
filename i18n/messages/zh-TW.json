@@ -833,7 +833,7 @@
       "error": "錯誤"
     },
     "account": {
-      "mask": "\u2022\u2022\u2022\u2022 {mask}"
+      "mask": "•••• {mask}"
     },
     "plaid": {
       "connectBank": "連接銀行",
@@ -1000,6 +1000,35 @@
       "success": "交易記錄已匯出",
       "error": "匯出失敗",
       "noDateNote": "留空則匯出全部交易"
+    },
+    "csvImport": {
+      "title": "匯入 CSV",
+      "description": "上傳 CSV 檔案以匯入交易紀錄",
+      "selectFile": "選擇 CSV 檔案",
+      "dragDrop": "或拖放檔案",
+      "selectAccount": "匯入到帳戶",
+      "flipSign": "翻轉交易符號",
+      "flipSignHelp": "如果你的 CSV 使用相反的符號規則（正數表示支出），請勾選此項",
+      "step1Title": "上傳檔案",
+      "step2Title": "對應欄位",
+      "step3Title": "預覽",
+      "step4Title": "正在匯入",
+      "mapColumn": "對應到 CSV 欄位",
+      "required": "必填",
+      "skip": "略過",
+      "back": "返回",
+      "next": "下一步",
+      "import": "匯入",
+      "importing": "正在匯入...",
+      "previewNote": "顯示 {total} 行中的前 {count} 行",
+      "importingTo": "正在將 {count} 筆交易匯入到 {account}",
+      "importSuccess": "成功匯入 {count} 筆交易",
+      "duplicatesSkipped": "略過 {count} 筆重複交易",
+      "importError": "匯入交易失敗",
+      "noRows": "CSV 檔案中未找到有效行",
+      "tooManyRows": "CSV 有 {count} 行，最大限制為 {max}",
+      "requiredFields": "日期、金額和描述欄位必須對應",
+      "parseError": "解析 CSV 檔案失敗"
     },
     "deleteData": {
       "title": "刪除財務資料",
