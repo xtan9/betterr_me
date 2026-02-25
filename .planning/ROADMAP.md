@@ -252,4 +252,4 @@ Phases execute in numeric order: 18 -> 18.1 -> 19 -> 19.1 -> ... -> 25
 | 23. Household & Couples | 4/4 | Complete    | 2026-02-24 | - |
 | 24. Future-First Dashboard & AI Insights | 5/5 | Complete    | 2026-02-24 | - |
 | 25. Data Management & Polish | 2/2 | Complete    | 2026-02-24 | - |
-| 26. CSV Import & Integration Polish | v4.0 | 0/? | Not started | - |
+| 26. CSV Import & Integration Polish | 1/2 | In Progress|  | - |

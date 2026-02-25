@@ -37,7 +37,7 @@ Requirements for money tracking milestone. Each maps to roadmap phases.
 - [x] **TXNS-04**: User can manually override the category of any transaction
 - [x] **TXNS-05**: User can create custom categories (household-scoped, shared between partners)
 - [x] **TXNS-06**: User can split a transaction across multiple categories
-- [ ] **TXNS-07**: User can import transactions via CSV file upload with column mapping and duplicate detection
+- [x] **TXNS-07**: User can import transactions via CSV file upload with column mapping and duplicate detection
 - [x] **TXNS-08**: User can manually enter individual transactions (for cash purchases)
 
 ### Categorization
@@ -166,7 +166,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TXNS-04 | Phase 20 | Complete |
 | TXNS-05 | Phase 20 | Complete |
 | TXNS-06 | Phase 20 | Complete |
-| TXNS-07 | Phase 26 | Pending |
+| TXNS-07 | Phase 26 | Complete |
 | TXNS-08 | Phase 19 | Complete |
 | CATG-01 | Phase 20 | Complete |
 | CATG-02 | Phase 20 | Complete |

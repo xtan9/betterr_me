@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-21)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** v4.0 Money Tracking — Phase 25 COMPLETE (Data Management & Polish), Phase 26 remaining
+**Current focus:** v4.0 Money Tracking — Phase 26 in progress (CSV Import & Integration Polish)
 
 ## Current Position
 
-Phase: 25 of 26 (Data Management & Polish) -- COMPLETE
-Plan: 2 of 2 in current phase (25-01, 25-02 complete)
-Status: Phase 25 complete — Phase 26 (CSV Import & Integration Polish) remaining
-Last activity: 2026-02-24 — Completed 25-02 (Data Management UI)
+Phase: 26 of 26 (CSV Import & Integration Polish)
+Plan: 1 of 2 in current phase (26-01 complete)
+Status: Phase 26 in progress — Plan 02 (CSV Import UI) remaining
+Last activity: 2026-02-24 — Completed 26-01 (CSV Import Backend)
 
-Progress: [█████████░] 97% v4.0
+Progress: [██████████] 99% v4.0
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Progress: [█████████░] 97% v4.0
 - 24-05: 5min, 2 tasks (1 auto + 1 human-verify), 10 files
 - 25-01: 4min, 2 tasks, 6 files
 - 25-02: 5min, 2 tasks (1 auto + 1 human-verify), 9 files
+- 26-01: 8min, 2 tasks, 10 files
 
 ## Accumulated Context
 
@@ -214,6 +215,9 @@ Recent decisions affecting current work:
 - [25-02] Typed DELETE confirmation pattern for destructive data deletion (exact string match guard)
 - [25-02] Blob download via URL.createObjectURL + programmatic anchor click for CSV export
 - [25-02] Date inputs (type=date) for range selection instead of Calendar+Popover for simplicity
+- [26-01] Deterministic duplicate key: date|amountCents|normalized_description for CSV import dedup
+- [26-01] Non-blocking net worth snapshot pattern replicated from Plaid sync into manual asset CRUD
+- [26-01] Batch insert uses 200-row chunks to avoid Supabase payload limits
 
 ### Pending Todos
 
@@ -235,5 +239,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 25-02-PLAN.md (Phase 25 complete)
-Resume: Continue with Phase 26 (CSV Import & Integration Polish)
+Stopped at: Completed 26-01-PLAN.md (CSV Import Backend)
+Resume: Continue with 26-02-PLAN.md (CSV Import UI)
