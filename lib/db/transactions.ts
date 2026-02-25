@@ -131,6 +131,26 @@ export class TransactionsDB {
   }
 
   /**
+   * Batch insert transactions (e.g. from CSV import).
+   * Inserts in chunks of 200 to avoid payload limits.
+   * Returns the count of inserted rows.
+   */
+  async createBatch(transactions: TransactionInsert[]): Promise<number> {
+    if (transactions.length === 0) return 0;
+
+    let inserted = 0;
+    for (let i = 0; i < transactions.length; i += 200) {
+      const chunk = transactions.slice(i, i + 200);
+      const { error } = await this.supabase
+        .from("transactions")
+        .insert(chunk);
+      if (error) throw error;
+      inserted += chunk.length;
+    }
+    return inserted;
+  }
+
+  /**
    * Batch upsert Plaid transactions by plaid_transaction_id.
    * Uses onConflict for idempotent sync — safe to call multiple times
    * with the same transactions.
