@@ -272,3 +272,72 @@
   background-color: hsl(var(--sidebar-background) / 0.88);
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25), 1px 0 0 rgba(0, 0, 0, 0.15);
 }
+
+/* === Tiptap Journal Editor Styles === */
+.tiptap-journal {
+  @apply text-foreground;
+}
+
+.tiptap-journal .tiptap {
+  @apply min-h-[300px] focus:outline-none;
+}
+
+.tiptap-journal h2 {
+  @apply text-xl font-bold mt-6 mb-2;
+}
+
+.tiptap-journal h3 {
+  @apply text-lg font-semibold mt-4 mb-2;
+}
+
+.tiptap-journal p {
+  @apply mb-3 leading-relaxed;
+}
+
+.tiptap-journal ul {
+  @apply list-disc pl-6 mb-3;
+}
+
+.tiptap-journal ol {
+  @apply list-decimal pl-6 mb-3;
+}
+
+.tiptap-journal ul[data-type="taskList"] {
+  @apply list-none pl-0;
+}
+
+.tiptap-journal ul[data-type="taskList"] li {
+  @apply flex items-start gap-2;
+}
+
+.tiptap-journal blockquote {
+  @apply border-l-4 border-muted-foreground/30 pl-4 italic text-muted-foreground;
+}
+
+.tiptap-journal pre {
+  @apply bg-muted rounded-md p-4 font-mono text-sm overflow-x-auto mb-3;
+}
+
+.tiptap-journal code {
+  @apply bg-muted rounded px-1.5 py-0.5 font-mono text-sm;
+}
+
+.tiptap-journal hr {
+  @apply border-border my-6;
+}
+
+.tiptap-journal a {
+  @apply text-primary underline;
+}
+
+.tiptap-journal s {
+  @apply line-through text-muted-foreground;
+}
+
+.tiptap-journal .tiptap p.is-empty::before {
+  @apply text-muted-foreground/50;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

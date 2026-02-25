@@ -8,6 +8,7 @@
       "habits": "习惯",
       "settings": "设置",
       "tasks": "任务",
+      "journal": "日记",
       "learnMore": "了解更多",
       "profile": "个人资料"
     },
@@ -29,6 +30,7 @@
       "profileError": "个人资料不可用",
       "signOutError": "退出登录失败"
     },
+    "cancel": "取消",
     "footer": {
       "product": "产品",
       "features": "功能",
@@ -203,6 +205,23 @@
       "viewHabit": "查看习惯",
       "changeFrequency": "更改频率",
       "dismiss": "关闭"
+    },
+    "journal": {
+      "title": "日记",
+      "startWriting": "开始写作",
+      "viewEntry": "查看日记",
+      "prompt": "今天感觉怎么样？",
+      "fetchError": "加载数据失败",
+      "streak": {
+        "count": "{count, plural, other {连续 # 天}}"
+      },
+      "onThisDay": {
+        "title": "那年今日",
+        "empty": "坚持写日记，你很快就能在这里看到过去的回忆！",
+        "30_days_ago": "30 天前",
+        "90_days_ago": "90 天前",
+        "1_year_ago": "1 年前"
+      }
     }
   },
   "habits": {
@@ -808,5 +827,81 @@
     "creating": "创建中...",
     "namePlaceholder": "分类名称",
     "createError": "创建分类失败"
+  },
+  "journal": {
+    "mood": {
+      "label": "你现在感觉如何？",
+      "amazing": "太棒了",
+      "good": "不错",
+      "okay": "一般",
+      "notGreat": "不太好",
+      "awful": "糟透了"
+    },
+    "saving": "保存中...",
+    "saved": "已保存",
+    "saveError": "保存失败",
+    "newEntry": "新日记",
+    "editEntry": "编辑日记",
+    "delete": "删除",
+    "deleteConfirm": {
+      "title": "删除这篇日记？",
+      "description": "此操作无法撤销。这将永久删除你的日记。"
+    },
+    "untitled": "无标题",
+    "wordCount": "{count}个字",
+    "pageTitle": "日记",
+    "writeToday": "写今天的日记",
+    "emptyState": "你的日记将显示在这里",
+    "calendar": "日历",
+    "timeline": "时间线",
+    "loadMore": "加载更多",
+    "noEntries": "还没有日记。开始写作，在这里查看你的记录。",
+    "deleteError": "删除日记失败",
+    "fetchError": "加载数据失败",
+    "links": {
+      "title": "关联项目",
+      "addLink": "关联习惯或任务",
+      "habits": "习惯",
+      "tasks": "任务",
+      "searchPlaceholder": "搜索习惯和任务...",
+      "noResults": "没有匹配的项目",
+      "deleted": "（已删除）",
+      "addError": "关联失败",
+      "removeError": "移除关联失败"
+    },
+    "onThisDay": {
+      "title": "那年今日",
+      "empty": "坚持写日记，你很快就能在这里看到过去的回忆！",
+      "30_days_ago": "30 天前",
+      "90_days_ago": "90 天前",
+      "1_year_ago": "1 年前"
+    },
+    "editor": {
+      "placeholder": "开始写作..."
+    },
+    "prompts": {
+      "title": "写作灵感",
+      "trigger": "需要灵感？",
+      "categories": {
+        "gratitude": "感恩",
+        "reflection": "反思",
+        "goals": "目标"
+      },
+      "gratitude01": "今天有什么让你开心的事吗？",
+      "gratitude02": "说出三件你现在感恩的事。",
+      "gratitude03": "今天谁让你的生活变得更好了？",
+      "gratitude04": "今天你享受了哪些简单的快乐？",
+      "gratitude05": "有什么是你经常忽略但其实很珍贵的？",
+      "reflection01": "如果可以重来，今天你会改变什么？",
+      "reflection02": "今天你对自己有了什么新的认识？",
+      "reflection03": "今天遇到了什么挑战？你是怎么应对的？",
+      "reflection04": "今天最常出现的情绪是什么？",
+      "reflection05": "未来的你会感谢今天的你做了什么？",
+      "goals01": "明天你可以为目标迈出哪一小步？",
+      "goals02": "有什么事你一直在拖延？为什么？",
+      "goals03": "六个月后你希望自己在哪里？",
+      "goals04": "接下来你想培养什么技能？",
+      "goals05": "怎样才能让明天成为美好的一天？"
+    }
   }
 }

@@ -9,3 +9,5 @@ export * from "./habit-milestones";
 export * from "./insights";
 export * from "./recurring-tasks";
 export * from "./categories";
+export * from "./journal-entries";
+export * from "./journal-entry-links";

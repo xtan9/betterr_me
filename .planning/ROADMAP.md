@@ -7,6 +7,7 @@
 - ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
 - ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
 - ✅ **v3.0 Projects & Kanban** — Phases 13-17 (shipped 2026-02-21)
+- ✅ **v4.0 Journal** — Phases 20-26 (shipped 2026-02-24)
 
 ## Phases
 
@@ -45,6 +46,13 @@
 
 </details>
 
+<details>
+<summary>✅ v4.0 Journal (Phases 20-26) — SHIPPED 2026-02-24</summary>
+
+7 phases, 13 plans, 17 requirements. See `.planning/milestones/v4.0-ROADMAP.md` for details.
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -63,3 +71,10 @@
 | 15. Kanban Board | v3.0 | 4/4 | Complete | 2026-02-20 |
 | 16. Integration Bug Fixes | v3.0 | 2/2 | Complete | 2026-02-21 |
 | 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |
+| 20. Database & API Foundation | v4.0 | 2/2 | Complete | 2026-02-23 |
+| 21. Journal Entry CRUD | v4.0 | 2/2 | Complete | 2026-02-23 |
+| 22. Writing Prompts | v4.0 | 2/2 | Complete | 2026-02-23 |
+| 23. Journal Page & Navigation | v4.0 | 2/2 | Complete | 2026-02-24 |
+| 26. Fix Journal Entry Validation | v4.0 | 1/1 | Complete | 2026-02-24 |
+| 24. Dashboard & Cross-Feature Integration | v4.0 | 3/3 | Complete | 2026-02-24 |
+| 25. i18n & Polish | v4.0 | 1/1 | Complete | 2026-02-24 |

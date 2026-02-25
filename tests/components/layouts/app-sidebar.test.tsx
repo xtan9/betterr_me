@@ -100,11 +100,11 @@ describe("AppSidebar", () => {
     });
   });
 
-  it("renders all 3 nav items as links (flat list, no settings)", () => {
+  it("renders all 4 nav items as links (flat list, no settings)", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(3);
+    expect(links).toHaveLength(4);
   });
 
   it("renders correct hrefs for all nav items", () => {
@@ -114,6 +114,7 @@ describe("AppSidebar", () => {
     expect(links[0]).toHaveAttribute("href", "/dashboard");
     expect(links[1]).toHaveAttribute("href", "/habits");
     expect(links[2]).toHaveAttribute("href", "/tasks");
+    expect(links[3]).toHaveAttribute("href", "/journal");
   });
 
   it("renders i18n translation keys as labels", () => {
@@ -122,6 +123,7 @@ describe("AppSidebar", () => {
     expect(screen.getByText("dashboard")).toBeInTheDocument();
     expect(screen.getByText("habits")).toBeInTheDocument();
     expect(screen.getByText("tasks")).toBeInTheDocument();
+    expect(screen.getByText("journal")).toBeInTheDocument();
   });
 
   it("renders flat nav without group labels", () => {

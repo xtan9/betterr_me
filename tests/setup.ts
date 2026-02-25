@@ -45,9 +45,11 @@ class MockQueryBuilder {
   lt = vi.fn().mockReturnThis();
   lte = vi.fn().mockReturnThis();
   order = vi.fn().mockReturnThis();
+  limit = vi.fn().mockReturnThis();
 
-  // Terminal method that returns a promise
+  // Terminal methods that return a promise
   single = vi.fn(() => Promise.resolve({ data: this.mockData, error: this.mockError }));
+  maybeSingle = vi.fn(() => Promise.resolve({ data: this.mockData, error: this.mockError }));
 
   // Make this thenable so it can be awaited or destructured
   then(onFulfilled?: any, onRejected?: any) {

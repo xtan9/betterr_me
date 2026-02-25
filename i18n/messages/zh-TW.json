@@ -8,6 +8,7 @@
       "habits": "習慣",
       "settings": "設定",
       "tasks": "任務",
+      "journal": "日記",
       "learnMore": "了解更多",
       "profile": "個人資料"
     },
@@ -29,6 +30,7 @@
       "profileError": "個人資料無法使用",
       "signOutError": "登出失敗"
     },
+    "cancel": "取消",
     "footer": {
       "product": "產品",
       "features": "功能",
@@ -203,6 +205,23 @@
       "viewHabit": "查看習慣",
       "changeFrequency": "更改頻率",
       "dismiss": "關閉"
+    },
+    "journal": {
+      "title": "日記",
+      "startWriting": "開始寫作",
+      "viewEntry": "查看日記",
+      "prompt": "今天感覺怎麼樣？",
+      "fetchError": "載入資料失敗",
+      "streak": {
+        "count": "{count, plural, other {連續 # 天}}"
+      },
+      "onThisDay": {
+        "title": "那年今日",
+        "empty": "堅持寫日記，你很快就能在這裡看到過去的回憶！",
+        "30_days_ago": "30 天前",
+        "90_days_ago": "90 天前",
+        "1_year_ago": "1 年前"
+      }
     }
   },
   "habits": {
@@ -808,5 +827,81 @@
     "creating": "建立中...",
     "namePlaceholder": "分類名稱",
     "createError": "建立分類失敗"
+  },
+  "journal": {
+    "mood": {
+      "label": "你現在感覺如何？",
+      "amazing": "太棒了",
+      "good": "不錯",
+      "okay": "一般",
+      "notGreat": "不太好",
+      "awful": "糟透了"
+    },
+    "saving": "儲存中...",
+    "saved": "已儲存",
+    "saveError": "儲存失敗",
+    "newEntry": "新日記",
+    "editEntry": "編輯日記",
+    "delete": "刪除",
+    "deleteConfirm": {
+      "title": "刪除這篇日記？",
+      "description": "此操作無法撤銷。這將永久刪除你的日記。"
+    },
+    "untitled": "無標題",
+    "wordCount": "{count}個字",
+    "pageTitle": "日記",
+    "writeToday": "寫今天的日記",
+    "emptyState": "你的日記將顯示在這裡",
+    "calendar": "日曆",
+    "timeline": "時間線",
+    "loadMore": "載入更多",
+    "noEntries": "還沒有日記。開始寫作，在這裡查看你的紀錄。",
+    "deleteError": "刪除日記失敗",
+    "fetchError": "載入資料失敗",
+    "links": {
+      "title": "關聯項目",
+      "addLink": "關聯習慣或任務",
+      "habits": "習慣",
+      "tasks": "任務",
+      "searchPlaceholder": "搜尋習慣和任務...",
+      "noResults": "沒有符合的項目",
+      "deleted": "（已刪除）",
+      "addError": "關聯失敗",
+      "removeError": "移除關聯失敗"
+    },
+    "onThisDay": {
+      "title": "那年今日",
+      "empty": "堅持寫日記，你很快就能在這裡看到過去的回憶！",
+      "30_days_ago": "30 天前",
+      "90_days_ago": "90 天前",
+      "1_year_ago": "1 年前"
+    },
+    "editor": {
+      "placeholder": "開始寫作..."
+    },
+    "prompts": {
+      "title": "寫作靈感",
+      "trigger": "需要靈感嗎？",
+      "categories": {
+        "gratitude": "感恩",
+        "reflection": "反思",
+        "goals": "目標"
+      },
+      "gratitude01": "今天有什麼讓你開心的事嗎？",
+      "gratitude02": "說出三件你現在感恩的事。",
+      "gratitude03": "今天誰讓你的生活變得更好了？",
+      "gratitude04": "今天你享受了哪些簡單的快樂？",
+      "gratitude05": "有什麼是你經常忽略但其實很珍貴的？",
+      "reflection01": "如果可以重來，今天你會改變什麼？",
+      "reflection02": "今天你對自己有了什麼新的認識？",
+      "reflection03": "今天遇到了什麼挑戰？你是怎麼應對的？",
+      "reflection04": "今天最常出現的情緒是什麼？",
+      "reflection05": "未來的你會感謝今天的你做了什麼？",
+      "goals01": "明天你可以為目標邁出哪一小步？",
+      "goals02": "有什麼事你一直在拖延？為什麼？",
+      "goals03": "六個月後你希望自己在哪裡？",
+      "goals04": "接下來你想培養什麼技能？",
+      "goals05": "怎樣才能讓明天成為美好的一天？"
+    }
   }
 }

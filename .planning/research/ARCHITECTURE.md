@@ -1,956 +1,851 @@
-# Architecture Patterns
+# Architecture Research
 
-**Domain:** Projects & Kanban integration into existing BetterR.Me habit tracking app
-**Researched:** 2026-02-18
+**Domain:** Journal/diary feature integration into existing habit tracking app
+**Researched:** 2026-02-22
+**Confidence:** HIGH (based on direct codebase analysis -- all patterns verified from source)
 
-## Recommended Architecture
-
-### High-Level Integration Overview
-
-The Projects & Kanban feature integrates into the existing `DB class -> API route -> SWR hook -> React component` data flow. No new architectural patterns are introduced -- every new piece follows the exact conventions already established in the codebase.
+## System Overview
 
 ```
-                                    EXISTING                          NEW
-                             +-----------------+            +-----------------+
-                             |   Dashboard     |            |  Projects Page  |
-                             |  Tasks Page     |            |  Kanban Board   |
-                             +-----------------+            +-----------------+
-                                     |                              |
-                              SWR hooks                      SWR hooks (new)
-                              (existing)                     useProjects()
-                                     |                       useTasks() (extended)
-                                     v                              v
-                             +-----------------+            +-----------------+
-                             | /api/tasks      |            | /api/projects   |
-                             | /api/dashboard  |            | /api/tasks      |
-                             +-----------------+            |   (extended)    |
-                                     |                      +-----------------+
-                                     v                              v
-                             +-----------------+            +-----------------+
-                             |   TasksDB       |            |  ProjectsDB     |
-                             |   (existing)    |            |  TasksDB        |
-                             +-----------------+            |   (extended)    |
-                                     |                      +-----------------+
-                                     v                              v
-                             +-----------------+            +-----------------+
-                             |  tasks table    |            | projects table  |
-                             |  (existing)     |            | tasks table     |
-                             +-----------------+            |  (+ new cols)   |
-                                                            +-----------------+
+                         JOURNAL INTEGRATION MAP
+                   (new components marked with [NEW])
+
+  +--------------------- Sidebar Navigation ----------------------+
+  |  Dashboard  |  Habits  |  Tasks  |  [NEW] Journal            |
+  +--------------+---------+---------+---+------------------------+
+                 |                       |
+  +--------------v--------------+  +-----v---------------------------+
+  |   Dashboard Page            |  |  [NEW] Journal Page             |
+  | +-------------------------+ |  | +--------------------------+    |
+  | | [NEW] Journal Widget    | |  | | Calendar View (entries)  |    |
+  | | (quick entry card)      | |  | |  - dot indicators        |    |
+  | +-------------------------+ |  | |  - month navigation      |    |
+  | + existing habit/task cards |  | +--------------------------+    |
+  +-----------------------------+  | +--------------------------+    |
+                                   | | Timeline Feed            |    |
+                                   | |  - chronological entries  |    |
+                                   | |  - mood + linked items    |    |
+                                   | +--------------------------+    |
+                                   | +--------------------------+    |
+                                   | | Entry Editor (new/edit)  |    |
+                                   | |  - textarea body         |    |
+                                   | |  - mood selector         |    |
+                                   | |  - writing prompts       |    |
+                                   | |  - habit/task linker     |    |
+                                   | +--------------------------+    |
+                                   +---------------------------------+
+
+  +---------------------- API Layer ---------------------------------+
+  |  [NEW] /api/journal             GET (list), POST (create)       |
+  |  [NEW] /api/journal/[id]        GET, PATCH, DELETE              |
+  |  [NEW] /api/journal/calendar    GET (entries-by-month dots)     |
+  |  [MOD] /api/dashboard           + journal_today field           |
+  +-----------------------------+-----------------------------------+
+                                |
+  +-----------------------------v-----------------------------------+
+  |  DB Layer                                                       |
+  |  [NEW] lib/db/journal-entries.ts   JournalEntriesDB class       |
+  |  [MOD] lib/db/types.ts            + JournalEntry types          |
+  |  [MOD] lib/db/index.ts            + export JournalEntriesDB     |
+  +-----------------------------+-----------------------------------+
+                                |
+  +-----------------------------v-----------------------------------+
+  |  Supabase                                                       |
+  |  [NEW] journal_entries table                                    |
+  |  [NEW] journal_entry_links junction table                       |
+  |  [NEW] RLS policies per user                                    |
+  +----------------------------------------------------------------+
 ```
 
-### Component Boundaries
+## Component Responsibilities
 
-| Component | Responsibility | Communicates With | New/Modified |
-|-----------|---------------|-------------------|--------------|
-| `ProjectsDB` | CRUD for projects table, sort_order management | Supabase client | **NEW** |
-| `TasksDB` (extended) | Existing task CRUD + new filters for section/status/project_id | Supabase client | **MODIFIED** |
-| `/api/projects/route.ts` | GET/POST for projects | ProjectsDB | **NEW** |
-| `/api/projects/[id]/route.ts` | GET/PATCH/DELETE for single project | ProjectsDB | **NEW** |
-| `/api/tasks/route.ts` (extended) | Extended GET with section/status/project_id filters, new PATCH for bulk status/order updates | TasksDB | **MODIFIED** |
-| `/api/tasks/reorder/route.ts` | Bulk reorder endpoint for drag-and-drop | TasksDB | **NEW** |
-| `useProjects()` | SWR hook for projects list | `/api/projects` | **NEW** |
-| `useTasks()` | SWR hook with extended filters (section, status, project) | `/api/tasks` | **NEW** (replaces inline fetcher in TasksPageContent) |
-| `useKanbanTasks()` | SWR hook for kanban board (tasks grouped by status) | `/api/tasks?view=kanban` | **NEW** |
-| `ProjectsPageContent` | Projects listing page | useProjects() | **NEW** |
-| `KanbanBoard` | Kanban board with drag-and-drop columns | useKanbanTasks(), DnD library | **NEW** |
-| `KanbanColumn` | Single status column (Backlog/Todo/In Progress/Done) | KanbanBoard (parent) | **NEW** |
-| `KanbanCard` | Draggable task card within kanban column | KanbanColumn (parent) | **NEW** |
-| `TasksPageContent` (redesigned) | Section-based task layout (Work/Personal tabs or toggle) | useTasks() | **MODIFIED** |
-| `TaskCard` (extended) | Show project badge, section indicator | Task data | **MODIFIED** |
-| `TaskForm` (extended) | Section, status, and project_id fields | Validation schemas | **MODIFIED** |
-| `AppSidebar` (extended) | Projects nav item in sidebar | Navigation config | **MODIFIED** |
+### New Files
 
-## Data Model Changes
+| Component | Responsibility | Pattern Source |
+|-----------|----------------|---------------|
+| `JournalEntriesDB` | CRUD for journal entries + linked items | Follows `TasksDB`, `HabitsDB` pattern |
+| `journal-entries.ts` (DB) | Supabase queries, date-range fetching, calendar aggregation | Same constructor(supabase) pattern |
+| `/api/journal/route.ts` | GET list + POST create journal entries | Mirrors `/api/tasks/route.ts` |
+| `/api/journal/[id]/route.ts` | GET/PATCH/DELETE single entry | Mirrors `/api/tasks/[id]/route.ts` |
+| `/api/journal/calendar/route.ts` | GET entries for a month (date + mood only, lightweight) | New but follows sidebar/counts pattern |
+| `lib/validations/journal.ts` | Zod schemas for create + update | Mirrors `lib/validations/task.ts` |
+| `lib/hooks/use-journal.ts` | SWR hooks for journal data | Mirrors `lib/hooks/use-habits.ts` |
+| `components/journal/` | All journal UI components | New directory alongside `components/habits/` |
+| `app/journal/` | Journal pages (list, new, [id], [id]/edit) | Mirrors `app/habits/` structure |
 
-### New Table: `projects`
+### Modified Files
+
+| File | Change | Reason |
+|------|--------|--------|
+| `components/layouts/app-sidebar.tsx` | Add "Journal" nav item with `BookOpen` icon | New top-level section |
+| `components/dashboard/dashboard-content.tsx` | Add `JournalWidget` in content area | Quick daily entry from dashboard |
+| `app/api/dashboard/route.ts` | Add `journal_today` field (boolean: has entry today?) | Dashboard widget needs to know |
+| `app/dashboard/page.tsx` | Pass `journal_today` through `initialData` | Server-side prefetch for widget |
+| `lib/db/types.ts` | Add `JournalEntry`, `JournalEntryLink`, insert/update types, extend `DashboardData` | Type definitions |
+| `lib/db/index.ts` | Export `JournalEntriesDB` | Standard barrel export |
+| `i18n/messages/en.json` | Add `journal` namespace | New strings |
+| `i18n/messages/zh.json` | Add `journal` namespace | New strings |
+| `i18n/messages/zh-TW.json` | Add `journal` namespace | New strings |
+
+## New File Structure
+
+```
+lib/
++-- db/
+|   +-- journal-entries.ts        # JournalEntriesDB class
+|   +-- types.ts                  # + JournalEntry, JournalEntryLink types
+|   +-- index.ts                  # + export
++-- validations/
+|   +-- journal.ts                # Zod schemas
++-- hooks/
+|   +-- use-journal.ts            # SWR hooks
++-- journal/
+    +-- prompts.ts                # Writing prompt definitions (static data)
+    +-- moods.ts                  # Mood definitions (key -> emoji + label i18n key)
+
+components/
++-- journal/
+    +-- journal-entry-form.tsx     # Shared form (create + edit)
+    +-- journal-entry-card.tsx     # Single entry in timeline
+    +-- journal-calendar.tsx       # Calendar with entry dot indicators
+    +-- journal-timeline.tsx       # Scrollable list of entries
+    +-- journal-widget.tsx         # Dashboard quick-entry card
+    +-- mood-selector.tsx          # Emoji/icon mood picker
+    +-- prompt-selector.tsx        # Writing prompt display + selection
+    +-- link-selector.tsx          # Habit/task linking UI
+
+app/
++-- journal/
+|   +-- layout.tsx                # SidebarShell wrapper
+|   +-- loading.tsx               # Skeleton loading state
+|   +-- page.tsx                  # Main journal page (calendar + timeline)
+|   +-- new/
+|   |   +-- page.tsx              # New entry page
+|   +-- [id]/
+|       +-- page.tsx              # View single entry
+|       +-- edit/
+|           +-- page.tsx          # Edit entry page
++-- api/
+    +-- journal/
+        +-- route.ts              # GET (list), POST (create)
+        +-- [id]/
+        |   +-- route.ts          # GET, PATCH, DELETE
+        +-- calendar/
+            +-- route.ts          # GET entries-per-day for month
+
+supabase/
++-- migrations/
+    +-- 2026MMDD000001_create_journal_entries.sql
+```
+
+### Structure Rationale
+
+- **`components/journal/`**: Follows existing pattern of `components/habits/`, `components/tasks/`, `components/kanban/`. Domain-specific components grouped together.
+- **`lib/journal/prompts.ts`**: Static prompt data does not need the DB -- simple TypeScript arrays with i18n keys. Mirrors how milestone thresholds are defined in `lib/habits/milestones.ts`.
+- **`lib/journal/moods.ts`**: Static mood definitions (key, emoji, i18n label key). Keeps mood rendering consistent between the selector, cards, and calendar dots.
+- **`app/journal/` route structure**: Mirrors `app/habits/` (list, new, [id], [id]/edit) for consistency. Uses the same `SidebarShell` layout.
+- **`/api/journal/calendar/`**: Separate lightweight endpoint that returns only `{entry_date, mood}[]` for an entire month, avoiding transferring kilobytes of journal content just to render dots on a calendar.
+
+## Database Schema
+
+### `journal_entries` Table
 
 ```sql
-CREATE TABLE projects (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-  name TEXT NOT NULL,
-  section TEXT NOT NULL DEFAULT 'work' CHECK (section IN ('work', 'personal')),
-  color TEXT NOT NULL DEFAULT '#6366f1',  -- hex color for project badge
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
-  sort_order FLOAT8 NOT NULL DEFAULT 0,  -- float for efficient drag reorder
+CREATE TABLE journal_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  entry_date DATE NOT NULL,                    -- one entry per day
+  body TEXT NOT NULL DEFAULT '',                -- free-form text content
+  mood TEXT,                                   -- mood key (nullable)
+  prompt_key TEXT,                             -- writing prompt i18n key used (nullable)
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- Enforce one entry per user per day
+  CONSTRAINT journal_entries_user_date_unique UNIQUE (user_id, entry_date)
 );
 
-CREATE INDEX idx_projects_user_id ON projects(user_id);
-CREATE INDEX idx_projects_user_section ON projects(user_id, section) WHERE status = 'active';
+-- Indexes
+CREATE INDEX idx_journal_entries_user_date
+  ON journal_entries(user_id, entry_date DESC);
 
--- RLS
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+-- RLS (mirrors existing pattern from categories, projects)
+ALTER TABLE journal_entries ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own projects"
-  ON projects FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can create own projects"
-  ON projects FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own projects"
-  ON projects FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own projects"
-  ON projects FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can view their own journal entries"
+  ON journal_entries FOR SELECT USING (auth.uid() = user_id);
 
--- Trigger
-CREATE TRIGGER update_projects_updated_at
-  BEFORE UPDATE ON projects
+CREATE POLICY "Users can create their own journal entries"
+  ON journal_entries FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own journal entries"
+  ON journal_entries FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own journal entries"
+  ON journal_entries FOR DELETE USING (auth.uid() = user_id);
+
+-- Reuse existing updated_at trigger
+CREATE TRIGGER update_journal_entries_updated_at
+  BEFORE UPDATE ON journal_entries
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 ```
 
-### Modified Table: `tasks` (new columns)
+### `journal_entry_links` Junction Table
 
 ```sql
--- Add section column (work/personal, independent of category)
-ALTER TABLE tasks ADD COLUMN section TEXT DEFAULT 'personal'
-  CHECK (section IN ('work', 'personal'));
+CREATE TABLE journal_entry_links (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  journal_entry_id UUID NOT NULL
+    REFERENCES journal_entries(id) ON DELETE CASCADE,
+  link_type TEXT NOT NULL CHECK (link_type IN ('habit', 'task')),
+  link_id UUID NOT NULL,           -- habit.id or task.id (soft reference)
+  created_at TIMESTAMPTZ DEFAULT NOW(),
 
--- Add kanban status column
-ALTER TABLE tasks ADD COLUMN status TEXT DEFAULT 'todo'
-  CHECK (status IN ('backlog', 'todo', 'in_progress', 'done'));
+  -- One link per entry+type+target
+  CONSTRAINT journal_entry_links_unique
+    UNIQUE (journal_entry_id, link_type, link_id)
+);
 
--- Add project FK (optional -- tasks can exist without a project)
-ALTER TABLE tasks ADD COLUMN project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+CREATE INDEX idx_journal_entry_links_entry
+  ON journal_entry_links(journal_entry_id);
 
--- Add sort_order for kanban column ordering
-ALTER TABLE tasks ADD COLUMN sort_order FLOAT8 DEFAULT 0;
+-- RLS through parent join (user scoping via journal_entries)
+ALTER TABLE journal_entry_links ENABLE ROW LEVEL SECURITY;
 
--- Indexes for common query patterns
-CREATE INDEX idx_tasks_section ON tasks(user_id, section) WHERE is_completed = false;
-CREATE INDEX idx_tasks_status ON tasks(user_id, status) WHERE is_completed = false;
-CREATE INDEX idx_tasks_project ON tasks(user_id, project_id) WHERE project_id IS NOT NULL;
-CREATE INDEX idx_tasks_kanban ON tasks(user_id, status, sort_order);
+CREATE POLICY "Users can view their own journal entry links"
+  ON journal_entry_links FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM journal_entries
+      WHERE journal_entries.id = journal_entry_links.journal_entry_id
+      AND journal_entries.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can create their own journal entry links"
+  ON journal_entry_links FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM journal_entries
+      WHERE journal_entries.id = journal_entry_links.journal_entry_id
+      AND journal_entries.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can delete their own journal entry links"
+  ON journal_entry_links FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM journal_entries
+      WHERE journal_entries.id = journal_entry_links.journal_entry_id
+      AND journal_entries.user_id = auth.uid()
+    )
+  );
 ```
 
-**Confidence: HIGH** -- follows the exact same patterns as existing schema migrations in the codebase.
+### Schema Design Decisions
 
-### sort_order Strategy: Float-Based Ordering
+| Decision | Rationale |
+|----------|-----------|
+| One entry per user per day (UNIQUE) | Journal is a daily reflection tool, not a multi-post-per-day blog. Simplifies calendar view and dashboard widget ("did you write today?"). |
+| `entry_date` is DATE, not TIMESTAMPTZ | Follows existing timezone convention: dates are browser-local. Matches `habit_logs.logged_date` and task `due_date` patterns. |
+| `body` is plain TEXT, not JSONB | Rich text editing is out of scope. Plain text with optional markdown rendering later. Avoids complexity of tiptap/draft.js state serialization. |
+| `mood` is TEXT key, not emoji directly | Decouples display emoji from storage. Keys like `"good"`, `"neutral"`, `"bad"` map to emojis in the UI layer. Enables i18n-friendly mood labels. |
+| `prompt_key` stores i18n key, not prompt text | Prompts are defined in code (`lib/journal/prompts.ts`). Storing the key allows prompt text to be translated and updated without migrating DB data. |
+| Soft references in `journal_entry_links` (no FK to habits/tasks) | Habits and tasks can be deleted independently. Hard FK would require complex multi-target cascade logic. Soft reference with `link_type` discriminator is simpler and matches the "light tags" requirement from PROJECT.md. |
+| No `category_id` on journal entries | Journal entries are daily reflections, not categorized items. The mood field serves the tagging purpose. Adding categories would create unnecessary UI complexity for a free-form feature. |
+| `user_id` references `profiles(id)`, not `auth.users(id)` | Matches existing convention (projects table uses same pattern). The `profiles` table is the canonical user reference within the app schema. |
 
-Use `FLOAT8` (double precision) for `sort_order` instead of integers because:
-
-1. **Single-row updates on reorder**: When dragging a task between two others, compute midpoint (`(prev.sort_order + next.sort_order) / 2`) and update only the moved task. No need to renumber siblings.
-2. **Cross-column moves**: When moving to a new kanban column, find the midpoint between the target neighbors, update the single task's `status` + `sort_order` in one write.
-3. **Edge cases**: Insert at top = `first_item.sort_order - 1.0`. Insert at bottom = `last_item.sort_order + 1.0`.
-4. **Periodic normalization**: After ~50 reorders in the same neighborhood, precision degrades. Add a background normalization that reassigns integer sort_orders (1.0, 2.0, 3.0...) when gap between adjacent items < 0.001. This is a future optimization, not a launch blocker.
-
-**Confidence: MEDIUM** -- float ordering is a well-established pattern for drag-and-drop, but the normalization threshold (0.001) is a heuristic that should be validated in practice.
-
-## New DB Classes
-
-### `ProjectsDB` (new file: `lib/db/projects.ts`)
-
-Follow the exact same pattern as `TasksDB` and `HabitsDB`:
+## TypeScript Types
 
 ```typescript
-import { createClient } from '@/lib/supabase/client';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Project, ProjectInsert, ProjectUpdate, ProjectFilters } from './types';
+// In lib/db/types.ts
 
-export class ProjectsDB {
-  constructor(private supabase: SupabaseClient) {}
-
-  async getUserProjects(userId: string, filters?: ProjectFilters): Promise<Project[]> {
-    let query = this.supabase
-      .from('projects')
-      .select('*')
-      .eq('user_id', userId)
-      .order('sort_order', { ascending: true });
-
-    if (filters?.status) query = query.eq('status', filters.status);
-    if (filters?.section) query = query.eq('section', filters.section);
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
-  }
-
-  async getProject(projectId: string, userId: string): Promise<Project | null> {
-    const { data, error } = await this.supabase
-      .from('projects')
-      .select('*')
-      .eq('id', projectId)
-      .eq('user_id', userId)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
-    return data;
-  }
-
-  async createProject(project: ProjectInsert): Promise<Project> {
-    const { data, error } = await this.supabase
-      .from('projects')
-      .insert(project)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
-
-  async updateProject(projectId: string, userId: string, updates: ProjectUpdate): Promise<Project> {
-    const { data, error } = await this.supabase
-      .from('projects')
-      .update(updates)
-      .eq('id', projectId)
-      .eq('user_id', userId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
-
-  async deleteProject(projectId: string, userId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('projects')
-      .delete()
-      .eq('id', projectId)
-      .eq('user_id', userId);
-
-    if (error) throw error;
-  }
-}
-
-export const projectsDB = new ProjectsDB(createClient());
-```
-
-### `TasksDB` Extensions
-
-Add these methods to the existing `TasksDB` class:
-
-```typescript
-// In lib/db/tasks.ts -- add to existing class
-
-/**
- * Get tasks grouped by status for kanban view
- */
-async getKanbanTasks(userId: string, filters?: { section?: string; project_id?: string }): Promise<Task[]> {
-  let query = this.supabase
-    .from('tasks')
-    .select('*, projects:project_id(id, name, color)')
-    .eq('user_id', userId)
-    .order('sort_order', { ascending: true });
-
-  if (filters?.section) query = query.eq('section', filters.section);
-  if (filters?.project_id) query = query.eq('project_id', filters.project_id);
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
-}
-
-/**
- * Bulk update sort_order for drag-and-drop reorder
- * Accepts array of { id, sort_order, status? }
- */
-async reorderTasks(
-  userId: string,
-  updates: Array<{ id: string; sort_order: number; status?: string }>
-): Promise<void> {
-  // Use a transaction-like approach: update each task
-  // Supabase doesn't support multi-row update in one call,
-  // so batch with Promise.all (RLS ensures user_id scoping)
-  const promises = updates.map(({ id, sort_order, status }) => {
-    const updateData: Record<string, unknown> = { sort_order };
-    if (status) updateData.status = status;
-
-    return this.supabase
-      .from('tasks')
-      .update(updateData)
-      .eq('id', id)
-      .eq('user_id', userId);
-  });
-
-  const results = await Promise.all(promises);
-  const failed = results.find(r => r.error);
-  if (failed?.error) throw failed.error;
-}
-
-/**
- * Get tasks for a specific project
- */
-async getProjectTasks(userId: string, projectId: string): Promise<Task[]> {
-  const { data, error } = await this.supabase
-    .from('tasks')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('project_id', projectId)
-    .order('sort_order', { ascending: true });
-
-  if (error) throw error;
-  return data || [];
-}
-```
-
-**Note on `reorderTasks`**: Supabase JS client does not support multi-row upsert with different values per row. The `Promise.all` approach works but is N+1 writes. For a typical drag operation, N=1 (move one task, update one row). Batch reorder (normalizing all tasks in a column) could be N=20-50. This is acceptable at the scale of a personal productivity app. If it becomes a bottleneck, use a Supabase Edge Function with raw SQL for batch updates.
-
-**Confidence: HIGH** -- follows existing patterns exactly. The `select('*, projects:project_id(...)')` join syntax is standard Supabase.
-
-## New Type Definitions
-
-Add to `lib/db/types.ts`:
-
-```typescript
 // =============================================================================
-// PROJECTS
+// JOURNAL ENTRIES
 // =============================================================================
 
-export type ProjectSection = 'work' | 'personal';
-export type ProjectStatus = 'active' | 'archived';
+export type MoodKey =
+  | "amazing"
+  | "good"
+  | "neutral"
+  | "bad"
+  | "terrible";
 
-export interface Project {
-  id: string;
-  user_id: string;
-  name: string;
-  section: ProjectSection;
-  color: string;
-  status: ProjectStatus;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
+export interface JournalEntry {
+  id: string;                    // UUID
+  user_id: string;               // UUID
+  entry_date: string;            // DATE (YYYY-MM-DD)
+  body: string;                  // free-form text
+  mood: MoodKey | null;          // mood key
+  prompt_key: string | null;     // i18n prompt key
+  created_at: string;            // TIMESTAMPTZ
+  updated_at: string;            // TIMESTAMPTZ
 }
 
-export type ProjectInsert = Omit<Project, 'id' | 'created_at' | 'updated_at'> & {
+export type JournalEntryInsert = Omit<
+  JournalEntry,
+  "id" | "created_at" | "updated_at"
+> & {
   id?: string;
 };
 
-export type ProjectUpdate = Partial<Omit<Project, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+export type JournalEntryUpdate = Partial<
+  Omit<JournalEntry, "id" | "user_id" | "created_at" | "updated_at">
+>;
 
-export interface ProjectFilters {
-  status?: ProjectStatus;
-  section?: ProjectSection;
+export type JournalLinkType = "habit" | "task";
+
+export interface JournalEntryLink {
+  id: string;
+  journal_entry_id: string;
+  link_type: JournalLinkType;
+  link_id: string;               // habit or task UUID
+  created_at: string;
 }
 
-// =============================================================================
-// TASK EXTENSIONS
-// =============================================================================
-
-export type TaskSection = 'work' | 'personal';
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'done';
-
-// Extend TaskFilters with new fields
-export interface TaskFilters {
-  is_completed?: boolean;
-  priority?: Priority;
-  due_date?: string;
-  has_due_date?: boolean;
-  section?: TaskSection;      // NEW
-  status?: TaskStatus;        // NEW
-  project_id?: string;        // NEW
+export interface JournalEntryWithLinks extends JournalEntry {
+  links: JournalEntryLink[];
 }
 
-// Task with joined project data (for kanban view)
-export interface TaskWithProject extends Task {
-  projects: Pick<Project, 'id' | 'name' | 'color'> | null;
+// Calendar view: lightweight shape for dot indicators
+export interface JournalCalendarDay {
+  entry_date: string;            // YYYY-MM-DD
+  mood: MoodKey | null;
 }
 ```
 
-## New Validation Schemas
-
-Add to `lib/validations/task.ts` (extend existing schemas):
+### DashboardData Extension
 
 ```typescript
-// Extend taskFormSchema
-export const taskFormSchema = z.object({
-  title: z.string().trim().min(1).max(100),
-  description: z.string().max(500).optional().nullable(),
-  intention: z.string().max(200).optional().nullable(),
-  priority: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).optional(),
-  category: z.enum(["work", "personal", "shopping", "other"]).nullable().optional(),
-  due_date: z.string().nullable().optional(),
-  due_time: z.string().nullable().optional(),
-  completion_difficulty: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
-  section: z.enum(["work", "personal"]).optional(),           // NEW
-  status: z.enum(["backlog", "todo", "in_progress", "done"]).optional(),  // NEW
-  project_id: z.string().uuid().nullable().optional(),        // NEW
-});
+// Extend existing DashboardData interface
+export interface DashboardData {
+  habits: HabitWithAbsence[];
+  tasks_today: Task[];
+  tasks_tomorrow: Task[];
+  milestones_today: HabitMilestone[];
+  stats: {
+    total_habits: number;
+    completed_today: number;
+    current_best_streak: number;
+    total_tasks: number;
+    tasks_due_today: number;
+    tasks_completed_today: number;
+  };
+  _warnings?: string[];
+  journal_today: boolean;  // NEW: whether user has a journal entry for today
+}
 ```
 
-New file `lib/validations/project.ts`:
+## Architectural Patterns
+
+### Pattern 1: One-Entry-Per-Day Upsert
+
+**What:** The journal enforces one entry per day per user. Creating a second entry for the same day updates the existing one via Supabase upsert.
+**When to use:** Always when creating entries from the dashboard widget or journal page.
+**Trade-offs:** Simpler UX (user never sees "entry already exists" errors), but requires `ON CONFLICT` handling and the UNIQUE constraint.
 
 ```typescript
-import { z } from "zod";
+// In JournalEntriesDB
+async upsertEntry(entry: JournalEntryInsert): Promise<JournalEntry> {
+  const { data, error } = await this.supabase
+    .from("journal_entries")
+    .upsert(entry, { onConflict: "user_id,entry_date" })
+    .select()
+    .single();
 
-export const projectFormSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(50, "Name must be 50 characters or less"),
-  section: z.enum(["work", "personal"]),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color"),
-});
-
-export type ProjectFormValues = z.infer<typeof projectFormSchema>;
-
-export const projectUpdateSchema = projectFormSchema.partial().extend({
-  status: z.enum(["active", "archived"]).optional(),
-  sort_order: z.number().optional(),
-}).refine((data) => Object.keys(data).length > 0, {
-  message: "At least one field must be provided",
-});
+  if (error) throw error;
+  return data;
+}
 ```
 
-New file `lib/validations/reorder.ts`:
+### Pattern 2: SWR with Date-Keyed Cache
+
+**What:** SWR keys include the local date to ensure midnight cache refresh. Matches existing dashboard and sidebar-counts patterns.
+**When to use:** All journal data fetching on the client.
+**Trade-offs:** Guarantees fresh data when date changes, but creates new cache entries at midnight.
 
 ```typescript
-import { z } from "zod";
-
-export const reorderSchema = z.object({
-  updates: z.array(z.object({
-    id: z.string().uuid(),
-    sort_order: z.number(),
-    status: z.enum(["backlog", "todo", "in_progress", "done"]).optional(),
-  })).min(1).max(100),  // Cap at 100 to prevent abuse
-});
-
-export type ReorderValues = z.infer<typeof reorderSchema>;
-```
-
-## New API Routes
-
-### `/api/projects/route.ts`
-
-```
-GET  /api/projects                    -> List user's projects (with filters)
-POST /api/projects                    -> Create project
-```
-
-### `/api/projects/[id]/route.ts`
-
-```
-GET    /api/projects/[id]             -> Get single project
-PATCH  /api/projects/[id]             -> Update project
-DELETE /api/projects/[id]             -> Delete project (tasks get project_id = NULL)
-```
-
-### `/api/tasks/route.ts` (extended)
-
-```
-GET /api/tasks?view=kanban&section=work     -> Kanban view with project joins
-GET /api/tasks?section=work                 -> Filter by section
-GET /api/tasks?project_id=uuid             -> Filter by project
-GET /api/tasks?status=in_progress          -> Filter by kanban status
-```
-
-### `/api/tasks/reorder/route.ts` (new)
-
-```
-POST /api/tasks/reorder               -> Bulk update sort_order (and optionally status)
-```
-
-This is a dedicated endpoint rather than overloading PATCH on individual tasks because:
-1. Drag-and-drop moves may update 1-3 tasks atomically (moved task + neighbors for normalization)
-2. Cross-column moves need to update both `status` and `sort_order`
-3. Keeps the existing PATCH endpoint's validation clean
-
-## New SWR Hooks
-
-### `lib/hooks/use-projects.ts`
-
-```typescript
-import useSWR from "swr";
-import { fetcher } from "@/lib/fetcher";
-import type { Project, ProjectSection } from "@/lib/db/types";
-
-export function useProjects(filters?: { section?: ProjectSection }) {
-  const params = new URLSearchParams();
-  if (filters?.section) params.set("section", filters.section);
-
-  const { data, error, isLoading, mutate } = useSWR<{ projects: Project[] }>(
-    `/api/projects?${params}`,
+// In lib/hooks/use-journal.ts
+export function useJournalEntry(date: string) {
+  const { data, error, isLoading, mutate } = useSWR<{
+    entry: JournalEntryWithLinks | null;
+  }>(
+    `/api/journal?date=${date}`,
     fetcher,
-    { revalidateOnFocus: true }
+    { keepPreviousData: true }
   );
 
   return {
-    projects: data?.projects ?? [],
+    entry: data?.entry ?? null,
     error,
     isLoading,
     mutate,
   };
 }
-```
 
-### `lib/hooks/use-tasks.ts` (new, replaces inline fetcher)
-
-```typescript
-import useSWR from "swr";
-import { fetcher } from "@/lib/fetcher";
-import type { Task, TaskWithProject, TaskSection, TaskStatus } from "@/lib/db/types";
-
-interface UseTasksOptions {
-  section?: TaskSection;
-  status?: TaskStatus;
-  project_id?: string;
-  view?: "kanban";
-}
-
-export function useTasks(options?: UseTasksOptions) {
-  const params = new URLSearchParams();
-  if (options?.section) params.set("section", options.section);
-  if (options?.status) params.set("status", options.status);
-  if (options?.project_id) params.set("project_id", options.project_id);
-  if (options?.view) params.set("view", options.view);
-
-  const { data, error, isLoading, mutate } = useSWR<{ tasks: TaskWithProject[] }>(
-    `/api/tasks?${params}`,
+export function useJournalCalendar(yearMonth: string) {
+  // yearMonth = "2026-02"
+  const { data, error, isLoading } = useSWR<{
+    days: JournalCalendarDay[];
+  }>(
+    `/api/journal/calendar?month=${yearMonth}`,
     fetcher,
-    { revalidateOnFocus: true, keepPreviousData: true }
+    { keepPreviousData: true }
   );
 
   return {
-    tasks: data?.tasks ?? [],
+    days: data?.days ?? [],
     error,
     isLoading,
-    mutate,
   };
 }
 ```
 
-## Drag-and-Drop Architecture
+### Pattern 3: Lightweight Calendar Endpoint
 
-### Library Choice: `@dnd-kit/react` (new rewrite)
+**What:** Separate `/api/journal/calendar` endpoint returns only `{entry_date, mood}[]` for an entire month. No body text transferred.
+**When to use:** Calendar view component fetches this, not the full entry list.
+**Trade-offs:** Extra endpoint, but much better performance for the calendar view. A month returns at most 31 tiny rows vs. potentially 31 entries with multi-paragraph bodies.
 
-**Recommendation: `@dnd-kit/react` v0.3.x** because:
+```typescript
+// In /api/journal/calendar/route.ts
+export async function GET(request: NextRequest) {
+  // ...auth check...
+  const month = searchParams.get("month"); // "2026-02"
+  const startDate = `${month}-01`;
+  // Use last-day-of-month calculation to avoid date overflow
+  const [y, m] = month.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const endDate = `${month}-${String(lastDay).padStart(2, "0")}`;
 
-1. **React 19 compatible**: Peer dependencies explicitly declare `react: '^18.0.0 || ^19.0.0'` (verified via npm registry).
-2. **Ground-up rewrite**: The new `@dnd-kit/react` is a complete rewrite built on `@dnd-kit/dom`, designed for modern React. The legacy `@dnd-kit/core` v6.x has open issues with React 19 (GitHub issue #1511).
-3. **Sortable built-in**: Ships with `@dnd-kit/react/sortable` for kanban column reordering.
-4. **Lightweight**: ~10kB, zero external dependencies.
-5. **Accessibility**: Built-in keyboard navigation and screen reader announcements.
-6. **Tailwind + shadcn/ui compatible**: The library is headless -- it provides behavior, not styles. Works perfectly with the existing design system.
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .select("entry_date, mood")
+    .eq("user_id", user.id)
+    .gte("entry_date", startDate)
+    .lte("entry_date", endDate)
+    .order("entry_date", { ascending: true });
 
-**Alternative considered: `@atlaskit/pragmatic-drag-and-drop`**
-- Also React 19 compatible (wide peer deps: `^16.8 || ^17 || ^18 || ^19`).
-- Framework-agnostic (vanilla JS core), which is overkill for a React-only app.
-- Requires importing from `@atlaskit/*` packages (Atlassian's monorepo), adding more dependencies.
-- Fewer community examples with shadcn/ui + Tailwind.
-
-**Alternative considered: `@dnd-kit/core` (legacy)**
-- Does not officially support React 19. Works with `--legacy-peer-deps` or overrides, but this is a workaround, not a solution.
-- More community examples exist, but the library is being superseded by `@dnd-kit/react`.
-
-**Risk: `@dnd-kit/react` is pre-1.0 (v0.3.x)**
-- The API may change before 1.0.
-- Mitigation: Isolate all dnd-kit usage behind an internal abstraction layer (`lib/kanban/dnd-provider.tsx`, `lib/kanban/use-kanban-dnd.ts`). If the API changes, only these files need updating.
-- The existing `@dnd-kit/core` can be used as a fallback if `@dnd-kit/react` proves unstable.
-
-**Confidence: MEDIUM** -- `@dnd-kit/react` is the correct choice for React 19, but its pre-1.0 status means API instability is possible. The abstraction layer mitigation is sound.
-
-### Installation
-
-```bash
-pnpm add @dnd-kit/react @dnd-kit/helpers
+  return NextResponse.json({ days: data ?? [] });
+}
 ```
 
-### DnD Component Architecture
+### Pattern 4: Links as Post-Save Sync
 
-```
-KanbanBoard (page-level component)
-  |-- DragDropProvider (from @dnd-kit/react)
-  |     |-- KanbanColumn (status="backlog", droppable)
-  |     |     |-- SortableContext
-  |     |     |     |-- KanbanCard (draggable + sortable)
-  |     |     |     |-- KanbanCard
-  |     |     |     |-- ...
-  |     |-- KanbanColumn (status="todo", droppable)
-  |     |     |-- SortableContext
-  |     |     |     |-- KanbanCard
-  |     |-- KanbanColumn (status="in_progress", droppable)
-  |     |-- KanbanColumn (status="done", droppable)
-  |     |-- DragOverlay (floating card during drag)
-```
+**What:** Journal entry links are managed as a separate step after the entry itself is saved. The form collects selected habit/task IDs, then the API route syncs the links table (delete removed, insert added).
+**When to use:** When creating or updating a journal entry with linked habits/tasks.
+**Trade-offs:** Two-step save (entry + links) adds slight complexity but avoids nested transaction logic. Links are optional and lightweight.
 
-### DnD State Management Pattern
+```typescript
+// In JournalEntriesDB
+async syncLinks(
+  entryId: string,
+  links: { link_type: JournalLinkType; link_id: string }[]
+): Promise<void> {
+  // Delete existing links for this entry
+  await this.supabase
+    .from("journal_entry_links")
+    .delete()
+    .eq("journal_entry_id", entryId);
 
-The kanban drag-and-drop follows this data flow:
-
-```
-1. DRAG START
-   - User grabs a KanbanCard
-   - Set activeTaskId in local state
-   - DragOverlay renders a ghost card
-
-2. DRAG OVER (cross-column)
-   - User drags card over a different KanbanColumn
-   - Optimistically move card to new column in local state
-   - This gives immediate visual feedback
-
-3. DRAG END
-   - User drops card
-   - Compute new sort_order (midpoint between neighbors)
-   - SWR optimistic update:
-     mutate(
-       reorderOnServer([{ id, sort_order, status }]),
-       {
-         optimisticData: (current) => reorderedTasks,
-         rollbackOnError: true,
-         populateCache: false,
-         revalidate: false,
-       }
-     )
-   - API call: POST /api/tasks/reorder
-
-4. ERROR ROLLBACK
-   - If API fails, SWR automatically rolls back to previous state
-   - Toast error notification
+  // Insert new links (if any)
+  if (links.length > 0) {
+    const inserts = links.map((l) => ({
+      journal_entry_id: entryId,
+      link_type: l.link_type,
+      link_id: l.link_id,
+    }));
+    const { error } = await this.supabase
+      .from("journal_entry_links")
+      .insert(inserts);
+    if (error) throw error;
+  }
+}
 ```
 
-**Key design decision**: The kanban board derives its column data from SWR cache, NOT from separate local state. This means:
-- Single source of truth (SWR cache)
-- Optimistic updates use SWR's `mutate()` with `optimisticData`
-- No state synchronization bugs between local state and server state
-- `rollbackOnError: true` handles failures automatically
+### Pattern 5: Dashboard HEAD-Only Query
 
-The one exception is during an active drag (`dragOver` events), where a local `useState` temporarily holds the "in-flight" column assignment. On `dragEnd`, this local state is flushed to SWR via `mutate()`.
+**What:** The dashboard only needs to know whether a journal entry exists for today (boolean), not the entry content. Use a count query with `head: true` to avoid transferring any row data.
+**When to use:** Dashboard data fetching in `/api/dashboard/route.ts`.
+**Trade-offs:** Adds one query to the existing `Promise.all`, but it is extremely cheap (HEAD-only).
 
-**Confidence: HIGH** -- this is the exact same optimistic update pattern already used in `dashboard-content.tsx` for habit and task toggles.
+```typescript
+// In JournalEntriesDB
+async hasEntryForDate(userId: string, date: string): Promise<boolean> {
+  const { count, error } = await this.supabase
+    .from("journal_entries")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("entry_date", date);
 
-### New Component Files
-
-```
-components/
-  projects/
-    projects-page-content.tsx     # Projects listing page
-    project-card.tsx              # Project card in listing
-    project-form.tsx              # Create/edit project form
-    project-selector.tsx          # Dropdown to pick project in task form
-  kanban/
-    kanban-board.tsx              # Main kanban board with DragDropProvider
-    kanban-column.tsx             # Single status column (droppable)
-    kanban-card.tsx               # Draggable task card
-    kanban-empty-column.tsx       # Empty state for a column
-  tasks/
-    task-card.tsx                 # MODIFIED: add project badge, section indicator
-    task-form.tsx                 # MODIFIED: add section, status, project_id fields
-    task-list.tsx                 # MODIFIED: section-based filtering
-    tasks-page-content.tsx        # MODIFIED: section tabs, kanban view toggle
-    task-section-toggle.tsx       # NEW: Work/Personal toggle control
-    task-view-toggle.tsx          # NEW: List/Kanban view toggle
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
 ```
 
-### New Route Pages
-
-```
-app/
-  projects/
-    page.tsx                      # Projects listing
-    new/page.tsx                  # Create project
-    [id]/
-      page.tsx                    # Project detail (shows project's tasks in kanban)
-      edit/page.tsx               # Edit project
-  tasks/
-    page.tsx                      # MODIFIED: section-based layout
-    kanban/
-      page.tsx                    # Dedicated kanban board page (alternative to /tasks?view=kanban)
-```
-
-**Decision**: The kanban view can be either a separate page (`/tasks/kanban`) or a view toggle within the existing `/tasks` page. Recommending **view toggle within `/tasks`** because:
-- Fewer pages to maintain
-- User preference can be persisted in a query param or localStorage
-- Consistent with how the existing tasks page already uses tabs (pending/completed)
+This follows the existing pattern in `TasksDB.getTaskCount()`.
 
 ## Data Flow
 
-### Kanban Board Data Flow (Detailed)
+### Create/Edit Journal Entry Flow
 
 ```
-1. Page Load: /tasks?view=kanban&section=work
-   |
-   v
-2. TasksPage (Server Component)
-   - Read searchParams.view and searchParams.section
-   - Pass to KanbanBoard client component
-   |
-   v
-3. KanbanBoard (Client Component)
-   - useTasks({ view: "kanban", section: "work" })
-   - SWR fetches: GET /api/tasks?view=kanban&section=work
-   |
-   v
-4. API Route: GET /api/tasks?view=kanban&section=work
-   - createClient() -> fresh server Supabase client
-   - const tasksDB = new TasksDB(supabase)
-   - tasksDB.getKanbanTasks(userId, { section: "work" })
-   - Returns tasks with joined project data
-   |
-   v
-5. KanbanBoard receives tasks
-   - Groups tasks by status: { backlog: [...], todo: [...], in_progress: [...], done: [...] }
-   - Renders 4 KanbanColumn components
-   - Each column wraps its cards in SortableContext
-   |
-   v
-6. User drags card from "todo" to "in_progress"
-   - onDragEnd fires
-   - Compute new sort_order for moved card
-   - Call SWR mutate() with optimistic data
-   - POST /api/tasks/reorder with [{ id, sort_order, status: "in_progress" }]
-   |
-   v
-7. API Route: POST /api/tasks/reorder
-   - Validate with reorderSchema
-   - tasksDB.reorderTasks(userId, updates)
-   - Each update: supabase.from('tasks').update({ sort_order, status }).eq('id', id).eq('user_id', userId)
-   - Return success
+User opens journal (dashboard widget or /journal/new)
+    |
+    v
+[JournalEntryForm] --- mood selector, textarea, prompt, link selector
+    |
+    v  (submit)
+[react-hook-form + zod validation]  (journalFormSchema)
+    |
+    v
+fetch POST /api/journal  (or PATCH /api/journal/[id])
+    |
+    v
+[API route]
+    |-- createClient() (fresh server client, per existing convention)
+    |-- auth.getUser() (verify authenticated)
+    |-- validateRequestBody(body, journalFormSchema)
+    |-- ensureProfile(supabase, user)
+    |-- journalDB.upsertEntry({ user_id, entry_date, body, mood, prompt_key })
+    |-- journalDB.syncLinks(entryId, links)  (if links provided)
+    |
+    v
+Return { entry } with 201 (create) or 200 (update)
+    |
+    v
+[SWR mutate] --- revalidate journal entry + calendar + dashboard caches
+    |
+    v
+toast.success() + optionally navigate to /journal
 ```
 
-### Task Creation with Project Assignment
+### Dashboard Journal Widget Flow
 
 ```
-1. User clicks "New Task" (within a project context or standalone)
-   |
-   v
-2. TaskForm renders with optional project_id pre-selected
-   - If created from project page: project_id pre-filled
-   - If created from tasks page: project_id is a dropdown (optional)
-   - Section defaults to project's section (if project selected)
-   - Status defaults to "todo"
-   |
-   v
-3. Form submission: POST /api/tasks
-   - Body includes: { title, ..., section, status, project_id }
-   - Validation: extended taskFormSchema
-   - TasksDB.createTask() with new fields
-   |
-   v
-4. SWR cache invalidation
-   - mutate() on tasks list
-   - mutate() on kanban view (if open)
-   - mutate() on project tasks (if viewing project)
+[DashboardContent] mounts
+    |
+    v
+useSWR("/api/dashboard?date=YYYY-MM-DD")
+    |-- response now includes journal_today: boolean
+    |
+    v
+[JournalWidget] renders in dashboard grid
+    |-- if journal_today === true:
+    |       Show "View today's entry" link -> /journal?date=YYYY-MM-DD
+    |-- if journal_today === false:
+    |       Show quick textarea + mood selector
+    |       |
+    |       v  (submit)
+    |   POST /api/journal (upsert for today's date)
+    |       |
+    |       v
+    |   mutate("/api/dashboard?date=...")  -- refresh widget state
+    |
+    v
+Positioned in dashboard grid alongside HabitChecklist + TasksToday
 ```
 
-### is_completed vs status Relationship
+### Calendar Browse Flow
 
-**Critical design decision**: The `is_completed` boolean and the `status` enum are related but distinct:
+```
+User navigates to /journal
+    |
+    v
+[JournalPage] (server component)
+    |-- Renders JournalCalendar + JournalTimeline side by side
+    |   (or stacked on mobile)
+    |
+    v
+[JournalCalendar] (client component)
+    |-- useJournalCalendar("2026-02")
+    |-- GET /api/journal/calendar?month=2026-02
+    |       returns [{entry_date: "2026-02-01", mood: "good"}, ...]
+    |
+    v
+react-day-picker renders with custom modifiers:
+    |-- days with entries get mood-colored dots (from existing Calendar UI)
+    |-- clicking a day:
+    |     if entry exists -> navigate to /journal/[id]
+    |     if no entry -> navigate to /journal/new?date=YYYY-MM-DD
+    |
+    v
+[JournalTimeline] (client component)
+    |-- useSWR for entries in current month or selected range
+    |-- chronological list of JournalEntryCard components
+    |-- each card shows: date header, mood emoji, body preview, linked item badges
+    |-- click card -> navigate to /journal/[id]
+```
 
-- `is_completed = true` implies `status = 'done'` (auto-set when toggling complete)
-- `status = 'done'` implies `is_completed = true` (auto-set when dragging to Done column)
-- Moving OUT of "Done" column sets `is_completed = false`
-- The toggle API (`POST /api/tasks/:id/toggle`) must also update `status` to/from 'done'
+### State Management
 
-This bidirectional sync happens in the API layer, not the database (no triggers), to keep logic explicit and testable:
+```
+No new global state needed. Follows existing SWR-only pattern:
+
+SWR Cache Keys:
+  /api/journal?date=YYYY-MM-DD          -- single entry for a date
+  /api/journal?from=YYYY-MM-DD&to=...   -- entries in range (timeline)
+  /api/journal/calendar?month=YYYY-MM    -- calendar dots for month
+  /api/dashboard?date=YYYY-MM-DD         -- existing key, + journal_today
+
+Cross-cache revalidation after journal upsert:
+  1. mutate("/api/journal?date=YYYY-MM-DD")     -- refresh entry
+  2. mutate("/api/journal/calendar?month=...")   -- refresh calendar dots
+  3. mutate("/api/dashboard?date=...")           -- refresh dashboard widget
+```
+
+## Integration Points
+
+### Sidebar Navigation (Modified)
+
+Add to `mainNavItems` array in `components/layouts/app-sidebar.tsx`:
 
 ```typescript
-// In PATCH /api/tasks/[id] handler
-if (updates.is_completed !== undefined) {
-  updates.status = updates.is_completed ? 'done' : 'todo';
-}
-if (updates.status !== undefined) {
-  updates.is_completed = updates.status === 'done';
-  updates.completed_at = updates.status === 'done' ? new Date().toISOString() : null;
+import { BookOpen } from "lucide-react";
+
+// Add after tasks item:
+{
+  href: "/journal",
+  icon: BookOpen,
+  labelKey: "journal",
+  match: (p: string) => p.startsWith("/journal"),
 }
 ```
 
-**Confidence: HIGH** -- this is the simplest correct approach. Database triggers would hide logic and make testing harder.
+Add `"journal": "Journal"` to `common.nav` in all three locale files. No badge needed for journal (unlike habits/tasks, journal has no "incomplete" concept that needs a count badge).
 
-## Patterns to Follow
+### Dashboard API (Modified)
 
-### Pattern 1: DB Class Per Entity
+In `/api/dashboard/route.ts`, add to the `Promise.all`:
 
-**What:** Each database entity (projects, tasks, habits) has its own DB class with constructor-injected Supabase client.
-**When:** Always, for any new database entity.
-**Example:** `ProjectsDB` follows the exact same pattern as `HabitsDB` and `TasksDB`.
-
-### Pattern 2: SWR Hook Per View
-
-**What:** Each distinct data view gets its own SWR hook with typed response.
-**When:** Any component that fetches data from an API route.
-**Example:**
 ```typescript
-// lib/hooks/use-projects.ts
-export function useProjects(filters?: { section?: ProjectSection }) {
-  const params = new URLSearchParams();
-  if (filters?.section) params.set("section", filters.section);
-  const { data, error, isLoading, mutate } = useSWR<{ projects: Project[] }>(
-    `/api/projects?${params}`, fetcher, { revalidateOnFocus: true }
-  );
-  return { projects: data?.projects ?? [], error, isLoading, mutate };
-}
+const journalDB = new JournalEntriesDB(supabase);
+
+const [/* ...existing 5 queries... */, hasJournalToday] = await Promise.all([
+  habitsDB.getHabitsWithTodayStatus(user.id, date),
+  tasksDB.getTodayTasks(user.id, date),
+  tasksDB.getTaskCount(user.id),
+  tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
+  milestonesDB.getTodaysMilestones(user.id, date).catch(/* ... */),
+  // NEW: lightweight HEAD-only check
+  journalDB.hasEntryForDate(user.id, date).catch((err) => {
+    log.error("Failed to check journal entry", err, { userId: user.id, date });
+    return false; // Degrade gracefully -- widget shows "write" state
+  }),
+]);
 ```
 
-### Pattern 3: Optimistic Updates for Mutations
+### Dashboard Server Page (Modified)
 
-**What:** Use SWR's `mutate()` with `optimisticData` for user-facing mutations.
-**When:** Any action that modifies data and should feel instant (drag-drop, toggles, creates).
-**Example:** See the existing `handleToggleHabit` in `dashboard-content.tsx` -- the kanban reorder follows this exact pattern.
+In `app/dashboard/page.tsx`, add `journal_today` to `initialData`:
 
-### Pattern 4: Zod Validation at API Boundaries
-
-**What:** Every API route validates input with a Zod schema before processing.
-**When:** Every POST/PATCH/PUT handler.
-**Example:** `validateRequestBody(body, reorderSchema)` in the reorder endpoint.
-
-### Pattern 5: Float-Based Sort Order
-
-**What:** Use float values for sort_order to enable single-row updates on reorder.
-**When:** Any orderable list that supports drag-and-drop.
-**Example:**
 ```typescript
-function computeSortOrder(prevOrder: number | null, nextOrder: number | null): number {
-  if (prevOrder === null && nextOrder === null) return 1.0;
-  if (prevOrder === null) return nextOrder! - 1.0;
-  if (nextOrder === null) return prevOrder + 1.0;
-  return (prevOrder + nextOrder) / 2;
-}
+const initialData: DashboardData = {
+  // ...existing fields...
+  journal_today: hasJournalToday,
+};
 ```
 
-## Anti-Patterns to Avoid
+### Dashboard Content Component (Modified)
 
-### Anti-Pattern 1: Dual Source of Truth for Kanban State
+In `components/dashboard/dashboard-content.tsx`, add the journal widget to the render tree. Position it below the main content grid or as a third column element:
 
-**What:** Maintaining both local React state AND SWR cache for the same task list in the kanban board.
-**Why bad:** State synchronization bugs. Stale data after mutations. Race conditions between local state updates and SWR revalidation.
-**Instead:** Use SWR cache as the single source of truth. Derive kanban columns from SWR data. Use `optimisticData` in `mutate()` for instant UI updates.
+```typescript
+const JournalWidget = dynamic(() =>
+  import("@/components/journal/journal-widget").then(
+    (m) => ({ default: m.JournalWidget })
+  ),
+);
 
-### Anti-Pattern 2: Integer Sort Order with Full Renumbering
-
-**What:** Using integer `sort_order` (1, 2, 3, ...) and renumbering all items in a column after every drag.
-**Why bad:** N writes per drag operation. Conflicts if two users (or tabs) reorder simultaneously. Slow for columns with many items.
-**Instead:** Use float `sort_order` with midpoint calculation. Only 1 write per drag.
-
-### Anti-Pattern 3: Separate API Call Per Drag Event (dragOver)
-
-**What:** Calling the API on every `onDragOver` event as the user drags a card.
-**Why bad:** Generates dozens of API calls per second during a drag. Server overload. Flickering on rollback.
-**Instead:** Only call the API on `onDragEnd`. Use local state for the in-flight visual position during drag.
-
-### Anti-Pattern 4: Database Triggers for is_completed/status Sync
-
-**What:** Using PostgreSQL triggers to auto-sync `is_completed` and `status` fields.
-**Why bad:** Hidden logic that's hard to test. Makes unit testing DB classes require a live database. Can cause unexpected behavior when updating one field.
-**Instead:** Handle the sync explicitly in API route handlers. Easy to test, easy to reason about.
-
-### Anti-Pattern 5: Overloading the Existing Task PATCH Endpoint for Reorder
-
-**What:** Using `PATCH /api/tasks/:id` for drag-and-drop reorder operations.
-**Why bad:** Reorder may need to update multiple tasks atomically. The existing PATCH is designed for single-task updates with full validation. Mixing concerns makes the endpoint harder to maintain.
-**Instead:** Create a dedicated `POST /api/tasks/reorder` endpoint with its own validation schema.
-
-## Scalability Considerations
-
-| Concern | At 50 tasks | At 500 tasks | At 5000 tasks |
-|---------|-------------|--------------|---------------|
-| Kanban load | Single query, instant | Single query, fast | Paginate per column (limit 50 per status) |
-| Drag reorder | 1 write, instant | 1 write, instant | 1 write, instant (float sort_order) |
-| Sort normalization | Never needed | Rarely needed | May need periodic normalization |
-| Project list | Single query | Single query | Single query (personal app, unlikely to have 100+ projects) |
-
-BetterR.Me is a personal productivity app. A single user is unlikely to have more than a few hundred tasks total. The architecture is designed for this scale and does not over-engineer for multi-tenant or collaborative scenarios.
-
-## Migration Strategy
-
-### Backward Compatibility
-
-The new columns on `tasks` have defaults:
-- `section DEFAULT 'personal'` -- existing tasks get assigned to "personal"
-- `status DEFAULT 'todo'` -- existing incomplete tasks get "todo" status
-- `project_id DEFAULT NULL` -- existing tasks have no project (which is valid)
-- `sort_order DEFAULT 0` -- existing tasks all start at 0 (will be normalized on first kanban load)
-
-A data migration should set `status = 'done'` for all tasks where `is_completed = true`:
-
-```sql
-UPDATE tasks SET status = 'done' WHERE is_completed = true;
+// In the JSX, after the main grid:
+<JournalWidget
+  hasEntry={data.journal_today}
+  date={today}
+  onSaved={() => {
+    mutate();  // Revalidate dashboard data
+  }}
+/>
 ```
 
-And normalize sort_order for existing tasks:
+### Existing Calendar Component (Reused)
 
-```sql
-WITH ranked AS (
-  SELECT id, ROW_NUMBER() OVER (PARTITION BY user_id, status ORDER BY created_at) AS rn
-  FROM tasks
-)
-UPDATE tasks SET sort_order = ranked.rn
-FROM ranked WHERE tasks.id = ranked.id;
+The existing `components/ui/calendar.tsx` wraps `react-day-picker`. The journal calendar view uses this directly with custom `modifiers` and `modifiersClassNames` props to render mood-colored dots on days that have entries. No new calendar library needed.
+
+```typescript
+// In components/journal/journal-calendar.tsx
+const entryDates = days.reduce<Record<string, MoodKey | null>>((acc, d) => {
+  acc[d.entry_date] = d.mood;
+  return acc;
+}, {});
+
+const modifiers = {
+  hasEntry: (date: Date) => {
+    const key = getLocalDateString(date);
+    return key in entryDates;
+  },
+};
 ```
 
-### sidebar counts update
+### Link Selector (Reads Existing Data)
 
-The existing `useSidebarCounts()` hook and `/api/sidebar/counts` endpoint do not need changes. The "tasks due" badge already counts incomplete tasks by due date, which is independent of section/status/project.
+The habit/task link selector fetches existing data from existing hooks:
+- `useHabits({ status: "active" })` from `lib/hooks/use-habits.ts` (already exists)
+- SWR fetch of `/api/tasks` (already exists)
+- Renders as a multi-select with checkboxes or tag-style chips
 
-**When Projects nav item is added to sidebar**, a project count badge can optionally be added using the same pattern.
+No modification to habit or task APIs needed -- read-only consumption of existing endpoints.
 
-## Files Summary: New vs Modified
+## Anti-Patterns
 
-### New Files (create)
+### Anti-Pattern 1: Rich Text Editor for V1
 
-| File | Purpose |
-|------|---------|
-| `lib/db/projects.ts` | ProjectsDB class |
-| `lib/validations/project.ts` | Project Zod schemas |
-| `lib/validations/reorder.ts` | Reorder Zod schema |
-| `lib/hooks/use-projects.ts` | SWR hook for projects |
-| `lib/hooks/use-tasks.ts` | SWR hook for tasks (replaces inline fetcher) |
-| `app/api/projects/route.ts` | Projects list/create API |
-| `app/api/projects/[id]/route.ts` | Project CRUD API |
-| `app/api/tasks/reorder/route.ts` | Bulk reorder API |
-| `app/projects/page.tsx` | Projects listing page |
-| `app/projects/new/page.tsx` | Create project page |
-| `app/projects/[id]/page.tsx` | Project detail/kanban page |
-| `app/projects/[id]/edit/page.tsx` | Edit project page |
-| `components/projects/projects-page-content.tsx` | Projects page client component |
-| `components/projects/project-card.tsx` | Project card |
-| `components/projects/project-form.tsx` | Project create/edit form |
-| `components/projects/project-selector.tsx` | Project dropdown for task form |
-| `components/kanban/kanban-board.tsx` | Kanban board with DnD |
-| `components/kanban/kanban-column.tsx` | Kanban column (droppable) |
-| `components/kanban/kanban-card.tsx` | Kanban card (draggable) |
-| `components/kanban/kanban-empty-column.tsx` | Empty column state |
-| `components/tasks/task-section-toggle.tsx` | Work/Personal toggle |
-| `components/tasks/task-view-toggle.tsx` | List/Kanban view toggle |
-| `supabase/migrations/YYYYMMDD_create_projects_table.sql` | Projects table + RLS |
-| `supabase/migrations/YYYYMMDD_add_task_kanban_fields.sql` | New task columns + indexes |
-| `i18n/messages/en.json` (sections) | New i18n strings for projects/kanban |
-| `i18n/messages/zh.json` (sections) | Chinese translations |
-| `i18n/messages/zh-TW.json` (sections) | Traditional Chinese translations |
+**What people do:** Reach for tiptap, slate, or draft.js to build a "rich text area."
+**Why it's wrong:** Massive bundle size increase (tiptap core alone is 100kb+ gzipped), complex serialization format decisions (HTML? JSON? ProseMirror doc?), and the PRD says "rich text area" meaning a large textarea, not a WYSIWYG editor.
+**Do this instead:** Use the existing shadcn `<Textarea>` component with auto-grow styling. If markdown preview is desired later, add it as a view-only feature (render body with `react-markdown`) in a future milestone.
 
-### Modified Files (edit)
+### Anti-Pattern 2: Multiple Entries Per Day
 
-| File | What Changes |
-|------|-------------|
-| `lib/db/types.ts` | Add Project types, TaskSection, TaskStatus, extend TaskFilters |
-| `lib/db/tasks.ts` | Add getKanbanTasks(), reorderTasks(), getProjectTasks(), extend getUserTasks() filters |
-| `lib/db/index.ts` | Export ProjectsDB |
-| `lib/validations/task.ts` | Add section, status, project_id to taskFormSchema |
-| `app/api/tasks/route.ts` | Handle section/status/project_id filters, kanban view |
-| `app/api/tasks/[id]/route.ts` | Sync is_completed/status in PATCH handler |
-| `components/tasks/tasks-page-content.tsx` | Section tabs, view toggle, redesigned layout |
-| `components/tasks/task-card.tsx` | Show project badge and section indicator |
-| `components/tasks/task-form.tsx` | Add section, status, project_id fields |
-| `components/tasks/task-list.tsx` | Support section-based filtering |
-| `components/layouts/app-sidebar.tsx` | Add Projects nav item |
-| `app/tasks/page.tsx` | Pass view/section from searchParams |
+**What people do:** Allow unlimited journal entries per day, like a micro-blog.
+**Why it's wrong:** Complicates the calendar view (which entry to show?), the dashboard widget (which is "today's"?), and the mental model. Journal is for daily reflection, not continuous logging.
+**Do this instead:** One entry per day with a `UNIQUE(user_id, entry_date)` constraint. Dashboard widget always targets today's entry (create or update). Calendar shows one dot per day. This matches the Day One daily journal paradigm.
+
+### Anti-Pattern 3: Hard FK on Links to Habits/Tasks
+
+**What people do:** Add `REFERENCES habits(id)` or `REFERENCES tasks(id)` on the links table.
+**Why it's wrong:** Postgres does not support conditional foreign keys where the target table depends on a discriminator column. You would need separate columns (`habit_id` + `task_id`) or a polymorphic pattern, both adding schema complexity. Deleting a habit would cascade to journal links, which is unexpected behavior.
+**Do this instead:** Soft references with `link_type` + `link_id`. If the linked item is deleted, the link becomes an orphan. The UI can show "Deleted item" or silently filter orphaned links.
+
+### Anti-Pattern 4: Storing Full Prompt Text in DB
+
+**What people do:** Save the entire writing prompt text alongside the journal entry.
+**Why it's wrong:** Prompts need i18n (three locales). If prompt text changes, stored copies are stale. Wastes storage.
+**Do this instead:** Store only the prompt key (e.g., `"gratitude_3things"`). The UI resolves the key to localized text via `useTranslations("journal.prompts")`.
+
+### Anti-Pattern 5: Loading All Entry Bodies for Calendar View
+
+**What people do:** Fetch full journal entries to render the calendar, then discard the bodies.
+**Why it's wrong:** Transfers potentially kilobytes of text per entry just to show dot indicators. With a year of daily entries, that is 365 full entries when the UI only needs 31 dates + moods for the current month.
+**Do this instead:** Dedicated `/api/journal/calendar` endpoint that selects only `entry_date` and `mood` columns. Maximum 31 rows, each under 50 bytes.
+
+## Scaling Considerations
+
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 1-100 users (current) | Single `journal_entries` table, composite index on `(user_id, entry_date DESC)`. Calendar query scans at most 31 rows per month per user. Zero concern. |
+| 100-10K users | Same architecture holds. RLS policies scale linearly. Consider adding `entry_date` range indexes if timeline pagination becomes slow for users with years of entries. |
+| 10K+ users | If bodies become very large (>10KB each, unlikely for journaling), consider moving `body` to a separate `journal_entry_bodies` table to keep the main table lean for calendar/list queries. Not needed for V1. |
+
+### Performance Notes
+
+- **Calendar endpoint returns max 31 rows** per request (one month). Cost is negligible.
+- **Timeline pagination:** For users with years of entries, add `?limit=20&offset=0` to the timeline endpoint. Likely not needed for V1 (users start with zero entries), but the API should support `limit` and `offset` params from the start so no breaking changes later.
+- **Dashboard overhead:** One additional HEAD-only query (`hasEntryForDate`) adds negligible latency to the existing 5-query `Promise.all`. The `.catch()` wrapper ensures it degrades gracefully.
+- **Link resolution:** When rendering a journal entry with links, the UI can batch-resolve linked habit/task names. This is a client-side concern (fetch habits and tasks that user already has cached via SWR). No extra API needed.
 
 ## Suggested Build Order
 
-Based on dependencies:
+Build order based on dependency analysis: each phase depends only on previously completed phases.
 
-1. **Database migration** (projects table + task column additions) -- everything depends on this
-2. **Type definitions** (`lib/db/types.ts`) -- everything depends on types
-3. **ProjectsDB class** + **TasksDB extensions** -- API routes depend on these
-4. **Validation schemas** (project, reorder, extended task) -- API routes depend on these
-5. **API routes** (projects CRUD, extended tasks, reorder) -- hooks depend on these
-6. **SWR hooks** (useProjects, useTasks) -- components depend on these
-7. **Project CRUD components** (form, card, page) -- standalone, no DnD dependency
-8. **Task form/card extensions** (section, status, project_id fields) -- standalone
-9. **Tasks page redesign** (section toggle, view toggle) -- depends on extended task form
-10. **Kanban board** (DnD components) -- depends on everything above
-11. **Sidebar update** -- cosmetic, can be done anytime after step 7
-12. **i18n strings** -- should be added alongside each component (not as a separate step)
+### Phase 1: Database + Types + DB Class
+
+**Depends on:** Nothing (foundation layer)
+**Delivers:** Migration file, TypeScript types, `JournalEntriesDB` class with full CRUD + calendar + upsert
+**Why first:** Every other piece depends on the data layer.
+
+Files:
+- `supabase/migrations/2026MMDD000001_create_journal_entries.sql`
+- `lib/db/types.ts` (add journal types)
+- `lib/db/journal-entries.ts` (new)
+- `lib/db/index.ts` (add export)
+- `lib/validations/journal.ts` (Zod schemas)
+- `lib/journal/moods.ts` (mood key -> emoji + label mapping)
+- `lib/journal/prompts.ts` (prompt definitions with i18n keys)
+
+### Phase 2: API Routes
+
+**Depends on:** Phase 1 (DB class + types + validation)
+**Delivers:** Full CRUD + calendar API for journal entries
+**Why second:** UI components need API endpoints to fetch from and submit to.
+
+Files:
+- `app/api/journal/route.ts` (GET list + POST create/upsert)
+- `app/api/journal/[id]/route.ts` (GET + PATCH + DELETE)
+- `app/api/journal/calendar/route.ts` (GET calendar data)
+
+### Phase 3: SWR Hooks
+
+**Depends on:** Phase 2 (API routes must exist for hooks to call)
+**Delivers:** Client-side data hooks for all journal views
+
+Files:
+- `lib/hooks/use-journal.ts`
+
+### Phase 4: Core UI Components
+
+**Depends on:** Phase 3 (hooks for data), Phase 1 (moods + prompts definitions)
+**Delivers:** Reusable journal UI building blocks
+
+Files:
+- `components/journal/mood-selector.tsx`
+- `components/journal/prompt-selector.tsx`
+- `components/journal/link-selector.tsx`
+- `components/journal/journal-entry-form.tsx`
+- `components/journal/journal-entry-card.tsx`
+
+### Phase 5: Journal Page + Sidebar Nav
+
+**Depends on:** Phase 4 (UI components)
+**Delivers:** Full journal page with calendar + timeline + CRUD, sidebar navigation entry
+
+Files:
+- `app/journal/layout.tsx`
+- `app/journal/loading.tsx`
+- `app/journal/page.tsx`
+- `app/journal/new/page.tsx`
+- `app/journal/[id]/page.tsx`
+- `app/journal/[id]/edit/page.tsx`
+- `components/journal/journal-calendar.tsx`
+- `components/journal/journal-timeline.tsx`
+- `components/layouts/app-sidebar.tsx` (modify: add journal nav item)
+
+### Phase 6: Dashboard Integration
+
+**Depends on:** Phase 2 (journal API), Phase 4 (journal-entry-form reuse)
+**Delivers:** Dashboard widget for quick daily journal entry, `journal_today` field
+
+Files:
+- `components/journal/journal-widget.tsx` (new)
+- `components/dashboard/dashboard-content.tsx` (modify: add widget)
+- `app/api/dashboard/route.ts` (modify: add hasEntryForDate query)
+- `app/dashboard/page.tsx` (modify: prefetch journal_today)
+- `lib/db/types.ts` (modify: extend DashboardData with journal_today)
+
+### Phase 7: i18n + Polish
+
+**Depends on:** All previous phases (need to know all strings)
+**Delivers:** Full translation coverage in en, zh, zh-TW + dark mode verification
+
+Files:
+- `i18n/messages/en.json` (add `journal` namespace + `common.nav.journal`)
+- `i18n/messages/zh.json` (same)
+- `i18n/messages/zh-TW.json` (same)
+
+**Note:** i18n keys should be added incrementally during each phase. Phase 7 is a final audit pass to ensure nothing was missed and all three locales are complete.
 
 ## Sources
 
-- Existing codebase analysis (all files referenced above) -- **HIGH confidence**
-- [@dnd-kit/react npm registry](https://www.npmjs.com/package/@dnd-kit/react) -- version 0.3.2, peer deps verified -- **HIGH confidence**
-- [@dnd-kit/core npm registry](https://www.npmjs.com/package/@dnd-kit/core) -- version 6.3.1 -- **HIGH confidence**
-- [dnd-kit React 19 support issue #1511](https://github.com/clauderic/dnd-kit/issues/1511) -- **HIGH confidence**
-- [SWR mutation docs](https://swr.vercel.app/docs/mutation) -- optimistic update pattern -- **HIGH confidence**
-- [Basedash: Implementing Re-Ordering at the Database Level](https://www.basedash.com/blog/implementing-re-ordering-at-the-database-level-our-experience) -- float sort_order pattern -- **MEDIUM confidence**
-- [Georgegriff/react-dnd-kit-tailwind-shadcn-ui](https://github.com/Georgegriff/react-dnd-kit-tailwind-shadcn-ui) -- reference kanban implementation -- **MEDIUM confidence**
-- [Top 5 Drag-and-Drop Libraries for React in 2026](https://puckeditor.com/blog/top-5-drag-and-drop-libraries-for-react) -- ecosystem overview -- **MEDIUM confidence**
+- Direct codebase analysis of `/home/xingdi/code/betterr_me/` -- all patterns verified from source files (HIGH confidence)
+- Existing migration patterns: `supabase/migrations/20260222000001_create_categories_table.sql`, `20260219000001_create_projects_table.sql` (HIGH confidence)
+- Existing DB class patterns: `lib/db/tasks.ts`, `lib/db/habits.ts`, `lib/db/categories.ts`, `lib/db/projects.ts` (HIGH confidence)
+- Existing API route patterns: `app/api/tasks/route.ts`, `app/api/dashboard/route.ts`, `app/api/sidebar/counts/route.ts` (HIGH confidence)
+- Existing SWR hook patterns: `lib/hooks/use-habits.ts`, `lib/hooks/use-sidebar-counts.ts` (HIGH confidence)
+- Existing validation patterns: `lib/validations/task.ts`, `lib/validations/api.ts` (HIGH confidence)
+- Existing sidebar pattern: `components/layouts/app-sidebar.tsx` (HIGH confidence)
+- Existing dashboard pattern: `components/dashboard/dashboard-content.tsx`, `app/dashboard/page.tsx` (HIGH confidence)
+- Existing Calendar UI component: `components/ui/calendar.tsx` (react-day-picker wrapper) (HIGH confidence)
+- Project requirements: `.planning/PROJECT.md` v4.0 Journal milestone definition (HIGH confidence)
 
 ---
-
-*Architecture analysis: 2026-02-18*
+*Architecture research for: Journal feature integration into BetterR.Me*
+*Researched: 2026-02-22*
