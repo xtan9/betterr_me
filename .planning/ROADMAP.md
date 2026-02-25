@@ -217,10 +217,11 @@ Plans:
   1. User can upload a CSV file, map columns to transaction fields, preview rows, and import with duplicate detection
   2. Manual asset creation/update triggers `NetWorthSnapshotsDB.upsert()` so net worth history stays current for non-Plaid users
   3. Phase 20 VERIFICATION.md exists and confirms all Phase 20 requirements satisfied
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 26-01: TBD
+- [ ] 26-01-PLAN.md — CSV import pure functions, validation schemas, batch DB method, import API route, net worth snapshot wiring
+- [ ] 26-02-PLAN.md — CSV import wizard dialog UI, page wiring, i18n (3 locales), tests, human verification
 
 ## Progress
 
