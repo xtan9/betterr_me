@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { RoutinesDB } from "@/lib/db/routines";
+import { WorkoutsDB } from "@/lib/db/workouts";
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
 import { log } from "@/lib/logger";
-import type { ExerciseType } from "@/lib/db/types";
+import type { ExerciseType, Workout } from "@/lib/db/types";
 
 /**
  * POST /api/routines/[id]/start
@@ -15,9 +16,11 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: routineId } = await params;
+  const supabase = await createClient();
+  let workout: Workout | undefined;
+
   try {
-    const { id: routineId } = await params;
-    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -37,28 +40,18 @@ export async function POST(
       );
     }
 
-    // 2. Create workout (direct insert to set routine_id and title from routine)
-    const { data: workout, error: workoutError } = await supabase
-      .from("workouts")
-      .insert({
-        user_id: user.id,
+    // 2. Create workout via DB class
+    const workoutsDB = new WorkoutsDB(supabase);
+    try {
+      workout = await workoutsDB.startWorkout(user.id, {
         title: routine.name,
-        status: "in_progress" as const,
-        started_at: new Date().toISOString(),
         routine_id: routineId,
-      })
-      .select()
-      .single();
-
-    if (workoutError) {
-      if (workoutError.code === "23505") {
-        return NextResponse.json(
-          { error: "You already have an active workout" },
-          { status: 409 }
-        );
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === "You already have an active workout") {
+        return NextResponse.json({ error: err.message }, { status: 409 });
       }
-      log.error("Failed to create workout from routine", workoutError);
-      throw workoutError;
+      throw err;
     }
 
     // 3. Deep-copy each routine exercise with pre-filled sets
@@ -123,6 +116,18 @@ export async function POST(
     return NextResponse.json({ workout }, { status: 201 });
   } catch (error) {
     log.error("POST /api/routines/[id]/start error", error);
+
+    // Clean up orphaned workout if exercise copying failed
+    if (workout?.id) {
+      try {
+        const { error: cleanupError } = await supabase.from("workouts").delete().eq("id", workout.id);
+        if (cleanupError) {
+          log.error("Failed to clean up orphaned workout", cleanupError, { workoutId: workout.id });
+        }
+      } catch (cleanupErr) {
+        log.error("Failed to clean up orphaned workout", cleanupErr, { workoutId: workout.id });
+      }
+    }
 
     // Re-check for 23505 in case it was thrown from WorkoutsDB
     const code =

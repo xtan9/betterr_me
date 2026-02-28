@@ -11,8 +11,8 @@ export const STORAGE_KEY = "betterrme_active_workout";
 export function saveWorkoutToStorage(workout: WorkoutWithExercises): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(workout));
-  } catch {
-    // Silent fail — server is source of truth
+  } catch (err) {
+    console.warn("Failed to save workout to localStorage", err);
   }
 }
 
@@ -24,7 +24,7 @@ export function saveWorkoutToStorage(workout: WorkoutWithExercises): void {
 export function clearWorkoutStorage(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Silent fail — server is source of truth
+  } catch (err) {
+    console.warn("Failed to clear workout from localStorage", err);
   }
 }

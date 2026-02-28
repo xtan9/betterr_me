@@ -2,16 +2,38 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // --- Hoisted mocks ---
-const { mockGetUser, mockFrom } = vi.hoisted(() => ({
+const {
+  mockGetUser,
+  mockGetWorkoutWithExercises,
+  mockCreateRoutine,
+  mockAddExerciseToRoutine,
+  mockDeleteRoutine,
+} = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
-  mockFrom: vi.fn(),
+  mockGetWorkoutWithExercises: vi.fn(),
+  mockCreateRoutine: vi.fn(),
+  mockAddExerciseToRoutine: vi.fn(),
+  mockDeleteRoutine: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({
     auth: { getUser: mockGetUser },
-    from: mockFrom,
   })),
+}));
+
+vi.mock("@/lib/db/workouts", () => ({
+  WorkoutsDB: class {
+    getWorkoutWithExercises = mockGetWorkoutWithExercises;
+  },
+}));
+
+vi.mock("@/lib/db/routines", () => ({
+  RoutinesDB: class {
+    createRoutine = mockCreateRoutine;
+    addExerciseToRoutine = mockAddExerciseToRoutine;
+    deleteRoutine = mockDeleteRoutine;
+  },
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -27,12 +49,12 @@ import { POST } from "@/app/api/workouts/[id]/save-as-routine/route";
 
 // --- Helpers ---
 
-function makeWorkout(status: string) {
+function makeWorkoutWithExercises(status: string) {
   return {
     id: "workout-1",
     user_id: "user-123",
     status,
-    workout_exercises: [
+    exercises: [
       {
         id: "we-1",
         exercise_id: "ex-1",
@@ -74,54 +96,6 @@ function callPOST(request: NextRequest, workoutId: string) {
   });
 }
 
-/**
- * Build a chainable mock for `supabase.from(table)`.
- *
- * Each table is configured with a result object that is returned by the
- * terminal method (.single() for selects, .select()/.single() for inserts,
- * or the bare insert for routine_exercises).
- */
-function setupSupabaseMock(config: {
-  workoutsResult: { data: unknown; error: unknown };
-  routinesResult?: { data: unknown; error: unknown };
-  routineExercisesResult?: { data: unknown; error: unknown };
-}) {
-  mockFrom.mockImplementation((table: string) => {
-    if (table === "workouts") {
-      return {
-        select: () => ({
-          eq: () => ({
-            single: () => config.workoutsResult,
-          }),
-        }),
-      };
-    }
-    if (table === "routines") {
-      const result = config.routinesResult ?? {
-        data: { id: "routine-1", user_id: "user-123", name: "My Routine" },
-        error: null,
-      };
-      return {
-        insert: () => ({
-          select: () => ({
-            single: () => result,
-          }),
-        }),
-      };
-    }
-    if (table === "routine_exercises") {
-      const result = config.routineExercisesResult ?? {
-        data: null,
-        error: null,
-      };
-      return {
-        insert: () => result,
-      };
-    }
-    return {};
-  });
-}
-
 // --- Tests ---
 
 describe("POST /api/workouts/[id]/save-as-routine", () => {
@@ -131,12 +105,22 @@ describe("POST /api/workouts/[id]/save-as-routine", () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: "user-123" } },
     });
+    // Default: successful routine creation
+    mockCreateRoutine.mockResolvedValue({
+      id: "routine-1",
+      user_id: "user-123",
+      name: "My Routine",
+    });
+    mockAddExerciseToRoutine.mockResolvedValue({
+      id: "re-1",
+      routine_id: "routine-1",
+    });
   });
 
   it("creates routine from in_progress workout (timing fix)", async () => {
-    setupSupabaseMock({
-      workoutsResult: { data: makeWorkout("in_progress"), error: null },
-    });
+    mockGetWorkoutWithExercises.mockResolvedValue(
+      makeWorkoutWithExercises("in_progress")
+    );
 
     const request = makeRequest("workout-1", { name: "My Routine" });
     const response = await callPOST(request, "workout-1");
@@ -148,9 +132,9 @@ describe("POST /api/workouts/[id]/save-as-routine", () => {
   });
 
   it("creates routine from completed workout", async () => {
-    setupSupabaseMock({
-      workoutsResult: { data: makeWorkout("completed"), error: null },
-    });
+    mockGetWorkoutWithExercises.mockResolvedValue(
+      makeWorkoutWithExercises("completed")
+    );
 
     const request = makeRequest("workout-1", { name: "My Routine" });
     const response = await callPOST(request, "workout-1");
@@ -175,12 +159,7 @@ describe("POST /api/workouts/[id]/save-as-routine", () => {
   });
 
   it("returns 404 for non-existent workout", async () => {
-    setupSupabaseMock({
-      workoutsResult: {
-        data: null,
-        error: { code: "PGRST116", message: "Not found" },
-      },
-    });
+    mockGetWorkoutWithExercises.mockResolvedValue(null);
 
     const request = makeRequest("nonexistent", { name: "My Routine" });
     const response = await callPOST(request, "nonexistent");

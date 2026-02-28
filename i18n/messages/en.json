@@ -1053,7 +1053,6 @@
     "workoutSets": "Sets Completed",
     "totalSets": "Sets Completed",
     "workoutVolume": "Total Volume",
-    "totalVolume": "Total Volume",
     "confirm": "Confirm",
     "cancel": "Cancel",
     "discardWorkoutTitle": "Discard Workout?",
@@ -1095,7 +1094,11 @@
     "volumePR": "Volume PR: {value}",
     "repsPR": "Reps PR: {value} reps",
     "durationPR": "Duration PR: {value}s",
-    "prAchieved": "PR"
+    "prAchieved": "PR",
+    "loadError": "Failed to load data",
+    "retry": "Retry",
+    "finishError": "Failed to finish workout",
+    "discardError": "Failed to discard workout"
   },
   "routines": {
     "title": "Routines",
@@ -1164,6 +1167,10 @@
     "manageRoutines": "Manage Routines",
     "viewAll": "View All",
     "createFirst": "Create your first routine to quickly start workouts",
-    "moreExercises": "+{count} more"
+    "moreExercises": "+{count} more",
+    "loadError": "Failed to load routines",
+    "addExerciseError": "Failed to add exercise",
+    "updateExerciseError": "Failed to update exercise",
+    "removeExerciseError": "Failed to remove exercise"
   }
 }

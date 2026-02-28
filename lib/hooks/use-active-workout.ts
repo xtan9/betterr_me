@@ -32,7 +32,7 @@ interface ActiveWorkoutResponse {
 }
 
 // ---------------------------------------------------------------------------
-// useActiveWorkout — SWR hook with optimistic mutations + localStorage dual-write
+// useActiveWorkout — SWR hook with optimistic mutations + server-first with localStorage backup
 // ---------------------------------------------------------------------------
 
 export interface UseActiveWorkoutActions {
@@ -89,9 +89,9 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
   const workout = data?.workout ?? null;
 
   // ---------------------------------------------------------------------------
-  // Helper: dual-write after optimistic update
+  // Helper: persist to localStorage after optimistic update
   // ---------------------------------------------------------------------------
-  const dualWrite = useCallback((updated: ActiveWorkout | null) => {
+  const persistToStorage = useCallback((updated: ActiveWorkout | null) => {
     if (updated) {
       saveWorkoutToStorage(updated as unknown as WorkoutWithExercises);
     } else {
@@ -140,13 +140,13 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
           // Revalidate to get the exercise with details, previous sets, etc.
           const activeRes = await fetch(SWR_KEY);
           const activeData = (await activeRes.json()) as ActiveWorkoutResponse;
-          if (activeData.workout) dualWrite(activeData.workout);
+          if (activeData.workout) persistToStorage(activeData.workout);
           return activeData;
         },
         { revalidate: false }
       );
     },
-    [workout, mutate, dualWrite]
+    [workout, mutate, persistToStorage]
   );
 
   // ---------------------------------------------------------------------------
@@ -172,13 +172,13 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
             { method: "DELETE" }
           );
           if (!res.ok) throw new Error("Failed to remove exercise");
-          dualWrite(optimistic.workout);
+          persistToStorage(optimistic.workout);
           return optimistic;
         },
         { optimisticData: optimistic, revalidate: false }
       );
     },
-    [workout, mutate, dualWrite]
+    [workout, mutate, persistToStorage]
   );
 
   // ---------------------------------------------------------------------------
@@ -211,17 +211,17 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
               ),
             },
           };
-          dualWrite(updated.workout);
+          persistToStorage(updated.workout);
           return updated;
         },
         { revalidate: false }
       );
     },
-    [workout, mutate, dualWrite]
+    [workout, mutate, persistToStorage]
   );
 
   // ---------------------------------------------------------------------------
-  // updateSet — uses revalidate: false to prevent Pitfall 4 race conditions
+  // updateSet — uses revalidate: false to prevent race conditions between rapid set updates
   // ---------------------------------------------------------------------------
   const updateSet = useCallback(
     async (
@@ -273,13 +273,13 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
               ),
             },
           };
-          dualWrite(updated.workout);
+          persistToStorage(updated.workout);
           return updated;
         },
         { optimisticData: optimistic, revalidate: false }
       );
     },
-    [workout, mutate, dualWrite]
+    [workout, mutate, persistToStorage]
   );
 
   // ---------------------------------------------------------------------------
@@ -307,13 +307,13 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
             { method: "DELETE" }
           );
           if (!res.ok) throw new Error("Failed to delete set");
-          dualWrite(optimistic.workout);
+          persistToStorage(optimistic.workout);
           return optimistic;
         },
         { optimisticData: optimistic, revalidate: false }
       );
     },
-    [workout, mutate, dualWrite]
+    [workout, mutate, persistToStorage]
   );
 
   // ---------------------------------------------------------------------------
@@ -355,13 +355,13 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
             }
           );
           if (!res.ok) throw new Error("Failed to update exercise notes");
-          dualWrite(optimistic.workout);
+          persistToStorage(optimistic.workout);
           return optimistic;
         },
         { optimisticData: optimistic, revalidate: false }
       );
     },
-    [workout, mutate, dualWrite]
+    [workout, mutate, persistToStorage]
   );
 
   // ---------------------------------------------------------------------------
@@ -393,13 +393,13 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
             }
           );
           if (!res.ok) throw new Error("Failed to update rest timer");
-          dualWrite(optimistic.workout);
+          persistToStorage(optimistic.workout);
           return optimistic;
         },
         { optimisticData: optimistic, revalidate: false }
       );
     },
-    [workout, mutate, dualWrite]
+    [workout, mutate, persistToStorage]
   );
 
   // ---------------------------------------------------------------------------
@@ -421,13 +421,13 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
             body: JSON.stringify(updates),
           });
           if (!res.ok) throw new Error("Failed to update workout");
-          dualWrite(optimistic.workout);
+          persistToStorage(optimistic.workout);
           return optimistic;
         },
         { optimisticData: optimistic, revalidate: false }
       );
     },
-    [workout, mutate, dualWrite]
+    [workout, mutate, persistToStorage]
   );
 
   // ---------------------------------------------------------------------------

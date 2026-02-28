@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Trophy } from "lucide-react";
 import { formatWeight } from "@/lib/fitness/units";
@@ -23,15 +23,19 @@ export function PRBanner({
 }: PRBannerProps) {
   const t = useTranslations("workouts");
   const [visible, setVisible] = useState(true);
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
 
   // Auto-dismiss after 5 seconds
   useEffect(() => {
     const timer = setTimeout(() => {
       setVisible(false);
-      onDismiss?.();
+      onDismissRef.current?.();
     }, 5000);
     return () => clearTimeout(timer);
-  }, [onDismiss]);
+  }, []);
 
   if (!visible) return null;
 

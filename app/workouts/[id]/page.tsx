@@ -38,11 +38,15 @@ export default async function WorkoutDetailPage({
   }
 
   // Get weight unit from user profile
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("preferences")
     .eq("id", user.id)
     .single();
+
+  if (profileError) {
+    console.error("Failed to fetch profile for weight unit", profileError);
+  }
 
   const weightUnit: WeightUnit =
     (profile?.preferences as { weight_unit?: string } | null)?.weight_unit === "lbs"

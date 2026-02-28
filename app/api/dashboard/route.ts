@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
+import { WorkoutsDB } from '@/lib/db/workouts';
 import { type DashboardData, type HabitLog, type HabitMilestone, ZERO_ABSENCE } from '@/lib/db/types';
 import { getLocalDateString, getNextDateString } from '@/lib/utils';
 import { computeMissedDays } from '@/lib/habits/absence';
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
     const tasksDB = new TasksDB(supabase);
     const habitLogsDB = new HabitLogsDB(supabase);
     const milestonesDB = new HabitMilestonesDB(supabase);
+    const workoutsDB = new WorkoutsDB(supabase);
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
 
@@ -101,27 +103,15 @@ export async function GET(request: NextRequest) {
         return [] as HabitMilestone[];
       }),
       // Last completed workout
-      Promise.resolve(
-        supabase
-          .from('workouts')
-          .select('completed_at')
-          .eq('user_id', user.id)
-          .eq('status', 'completed')
-          .order('completed_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      ).then(r => r.data?.completed_at ?? null)
-        .catch(() => null),
-      // Completed workouts this week (HEAD-only count)
-      Promise.resolve(
-        supabase
-          .from('workouts')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('status', 'completed')
-          .gte('started_at', weekStartDate)
-      ).then(r => r.count ?? 0)
-        .catch(() => 0),
+      workoutsDB.getLastCompletedAt(user.id).catch((err) => {
+        log.error('Failed to fetch last workout', err, { userId: user.id });
+        return null;
+      }),
+      // Completed workouts this week
+      workoutsDB.getWeekWorkoutCount(user.id, weekStartDate).catch((err) => {
+        log.error('Failed to fetch week workout count', err, { userId: user.id });
+        return 0;
+      }),
     ]);
 
     // Group completed logs by habit_id for absence computation
@@ -157,7 +147,7 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         log.error('computeMissedDays failed', err, { userId: user.id, habitId: habit.id, date, dateRange: `${thirtyDaysAgoStr} to ${date}` });
         warnings.push(`Absence data unavailable for habit ${habit.id}`);
-        // Zeros as fallback: no prior cached value available (see RESEARCH.md Pitfall 5)
+        // Zeros as fallback: no prior cached value available
         return { ...habit, ...ZERO_ABSENCE };
       }
     });

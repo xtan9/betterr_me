@@ -37,13 +37,16 @@ export function WorkoutResumeBanner() {
   // Snapshot time once on data arrival to avoid impure Date.now() in render
   const snapshotRef = useRef<{ workoutId: string; elapsed: string } | null>(null);
 
-  const { data, mutate } = useSWR<{ workout: WorkoutWithExercises | null }>(
+  const { data, error, mutate } = useSWR<{ workout: WorkoutWithExercises | null }>(
     "/api/workouts/active",
     fetcher,
     { dedupingInterval: 30000 }
   );
 
   const workout = data?.workout;
+
+  // Banner is non-critical — silently hide on error
+  if (error) return null;
 
   // Update snapshot when workout data changes
   if (workout && snapshotRef.current?.workoutId !== workout.id) {

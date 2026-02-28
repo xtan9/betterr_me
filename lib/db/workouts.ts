@@ -248,7 +248,7 @@ export class WorkoutsDB {
 
   /**
    * Get previous sets for an exercise from the most recent completed workout.
-   * Used for WLOG-09: showing previous workout values alongside set inputs.
+   * Provides previous workout values alongside active set inputs.
    * Returns empty array if no previous workout found.
    */
   async getPreviousSets(exerciseId: string): Promise<WorkoutSet[]> {
@@ -267,7 +267,7 @@ export class WorkoutsDB {
 
     if (error) {
       log.error("Failed to get previous sets", error);
-      return [];
+      throw error;
     }
 
     if (!data || data.length === 0) return [];
@@ -473,5 +473,50 @@ export class WorkoutsDB {
     }
 
     return result;
+  }
+
+  /**
+   * Get the most recent completed_at timestamp for a user's workouts.
+   * Returns null if no completed workouts exist.
+   */
+  async getLastCompletedAt(userId: string): Promise<string | null> {
+    const { data, error } = await this.supabase
+      .from("workouts")
+      .select("completed_at")
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .order("completed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      log.error("Failed to get last completed workout", error);
+      throw error;
+    }
+
+    return data?.completed_at ?? null;
+  }
+
+  /**
+   * Count completed workouts for a user since a given date.
+   * Uses head-only query for efficiency.
+   */
+  async getWeekWorkoutCount(
+    userId: string,
+    weekStartDate: string
+  ): Promise<number> {
+    const { count, error } = await this.supabase
+      .from("workouts")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .gte("started_at", weekStartDate);
+
+    if (error) {
+      log.error("Failed to get week workout count", error);
+      throw error;
+    }
+
+    return count ?? 0;
   }
 }

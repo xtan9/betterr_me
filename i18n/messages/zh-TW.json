@@ -1053,7 +1053,6 @@
     "workoutSets": "完成組數",
     "totalSets": "完成組數",
     "workoutVolume": "總容量",
-    "totalVolume": "總負荷",
     "confirm": "確認",
     "cancel": "取消",
     "discardWorkoutTitle": "放棄訓練？",
@@ -1095,7 +1094,11 @@
     "volumePR": "容量紀錄：{value}",
     "repsPR": "次數紀錄：{value} 次",
     "durationPR": "時長紀錄：{value}秒",
-    "prAchieved": "PR"
+    "prAchieved": "PR",
+    "loadError": "載入資料失敗",
+    "retry": "重試",
+    "finishError": "完成訓練失敗",
+    "discardError": "丟棄訓練失敗"
   },
   "routines": {
     "title": "訓練計畫",
@@ -1164,6 +1167,10 @@
     "manageRoutines": "管理計劃",
     "viewAll": "查看全部",
     "createFirst": "建立您的第一個訓練計劃來快速開始訓練",
-    "moreExercises": "+{count} 更多"
+    "moreExercises": "+{count} 更多",
+    "loadError": "載入訓練計畫失敗",
+    "addExerciseError": "新增動作失敗",
+    "updateExerciseError": "更新動作失敗",
+    "removeExerciseError": "移除動作失敗"
   }
 }

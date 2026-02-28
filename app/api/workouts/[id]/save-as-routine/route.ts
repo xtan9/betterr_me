@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { WorkoutsDB } from "@/lib/db/workouts";
+import { RoutinesDB } from "@/lib/db/routines";
 import { validateRequestBody } from "@/lib/validations/api";
 import { saveAsRoutineSchema } from "@/lib/validations/routine";
 import { log } from "@/lib/logger";
-import type { WorkoutSet } from "@/lib/db/types";
+import type { Routine, WorkoutSet } from "@/lib/db/types";
 
 /**
  * POST /api/workouts/[id]/save-as-routine
@@ -14,8 +16,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: workoutId } = await params;
+  let routine: Routine | undefined;
+  let routinesDB: RoutinesDB | undefined;
+
   try {
-    const { id: workoutId } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -30,59 +35,30 @@ export async function POST(
     const validation = validateRequestBody(body, saveAsRoutineSchema);
     if (!validation.success) return validation.response;
 
-    // Fetch workout with exercises and sets
-    const { data: workout, error: workoutError } = await supabase
-      .from("workouts")
-      .select(
-        `
-        *,
-        workout_exercises (
-          *,
-          exercise:exercises (*),
-          sets:workout_sets (*)
-        )
-      `
-      )
-      .eq("id", workoutId)
-      .single();
+    // Fetch workout with exercises and sets via DB class
+    const workoutsDB = new WorkoutsDB(supabase);
+    const workout = await workoutsDB.getWorkoutWithExercises(workoutId);
 
-    if (workoutError) {
-      if (workoutError.code === "PGRST116") {
-        return NextResponse.json(
-          { error: "Workout not found" },
-          { status: 404 }
-        );
-      }
-      log.error("Failed to fetch workout", workoutError);
-      throw workoutError;
+    if (!workout) {
+      return NextResponse.json(
+        { error: "Workout not found" },
+        { status: 404 }
+      );
     }
 
-    // Create routine
-    const { data: routine, error: routineError } = await supabase
-      .from("routines")
-      .insert({
-        user_id: user.id,
-        name: validation.data.name,
-      })
-      .select()
-      .single();
-
-    if (routineError) {
-      log.error("Failed to create routine from workout", routineError);
-      throw routineError;
-    }
+    // Create routine via DB class
+    routinesDB = new RoutinesDB(supabase);
+    routine = await routinesDB.createRoutine(user.id, {
+      name: validation.data.name,
+    });
 
     // Sort workout exercises by sort_order
-    const sortedExercises = [
-      ...(workout.workout_exercises as Record<string, unknown>[]),
-    ].sort(
-      (a, b) =>
-        (a.sort_order as number) - (b.sort_order as number)
+    const sortedExercises = [...workout.exercises].sort(
+      (a, b) => a.sort_order - b.sort_order
     );
 
     // Create routine exercises from workout exercises
-    for (let i = 0; i < sortedExercises.length; i++) {
-      const we = sortedExercises[i];
+    for (const we of sortedExercises) {
       const sets = (we.sets as WorkoutSet[]) ?? [];
       const completedSets = sets.filter((s) => s.is_completed);
 
@@ -107,33 +83,32 @@ export async function POST(
         targetDurationSeconds = completedSets[0].duration_seconds ?? null;
       }
 
-      const sortOrder = (i + 1) * 65536;
       const targetSetCount =
         completedSets.length > 0 ? completedSets.length : sets.length;
 
-      const { error: reError } = await supabase
-        .from("routine_exercises")
-        .insert({
-          routine_id: routine.id,
-          exercise_id: we.exercise_id as string,
-          sort_order: sortOrder,
-          target_sets: targetSetCount || 1,
-          target_reps: targetReps,
-          target_weight_kg: targetWeightKg,
-          target_duration_seconds: targetDurationSeconds,
-          rest_timer_seconds: (we.rest_timer_seconds as number) ?? 90,
-          notes: (we.notes as string) ?? null,
-        });
-
-      if (reError) {
-        log.error("Failed to create routine exercise from workout", reError);
-        throw reError;
-      }
+      await routinesDB.addExerciseToRoutine(routine.id, {
+        exercise_id: we.exercise_id,
+        target_sets: targetSetCount || 1,
+        target_reps: targetReps,
+        target_weight_kg: targetWeightKg,
+        target_duration_seconds: targetDurationSeconds,
+        rest_timer_seconds: we.rest_timer_seconds ?? 90,
+        notes: we.notes ?? null,
+      });
     }
 
     return NextResponse.json({ routine }, { status: 201 });
   } catch (error) {
     log.error("POST /api/workouts/[id]/save-as-routine error", error);
+
+    // Clean up partially created routine
+    if (routine?.id && routinesDB) {
+      const routineId = routine.id;
+      await routinesDB.deleteRoutine(routineId).catch((cleanupErr) => {
+        log.error("Failed to clean up partial routine", cleanupErr, { routineId });
+      });
+    }
+
     return NextResponse.json(
       { error: "Failed to save workout as routine" },
       { status: 500 }

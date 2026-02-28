@@ -15,7 +15,7 @@
 
 CREATE TABLE exercises (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,  -- NULL for preset exercises
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,  -- CASCADE: user deletion removes all their data; NULL for preset exercises
   name TEXT NOT NULL,
   muscle_group_primary TEXT NOT NULL,
   muscle_groups_secondary TEXT[] DEFAULT '{}',
@@ -87,7 +87,7 @@ CREATE TRIGGER update_exercises_updated_at
 
 CREATE TABLE routines (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE, -- CASCADE: user deletion removes all their data
   name TEXT NOT NULL,
   notes TEXT,
   last_performed_at TIMESTAMPTZ,
@@ -120,7 +120,7 @@ CREATE TRIGGER update_routines_updated_at
 
 CREATE TABLE workouts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE, -- CASCADE: user deletion removes all their data
   title TEXT NOT NULL DEFAULT 'Workout',
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
@@ -164,8 +164,8 @@ CREATE TRIGGER update_workouts_updated_at
 
 CREATE TABLE workout_exercises (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workout_id UUID NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
-  exercise_id UUID NOT NULL REFERENCES exercises(id) ON DELETE RESTRICT,
+  workout_id UUID NOT NULL REFERENCES workouts(id) ON DELETE CASCADE, -- CASCADE: workout deletion removes its exercises
+  exercise_id UUID NOT NULL REFERENCES exercises(id) ON DELETE RESTRICT, -- RESTRICT: prevent deleting exercises still in use
   sort_order DOUBLE PRECISION NOT NULL DEFAULT 0,
   notes TEXT,
   rest_timer_seconds INTEGER DEFAULT 90,
@@ -212,7 +212,7 @@ CREATE POLICY "Users can remove exercises from own workouts"
 
 CREATE TABLE workout_sets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workout_exercise_id UUID NOT NULL REFERENCES workout_exercises(id) ON DELETE CASCADE,
+  workout_exercise_id UUID NOT NULL REFERENCES workout_exercises(id) ON DELETE CASCADE, -- CASCADE: exercise removal removes its sets
   set_number INTEGER NOT NULL,
   set_type TEXT NOT NULL DEFAULT 'normal'
     CHECK (set_type IN ('warmup', 'normal', 'drop', 'failure')),
@@ -279,8 +279,8 @@ CREATE TRIGGER update_workout_sets_updated_at
 
 CREATE TABLE routine_exercises (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  routine_id UUID NOT NULL REFERENCES routines(id) ON DELETE CASCADE,
-  exercise_id UUID NOT NULL REFERENCES exercises(id) ON DELETE RESTRICT,
+  routine_id UUID NOT NULL REFERENCES routines(id) ON DELETE CASCADE, -- CASCADE: routine deletion removes its exercises
+  exercise_id UUID NOT NULL REFERENCES exercises(id) ON DELETE RESTRICT, -- RESTRICT: prevent deleting exercises still in use
   sort_order DOUBLE PRECISION NOT NULL DEFAULT 0,
   target_sets INTEGER DEFAULT 3,
   target_reps INTEGER,

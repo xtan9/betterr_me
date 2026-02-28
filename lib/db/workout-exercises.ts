@@ -24,6 +24,7 @@ export class WorkoutExercisesDB {
       .limit(1)
       .single();
 
+    // 65536 (2^16) gap allows ~52 bisection levels for drag-and-drop reordering without renumbering
     const nextSortOrder = maxRow ? (maxRow.sort_order as number) + 65536.0 : 65536.0;
 
     const { data, error } = await this.supabase

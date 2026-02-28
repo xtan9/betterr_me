@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus, Dumbbell } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   useActiveWorkout,
@@ -19,7 +20,7 @@ import { WorkoutDiscardDialog } from "./workout-discard-dialog";
 export function WorkoutLogger() {
   const t = useTranslations("workouts");
   const router = useRouter();
-  const { workout, isLoading, actions } = useActiveWorkout();
+  const { workout, error, isLoading, actions } = useActiveWorkout();
   const weightUnit = useWeightUnit();
   const restTimer = useRestTimer();
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
@@ -43,6 +44,15 @@ export function WorkoutLogger() {
         <Button onClick={() => router.push("/workouts")}>
           {t("goToWorkouts")}
         </Button>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <p>{t("loadError")}</p>
       </div>
     );
   }
@@ -143,9 +153,13 @@ export function WorkoutLogger() {
         workout={workout}
         durationSeconds={finishDuration}
         weightUnit={weightUnit}
-        onConfirm={() => {
-          void actions.finishWorkout();
-          setShowFinishDialog(false);
+        onConfirm={async () => {
+          try {
+            await actions.finishWorkout();
+            setShowFinishDialog(false);
+          } catch {
+            toast.error(t("finishError"));
+          }
         }}
       />
 
@@ -153,9 +167,13 @@ export function WorkoutLogger() {
       <WorkoutDiscardDialog
         open={showDiscardDialog}
         onOpenChange={setShowDiscardDialog}
-        onConfirm={() => {
-          void actions.discardWorkout();
-          setShowDiscardDialog(false);
+        onConfirm={async () => {
+          try {
+            await actions.discardWorkout();
+            setShowDiscardDialog(false);
+          } catch {
+            toast.error(t("discardError"));
+          }
         }}
       />
     </div>

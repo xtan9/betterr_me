@@ -15,7 +15,7 @@ export function WorkoutHistoryList() {
   const t = useTranslations("workouts");
   const weightUnit = useWeightUnit();
   const [limit, setLimit] = useState(PAGE_SIZE);
-  const { workouts, isLoading } = useWorkouts({ limit, offset: 0 });
+  const { workouts, error, isLoading } = useWorkouts({ limit, offset: 0 });
 
   if (isLoading && workouts.length === 0) {
     return (
@@ -24,6 +24,17 @@ export function WorkoutHistoryList() {
         {Array.from({ length: 3 }).map((_, i) => (
           <Skeleton key={i} className="h-28 w-full rounded-lg" />
         ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold">{t("history")}</h2>
+        <div className="text-center py-12 text-muted-foreground">
+          <p>{t("loadError")}</p>
+        </div>
       </div>
     );
   }

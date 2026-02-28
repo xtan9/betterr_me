@@ -36,8 +36,8 @@ export function playBeep(frequency = 440, durationMs = 200): void {
 
     oscillator.start();
     oscillator.stop(audioContext.currentTime + durationMs / 1000);
-  } catch {
-    // Silent fail — audio not critical
+  } catch (err) {
+    console.warn("Audio playback failed", err);
   }
 }
 
@@ -49,6 +49,7 @@ export function playBeep(frequency = 440, durationMs = 200): void {
 const AUTO_DISMISS_MS = 3000;
 
 /** Tick interval for countdown display refresh (ms) */
+// 200ms provides smooth countdown display while keeping CPU usage low (5 ticks/sec)
 const TICK_INTERVAL_MS = 200;
 
 export interface UseRestTimerReturn {

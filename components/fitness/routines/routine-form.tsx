@@ -82,7 +82,7 @@ export function RoutineForm({
         toast.success(t("exerciseAdded"));
         mutate();
       } catch {
-        toast.error(t("startError"));
+        toast.error(t("addExerciseError"));
       }
     },
     [routine, mutate, t]
@@ -109,7 +109,7 @@ export function RoutineForm({
 
         mutate();
       } catch {
-        toast.error(t("startError"));
+        toast.error(t("updateExerciseError"));
       }
     },
     [routine, mutate, t]
@@ -133,7 +133,7 @@ export function RoutineForm({
         toast.success(t("exerciseRemoved"));
         mutate();
       } catch {
-        toast.error(t("startError"));
+        toast.error(t("removeExerciseError"));
       }
     },
     [routine, mutate, t]

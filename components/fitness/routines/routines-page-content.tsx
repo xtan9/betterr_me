@@ -25,7 +25,7 @@ import type { RoutineWithExercises } from "@/lib/db/types";
 export function RoutinesPageContent() {
   const t = useTranslations("routines");
   const router = useRouter();
-  const { routines, isLoading, mutate } = useRoutines();
+  const { routines, error, isLoading, mutate } = useRoutines();
 
   // Form dialog state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -124,6 +124,14 @@ export function RoutinesPageContent() {
             <Skeleton key={i} className="h-48" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <p>{t("loadError")}</p>
       </div>
     );
   }

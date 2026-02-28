@@ -18,7 +18,7 @@ import type { RoutineWithExercises } from "@/lib/db/types";
 export function WorkoutsPageRoutines() {
   const t = useTranslations("routines");
   const router = useRouter();
-  const { routines, isLoading } = useRoutines();
+  const { routines, error, isLoading } = useRoutines();
 
   const handleStart = useCallback(
     async (routineId: string) => {
@@ -68,6 +68,14 @@ export function WorkoutsPageRoutines() {
             <Skeleton key={i} className="h-40" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <p>{t("loadError")}</p>
       </div>
     );
   }

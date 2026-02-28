@@ -72,7 +72,7 @@ export function WorkoutExerciseCard({
   // Fetch current PR for this exercise (for mid-workout PR detection)
   const { records: currentPR } = useExerciseRecords(exerciseInfo.id);
 
-  // Wrap onCompleteSet to check for PR before the async mutation (Pitfall 3)
+  // Wrap onCompleteSet to check for PR before the async mutation (snapshot value before async mutation)
   const handleCompleteSetWithPR = useCallback(
     async (setId: string) => {
       // Capture set data BEFORE the async mutation

@@ -39,8 +39,8 @@ export function ExerciseProgressChart({
   const t = useTranslations("workouts");
   const [dateRange, setDateRange] = useState<DateRange>("3m");
 
-  // Fetch ALL history data once, filter client-side (per Pitfall 2)
-  const { history, isLoading } = useExerciseHistory(exerciseId);
+  // Fetch ALL history data once, filter client-side (avoids refetch on range change)
+  const { history, error, isLoading } = useExerciseHistory(exerciseId);
 
   // Filter data by date range client-side
   const filteredData = useMemo(() => {
@@ -86,6 +86,15 @@ export function ExerciseProgressChart({
       <div className="space-y-2 pt-2">
         <Skeleton className="h-4 w-24" />
         <Skeleton className="h-[200px] w-full" />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <p>{t("loadError")}</p>
       </div>
     );
   }
