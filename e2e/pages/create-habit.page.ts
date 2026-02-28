@@ -51,6 +51,7 @@ export class CreateHabitPage {
   /** Wait for redirect to habits list after successful creation */
   async waitForRedirect() {
     await this.page.waitForURL('/habits', { timeout: 10000 });
+    await this.page.waitForLoadState('networkidle');
   }
 
   /** Validation error message */
