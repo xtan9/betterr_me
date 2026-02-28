@@ -121,6 +121,8 @@ export default {
           "blue-bg": "hsl(var(--stat-icon-blue-bg))",
           orange: "hsl(var(--stat-icon-orange))",
           "orange-bg": "hsl(var(--stat-icon-orange-bg))",
+          purple: "hsl(var(--stat-icon-purple))",
+          "purple-bg": "hsl(var(--stat-icon-purple-bg))",
         },
         "empty-state": {
           "celebration-bg": "hsl(var(--empty-state-celebration-bg))",

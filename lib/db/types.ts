@@ -19,6 +19,7 @@ export interface ProfilePreferences {
   date_format: string;
   week_start_day: number;
   theme: "system" | "light" | "dark";
+  weight_unit: "kg" | "lbs";
 }
 
 export type ProfileInsert = Omit<
@@ -369,6 +370,8 @@ export interface DashboardData {
     total_tasks: number;
     tasks_due_today: number;
     tasks_completed_today: number;
+    last_workout_at: string | null;
+    week_workout_count: number;
   };
   /** Non-fatal warnings about degraded data (omitted when empty) */
   _warnings?: string[];
@@ -443,3 +446,254 @@ export type JournalEntryLinkInsert = Omit<
 > & {
   id?: string;
 };
+
+// =============================================================================
+// FITNESS: EXERCISES
+// =============================================================================
+
+export type ExerciseType =
+  | "weight_reps"
+  | "bodyweight_reps"
+  | "weighted_bodyweight"
+  | "assisted_bodyweight"
+  | "duration"
+  | "duration_weight"
+  | "distance_duration"
+  | "weight_distance";
+
+export type MuscleGroup =
+  | "chest"
+  | "back"
+  | "shoulders"
+  | "biceps"
+  | "triceps"
+  | "forearms"
+  | "core"
+  | "quadriceps"
+  | "hamstrings"
+  | "glutes"
+  | "calves"
+  | "traps"
+  | "lats"
+  | "full_body"
+  | "cardio"
+  | "other";
+
+export type Equipment =
+  | "barbell"
+  | "dumbbell"
+  | "machine"
+  | "bodyweight"
+  | "kettlebell"
+  | "cable"
+  | "band"
+  | "other"
+  | "none";
+
+export interface Exercise {
+  id: string;
+  user_id: string | null; // NULL for preset exercises
+  name: string;
+  muscle_group_primary: MuscleGroup;
+  muscle_groups_secondary: MuscleGroup[];
+  equipment: Equipment;
+  exercise_type: ExerciseType;
+  is_custom: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ExerciseInsert = Omit<
+  Exercise,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+};
+
+export type ExerciseUpdate = Partial<
+  Omit<Exercise, "id" | "user_id" | "created_at" | "updated_at" | "is_custom">
+>;
+
+export interface ExerciseFilters {
+  muscle_group?: MuscleGroup;
+  equipment?: Equipment;
+  exercise_type?: ExerciseType;
+  is_custom?: boolean;
+  search?: string;
+}
+
+// =============================================================================
+// FITNESS: WORKOUTS
+// =============================================================================
+
+export type WorkoutStatus = "in_progress" | "completed" | "discarded";
+
+export interface Workout {
+  id: string;
+  user_id: string;
+  title: string;
+  started_at: string;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  status: WorkoutStatus;
+  notes: string | null;
+  routine_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type WorkoutInsert = Omit<
+  Workout,
+  "id" | "created_at" | "updated_at" | "completed_at" | "duration_seconds"
+> & {
+  id?: string;
+  completed_at?: string | null;
+  duration_seconds?: number | null;
+};
+
+export type WorkoutUpdate = Partial<
+  Omit<Workout, "id" | "user_id" | "created_at" | "updated_at">
+>;
+
+// =============================================================================
+// FITNESS: WORKOUT EXERCISES
+// =============================================================================
+
+export interface WorkoutExercise {
+  id: string;
+  workout_id: string;
+  exercise_id: string;
+  sort_order: number;
+  notes: string | null;
+  rest_timer_seconds: number;
+  created_at: string;
+}
+
+export type WorkoutExerciseInsert = Omit<
+  WorkoutExercise,
+  "id" | "created_at"
+> & {
+  id?: string;
+};
+
+// Joined type for display
+export interface WorkoutExerciseWithDetails extends WorkoutExercise {
+  exercise: Exercise;
+  sets: WorkoutSet[];
+}
+
+// =============================================================================
+// FITNESS: WORKOUT SETS
+// =============================================================================
+
+export type SetType = "warmup" | "normal" | "drop" | "failure";
+
+export interface WorkoutSet {
+  id: string;
+  workout_exercise_id: string;
+  set_number: number;
+  set_type: SetType;
+  weight_kg: number | null;
+  reps: number | null;
+  duration_seconds: number | null;
+  distance_meters: number | null;
+  is_completed: boolean;
+  rpe: number | null; // 1-10
+  created_at: string;
+  updated_at: string;
+}
+
+export type WorkoutSetInsert = Omit<
+  WorkoutSet,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+};
+
+export type WorkoutSetUpdate = Partial<
+  Omit<WorkoutSet, "id" | "workout_exercise_id" | "created_at" | "updated_at">
+>;
+
+// =============================================================================
+// FITNESS: ROUTINES
+// =============================================================================
+
+export interface Routine {
+  id: string;
+  user_id: string;
+  name: string;
+  notes: string | null;
+  last_performed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RoutineInsert = Omit<
+  Routine,
+  "id" | "created_at" | "updated_at" | "last_performed_at"
+> & {
+  id?: string;
+  last_performed_at?: string | null;
+};
+
+export type RoutineUpdate = Partial<
+  Omit<Routine, "id" | "user_id" | "created_at" | "updated_at">
+>;
+
+export interface RoutineExercise {
+  id: string;
+  routine_id: string;
+  exercise_id: string;
+  sort_order: number;
+  target_sets: number;
+  target_reps: number | null;
+  target_weight_kg: number | null;
+  target_duration_seconds: number | null;
+  rest_timer_seconds: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export type RoutineExerciseInsert = Omit<
+  RoutineExercise,
+  "id" | "created_at"
+> & {
+  id?: string;
+};
+
+// Joined type for display
+export interface RoutineWithExercises extends Routine {
+  exercises: (RoutineExercise & { exercise: Exercise })[];
+}
+
+// =============================================================================
+// FITNESS: AGGREGATED TYPES
+// =============================================================================
+
+/** Full workout with nested exercises and sets, used by workout detail view */
+export interface WorkoutWithExercises extends Workout {
+  exercises: WorkoutExerciseWithDetails[];
+}
+
+/** Personal record for a specific exercise */
+export interface PersonalRecord {
+  exercise_id: string;
+  best_weight_kg: number | null;
+  best_reps: number | null;
+  best_volume: number | null; // weight * reps
+  best_duration_seconds: number | null;
+  achieved_at: string;
+}
+
+/** Exercise history entry for progression charts */
+export interface ExerciseHistoryEntry {
+  date: string; // workout started_at date
+  workout_id: string;
+  best_set_weight_kg: number | null;
+  best_set_reps: number | null;
+  total_volume: number | null; // sum(weight * reps) across all sets
+  total_sets: number;
+}
+
+/** Weight unit type */
+export type WeightUnit = "kg" | "lbs";

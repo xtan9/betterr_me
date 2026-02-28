@@ -8,6 +8,7 @@
 - ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
 - ✅ **v3.0 Projects & Kanban** — Phases 13-17 (shipped 2026-02-21)
 - ✅ **v4.0 Journal** — Phases 20-26 (shipped 2026-02-24)
+- ✅ **v5.0 Fitness Tracking** — Phases 18-23 (shipped 2026-02-27)
 
 ## Phases
 
@@ -53,6 +54,13 @@
 
 </details>
 
+<details>
+<summary>✅ v5.0 Fitness Tracking (Phases 18-23) — SHIPPED 2026-02-27</summary>
+
+6 phases, 20 plans, 36 requirements. See `.planning/milestones/v5.0-ROADMAP.md` for details.
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -75,6 +83,12 @@
 | 21. Journal Entry CRUD | v4.0 | 2/2 | Complete | 2026-02-23 |
 | 22. Writing Prompts | v4.0 | 2/2 | Complete | 2026-02-23 |
 | 23. Journal Page & Navigation | v4.0 | 2/2 | Complete | 2026-02-24 |
-| 26. Fix Journal Entry Validation | v4.0 | 1/1 | Complete | 2026-02-24 |
 | 24. Dashboard & Cross-Feature Integration | v4.0 | 3/3 | Complete | 2026-02-24 |
 | 25. i18n & Polish | v4.0 | 1/1 | Complete | 2026-02-24 |
+| 26. Fix Journal Entry Validation | v4.0 | 1/1 | Complete | 2026-02-24 |
+| 18. Database Foundation & Exercise Library | v5.0 | 4/4 | Complete | 2026-02-23 |
+| 19. Workout Logging Core Loop | v5.0 | 7/7 | Complete | 2026-02-24 |
+| 20. Routines & Templates | v5.0 | 3/3 | Complete | 2026-02-24 |
+| 21. History, Personal Records & Progression | v5.0 | 4/4 | Complete | 2026-02-24 |
+| 22. Bug Fix & Dead Code Cleanup | v5.0 | 1/1 | Complete | 2026-02-25 |
+| 23. Fix Save-as-Routine Timing Bug | v5.0 | 1/1 | Complete | 2026-02-27 |

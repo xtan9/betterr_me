@@ -29,6 +29,7 @@ import { WeeklyInsightCard } from "./weekly-insight-card";
 import type { WeeklyInsight } from "@/lib/db/insights";
 import { MilestoneCards } from "@/components/habits/milestone-card";
 import { AbsenceCard } from "./absence-card";
+import { WorkoutStatsWidget } from "./workout-stats-widget";
 import { toast } from "sonner";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
@@ -50,6 +51,8 @@ const EMPTY_DASHBOARD: DashboardData = {
     total_tasks: 0,
     tasks_due_today: 0,
     tasks_completed_today: 0,
+    last_workout_at: null,
+    week_workout_count: 0,
   },
 };
 
@@ -475,6 +478,14 @@ export function DashboardContent({
 
       {/* Daily Snapshot — only show when user has habits */}
       {data.stats.total_habits > 0 && <DailySnapshot stats={data.stats} />}
+
+      {/* Workout Stats — only show when user has workout data */}
+      {(data.stats.last_workout_at !== null || data.stats.week_workout_count > 0) && (
+        <WorkoutStatsWidget
+          lastWorkoutAt={data.stats.last_workout_at}
+          weekWorkoutCount={data.stats.week_workout_count}
+        />
+      )}
 
       {/* Milestone celebrations */}
       {data.milestones_today && data.milestones_today.length > 0 && (

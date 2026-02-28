@@ -5,6 +5,7 @@ export const preferencesSchema = z
     date_format: z.string().optional(),
     week_start_day: z.number().int().min(0).max(6).optional(),
     theme: z.enum(["system", "light", "dark"]).optional(),
+    weight_unit: z.enum(["kg", "lbs"]).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one preference must be provided",

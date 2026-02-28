@@ -79,9 +79,16 @@ export async function GET(request: NextRequest) {
     // Derive completed count from todayTasks (no separate DB call needed)
     const tasksCompletedToday = todayTasks.filter(t => t.is_completed).length;
 
+    // Compute week start date for workout count query
+    // Default week_start_day to Monday (1) — matches dashboard convention
+    const weekStartDay = 1;
+    const currentDayOfWeek = new Date(year, month - 1, day).getDay();
+    const daysToSubtract = (currentDayOfWeek - weekStartDay + 7) % 7;
+    const weekStartDate = getLocalDateString(new Date(year, month - 1, day - daysToSubtract));
+
     // Supplementary queries — failure falls back gracefully
     let logsFetchFailed = false;
-    const [allLogs, milestonesToday] = await Promise.all([
+    const [allLogs, milestonesToday, lastWorkoutAt, weekWorkoutCount] = await Promise.all([
       // Bulk fetch 30-day logs for all habits (1 query, avoids N+1)
       habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date).catch((err) => {
         log.error('Failed to fetch habit logs for absence', err, { userId: user.id, date });
@@ -93,6 +100,28 @@ export async function GET(request: NextRequest) {
         log.error('Failed to fetch milestones', err, { userId: user.id, date });
         return [] as HabitMilestone[];
       }),
+      // Last completed workout
+      Promise.resolve(
+        supabase
+          .from('workouts')
+          .select('completed_at')
+          .eq('user_id', user.id)
+          .eq('status', 'completed')
+          .order('completed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      ).then(r => r.data?.completed_at ?? null)
+        .catch(() => null),
+      // Completed workouts this week (HEAD-only count)
+      Promise.resolve(
+        supabase
+          .from('workouts')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('status', 'completed')
+          .gte('started_at', weekStartDate)
+      ).then(r => r.count ?? 0)
+        .catch(() => 0),
     ]);
 
     // Group completed logs by habit_id for absence computation
@@ -151,6 +180,8 @@ export async function GET(request: NextRequest) {
         total_tasks: totalTaskCount,
         tasks_due_today: todayTasks.length,
         tasks_completed_today: tasksCompletedToday,
+        last_workout_at: lastWorkoutAt,
+        week_workout_count: weekWorkoutCount,
       },
       ...(warnings.length > 0 && { _warnings: warnings }),
     };

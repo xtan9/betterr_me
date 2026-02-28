@@ -1,294 +1,276 @@
 # Project Research Summary
 
-**Project:** BetterR.Me — v4.0 Journal Feature
-**Domain:** Reflective journaling with mood tracking integrated into an existing habit tracking & task management app
-**Researched:** 2026-02-22
+**Project:** BetterR.Me v4.0 -- Fitness Tracking Milestone
+**Domain:** Hevy-inspired workout logging integrated into existing habit/task management app (web-only, single-user)
+**Researched:** 2026-02-23
 **Confidence:** HIGH
 
 ## Executive Summary
 
-BetterR.Me's v4.0 Journal feature adds a daily reflection layer to an existing Next.js 16 / Supabase / shadcn/ui application. The research consensus is clear: a one-entry-per-day model with a 5-point mood selector, writing prompts, and optional habit/task linking is the right scope. This mirrors the Daylio + Finch pattern (fast daily check-in) while adding BetterR.Me's unique cross-feature linking advantage. The app already contains nearly everything needed — the only new libraries are Tiptap 3 for rich text editing and Frimousse for the emoji/mood picker.
+BetterR.Me v4.0 adds Hevy-inspired workout tracking to a mature habit and task management app. The feature set is well-understood: exercise library with preset and custom exercises, workout session logging (start/finish, add exercises, log sets), routine templates, rest timer, personal records, and progression charts. The reference implementation is Hevy -- a purpose-built workout app -- and the implementation path is clear across all four research areas. The domain is thoroughly documented (Hevy feature pages, API documentation, public exercise databases) and the codebase patterns generalize cleanly to fitness data.
 
-The recommended approach is to build in strict dependency order: database schema and DB class first, then API routes, then SWR hooks, then UI components, and finally integration into the sidebar and dashboard. Every layer of this stack already has a verified pattern from existing features (habits, tasks, categories). The architecture is additive — no existing feature needs structural changes beyond modest modifications to the dashboard API and sidebar navigation. The `journal_entries` table, `JournalEntriesDB` class, and API routes can be built entirely by following the existing `tasks`/`habits` patterns.
+The stack addition is minimal: only `recharts` v2 (via the shadcn/ui `chart` component) is a new external dependency. Everything else -- timers, audio feedback, exercise seed data -- is implemented with custom hooks and browser-native APIs (~55 lines of code total). The architecture layers entirely onto the existing `DB class -> API route -> SWR hook -> React component` pattern. New tables follow established Supabase RLS patterns. New DB classes follow the constructor-injected client pattern. New API routes follow existing REST conventions. The single largest structural addition is 5 new Supabase tables and ~65 new/modified files.
 
-The three critical risks are: (1) Tiptap SSR hydration mismatches in Next.js App Router — prevented by `next/dynamic` with `ssr: false` and `immediatelyRender: false`; (2) content data loss from missing autosave — prevented by debounced autosave with localStorage fallback; and (3) bloating the dashboard API with journal data — prevented by keeping the journal widget self-contained with its own SWR endpoint. There is one notable tension between the STACK and ARCHITECTURE research files: STACK.md recommends Tiptap with JSONB storage while ARCHITECTURE.md initially specifies a plain `TEXT` body. The resolution is clear and opinionated: use Tiptap with JSONB per STACK.md, as the structured JSON enables future search and migration capabilities that raw HTML or plain text cannot.
+The highest-risk areas are the data model decisions in Phase 1 -- particularly the exercise type enum, the weight storage strategy, and the session persistence design -- all of which are expensive to retrofit after users have logged workout data. Phase 1 must lock in the schema before any UI work begins. Secondary risks are workout session state loss on browser refresh (mitigated by dual-write to both server and localStorage from day one) and SWR cache design for deeply nested workout data (mitigated by coarse-grained cache keys per workout session). The feature is well-scoped: no social features, no AI, no cardio distance tracking -- a focused strength training logger that bridges workout tracking with BetterR.Me's self-improvement philosophy.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack is nearly complete for this feature. Only two new library groups are needed: Tiptap 3 (rich text editor) and Frimousse (emoji picker). Both are headless and unstyled, fitting cleanly into the Tailwind CSS + shadcn/ui design system. All calendar, form, data fetching, i18n, toast, and icon needs are met by already-installed packages.
+The existing stack handles all fitness tracking needs. The only new dependency is the charting library, added via the shadcn/ui CLI.
 
-**New libraries to add:**
-- `@tiptap/react` + `@tiptap/pm` + `@tiptap/starter-kit` + `@tiptap/extension-placeholder` + `@tiptap/extension-character-count` (^3.20.0): Headless WYSIWYG editor — outputs structured JSON for Supabase JSONB storage, React 19 compatible, SSR-safe with `immediatelyRender: false`
-- `frimousse` (^0.3.0): 12kB dependency-free emoji picker — official shadcn/ui CLI recipe, zero styling opinions, React 18/19 compatible
+**New dependencies:**
+- `recharts` v2.15.x (via `pnpm dlx shadcn@latest add chart`): SVG-based charting for progression line charts and weekly volume bar charts. The shadcn/ui `chart` component wraps Recharts with automatic dark mode support via CSS custom properties. Recharts v2 is specifically required -- shadcn/ui is not yet compatible with Recharts v3 (PR #8486 open; v3 also adds unnecessary Redux/Immer dependencies).
 
-**Existing technologies covering remaining needs:**
-- `react-day-picker` (already installed via shadcn/ui `Calendar`): Calendar view with custom modifiers for entry dot indicators
-- `react-hook-form` + `zod`: Wrapping form fields (not the Tiptap body itself)
-- `SWR`: Journal data fetching with the established date-keyed cache pattern
-- `lucide-react`, `date-fns`, `sonner`, `next-intl`, `next-themes`, `shadcn/ui` components: No changes needed
+**Custom implementations (no new libraries needed):**
+- `useStopwatch` + `useCountdown` hooks (~55 lines total): client-side workout duration and rest timer. Custom hooks give full control for audio integration, optimistic persistence, and Vitest testing with `vi.useFakeTimers()`.
+- `playBeep()` via Web Audio API (~10 lines): rest timer audio alert. No library needed for a single programmatic tone.
+- Exercise seed data as curated JSON (~80-120 exercises): seeded via Supabase migration (global, `user_id IS NULL`), following the same pattern as the existing `categories` table -- except seeded via migration SQL, not lazy application code (see Critical Pitfalls #6).
 
-**Version note:** Tiptap v3.20.0 explicitly declares React `^19.0.0` as a peer dependency. No `peerDependencyRules` overrides needed.
+**What NOT to add:** Recharts v3, `react-timer-hook`, `react-countdown-circle-timer`, Chart.js, framer-motion, Zustand/Redux, external exercise APIs (ExerciseDB, wger), `howler.js`, `react-query`, `react-beautiful-dnd`.
 
-See `.planning/research/STACK.md` for full rationale and installation commands.
+See: `.planning/research/STACK.md` for full analysis and all alternatives considered.
 
 ### Expected Features
 
-The feature set divides cleanly into a core MVP (table stakes) and a set of differentiators that leverage the existing habit/task ecosystem.
-
 **Must have (table stakes):**
-- Daily journal entry with rich text area (Tiptap) — fundamental journal action
-- One entry per day model with upsert semantics — simplifies calendar, dashboard, and mental model
-- Mood selection (5-point emoji/icon scale) — Daylio/Finch standard, primary reason users combine journaling with habit tracking
-- Create, read, update, delete for entries — universal expectation
-- Journal page with calendar view (entry dot indicators) and timeline feed — navigation pattern from every major journal app
-- Click calendar day to view or create entry — primary navigation UX
-- Sidebar navigation item (4th item, BookOpen icon) — required discoverability
-- Full i18n coverage (en, zh, zh-TW) — project constraint, not optional
-- Dark mode compliance — inherited free via existing design tokens
+- Start / finish a workout session (sticky or dedicated active-workout UI, persisted to DB with `status: "in_progress"`)
+- Exercise library with ~80-120 preset exercises (seeded globally, searchable, filterable by muscle group and equipment)
+- Custom user exercises (name, primary muscle, equipment, exercise type)
+- Exercise search/selection via full-screen modal with client-side filtering (load-all, no server pagination)
+- Set tracking: weight + reps, bodyweight + reps, and duration (covers ~100% of strength exercises)
+- Previous workout values auto-filled on each set row (Hevy-style -- single biggest UX driver for logging speed)
+- Workout history list (reverse chronological, paginated)
+- Workout detail view (all exercises and sets, read-only)
+- Routine templates: create, edit, delete, start workout from routine
+- Rest timer: client-side countdown auto-starts on set completion, configurable duration, audio beep on completion
+- Weight unit preference: kg / lbs (stored in `ProfilePreferences` JSONB, all weights stored as `weight_kg` internally)
+- Workouts page as 4th top-level sidebar section (Dumbbell icon, flat nav following existing pattern)
 
 **Should have (differentiators):**
-- Writing prompts (gratitude, reflection, goals categories; 15-20 prompts; all 3 locales) — reduces blank-page anxiety; static library (no AI)
-- Dashboard quick-entry widget — surfaces journal from the app's main entry point, reduces friction to zero
-- Optional habit/task linking — unique BetterR.Me differentiator, no competitor offers cross-feature linking
-- "On This Day" past reflections card — Day One's signature feature, simple to implement, high emotional value
-- Journal streak counter — reuses existing streak calculation pattern from habits
+- Personal records (PR) detection: max weight and best set volume per exercise, shown mid-workout as inline banner
+- Per-exercise progression chart: line chart of weight over time (Recharts via shadcn Chart)
+- Set type labels: warmup / normal / drop set / failure (warmup excluded from PR calculations)
+- Workout title and per-exercise notes (freeform)
+- Dashboard integration: last workout date and current week workout count
 
-**Defer to v2+:**
-- Mood correlation analytics ("you feel better on days you exercise") — requires cross-feature data analysis and charting
-- Full-text search across entries — requires pg_trgm or tsvector indexing
-- Photo/media attachments — separate storage infrastructure project
-- AI-generated prompts or entry analysis — privacy concerns and API costs
-- Push notification reminders — no notification infrastructure exists
-- Rich-text-to-markdown export — not needed while Tiptap handles display
+**Defer to v4.1+:**
+- Superset grouping (include nullable `superset_id` column in schema; defer UI)
+- Muscle group distribution charts (weekly volume per muscle group)
+- Estimated 1RM PR type (requires formula selection and user explanation)
+- Workout streak tracking (reuse habit streak pattern later)
+- Body measurements, plate calculator, video demos, social features, AI generation
 
-See `.planning/research/FEATURES.md` for competitor analysis and mood picker UX research.
+**Critical path:** Exercises table (seed) -> Workouts/Sets tables -> Workout logging UI -> Previous value auto-fill -> Routines -> History/Detail views -> PR detection -> Progression charts
+
+See: `.planning/research/FEATURES.md` for the full feature landscape, exercise type taxonomy (8 types), muscle group taxonomy (14 groups), equipment taxonomy (9 types), and anti-features.
 
 ### Architecture Approach
 
-The architecture is entirely additive and modeled on existing patterns. New files live in `components/journal/`, `app/journal/`, `app/api/journal/`, `lib/db/journal-entries.ts`, `lib/hooks/use-journal.ts`, `lib/validations/journal.ts`, and `lib/journal/` (static prompt and mood definitions). Modified files are minimal: sidebar nav, dashboard API (one HEAD-only query added to `Promise.all`), dashboard content component, and three i18n locale files.
+The fitness tracking architecture is a clean extension of the existing `DB class -> API route -> SWR hook -> React component` pattern. Five new Supabase tables (`exercises`, `workouts`, `workout_exercises`, `workout_sets`, `routines`/`routine_exercises`), four new DB classes, a new `components/fitness/` component tree, and an `app/workouts/` page hierarchy. No new architectural paradigms are introduced.
 
 **Major components:**
-1. `JournalEntriesDB` (`lib/db/journal-entries.ts`) — Supabase CRUD, upsert-by-date, calendar aggregation, dashboard existence check; mirrors `TasksDB`/`HabitsDB` constructor pattern
-2. API routes (`/api/journal`, `/api/journal/[id]`, `/api/journal/calendar`) — REST endpoints following existing task/habit API structure; the calendar endpoint is a separate lightweight route returning only `{entry_date, mood}[]` to avoid transferring full content for dot rendering
-3. `JournalEntryForm` (`components/journal/journal-entry-form.tsx`) — shared create/edit form with Tiptap editor, mood selector, prompt selector, and optional link selector; editor loaded via `next/dynamic` with `ssr: false`
-4. Journal page (`app/journal/page.tsx`) — calendar + timeline side-by-side layout; mirrors `app/habits/` route structure
-5. Dashboard widget (`components/journal/journal-widget.tsx`) — self-contained component with its own SWR hook targeting a separate journal endpoint; does NOT add journal fields to `DashboardData`
+1. **ExercisesDB + `/api/exercises`** -- exercise library CRUD; global preset rows (`user_id IS NULL`) plus per-user custom exercises; client-side filtering (load-all, no server pagination required for ~100-120 exercises)
+2. **WorkoutsDB + WorkoutExercisesDB + `/api/workouts`** -- session CRUD, active workout state, set CRUD; unique partial index on `(user_id) WHERE status = 'in_progress'` enforces one active workout per user at the DB level
+3. **RoutinesDB + `/api/routines`** -- routine template CRUD; copy-on-start pattern (routine exercises are copied into the new workout at start time, not referenced live -- `ON DELETE SET NULL` for `routine_id` FK on workouts)
+4. **Workout Logger UI** -- `WorkoutLogger`, `WorkoutExerciseCard`, `WorkoutSetRow`, rest timer; active workout managed in `useReducer` + localStorage dual-write, synced to server on every set mutation via debounced PATCH
+5. **Progress components** -- `ExerciseProgressChart` (Recharts LineChart via shadcn ChartContainer), `PersonalRecordsCard`; exercise history API aggregates per workout with default 3-month limit
+6. **Modified: ProfilesDB + preferences API** -- add `weight_unit: "kg" | "lbs"` to existing JSONB preferences column (zero migration needed, schema-on-write)
+7. **Modified: AppSidebar** -- add "Workouts" nav item; active workout indicator uses client-side state (not sidebar counts API)
 
-**Key patterns:**
-- Upsert over insert — `INSERT ... ON CONFLICT (user_id, entry_date) DO UPDATE` enforces one-entry-per-day at the DB level
-- Lightweight calendar endpoint — fetches `entry_date` + `mood` only, max 31 rows per month
-- SWR date-keyed cache — matches existing dashboard and sidebar-counts patterns
-- Static prompt/mood definitions — TypeScript constants, resolved via next-intl at render time; never stored as user content
+**Key architectural decisions:**
+- All weights stored as `weight_kg` (canonical kg) in DB; convert to user preference in UI at display/input boundaries only -- prevents data corruption if user switches units
+- Coarse-grained SWR cache: one key per workout (`/api/workouts/[id]` returns full nested workout with exercises and sets); no separate SWR keys for exercises or sets within a workout
+- Active workout state in `useReducer` + localStorage during session, synced to server on each mutation -- prevents state loss on refresh
+- Exercise library: load-all-then-filter-client-side -- ~80-120 exercises fit in one SWR cache entry; `Array.filter()` is instant vs. API roundtrip during workout
 
-**Database schema (two new tables):**
-- `journal_entries`: `id`, `user_id`, `entry_date DATE`, `content JSONB`, `mood TEXT`, `prompt_key TEXT`, `created_at`, `updated_at` + UNIQUE(user_id, entry_date) + RLS
-- `journal_entry_links`: `id`, `journal_entry_id`, `link_type TEXT CHECK ('habit','task')`, `link_id UUID` (soft reference, no FK) + RLS via parent join
+**New vs. modified files:** ~55 new files (migrations, DB classes, API routes, hooks, components, pages, validations, utilities) + ~8 modified files (types.ts, sidebar, settings-content, preferences validation, locale files, lib/db/index.ts, lib/constants.ts).
 
-**Resolution of STACK vs ARCHITECTURE tension:** ARCHITECTURE.md specifies `body TEXT` while STACK.md recommends Tiptap with `content JSONB`. Use JSONB per STACK.md. The structured JSON format enables future search, analytics, and editor migration without schema changes. The `body TEXT` column in the ARCHITECTURE.md schema should be treated as superseded.
-
-See `.planning/research/ARCHITECTURE.md` for full schema SQL, TypeScript types, and data flow diagrams.
+See: `.planning/research/ARCHITECTURE.md` for full SQL schema (all 6 tables with RLS policies and indexes), component file tree, data flow diagrams, SWR hook implementations, validation schemas, and a 17-step build order.
 
 ### Critical Pitfalls
 
-1. **Tiptap SSR hydration mismatch** — Use `next/dynamic({ ssr: false })` for the editor component and set `immediatelyRender: false` in `useEditor()`. Both steps are required. This pattern already exists in the codebase for the kanban board (`dashboard-content.tsx`). Skipping either step crashes the journal page on first load.
+1. **Flat set schema without exercise type semantics** -- A `workout_sets` table with all nullable columns seems fine initially, but volume calculations produce NaN for bodyweight exercises, progression chart code scatters `if (type === 'weight')` everywhere, and DB CHECK constraints cannot enforce required fields per type. **Prevention:** Define `exercise_type` enum on `exercises` table. Centralize field semantics in `lib/fitness/exercise-fields.ts`. Use Zod discriminated unions in `lib/validations/workout.ts`. Address in Phase 1 before any UI work.
 
-2. **Content data loss from missing autosave** — Journal writing sessions are long-form; users expect autosave like Notion. Implement debounced autosave (2-3 second debounce on Tiptap's `onUpdate`), a visible save status indicator ("Saving..." / "Saved"), and a localStorage draft fallback keyed by date. Without this, users lose writing on navigation and abandon the feature.
+2. **In-progress workout state lost on browser refresh** -- Storing workout data only in React state means 20-60 minutes of gym data evaporates on page crash or tab close. This is the single most rage-inducing failure in the domain. **Prevention:** Dual-write on every mutation: PATCH to server (sets `status: "in_progress"`) AND `localStorage.setItem` (synchronous -- survives page teardown). On mount, check both server and localStorage for in-progress workout; show "Resume workout?" banner. Do NOT use IndexedDB in `beforeunload` handlers (async, not guaranteed to flush before page teardown). Must be built into Phase 2 from the start -- not retrofitted.
 
-3. **HTML storage lock-in** — Store Tiptap's native JSON via `editor.getJSON()` in a `JSONB` column, not `editor.getHTML()` in a TEXT column. HTML storage creates XSS risk, complicates search, and tightly couples the schema to Tiptap's HTML output format. If you find yourself importing DOMPurify, the wrong storage format was chosen.
+3. **Weight unit conversion corrupting historical data** -- Rounding the irrational lb->kg conversion and storing the result means switching unit preferences causes historical weights to drift. Retroactively converting stored data is worse. **Prevention:** Store all weights as `weight_kg` (canonical kg, `NUMERIC(7,2)`). Display by converting on read with intelligent rounding (nearest 0.5 lbs for lbs display). `ProfilePreferences.weight_unit` controls display only; never mutate stored values. Address in Phase 1 schema design.
 
-4. **Dashboard API bloat** — The journal dashboard widget must be self-contained with its own SWR hook and its own lightweight endpoint. Do not add `journal_today` to `DashboardData` in `lib/db/types.ts` or import `JournalEntriesDB` into `app/api/dashboard/route.ts`. The existing `WeeklyInsightCard` pattern (separate SWR call alongside main dashboard) is the correct model.
+4. **SWR cache explosion from fine-grained workout data** -- Workout data is hierarchical (workout -> exercises -> sets), unlike flat habit/task entities. Per-entity SWR keys cause cascade invalidation bugs (adding a set must invalidate workout detail, workout list, exercise history, and PRs). **Prevention:** Coarse-grained SWR -- one key per workout returns everything nested. Manage active workout mutations in `useReducer` local state. Use a `revalidateWorkoutData()` utility (mirroring existing `revalidateSidebarCounts()`) for targeted post-mutation invalidation.
 
-5. **Missing unique constraint or incorrect upsert** — The DB migration must include `UNIQUE(user_id, entry_date)`. All saves must use Supabase `.upsert()` with `onConflict: "user_id,entry_date"`. Without this, two tabs open simultaneously create duplicate rows that break calendar dots, the dashboard widget, and the one-entry-per-day mental model.
+5. **Exercise library overengineered as a searchable service** -- Adding `tsvector` full-text search, server-side pagination, and GIN indexes to 80-120 exercises is massive overengineering. The entire dataset fits in browser memory (~200KB). **Prevention:** Load all exercises in a single `GET /api/exercises` with long SWR `dedupingInterval` (10+ minutes). Filter client-side. Reserve server-side aggregation for exercise HISTORY (time-series data that grows).
 
-See `.planning/research/PITFALLS.md` for the full list of 15 pitfalls with detection and prevention guidance.
+6. **Exercise preset seeding via application code (not migration)** -- The categories "lazy seed" pattern works for 12 rows but would cause 5+ second latency if reused for 80-120 exercises. **Prevention:** Seed preset exercises via Supabase migration SQL (`user_id IS NULL`), not application code. This diverges intentionally from the categories seeding pattern. Address in Phase 1.
+
+7. **Rest timer drifting in background tabs** -- `setInterval` tick-counting is throttled by Chrome/Firefox in background tabs (to 1-minute intervals). Timer shows wrong remaining time when user returns from their phone camera. **Prevention:** Timestamp-based elapsed time: `const remaining = Math.max(0, durationMs - (Date.now() - startTime))`. On `visibilitychange`, immediately recalculate from stored `startTime`. Address in Phase 2 timer implementation.
+
+See: `.planning/research/PITFALLS.md` for the full analysis of 14 pitfalls (5 critical, 5 moderate, 4 minor) with detection signals, phase-to-pitfall mapping, and integration-specific warnings for the BetterR.Me codebase.
 
 ## Implications for Roadmap
 
-Based on research, the dependency graph is strict and well-understood. Every phase depends cleanly on the prior phase with no cycles. The architecture research provides a 7-phase build order that should be followed.
+Based on combined research, the feature decomposes into 4 phases with strict dependency ordering. The schema must be locked before any UI; the exercise library must exist before the workout logger; the workout logger must be functional before routines; history and progression come last because they read from completed workout data.
 
-### Phase 1: Database Foundation
+### Phase 1: Database Foundation & Exercise Library
 
-**Rationale:** Every other component — API routes, UI, dashboard widget — depends on the database schema and DB class. Getting the schema right (JSONB content column, unique constraint, RLS policies, soft link references) prevents rewrites later. Mistakes at this layer are the most expensive to fix.
-
-**Delivers:** Supabase migration file, `JournalEntriesDB` class with full CRUD + upsert + calendar query, TypeScript types (`JournalEntry`, `JournalEntryLink`, `JournalCalendarDay`, `MoodKey`), Zod validation schemas (`lib/validations/journal.ts`), static mood definitions (`lib/journal/moods.ts`), static prompt definitions (`lib/journal/prompts.ts`)
-
-**Addresses features:** One-entry-per-day model, mood tracking foundation, habit/task linking foundation
-
-**Avoids pitfalls:** Pitfall 5 (missing unique constraint), Pitfall 15 (RLS missing), Pitfall 9 (FK coupling on links — use soft references from day one), Pitfall 2 (content storage format — JSONB column, not TEXT)
-
-**Research flag:** Standard patterns. Follows existing migration + DB class patterns exactly (copy RLS from categories migration, follow `TasksDB` constructor). No deep research phase needed.
-
-### Phase 2: API Routes
-
-**Rationale:** UI components cannot be built without endpoints to fetch from and submit to. The three API routes (list/create, single entry CRUD, calendar aggregation) are independent of each other and can be built in parallel once Phase 1 completes.
-
-**Delivers:** `GET/POST /api/journal`, `GET/PATCH/DELETE /api/journal/[id]`, `GET /api/journal/calendar?month=YYYY-MM` (lightweight — returns `{entry_date, mood}[]` only)
-
-**Addresses features:** All CRUD table stakes, calendar performance
-
-**Avoids pitfalls:** Pitfall 8 (calendar performance — dedicated lightweight endpoint from the start), Pitfall 13 (timezone — client-sent date param validated with existing regex), Pitfall 11 (SWR key collisions — distinct API paths for distinct data shapes)
-
-**Research flag:** Standard patterns. Mirrors existing `/api/tasks/` and `/api/habits/` routes exactly. No deep research needed.
-
-### Phase 3: SWR Hooks
-
-**Rationale:** Thin layer between API and UI. Must exist before UI components can be built. Building hooks before components keeps components focused on rendering rather than data wiring.
-
-**Delivers:** `lib/hooks/use-journal.ts` with `useJournalEntry(date)`, `useJournalCalendar(yearMonth)`, `useJournalTimeline()` hooks
-
-**Addresses features:** Date-keyed cache for midnight refresh, timeline pagination setup with `keepPreviousData: true`
-
-**Avoids pitfalls:** Pitfall 11 (SWR key collisions), Pitfall 13 (timezone — `getLocalDateString()` in SWR keys)
-
-**Research flag:** Standard patterns. Follows `use-habits.ts` and `use-sidebar-counts.ts` patterns.
-
-### Phase 4: Core UI Components
-
-**Rationale:** Reusable building blocks must exist before pages can compose them. The mood selector, prompt selector, Tiptap editor, and entry form are shared between the journal page and dashboard widget — building them as standalone components prevents duplication.
-
-**Delivers:** `MoodSelector`, `PromptSelector`, `JournalEditor` (Tiptap, loaded via `next/dynamic({ ssr: false })`), `JournalEntryForm` (shared create/edit), `JournalEntryCard` (timeline card)
-
-**Uses stack:** Tiptap 3 (`@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`, `@tiptap/extension-placeholder`, `@tiptap/extension-character-count`), Frimousse if using emoji picker, existing shadcn/ui Popover + Button + Textarea components
-
-**Implements:** `MoodSelector` as `role="radiogroup"` with 5 `role="radio"` buttons (not `<div>` or `<span>`), Tiptap with debounced autosave + localStorage draft fallback, `JournalEditor` wrapped in `next/dynamic` with loading skeleton
-
-**Avoids pitfalls:** Pitfall 1 (SSR hydration — `next/dynamic ssr: false` + `immediatelyRender: false`), Pitfall 3 (data loss — debounced autosave in editor component), Pitfall 6 (mood picker accessibility — radiogroup pattern, aria-labels, keyboard nav), Pitfall 10 (bundle size — StarterKit only, no extra extensions)
-
-**Research flag:** Moderate care needed. Tiptap integration with Next.js App Router has known SSR gotchas — the fix is documented and verified, but must be applied correctly from the start. Review PITFALLS.md Pitfall 1 and Pitfall 3 before implementation. Run `pnpm analyze` after adding Tiptap to verify bundle size.
-
-### Phase 5: Journal Page and Sidebar Navigation
-
-**Rationale:** The full journal browsing experience — calendar view, timeline feed, entry create/edit/view pages — is the core user-facing surface. Sidebar nav provides discoverability. This phase is buildable once Phase 4 components exist.
-
-**Delivers:** `app/journal/` routes (layout, page, new/page, [id]/page, [id]/edit/page, loading skeleton), `JournalCalendar` (react-day-picker with custom modifiers for mood-colored dots), `JournalTimeline` (reverse chronological, paginated), sidebar nav item (BookOpen icon, `/journal` route)
-
-**Implements:** Two-panel calendar + timeline layout (stacked on mobile), react-day-picker `modifiers` + `modifiersClassNames` for entry dot indicators, route structure mirroring `app/habits/`
-
-**Avoids pitfalls:** Pitfall 8 (calendar uses lightweight `useJournalCalendar` hook from Phase 3), Pitfall 14 (dark mode mood colors as CSS custom properties, not hardcoded hex)
-
-**Research flag:** Standard patterns. Calendar modifiers are well-documented in react-day-picker. Route structure mirrors habits exactly. No deep research needed.
-
-### Phase 6: Dashboard Integration
-
-**Rationale:** The dashboard widget is the lowest-friction entry point for journaling. Positioning it here — after the core journal feature is complete — means the widget can reuse Phase 4 components and Phase 2 API routes without circular dependencies.
-
-**Delivers:** `JournalWidget` dashboard component, dedicated self-contained SWR hook for today's entry status (targeting `/api/journal?date=YYYY-MM-DD` or a dedicated `/api/journal/today`), modifications to `dashboard-content.tsx` and `app/dashboard/page.tsx`
-
-**Implements:** Widget pattern matching `WeeklyInsightCard` — separate SWR call alongside main dashboard SWR, no modification to `DashboardData` type, shows quick mood selector + "Write more..." link when no entry exists, shows "View today's entry" link when entry exists
-
-**Avoids pitfalls:** Pitfall 4 (dashboard API bloat — separate endpoint, `DashboardData` type unchanged, no `JournalEntriesDB` import in dashboard route)
-
-**Research flag:** Standard patterns. The `WeeklyInsightCard` component in the codebase provides the exact pattern to follow.
-
-### Phase 7: i18n and Polish
-
-**Rationale:** Final pass to ensure all three locale files are complete, all journal strings are translated, writing prompts exist in all locales, and mood labels are translated. Also includes dark mode verification across all journal components and accessibility audit.
-
-**Delivers:** Complete `journal` namespace in `en.json`, `zh.json`, `zh-TW.json` (approx. 50-80 string keys + 20+ prompts per locale across 3 categories), verified dark mode across all journal components, vitest-axe tests for `MoodSelector` and `JournalEntryForm`
-
-**Avoids pitfalls:** Pitfall 7 (i18n of prompts vs user content — prompts stored as i18n keys, user journal text never passed through `t()`), Pitfall 14 (dark mode mood colors)
-
-**Research flag:** Standard patterns. Follows existing next-intl namespace pattern. Mechanical work; no research needed.
-
-### Phase 8: Differentiators (Conditional)
-
-**Rationale:** Ship if time allows after Phase 7. These are high-value but independent of each other and of the core feature. Each can be built incrementally without blocking the others.
+**Rationale:** Every subsequent feature depends on the schema. The exercise type enum, weight storage strategy, and set field semantics must be locked before any UI is built -- retroactively changing these after workout data exists requires a full data migration. The exercise library is the dependency for workout logging, routines, and progression charts.
 
 **Delivers:**
-- Habit/task linking UI (`LinkSelector` component in entry form, `journal_entry_links` sync in API routes)
-- "On This Day" dashboard card (date-range query: today minus 30 days and today minus 365 days)
-- Journal streak counter (reuse existing streak calculation pattern from habits)
-- Simple mood distribution chart for current month (count per mood level, bar or pixel grid)
+- Supabase migrations: `exercises`, `workouts`, `workout_exercises`, `workout_sets`, `routines`, `routine_exercises` tables with full RLS policies, constraints, and indexes (including unique partial index on active workout per user)
+- Exercise preset seed migration (~80-120 exercises, `user_id IS NULL`, global -- not per-user)
+- TypeScript type definitions for all fitness entities (`Exercise`, `Workout`, `WorkoutSet`, `Routine`, `RoutineExercise`, `PersonalRecord`, `ExerciseHistoryEntry`, `WeightUnit`) in `lib/db/types.ts`
+- DB classes: `ExercisesDB`, `WorkoutsDB`, `WorkoutExercisesDB`, `RoutinesDB`
+- Validation schemas with Zod discriminated unions on `exercise_type`: `lib/validations/exercise.ts`, `lib/validations/workout.ts`, `lib/validations/routine.ts`
+- Fitness utilities: `lib/fitness/units.ts` (kg/lbs conversion), `lib/fitness/exercise-fields.ts` (exercise type to input field mapping)
+- Exercises API: `GET /api/exercises` (load-all, no pagination), `POST /api/exercises` (custom creation), `GET/PATCH/DELETE /api/exercises/[id]`
+- Exercise library UI: browse, search, filter by muscle group and equipment (client-side), create custom exercise form, exercise detail page
+- Weight unit preference: extend `ProfilePreferences` TypeScript type + Zod schema + settings UI selector (kg/lbs toggle following existing WeekStartSelector pattern)
+- Sidebar: add "Workouts" nav item with Dumbbell icon
+- i18n strings for all fitness UI in en/zh/zh-TW (exercise name translations can be incremental -- see Gaps)
 
-**Avoids pitfalls:** Pitfall 9 (habit/task linking — soft references with entity name snapshot at link time so deleted items show as "Morning Run (deleted)" rather than a broken link)
+**Addresses features:** Exercise library, custom exercises, exercise search/filter, weight unit preference, workouts nav item
+**Avoids pitfalls:** P1 (flat schema without type semantics), P3 (weight unit corruption), P5 (overengineered search), P6 (lazy seeding at app-code level), P10 (missing discriminated union validation)
 
-**Research flag:** Habit/task linking needs a deliberate UX decision about orphaned link display before implementation. Everything else is straightforward.
+**Verification:** Confirm all 6 tables exist with correct RLS. Verify preset exercises are queryable by all authenticated users. Create a custom exercise -- confirm it appears only for the creating user. Confirm `weight_unit` updates via existing `PATCH /api/profile/preferences`. Exercise library UI should render with client-side search and muscle group filter working without API calls on keystroke.
+
+### Phase 2: Workout Logging (Core Loop)
+
+**Rationale:** The core product loop -- start a workout, add exercises, log sets, finish. This is the feature that all other phases depend on. A user must be able to log a workout end-to-end before routines, history, or progression charts matter. Building this phase proves the schema works, the SWR cache strategy is correct, and the session persistence is reliable.
+
+**Delivers:**
+- Workouts API: `POST /api/workouts` (start session), `GET /api/workouts/active` (404 if none), `PATCH /api/workouts/[id]` (update title/notes/finish), `DELETE /api/workouts/[id]`, exercise CRUD endpoints, set CRUD endpoints
+- SWR hooks: `useActiveWorkout()` (no auto-refresh, manual mutate), `useWorkouts()` (paginated history list)
+- Custom hooks: `useStopwatch` (workout elapsed duration), `useCountdown` (rest timer countdown)
+- Active workout session persistence: `useReducer` local state + `localStorage` dual-write on every mutation + recovery banner on mount
+- Workout logger UI: `WorkoutLogger`, `WorkoutHeader` (elapsed timer, title, finish/discard buttons), `WorkoutExerciseCard` (sets accordion), `WorkoutSetRow` (weight/reps/duration inputs per exercise type), `WorkoutAddExercise` (exercise picker Sheet/Dialog), `WorkoutRestTimer` (countdown with progress bar, +15s/-15s buttons), `WorkoutFinishDialog` (confirmation modal)
+- Previous workout values auto-fill: displayed alongside set input fields (query last workout containing same exercise)
+- Rest timer: configurable default (90s default, per-exercise override), auto-starts on set completion, Web Audio API beep on zero
+- Set completion: checkbox per set with optimistic SWR update
+- Workouts landing page (`/workouts`): "Start Workout" CTA, recent workouts preview, routines preview, active session recovery banner
+- Active workout page (`/workouts/active`): redirects to `/workouts` if no active session
+
+**Addresses features:** Start/finish workout, exercise selection mid-workout, set tracking (all 3 types), previous values auto-fill, rest timer, workout session page
+**Avoids pitfalls:** P2 (state loss on refresh -- dual-write built in from day one), P4 (SWR cache explosion -- coarse-grained keys, `useReducer` for active session), P8 (sidebar crowding -- active workout indicator from client state, not counts API), P6-timer (timestamp-based countdown, not tick-counting)
+
+**Verification:** Log a complete workout (start, 3 exercises, multiple sets of each, finish). Confirm data in Supabase. Refresh mid-workout -- confirm "Resume workout?" banner appears and all sets restore. Switch to another browser tab for 2 minutes, return -- confirm rest timer shows correct remaining time. Try starting a second workout while one is active -- confirm 409 Conflict response.
+
+### Phase 3: Routines & Templates
+
+**Rationale:** Routines depend on a stable workout logging flow. Users build routines after logging a few raw workouts and wanting to repeat them. The copy-on-start pattern must be implemented correctly at the API layer to prevent the routine/workout coupling pitfall.
+
+**Delivers:**
+- Routines API: `POST /api/routines`, `GET /api/routines`, `GET/PATCH/DELETE /api/routines/[id]`, exercise CRUD within routine, `POST /api/routines/from-workout/[workoutId]` (save workout as routine)
+- Copy-on-start enforcement: `POST /api/workouts` with `routine_id` copies all `routine_exercises` into `workout_exercises` + creates empty `workout_sets` for target_sets count; subsequent routine edits do NOT affect the workout; `ON DELETE SET NULL` for `routine_id` FK
+- SWR hooks: `useRoutines()`, `useRoutineDetail()`
+- Routines UI: routines list page, routine card (name, exercise count, last performed date), routine detail (exercise list with targets, "Start Workout" button), routine form (create/edit with drag-to-reorder exercise order), routine exercise row (exercise, target sets/reps/weight, rest timer)
+- "Save as routine" from completed workout detail view
+- Routines section on workouts landing page (`/workouts`)
+- i18n strings for routines in all 3 locales
+
+**Addresses features:** Create/edit/delete routines, start workout from routine, routine exercise ordering with targets
+**Avoids pitfalls:** P7 (template-workout coupling -- copy-on-start enforced in API layer, `ON DELETE SET NULL` for `routine_id`)
+
+**Verification:** Create a routine with 3 exercises and target sets. Start a workout from it -- verify exercises and target sets pre-fill the workout. Edit the routine. Confirm the previously started workout's exercises are unchanged. Delete the routine -- confirm historical workouts that used it retain their exercise data (routine_id becomes NULL, exercises remain).
+
+### Phase 4: History, Personal Records & Progression
+
+**Rationale:** Progression tracking requires workout history to exist. Personal records are computed from historical data. This is the "payoff" phase -- the reward that motivates users to keep logging. It is last because it is primarily read-only (reads from data created in phases 1-3) and does not block any other phase.
+
+**Delivers:**
+- Exercise history API: `GET /api/exercises/[id]/history` -- aggregated per workout (best set weight, total volume, total normal sets); default 3-month limit with date range selector
+- Workout history list page and history cards: paginated reverse chronological list, summary cards (date, title, exercise count, total volume, duration)
+- Workout detail view (`/workouts/[id]`): completed workout read-only view showing all exercises, all sets, PRs achieved, duration, total volume
+- Exercise detail page (`/workouts/exercises/[id]`): exercise info, progression chart, current PRs
+- Personal records: `personal_records` table updated incrementally on workout completion (compare each completed normal set vs. stored best per exercise); PR types: max weight, best set volume (weight x reps)
+- PR detection mid-workout: compare current set against stored best; show congratulatory inline banner on new PR
+- Per-exercise progression chart: Recharts `LineChart` via shadcn `ChartContainer` -- max weight and/or volume over time, date range selector (1m / 3m / 6m / all time), dark mode automatic via CSS custom properties
+- Dashboard integration: last workout date and current week workout count (extends dashboard API query)
+- `useExerciseHistory()` SWR hook with `keepPreviousData: true` (matches existing date-based key pattern)
+
+**Addresses features:** Workout history list, workout detail, PR detection (max weight + best set volume), progression charts, dashboard integration
+**Uses stack:** `recharts` v2 via shadcn `chart` component (`ChartContainer`, `ChartTooltip`, `ChartTooltipContent`)
+**Avoids pitfalls:** P9 (slow chart queries -- 3-month default limit, server-side aggregation, consider `supabase.rpc()` if JOINs across RLS tables are slow), P14 (PR full-scan -- incremental `personal_records` table updated on workout completion)
+
+**Verification:** Log 5 workouts with the same exercise, increasing weight each time. Confirm progression chart shows 5 data points with an upward trend. Beat the previous best weight in workout 6 -- confirm PR banner appears mid-workout and `personal_records` table updates. Delete a workout -- confirm chart and PRs update correctly. Check dashboard shows last workout date and week count.
 
 ### Phase Ordering Rationale
 
-- **Data before API before UI** — Every phase depends strictly on prior phases. This is required by the dependency graph, not just a stylistic preference.
-- **Journal page before dashboard widget** — The widget reuses Phase 4 components and Phase 2 API. Building the widget first would require building those in isolation and then refactoring.
-- **i18n as final pass** — Keys should be added incrementally during each phase (using placeholder strings), with a final completeness audit in Phase 7. This avoids blocking UI work on translation completeness.
-- **Differentiators last and conditional** — Core value is delivered in Phases 1-6. Differentiators add depth but are not required for a functional, polished journal feature.
+- **Schema first** because the exercise type enum, weight storage strategy, and the routine/workout copy-on-start relationship cannot be changed after workout data exists. Phase 1 locks these architectural decisions before any UI is built.
+- **Exercise library before workout logger** because the workout logger's exercise picker requires the exercise library API and UI to be functional. The set input components also require `weight_unit` preference to be in place.
+- **Workout logging (Phase 2) before routines (Phase 3)** because the "start from routine" flow copies exercises into a new workout using the same `POST /api/workouts` endpoint. That endpoint must work correctly before the copy-on-start logic can be tested.
+- **History and progression last (Phase 4)** because progression charts and PRs are pure reads from completed workout data and cannot be meaningfully built or tested until Phase 2 has produced completed workouts.
+- **This ordering avoids the top pitfalls:** Phase 1 locks schema decisions that are expensive to change. Phase 2 builds dual-write session persistence from day one (not retrofitted). Phase 3 enforces copy-on-start at the API level before any UI depends on the relationship. Phase 4 can focus on data visualization without data integrity concerns.
 
 ### Research Flags
 
-Phases needing careful attention during implementation (review relevant PITFALLS.md sections before starting, not full research sprints):
+**Phases likely needing deeper research during planning:**
 
-- **Phase 4 (Core UI):** Tiptap SSR integration and autosave implementation have documented gotchas. The fix is known and verified, but must be applied correctly from the start. Review Pitfalls 1, 3, and 10 before writing `JournalEditor`.
-- **Phase 8 (Habit/task linking):** Soft reference display logic for orphaned links (after entity deletion) needs a deliberate UX decision before writing code.
+- **Phase 1 (Schema Design):** The `workout_sets` nullable-column strategy and Zod discriminated union implementation need careful upfront review. Consider running `EXPLAIN ANALYZE` on the planned exercise history query (Phase 4 concern, but plan the schema now) to determine if `supabase.rpc()` will be needed. The weight storage conflict (store as kg vs. store in logged unit) must be resolved before writing the first migration -- see Gaps.
+- **Phase 2 (Workout Logging):** The `useReducer` + localStorage dual-write pattern for active session state is the most novel part relative to the existing codebase. Build a minimal proof-of-concept of the persistence layer first (start workout, add one set, refresh page, verify recovery) before building the full workout logger UI.
+- **Phase 4 (Progression Charts):** The exercise history aggregation query (3-table JOIN across RLS-protected tables) should be validated against Supabase's query planner before building the UI. If the query exceeds ~100ms on realistic data (50+ workouts), implement a `supabase.rpc()` PostgreSQL function.
 
-Phases with fully standard patterns (no additional research needed):
+**Phases with standard patterns (skip deep research):**
 
-- **Phase 1 (Database):** Copy RLS pattern from categories migration, follow `TasksDB` constructor pattern exactly.
-- **Phase 2 (API):** Mirror `/api/tasks/` structure exactly.
-- **Phase 3 (SWR hooks):** Mirror `use-habits.ts` exactly.
-- **Phase 5 (Journal page):** Mirror `app/habits/` route structure; react-day-picker modifiers are documented.
-- **Phase 6 (Dashboard widget):** Mirror the `WeeklyInsightCard` component pattern.
-- **Phase 7 (i18n):** Mechanical translation work following existing locale file structure.
+- **Phase 1 (Exercise Library UI):** Standard CRUD following existing patterns. Load-all-and-filter-client-side is identical to how categories are used in existing task/habit forms. Well-understood shadcn/ui Sheet + search input pattern.
+- **Phase 3 (Routines CRUD):** Standard `DB class -> API -> SWR hook -> component` pattern. Follows `HabitsDB`/`TasksDB` exactly. Copy-on-start logic is ~20-30 lines in the API route.
+- **Phase 4 (Workout History list and detail):** Standard paginated list + detail view. Recharts usage is documented with multiple shadcn chart examples. No novel patterns.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Tiptap v3.20.0 React 19 peer deps verified on npm. Frimousse shadcn/ui integration confirmed at official site. All existing stack elements verified against running codebase. No peer dependency conflicts. |
-| Features | MEDIUM-HIGH | Feature set validated against Daylio, Finch, Day One, and Balance Journal. Mood UX grounded in ECMES academic scale research. Writing prompt content quality depends on native speaker review for zh/zh-TW (flagged as gap). |
-| Architecture | HIGH | Based on direct codebase analysis of existing patterns (habits, tasks, categories, dashboard). All patterns verified from source files. Schema SQL is production-ready with RLS. |
-| Pitfalls | HIGH | 15 pitfalls documented with verified prevention strategies. Tiptap SSR and autosave pitfalls confirmed against official docs and GitHub issues. Dashboard API pitfall grounded in codebase analysis. |
+| Stack | HIGH | Recharts v2 via shadcn/ui Chart is officially documented and npm-verified (React 19 peer dep confirmed). Custom hooks are standard React. Exercise seed dataset (free-exercise-db, Unlicense) verified on GitHub. No uncertainty on the single new dependency. |
+| Features | HIGH | Feature scope sourced directly from Hevy's official feature pages and API docs. The 80-120 exercise seed count and 3-exercise-type MVP scope are judgment calls modeled on Hevy's production library. The decision to use max weight + best set volume (not estimated 1RM) as initial PR types is a deliberate simplification with clear rationale. |
+| Architecture | HIGH | All patterns are direct extensions of existing BetterR.Me codebase conventions. Data model follows PostgreSQL best practices (partial unique index for one-active-workout enforcement, nullable columns over separate tables per exercise type). RLS patterns identical to existing tables. The exercise history aggregation query is the one area at MEDIUM confidence -- needs `EXPLAIN ANALYZE` validation with real data in Phase 4. |
+| Pitfalls | HIGH | Verified against existing codebase analysis (not just theory), Hevy API docs, browser timer throttling documentation, localStorage vs. IndexedDB research, and workout tracking post-mortems. 14 pitfalls identified with concrete prevention strategies and detection signals. One research conflict (weight storage strategy) is documented in Gaps. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **STACK vs ARCHITECTURE storage format conflict:** STACK.md recommends Tiptap + JSONB; ARCHITECTURE.md specifies `body TEXT`. Resolution chosen: use JSONB per STACK.md. The architecture DB schema must be updated before migration is written — `body TEXT NOT NULL DEFAULT ''` becomes `content JSONB NOT NULL DEFAULT '{"type":"doc","content":[]}'::jsonb`.
+- **Weight storage strategy conflict (must resolve before Phase 1 migration):** ARCHITECTURE.md recommends storing all weights as `weight_kg` (single canonical unit, convert on display). PITFALLS.md recommends storing in the logged unit with a `weight_unit` column per set to avoid rounding drift. Recommendation: store as `weight_kg` (canonical kg, `NUMERIC(7,2)`). Display with intelligent rounding (nearest 0.5 lbs for lbs display). This is the industry standard (Hevy's API exposes both `weight_kg` and `weight_lb` as computed fields, sourced from a canonical stored value). The per-set `weight_unit` column adds overhead and complicates aggregate queries. Accept that `135 lbs -> 61.23 kg -> 135.01 lbs` drift exists but is imperceptible at 2-decimal precision with 0.5 lbs rounding. Validate this decision explicitly before writing the Phase 1 migration.
 
-- **Autosave debounce timing:** Research recommends 2-3 seconds but optimal timing for this user base is unvalidated. Start with 2 seconds (matches Notion's pattern) and adjust based on user feedback.
+- **Personal records: table vs. on-demand computation (resolve in Phase 1 schema):** PITFALLS.md recommends a `personal_records` table updated incrementally on workout completion (O(1) lookup). ARCHITECTURE.md defers this, accepting on-demand computation for MVP. Recommendation: implement incremental PR table from the start. At 3-4 workouts per week, a user hits 500 workouts in ~3 years. Adding the table later requires backfilling from all historical data. The table is ~10 lines of SQL and ~30 lines of update logic -- not a significant Phase 1 addition.
 
-- **Writing prompt quality in zh and zh-TW:** The 20+ prompts per locale need review by a native Chinese speaker. The i18n key structure will be in place; prompt text can be revised without code changes post-launch.
+- **Exercise history aggregation performance (validate in Phase 4 but plan schema in Phase 1):** The progression chart query joins `workout_sets -> workout_exercises -> workouts` across three RLS-protected tables. Supabase's RLS evaluation on cross-table JOINs can be slow. Validate with `EXPLAIN ANALYZE` on 50+ workouts of seed data before building the chart UI. If it exceeds 100ms, implement `supabase.rpc()` with a PostgreSQL function, or add a `workout_exercise_summaries` computed table (pre-aggregate on workout completion).
 
-- **Dashboard widget grid position:** The exact placement of the journal widget within the dashboard card grid requires visual design judgment that research cannot determine. Defer this layout decision to Phase 6 implementation.
+- **i18n translation volume for exercise names:** Exercise names across 3 locales add 1,200+ translation strings (400 potential exercises x 3 locales). Recommendation: create a separate `exercises` namespace in locale files (`exercises.names.*`). Translate the ~50 most common exercises for v4.0. Block the feature ship on UI string translations (workout logging, routines, settings), not on complete exercise name coverage. Mark untranslated exercise names as falling back to English.
 
-- **Mood color token values:** Specific HSL values for 5 mood states in both light and dark mode are not defined in research. These need to be established during Phase 4 using the existing CSS custom property pattern in `globals.css`.
+- **Mobile workout logging UX:** Web-based workout logging on a phone is inherently harder than a native app (smaller tap targets, keyboard obscures inputs, no haptic feedback). This gap cannot be resolved by research -- it requires UX testing with real users during Phase 2. Ensure large tap targets on set completion checkboxes, minimal scrolling to reach the next set, and the rest timer visible without scrolling.
 
 ## Sources
 
-### Primary (HIGH confidence — official docs and direct codebase analysis)
+### Primary (HIGH confidence)
+- [shadcn/ui Chart docs](https://ui.shadcn.com/docs/components/radix/chart) -- Official chart component, Recharts integration, installation command
+- [Recharts v2.15.4 on npm](https://www.npmjs.com/package/recharts) -- Version, React 19 peer deps confirmed
+- [shadcn/ui Recharts v3 issue #7669](https://github.com/shadcn-ui/ui/issues/7669) -- v3 migration in progress (reason to stay on v2)
+- [Hevy Feature List](https://www.hevyapp.com/features/) -- Authoritative feature scope definition
+- [Hevy Tutorial](https://www.hevyapp.com/hevy-tutorial/) -- UX flow reference for workout logging
+- [Hevy Custom Exercises](https://www.hevyapp.com/features/custom-exercises/) -- Exercise fields and type taxonomy
+- [Hevy Exercise Library](https://www.hevyapp.com/features/exercise-library/) -- Muscle group and equipment categorization
+- [Hevy Exercise Programming Options](https://www.hevyapp.com/features/exercise-programming-options/) -- Exercise type taxonomy (weight_reps, bodyweight_reps, duration, etc.)
+- [Hevy Gym Performance Tracking](https://www.hevyapp.com/features/gym-performance/) -- Progression metrics (max weight, volume, estimated 1RM)
+- [Hevy API Docs](https://api.hevyapp.com/docs/) -- Data model reference for workouts, exercises, sets
+- [Hevy MCP Server](https://github.com/chrisdoc/hevy-mcp) -- Hevy API internal data model
+- BetterR.Me codebase analysis -- `lib/db/`, `app/api/`, `components/`, `lib/hooks/`, `lib/validations/`, `lib/db/types.ts` -- source of extension patterns
+- [free-exercise-db (GitHub)](https://github.com/yuhonas/free-exercise-db) -- 800+ exercises, Unlicense, JSON format (source for curated seed)
 
-- `lib/db/tasks.ts`, `lib/db/habits.ts`, `lib/db/categories.ts` — DB class constructor-injected Supabase pattern
-- `app/api/tasks/route.ts`, `app/api/dashboard/route.ts` — API route pattern with auth + validation
-- `lib/hooks/use-habits.ts`, `lib/hooks/use-sidebar-counts.ts` — SWR hook pattern with date keys
-- `components/layouts/app-sidebar.tsx` — Sidebar nav item addition pattern
-- `components/dashboard/dashboard-content.tsx` — Dashboard component + `next/dynamic` import pattern
-- `components/ui/calendar.tsx` — react-day-picker wrapper with custom modifiers
-- `supabase/migrations/20260222000001_create_categories_table.sql` — RLS policy migration pattern
-- [Tiptap Next.js Installation Guide](https://tiptap.dev/docs/editor/getting-started/install/nextjs) — SSR pattern, `immediatelyRender: false`
-- [Tiptap Persistence Docs](https://tiptap.dev/docs/editor/core-concepts/persistence) — JSONB recommended over HTML
-- [Tiptap GitHub issue #5856](https://github.com/ueberdosis/tiptap/issues/5856) — SSR hydration bug confirmed for Next.js 15+
-- [Frimousse official site](https://frimousse.liveblocks.io) — shadcn/ui CLI integration, 12kB bundle
-- [@tiptap/react on npm](https://www.npmjs.com/package/@tiptap/react) — v3.20.0 React 19 peer deps verified
-- [frimousse on npm](https://www.npmjs.com/package/frimousse) — v0.3.0 React 18/19 peer deps verified
+### Secondary (MEDIUM confidence)
+- [react-timer-hook on npm](https://www.npmjs.com/package/react-timer-hook) -- Evaluated and rejected (trivial to build custom, better testability)
+- [Best React chart libraries 2025 (LogRocket)](https://blog.logrocket.com/best-react-chart-libraries-2025/) -- Ecosystem comparison confirming Recharts choice
+- [Why setInterval breaks in inactive tabs](https://pontistechnology.com/learn-why-setinterval-javascript-breaks-when-throttled/) -- Rest timer drift prevention rationale
+- [localStorage vs IndexedDB in beforeunload](https://vaughnroyko.com/offline-storage-indexeddb-and-the-onbeforeunloadunload-problem/) -- Session persistence strategy (use localStorage not IndexedDB)
+- [Designing data structure for workouts (1df.co)](https://1df.co/designing-data-structure-to-track-workouts/) -- Schema design patterns
+- [Dittofi workout data model](https://www.dittofi.com/learn/how-to-design-a-data-model-for-a-workout-tracking-app) -- Schema patterns
+- [Supabase RLS Performance Best Practices](https://supabase.com/docs/guides/troubleshooting/rls-performance-and-best-practices-Z5Jjwv) -- Cross-table JOIN RLS cost and mitigation
+- [Hevy Track Workouts](https://www.hevyapp.com/features/track-workouts/) -- Workout logging UX reference
+- [Hevy Workout Settings](https://www.hevyapp.com/features/workout-settings/) -- Rest timer and preference features
 
-### Secondary (MEDIUM confidence — community consensus and competitor analysis)
-
-- [Daylio Official Site](https://daylio.net/) — one-entry-per-day model, 5-point mood scale, activity linking UX
-- [Finch: Self-Care App Review](https://webisoft.com/articles/finch-self-care-app/) — guided prompt categories, journaling UX
-- [Day One Features](https://dayoneapp.com/features/) — timeline view, "On This Day" feature
-- [Tiptap GitHub discussion #5677](https://github.com/ueberdosis/tiptap/discussions/5677) — autosave debounce patterns
-- [Tiptap GitHub discussion #964](https://github.com/ueberdosis/tiptap/discussions/964) — DB storage best practices
-- [ECMES Emoji Mood Scale](https://www.tandfonline.com/doi/full/10.1080/09638237.2022.2069694) — academic basis for 5-point scale
-- [Building an accessible emoji picker (Nolan Lawson)](https://nolanlawson.com/2020/07/01/building-an-accessible-emoji-picker/) — aria-label and keyboard nav patterns
-- [shadcn/ui Calendar docs](https://ui.shadcn.com/docs/components/radix/calendar) — custom modifiers API
-- [react-day-picker Custom Modifiers](https://daypicker.dev/guides/custom-modifiers) — highlighted dates API
-
-### Tertiary (MEDIUM-LOW confidence — content and UX pattern sites)
-
-- [QuillBot: 75+ Journal Prompts](https://quillbot.com/blog/creative-writing/journal-prompts/) — prompt library inspiration
-- [Calm Blog: Gratitude Journal Prompts](https://www.calm.com/blog/gratitude-journal-prompts) — gratitude prompt examples
-- [Eleken: Calendar UI Examples](https://www.eleken.co/blog-posts/calendar-ui) — calendar UX patterns
-- [Zapier: Best Journal Apps](https://zapier.com/blog/best-journaling-apps/) — competitor landscape
+### Tertiary (LOW confidence)
+- [Back4App Fitness Database Schema](https://www.back4app.com/tutorials/how-to-build-a-database-schema-for-a-fitness-tracking-application) -- General schema patterns
+- [GeeksforGeeks Fitness DB Design](https://www.geeksforgeeks.org/dbms/how-to-design-a-database-for-health-and-fitness-tracking-applications/) -- General schema patterns
+- [Fitness app UX design principles (Stormotion)](https://stormotion.io/blog/fitness-app-ux/) -- UX reference
+- [SWR cache documentation](https://swr.vercel.app/docs/advanced/cache) -- Cache strategy reference
 
 ---
-*Research completed: 2026-02-22*
+*Research completed: 2026-02-23*
 *Ready for roadmap: yes*
