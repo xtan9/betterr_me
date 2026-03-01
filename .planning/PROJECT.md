@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A habit tracking, project management, and personal finance web app built with Next.js 16, Supabase, and TypeScript. Supports habits (daily/weekdays/weekly/times_per_week/custom), task management with Work/Personal sections and named projects, 4-column kanban boards per project, streaks, weekly insights, and data export. Adding money tracking with Plaid bank connections, transaction management, budgeting, bill tracking, savings goals, net worth, and couples/household support. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
+A habit tracking, project management, and personal finance web app built with Next.js 16, Supabase, and TypeScript. Supports habits (daily/weekdays/weekly/times_per_week/custom), task management with Work/Personal sections and named projects, 4-column kanban boards per project, streaks, weekly insights, and data export. Full money tracking with Plaid bank connections, transaction management with auto-categorization, monthly budgets with spending analytics, bill/subscription detection, savings goals, net worth tracking, couples/household support with privacy controls, future-first dashboard with cash flow projections, and contextual AI insights. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
 
 ## Core Value
 
@@ -63,24 +63,26 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ 4-column kanban board per project with drag-and-drop between columns — v3.0
 - ✓ Monday.com-style detail modal and column quick-add on kanban board — v3.0
 - ✓ All v3.0 UI strings translated in en, zh, zh-TW — v3.0
+- ✓ Household schema with RLS, money arithmetic (BIGINT cents + decimal.js), admin client, lazy household creation — v4.0
+- ✓ Plaid bank connections: OAuth flow, Vault-encrypted tokens, JWT/ES256 webhook verification, cursor-based sync, Vercel Cron — v4.0
+- ✓ Transaction list with search, filters (date/amount/category/account), cursor pagination — v4.0
+- ✓ Auto-categorization (16 PFCv2 categories), merchant rules, category overrides, custom categories, transaction splitting — v4.0
+- ✓ CSV import with column mapping, duplicate detection, and manual transaction entry — v4.0
+- ✓ Monthly budgets per category with progress rings, donut/bar charts, drill-down, and rollover — v4.0
+- ✓ Bill auto-detection from transaction patterns, bill calendar, manual bill entry — v4.0
+- ✓ Savings goals with target/deadline, progress rings, projected completion dates — v4.0
+- ✓ Net worth tracking (assets minus liabilities) with line chart over time, manual assets — v4.0
+- ✓ Household/couples: partner invitation, mine/household views, account visibility (mine/ours/hidden), shared budgets/goals — v4.0
+- ✓ Future-first dashboard: available money, upcoming bills, projected balance, income detection — v4.0
+- ✓ Contextual AI insights: spending anomalies, price increases, goal progress, anxiety-aware framing — v4.0
+- ✓ Money summary card on main BetterR.Me dashboard — v4.0
+- ✓ CSV export with date range, full data deletion with Plaid revocation — v4.0
+- ✓ Calm Finance design tokens for money views (muted teal/amber, no red/green) — v4.0
+- ✓ All money UI strings in en, zh, zh-TW — v4.0
 
 ### Active
 
-## Current Milestone: v4.0 Money Tracking
-
-**Goal:** Add personal finance management to BetterR.Me — Plaid bank connections, transaction management, budgeting, bill tracking, savings goals, net worth, couples/household support, future-first dashboard, and contextual AI insights.
-
-**Target features:**
-- Plaid bank account connections with automatic transaction syncing
-- Transaction viewing, searching, filtering, and auto-categorization with manual override
-- Monthly budgets per category with progress tracking and spending charts
-- Bill and subscription auto-detection and tracking with due dates
-- Savings goals with progress visualization
-- Net worth tracking across all accounts
-- Multi-user household/couples support with shared + individual views
-- Future-first dashboard with cash flow projections
-- Contextual AI insights embedded in UI (not a chatbot)
-- Calm Finance design principles for money views (no aggressive red/green, forward-looking framing)
+(No active requirements — next milestone not yet defined)
 
 ### Out of Scope
 
@@ -99,20 +101,31 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - Custom kanban columns / user-defined statuses — fixed 4-column model for personal use
 - WIP limits, swimlanes, automations — team-oriented features, not aligned with solo use
 - Subtasks, time tracking, card attachments — scope creep for personal task management
+- AI chatbot for financial advice — SEC/FINRA compliance risk, LLM hallucination liability
+- Bill negotiation service — operational complexity, legal liability
+- Investment advisory / robo-advisor — SEC/FINRA registration required
+- Multi-currency support — massive complexity, US-focused for now
+- Automatic bill payment — money transmitter licensing, ACH complexity
+- Envelope budgeting (YNAB-style) — high complexity, niche audience
+- Receipt scanning / OCR — specialized feature, separate scope
+- Stripe/freemium billing — build features first, add billing in future milestone
 
 ## Context
 
-- **Money feature origin:** Brainstormed as separate "moneyy.me" project, incorporated into BetterR.Me. Research at `/home/xingdi/code/moneyy_me/.planning/` (market report, competitor UX, stack/features/architecture/pitfalls research)
-- **Codebase:** ~200+ files, Next.js 16 App Router, Supabase backend, deployed to Vercel
+- **Codebase:** 77,070 LOC TypeScript, 323+ files, Next.js 16 App Router, Supabase backend, deployed to Vercel
 - **Test suite:** 1207+ tests (Vitest + Playwright), 50% coverage threshold
 - **Shipped:** v1.0 Codebase Hardening (2026-02-16) — 5 phases, 11 plans, 26 requirements
 - **Shipped:** v1.1 Dashboard Task Fixes (2026-02-17) — 1 phase, 1 plan, 3 requirements
 - **Shipped:** v2.0 UI Style Redesign (2026-02-17) — 9 phases, 21 plans, 28 requirements
 - **Shipped:** v2.1 UI Polish & Refinement (2026-02-18) — 3 phases, 6 plans, 8 requirements
 - **Shipped:** v3.0 Projects & Kanban (2026-02-21) — 5 phases, 12 plans, 17 requirements
-- **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit)
+- **Shipped:** v4.0 Money Tracking (2026-02-28) — 9 phases, 38 plans, 66 requirements
+- **Money feature origin:** Brainstormed as separate "moneyy.me" project, incorporated into BetterR.Me
+- **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit — may need refresh after v4.0)
 - **Known:** Vitest picks up .worktrees/ test files (spurious, not blocking)
 - **Known:** @dnd-kit/core v6 + React 19 peer dep mismatch (cosmetic, works correctly)
+- **Known:** Plaid API costs ~$1-2/connected account/month — monitor unit economics
+- **Known:** 7 household human verification items pending live two-user testing
 
 ## Constraints
 
@@ -148,12 +161,17 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | Section change clears project_id silently | No confirmation needed, natural form behavior | ✓ Good — clean UX, no modal interruption |
 | next/dynamic ssr:false for KanbanBoard | Avoid hydration issues with drag-and-drop library | ✓ Good — fixes Next.js 16 build, clean client-only boundary |
 
-| Keep Supabase for money features | BetterR.Me already uses Supabase auth+DB; no need for Better Auth+Drizzle+Neon from moneyy.me brainstorm | — Pending |
-| Plaid for bank connections | Best US coverage (12,000+ institutions), industry standard | — Pending |
-| Calm Finance for money views only | BetterR.Me design + Calm Finance principles (no red/green, forward framing) for finance UI | — Pending |
-| No billing in v4.0 | Build features first, add Stripe/freemium in future milestone | — Pending |
-| decimal.js for money arithmetic | JavaScript floats break at 0.1 + 0.2; financial data requires exact arithmetic | — Pending |
-| Couples/household from day one | Core differentiator from moneyy.me vision; household_id in schema from first migration | — Pending |
+| Keep Supabase for money features | BetterR.Me already uses Supabase auth+DB; no need for Better Auth+Drizzle+Neon | ✓ Good — unified auth/DB, Vault for Plaid encryption, RLS for data isolation |
+| Plaid for bank connections | Best US coverage (12,000+ institutions), industry standard | ✓ Good — OAuth flow, webhooks, PFCv2 categorization all working |
+| Calm Finance for money views only | BetterR.Me design + Calm Finance principles (no red/green, forward framing) for finance UI | ✓ Good — muted teal/amber palette, anxiety-aware language, users feel calm not judged |
+| No billing in v4.0 | Build features first, add Stripe/freemium in future milestone | ✓ Good — 66 features shipped without billing complexity |
+| decimal.js for money arithmetic | JavaScript floats break at 0.1 + 0.2; financial data requires exact arithmetic | ✓ Good — BIGINT cents in DB, decimal.js at API boundary, zero precision errors |
+| Couples/household from day one | Core differentiator; household_id in schema from first migration | ✓ Good — mine/ours/hidden views, shared budgets/goals, solo-to-couple transition seamless |
+| IN-subquery RLS pattern | 99.78% faster than JOIN-based RLS per Supabase docs | ✓ Good — all money tables use this pattern, consistent and performant |
+| Plaid access tokens in Supabase Vault | Encryption at rest required for financial data | ✓ Good — Vault wrapper functions with SECURITY DEFINER for PostgREST access |
+| Cursor-based Plaid sync | Idempotent partial progress, safe for serverless timeouts | ✓ Good — sync_cursor persisted per connection, Vercel Cron handles background |
+| Pure computation modules for insights | No DB imports in lib/money/projections, income-detection, insights | ✓ Good — testable pure functions, all inputs are typed args |
+| SWR deduplication for household state | useHousehold() per-component, no context provider needed | ✓ Good — simpler than React context, SWR handles cache automatically |
 
 ---
-*Last updated: 2026-02-21 after v4.0 milestone started*
+*Last updated: 2026-02-28 after v4.0 milestone completed*
