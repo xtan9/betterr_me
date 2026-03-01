@@ -197,7 +197,7 @@ export function JournalEntryModal({
       }
       onOpenChange(newOpen);
     },
-    [flushNow, onOpenChange]
+    [flushNow, onOpenChange, t]
   );
 
   const title = entry ? t("journal.editEntry") : t("journal.newEntry");

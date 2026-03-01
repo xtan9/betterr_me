@@ -50,4 +50,9 @@ describe("countWords", () => {
     expect(countWords("こんにちは、世界！")).toBe(7);
     expect(countWords("Hello，世界！")).toBe(3);
   });
+
+  it("does not count purely-punctuation latin input as words", () => {
+    expect(countWords("... --- !!!")).toBe(0);
+    expect(countWords("@#$ %^&")).toBe(0);
+  });
 });

@@ -474,7 +474,7 @@ describe("useJournalAutosave", () => {
       expect(result.current.saveStatus).toBe("saved");
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         "Journal onSaved callback failed",
-        expect.any(Error)
+        expect.objectContaining({ callbackError: expect.any(Error) })
       );
       consoleErrorSpy.mockRestore();
     });

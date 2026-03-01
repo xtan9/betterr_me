@@ -285,6 +285,7 @@ describe("JournalEntryModal", () => {
   });
 
   it("closing modal still calls onOpenChange when flushNow rejects", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     mockFlushNow.mockRejectedValueOnce(new Error("save failed"));
     mockUseJournalEntry.mockReturnValue({
       entry: null,
@@ -302,7 +303,13 @@ describe("JournalEntryModal", () => {
 
     await waitFor(() => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(mockToastError).toHaveBeenCalledWith("journal.saveError");
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "Failed to flush journal changes on close",
+        expect.any(Error)
+      );
     });
+    consoleErrorSpy.mockRestore();
   });
 
   it("shows word count in footer", () => {

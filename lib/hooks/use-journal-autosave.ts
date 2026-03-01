@@ -58,7 +58,7 @@ export function useJournalAutosave(
         try {
           await onSavedRef.current?.();
         } catch (callbackError) {
-          console.error("Journal onSaved callback failed", callbackError);
+          console.error("Journal onSaved callback failed", { entryId: entryIdRef.current, entryDate, callbackError });
         }
         return result.entry;
       } catch (error) {
@@ -86,7 +86,11 @@ export function useJournalAutosave(
   const flushNow = useCallback(async () => {
     if (pendingRef.current) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      return save(pendingRef.current);
+      const result = await save(pendingRef.current);
+      if (result === null) {
+        throw new Error("Journal flush failed");
+      }
+      return result;
     }
     return null;
   }, [save]);
