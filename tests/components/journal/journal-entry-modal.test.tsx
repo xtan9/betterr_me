@@ -278,8 +278,9 @@ describe("JournalEntryModal", () => {
     const closeButton = screen.getByRole("button", { name: "Close" });
     fireEvent.click(closeButton);
 
+    expect(mockFlushNow).toHaveBeenCalled();
+    // handleOpenChange is now async (awaits flushNow), so onOpenChange fires asynchronously
     await waitFor(() => {
-      expect(mockFlushNow).toHaveBeenCalled();
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });

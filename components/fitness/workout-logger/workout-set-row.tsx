@@ -272,7 +272,7 @@ export function WorkoutSetRow({
           variant="ghost"
           size="sm"
           className="ml-0.5 hidden h-6 w-6 p-0 text-muted-foreground hover:text-destructive group-hover:flex"
-          onClick={onDelete}
+          onClick={() => void onDelete().catch(() => toast.error(t("deleteSetError")))}
         >
           <Trash2 className="h-3 w-3" />
           <span className="sr-only">{t("deleteSet")}</span>

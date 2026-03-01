@@ -1,5 +1,24 @@
+import { z } from "zod";
 import type { WorkoutWithExercises } from "@/lib/db/types";
 import { log } from "@/lib/logger";
+
+/**
+ * Lenient schema for validating localStorage workout data on load.
+ * Checks structural shape without requiring every nested field —
+ * `.passthrough()` preserves extra fields from superset types.
+ */
+const storedWorkoutSchema = z.object({
+  id: z.string().min(1),
+  status: z.string(),
+  exercises: z.array(
+    z.object({
+      id: z.string(),
+      exercise: z.object({ id: z.string(), name: z.string() }).passthrough(),
+      sets: z.array(z.object({ id: z.string() }).passthrough()),
+    }).passthrough()
+  ),
+}).passthrough();
+
 
 /** localStorage key for active workout session state */
 export const STORAGE_KEY = "betterrme_active_workout";
@@ -28,17 +47,15 @@ export function loadWorkoutFromStorage(): WorkoutWithExercises | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      !parsed.id ||
-      !Array.isArray(parsed.exercises)
-    ) {
-      log.warn("Invalid workout shape in localStorage, clearing");
+    const result = storedWorkoutSchema.safeParse(parsed);
+    if (!result.success) {
+      log.warn("Invalid workout shape in localStorage, clearing", {
+        errors: result.error.issues.map((i) => i.message),
+      });
       localStorage.removeItem(STORAGE_KEY);
       return null;
     }
-    return parsed as WorkoutWithExercises;
+    return result.data as WorkoutWithExercises;
   } catch (err) {
     log.warn("Failed to load workout from localStorage", { error: String(err) });
     return null;
