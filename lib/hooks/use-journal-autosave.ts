@@ -6,7 +6,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface AutosaveOptions {
   delay?: number;
-  onSaved?: () => void;
+  onSaved?: () => void | Promise<void>;
 }
 
 export function useJournalAutosave(
@@ -55,7 +55,11 @@ export function useJournalAutosave(
 
         pendingRef.current = null;
         setSaveStatus("saved");
-        onSavedRef.current?.();
+        try {
+          await onSavedRef.current?.();
+        } catch (callbackError) {
+          console.error("Journal onSaved callback failed", { entryId: entryIdRef.current, entryDate, callbackError });
+        }
         return result.entry;
       } catch (error) {
         console.error("Journal autosave failed", { entryId: entryIdRef.current, entryDate, error });
@@ -82,7 +86,11 @@ export function useJournalAutosave(
   const flushNow = useCallback(async () => {
     if (pendingRef.current) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      return save(pendingRef.current);
+      const result = await save(pendingRef.current);
+      if (result === null) {
+        throw new Error("Journal flush failed");
+      }
+      return result;
     }
     return null;
   }, [save]);

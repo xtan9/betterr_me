@@ -40,7 +40,7 @@ export function JournalEntryModal({
   const { saveStatus, scheduleSave, flushNow } = useJournalAutosave(
     entry?.id ?? null,
     date,
-    { onSaved: () => mutate() }
+    { onSaved: async () => { await mutate(); } }
   );
 
   const [mood, setMood] = useState<MoodRating | null>(null);
@@ -188,13 +188,16 @@ export function JournalEntryModal({
   const handleOpenChange = useCallback(
     async (newOpen: boolean) => {
       if (!newOpen) {
-        // Closing: flush pending changes and revalidate SWR before closing
-        await flushNow();
-        await mutate();
+        try {
+          await flushNow();
+        } catch (error) {
+          console.error("Failed to flush journal changes on close", error);
+          toast.error(t("journal.saveError"));
+        }
       }
       onOpenChange(newOpen);
     },
-    [flushNow, mutate, onOpenChange]
+    [flushNow, onOpenChange, t]
   );
 
   const title = entry ? t("journal.editEntry") : t("journal.newEntry");

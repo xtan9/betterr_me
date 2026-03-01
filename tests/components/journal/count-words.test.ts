@@ -36,4 +36,23 @@ describe("countWords", () => {
   it("handles Traditional Chinese", () => {
     expect(countWords("繁體中文")).toBe(4);
   });
+
+  it("does not count CJK punctuation as words", () => {
+    expect(countWords("你好，世界！")).toBe(4);
+    expect(countWords("你好、世界。")).toBe(4);
+  });
+
+  it("does not count fullwidth Latin as CJK words", () => {
+    expect(countWords("ＡＢＣ")).toBe(1);
+  });
+
+  it("handles CJK text with mixed punctuation", () => {
+    expect(countWords("こんにちは、世界！")).toBe(7);
+    expect(countWords("Hello，世界！")).toBe(3);
+  });
+
+  it("does not count purely-punctuation latin input as words", () => {
+    expect(countWords("... --- !!!")).toBe(0);
+    expect(countWords("@#$ %^&")).toBe(0);
+  });
 });

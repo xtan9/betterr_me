@@ -14,15 +14,15 @@ import { JournalToolbar } from "./journal-toolbar";
 export function countWords(text: string): number {
   if (!text.trim()) return 0;
 
-  // CJK Unified Ideographs + common CJK ranges
+  // CJK Unified Ideographs + extensions, Hiragana, Katakana
   const CJK_RE =
-    /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u{20000}-\u{2a6df}\u{2a700}-\u{2b73f}\u{2b740}-\u{2b81f}\u{2b820}-\u{2ceaf}\u{2ceb0}-\u{2ebef}\u{30000}-\u{3134f}\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uffef]/gu;
+    /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u{20000}-\u{2a6df}\u{2a700}-\u{2b73f}\u{2b740}-\u{2b81f}\u{2b820}-\u{2ceaf}\u{2ceb0}-\u{2ebef}\u{30000}-\u{3134f}\u3040-\u309f\u30a0-\u30ff]/gu;
 
   const cjkCount = (text.match(CJK_RE) || []).length;
   const withoutCjk = text.replace(CJK_RE, " ");
   const latinWords = withoutCjk
     .split(/\s+/)
-    .filter((w) => w.length > 0);
+    .filter((w) => w.length > 0 && /[\p{L}\p{N}]/u.test(w));
 
   return cjkCount + latinWords.length;
 }
