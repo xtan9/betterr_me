@@ -4,10 +4,18 @@ import { HabitRow } from '@/components/habits/habit-row';
 import type { HabitWithTodayStatus, Category } from '@/lib/db/types';
 
 vi.mock('next-intl', () => ({
-  useTranslations: () => {
+  useTranslations: (namespace?: string) => {
     const t = (key: string, params?: Record<string, unknown>) => {
+      if (namespace === 'categories') {
+        const catMessages: Record<string, string> = {
+          'defaults.Health': 'Health',
+          'defaults.Finance': 'Finance',
+        };
+        return catMessages[key] ?? key;
+      }
       const messages: Record<string, string> = {
         'card.streakDays': `${params?.count ?? 0} days`,
+        'card.streakWeeks': `${params?.count ?? 0} weeks`,
         'card.markComplete': 'Mark complete',
       };
       return messages[key] ?? key;

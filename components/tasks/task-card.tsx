@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getProjectColor } from "@/lib/projects/colors";
+import { getCategoryDisplayName } from "@/lib/categories/get-category-display-name";
 import type { Task, Category } from "@/lib/db/types";
 import { getPriorityColor } from "@/lib/tasks/format";
 
@@ -29,6 +30,7 @@ function isOverdue(dueDate: string | null, isCompleted: boolean): boolean {
 export function TaskCard({ task, categories, onToggle, onClick, isToggling }: TaskCardProps) {
   const t = useTranslations("tasks");
   const cardT = useTranslations("tasks.card");
+  const tCat = useTranslations("categories");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
@@ -81,7 +83,7 @@ export function TaskCard({ task, categories, onToggle, onClick, isToggling }: Ta
               >
                 {task.title}
               </h3>
-              <p className="text-xs text-muted-foreground">{category?.name ?? ""}</p>
+              <p className="text-xs text-muted-foreground">{category ? getCategoryDisplayName(category.name, tCat) : ""}</p>
             </div>
           </button>
           <Checkbox

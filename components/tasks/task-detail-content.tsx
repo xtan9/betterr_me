@@ -43,6 +43,7 @@ import { EditScopeDialog } from "@/components/tasks/edit-scope-dialog";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { getProjectColor } from "@/lib/projects/colors";
+import { getCategoryDisplayName } from "@/lib/categories/get-category-display-name";
 import type { Task, RecurringTask } from "@/lib/db/types";
 import type { EditScope } from "@/lib/validations/recurring-task";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
@@ -87,6 +88,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   const router = useRouter();
   const t = useTranslations("tasks");
   const priorityT = useTranslations("tasks.priorities");
+  const tCat = useTranslations("categories");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const { categories } = useCategories();
@@ -305,7 +307,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
                     <Tag className="size-4 text-white" aria-hidden="true" />
                   </span>
                   <span className="font-medium">
-                    {category?.name ?? "---"}
+                    {category ? getCategoryDisplayName(category.name, tCat) : "---"}
                   </span>
                 </div>
               </div>

@@ -826,7 +826,21 @@
     "create": "建立",
     "creating": "建立中...",
     "namePlaceholder": "分類名稱",
-    "createError": "建立分類失敗"
+    "createError": "建立分類失敗",
+    "defaults": {
+      "Errands": "雜務",
+      "Health": "健康",
+      "Finance": "財務",
+      "Home": "家庭",
+      "Social": "社交",
+      "Learning": "學習",
+      "Meetings": "會議",
+      "Planning": "規劃",
+      "Development": "開發",
+      "Research": "研究",
+      "Admin": "管理",
+      "Review": "審查"
+    }
   },
   "journal": {
     "mood": {

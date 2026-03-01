@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useCategories } from "@/lib/hooks/use-categories";
+import { getCategoryDisplayName } from "@/lib/categories/get-category-display-name";
 import { PROJECT_COLORS, getProjectColor } from "@/lib/projects/colors";
 import type { Category } from "@/lib/db/types";
 
@@ -78,7 +79,7 @@ export function CategoryPicker({ value, onChange, disabled }: CategoryPickerProp
               className="inline-block size-2.5 rounded-full shrink-0"
               style={{ backgroundColor: bgColor }}
             />
-            <span className="text-xs">{cat.name}</span>
+            <span className="text-xs">{getCategoryDisplayName(cat.name, t)}</span>
           </Toggle>
         );
       })}
