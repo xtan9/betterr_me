@@ -4,15 +4,23 @@ import { useRef, useState, useCallback, useEffect } from "react";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
+interface AutosaveOptions {
+  delay?: number;
+  onSaved?: () => void;
+}
+
 export function useJournalAutosave(
   entryId: string | null,
   entryDate: string,
-  delay = 2000
+  options: AutosaveOptions = {}
 ) {
+  const { delay = 2000, onSaved } = options;
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<Record<string, unknown> | null>(null);
   const entryIdRef = useRef<string | null>(entryId);
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
 
   useEffect(() => {
     entryIdRef.current = entryId;
@@ -47,6 +55,7 @@ export function useJournalAutosave(
 
         pendingRef.current = null;
         setSaveStatus("saved");
+        onSavedRef.current?.();
         return result.entry;
       } catch (error) {
         console.error("Journal autosave failed", { entryId: entryIdRef.current, entryDate, error });
