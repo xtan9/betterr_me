@@ -12,7 +12,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { useTranslations } from "next-intl";
 import type {
   WorkoutSet,
   WorkoutSetUpdate,
