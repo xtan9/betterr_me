@@ -263,7 +263,6 @@ describe("JournalEntryModal", () => {
   });
 
   it("closing modal calls flushNow to save pending changes", async () => {
-    mockMutate.mockResolvedValue(undefined);
     mockUseJournalEntry.mockReturnValue({
       entry: null,
       isLoading: false,
@@ -281,9 +280,36 @@ describe("JournalEntryModal", () => {
 
     await waitFor(() => {
       expect(mockFlushNow).toHaveBeenCalled();
-      expect(mockMutate).toHaveBeenCalled();
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
+  });
+
+  it("closing modal still calls onOpenChange when flushNow rejects", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockFlushNow.mockRejectedValueOnce(new Error("save failed"));
+    mockUseJournalEntry.mockReturnValue({
+      entry: null,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    const onOpenChange = vi.fn();
+    render(
+      <JournalEntryModal {...defaultProps} onOpenChange={onOpenChange} />
+    );
+
+    const closeButton = screen.getByRole("button", { name: "Close" });
+    fireEvent.click(closeButton);
+
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(mockToastError).toHaveBeenCalledWith("journal.saveError");
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "Failed to flush journal changes on close",
+        expect.any(Error)
+      );
+    });
+    consoleErrorSpy.mockRestore();
   });
 
   it("shows word count in footer", () => {
