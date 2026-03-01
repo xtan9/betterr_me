@@ -48,14 +48,14 @@ export function WorkoutsPageRoutines() {
 
   // No-op handlers for edit/delete since the full management page handles those
   const handleEdit = useCallback(
-    (_routine: RoutineWithExercises) => {
+    (_routine: RoutineWithExercises) => { // eslint-disable-line @typescript-eslint/no-unused-vars
       router.push("/workouts/routines");
     },
     [router]
   );
 
   const handleDelete = useCallback(
-    (_id: string) => {
+    (_id: string) => { // eslint-disable-line @typescript-eslint/no-unused-vars
       router.push("/workouts/routines");
     },
     [router]

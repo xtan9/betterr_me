@@ -3,7 +3,7 @@
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
-import { PROJECT_COLORS, getProjectColor } from "@/lib/projects/colors";
+import { PROJECT_COLORS } from "@/lib/projects/colors";
 
 interface ProjectColorPickerProps {
   value: string;

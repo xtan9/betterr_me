@@ -65,7 +65,7 @@ export function JournalEntryModal({
         toast.error(t("journal.links.removeError"));
       }
     },
-    [entry, mutateLinks],
+    [entry, mutateLinks, t],
   );
 
   const handleLinkAdded = useCallback(() => {

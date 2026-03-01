@@ -46,12 +46,6 @@ export function WorkoutResumeBanner() {
 
   const workout = data?.workout;
 
-  // Banner is non-critical — log and hide on error
-  if (error) {
-    log.error("Failed to check active workout", error);
-    return null;
-  }
-
   // Update snapshot when workout data changes
   useEffect(() => {
     if (workout && snapshotRef.current?.workoutId !== workout.id) {
@@ -61,6 +55,12 @@ export function WorkoutResumeBanner() {
       };
     }
   }, [workout]);
+
+  // Banner is non-critical — log and hide on error
+  if (error) {
+    log.error("Failed to check active workout", error);
+    return null;
+  }
 
   if (!workout) return null;
 
