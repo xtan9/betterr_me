@@ -1,66 +1,16 @@
 import { z } from "zod";
+import {
+  MUSCLE_GROUPS,
+  EQUIPMENT,
+  EXERCISE_TYPES,
+} from "@/lib/constants/enums";
 
 export const exerciseFormSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
-  muscle_group_primary: z.enum([
-    "chest",
-    "back",
-    "shoulders",
-    "biceps",
-    "triceps",
-    "forearms",
-    "core",
-    "quadriceps",
-    "hamstrings",
-    "glutes",
-    "calves",
-    "traps",
-    "lats",
-    "full_body",
-    "cardio",
-    "other",
-  ]),
-  muscle_groups_secondary: z.array(
-    z.enum([
-      "chest",
-      "back",
-      "shoulders",
-      "biceps",
-      "triceps",
-      "forearms",
-      "core",
-      "quadriceps",
-      "hamstrings",
-      "glutes",
-      "calves",
-      "traps",
-      "lats",
-      "full_body",
-      "cardio",
-      "other",
-    ])
-  ),
-  equipment: z.enum([
-    "barbell",
-    "dumbbell",
-    "machine",
-    "bodyweight",
-    "kettlebell",
-    "cable",
-    "band",
-    "other",
-    "none",
-  ]),
-  exercise_type: z.enum([
-    "weight_reps",
-    "bodyweight_reps",
-    "weighted_bodyweight",
-    "assisted_bodyweight",
-    "duration",
-    "duration_weight",
-    "distance_duration",
-    "weight_distance",
-  ]),
+  muscle_group_primary: z.enum(MUSCLE_GROUPS),
+  muscle_groups_secondary: z.array(z.enum(MUSCLE_GROUPS)),
+  equipment: z.enum(EQUIPMENT),
+  exercise_type: z.enum(EXERCISE_TYPES),
 });
 
 export const exerciseUpdateSchema = exerciseFormSchema

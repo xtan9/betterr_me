@@ -263,6 +263,7 @@ export class WorkoutsDB {
       )
       .eq("exercise_id", exerciseId)
       .eq("workout.status", "completed")
+      .order("started_at", { referencedTable: "workouts", ascending: false })
       .limit(5);
 
     if (error) {
@@ -406,7 +407,7 @@ export class WorkoutsDB {
       );
 
       return {
-        date: workout.started_at.split("T")[0],
+        started_at: workout.started_at,
         workout_id: workout.id,
         best_set_weight_kg:
           completedNormal.length > 0
@@ -505,12 +506,19 @@ export class WorkoutsDB {
     userId: string,
     weekStartDate: string
   ): Promise<number> {
+    // Append time component so Postgres doesn't cast the bare date to midnight UTC.
+    // weekStartDate is already the client's local week start (e.g. "2026-02-23"),
+    // so comparing as a timestamp avoids a ~timezone-offset-hours window of imprecision.
+    const weekStartTimestamp = weekStartDate.includes("T")
+      ? weekStartDate
+      : `${weekStartDate}T00:00:00`;
+
     const { count, error } = await this.supabase
       .from("workouts")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("status", "completed")
-      .gte("started_at", weekStartDate);
+      .gte("started_at", weekStartTimestamp);
 
     if (error) {
       log.error("Failed to get week workout count", error);

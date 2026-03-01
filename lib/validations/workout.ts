@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  WORKOUT_STATUSES,
+  SET_TYPES,
+} from "@/lib/constants/enums";
 
 /** Schema for creating a new workout (POST /api/workouts). */
 export const workoutCreateSchema = z.object({
@@ -11,7 +15,7 @@ export const workoutUpdateSchema = z
   .object({
     title: z.string().trim().min(1).max(100).optional(),
     notes: z.string().max(2000).nullable().optional(),
-    status: z.enum(["in_progress", "completed", "discarded"]).optional(),
+    status: z.enum(WORKOUT_STATUSES).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
@@ -36,19 +40,20 @@ export const workoutExerciseUpdateSchema = z
 /** Schema for creating a set (POST /api/workouts/[id]/exercises/[weId]/sets). */
 export const workoutSetCreateSchema = z.object({
   set_type: z
-    .enum(["warmup", "normal", "drop", "failure"])
+    .enum(SET_TYPES)
     .default("normal"),
   weight_kg: z.number().min(0).max(99999.99).nullable().optional(),
   reps: z.number().int().min(0).max(9999).nullable().optional(),
   duration_seconds: z.number().int().min(0).max(86400).nullable().optional(),
   distance_meters: z.number().min(0).max(999999.99).nullable().optional(),
+  rpe: z.number().int().min(1).max(10).nullable().optional(),
   is_completed: z.boolean().default(false),
 });
 
 /** Schema for updating a set (PATCH /api/workouts/[id]/exercises/[weId]/sets). */
 export const workoutSetUpdateSchema = z
   .object({
-    set_type: z.enum(["warmup", "normal", "drop", "failure"]).optional(),
+    set_type: z.enum(SET_TYPES).optional(),
     weight_kg: z.number().min(0).max(99999.99).nullable().optional(),
     reps: z.number().int().min(0).max(9999).nullable().optional(),
     duration_seconds: z
@@ -64,6 +69,7 @@ export const workoutSetUpdateSchema = z
       .max(999999.99)
       .nullable()
       .optional(),
+    rpe: z.number().int().min(1).max(10).nullable().optional(),
     is_completed: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {

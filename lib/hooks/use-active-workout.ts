@@ -32,7 +32,7 @@ interface ActiveWorkoutResponse {
 }
 
 // ---------------------------------------------------------------------------
-// useActiveWorkout — SWR hook with optimistic mutations + server-first with localStorage backup
+// useActiveWorkout — SWR hook with optimistic mutations + localStorage backup for crash recovery
 // ---------------------------------------------------------------------------
 
 export interface UseActiveWorkoutActions {
@@ -49,7 +49,7 @@ export interface UseActiveWorkoutActions {
   completeSet: (
     workoutExerciseId: string,
     setId: string
-  ) => Promise<boolean>;
+  ) => Promise<void>;
   updateExerciseNotes: (
     workoutExerciseId: string,
     notes: string
@@ -76,6 +76,12 @@ export interface UseActiveWorkoutReturn {
 
 const SWR_KEY = "/api/workouts/active";
 
+/** Extract error message from a failed API response. */
+async function throwResponseError(res: Response, fallback: string): Promise<never> {
+  const body = await res.json().catch(() => ({}));
+  throw new Error(body.error ?? `${fallback} (${res.status})`);
+}
+
 export function useActiveWorkout(): UseActiveWorkoutReturn {
   const { data, error, isLoading, mutate } = useSWR<ActiveWorkoutResponse>(
     SWR_KEY,
@@ -93,7 +99,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
   // ---------------------------------------------------------------------------
   const persistToStorage = useCallback((updated: ActiveWorkout | null) => {
     if (updated) {
-      saveWorkoutToStorage(updated as unknown as WorkoutWithExercises);
+      saveWorkoutToStorage(updated);
     } else {
       clearWorkoutStorage();
     }
@@ -109,7 +115,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
       });
-      if (!res.ok) throw new Error("Failed to start workout");
+      if (!res.ok) await throwResponseError(res, "Failed to start workout");
       // Revalidate to get the full workout with exercises
       await mutate();
     },
@@ -136,7 +142,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
               }),
             }
           );
-          if (!res.ok) throw new Error("Failed to add exercise");
+          if (!res.ok) await throwResponseError(res, "Failed to add exercise");
           // Revalidate to get the exercise with details, previous sets, etc.
           const activeRes = await fetch(SWR_KEY);
           const activeData = (await activeRes.json()) as ActiveWorkoutResponse;
@@ -171,7 +177,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
             `/api/workouts/${workout.id}/exercises/${workoutExerciseId}`,
             { method: "DELETE" }
           );
-          if (!res.ok) throw new Error("Failed to remove exercise");
+          if (!res.ok) await throwResponseError(res, "Failed to remove exercise");
           persistToStorage(optimistic.workout);
           return optimistic;
         },
@@ -198,7 +204,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
               body: JSON.stringify({}),
             }
           );
-          if (!res.ok) throw new Error("Failed to add set");
+          if (!res.ok) await throwResponseError(res, "Failed to add set");
           const { set } = (await res.json()) as { set: WorkoutSet };
 
           const updated: ActiveWorkoutResponse = {
@@ -257,7 +263,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
               body: JSON.stringify(updates),
             }
           );
-          if (!res.ok) throw new Error("Failed to update set");
+          if (!res.ok) await throwResponseError(res, "Failed to update set");
           const { set } = (await res.json()) as { set: WorkoutSet };
 
           const updated: ActiveWorkoutResponse = {
@@ -306,7 +312,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
             `/api/workouts/${workout.id}/exercises/${workoutExerciseId}/sets/${setId}`,
             { method: "DELETE" }
           );
-          if (!res.ok) throw new Error("Failed to delete set");
+          if (!res.ok) await throwResponseError(res, "Failed to delete set");
           persistToStorage(optimistic.workout);
           return optimistic;
         },
@@ -317,13 +323,11 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
   );
 
   // ---------------------------------------------------------------------------
-  // completeSet — shortcut for updateSet with is_completed: true, returns true
-  // to signal rest timer should start
+  // completeSet — shortcut for updateSet with is_completed: true
   // ---------------------------------------------------------------------------
   const completeSet = useCallback(
-    async (workoutExerciseId: string, setId: string): Promise<boolean> => {
+    async (workoutExerciseId: string, setId: string): Promise<void> => {
       await updateSet(workoutExerciseId, setId, { is_completed: true });
-      return true;
     },
     [updateSet]
   );
@@ -354,7 +358,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
               body: JSON.stringify({ notes }),
             }
           );
-          if (!res.ok) throw new Error("Failed to update exercise notes");
+          if (!res.ok) await throwResponseError(res, "Failed to update exercise notes");
           persistToStorage(optimistic.workout);
           return optimistic;
         },
@@ -392,7 +396,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
               body: JSON.stringify({ rest_timer_seconds: seconds }),
             }
           );
-          if (!res.ok) throw new Error("Failed to update rest timer");
+          if (!res.ok) await throwResponseError(res, "Failed to update rest timer");
           persistToStorage(optimistic.workout);
           return optimistic;
         },
@@ -420,7 +424,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(updates),
           });
-          if (!res.ok) throw new Error("Failed to update workout");
+          if (!res.ok) await throwResponseError(res, "Failed to update workout");
           persistToStorage(optimistic.workout);
           return optimistic;
         },
@@ -443,7 +447,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "completed" }),
         });
-        if (!res.ok) throw new Error("Failed to finish workout");
+        if (!res.ok) await throwResponseError(res, "Failed to finish workout");
         clearWorkoutStorage();
         return { workout: null };
       },
@@ -464,7 +468,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "discarded" }),
         });
-        if (!res.ok) throw new Error("Failed to discard workout");
+        if (!res.ok) await throwResponseError(res, "Failed to discard workout");
         clearWorkoutStorage();
         return { workout: null };
       },

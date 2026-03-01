@@ -1,4 +1,4 @@
-export type WeightUnit = "kg" | "lbs";
+import type { WeightUnit } from "@/lib/db/types";
 
 const KG_TO_LBS = 2.20462;
 const LBS_TO_KG = 0.453592;

@@ -1,4 +1,5 @@
 import type { WorkoutWithExercises } from "@/lib/db/types";
+import { log } from "@/lib/logger";
 
 /** localStorage key for active workout session state */
 export const STORAGE_KEY = "betterrme_active_workout";
@@ -6,13 +7,41 @@ export const STORAGE_KEY = "betterrme_active_workout";
 /**
  * Save active workout state to localStorage for crash resilience.
  * Server is the source of truth; localStorage is a fallback for session recovery.
+ * Accepts WorkoutWithExercises or any superset (e.g. ActiveWorkout with extra
+ * fields like previousSets). Extra fields are stored harmlessly and ignored on load.
  * Silently fails if localStorage is unavailable (e.g., private browsing quota exceeded).
  */
-export function saveWorkoutToStorage(workout: WorkoutWithExercises): void {
+export function saveWorkoutToStorage(workout: { id: string; exercises: unknown[] }): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(workout));
   } catch (err) {
-    console.warn("Failed to save workout to localStorage", err);
+    log.warn("Failed to save workout to localStorage", { error: String(err) });
+  }
+}
+
+/**
+ * Load active workout state from localStorage.
+ * Returns null if no workout is stored or if parsing fails.
+ */
+export function loadWorkoutFromStorage(): WorkoutWithExercises | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !parsed.id ||
+      !Array.isArray(parsed.exercises)
+    ) {
+      log.warn("Invalid workout shape in localStorage, clearing");
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return parsed as WorkoutWithExercises;
+  } catch (err) {
+    log.warn("Failed to load workout from localStorage", { error: String(err) });
+    return null;
   }
 }
 
@@ -25,6 +54,6 @@ export function clearWorkoutStorage(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch (err) {
-    console.warn("Failed to clear workout from localStorage", err);
+    log.warn("Failed to clear workout from localStorage", { error: String(err) });
   }
 }

@@ -168,4 +168,37 @@ describe("POST /api/workouts/[id]/save-as-routine", () => {
     const data = await response.json();
     expect(data.error).toBe("Workout not found");
   });
+
+  it("cleans up routine on exercise copy failure", async () => {
+    mockGetWorkoutWithExercises.mockResolvedValue(
+      makeWorkoutWithExercises("completed")
+    );
+    mockAddExerciseToRoutine.mockRejectedValue(new Error("Copy failed"));
+    mockDeleteRoutine.mockResolvedValue(undefined);
+
+    const request = makeRequest("workout-1", { name: "My Routine" });
+    const response = await callPOST(request, "workout-1");
+
+    expect(response.status).toBe(500);
+    expect(mockDeleteRoutine).toHaveBeenCalledWith("routine-1");
+  });
+
+  it("extracts target values from completed sets", async () => {
+    mockGetWorkoutWithExercises.mockResolvedValue(
+      makeWorkoutWithExercises("completed")
+    );
+
+    const request = makeRequest("workout-1", { name: "My Routine" });
+    await callPOST(request, "workout-1");
+
+    expect(mockAddExerciseToRoutine).toHaveBeenCalledWith(
+      "routine-1",
+      expect.objectContaining({
+        exercise_id: "ex-1",
+        target_sets: 2, // 2 completed sets
+        target_weight_kg: 65, // max weight from completed sets
+        target_reps: 10, // first completed set's reps
+      })
+    );
+  });
 });

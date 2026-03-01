@@ -45,8 +45,11 @@ export function WorkoutResumeBanner() {
 
   const workout = data?.workout;
 
-  // Banner is non-critical — silently hide on error
-  if (error) return null;
+  // Banner is non-critical — log and hide on error
+  if (error) {
+    console.error("Failed to check active workout", error);
+    return null;
+  }
 
   // Update snapshot when workout data changes
   if (workout && snapshotRef.current?.workoutId !== workout.id) {
@@ -72,8 +75,9 @@ export function WorkoutResumeBanner() {
       snapshotRef.current = null;
       mutate({ workout: null }, false);
       setShowDiscard(false);
-    } catch {
-      toast.error("Failed to discard workout");
+    } catch (error) {
+      console.error("Failed to discard workout", error);
+      toast.error(t("discardError"));
     } finally {
       setIsDiscarding(false);
     }

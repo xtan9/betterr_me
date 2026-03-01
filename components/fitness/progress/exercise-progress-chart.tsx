@@ -47,14 +47,16 @@ export function ExerciseProgressChart({
     const cutoff = getDateCutoff(dateRange);
     if (!cutoff) return history;
     const cutoffTime = cutoff.getTime();
-    return history.filter((entry) => new Date(entry.date).getTime() >= cutoffTime);
+    return history.filter(
+      (entry) => new Date(entry.started_at).getTime() >= cutoffTime
+    );
   }, [history, dateRange]);
 
   // Transform filtered data into chart format
   const chartData = useMemo(() => {
     return filteredData.map((entry) => ({
-      date: entry.date,
-      dateFormatted: new Date(entry.date).toLocaleDateString(undefined, {
+      date: new Date(entry.started_at).toLocaleDateString(),
+      dateFormatted: new Date(entry.started_at).toLocaleDateString(undefined, {
         month: "short",
         day: "numeric",
       }),

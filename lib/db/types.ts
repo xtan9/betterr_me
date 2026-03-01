@@ -451,44 +451,18 @@ export type JournalEntryLinkInsert = Omit<
 // FITNESS: EXERCISES
 // =============================================================================
 
-export type ExerciseType =
-  | "weight_reps"
-  | "bodyweight_reps"
-  | "weighted_bodyweight"
-  | "assisted_bodyweight"
-  | "duration"
-  | "duration_weight"
-  | "distance_duration"
-  | "weight_distance";
+import {
+  EXERCISE_TYPES,
+  MUSCLE_GROUPS,
+  EQUIPMENT,
+  SET_TYPES,
+  WORKOUT_STATUSES,
+  WEIGHT_UNITS,
+} from "@/lib/constants/enums";
 
-export type MuscleGroup =
-  | "chest"
-  | "back"
-  | "shoulders"
-  | "biceps"
-  | "triceps"
-  | "forearms"
-  | "core"
-  | "quadriceps"
-  | "hamstrings"
-  | "glutes"
-  | "calves"
-  | "traps"
-  | "lats"
-  | "full_body"
-  | "cardio"
-  | "other";
-
-export type Equipment =
-  | "barbell"
-  | "dumbbell"
-  | "machine"
-  | "bodyweight"
-  | "kettlebell"
-  | "cable"
-  | "band"
-  | "other"
-  | "none";
+export type ExerciseType = (typeof EXERCISE_TYPES)[number];
+export type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
+export type Equipment = (typeof EQUIPMENT)[number];
 
 export interface Exercise {
   id: string;
@@ -526,7 +500,7 @@ export interface ExerciseFilters {
 // FITNESS: WORKOUTS
 // =============================================================================
 
-export type WorkoutStatus = "in_progress" | "completed" | "discarded";
+export type WorkoutStatus = (typeof WORKOUT_STATUSES)[number];
 
 export interface Workout {
   id: string;
@@ -586,7 +560,7 @@ export interface WorkoutExerciseWithDetails extends WorkoutExercise {
 // FITNESS: WORKOUT SETS
 // =============================================================================
 
-export type SetType = "warmup" | "normal" | "drop" | "failure";
+export type SetType = (typeof SET_TYPES)[number];
 
 export interface WorkoutSet {
   id: string;
@@ -682,12 +656,12 @@ export interface PersonalRecord {
   best_reps: number | null;
   best_volume: number | null; // weight * reps
   best_duration_seconds: number | null;
-  achieved_at: string;
+  achieved_at: string | null;
 }
 
 /** Exercise history entry for progression charts */
 export interface ExerciseHistoryEntry {
-  date: string; // workout started_at date
+  started_at: string; // raw ISO timestamp — client formats to local date
   workout_id: string;
   best_set_weight_kg: number | null;
   best_set_reps: number | null;
@@ -696,4 +670,4 @@ export interface ExerciseHistoryEntry {
 }
 
 /** Weight unit type */
-export type WeightUnit = "kg" | "lbs";
+export type WeightUnit = (typeof WEIGHT_UNITS)[number];

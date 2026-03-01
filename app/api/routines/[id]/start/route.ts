@@ -108,10 +108,14 @@ export async function POST(
       }
     }
 
-    // 4. Update routine's last_performed_at
-    await routinesDB.updateRoutine(routineId, {
-      last_performed_at: new Date().toISOString(),
-    });
+    // 4. Update routine's last_performed_at (best-effort, do not fail the request)
+    try {
+      await routinesDB.updateRoutine(routineId, {
+        last_performed_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      log.error("Failed to update routine last_performed_at", err, { routineId });
+    }
 
     return NextResponse.json({ workout }, { status: 201 });
   } catch (error) {
