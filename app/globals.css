@@ -97,6 +97,8 @@
     --stat-icon-blue-bg: 215 75% 93%;
     --stat-icon-orange: 25 90% 45%;
     --stat-icon-orange-bg: 25 90% 93%;
+    --stat-icon-purple: 270 60% 50%;
+    --stat-icon-purple-bg: 270 60% 93%;
 
     /* === Empty state === */
     --empty-state-celebration-bg: 45 90% 97%;
@@ -232,6 +234,8 @@
     --stat-icon-blue-bg: 215 40% 20%;
     --stat-icon-orange: 25 80% 58%;
     --stat-icon-orange-bg: 25 40% 20%;
+    --stat-icon-purple: 270 50% 65%;
+    --stat-icon-purple-bg: 270 30% 20%;
 
     /* === Empty state === */
     --empty-state-celebration-bg: 45 30% 14%;

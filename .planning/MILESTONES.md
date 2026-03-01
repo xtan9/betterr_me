@@ -105,3 +105,23 @@
 
 ---
 
+
+## v5.0 Fitness Tracking (Shipped: 2026-02-27)
+
+**Phases completed:** 6 phases, 20 plans
+**Stats:** 72 commits (37 feature), 5 days (2026-02-23 → 2026-02-27), ~57,500 LOC TypeScript total
+
+**Key accomplishments:**
+- Exercise library with 92 preset exercises — browse, search, filter by muscle group/equipment; create/edit/delete custom exercises with RLS isolation
+- Real-time workout logging — start sessions, add exercises, log sets (weight+reps, bodyweight, duration), rest timer with audio beep, dual-write persistence across browser refresh
+- Routine templates with copy-on-start — create reusable workout templates, start workouts from routines with pre-filled targets, save completed workouts as new routines
+- Workout history and progression charts — reverse-chronological history list, workout detail with PR badges, per-exercise Recharts line charts with date range selector
+- Personal record detection mid-workout — auto-detect weight/volume/reps/duration PRs during active sets with celebratory banner
+- Dashboard integration and full i18n — workout stats widget on dashboard, all fitness UI translated in en/zh/zh-TW
+
+**Requirements:** 36/36 satisfied (EXER-01..05, SETT-01..03, WLOG-01..12, REST-01..05, ROUT-01..04, HIST-01..06, I18N-01)
+
+**Tech debt (3 minor items):** 5 human browser verification items (Phase 19), save-as-routine heuristic may not match all exercise types (Phase 20), useExerciseRecords per-SetRow SWR calls deduplicated but not optimized (Phase 21)
+
+---
+

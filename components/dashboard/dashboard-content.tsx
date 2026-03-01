@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
@@ -29,7 +29,9 @@ import { WeeklyInsightCard } from "./weekly-insight-card";
 import type { WeeklyInsight } from "@/lib/db/insights";
 import { MilestoneCards } from "@/components/habits/milestone-card";
 import { AbsenceCard } from "./absence-card";
+import { WorkoutStatsWidget } from "./workout-stats-widget";
 import { toast } from "sonner";
+import { log } from "@/lib/logger";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
 import { shouldTrackOnDate } from "@/lib/habits/format";
@@ -50,6 +52,8 @@ const EMPTY_DASHBOARD: DashboardData = {
     total_tasks: 0,
     tasks_due_today: 0,
     tasks_completed_today: 0,
+    last_workout_at: null,
+    week_workout_count: 0,
   },
 };
 
@@ -149,6 +153,14 @@ export function DashboardContent({
       keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
     },
   );
+
+  // Log non-fatal degradation warnings from the API
+  useEffect(() => {
+    const warnings = (data as DashboardData & { _warnings?: string[] })?._warnings;
+    if (warnings?.length) {
+      for (const w of warnings) log.warn("Dashboard degradation", { warning: w });
+    }
+  }, [data]);
 
   // Weekly insight — only fetch on the user's week start day
   const dayOfWeek = new Date().getDay();
@@ -475,6 +487,14 @@ export function DashboardContent({
 
       {/* Daily Snapshot — only show when user has habits */}
       {data.stats.total_habits > 0 && <DailySnapshot stats={data.stats} />}
+
+      {/* Workout Stats — only show when user has workout data */}
+      {(data.stats.last_workout_at !== null || data.stats.week_workout_count > 0) && (
+        <WorkoutStatsWidget
+          lastWorkoutAt={data.stats.last_workout_at}
+          weekWorkoutCount={data.stats.week_workout_count}
+        />
+      )}
 
       {/* Milestone celebrations */}
       {data.milestones_today && data.milestones_today.length > 0 && (

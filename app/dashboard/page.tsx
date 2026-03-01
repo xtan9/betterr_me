@@ -71,6 +71,8 @@ export default async function DashboardPage() {
       total_tasks: totalTaskCount,
       tasks_due_today: todayTasks.length,
       tasks_completed_today: tasksCompletedTodayCount,
+      last_workout_at: null, // Workout stats hydrated via SWR from API
+      week_workout_count: 0,
     },
   };
 

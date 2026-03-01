@@ -8,6 +8,7 @@ import {
   ClipboardList,
   ListChecks,
   BookOpen,
+  Dumbbell,
   PanelLeftClose,
   PanelLeft,
 } from "lucide-react";
@@ -58,6 +59,12 @@ const mainNavItems = [
     icon: BookOpen,
     labelKey: "journal",
     match: (p: string) => p.startsWith("/journal"),
+  },
+  {
+    href: "/workouts",
+    icon: Dumbbell,
+    labelKey: "workouts",
+    match: (p: string) => p.startsWith("/workouts"),
   },
 ];
 
