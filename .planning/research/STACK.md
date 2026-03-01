@@ -1,293 +1,416 @@
-# Technology Stack: Journal Feature
+# Technology Stack: Fitness Tracking Features
 
-**Project:** BetterR.Me - v4.0 Journal Milestone
-**Researched:** 2026-02-22
-**Confidence:** HIGH
-**Scope:** Stack ADDITIONS only. Existing stack (Next.js 16, React 19, Supabase, shadcn/ui, Tailwind CSS 3, SWR, next-intl, etc.) is validated and unchanged.
-
-## Decision Summary
-
-The journal feature needs exactly **two new library groups**: a rich text editor (Tiptap) and an emoji picker (Frimousse). Everything else -- calendar, forms, data fetching, i18n, testing -- is already in the stack and sufficient as-is.
+**Project:** BetterR.Me v4.0 -- Fitness Tracking Milestone
+**Researched:** 2026-02-23
+**Scope:** Stack ADDITIONS only. Existing stack (Next.js 16, React 19, Supabase, shadcn/ui, Tailwind CSS 3, SWR, react-hook-form, zod, date-fns, next-intl, next-themes, @dnd-kit/core v6, Vitest, Playwright) is validated and unchanged.
 
 ## Recommended Stack Additions
 
-### Rich Text Editor: Tiptap 3
+### 1. Charting: `recharts` v2.15.x via shadcn/ui Chart Component
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| `@tiptap/react` | ^3.20.0 | React bindings for the Tiptap editor | Headless WYSIWYG built on ProseMirror. MIT licensed. Outputs structured JSON (ideal for Supabase JSONB storage). Fully supports React 19 (`peerDependencies: ^19.0.0`). Unstyled -- works perfectly with Tailwind CSS and shadcn/ui design tokens. |
-| `@tiptap/pm` | ^3.20.0 | ProseMirror foundation (required peer) | Required peer dependency for `@tiptap/react`. Provides the low-level editing primitives. |
-| `@tiptap/starter-kit` | ^3.20.0 | Bundle of common extensions | Includes paragraph, heading, bold, italic, underline, strike, code, blockquote, bullet list, ordered list, link, hard break, horizontal rule. Covers all formatting a journal entry needs without cherry-picking individual extensions. |
-| `@tiptap/extension-placeholder` | ^3.20.0 | Placeholder text in empty editor | Shows "What's on your mind today?" or writing prompts as placeholder text in the empty editor state. Essential UX for journal entries. |
-| `@tiptap/extension-character-count` | ^3.20.0 | Character/word count display | Shows word count for journal entries. Useful for users tracking writing habits. Low cost, high value for a journaling feature. |
+| `recharts` | ^2.15.4 | SVG-based charting (line charts for progression, bar charts for volume) | shadcn/ui's built-in Chart component uses Recharts under the hood. Zero new abstraction layer -- compose with existing shadcn/ui patterns. React 19 compatible. |
 
-**Why Tiptap over a plain `<Textarea>`:**
+**Install via shadcn CLI:**
 
-A journal with "rich text area" (per PROJECT.md requirements) needs at minimum bold, italic, lists, and headings. A plain textarea only supports raw text -- no inline formatting without implementing a custom markdown parser and preview. Tiptap provides:
+```bash
+pnpm dlx shadcn@latest add chart
+```
 
-1. **WYSIWYG editing** -- users see formatted text as they write, no markdown syntax needed
-2. **Structured JSON output** -- stores as `JSONB` in Supabase, enabling future search/filtering/export without parsing HTML
-3. **Extensible** -- add features like task checkboxes, image embeds, or mentions later without replacing the editor
-4. **Headless** -- zero opinions about styling, so it integrates cleanly with the existing Tailwind + shadcn/ui design system
-5. **SSR-safe** -- set `immediatelyRender: false` in `useEditor()` to avoid hydration mismatches in Next.js App Router
+This installs `recharts` as a dependency AND copies the `chart.tsx` component into `components/ui/`. The component provides `ChartContainer`, `ChartTooltip`, `ChartTooltipContent`, `ChartLegend`, and `ChartLegendContent` -- all themed with the existing CSS custom property system (dark mode support automatic).
 
-**Why NOT markdown + preview:**
+**Why Recharts v2 (not v3):**
 
-For a personal journal app, markdown syntax creates friction. Users expect to click "B" for bold, not type `**text**`. The audience is general users tracking habits, not developers. WYSIWYG matches the UX expectations set by the rest of the app (forms, selects, toggles).
+- shadcn/ui's Chart component was built for Recharts v2. The v3 migration is still in progress (PR #8486 open on shadcn-ui/ui). Using v2 avoids breaking the shadcn Chart wrapper.
+- Recharts v3 (3.7.0) adds heavy dependencies: `@reduxjs/toolkit`, `immer`, `react-redux`, `reselect`. The v2 dependency tree is significantly lighter (`lodash`, `react-is`, `react-smooth` -- no state management libraries).
+- Recharts v2.15.4 supports React 19 (`peerDependencies: react ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0`).
+- When shadcn officially ships v3 support, the upgrade path is straightforward -- shadcn does not wrap Recharts, so the standard migration guide applies.
 
-**Confidence: HIGH** -- Tiptap v3 explicitly supports React 19 in peer dependencies. Official Next.js integration docs describe the exact `immediatelyRender: false` pattern needed. Verified via npm and tiptap.dev.
+**Confidence: HIGH** -- shadcn/ui official docs confirm Recharts as the charting foundation. Recharts v2.15.4 verified on npm with React 19 peer support. Multiple 2025-2026 ecosystem surveys rank Recharts as the top React charting choice for small-to-medium projects.
 
-### Emoji Picker: Frimousse
+**Chart types needed for fitness tracking:**
+
+| Chart | Recharts Component | Use Case |
+|-------|--------------------|----------|
+| Line chart | `<LineChart>` + `<Line>` | Per-exercise weight progression over time |
+| Bar chart | `<BarChart>` + `<Bar>` | Weekly volume (total sets/reps) comparison |
+| Area chart | `<AreaChart>` + `<Area>` | Training frequency over time |
+
+All three chart types are supported by shadcn/ui's Chart examples and work with `ChartContainer` for responsive sizing and `ChartTooltip` for interactive data points.
+
+### 2. Timer/Stopwatch: Custom Hooks (NO External Library)
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| `frimousse` | ^0.3.0 | Mood emoji selection for journal entries | 12kB bundle, dependency-free, unstyled and composable, React 18/19 support, has official shadcn/ui integration via `npx shadcn@latest add`. Virtualized with minimal re-renders. Keyboard navigable and screen-reader friendly. |
+| Custom `useStopwatch` hook | N/A | Workout duration timer (count-up) | ~30 lines of code. `setInterval` + `useRef` + `useState`. No library overhead for two simple hooks. |
+| Custom `useCountdown` hook | N/A | Rest timer between sets (count-down) | ~25 lines of code. Same pattern with decrement and `onComplete` callback. |
 
-**Why Frimousse over alternatives:**
+**Why NOT `react-timer-hook` (v4.0.5):**
 
-| Criteria | Frimousse | emoji-picker-react | emoji-mart |
-|----------|-----------|-------------------|------------|
-| Bundle size | ~12kB | ~90kB+ | ~40kB+ |
-| Styling approach | Unstyled, composable | Pre-styled, opinionated | Pre-styled |
-| shadcn/ui integration | Official (CLI install) | None | None |
-| React 19 support | Yes (`^18 \|\| ^19`) | Yes (`>=16`) | Needs verification |
-| Dependencies | Zero | Multiple | Multiple |
-| Tailwind CSS compat | Native (BYO styles) | Requires overrides | Requires overrides |
+The library exports `useTimer`, `useStopwatch`, and `useTime` hooks -- which is exactly what we need. However:
 
-Frimousse wins on every dimension that matters for this project: it is the smallest, has zero dependencies, is unstyled (matches our headless component philosophy with shadcn/ui), and has an official shadcn/ui component recipe. The other pickers would fight against our design system.
+- The combined implementation is trivially small (~55 lines for both hooks). The library adds a dependency for negligible code savings.
+- `react-timer-hook` declares `react: ">=16.8.0"` as peer dep -- technically supports React 19, but the broad range signals limited React 19 testing.
+- Custom hooks are fully testable with Vitest's `vi.useFakeTimers()` without mocking an external module.
+- The rest timer needs tight integration with the workout UI (show in notification bar, persist across set logging, play audio cue). A custom hook gives full control over these behaviors without fighting library abstractions.
 
-**Mood selector context:** The journal feature needs a mood picker, not a full emoji keyboard. Frimousse can be constrained to show only a curated set of mood-relevant emojis (e.g., smileys & people category), or we can build a simpler custom grid of 5-8 mood emojis using Frimousse's composable parts. Either approach works cleanly.
+**Implementation pattern:**
 
-**Confidence: HIGH** -- Verified version and peer deps via npm. shadcn/ui integration confirmed at frimousse.liveblocks.io. Liveblocks (the maintainer) uses it in production.
+```typescript
+// lib/hooks/use-stopwatch.ts
+export function useStopwatch() {
+  const [seconds, setSeconds] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-## Existing Stack: Already Sufficient
+  const start = useCallback(() => {
+    setIsRunning(true);
+    intervalRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
+  }, []);
 
-These existing technologies cover the journal feature's remaining needs with zero additions:
+  const pause = useCallback(() => {
+    setIsRunning(false);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+  }, []);
 
-| Existing Technology | Journal Feature Use |
-|---------------------|---------------------|
-| `react-day-picker` v8.10.1 + shadcn/ui `Calendar` | Calendar view showing which days have entries. Use custom modifiers/`modifiersStyles` to highlight days with entries (colored dots or background). Already in `components/ui/calendar.tsx`. |
-| `react-hook-form` + `zod` | Journal entry form (mood, prompt selection, metadata). NOT for the rich text body itself (Tiptap manages its own state), but for the wrapping form fields. |
-| `SWR` | Fetching journal entries by date, timeline pagination, calendar entry-existence queries. Same patterns as habits/tasks. |
-| `lucide-react` | Icons for journal sidebar nav (e.g., `BookOpen`, `Pencil`, `SmilePlus`), toolbar buttons, prompt icons. Already installed, just use new icon names. |
-| `date-fns` v4 | Date formatting for timeline view, "3 days ago" relative dates, grouping entries by week/month. |
-| `sonner` | Toast feedback on save/delete/error. |
-| `next-intl` | i18n for all journal strings in en, zh, zh-TW. |
-| `next-themes` | Dark mode for journal editor and calendar. Tiptap inherits from parent CSS -- style the `.tiptap` class with Tailwind dark: variants. |
-| `shadcn/ui Card` | Entry cards in timeline view. |
-| `shadcn/ui Dialog` | Quick journal entry from dashboard widget. |
-| `shadcn/ui Popover` | Mood emoji picker popover, calendar date picker. |
-| `shadcn/ui Badge` | Mood indicator badges, prompt tags. |
-| `shadcn/ui Tabs` | Calendar view vs timeline view toggle. |
-| `shadcn/ui Textarea` | NOT used for journal body (Tiptap replaces this), but could be used for a simple "prompt response" field if needed. |
-| `Supabase` | New `journal_entries` table with JSONB content column for Tiptap JSON. RLS policies follow existing pattern. |
-| `Tailwind CSS 3` | All journal layout and editor styling. |
+  const reset = useCallback(() => {
+    pause();
+    setSeconds(0);
+  }, [pause]);
 
-## Installation
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
 
-```bash
-# Rich text editor (Tiptap 3) -- 5 packages
-pnpm add @tiptap/react @tiptap/pm @tiptap/starter-kit @tiptap/extension-placeholder @tiptap/extension-character-count
+  return { seconds, isRunning, start, pause, reset,
+    formatted: formatDuration(seconds) };
+}
 
-# Emoji picker
-pnpm add frimousse
+// lib/hooks/use-countdown.ts
+export function useCountdown(initialSeconds: number, onComplete?: () => void) {
+  const [remaining, setRemaining] = useState(initialSeconds);
+  const [isRunning, setIsRunning] = useState(false);
+  // ... similar pattern with decrement, auto-stop at 0, onComplete callback
+}
 ```
 
-Optionally, install the Frimousse shadcn/ui component recipe:
+**Confidence: HIGH** -- This is standard React hook implementation. No external verification needed. The pattern is well-documented across React docs, DigitalOcean tutorials, and freeCodeCamp guides.
 
-```bash
-npx shadcn@latest add https://frimousse.liveblocks.io/r/emoji-picker
+### 3. Audio Feedback: Web Audio API (NO External Library)
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Web Audio API (`AudioContext`) | Browser built-in | Rest timer completion beep | Generate a short tone programmatically. No audio files to bundle. ~10 lines of code. |
+
+**Implementation:**
+
+```typescript
+// lib/audio/beep.ts
+export function playBeep(frequency = 880, duration = 200) {
+  const ctx = new AudioContext();
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+  oscillator.connect(gain);
+  gain.connect(ctx.destination);
+  oscillator.frequency.value = frequency;
+  gain.gain.value = 0.3;
+  oscillator.start();
+  oscillator.stop(ctx.currentTime + duration / 1000);
+}
 ```
 
-This creates a styled `EmojiPicker` component in `components/ui/` that uses the project's existing CSS variables.
+No library needed. The Web Audio API is supported in all modern browsers. For users who prefer silence, gate behind the rest timer settings.
 
-No new dev dependencies needed -- existing Vitest + Testing Library + Playwright cover all testing needs.
+### 4. Exercise Seed Data: Self-Curated JSON (NO External API/Library)
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Custom JSON seed file | N/A | Preset exercise library (~80-120 exercises) | Curate from public domain datasets. Seed via Supabase migration. No runtime API dependency. |
+
+**Approach: Curate from `free-exercise-db` (Unlicense/public domain)**
+
+The [free-exercise-db](https://github.com/yuhonas/free-exercise-db) dataset has 800+ exercises with: `name`, `force` (push/pull), `level` (beginner/intermediate/advanced), `mechanic` (isolation/compound), `equipment`, `primaryMuscles[]`, `secondaryMuscles[]`, `instructions[]`, `category` (strength/stretching/etc.).
+
+**Why NOT use the full 800+ dataset:**
+
+- Most users need 80-120 common exercises. 800+ creates overwhelming search/browse UX.
+- Many exercises in the dataset are obscure variations (e.g., "Alternate Incline Dumbbell Curl" vs "Dumbbell Curl").
+- Curating allows mapping to our own taxonomy (exercise types, equipment enum, muscle group enum).
+- Follows the existing pattern: categories table seeds 12 defaults from `lib/categories/seed.ts`.
+
+**Curated seed structure:**
+
+```typescript
+// lib/exercises/seed.ts
+export const SEED_EXERCISES: ExerciseSeed[] = [
+  {
+    name: "Barbell Bench Press",
+    exercise_type: "weight_reps",
+    equipment: "barbell",
+    primary_muscles: ["chest"],
+    secondary_muscles: ["triceps", "shoulders"],
+    instructions_key: "exercises.bench_press.instructions", // i18n key
+  },
+  // ... ~80-120 exercises
+];
+```
+
+**Exercise type taxonomy (modeled after Hevy):**
+
+| Exercise Type | Fields Per Set | Example |
+|---------------|----------------|---------|
+| `weight_reps` | weight + reps | Bench Press, Squat |
+| `bodyweight_reps` | reps only | Pull-ups, Push-ups |
+| `weighted_bodyweight` | weight + reps | Weighted Dips |
+| `duration` | duration (seconds) | Plank, Wall Sit |
+| `duration_weight` | weight + duration | Weighted Plank |
+| `distance_duration` | distance + duration | Running, Rowing |
+
+Start with the 3 most common types: `weight_reps`, `bodyweight_reps`, `duration`. Add the rest in a follow-up if needed. This covers 90%+ of exercises.
+
+**Muscle group enum (14 groups):**
+
+`chest`, `back`, `shoulders`, `biceps`, `triceps`, `forearms`, `quadriceps`, `hamstrings`, `glutes`, `calves`, `abs`, `obliques`, `traps`, `lats`
+
+**Equipment enum (9 types):**
+
+`barbell`, `dumbbell`, `kettlebell`, `machine`, `cable`, `bodyweight`, `band`, `plate`, `other`
+
+**Confidence: MEDIUM-HIGH** -- The public domain dataset is verified (Unlicense). The taxonomy is modeled after Hevy's production exercise library. The seed count (80-120) is a judgment call that may need adjustment based on user feedback. The lazy-seed pattern (`ExercisesDB.seedExercises()`) is proven in the existing `CategoriesDB.seedCategories()`.
+
+### 5. No New shadcn/ui Components Needed (Except Chart)
+
+The existing component library covers all fitness tracking UI needs:
+
+| Existing Component | Fitness Tracking Use |
+|--------------------|---------------------|
+| `Card` | Workout session card, exercise card, set row |
+| `Dialog` / `Sheet` | Exercise picker modal, routine template editor |
+| `Button` | Start/pause/finish workout, add set, log set |
+| `Input` | Weight, reps, duration inputs |
+| `Select` | Exercise type filter, muscle group filter, equipment filter |
+| `Badge` | Muscle group tags, PR indicator, exercise type badge |
+| `Tabs` | Workout history tabs, chart time range selector |
+| `Progress` | Rest timer progress bar (circular progress via custom CSS) |
+| `Table` | Workout history list, set log table |
+| `Accordion` | Collapsible exercise groups within a workout |
+| `Skeleton` | Loading states for charts and workout data |
+| `Slider` | Rest timer duration selector (30s - 5min) |
+| `Switch` | Auto-start rest timer toggle |
+| `Tooltip` | Chart data point tooltips (via ChartTooltip) |
+| `DropdownMenu` | Exercise options (replace, delete, reorder) |
+| `ScrollArea` | Long exercise lists in picker modal |
+| `Separator` | Visual dividers between exercises in a workout |
+
+**New shadcn/ui component to add:**
+
+```bash
+pnpm dlx shadcn@latest add chart
+```
+
+This is the ONLY new shadcn component. No `NumberInput` exists in shadcn/ui -- use `<Input type="number">` with Zod validation (existing pattern).
 
 ## Alternatives Considered
 
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
-| Rich text | Tiptap 3 | Plain `<Textarea>` | No formatting support. "Rich text area" requirement demands inline formatting (bold, lists, headings). Building markdown parsing + preview on top of textarea reinvents Tiptap poorly. |
-| Rich text | Tiptap 3 | Lexical (Meta) | Lower-level than Tiptap, requires more boilerplate for the same features. Smaller extension ecosystem. Less community adoption for journal/note-taking use cases. Tiptap's StarterKit gives us 80% of what we need in one import. |
-| Rich text | Tiptap 3 | Plate (shadcn-native) | Plate is built on Slate.js, which has a history of breaking changes and migration pain. Tiptap/ProseMirror has a more stable API surface. Plate's shadcn integration is nice but adds coupling to a specific component library version. |
-| Rich text | Tiptap 3 | TinyMCE / CKEditor | Commercial licenses for advanced features. Opinionated styling that clashes with our Tailwind + shadcn/ui design system. Heavier bundle. Not headless. |
-| Rich text | Tiptap 3 | Markdown textarea + preview | Adds cognitive overhead for non-technical users. Requires building a preview renderer (react-markdown + rehype). Two states to manage (raw markdown + rendered HTML). Not suitable for a mainstream habit tracking app. |
-| Emoji picker | Frimousse | `emoji-picker-react` | 7-8x larger bundle (~90kB). Pre-styled -- fights our design system. No shadcn/ui integration. |
-| Emoji picker | Frimousse | `emoji-mart` | 3-4x larger bundle (~40kB). Pre-styled. No shadcn/ui integration. Overkill for a mood selector. |
-| Emoji picker | Frimousse | Custom hardcoded grid | Viable for MVP (just 5-8 mood buttons), but Frimousse at 12kB gives us search, categories, and accessibility for free. If users want to pick any emoji as their mood, a hardcoded grid cannot satisfy that. Frimousse is the "costs almost nothing, enables everything" choice. |
-| Calendar | Existing `react-day-picker` v8 | `react-calendar` | Already have react-day-picker installed and a shadcn/ui `Calendar` component built. Adding another calendar library is pointless. Custom modifiers in react-day-picker handle "highlight days with entries" perfectly. |
+| Charting | Recharts v2 (via shadcn Chart) | Chart.js + react-chartjs-2 | Canvas-based (harder to style with Tailwind/CSS vars), no shadcn integration, heavier bundle for simple line/bar charts |
+| Charting | Recharts v2 (via shadcn Chart) | Recharts v3 | shadcn Chart component not yet v3-compatible (PR #8486 open). Adds Redux/Immer deps unnecessarily. Wait for official shadcn v3 support. |
+| Charting | Recharts v2 (via shadcn Chart) | Tremor | Built on Recharts anyway. Adds an abstraction layer. Better for analytics dashboards, overkill for 2-3 progression charts. |
+| Charting | Recharts v2 (via shadcn Chart) | Visx (Airbnb) | More control but much more boilerplate. No shadcn integration. Better for highly custom visualizations, not standard line/bar charts. |
+| Timer | Custom hooks | `react-timer-hook` v4.0.5 | Adds a dependency for ~55 lines of trivial code. Less control over audio integration, notification persistence, and Vitest testing. |
+| Timer | Custom hooks | `react-countdown-circle-timer` | Visual countdown circle is nice but the rest timer needs a progress bar (shadcn Progress), not a circle. Adds bundle weight for a visual we will not use. |
+| Exercise DB | Curated JSON seed | `free-exercise-db` (full 800+) | Too many exercises for UX. Many obscure variations. Requires runtime data mapping. |
+| Exercise DB | Curated JSON seed | ExerciseDB API (11k+ exercises) | External API dependency. Rate limits. Overkill for a personal app. Requires network calls for data that should be local. |
+| Exercise DB | Curated JSON seed | wger API | Another external dependency. Dataset quality varies. Self-hosted option is heavy (Django app). |
+
+## Installation
+
+```bash
+# New dependency: Recharts (via shadcn Chart component)
+pnpm dlx shadcn@latest add chart
+
+# That's it. No other new packages needed.
+```
+
+**Verify after install:**
+
+```bash
+# Confirm recharts was added to package.json
+grep recharts package.json
+
+# Confirm chart.tsx was created
+ls components/ui/chart.tsx
+```
+
+No new dev dependencies are needed -- existing Vitest + Testing Library + Playwright cover all testing needs.
 
 ## What NOT to Add
 
-| Do NOT Add | Why | What to Use Instead |
-|------------|-----|---------------------|
-| `react-markdown` / `remark` / `rehype` | No markdown parsing needed -- Tiptap handles rich text natively and outputs structured JSON | Tiptap's `editor.getJSON()` for storage, `editor.getHTML()` for read-only rendering |
-| `@tiptap/extension-image` | Images in journal entries add storage complexity (Supabase Storage, upload UI, S3 costs). Out of scope for v4.0. | Defer to future milestone if users request image support |
-| `@tiptap/extension-task-list` | Tempting for "linking tasks to entries", but the journal-task link should be a foreign key reference, not embedded checkboxes in rich text | Use a separate `journal_entry_links` table or JSONB field for habit/task references |
-| `@tiptap/extension-mention` | No @-mention use case in a personal journal app | Simple dropdown/multiselect for linking habits/tasks |
-| `framer-motion` | No complex animations needed for journal. Page transitions and micro-interactions are handled by Tailwind CSS transitions. | Tailwind `transition-*` classes |
-| Any markdown parser | Tiptap stores as JSON, renders as HTML. No markdown intermediate format. | Tiptap JSON in Supabase JSONB column |
-| `react-virtualized` / `react-window` | Timeline view pagination via SWR (load 20 entries, fetch more on scroll) is sufficient. A personal journal will have hundreds of entries, not millions. | SWR cursor-based pagination |
-| `dompurify` / `sanitize-html` | Tiptap's structured JSON output is inherently safe -- no raw HTML injection risk. Only sanitize if rendering user HTML from external sources, which we don't. | Tiptap's JSON-to-HTML rendering via `generateHTML()` |
+| Do NOT Add | Why |
+|------------|-----|
+| `recharts` v3 | shadcn Chart component not v3-compatible yet. v3 adds Redux/Immer deps. Wait for official shadcn support. |
+| `react-timer-hook` | Trivial to build custom. Two hooks, ~55 lines total. Better testability and integration control. |
+| `react-countdown-circle-timer` | Rest timer uses a progress bar, not a circle. Adds bundle for unused visual. |
+| `chart.js` / `react-chartjs-2` | Canvas-based. No shadcn integration. Harder to theme with CSS custom properties. |
+| `framer-motion` | No animation needs beyond CSS transitions. Tailwind `transition-*` classes handle workout card animations. |
+| `zustand` / `jotai` / `redux` | SWR handles server state. React `useState` handles workout session state. Active workout state is local to the session component -- no global store needed. |
+| `react-beautiful-dnd` / `@hello-pangea/dnd` | No drag-and-drop needed for fitness features. Existing @dnd-kit is only for kanban. |
+| External exercise API (ExerciseDB, wger) | Runtime API dependency for data that should be seeded locally. Network failures would break exercise browsing. |
+| `howler.js` / audio library | Web Audio API handles the rest timer beep in ~10 lines. No library needed for a single tone. |
+| `react-query` / `tanstack-query` | Already using SWR. No reason to add a second data fetching library. |
 
 ## Key Integration Points
 
-### Tiptap + Next.js App Router (SSR)
+### Recharts + shadcn/ui Theme System
 
-All Tiptap components MUST be client components (`"use client"`). Set `immediatelyRender: false` to prevent hydration mismatches:
+The shadcn Chart component uses CSS custom properties for colors, automatically supporting dark mode:
 
 ```typescript
-"use client";
+// Define chart config with theme-aware colors
+const chartConfig = {
+  weight: {
+    label: t("workouts.weight"),
+    color: "hsl(var(--chart-1))", // Uses existing CSS variable
+  },
+  volume: {
+    label: t("workouts.volume"),
+    color: "hsl(var(--chart-2))",
+  },
+} satisfies ChartConfig;
+```
 
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
-import CharacterCount from "@tiptap/extension-character-count";
+The `--chart-1` through `--chart-5` CSS variables are already defined in the shadcn theme system. Add more if needed in `globals.css`.
 
-export function JournalEditor({ content, onChange }: JournalEditorProps) {
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({ placeholder: "What's on your mind today?" }),
-      CharacterCount,
-    ],
-    content, // Tiptap JSON from database
-    immediatelyRender: false, // CRITICAL: prevents SSR hydration mismatch
-    onUpdate: ({ editor }) => {
-      onChange(editor.getJSON()); // Pass JSON to parent for saving
-    },
-  });
+### Workout Session State + SWR
 
-  return <EditorContent editor={editor} className="prose dark:prose-invert" />;
+Active workout sessions are ephemeral -- they exist only while the user is logging. Use React `useState`/`useReducer` for the in-progress workout. Persist to Supabase (via SWR `mutate`) only on "Finish Workout":
+
+```typescript
+// Pattern: local state during workout, SWR on save
+const [workout, dispatch] = useReducer(workoutReducer, initialWorkoutState);
+// User adds sets, changes weights, etc. -- all local state
+
+const handleFinishWorkout = async () => {
+  await fetch("/api/workouts", { method: "POST", body: JSON.stringify(workout) });
+  mutate("/api/workouts"); // Revalidate workout history
+  router.push("/workouts"); // Navigate to history
+};
+```
+
+This avoids unnecessary API calls during active logging and matches the established SWR pattern.
+
+### Exercise Seed Pattern (Following Categories Pattern)
+
+The exercise library uses the same lazy-seed pattern as `CategoriesDB.seedCategories()`:
+
+```typescript
+// lib/db/exercises.ts
+export class ExercisesDB {
+  constructor(private supabase: SupabaseClient) {}
+
+  async seedExercises(userId: string): Promise<Exercise[]> {
+    const existing = await this.getUserExercises(userId);
+    if (existing.length > 0) return existing;
+
+    const { SEED_EXERCISES } = await import("@/lib/exercises/seed");
+    // Insert preset exercises for this user
+    // ...
+  }
 }
 ```
 
-### Tiptap + Supabase (Storage)
+Each user gets their own copy of the exercise library (allows customization, deletion, reordering without affecting other users). This is the same per-user seeding approach used for categories.
 
-Store journal content as **JSONB** in Supabase. Tiptap JSON is the recommended storage format per Tiptap docs -- more flexible than HTML, easier to query, and enables future features (search, analytics) without parsing HTML.
+### Weight Unit Preference (Extending ProfilePreferences)
 
-```sql
-CREATE TABLE journal_entries (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-  entry_date DATE NOT NULL,
-  content JSONB NOT NULL DEFAULT '{"type":"doc","content":[]}'::jsonb,
-  mood TEXT,          -- emoji character e.g., '😊'
-  prompt_key TEXT,    -- i18n key for which prompt was used, if any
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id, entry_date)  -- one entry per day per user
-);
-```
-
-### Tiptap + Tailwind CSS (Styling)
-
-Tiptap renders into a `.tiptap` container. Style it with Tailwind's `@apply` or the `prose` class from `@tailwindcss/typography` (already available via Tailwind CSS 3). Use the project's semantic design tokens for consistent look:
-
-```css
-/* In globals.css or a journal-specific CSS file */
-.tiptap {
-  @apply text-foreground min-h-[200px] outline-none;
-}
-.tiptap p.is-editor-empty:first-child::before {
-  @apply text-muted-foreground pointer-events-none float-left h-0;
-  content: attr(data-placeholder);
-}
-```
-
-### Frimousse + shadcn/ui Popover (Mood Picker)
-
-Combine Frimousse's composable parts with the existing Popover component:
+Add `weight_unit: "kg" | "lbs"` to the existing `ProfilePreferences` interface:
 
 ```typescript
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { EmojiPicker } from "@/components/ui/emoji-picker"; // from shadcn recipe
-
-export function MoodPicker({ value, onChange }: MoodPickerProps) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          {value || "Pick mood"}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[352px] p-0">
-        <EmojiPicker onEmojiSelect={(emoji) => onChange(emoji.emoji)} />
-      </PopoverContent>
-    </Popover>
-  );
+// lib/db/types.ts -- extend existing interface
+export interface ProfilePreferences {
+  date_format: string;
+  week_start_day: number;
+  theme: "system" | "light" | "dark";
+  weight_unit: "kg" | "lbs"; // NEW
 }
+
+// lib/validations/preferences.ts -- extend existing schema
+export const preferencesSchema = z.object({
+  date_format: z.string().optional(),
+  week_start_day: z.number().int().min(0).max(6).optional(),
+  theme: z.enum(["system", "light", "dark"]).optional(),
+  weight_unit: z.enum(["kg", "lbs"]).optional(), // NEW
+}).refine((data) => Object.keys(data).length > 0, {
+  message: "At least one preference must be provided",
+});
 ```
 
-### Calendar + Custom Modifiers (Entry Indicators)
+No new API route needed -- the existing `PATCH /api/profile/preferences` handles this. Supabase stores preferences as JSONB, so no migration needed to add the field (it is schema-on-write). Default to `"kg"` when the field is absent.
 
-Use the existing `Calendar` component with `modifiers` to highlight days with journal entries:
+### i18n for Exercises
+
+Exercise names need translation in all 3 locales. Two approaches:
+
+**Approach A (recommended): i18n keys in exercise seed, translated in locale files.**
 
 ```typescript
-import { Calendar } from "@/components/ui/calendar";
+// Seed data uses i18n keys
+{ name_key: "exercises.bench_press", ... }
 
-// datesWithEntries: Date[] fetched via SWR
-<Calendar
-  modifiers={{ hasEntry: datesWithEntries }}
-  modifiersClassNames={{ hasEntry: "bg-primary/20 font-semibold" }}
-  onDayClick={(day) => navigateToEntry(day)}
-/>
+// messages/en.json
+{ "exercises": { "bench_press": "Barbell Bench Press" } }
+// messages/zh.json
+{ "exercises": { "bench_press": "杠铃卧推" } }
+// messages/zh-TW.json
+{ "exercises": { "bench_press": "槓鈴臥推" } }
 ```
 
-### SWR Key Pattern (Consistent with Existing Code)
+**Approach B: Store translated names directly in the database.**
 
-Follow the project's established SWR pattern where keys include the local date:
-
-```typescript
-const { data: entries } = useSWR(
-  `/api/journal?month=${getLocalMonthString(date)}`,
-  fetcher,
-  { keepPreviousData: true }
-);
-```
+Approach A is recommended because it follows the existing i18n pattern and allows fallback to English if a translation is missing. Exercise instructions (longer text) should also use i18n keys.
 
 ## Database Additions (Supabase)
 
-No new libraries needed -- use existing Supabase client. Schema changes:
+No new libraries -- use the existing Supabase client. New tables required:
 
-| Table/Column | Type | Purpose |
-|--------------|------|---------|
-| `journal_entries` table | New table | Stores daily journal entries |
-| `journal_entries.content` | `JSONB` | Tiptap JSON document |
-| `journal_entries.mood` | `TEXT` | Mood emoji character |
-| `journal_entries.prompt_key` | `TEXT` (nullable) | i18n key for writing prompt used |
-| `journal_entries.entry_date` | `DATE` | Entry date (browser-local, per existing timezone convention) |
-| `journal_entry_links` table (optional) | New table | Links entries to habits/tasks via foreign keys |
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `exercises` | Exercise library (per-user, seeded with defaults) | `id`, `user_id`, `name_key`, `exercise_type`, `equipment`, `primary_muscles[]`, `secondary_muscles[]`, `is_preset`, `sort_order` |
+| `workouts` | Completed workout sessions | `id`, `user_id`, `name`, `started_at`, `finished_at`, `duration_seconds`, `notes` |
+| `workout_exercises` | Exercises within a workout (ordered) | `id`, `workout_id`, `exercise_id`, `sort_order`, `notes`, `rest_timer_seconds` |
+| `workout_sets` | Individual sets within a workout exercise | `id`, `workout_exercise_id`, `set_number`, `set_type` (normal/warmup/dropset), `weight`, `reps`, `duration_seconds`, `distance_meters`, `is_completed` |
+| `routines` | Saved workout templates | `id`, `user_id`, `name`, `exercises[]` (JSONB array of exercise configs) |
+| `personal_records` | Cached PRs per exercise | `id`, `user_id`, `exercise_id`, `pr_type` (max_weight/max_reps/max_volume), `value`, `achieved_at`, `workout_id` |
 
-## Version Compatibility
+**Existing table changes:**
 
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| `@tiptap/react@^3.20.0` | React ^19.0.0 | Explicitly declared in peer deps. Verified via npm. |
-| `@tiptap/react@^3.20.0` | Next.js 16 | Works with `immediatelyRender: false`. Official Next.js guide on tiptap.dev. |
-| `@tiptap/pm@^3.20.0` | `@tiptap/react@^3.20.0` | Must match major version. Both at 3.20.0. |
-| `@tiptap/starter-kit@^3.20.0` | `@tiptap/react@^3.20.0` | Same version family. |
-| `frimousse@^0.3.0` | React ^18 or ^19 | Explicitly declared. |
-| `frimousse@^0.3.0` | TypeScript >=5.1.0 | Project uses TypeScript ^5. Compatible. |
-| `frimousse@^0.3.0` | shadcn/ui | Official CLI recipe available. |
+| Table | Change | Purpose |
+|-------|--------|---------|
+| `profiles.preferences` | Add `weight_unit: "kg" \| "lbs"` | No migration needed (JSONB) |
 
-No peer dependency conflicts with the existing stack. No `peerDependencyRules` overrides needed (unlike `@dnd-kit` in v3.0).
+All new tables follow existing RLS patterns (user_id = auth.uid() policy). New DB classes follow the `SupabaseClient` constructor injection pattern.
 
 ## Sources
 
-- [@tiptap/react on npm](https://www.npmjs.com/package/@tiptap/react) -- v3.20.0, React 19 peer dep support, verified 2026-02-22
-- [Tiptap Next.js Installation Guide](https://tiptap.dev/docs/editor/getting-started/install/nextjs) -- `immediatelyRender: false` pattern, client component requirement
-- [Tiptap Persistence Docs](https://tiptap.dev/docs/editor/core-concepts/persistence) -- JSON storage recommended over HTML
-- [Tiptap Export JSON/HTML](https://tiptap.dev/docs/guides/output-json-html) -- `editor.getJSON()` and `generateHTML()` APIs
-- [Tiptap SSR Hydration Issue #5856](https://github.com/ueberdosis/tiptap/issues/5856) -- Confirms `immediatelyRender: false` fix
-- [Frimousse official site](https://frimousse.liveblocks.io) -- 12kB, dependency-free, shadcn/ui CLI integration
-- [Frimousse on npm](https://www.npmjs.com/package/frimousse) -- v0.3.0, React 18/19 peer deps, verified 2026-02-22
-- [Frimousse GitHub](https://github.com/liveblocks/frimousse) -- Source, composable API, accessibility features
-- [Liveblocks blog: Open-sourced Frimousse](https://liveblocks.io/blog/weve-open-sourced-our-customizable-emoji-picker-for-react) -- Production usage context
-- [shadcn/ui Calendar docs](https://ui.shadcn.com/docs/components/radix/calendar) -- Custom modifiers for react-day-picker v8
-- [react-day-picker Custom Modifiers](https://daypicker.dev/guides/custom-modifiers) -- API for highlighting specific dates
-- [Tiptap Best Practices for Saving JSON vs HTML](https://medium.com/@faisalmujtaba/best-practices-for-saving-tiptap-json-vs-html-in-mongodb-mysql-a5192bd68abc) -- JSON as source of truth recommendation
+### Primary (HIGH confidence)
+- [shadcn/ui Chart docs](https://ui.shadcn.com/docs/components/radix/chart) -- Official chart component, confirmed Recharts under the hood
+- [Recharts v2.15.4 on npm](https://www.npmjs.com/package/recharts) -- Version, peer deps (React 19 supported), dependencies
+- [Recharts v3.7.0 on npm](https://www.npmjs.com/package/recharts) -- Version, heavy deps (Redux, Immer) -- reason to avoid
+- [shadcn/ui Recharts v3 issue #7669](https://github.com/shadcn-ui/ui/issues/7669) -- v3 migration in progress, PR #8486 open
+- [react-timer-hook on npm](https://www.npmjs.com/package/react-timer-hook) -- v4.0.5, evaluated and rejected (trivial to build custom)
+
+### Secondary (MEDIUM confidence)
+- [free-exercise-db on GitHub](https://github.com/yuhonas/free-exercise-db) -- 800+ exercises, Unlicense, JSON format with primaryMuscles/secondaryMuscles/equipment fields
+- [exercises.json on GitHub](https://github.com/wrkout/exercises.json) -- Alternative exercise dataset, Unlicense
+- [Hevy custom exercises](https://www.hevyapp.com/features/custom-exercises/) -- Exercise type taxonomy: weight_reps, bodyweight_reps, duration, etc.
+- [Hevy exercise library](https://www.hevyapp.com/features/exercise-library/) -- 400+ exercises, muscle group + equipment categorization
+- [Best React chart libraries 2025 (LogRocket)](https://blog.logrocket.com/best-react-chart-libraries-2025/) -- Ecosystem comparison
+- [React countdown timer implementation (DigitalOcean)](https://www.digitalocean.com/community/tutorials/react-countdown-timer-react-hooks) -- Custom hook pattern reference
+
+### Tertiary (LOW confidence)
+- [Workout tracking database schema (Dittofi)](https://www.dittofi.com/learn/how-to-design-a-data-model-for-a-workout-tracking-app) -- General schema patterns
+- [Fitness tracking DB schema (GeeksforGeeks)](https://www.geeksforgeeks.org/dbms/how-to-design-a-database-for-health-and-fitness-tracking-applications/) -- General schema patterns
 
 ---
-*Stack research for: BetterR.Me v4.0 Journal Feature*
-*Researched: 2026-02-22*
+*Research completed: 2026-02-23*
+*Ready for roadmap: yes*

@@ -2,11 +2,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from '@/app/api/dashboard/route';
 import { NextRequest } from 'next/server';
 
+// Chainable Supabase query mock for workout queries
+function createChainableMock(result: any = { data: null, count: 0 }) {
+  const chain: any = {};
+  const methods = ['from', 'select', 'eq', 'gte', 'order', 'limit', 'maybeSingle'];
+  for (const m of methods) {
+    chain[m] = vi.fn(() => chain);
+  }
+  chain.then = (resolve: any) => resolve(result);
+  chain.catch = () => chain;
+  return chain;
+}
+
+const mockWorkoutChain = createChainableMock({ data: null, count: 0 });
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => ({
     auth: {
       getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })),
     },
+    from: vi.fn(() => mockWorkoutChain),
   })),
 }));
 
@@ -47,6 +62,7 @@ describe('GET /api/dashboard', () => {
     vi.clearAllMocks();
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
+      from: vi.fn(() => createChainableMock({ data: null, count: 0 })),
     } as any);
     vi.mocked(mockHabitLogsDB.getAllUserLogs).mockResolvedValue([]);
     vi.mocked(mockMilestonesDB.getTodaysMilestones).mockResolvedValue([]);
@@ -362,6 +378,7 @@ describe('GET /api/dashboard', () => {
   it('should return 401 if not authenticated', async () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
+      from: vi.fn(() => createChainableMock()),
     } as any);
 
     const request = new NextRequest('http://localhost:3000/api/dashboard');

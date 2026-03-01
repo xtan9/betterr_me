@@ -1,301 +1,596 @@
 # Domain Pitfalls
 
-**Domain:** Adding journal/diary features (rich text, mood tracking, calendar browse, dashboard widget) to an existing habit tracking + task management app (BetterR.Me)
-**Researched:** 2026-02-22
-**Confidence:** HIGH (verified against codebase patterns, official Tiptap/Supabase docs, community reports)
+**Domain:** Adding Hevy-inspired workout/fitness tracking to an existing habit/task management app (BetterR.Me v4.0)
+**Researched:** 2026-02-23
+**Confidence:** HIGH (verified against existing codebase patterns, Hevy API reference, and community post-mortems)
+
+---
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, data loss, or major integration breakage.
+Mistakes that cause rewrites, data corruption, or major user-facing failures.
 
-### Pitfall 1: Rich Text Editor SSR Hydration Mismatch
+### Pitfall 1: Flat Set Schema That Cannot Represent Multiple Exercise Types
 
-**What goes wrong:** Tiptap (or any ProseMirror-based editor) renders differently on the server vs the browser because it depends on browser DOM APIs. In Next.js App Router, components are Server Components by default. Dropping a Tiptap EditorContent into a page without proper isolation causes React hydration errors that crash the page or produce silent rendering bugs.
+**What goes wrong:**
+Developers design a single `sets` table with columns for `weight_kg`, `reps`, `duration_seconds`, and `distance_meters` -- then store `NULL` in whichever columns don't apply to the current exercise type. A bench press set stores weight+reps but NULLs for duration and distance. A plank stores duration but NULLs for weight and reps. A treadmill stores duration+distance but NULLs for weight and reps.
 
-**Why it happens:** Tiptap's useEditor hook initializes a ProseMirror EditorView that requires document and window globals. During SSR, these do not exist. Even with "use client", if immediatelyRender is not explicitly set to false, the editor tries to render content before hydration completes.
+This seems fine at first. Then you add features:
+- Volume calculation (`weight * reps * sets`) breaks when `weight_kg` is NULL for bodyweight exercises
+- Progression charts need to know which field to plot, requiring per-exercise-type logic everywhere
+- Validation becomes exercise-type-dependent (reps must be > 0 for weight exercises, duration must be > 0 for timed exercises)
+- UI forms must show/hide fields dynamically, with the schema providing no guidance on which fields are valid
 
-**Consequences:** Page crash on first load, intermittent hydration warnings in dev, invisible content in production. The existing kanban board already hit a similar issue (solved with next/dynamic + ssr: false -- see PROJECT.md key decisions).
+**Why it happens:**
+The "one table to rule them all" approach avoids the complexity of discriminated union types in the database. It looks simpler on day one.
+
+**Consequences:**
+- Every feature that touches sets needs a switch statement on exercise type
+- NULLable columns cannot be validated at the DB level (no CHECK constraint can say "weight_kg is required when exercise type is weight-based")
+- Aggregate queries become littered with COALESCE and CASE WHEN
+- Personal records logic must be duplicated per exercise type
 
 **Prevention:**
-1. Create the journal editor as a standalone "use client" component in `components/journal/journal-editor.tsx`
-2. Load it via `next/dynamic` with `ssr: false` (matching the existing KanbanBoard pattern)
-3. Set `immediatelyRender: false` in the useEditor config
-4. Return a skeleton/placeholder while the editor initializes (`if (!editor) return <EditorSkeleton />`)
+Follow Hevy's model: store ALL possible fields on each set row (weight_kg, reps, duration_seconds, distance_meters, rpe) and let them be nullable. But critically, define an `exercise_type` enum on the exercise template that determines which fields are meaningful. The exercise template declares its type (e.g., `weight_reps`, `bodyweight_reps`, `duration`, `distance_duration`), and the application layer uses this to:
+1. Render the correct input fields in the UI
+2. Validate that the required fields for that type are non-null
+3. Choose the correct progression metric for charts
+4. Calculate volume appropriately
 
-**Detection:** Hydration error in browser console: "Text content does not match server-rendered HTML" or "SSR has been detected, please set immediatelyRender explicitly to false"
+Define the exercise type enum in the Zod validation schema, not just in the database. The existing codebase already uses discriminated unions for `HabitFrequency` -- apply the same pattern to `ExerciseType`.
 
-**Sources:**
-- [Tiptap Next.js install docs](https://tiptap.dev/docs/editor/getting-started/install/nextjs)
-- [Tiptap GitHub issue #5856](https://github.com/ueberdosis/tiptap/issues/5856) -- bug persists in Next.js 15+
-- Existing codebase: next/dynamic pattern in `components/dashboard/dashboard-content.tsx`
+**Detection:**
+- Progression chart code has `if (exercise.type === 'weight') ... else if (exercise.type === 'duration') ...` scattered across multiple files instead of centralized
+- Volume calculation produces NaN or 0 for bodyweight exercises
+- Form shows weight input for plank exercises
+
+**Phase to address:**
+Phase 1 (Data Model / Schema Design). The exercise type enum and set field semantics must be locked down before any UI is built. Define Zod schemas with discriminated unions first; derive the DB schema from those.
 
 ---
 
-### Pitfall 2: Content Storage Format Lock-in
+### Pitfall 2: In-Progress Workout State Lost on Browser Refresh/Close
 
-**What goes wrong:** Storing journal content as raw HTML string in a Supabase TEXT column. Later, you need to search entries, render previews, migrate editor libraries, or sanitize output -- and raw HTML makes all of these painful or insecure.
+**What goes wrong:**
+A user is mid-workout (10 minutes in, 4 exercises logged, 12 sets recorded). They accidentally refresh the page, their phone switches apps, or the browser tab crashes. All in-progress data is gone. This is the single most rage-inducing failure in a workout tracking app because the user is physically in a gym with sweaty hands, possibly frustrated, and cannot reconstruct which sets they did.
 
-**Why it happens:** The quickest Tiptap integration stores editor.getHTML() as a string. It works initially but creates three problems: (a) searching requires HTML-aware parsing, (b) rendering previews requires sanitization against XSS, (c) changing editor libraries requires HTML-to-new-format migration.
+**Why it happens:**
+The natural approach with SWR/React state is to keep workout data in component state during the session and POST to the API only when the user taps "Finish Workout." This means 20-60 minutes of data exists only in volatile browser memory.
 
-**Consequences:** XSS vulnerabilities if rendering unsanitized HTML. Inability to full-text search journal content without stripping tags. Tight coupling to Tiptap's HTML output format.
+**Consequences:**
+- Users lose partially completed workouts (the most painful UX failure in this domain)
+- Users stop trusting the app and switch to pen-and-paper or a native app
+- Support complaints spike for an issue that is architecturally difficult to fix after the fact
 
 **Prevention:**
-1. Store Tiptap's native JSON document format (editor.getJSON()) in a JSONB column -- this is Tiptap's recommended approach and PostgreSQL's JSONB is optimized for it
-2. Add a computed plain_text column (or a generated column / trigger) that strips formatting for search
-3. Never store raw HTML -- render HTML on the client from the JSON document at display time
-4. If you need a text preview (dashboard widget, timeline), extract plain text from the JSON document at write time and store in a separate `preview_text VARCHAR(300)` column
+Implement a **dual-write strategy** from day one:
 
-**Detection:** If you find yourself importing DOMPurify or a sanitizer library, you likely chose the wrong storage format.
+1. **Server-side**: Create the workout row in the database when the user starts a workout (status: `in_progress`). Every set addition/modification triggers a debounced PATCH to the server (300ms debounce). The workout has `started_at` but no `completed_at` until the user finishes.
 
-**Sources:**
-- [Tiptap persistence docs](https://tiptap.dev/docs/editor/core-concepts/persistence)
-- [Supabase JSON/JSONB docs](https://supabase.com/docs/guides/database/json)
-- [Tiptap discussion #964: best practices for saving to DB](https://github.com/ueberdosis/tiptap/discussions/964)
+2. **Client-side**: Mirror the current workout state to `localStorage` on every mutation (localStorage.setItem is synchronous and survives page refreshes). Use a `beforeunload` event listener as a last-resort save. Do NOT use IndexedDB for this -- IndexedDB is async and browsers do not guarantee it completes during page teardown.
+
+3. **Recovery**: On mount, check for an `in_progress` workout in both localStorage and the API. If found, restore it and show a "Resume workout?" banner. The server is the source of truth; localStorage is the fast recovery path.
+
+**Important:** Do NOT use IndexedDB in the `beforeunload` handler. IndexedDB is asynchronous and Chrome/Firefox may tear down the page before the write completes. localStorage is synchronous and reliable in this context.
+
+**Detection:**
+- No `beforeunload` handler in the workout logging component
+- Workout data only exists in React state (useState/useReducer) with no persistence layer
+- No "in_progress" status on the workouts table
+- Refreshing the page during a workout loses all data
+
+**Phase to address:**
+Phase 2 (Workout Logging / Real-Time Session). This must be built into the workout logging flow from the start, not retrofitted. The `WorkoutSession` component should persist state on every mutation.
 
 ---
 
-### Pitfall 3: Autosave Data Loss on Navigation
+### Pitfall 3: Weight Unit Conversion Loses Precision and Corrupts Historical Data
 
-**What goes wrong:** User writes a journal entry, navigates away (clicks sidebar link, hits back button), and their unsaved content is lost. Unlike tasks and habits which are discrete form submissions, journal entries involve extended writing sessions.
+**What goes wrong:**
+User logs 135 lbs for bench press. System converts to kg (61.2349...) and stores 61.23 kg. User switches display back to lbs. System shows 135.01 lbs (or 134.99 lbs depending on rounding). Over many conversions, weights drift. Worse: if the user changes their unit preference and the system retroactively converts historical data, previously clean numbers become ugly decimals.
 
-**Why it happens:** The existing app uses form submit patterns (react-hook-form + explicit save buttons). Journal writing is different -- users expect continuous autosave like Google Docs or Notion. Without debounced autosave and navigation guards, content loss is inevitable.
+**Why it happens:**
+The 1 lb = 0.453592 kg conversion is irrational -- no finite decimal representation exists. Rounding on store, then rounding again on display, compounds errors. Some implementations convert ALL historical data when the user switches preferences, destroying the original logged values.
 
-**Consequences:** User loses writing. This is the single most frustrating UX failure in a journal app. Users will abandon the feature entirely.
+**Consequences:**
+- Personal records show wrong weights after unit switching
+- Progression charts have "phantom" weight changes from rounding
+- Users who log in lbs see 135.01 or 134.99 instead of clean 135
+- If historical data is retroactively converted, the original values are permanently lost
 
 **Prevention:**
-1. Implement debounced autosave (2-3 second debounce after last keystroke) using Tiptap's onUpdate callback
-2. Show a visible save status indicator ("Saving...", "Saved", "Unsaved changes")
-3. Use beforeunload event to warn about unsaved changes on browser close/refresh
-4. Use Next.js router events or a useEffect cleanup to save on component unmount
-5. Store a draft in localStorage as a fallback (keyed by date), auto-recover on return
-6. On initial load: check for localStorage draft newer than DB content, offer recovery
+Store weight in the **unit the user logged it in**, plus a `weight_unit` column on each set:
 
-**Detection:** Manual test: type in journal, click sidebar nav to dashboard, come back -- if content is gone, this pitfall was not addressed.
+```sql
+weight_value NUMERIC(7,2),  -- stores what user typed (e.g., 135.00)
+weight_unit TEXT NOT NULL DEFAULT 'kg'  -- 'kg' or 'lbs'
+```
 
-**Sources:**
-- [Tiptap discussion #5677: efficient saving to DB](https://github.com/ueberdosis/tiptap/discussions/5677)
-- [Tiptap discussion #2871: save with delay](https://github.com/ueberdosis/tiptap/discussions/2871)
+Display in the user's current preference unit, converting on read with proper rounding (round to nearest 0.5 for lbs, nearest 0.25 for kg). Never modify the stored value. The user preference (`kg` or `lbs` in profile preferences) controls display only.
+
+This matches how Hevy handles it: the API exposes both `weight_kg` and `weight_lb` as computed fields, but the source of truth is a single stored value.
+
+The existing `ProfilePreferences` type in `lib/db/types.ts` should be extended with `weight_unit: 'kg' | 'lbs'`.
+
+**Detection:**
+- Stored weight values have more than 2 decimal places
+- Switching unit preference changes historical workout display numbers by small amounts
+- Personal record for bench press shows 61.23 kg instead of a clean 135 lbs
+- No `weight_unit` column on the sets table
+
+**Phase to address:**
+Phase 1 (Data Model / Schema Design). The unit storage strategy must be decided before any set data is written. Retrofitting after users have logged workouts in the wrong format requires a data migration.
 
 ---
 
-### Pitfall 4: Dashboard API Bloat from Adding Journal Data
+### Pitfall 4: SWR Cache Explosion from Fine-Grained Workout Data
 
-**What goes wrong:** Adding journal entry data to the existing /api/dashboard endpoint. The dashboard already fetches habits, tasks, milestones, absence data, and recurring task instances in a single endpoint with 4+ parallel DB queries. Adding journal queries makes it slower and creates coupling between unrelated features.
+**What goes wrong:**
+The existing codebase uses SWR with URL-based cache keys (e.g., `/api/dashboard?date=2026-02-23`, `/api/habits`). Workout tracking introduces deeply nested data: a single workout contains multiple exercises, each containing multiple sets. If each entity gets its own SWR key, the cache grows explosively:
 
-**Why it happens:** The existing dashboard pattern aggregates everything in one API call. The temptation is to add journal_entry_today to the DashboardData type and add more queries to the already-complex route handler.
+- `/api/workouts` (list)
+- `/api/workouts/123` (detail)
+- `/api/workouts/123/exercises` (exercises within workout)
+- `/api/exercises/456/sets` (sets within exercise)
+- `/api/exercises/bench-press/history` (progression data)
+- `/api/exercises/bench-press/personal-records` (PRs)
 
-**Consequences:** Dashboard load time increases. A journal table schema change requires touching the dashboard route. The DashboardData type becomes a god object. Testing the dashboard route requires mocking journal DB classes too.
+Mutations cascade: adding a set must invalidate the workout detail, the workout list (volume changed), the exercise history, and possibly the personal records. Forgetting one invalidation = stale data visible to the user.
+
+**Why it happens:**
+The habit/task domain has flat data structures (one habit = one toggle per day). Workout data is hierarchical (workout -> exercises -> sets) and cross-referenced (exercise history spans multiple workouts). The SWR cache patterns that work for flat entities break down for nested ones.
+
+**Consequences:**
+- Stale data after mutations (user adds a set but the workout volume doesn't update)
+- Over-fetching due to aggressive revalidation (every set change refetches the entire workout list)
+- Memory bloat from caching every permutation of exercise history queries
+- Race conditions between optimistic updates on nested entities
 
 **Prevention:**
-1. Create a separate `/api/journal/today` endpoint for the dashboard widget
-2. Use a separate useSWR call in the dashboard for journal data -- SWR deduplicates and caches independently
-3. The journal dashboard widget should be a self-contained component that fetches its own data
-4. Keep DashboardData type unchanged -- the journal widget is additive, not integrated into the existing data structure
-5. Follow the existing pattern: WeeklyInsightCard already uses a separate `/api/insights/weekly` SWR call alongside the main dashboard SWR call
+Use a **coarse-grained cache strategy** for workout data:
 
-**Detection:** If DashboardData type in lib/db/types.ts gains journal fields, or if app/api/dashboard/route.ts imports JournalDB, the coupling has happened.
+1. **One SWR key per workout session**: `/api/workouts/123` returns the FULL workout including all exercises and sets (joined query). No separate SWR keys for exercises or sets within a workout.
+
+2. **Optimistic local state during active workout**: While a workout is in progress, manage exercises/sets in `useReducer` state (persisted to localStorage per Pitfall 2). Only use SWR for the workout list and historical data.
+
+3. **Targeted invalidation helper**: Create a `revalidateWorkoutData()` function (similar to the existing `revalidateSidebarCounts()`) that invalidates the specific keys affected: workout list, exercise history for affected exercises, and personal records.
+
+4. **Keep date-based keys for history**: Exercise progression data should use SWR keys like `/api/exercises/bench-press/history?period=3m` with `keepPreviousData: true` (matching the existing pattern).
+
+**Detection:**
+- Adding a set triggers 5+ network requests
+- Workout volume in the list view doesn't match the detail view after editing
+- Memory profiler shows thousands of SWR cache entries after a few weeks of use
+- `mutate()` calls scattered across multiple components without a centralized invalidation strategy
+
+**Phase to address:**
+Phase 2 (Workout Logging) for active session state management. Phase 4 (Progression Charts) for historical data caching. Define the API response shapes and SWR key strategy in Phase 1.
 
 ---
 
-### Pitfall 5: One-Entry-Per-Day Constraint Missing or Mishandled
+### Pitfall 5: Overengineering the Exercise Library as a Separate Searchable Service
 
-**What goes wrong:** Users create multiple journal entries for the same date, leading to confusion about which is "today's entry." Calendar views show inconsistent counts. The dashboard widget does not know which entry to display.
+**What goes wrong:**
+Developers treat the exercise library like a product catalog and build full-text search with PostgreSQL `tsvector`, autocomplete with debounced API calls, and virtualized infinite-scroll lists. For 400-600 exercises, this is massive overengineering. The entire Hevy library is ~400 exercises. With muscle group tags, that's maybe 200KB of JSON. It fits in a single SWR cache entry and can be filtered client-side with `Array.filter()` faster than any API roundtrip.
 
-**Why it happens:** Without a unique constraint on (user_id, entry_date), the API happily creates duplicates. The UI may use "create" when it should "upsert." Race conditions with autosave can create duplicates if two tabs are open.
+**Why it happens:**
+Engineers extrapolate from e-commerce search patterns (millions of products) to fitness domains (hundreds of exercises). They also conflate the exercise LIBRARY (static reference data) with exercise HISTORY (time-series data that does need server queries).
 
-**Consequences:** Duplicate entries, data confusion, broken calendar dots, dashboard widget showing wrong entry.
+**Consequences:**
+- Unnecessary API complexity (search endpoint, pagination, filtering)
+- Latency on exercise selection during workout logging (network roundtrip vs. instant client filter)
+- Over-indexing the exercises table (tsvector column, GIN index) for a dataset that fits in browser memory
+- Complex autocomplete component when a simple filtered list suffices
 
 **Prevention:**
-1. Add a UNIQUE constraint on (user_id, entry_date) in the migration
-2. Use `INSERT ... ON CONFLICT (user_id, entry_date) DO UPDATE` (Supabase's .upsert()) for saves
-3. The API should be `PUT /api/journal/:date` (idempotent) not `POST /api/journal` (creates new)
-4. If allowing multiple entries per day is desired (not in current scope), design for it from the start with explicit entry IDs in the URL
+Load the entire exercise library (preset + user custom) in a single API call. Cache it in SWR with a long `dedupingInterval` (10+ minutes). Filter client-side by name, muscle group, and equipment. Only fetch from the server on initial load and after the user creates a custom exercise.
 
-**Detection:** Try opening the journal in two tabs, write in both, save both. If two rows appear in the DB, the constraint is missing.
+The exercise library endpoint should be: `GET /api/exercises` returning all exercises (preset + user's custom). No pagination, no search parameters. The client does all filtering.
+
+Reserve server-side queries for exercise HISTORY (which exercises were performed on which dates with what weights) -- that data grows over time and genuinely needs server-side aggregation.
+
+**Detection:**
+- Exercise search makes API calls on every keystroke
+- Exercise list endpoint has pagination parameters
+- PostgreSQL migration includes `tsvector` or `GIN` index on exercise names
+- Exercise selection during workout has noticeable latency
+
+**Phase to address:**
+Phase 1 (Data Model + Exercise Library). Design the exercise library as a static reference dataset, not a searchable service.
+
+---
 
 ## Moderate Pitfalls
 
-### Pitfall 6: Mood Emoji Picker Accessibility Failures
+Mistakes that cause significant rework or degraded UX but don't require full rewrites.
 
-**What goes wrong:** Mood selection uses emoji icons without aria labels, keyboard navigation, or screen reader support. The picker looks pretty but is inaccessible.
+### Pitfall 6: Rest Timer Stops or Drifts in Background Tabs
 
-**Why it happens:** Emoji pickers are visually intuitive so developers skip accessibility. Custom emoji grids do not inherit button semantics. The app already uses vitest-axe for accessibility testing but only on existing components.
+**What goes wrong:**
+The rest timer between sets uses `setInterval` to count down. User switches to a different browser tab or locks their phone screen. Chrome throttles `setInterval` in background tabs to once per minute maximum. The timer UI freezes. When the user returns, it shows 58 seconds remaining even though 90 seconds have actually passed.
+
+**Why it happens:**
+Browser vendors throttle timers in background tabs to save battery and CPU. `setInterval` with a 1-second callback gets throttled to 1-minute intervals (or paused entirely) in inactive tabs. `requestAnimationFrame` is completely paused in background tabs.
+
+**Consequences:**
+- Timer shows wrong remaining time when user returns to the tab
+- Timer notification (if any) fires at the wrong time
+- User loses trust in the timer and uses their phone's native timer instead
+- Audio notification fires late or not at all
 
 **Prevention:**
-1. Use semantic `<button>` elements for each mood option, not `<span>` or `<div>`
-2. Add aria-label to each mood button (e.g., `aria-label="Great mood"` not just the emoji character)
-3. Implement `role="radiogroup"` with `role="radio"` for mood buttons since mood is single-select
-4. Support keyboard navigation: arrow keys to move between options, Enter/Space to select
-5. Translate mood labels via next-intl -- "Great" in English vs the Chinese equivalent
-6. Add vitest-axe tests for the mood picker component
-7. Use an accessible color for the selected state that works in both light and dark mode
+Use **timestamp-based elapsed time**, not tick-counting:
 
-**Detection:** Run axe on the mood picker component. If violations appear for missing labels or roles, this was not addressed.
+```typescript
+const startTime = Date.now();
+const durationMs = restSeconds * 1000;
 
-**Sources:**
-- [Building an accessible emoji picker (Nolan Lawson)](https://nolanlawson.com/2020/07/01/building-an-accessible-emoji-picker/)
-- [React Aria emoji picker example](https://react-spectrum.adobe.com/beta/react-aria/examples/emoji-picker.html)
+// On each tick (setInterval or requestAnimationFrame):
+const elapsed = Date.now() - startTime;
+const remaining = Math.max(0, durationMs - elapsed);
+```
+
+When the tab regains focus (via `visibilitychange` event), immediately recalculate remaining time from the stored `startTime`. This handles background throttling because the elapsed time calculation doesn't depend on how many ticks fired.
+
+For audio notifications, use the Web Audio API or `Notification` API which can fire even when the tab is backgrounded (with user permission). Consider a Web Worker for the countdown if sub-second accuracy matters.
+
+**Detection:**
+- Timer variable increments/decrements a counter (`remaining--`) instead of computing from wall-clock time
+- `setInterval(callback, 1000)` with no `visibilitychange` compensation
+- Timer shows wrong time after returning from a different tab
+- Rest timer notification fires late
+
+**Phase to address:**
+Phase 3 (Rest Timer). This is a one-time architectural decision that must be made correctly at implementation time.
 
 ---
 
-### Pitfall 7: i18n of Journal Prompts and Mood Labels vs User Content
+### Pitfall 7: Workout/Routine Template Coupling Creates Data Integrity Issues
 
-**What goes wrong:** Confusing system-provided content (writing prompts, mood labels, UI strings) with user-generated content (journal text). System content needs translation via next-intl. User content must NOT be translated -- it should be stored and displayed as-is regardless of locale.
+**What goes wrong:**
+A routine template references exercises by ID. The user modifies the template (adds an exercise, changes set count). Now, should in-progress workouts started from this template be updated? Should completed workouts retroactively change? If the template is deleted, do all historical workouts lose their structure?
 
-**Why it happens:** When prompts are stored in the DB or mixed with user text, locale switching can cause prompts to display in the wrong language. Or worse, someone tries to translate user journal content.
+This is the same class of problem the existing codebase solved for recurring tasks (ON DELETE SET NULL for `project_id` FK), but workout templates have deeper nesting.
 
-**Consequences:** Prompts appear in wrong language after locale switch. User content gets mangled. Mixed-language entries.
+**Why it happens:**
+Developers model routines as live references to workouts. A workout "uses" a routine. But routines are templates, not parents -- they should be copied at workout-start, not referenced.
+
+**Consequences:**
+- Editing a routine retroactively changes how historical workouts display
+- Deleting a routine makes historical workouts lose their exercise structure
+- A workout started from a routine but modified during the session has an inconsistent relationship to its template
 
 **Prevention:**
-1. Writing prompts are i18n keys, not DB strings -- store the key (e.g., "prompts.gratitude.1") and resolve to translated text at render time
-2. User journal content is stored as-is in the DB -- never pass through t() or any translation function
-3. Mood values are stored as enum strings (e.g., "great", "good", "okay", "bad", "terrible") in the DB, displayed via `t("mood.great")` at render time
-4. Add a "journal" top-level key to all three i18n message files (en.json, zh.json, zh-TW.json) -- do not nest under existing keys
-5. Prompts should be defined in the i18n message files, not in the DB
+**Copy-on-start pattern**: When a user starts a workout from a routine:
+1. Copy all exercise references and set templates into the new workout row
+2. Store `routine_id` as a reference to the source template (for "start this routine again")
+3. The workout is now independent -- editing the routine does NOT affect the workout
+4. Use `ON DELETE SET NULL` for the `routine_id` FK on workouts (matching the existing `project_id` pattern on tasks)
 
-**Detection:** Switch locale from English to Chinese, check if (a) prompts show in Chinese, (b) previously written English journal content is still in English. If prompts do not translate or content gets corrupted, this was not handled correctly.
+This means workouts and routines share the same `exercises[]` shape (as Hevy's API demonstrates -- both `Workout` and `Routine` contain an `exercises` array), but they are separate copies after creation.
+
+**Detection:**
+- Editing a routine changes how past workouts display
+- Deleting a routine causes errors when viewing historical workouts
+- No `routine_id` field on the workouts table (or it's a hard FK with CASCADE)
+
+**Phase to address:**
+Phase 1 (Data Model). The relationship between routines and workouts must be defined as copy-on-start, not live reference, in the schema design.
 
 ---
 
-### Pitfall 8: Calendar View Performance with Large Date Ranges
+### Pitfall 8: Sidebar Navigation Crowding When Adding a 4th Top-Level Section
 
-**What goes wrong:** The journal calendar loads ALL entries to render dots/indicators on dates with entries. For a user with 365+ days of entries, this means fetching hundreds of rows just to show which dates have dots.
+**What goes wrong:**
+The current sidebar has 3 items: Dashboard, Habits, Tasks. Adding "Workouts" makes it 4. This seems fine -- 4 items is below the recommended 5-6 max. But the real issue is the badge system. Currently, Dashboard has no badge, Habits shows incomplete count, Tasks shows due count. Workouts might show an "active workout" indicator or "workouts this week" count.
 
-**Why it happens:** The naive approach fetches full journal entries for a month to check existence. Tiptap JSON documents can be 1-50KB each. Fetching 30 full documents just to show dots is wasteful.
+The sidebar counts API (`/api/sidebar/counts`) currently queries habits and tasks. Adding workout counts means a third parallel query, increasing the endpoint's response time and the sidebar's render complexity.
+
+**Why it happens:**
+Each new feature owner adds "just one more" badge/count to the sidebar without considering the aggregate performance cost. The sidebar counts endpoint becomes a God query that touches every major table.
+
+**Consequences:**
+- Sidebar counts endpoint becomes the slowest API call (touches habits, tasks, AND workouts)
+- Badge information overload (too many numbers in the sidebar)
+- The 60px collapsed sidebar rail gets tight with 4 icon+badge combinations
+- Mobile sidebar sheet needs scrolling with more items
 
 **Prevention:**
-1. Create a dedicated lightweight API endpoint: `GET /api/journal/calendar?month=2026-02` that returns only `{ dates: ["2026-02-01", "2026-02-05", ...] }` -- no content, no mood, just date existence
-2. Use a SQL query like `SELECT DISTINCT entry_date FROM journal_entries WHERE user_id = $1 AND entry_date BETWEEN $2 AND $3`
-3. Optionally include mood per date for color-coded calendar dots: `SELECT entry_date, mood FROM journal_entries WHERE ...`
-4. Cache this in SWR with a month-based key (e.g., `/api/journal/calendar?month=2026-02`)
-5. Only fetch the visible month plus adjacent months for smooth navigation
+1. **Do NOT add workout counts to the existing sidebar counts endpoint.** The sidebar badge for workouts should only show during an active workout session (a simple "in-progress" indicator), not a daily/weekly count.
 
-**Detection:** Profile the network tab when navigating months in the calendar. If full entry content is being transferred, the optimization is missing.
+2. **Use client-side state for the active workout indicator**, not an API call. The workout session state (Pitfall 2) already tracks whether a workout is in progress. The sidebar can check this via a React context or a simple localStorage flag.
+
+3. **Add the Workouts nav item as a 4th flat item** (matching the existing pattern). Use the Dumbbell icon from Lucide. Keep the icon container style consistent with the existing `NavIconContainer`.
+
+4. **Do not group/collapse sidebar items** -- the existing decision was to use a flat sidebar (documented in Key Decisions: "Flat sidebar nav -- remove collapsible groups").
+
+**Detection:**
+- Sidebar counts endpoint response time increases by 50%+ after adding workout queries
+- Sidebar feels cluttered with too many badges
+- Mobile sidebar needs scrolling to see all items
+
+**Phase to address:**
+Phase 2 (Workout Logging) for the sidebar integration. The nav item is trivial; the badge strategy needs intentional design.
 
 ---
 
-### Pitfall 9: Habit/Task Linking Creates Tight Coupling
+### Pitfall 9: Progression Charts Query Every Set Ever Logged
 
-**What goes wrong:** Journal entries link to habits and tasks via direct FK references (habit_id, task_id). When a habit or task is deleted, the journal entry's link becomes a dangling reference or the entry itself gets cascade-deleted.
+**What goes wrong:**
+To show a bench press progression chart, the naive approach queries:
+```sql
+SELECT s.weight_value, s.reps, w.started_at
+FROM sets s
+JOIN workout_exercises we ON s.workout_exercise_id = we.id
+JOIN workouts w ON we.workout_id = w.id
+WHERE we.exercise_template_id = 'bench-press'
+AND w.user_id = $1
+ORDER BY w.started_at
+```
 
-**Why it happens:** The natural instinct is `REFERENCES habits(id)` or `REFERENCES tasks(id)`. But habits and tasks have their own lifecycle (archive, delete, complete) independent of journal entries. The journal is a reflective record -- it should preserve the user's writing even if the linked entity disappears.
+For a user who has been training for 2 years, 3x/week, with 5 sets per exercise, that's ~1,560 rows. Not huge, but the JOIN across 3 tables on Supabase (with RLS policies on each table) gets expensive. Add muscle group filtering and the query touches even more rows.
 
-**Consequences:** Cascade delete destroys journal entries when habits are deleted. Or ON DELETE SET NULL silently removes the association, but the user's text referencing "my morning run habit" still references something now invisible.
+**Why it happens:**
+Progression charts seem simple until you consider:
+- Which metric to chart (max weight? total volume? estimated 1RM?)
+- Time range selection (last month? 3 months? all time?)
+- Aggregation level (per-workout max, weekly average, monthly trend?)
+- Multiple exercise types need different chart metrics
+
+**Consequences:**
+- Progression page takes 2-3 seconds to load
+- Supabase RLS policies on JOINed tables compound query cost
+- The query returns raw sets when the chart only needs aggregated data points (one per workout)
 
 **Prevention:**
-1. Use a junction/linking table: `journal_entry_links(id, entry_id, entity_type, entity_id, entity_name_snapshot)` -- polymorphic with a name snapshot
-2. entity_type is 'habit' or 'task' and entity_id is the UUID
-3. entity_name_snapshot stores the habit/task name at link time -- so even after deletion, the journal shows "Linked to: Morning Run (deleted)"
-4. No FK constraint on entity_id -- this is a soft reference. Check existence at display time
-5. Alternatively: store links as a JSONB array on the journal entry itself: `linked_items: [{ type: "habit", id: "...", name: "Morning Run" }]` -- simpler, no junction table, good enough for read-heavy display
+1. **Pre-aggregate on write**: When a workout is completed, compute and store per-exercise summary data: `best_set_weight`, `total_volume`, `estimated_1rm`, `top_set_reps`. Store this in a `workout_exercise_summaries` table (or as computed columns on `workout_exercises`). The progression chart reads from summaries, not raw sets.
 
-**Detection:** Create a journal entry linked to a habit, delete the habit, view the journal entry. If the link info is gone with no trace, this was not handled.
+2. **Limit default time range**: Default to 3 months of data. Let the user expand. At 3x/week, that's ~36 data points -- fast to query and render.
+
+3. **Index strategically**: Create a composite index on `(exercise_template_id, user_id, completed_at)` for the workouts table to support efficient per-exercise history queries.
+
+4. **Use the same date-based SWR key pattern** as the existing dashboard: `/api/exercises/{id}/history?months=3` with `keepPreviousData: true`.
+
+**Detection:**
+- Progression chart queries JOINing 3+ tables
+- Chart page takes > 1 second to load
+- No indexes on exercise_template_id + user_id combinations
+- Raw set data sent to the client when only aggregated values are needed
+
+**Phase to address:**
+Phase 4 (Progression Charts / Personal Records). But the summary table should be planned in Phase 1 (schema design) and populated in Phase 2 (workout completion).
 
 ---
 
-### Pitfall 10: Tiptap Bundle Size Explosion
+### Pitfall 10: Zod Validation Schema Doesn't Match Discriminated Exercise Types
 
-**What goes wrong:** Importing all Tiptap extensions (table, code block, image, task list, color, etc.) balloons the client bundle. Tiptap's core is approximately 30KB gzipped, but adding 10+ extensions can push it to 100KB+.
+**What goes wrong:**
+The existing codebase uses Zod schemas for all API validation (`lib/validations/`). For workout data, the set validation must vary by exercise type: weight exercises require `weight_value` + `reps`, timed exercises require `duration_seconds`, cardio exercises require `duration_seconds` + `distance_meters`. A flat Zod schema with all fields optional lets through invalid data (a bench press set with no weight, a plank with reps instead of duration).
 
-**Why it happens:** Journal editors seem to need "all the features." Developers add extensions preemptively. The existing app has a tight bundle (no rich text libraries at all), so this is a proportionally huge increase.
+**Why it happens:**
+Developers create a single `setSchema` with all fields optional and rely on the UI to show the right inputs. But the API should reject invalid combinations regardless of what the UI sends.
 
-**Consequences:** Significant increase in initial page load for the journal page. TTI (Time to Interactive) degrades. The journal page loads noticeably slower than other pages.
+**Consequences:**
+- Invalid data in the database (bench press with NULL weight)
+- PRs calculated from garbage data (a "plank" with 999 reps)
+- The API accepts anything, and data quality degrades over time
+- Downstream features (progression charts, volume calculation) produce wrong results
 
 **Prevention:**
-1. Start with the minimal extension set: StarterKit (includes bold, italic, bullet list, ordered list, heading, blockquote, code, hard break, horizontal rule) -- this covers 90% of journal writing needs
-2. Do NOT add: Table, TaskList, Image, Color, Highlight, CodeBlockLowlight unless explicitly required
-3. Use next/dynamic with ssr: false to code-split the editor out of the main bundle
-4. Measure: add the editor, run `pnpm analyze` (@next/bundle-analyzer is already installed), verify the journal page chunk stays under 80KB gzipped
-5. If prompts need just bold/italic/lists, StarterKit alone is sufficient
+Use Zod discriminated unions (matching the existing `HabitFrequency` pattern):
 
-**Detection:** Run `pnpm analyze` before and after adding Tiptap. If the journal page chunk exceeds 100KB gzipped, too many extensions were added.
+```typescript
+const weightRepsSetSchema = z.object({
+  exercise_type: z.literal('weight_reps'),
+  weight_value: z.number().positive(),
+  weight_unit: z.enum(['kg', 'lbs']),
+  reps: z.number().int().positive(),
+  rpe: z.number().min(6).max(10).step(0.5).optional(),
+});
+
+const durationSetSchema = z.object({
+  exercise_type: z.literal('duration'),
+  duration_seconds: z.number().int().positive(),
+});
+
+const setSchema = z.discriminatedUnion('exercise_type', [
+  weightRepsSetSchema,
+  durationSetSchema,
+  // ... other types
+]);
+```
+
+Wire this into the workout API routes using `.safeParse()` exactly as the existing habit and task routes do.
+
+**Detection:**
+- Set validation schema has all fields optional
+- API accepts a bench press set with no weight_value
+- No discriminated union on exercise_type in the Zod schemas
+- The `lib/validations/` directory has no workout-related files
+
+**Phase to address:**
+Phase 1 (Data Model / Validation Schemas). Create `lib/validations/workout.ts` with discriminated union schemas before building API routes.
+
+---
 
 ## Minor Pitfalls
 
-### Pitfall 11: SWR Key Collision Between Journal Endpoints
+Mistakes that cause friction or technical debt but have bounded impact.
 
-**What goes wrong:** Multiple journal-related SWR hooks use similar keys, causing cache collisions. For example, `/api/journal?date=2026-02-22` (full entry) and `/api/journal/calendar?month=2026-02` (date list) could interact unexpectedly if the SWR key structure is not carefully designed.
+### Pitfall 11: Exercise Template Seeding Runs on Every API Call
+
+**What goes wrong:**
+The existing categories feature seeds 12 default categories on the first API call (lazy initialization). If the exercise library uses the same pattern (seed 400+ exercises on first call), the first workout-related API request takes 5+ seconds as it INSERTs hundreds of rows.
+
+**Why it happens:**
+The "lazy seed" pattern works for 12 categories but not for 400 exercises. The categories seeding inserts 12 rows; exercise seeding inserts 400+ rows with muscle group tags, equipment references, and exercise type metadata.
 
 **Prevention:**
-1. Use distinct API paths for distinct data shapes: `/api/journal/entries/:date`, `/api/journal/calendar`, `/api/journal/today`
-2. Include the full URL path as the SWR key (the existing pattern uses the URL string directly)
-3. Follow the existing dashboard pattern: separate SWR hooks for separate data (dashboard uses one hook for main data, another for weekly insights)
+Seed preset exercises via a **Supabase migration** (SQL INSERT in `supabase/migrations/`), not via application code. Preset exercises should be global (shared across all users) or seeded per-user at signup time, not on first API call.
+
+Recommended approach:
+- Create a global `exercise_templates` table with no `user_id` (shared across all users)
+- Create a `user_exercises` table for custom user-created exercises (with `user_id`)
+- The exercise library API returns the union of both tables
+- Preset exercises are seeded via migration; no lazy initialization
+
+**Detection:**
+- First workout API call takes > 2 seconds
+- `exercise_templates` table has `user_id` column with duplicate rows per user
+- Application code has a `seedExercises()` function called from API routes
+
+**Phase to address:**
+Phase 1 (Data Model / Schema Migration). Seed exercises in the migration, not in application code.
 
 ---
 
-### Pitfall 12: Writing Prompts Becoming Stale or Repetitive
+### Pitfall 12: i18n Translation Volume Underestimated for Fitness Domain
 
-**What goes wrong:** A fixed set of 5-10 prompts feels repetitive within a week. Users skip the prompt feature entirely.
+**What goes wrong:**
+The existing locale files (`en.json`, `zh.json`, `zh-TW.json`) have ~812 lines. Workout tracking adds:
+- ~400 exercise names (3 locales = 1,200 new strings)
+- ~30 muscle group names (90 strings)
+- ~20 equipment type names (60 strings)
+- ~80 UI strings for workout logging, timer, progression, routines
+- Set type labels, chart labels, unit labels
+
+That's 1,400+ new translation strings, nearly doubling the existing translation file size.
+
+**Why it happens:**
+The habit/task domain has maybe 50 entity-specific strings. The fitness domain has hundreds of proper nouns (exercise names) that all need translation. "Barbell Bench Press" must be "杠铃卧推" in zh and "槓鈴臥推" in zh-TW.
+
+**Consequences:**
+- Locale files become unwieldy (2000+ lines)
+- Exercise name translations are missed, showing English in Chinese UI
+- zh and zh-TW translations for exercise names diverge (simplified vs. traditional characters)
 
 **Prevention:**
-1. Organize prompts by category (gratitude, reflection, goals, achievements) in the i18n files
-2. Rotate prompts daily using a deterministic seed (e.g., hash(user_id + date) % promptCount) so each day shows a different prompt but the same prompt on revisit
-3. Allow dismissing/skipping the prompt without it blocking the entry
-4. Start with 20-30 prompts per locale -- enough for a month without repeats
+1. **Separate exercise translations from UI translations**: Create `i18n/messages/{locale}/exercises.json` (or a nested key in the existing file: `exercises.names.barbell_bench_press`). This keeps exercise-specific translations organized and separate from UI copy.
+
+2. **Use a translation spreadsheet or database approach**: Exercise names across 3 locales are better managed as structured data (CSV or DB rows) than as nested JSON keys.
+
+3. **Prioritize**: Translate the ~50 most common exercises first. Mark the rest as "fallback to English" with a TODO. Do not block the feature on complete translation of 400+ exercises.
+
+4. **Reuse existing next-intl patterns**: The `useTranslations('workouts')` pattern works; just namespace it clearly.
+
+**Detection:**
+- Exercise names appear in English in the Chinese locale
+- Locale files exceed 2000 lines and are hard to review in PRs
+- zh-TW exercise names use simplified characters (copy-pasted from zh)
+
+**Phase to address:**
+Phase 1 (Exercise Library) for the translation structure. Phase 5 (Polish) for complete translation coverage.
 
 ---
 
-### Pitfall 13: Timezone Bug on Journal Date Assignment
+### Pitfall 13: Superset/Circuit Grouping Attempted Too Early
 
-**What goes wrong:** Journal entries created near midnight get assigned to the wrong date because the server uses UTC while the user is in a different timezone.
+**What goes wrong:**
+Hevy supports supersets (two exercises back-to-back) and the developer tries to implement this in the first iteration. Superset grouping adds significant complexity: exercises need a `superset_id`, the UI needs a grouping visual treatment, the set logging flow changes (alternate between exercises), and the data model must handle N exercises in a group.
 
-**Why it happens:** This is the exact same pitfall the app already solved for habits and tasks (see PROJECT.md: "getTodayTasks accepts client date param"). But it is easy to forget when building a new feature.
+**Why it happens:**
+Feature envy -- Hevy has it, so we should have it. But supersets are a power-user feature that maybe 20% of users utilize.
+
+**Consequences:**
+- The exercise ordering logic becomes complex (sort by superset group, then by order within group)
+- UI layout must handle grouped and ungrouped exercises differently
+- The MVP takes 2-3x longer to ship
 
 **Prevention:**
-1. Follow the existing pattern exactly: the client sends date as a query/body parameter using getLocalDateString()
-2. The entry_date column in the DB is DATE type (not TIMESTAMPTZ)
-3. The API validates the date format with the same regex used in the dashboard route: `/^\d{4}-\d{2}-\d{2}$/`
-4. Never derive the entry date from new Date() on the server
+Defer supersets to a future iteration. The Hevy API includes a `superset_id` field on exercises, but it's nullable -- most exercises aren't in supersets. Include the `superset_id` column in the schema (nullable, defaulting to NULL) so the data model supports it, but don't build the UI for it in v4.0.
 
-**Detection:** Set system clock to 11:55 PM, create an entry, verify it is assigned to today not tomorrow.
+**Detection:**
+- Scope includes superset UI in the initial milestone
+- Exercise ordering logic handles group membership
+- The workout form has a "Create Superset" button
+
+**Phase to address:**
+Explicitly defer to v4.1 or v5.0. Add the nullable `superset_id` column in Phase 1 schema design but do not build UI for it.
 
 ---
 
-### Pitfall 14: Dark Mode Contrast Issues with Mood Colors
+### Pitfall 14: Personal Records Not Computed Incrementally
 
-**What goes wrong:** Mood indicators use bright colors (green for great, red for terrible) that look fine in light mode but have poor contrast or look washed out in dark mode.
+**What goes wrong:**
+Computing personal records (heaviest bench press ever, most reps at a given weight) by scanning all historical workout data on every request. For a user with 500+ workouts, this means aggregating thousands of sets.
+
+**Why it happens:**
+PRs seem simple ("just MAX(weight) WHERE exercise = bench press") but there are multiple PR types: heaviest weight, most reps at a given weight, highest volume in one set, highest estimated 1RM. Each requires a different aggregation.
 
 **Prevention:**
-1. Define mood colors as CSS custom properties (matching the existing HSL token pattern in globals.css)
-2. Provide light and dark variants: `--mood-great: 142 71% 45%` (light) vs `--mood-great: 142 71% 65%` (dark)
-3. Test all 5 mood states in both themes
-4. Use the existing semantic color token pattern -- do not hardcode hex/rgb values
+Maintain a `personal_records` table that is updated incrementally when a workout is completed:
+
+```sql
+CREATE TABLE personal_records (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id),
+  exercise_template_id TEXT NOT NULL,
+  record_type TEXT NOT NULL, -- 'max_weight', 'max_reps', 'max_volume', 'max_estimated_1rm'
+  value NUMERIC NOT NULL,
+  achieved_at TIMESTAMPTZ NOT NULL,
+  workout_id UUID REFERENCES workouts(id) ON DELETE SET NULL,
+  UNIQUE(user_id, exercise_template_id, record_type)
+);
+```
+
+When a workout is completed, compare each exercise's best set against the current PR. Update if beaten. This makes PR lookups O(1) instead of scanning all history.
+
+**Detection:**
+- PR display triggers a full-table scan on workout sets
+- PR computation takes > 500ms
+- No `personal_records` table in the schema
+
+**Phase to address:**
+Phase 1 (Schema Design) for the table. Phase 2 (Workout Completion) for the update logic. Phase 4 (Progression) for the display.
 
 ---
-
-### Pitfall 15: Migration Breaks Existing RLS Policies
-
-**What goes wrong:** The new journal_entries table is created without RLS policies, or the RLS policies are inconsistent with the existing pattern, exposing journal data cross-user.
-
-**Prevention:**
-1. Follow the exact RLS pattern from the categories migration (the most recent migration): ENABLE ROW LEVEL SECURITY + four policies (SELECT, INSERT, UPDATE, DELETE) all using `auth.uid() = user_id`
-2. Add `user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE` as the first column after id
-3. Create index on user_id: `CREATE INDEX idx_journal_entries_user ON journal_entries(user_id)`
-4. Test with Supabase's RLS testing: try querying without auth, verify 0 rows returned
 
 ## Phase-Specific Warnings
 
 | Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| DB schema / migration | Pitfall 5 (missing unique constraint), Pitfall 15 (RLS), Pitfall 9 (FK coupling) | Add unique constraint, copy RLS pattern from categories, use soft references for links |
-| Rich text editor integration | Pitfall 1 (SSR hydration), Pitfall 10 (bundle size), Pitfall 3 (data loss) | next/dynamic + ssr: false, minimal extensions, debounced autosave |
-| Content storage | Pitfall 2 (HTML storage lock-in) | JSONB column for Tiptap JSON, separate plain_text/preview column |
-| Mood tracking | Pitfall 6 (accessibility), Pitfall 14 (dark mode), Pitfall 7 (i18n) | radiogroup pattern, CSS tokens, enum DB values with translated labels |
-| Calendar view | Pitfall 8 (performance), Pitfall 13 (timezone) | Lightweight calendar endpoint, client-sent date |
-| Dashboard widget | Pitfall 4 (API bloat), Pitfall 11 (SWR collision) | Separate endpoint, self-contained widget component |
-| Writing prompts | Pitfall 7 (i18n confusion), Pitfall 12 (staleness) | Prompts as i18n keys, 20+ per locale, deterministic rotation |
-| Habit/task linking | Pitfall 9 (FK coupling) | Soft references with name snapshots, no cascade behavior |
+|---|---|---|
+| Phase 1: Schema Design | Flat set schema (P1), unit storage (P3), template coupling (P7), validation (P10) | Define exercise type enum and discriminated unions FIRST. Store weight in logged unit. Use copy-on-start for routines. |
+| Phase 1: Exercise Library | Overengineered search (P5), seeding cost (P11), translation volume (P12) | Load-all-and-filter-client-side. Seed via migration. Separate exercise translations. |
+| Phase 2: Workout Logging | State loss on refresh (P2), SWR cache explosion (P4), sidebar crowding (P8) | Dual-write (server + localStorage). Coarse-grained SWR keys. Client-side active workout indicator. |
+| Phase 3: Rest Timer | Timer drift in background (P6) | Timestamp-based elapsed time, not tick-counting. Use `visibilitychange` event. |
+| Phase 4: Progression Charts | Slow chart queries (P9), PR full-scan (P14) | Pre-aggregate summaries on workout completion. Maintain incremental PR table. Default 3-month range. |
+| Phase 4: Routines | Scope creep with supersets (P13) | Include nullable `superset_id` in schema but defer UI to future milestone. |
+| All Phases: i18n | Missing translations (P12) | Add workout namespace to all 3 locale files in each phase. Do not defer all translations to the end. |
+
+---
+
+## Integration-Specific Pitfalls (Existing Codebase)
+
+These pitfalls are specific to adding fitness features to the existing BetterR.Me codebase patterns.
+
+### Existing Pattern: Fresh Supabase Client Per Request
+The codebase requires `const supabase = await createClient()` in every API route. Workout routes MUST follow this pattern. Do NOT create a singleton `WorkoutsDB` instance -- instantiate it fresh in each handler. The existing pattern is documented in CLAUDE.md and enforced by code review.
+
+### Existing Pattern: Client-Sent Date Parameter
+All time-aware endpoints accept a `date` query param from the client (never trust server-local time on Vercel). Workout logging should use `started_at` and `completed_at` timestamps from the client, but validated server-side to be within reasonable bounds (not in the future, not more than 24 hours in the past).
+
+### Existing Pattern: DB Class + Zod Validation Separation
+DB classes (`lib/db/`) handle data access. Zod schemas (`lib/validations/`) handle input validation. API routes wire them together. Workout features must follow this separation: `WorkoutsDB`, `ExercisesDB`, `SetsDB` in `lib/db/`, with matching `lib/validations/workout.ts` schemas.
+
+### Existing Pattern: SWR Hook Per Feature
+Each feature has a dedicated hook (`use-dashboard.ts`, `use-habits.ts`, `use-projects.ts`). Create `use-workouts.ts`, `use-exercises.ts`, `use-workout-session.ts` following the same pattern. Use the `fetcher` from `lib/fetcher.ts`.
+
+### Existing Pattern: Sidebar Counts Revalidation
+The existing `revalidateSidebarCounts()` function is called after habit toggles and task completions. If workout activity should affect sidebar counts (not recommended per Pitfall 8), it would need to call this function too. Prefer client-side state for the active workout indicator instead.
+
+---
 
 ## Sources
 
-- [Tiptap Next.js installation guide](https://tiptap.dev/docs/editor/getting-started/install/nextjs) -- SSR guidance
-- [Tiptap persistence docs](https://tiptap.dev/docs/editor/core-concepts/persistence) -- storage format recommendations
-- [Tiptap GitHub issue #5856](https://github.com/ueberdosis/tiptap/issues/5856) -- SSR bug in Next.js 15+
-- [Tiptap GitHub discussion #964](https://github.com/ueberdosis/tiptap/discussions/964) -- DB storage best practices
-- [Tiptap GitHub discussion #5677](https://github.com/ueberdosis/tiptap/discussions/5677) -- autosave patterns
-- [Supabase JSON/JSONB documentation](https://supabase.com/docs/guides/database/json) -- JSONB column guidance
-- [Building an accessible emoji picker (Nolan Lawson)](https://nolanlawson.com/2020/07/01/building-an-accessible-emoji-picker/) -- a11y patterns
-- [React Aria emoji picker example](https://react-spectrum.adobe.com/beta/react-aria/examples/emoji-picker.html) -- keyboard nav reference
-- [next-intl rich text translation docs](https://next-intl.dev/docs/usage/translations) -- t.rich() usage
-- [Liveblocks: which rich text editor framework in 2025](https://liveblocks.io/blog/which-rich-text-editor-framework-should-you-choose-in-2025) -- editor comparison
-- Existing codebase patterns: dashboard-content.tsx (SWR + dynamic imports), categories migration (RLS pattern), getLocalDateString() (timezone handling)
+- Hevy API data model: [Hevy MCP Server](https://github.com/chrisdoc/hevy-mcp), [Hevy API Docs](https://api.hevyapp.com/docs/), [go-hevy package](https://pkg.go.dev/github.com/gregwilson777/go-hevy)
+- Hevy exercise library: [400+ Exercises](https://help.hevyapp.com/hc/en-us/articles/35688251991575-Hevy-Exercise-Library-400-Exercises-and-Custom-Exercises)
+- Hevy exercise types: [Exercise Programming Options](https://www.hevyapp.com/features/exercise-programming-options/)
+- Timer throttling: [Why setInterval breaks in inactive tabs](https://pontistechnology.com/learn-why-setinterval-javascript-breaks-when-throttled/), [Why JavaScript Timer Is Unreliable](https://abhi9bakshi.medium.com/why-javascript-timer-is-unreliable-and-how-can-you-fix-it-9ff5e6d34ee0)
+- State persistence: [localStorage vs IndexedDB in beforeunload](https://vaughnroyko.com/offline-storage-indexeddb-and-the-onbeforeunloadunload-problem/), [Persisting unsaved sessions with localStorage](https://mstflotfy.com/theindiedev/persist-state-localStorage-OneExercise)
+- Unit conversion: [Fitbod unit handling](https://fitbod.zendesk.com/hc/en-us/articles/23560953306263-Unit-of-Measurement)
+- Workout schema patterns: [Designing data structure for workouts](https://1df.co/designing-data-structure-to-track-workouts/), [Dittofi workout data model](https://www.dittofi.com/learn/how-to-design-a-data-model-for-a-workout-tracking-app)
+- Supabase RLS performance: [RLS Performance Best Practices](https://supabase.com/docs/guides/troubleshooting/rls-performance-and-best-practices-Z5Jjwv)
+- Sidebar UX: [Sidebar best practices](https://uxplanet.org/best-ux-practices-for-designing-a-sidebar-9174ee0ecaa2)
+- Workout logging UX: [Fitness app UX design principles](https://stormotion.io/blog/fitness-app-ux/)
+- SWR caching: [SWR cache documentation](https://swr.vercel.app/docs/advanced/cache)
+- Time-series queries: [PostgreSQL time-series design](https://neon.com/guides/timeseries-data)

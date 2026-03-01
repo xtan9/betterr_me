@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/layouts/page-header";
 import { ProfileForm } from "./profile-form";
 import { WeekStartSelector } from "./week-start-selector";
+import { WeightUnitSelector } from "./weight-unit-selector";
 import { DataExport } from "./data-export";
 import { CheckCircle, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ interface Profile {
     date_format: string;
     week_start_day: number;
     theme: "system" | "light" | "dark";
+    weight_unit?: "kg" | "lbs";
   };
 }
 
@@ -38,6 +40,7 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
   );
 
   const [weekStartDay, setWeekStartDay] = useState<number>(0);
+  const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -45,6 +48,7 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
   useEffect(() => {
     if (data?.profile?.preferences) {
       setWeekStartDay(data.profile.preferences.week_start_day ?? 0);
+      setWeightUnit(data.profile.preferences.weight_unit ?? "kg");
     }
   }, [data]);
 
@@ -56,7 +60,7 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
       const response = await fetch("/api/profile/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ week_start_day: weekStartDay }),
+        body: JSON.stringify({ week_start_day: weekStartDay, weight_unit: weightUnit }),
       });
 
       if (!response.ok) {
@@ -75,7 +79,8 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
   };
 
   const hasChanges =
-    data?.profile?.preferences?.week_start_day !== weekStartDay;
+    data?.profile?.preferences?.week_start_day !== weekStartDay ||
+    (data?.profile?.preferences?.weight_unit ?? "kg") !== weightUnit;
 
   if (error) {
     return (
@@ -134,6 +139,24 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
             <WeekStartSelector
               value={weekStartDay}
               onChange={setWeekStartDay}
+              disabled={isSaving}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("weightUnit.title")}</CardTitle>
+          <CardDescription>{t("weightUnit.description")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-10 w-48" />
+          ) : (
+            <WeightUnitSelector
+              value={weightUnit}
+              onChange={setWeightUnit}
               disabled={isSaving}
             />
           )}

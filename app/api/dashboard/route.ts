@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
+import { WorkoutsDB } from '@/lib/db/workouts';
 import { type DashboardData, type HabitLog, type HabitMilestone, ZERO_ABSENCE } from '@/lib/db/types';
 import { getLocalDateString, getNextDateString } from '@/lib/utils';
 import { computeMissedDays } from '@/lib/habits/absence';
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
     const tasksDB = new TasksDB(supabase);
     const habitLogsDB = new HabitLogsDB(supabase);
     const milestonesDB = new HabitMilestonesDB(supabase);
+    const workoutsDB = new WorkoutsDB(supabase);
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
 
@@ -79,9 +81,16 @@ export async function GET(request: NextRequest) {
     // Derive completed count from todayTasks (no separate DB call needed)
     const tasksCompletedToday = todayTasks.filter(t => t.is_completed).length;
 
+    // Compute week start date for workout count query
+    // Default week_start_day to Monday (1) — matches dashboard convention
+    const weekStartDay = 1;
+    const currentDayOfWeek = new Date(year, month - 1, day).getDay();
+    const daysToSubtract = (currentDayOfWeek - weekStartDay + 7) % 7;
+    const weekStartDate = getLocalDateString(new Date(year, month - 1, day - daysToSubtract));
+
     // Supplementary queries — failure falls back gracefully
     let logsFetchFailed = false;
-    const [allLogs, milestonesToday] = await Promise.all([
+    const [allLogs, milestonesToday, lastWorkoutAt, weekWorkoutCount] = await Promise.all([
       // Bulk fetch 30-day logs for all habits (1 query, avoids N+1)
       habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date).catch((err) => {
         log.error('Failed to fetch habit logs for absence', err, { userId: user.id, date });
@@ -92,6 +101,16 @@ export async function GET(request: NextRequest) {
       milestonesDB.getTodaysMilestones(user.id, date).catch((err) => {
         log.error('Failed to fetch milestones', err, { userId: user.id, date });
         return [] as HabitMilestone[];
+      }),
+      // Last completed workout
+      workoutsDB.getLastCompletedAt(user.id).catch((err) => {
+        log.error('Failed to fetch last workout', err, { userId: user.id });
+        return null;
+      }),
+      // Completed workouts this week
+      workoutsDB.getWeekWorkoutCount(user.id, weekStartDate).catch((err) => {
+        log.error('Failed to fetch week workout count', err, { userId: user.id });
+        return 0;
       }),
     ]);
 
@@ -128,7 +147,7 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         log.error('computeMissedDays failed', err, { userId: user.id, habitId: habit.id, date, dateRange: `${thirtyDaysAgoStr} to ${date}` });
         warnings.push(`Absence data unavailable for habit ${habit.id}`);
-        // Zeros as fallback: no prior cached value available (see RESEARCH.md Pitfall 5)
+        // Zeros as fallback: no prior cached value available
         return { ...habit, ...ZERO_ABSENCE };
       }
     });
@@ -151,6 +170,8 @@ export async function GET(request: NextRequest) {
         total_tasks: totalTaskCount,
         tasks_due_today: todayTasks.length,
         tasks_completed_today: tasksCompletedToday,
+        last_workout_at: lastWorkoutAt,
+        week_workout_count: weekWorkoutCount,
       },
       ...(warnings.length > 0 && { _warnings: warnings }),
     };

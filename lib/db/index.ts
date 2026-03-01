@@ -11,3 +11,7 @@ export * from "./recurring-tasks";
 export * from "./categories";
 export * from "./journal-entries";
 export * from "./journal-entry-links";
+export * from "./exercises";
+export * from "./workouts";
+export * from "./workout-exercises";
+export * from "./routines";
