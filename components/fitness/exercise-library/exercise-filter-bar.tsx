@@ -10,38 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MUSCLE_GROUPS, EQUIPMENT } from "@/lib/constants/enums";
 import type { MuscleGroup, Equipment } from "@/lib/db/types";
-
-const MUSCLE_GROUPS: MuscleGroup[] = [
-  "chest",
-  "back",
-  "shoulders",
-  "biceps",
-  "triceps",
-  "forearms",
-  "core",
-  "quadriceps",
-  "hamstrings",
-  "glutes",
-  "calves",
-  "traps",
-  "lats",
-  "full_body",
-  "cardio",
-  "other",
-];
-
-const EQUIPMENT_TYPES: Equipment[] = [
-  "barbell",
-  "dumbbell",
-  "machine",
-  "bodyweight",
-  "kettlebell",
-  "cable",
-  "band",
-  "other",
-  "none",
-];
 
 interface ExerciseFilterBarProps {
   search: string;
@@ -104,7 +74,7 @@ export function ExerciseFilterBar({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">{t("allEquipment")}</SelectItem>
-          {EQUIPMENT_TYPES.map((eq) => (
+          {EQUIPMENT.map((eq) => (
             <SelectItem key={eq} value={eq}>
               {t(`equipmentTypes.${eq}`)}
             </SelectItem>

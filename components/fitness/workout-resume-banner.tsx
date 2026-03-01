@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import useSWR from "swr";
@@ -53,12 +53,14 @@ export function WorkoutResumeBanner() {
   }
 
   // Update snapshot when workout data changes
-  if (workout && snapshotRef.current?.workoutId !== workout.id) {
-    snapshotRef.current = {
-      workoutId: workout.id,
-      elapsed: computeElapsedDisplay(workout.started_at, Date.now()),
-    };
-  }
+  useEffect(() => {
+    if (workout && snapshotRef.current?.workoutId !== workout.id) {
+      snapshotRef.current = {
+        workoutId: workout.id,
+        elapsed: computeElapsedDisplay(workout.started_at, Date.now()),
+      };
+    }
+  }, [workout]);
 
   if (!workout) return null;
 

@@ -191,6 +191,7 @@ export function ExerciseLibrary() {
       )}
 
       <ExerciseForm
+        key={editingExercise?.id ?? "new"}
         open={isFormOpen}
         onOpenChange={handleFormClose}
         exercise={editingExercise ?? undefined}

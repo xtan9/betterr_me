@@ -502,6 +502,14 @@ export interface ExerciseFilters {
 
 export type WorkoutStatus = (typeof WORKOUT_STATUSES)[number];
 
+/**
+ * A workout session.
+ *
+ * Status invariants:
+ * - 'in_progress': completed_at is null, duration_seconds is null. Only one per user (DB constraint).
+ * - 'completed': completed_at and duration_seconds are set on transition.
+ * - 'discarded': completed_at may remain null.
+ */
 export interface Workout {
   id: string;
   user_id: string;
@@ -562,6 +570,13 @@ export interface WorkoutExerciseWithDetails extends WorkoutExercise {
 
 export type SetType = (typeof SET_TYPES)[number];
 
+/**
+ * A single set within a workout exercise.
+ *
+ * Nullable measurement fields (weight_kg, reps, duration_seconds, distance_meters)
+ * are intentional: EXERCISE_FIELD_MAP determines which fields are relevant for each
+ * exercise type. Fields irrelevant to the exercise type remain null.
+ */
 export interface WorkoutSet {
   id: string;
   workout_exercise_id: string;

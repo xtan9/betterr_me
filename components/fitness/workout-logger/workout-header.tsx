@@ -102,7 +102,7 @@ export function WorkoutHeader({
     } else {
       setTitleValue(workout.title);
     }
-  }, [titleValue, workout.title, onUpdateWorkout]);
+  }, [titleValue, workout.title, onUpdateWorkout, t]);
 
   const handleTitleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -128,7 +128,7 @@ export function WorkoutHeader({
         });
       }, 500);
     },
-    [onUpdateWorkout]
+    [onUpdateWorkout, t]
   );
 
   // Cleanup debounce on unmount

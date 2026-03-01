@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { WorkoutsDB } from "@/lib/db/workouts";
+import { log } from "@/lib/logger";
 import { PageHeader } from "@/components/layouts/page-header";
 import { WorkoutDetailView } from "@/components/fitness/workout-history/workout-detail-view";
 import type { WeightUnit } from "@/lib/db/types";
@@ -45,7 +46,7 @@ export default async function WorkoutDetailPage({
     .single();
 
   if (profileError) {
-    console.error("Failed to fetch profile for weight unit", profileError);
+    log.error("Failed to fetch profile for weight unit", profileError);
   }
 
   const weightUnit: WeightUnit =

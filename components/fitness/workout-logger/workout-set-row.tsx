@@ -66,7 +66,7 @@ export function WorkoutSetRow({
   const typeConfig = SET_TYPE_CONFIG[set.set_type];
   const [typeOpen, setTypeOpen] = useState(false);
 
-  // Local state for inputs to allow fast typing (debounced PATCH)
+  // Local state for inputs to allow fast typing (optimistic blur-on-commit updates)
   const [localWeight, setLocalWeight] = useState(
     set.weight_kg != null ? String(displayWeight(set.weight_kg, weightUnit)) : ""
   );
@@ -103,53 +103,53 @@ export function WorkoutSetRow({
     const parsed = parseFloat(localWeight);
     const kg = isNaN(parsed) ? null : toKg(parsed, weightUnit);
     if (kg !== set.weight_kg) {
-      void onUpdate({ weight_kg: kg });
+      void onUpdate({ weight_kg: kg }).catch(() => toast.error(t("updateSetError")));
     }
-  }, [localWeight, weightUnit, set.weight_kg, onUpdate]);
+  }, [localWeight, weightUnit, set.weight_kg, onUpdate, t]);
 
   const handleRepsBlur = useCallback(() => {
     const parsed = parseInt(localReps, 10);
     const value = isNaN(parsed) ? null : parsed;
     if (value !== set.reps) {
-      void onUpdate({ reps: value });
+      void onUpdate({ reps: value }).catch(() => toast.error(t("updateSetError")));
     }
-  }, [localReps, set.reps, onUpdate]);
+  }, [localReps, set.reps, onUpdate, t]);
 
   const handleDurationBlur = useCallback(() => {
     const parsed = parseInt(localDuration, 10);
     const value = isNaN(parsed) ? null : parsed;
     if (value !== set.duration_seconds) {
-      void onUpdate({ duration_seconds: value });
+      void onUpdate({ duration_seconds: value }).catch(() => toast.error(t("updateSetError")));
     }
-  }, [localDuration, set.duration_seconds, onUpdate]);
+  }, [localDuration, set.duration_seconds, onUpdate, t]);
 
   const handleDistanceBlur = useCallback(() => {
     const parsed = parseFloat(localDistance);
     const value = isNaN(parsed) ? null : parsed;
     if (value !== set.distance_meters) {
-      void onUpdate({ distance_meters: value });
+      void onUpdate({ distance_meters: value }).catch(() => toast.error(t("updateSetError")));
     }
-  }, [localDistance, set.distance_meters, onUpdate]);
+  }, [localDistance, set.distance_meters, onUpdate, t]);
 
   const handleSetTypeChange = useCallback(
     (newType: SetType) => {
       setTypeOpen(false);
       if (newType !== set.set_type) {
-        void onUpdate({ set_type: newType });
+        void onUpdate({ set_type: newType }).catch(() => toast.error(t("updateSetError")));
       }
     },
-    [set.set_type, onUpdate]
+    [set.set_type, onUpdate, t]
   );
 
   const handleCheckChange = useCallback(
     (checked: boolean) => {
       if (checked) {
-        void onComplete();
+        void onComplete().catch(() => toast.error(t("completeSetError")));
       } else {
-        void onUpdate({ is_completed: false });
+        void onUpdate({ is_completed: false }).catch(() => toast.error(t("updateSetError")));
       }
     },
-    [onComplete, onUpdate]
+    [onComplete, onUpdate, t]
   );
 
   // ---------------------------------------------------------------------------

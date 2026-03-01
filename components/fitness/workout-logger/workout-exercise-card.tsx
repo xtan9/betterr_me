@@ -23,6 +23,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { toast } from "sonner";
 import type { WorkoutSetUpdate, WeightUnit, ExerciseType } from "@/lib/db/types";
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
 import { isNewPR, type PRCheckResult } from "@/lib/fitness/personal-records";
@@ -120,7 +121,7 @@ export function WorkoutExerciseCard({
   const handleNotesBlur = () => {
     const trimmed = notesValue.trim();
     if (trimmed !== (exercise.notes ?? "")) {
-      void onUpdateNotes(trimmed);
+      void onUpdateNotes(trimmed).catch(() => toast.error(t("updateNotesError")));
     }
   };
 
@@ -170,7 +171,7 @@ export function WorkoutExerciseCard({
                         size="sm"
                         className="h-7 px-2.5 text-xs"
                         onClick={() => {
-                          void onUpdateRestTimer(seconds);
+                          void onUpdateRestTimer(seconds).catch(() => toast.error(t("updateRestTimerError")));
                           setRestTimerPopoverOpen(false);
                         }}
                       >
@@ -187,7 +188,7 @@ export function WorkoutExerciseCard({
             variant="ghost"
             size="sm"
             className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-            onClick={onRemoveExercise}
+            onClick={() => void onRemoveExercise().catch(() => toast.error(t("removeExerciseError")))}
           >
             <Trash2 className="h-4 w-4" />
             <span className="sr-only">{t("removeExercise")}</span>
@@ -258,7 +259,7 @@ export function WorkoutExerciseCard({
           variant="ghost"
           size="sm"
           className="w-full text-xs"
-          onClick={onAddSet}
+          onClick={() => void onAddSet().catch(() => toast.error(t("addSetError")))}
         >
           <Plus className="mr-1 h-3 w-3" />
           {t("addSet")}

@@ -113,6 +113,9 @@ function ExerciseDetailCard({
   const exerciseInfo = exerciseDetail.exercise;
   const completedSets = exerciseDetail.sets.filter((s) => s.is_completed);
 
+  // Fetch records once at card level — avoids N hook calls inside SetRow
+  const { records, isLoading: recordsLoading } = useExerciseRecords(exerciseInfo.id);
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -151,8 +154,9 @@ function ExerciseDetailCard({
             key={set.id}
             set={set}
             exerciseType={exerciseInfo.exercise_type}
-            exerciseId={exerciseInfo.id}
             weightUnit={weightUnit}
+            records={records}
+            recordsLoading={recordsLoading}
           />
         ))}
 
@@ -230,18 +234,18 @@ const SET_TYPE_COLORS: Record<string, string> = {
 function SetRow({
   set,
   exerciseType,
-  exerciseId,
   weightUnit,
+  records,
+  recordsLoading,
 }: {
   set: WorkoutSet;
   exerciseType: ExerciseType;
-  exerciseId: string;
   weightUnit: WeightUnit;
+  records: ReturnType<typeof useExerciseRecords>["records"];
+  recordsLoading: boolean;
 }) {
   const t = useTranslations("workouts");
   const fields = EXERCISE_FIELD_MAP[exerciseType];
-  const { records, isLoading: recordsLoading } =
-    useExerciseRecords(exerciseId);
 
   const dynamicCols = [
     fields.showWeight,

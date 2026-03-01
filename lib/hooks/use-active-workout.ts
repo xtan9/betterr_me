@@ -151,8 +151,10 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
             const activeData = (await activeRes.json()) as ActiveWorkoutResponse;
             if (activeData.workout) persistToStorage(activeData.workout);
             return activeData;
-          } catch {
-            // Revalidation failed — return undefined so SWR triggers a background refetch
+          } catch (err) {
+            log.warn("addExercise revalidation failed, falling back to SWR refetch", {
+              error: String(err),
+            });
             return undefined;
           }
         },

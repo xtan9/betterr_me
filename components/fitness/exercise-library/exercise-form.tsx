@@ -34,49 +34,8 @@ import {
   exerciseFormSchema,
   type ExerciseFormValues,
 } from "@/lib/validations/exercise";
-import type { Exercise, MuscleGroup, Equipment, ExerciseType } from "@/lib/db/types";
-
-const MUSCLE_GROUPS: MuscleGroup[] = [
-  "chest",
-  "back",
-  "shoulders",
-  "biceps",
-  "triceps",
-  "forearms",
-  "core",
-  "quadriceps",
-  "hamstrings",
-  "glutes",
-  "calves",
-  "traps",
-  "lats",
-  "full_body",
-  "cardio",
-  "other",
-];
-
-const EQUIPMENT_TYPES: Equipment[] = [
-  "barbell",
-  "dumbbell",
-  "machine",
-  "bodyweight",
-  "kettlebell",
-  "cable",
-  "band",
-  "other",
-  "none",
-];
-
-const EXERCISE_TYPES: ExerciseType[] = [
-  "weight_reps",
-  "bodyweight_reps",
-  "weighted_bodyweight",
-  "assisted_bodyweight",
-  "duration",
-  "duration_weight",
-  "distance_duration",
-  "weight_distance",
-];
+import { MUSCLE_GROUPS, EQUIPMENT, EXERCISE_TYPES } from "@/lib/constants/enums";
+import type { Exercise } from "@/lib/db/types";
 
 interface ExerciseFormProps {
   open: boolean;
@@ -252,7 +211,7 @@ export function ExerciseForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {EQUIPMENT_TYPES.map((eq) => (
+                      {EQUIPMENT.map((eq) => (
                         <SelectItem key={eq} value={eq}>
                           {t(`equipmentTypes.${eq}`)}
                         </SelectItem>

@@ -32,6 +32,13 @@ export interface WorkoutSummary {
   totalSets: number;
 }
 
+/** Valid workout status transitions. Terminal states have no outgoing edges. */
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  in_progress: ["completed", "discarded"],
+  completed: [],
+  discarded: [],
+};
+
 /** CRUD for workouts. RLS handles user scoping. */
 export class WorkoutsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -57,7 +64,9 @@ export class WorkoutsDB {
     if (error) {
       if (error.code === "23505") {
         log.warn("Attempted to start workout while one is active", { userId });
-        throw new Error("You already have an active workout");
+        const err = new Error("You already have an active workout");
+        (err as Error & { code: string }).code = "23505";
+        throw err;
       }
       log.error("Failed to start workout", error);
       throw error;
@@ -166,6 +175,7 @@ export class WorkoutsDB {
    * Update a workout row. Handles status transitions:
    * - To 'completed': computes completed_at and duration_seconds.
    * - To 'discarded': just updates status.
+   * Validates state transitions — terminal states cannot be changed.
    */
   async updateWorkout(
     workoutId: string,
@@ -177,32 +187,41 @@ export class WorkoutsDB {
   ): Promise<Workout> {
     let finalUpdates: Record<string, unknown> = { ...updates };
 
-    // If completing, compute completed_at and duration_seconds
-    if (updates.status === "completed") {
-      // Fetch current workout to get started_at
+    // If status change is requested, validate the transition
+    if (updates.status) {
       const { data: current, error: fetchError } = await this.supabase
         .from("workouts")
-        .select("started_at")
+        .select("status, started_at")
         .eq("id", workoutId)
         .single();
 
       if (fetchError) {
-        log.error("Failed to fetch workout for completion", fetchError);
+        log.error("Failed to fetch workout for update", fetchError);
         throw fetchError;
       }
 
-      const completedAt = new Date().toISOString();
-      const durationSeconds = Math.floor(
-        (new Date(completedAt).getTime() -
-          new Date(current.started_at).getTime()) /
-          1000
-      );
+      const allowed = VALID_TRANSITIONS[current.status as string] ?? [];
+      if (!allowed.includes(updates.status)) {
+        throw new Error(
+          `Invalid status transition: ${current.status} → ${updates.status}`
+        );
+      }
 
-      finalUpdates = {
-        ...finalUpdates,
-        completed_at: completedAt,
-        duration_seconds: durationSeconds,
-      };
+      // If completing, compute completed_at and duration_seconds
+      if (updates.status === "completed") {
+        const completedAt = new Date().toISOString();
+        const durationSeconds = Math.floor(
+          (new Date(completedAt).getTime() -
+            new Date(current.started_at).getTime()) /
+            1000
+        );
+
+        finalUpdates = {
+          ...finalUpdates,
+          completed_at: completedAt,
+          duration_seconds: durationSeconds,
+        };
+      }
     }
 
     const { data, error } = await this.supabase
@@ -434,8 +453,9 @@ export class WorkoutsDB {
   }
 
   /**
-   * Get all completed normal sets for an exercise with workout started_at.
-   * Used by personal records computation.
+   * Get all sets for an exercise from completed workouts, filtered to
+   * completed normal sets in application code. Each set is enriched with
+   * the parent workout's started_at. Used by PR computation.
    */
   async getExerciseSets(
     exerciseId: string,

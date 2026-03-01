@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
@@ -31,6 +31,7 @@ import { MilestoneCards } from "@/components/habits/milestone-card";
 import { AbsenceCard } from "./absence-card";
 import { WorkoutStatsWidget } from "./workout-stats-widget";
 import { toast } from "sonner";
+import { log } from "@/lib/logger";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
 import { shouldTrackOnDate } from "@/lib/habits/format";
@@ -152,6 +153,14 @@ export function DashboardContent({
       keepPreviousData: true, // Prevent skeleton flash when date changes at midnight
     },
   );
+
+  // Log non-fatal degradation warnings from the API
+  useEffect(() => {
+    const warnings = (data as DashboardData & { _warnings?: string[] })?._warnings;
+    if (warnings?.length) {
+      for (const w of warnings) log.warn("Dashboard degradation", { warning: w });
+    }
+  }, [data]);
 
   // Weekly insight — only fetch on the user's week start day
   const dayOfWeek = new Date().getDay();
