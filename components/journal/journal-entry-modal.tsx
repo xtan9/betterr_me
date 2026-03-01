@@ -39,7 +39,8 @@ export function JournalEntryModal({
   const { entry, error: entryError, isLoading, mutate } = useJournalEntry(date);
   const { saveStatus, scheduleSave, flushNow } = useJournalAutosave(
     entry?.id ?? null,
-    date
+    date,
+    { onSaved: () => mutate() }
   );
 
   const [mood, setMood] = useState<MoodRating | null>(null);
@@ -87,21 +88,20 @@ export function JournalEntryModal({
     }
   }, [entryError, t]);
 
-  // Sync mood and prompt from loaded entry
-  useEffect(() => {
-    if (entry) {
-      setMood(entry.mood ?? null);
-      setPromptKey(entry.prompt_key ?? null);
-    }
-  }, [entry]);
-
-  // Reset dirty state when modal opens with new data
+  // Reset dirty state when modal opens/date changes
   useEffect(() => {
     if (open) {
       setIsDirty(false);
-      setPromptKey(null);
     }
   }, [open, date]);
+
+  // Sync mood and prompt from entry (runs on open and when entry loads)
+  useEffect(() => {
+    if (open) {
+      setMood(entry?.mood ?? null);
+      setPromptKey(entry?.prompt_key ?? null);
+    }
+  }, [open, entry]);
 
   const handleEditorUpdate = useCallback(
     (json: Record<string, unknown>, wc: number) => {
@@ -186,14 +186,15 @@ export function JournalEntryModal({
   }, [entry, mutate, onOpenChange, t]);
 
   const handleOpenChange = useCallback(
-    (newOpen: boolean) => {
+    async (newOpen: boolean) => {
       if (!newOpen) {
-        // Closing: flush pending changes
-        flushNow();
+        // Closing: flush pending changes and revalidate SWR before closing
+        await flushNow();
+        await mutate();
       }
       onOpenChange(newOpen);
     },
-    [flushNow, onOpenChange]
+    [flushNow, mutate, onOpenChange]
   );
 
   const title = entry ? t("journal.editEntry") : t("journal.newEntry");
