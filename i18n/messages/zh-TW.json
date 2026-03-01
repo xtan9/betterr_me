@@ -992,7 +992,8 @@
       "duration_weight": "時長 + 負重",
       "distance_duration": "距離 + 時長",
       "weight_distance": "負重 + 距離"
-    }
+    },
+    "loadError": "載入動作失敗"
   },
   "workouts": {
     "title": "訓練",
@@ -1098,7 +1099,16 @@
     "loadError": "載入資料失敗",
     "retry": "重試",
     "finishError": "完成訓練失敗",
-    "discardError": "丟棄訓練失敗"
+    "discardError": "丟棄訓練失敗",
+    "completeSetError": "完成組數失敗",
+    "addSetError": "新增組數失敗",
+    "updateSetError": "更新組數失敗",
+    "deleteSetError": "刪除組數失敗",
+    "updateNotesError": "更新備註失敗",
+    "updateRestTimerError": "更新休息計時器失敗",
+    "removeExerciseError": "移除動作失敗",
+    "addExerciseError": "新增動作失敗",
+    "startError": "開始訓練失敗"
   },
   "routines": {
     "title": "訓練計畫",

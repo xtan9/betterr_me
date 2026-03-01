@@ -992,7 +992,8 @@
       "duration_weight": "Duration + Weight",
       "distance_duration": "Distance + Duration",
       "weight_distance": "Weight + Distance"
-    }
+    },
+    "loadError": "Failed to load exercises"
   },
   "workouts": {
     "title": "Workouts",
@@ -1098,7 +1099,16 @@
     "loadError": "Failed to load data",
     "retry": "Retry",
     "finishError": "Failed to finish workout",
-    "discardError": "Failed to discard workout"
+    "discardError": "Failed to discard workout",
+    "completeSetError": "Failed to complete set",
+    "addSetError": "Failed to add set",
+    "updateSetError": "Failed to update set",
+    "deleteSetError": "Failed to delete set",
+    "updateNotesError": "Failed to update notes",
+    "updateRestTimerError": "Failed to update rest timer",
+    "removeExerciseError": "Failed to remove exercise",
+    "addExerciseError": "Failed to add exercise",
+    "startError": "Failed to start workout"
   },
   "routines": {
     "title": "Routines",

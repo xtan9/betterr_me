@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import useSWR from "swr";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { log } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { fetcher } from "@/lib/fetcher";
 import type { WorkoutWithExercises } from "@/lib/db/types";
@@ -48,8 +49,9 @@ export function StartWorkoutButton() {
       }
 
       router.push("/workouts/active");
-    } catch {
-      toast.error("Failed to start workout");
+    } catch (error) {
+      log.error("Failed to start workout", error);
+      toast.error(t("startError"));
     } finally {
       setIsStarting(false);
     }

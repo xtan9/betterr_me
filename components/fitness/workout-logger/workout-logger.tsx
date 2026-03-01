@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
+import { log } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import {
   useActiveWorkout,
@@ -71,12 +72,14 @@ export function WorkoutLogger() {
     setId: string,
     restTimerSeconds: number
   ) => {
-    const shouldStartTimer = await actions.completeSet(
-      workoutExerciseId,
-      setId
-    );
-    if (shouldStartTimer && restTimerSeconds > 0) {
-      restTimer.start(restTimerSeconds);
+    try {
+      await actions.completeSet(workoutExerciseId, setId);
+      if (restTimerSeconds > 0) {
+        restTimer.start(restTimerSeconds);
+      }
+    } catch (error) {
+      log.error("Failed to complete set", error);
+      toast.error(t("completeSetError"));
     }
   };
 
@@ -105,11 +108,18 @@ export function WorkoutLogger() {
             key={exercise.id}
             exercise={exercise}
             weightUnit={weightUnit}
-            onAddSet={() => actions.addSet(exercise.id)}
-            onUpdateSet={(setId, updates) =>
-              actions.updateSet(exercise.id, setId, updates)
-            }
-            onDeleteSet={(setId) => actions.deleteSet(exercise.id, setId)}
+            onAddSet={async () => {
+              try { await actions.addSet(exercise.id); }
+              catch (error) { log.error("Failed to add set", error); toast.error(t("addSetError")); }
+            }}
+            onUpdateSet={async (setId, updates) => {
+              try { await actions.updateSet(exercise.id, setId, updates); }
+              catch (error) { log.error("Failed to update set", error); toast.error(t("updateSetError")); }
+            }}
+            onDeleteSet={async (setId) => {
+              try { await actions.deleteSet(exercise.id, setId); }
+              catch (error) { log.error("Failed to delete set", error); toast.error(t("deleteSetError")); }
+            }}
             onCompleteSet={(setId) =>
               handleCompleteSet(
                 exercise.id,
@@ -117,13 +127,18 @@ export function WorkoutLogger() {
                 exercise.rest_timer_seconds
               )
             }
-            onUpdateNotes={(notes) =>
-              actions.updateExerciseNotes(exercise.id, notes)
-            }
-            onUpdateRestTimer={(seconds) =>
-              actions.updateExerciseRestTimer(exercise.id, seconds)
-            }
-            onRemoveExercise={() => actions.removeExercise(exercise.id)}
+            onUpdateNotes={async (notes) => {
+              try { await actions.updateExerciseNotes(exercise.id, notes); }
+              catch (error) { log.error("Failed to update notes", error); toast.error(t("updateNotesError")); }
+            }}
+            onUpdateRestTimer={async (seconds) => {
+              try { await actions.updateExerciseRestTimer(exercise.id, seconds); }
+              catch (error) { log.error("Failed to update rest timer", error); toast.error(t("updateRestTimerError")); }
+            }}
+            onRemoveExercise={async () => {
+              try { await actions.removeExercise(exercise.id); }
+              catch (error) { log.error("Failed to remove exercise", error); toast.error(t("removeExerciseError")); }
+            }}
           />
         ))}
 
@@ -142,7 +157,10 @@ export function WorkoutLogger() {
       <WorkoutAddExercise
         open={addExerciseOpen}
         onOpenChange={setAddExerciseOpen}
-        onSelectExercise={(id) => actions.addExercise(id)}
+        onSelectExercise={async (id) => {
+          try { await actions.addExercise(id); }
+          catch (error) { log.error("Failed to add exercise", error); toast.error(t("addExerciseError")); }
+        }}
         workoutExerciseIds={workout.exercises.map((e) => e.exercise_id)}
       />
 
@@ -157,7 +175,8 @@ export function WorkoutLogger() {
           try {
             await actions.finishWorkout();
             setShowFinishDialog(false);
-          } catch {
+          } catch (error) {
+            log.error("Failed to finish workout", error);
             toast.error(t("finishError"));
           }
         }}
@@ -171,7 +190,8 @@ export function WorkoutLogger() {
           try {
             await actions.discardWorkout();
             setShowDiscardDialog(false);
-          } catch {
+          } catch (error) {
+            log.error("Failed to discard workout", error);
             toast.error(t("discardError"));
           }
         }}

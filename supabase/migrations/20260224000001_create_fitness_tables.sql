@@ -126,7 +126,7 @@ CREATE TABLE workouts (
   completed_at TIMESTAMPTZ,
   duration_seconds INTEGER,
   status TEXT NOT NULL DEFAULT 'in_progress'
-    CHECK (status IN ('in_progress', 'completed')),
+    CHECK (status IN ('in_progress', 'completed')), -- NOTE: 'discarded' status added in migration 20260224000003
   notes TEXT,
   routine_id UUID REFERENCES routines(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),

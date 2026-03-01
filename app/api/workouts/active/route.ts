@@ -30,9 +30,14 @@ export async function GET() {
     // Enrich each exercise with previous sets from the most recent completed workout
     const enrichedExercises = await Promise.all(
       (workout.exercises ?? []).map(async (exercise) => {
-        const previousSets = await workoutsDB.getPreviousSets(
-          exercise.exercise_id
-        );
+        const previousSets = await workoutsDB
+          .getPreviousSets(exercise.exercise_id)
+          .catch((err) => {
+            log.error("Failed to fetch previous sets", err, {
+              exerciseId: exercise.exercise_id,
+            });
+            return [];
+          });
         return {
           ...exercise,
           previousSets,

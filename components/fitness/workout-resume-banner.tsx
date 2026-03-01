@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import useSWR from "swr";
 import { Dumbbell } from "lucide-react";
 import { toast } from "sonner";
+import { log } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { fetcher } from "@/lib/fetcher";
 import { WorkoutDiscardDialog } from "@/components/fitness/workout-logger/workout-discard-dialog";
@@ -47,7 +48,7 @@ export function WorkoutResumeBanner() {
 
   // Banner is non-critical — log and hide on error
   if (error) {
-    console.error("Failed to check active workout", error);
+    log.error("Failed to check active workout", error);
     return null;
   }
 
@@ -76,7 +77,7 @@ export function WorkoutResumeBanner() {
       mutate({ workout: null }, false);
       setShowDiscard(false);
     } catch (error) {
-      console.error("Failed to discard workout", error);
+      log.error("Failed to discard workout", error);
       toast.error(t("discardError"));
     } finally {
       setIsDiscarding(false);

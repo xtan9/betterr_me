@@ -171,13 +171,15 @@ export class RoutinesDB {
     }
   ): Promise<RoutineExercise> {
     // Compute next sort_order
-    const { data: maxRow } = await this.supabase
+    const { data: maxRow, error: sortError } = await this.supabase
       .from("routine_exercises")
       .select("sort_order")
       .eq("routine_id", routineId)
       .order("sort_order", { ascending: false })
       .limit(1)
       .single();
+
+    if (sortError && sortError.code !== "PGRST116") { log.error("Failed to get routine exercise sort order", sortError); throw sortError; }
 
     // 65536 (2^16) gap allows ~52 bisection levels for drag-and-drop reordering without renumbering
     const nextSortOrder = maxRow

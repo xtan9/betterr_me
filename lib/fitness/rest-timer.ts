@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { log } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Audio — lazy-init AudioContext (NOT at module scope per Web Audio best practice)
@@ -37,7 +38,7 @@ export function playBeep(frequency = 440, durationMs = 200): void {
     oscillator.start();
     oscillator.stop(audioContext.currentTime + durationMs / 1000);
   } catch (err) {
-    console.warn("Audio playback failed", err);
+    log.warn("Audio playback failed", { error: String(err) });
   }
 }
 
@@ -154,6 +155,7 @@ export function useRestTimer(): UseRestTimerReturn {
   // Public API
   // -----------------------------------------------------------------------
   const start = useCallback((durationSeconds: number) => {
+    if (durationSeconds <= 0) return;
     hasBeeped.current = false;
     if (autoDismissRef.current) {
       clearTimeout(autoDismissRef.current);

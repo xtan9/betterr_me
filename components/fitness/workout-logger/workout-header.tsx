@@ -17,6 +17,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { toast } from "sonner";
+import { log } from "@/lib/logger";
 import type { ActiveWorkout } from "@/lib/hooks/use-active-workout";
 import type { UseRestTimerReturn } from "@/lib/fitness/rest-timer";
 
@@ -93,7 +95,10 @@ export function WorkoutHeader({
     setIsEditingTitle(false);
     const trimmed = titleValue.trim();
     if (trimmed && trimmed !== workout.title) {
-      void onUpdateWorkout({ title: trimmed });
+      void onUpdateWorkout({ title: trimmed }).catch((err) => {
+        log.error("Failed to update workout title", err);
+        toast.error(t("updateError"));
+      });
     } else {
       setTitleValue(workout.title);
     }
@@ -117,7 +122,10 @@ export function WorkoutHeader({
       // Debounce PATCH for notes
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        void onUpdateWorkout({ notes: value || null });
+        void onUpdateWorkout({ notes: value || null }).catch((err) => {
+          log.error("Failed to update workout notes", err);
+          toast.error(t("updateError"));
+        });
       }, 500);
     },
     [onUpdateWorkout]

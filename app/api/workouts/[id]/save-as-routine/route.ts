@@ -9,7 +9,7 @@ import type { Routine, WorkoutSet } from "@/lib/db/types";
 
 /**
  * POST /api/workouts/[id]/save-as-routine
- * Creates a new routine from a completed workout's exercises and sets.
+ * Creates a new routine from a workout's exercises and sets.
  * Works for in_progress, completed, or discarded workouts.
  */
 export async function POST(

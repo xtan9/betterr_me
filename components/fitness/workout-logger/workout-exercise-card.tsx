@@ -70,14 +70,15 @@ export function WorkoutExerciseCard({
   const previousSets = exercise.previousSets ?? [];
 
   // Fetch current PR for this exercise (for mid-workout PR detection)
-  const { records: currentPR } = useExerciseRecords(exerciseInfo.id);
+  // Skip PR detection when records fetch fails to avoid false-positive banners
+  const { records: currentPR, error: recordsError } = useExerciseRecords(exerciseInfo.id);
 
   // Wrap onCompleteSet to check for PR before the async mutation (snapshot value before async mutation)
   const handleCompleteSetWithPR = useCallback(
     async (setId: string) => {
       // Capture set data BEFORE the async mutation
       const completedSet = exercise.sets.find((s) => s.id === setId);
-      if (completedSet) {
+      if (completedSet && !recordsError) {
         const setSnapshot = { ...completedSet, is_completed: true };
         const prResult: PRCheckResult = isNewPR(
           setSnapshot,
@@ -113,7 +114,7 @@ export function WorkoutExerciseCard({
       // Fire the actual completion (async mutation)
       await onCompleteSet(setId);
     },
-    [exercise.sets, exerciseInfo.exercise_type, currentPR, onCompleteSet]
+    [exercise.sets, exerciseInfo.exercise_type, currentPR, recordsError, onCompleteSet]
   );
 
   const handleNotesBlur = () => {

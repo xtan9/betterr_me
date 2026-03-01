@@ -8,8 +8,8 @@ import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
 /**
  * Compute personal records from an array of completed sets.
  * Identifies the best weight, reps, volume (weight * reps), and duration
- * across all provided sets. Uses the workout_started_at enrichment to
- * determine when each PR was achieved.
+ * across all provided sets. Returns a single achieved_at from the
+ * highest-priority PR (weight > volume > reps > duration).
  */
 export function computePersonalRecords(
   exerciseId: string,
@@ -69,7 +69,7 @@ export function computePersonalRecords(
       bestVolume?.date ??
       bestReps?.date ??
       bestDuration?.date ??
-      "",
+      null,
   };
 }
 

@@ -6,6 +6,7 @@ import type {
   Equipment,
   ExerciseType,
 } from "./types";
+import { log } from "@/lib/logger";
 
 /** Fields required to create a custom exercise (user_id and is_custom set by DB class). */
 export interface CreateExerciseInput {
@@ -26,7 +27,7 @@ export class ExercisesDB {
       .from("exercises")
       .select("*")
       .order("name", { ascending: true });
-    if (error) throw error;
+    if (error) { log.error("Failed to get exercises", error); throw error; }
     return data ?? [];
   }
 
@@ -39,7 +40,7 @@ export class ExercisesDB {
       .single();
     if (error) {
       if (error.code === "PGRST116") return null;
-      throw error;
+      log.error("Failed to get exercise", error); throw error;
     }
     return data;
   }
@@ -59,7 +60,7 @@ export class ExercisesDB {
       })
       .select()
       .single();
-    if (error) throw error;
+    if (error) { log.error("Failed to create exercise", error); throw error; }
     return data;
   }
 
@@ -71,7 +72,7 @@ export class ExercisesDB {
       .eq("id", id)
       .select()
       .single();
-    if (error) throw error;
+    if (error) { log.error("Failed to update exercise", error); throw error; }
     return data;
   }
 
@@ -90,7 +91,7 @@ export class ExercisesDB {
           "This exercise has been used in workouts and cannot be deleted."
         );
       }
-      throw error;
+      log.error("Failed to delete exercise", error); throw error;
     }
   }
 }

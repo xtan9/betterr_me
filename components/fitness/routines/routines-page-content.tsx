@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { log } from "@/lib/logger";
 import { Plus, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -56,7 +57,8 @@ export function RoutinesPageContent() {
         }
 
         router.push("/workouts/active");
-      } catch {
+      } catch (error) {
+        log.error("Failed to start workout from routine", error);
         toast.error(t("startError"));
       }
     },

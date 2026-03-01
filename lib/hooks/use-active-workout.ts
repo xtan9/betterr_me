@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import useSWR, { type KeyedMutator } from "swr";
 import { fetcher } from "@/lib/fetcher";
+import { log } from "@/lib/logger";
 import type {
   WorkoutWithExercises,
   WorkoutExerciseWithDetails,
@@ -144,10 +145,16 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
           );
           if (!res.ok) await throwResponseError(res, "Failed to add exercise");
           // Revalidate to get the exercise with details, previous sets, etc.
-          const activeRes = await fetch(SWR_KEY);
-          const activeData = (await activeRes.json()) as ActiveWorkoutResponse;
-          if (activeData.workout) persistToStorage(activeData.workout);
-          return activeData;
+          // Wrap in try-catch so a revalidation failure doesn't revert the optimistic update
+          try {
+            const activeRes = await fetch(SWR_KEY);
+            const activeData = (await activeRes.json()) as ActiveWorkoutResponse;
+            if (activeData.workout) persistToStorage(activeData.workout);
+            return activeData;
+          } catch {
+            // Revalidation failed — return undefined so SWR triggers a background refetch
+            return undefined;
+          }
         },
         { revalidate: false }
       );
@@ -508,7 +515,7 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
 // ---------------------------------------------------------------------------
 
 export function useWeightUnit(): WeightUnit {
-  const { data } = useSWR<{ preferences?: { weight_unit?: string } }>(
+  const { data, error } = useSWR<{ preferences?: { weight_unit?: string } }>(
     "/api/profile",
     fetcher,
     {
@@ -516,5 +523,9 @@ export function useWeightUnit(): WeightUnit {
       revalidateOnFocus: false,
     }
   );
-  return (data?.preferences?.weight_unit as WeightUnit) ?? "kg";
+  if (error) {
+    log.warn("Failed to load weight unit preference, defaulting to kg", { error: String(error) });
+  }
+  const raw = data?.preferences?.weight_unit;
+  return raw === "lbs" ? "lbs" : "kg";
 }

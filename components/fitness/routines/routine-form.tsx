@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { log } from "@/lib/logger";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,7 +82,8 @@ export function RoutineForm({
 
         toast.success(t("exerciseAdded"));
         mutate();
-      } catch {
+      } catch (error) {
+        log.error("Failed to add exercise to routine", error);
         toast.error(t("addExerciseError"));
       }
     },
@@ -108,7 +110,8 @@ export function RoutineForm({
         }
 
         mutate();
-      } catch {
+      } catch (error) {
+        log.error("Failed to update routine exercise", error);
         toast.error(t("updateExerciseError"));
       }
     },
@@ -132,7 +135,8 @@ export function RoutineForm({
 
         toast.success(t("exerciseRemoved"));
         mutate();
-      } catch {
+      } catch (error) {
+        log.error("Failed to remove exercise from routine", error);
         toast.error(t("removeExerciseError"));
       }
     },

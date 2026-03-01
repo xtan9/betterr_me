@@ -24,7 +24,7 @@ import type { Exercise, MuscleGroup, Equipment } from "@/lib/db/types";
 
 export function ExerciseLibrary() {
   const t = useTranslations("exercises");
-  const { exercises, isLoading, mutate } = useExercises();
+  const { exercises, error, isLoading, mutate } = useExercises();
 
   // Filter state
   const [search, setSearch] = useState("");
@@ -127,6 +127,14 @@ export function ExerciseLibrary() {
             <Skeleton key={i} className="h-28" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <p>{t("loadError")}</p>
       </div>
     );
   }

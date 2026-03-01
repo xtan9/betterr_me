@@ -16,13 +16,15 @@ export class WorkoutExercisesDB {
     restTimerSeconds?: number
   ): Promise<WorkoutExercise> {
     // Compute next sort_order
-    const { data: maxRow } = await this.supabase
+    const { data: maxRow, error: sortError } = await this.supabase
       .from("workout_exercises")
       .select("sort_order")
       .eq("workout_id", workoutId)
       .order("sort_order", { ascending: false })
       .limit(1)
       .single();
+
+    if (sortError && sortError.code !== "PGRST116") { log.error("Failed to get workout exercise sort order", sortError); throw sortError; }
 
     // 65536 (2^16) gap allows ~52 bisection levels for drag-and-drop reordering without renumbering
     const nextSortOrder = maxRow ? (maxRow.sort_order as number) + 65536.0 : 65536.0;
@@ -99,13 +101,15 @@ export class WorkoutExercisesDB {
     }
   ): Promise<WorkoutSet> {
     // Compute next set_number
-    const { data: maxRow } = await this.supabase
+    const { data: maxRow, error: setNumError } = await this.supabase
       .from("workout_sets")
       .select("set_number")
       .eq("workout_exercise_id", workoutExerciseId)
       .order("set_number", { ascending: false })
       .limit(1)
       .single();
+
+    if (setNumError && setNumError.code !== "PGRST116") { log.error("Failed to get set number", setNumError); throw setNumError; }
 
     const nextSetNumber = maxRow ? (maxRow.set_number as number) + 1 : 1;
 
