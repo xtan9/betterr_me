@@ -39,6 +39,12 @@ const mockHabitLogsDB = {
 const mockMilestonesDB = {
   getTodaysMilestones: vi.fn().mockResolvedValue([]),
 };
+const mockProfilesDB = {
+  getProfile: vi.fn().mockResolvedValue({
+    id: 'user-123',
+    preferences: { week_start_day: 1, date_format: 'YYYY-MM-DD', theme: 'system', weight_unit: 'kg' },
+  }),
+};
 
 vi.mock('@/lib/db', () => ({
   HabitsDB: class {
@@ -52,6 +58,9 @@ vi.mock('@/lib/db', () => ({
   },
   HabitMilestonesDB: class {
     constructor() { return mockMilestonesDB; }
+  },
+  ProfilesDB: class {
+    constructor() { return mockProfilesDB; }
   },
 }));
 

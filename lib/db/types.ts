@@ -534,7 +534,7 @@ export type WorkoutInsert = Omit<
 };
 
 export type WorkoutUpdate = Partial<
-  Omit<Workout, "id" | "user_id" | "created_at" | "updated_at">
+  Omit<Workout, "id" | "user_id" | "created_at" | "updated_at" | "completed_at" | "duration_seconds">
 >;
 
 // =============================================================================

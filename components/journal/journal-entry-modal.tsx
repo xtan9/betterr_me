@@ -186,14 +186,18 @@ export function JournalEntryModal({
   }, [entry, mutate, onOpenChange, t]);
 
   const handleOpenChange = useCallback(
-    (newOpen: boolean) => {
+    async (newOpen: boolean) => {
       if (!newOpen) {
-        // Closing: flush pending changes
-        flushNow();
+        // Closing: flush pending changes — await so we can notify on failure
+        try {
+          await flushNow();
+        } catch {
+          toast.error(t("journal.saveError"));
+        }
       }
       onOpenChange(newOpen);
     },
-    [flushNow, onOpenChange]
+    [flushNow, onOpenChange, t]
   );
 
   const title = entry ? t("journal.editEntry") : t("journal.newEntry");

@@ -73,7 +73,11 @@ export function useJournalAutosave(
   const flushNow = useCallback(async () => {
     if (pendingRef.current) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      return save(pendingRef.current);
+      const result = await save(pendingRef.current);
+      if (result === null) {
+        throw new Error("Journal flush failed");
+      }
+      return result;
     }
     return null;
   }, [save]);

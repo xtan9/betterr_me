@@ -262,7 +262,7 @@ describe("JournalEntryModal", () => {
     });
   });
 
-  it("closing modal calls flushNow to save pending changes", () => {
+  it("closing modal calls flushNow to save pending changes", async () => {
     mockUseJournalEntry.mockReturnValue({
       entry: null,
       isLoading: false,
@@ -279,7 +279,10 @@ describe("JournalEntryModal", () => {
     fireEvent.click(closeButton);
 
     expect(mockFlushNow).toHaveBeenCalled();
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    // handleOpenChange is now async (awaits flushNow), so onOpenChange fires asynchronously
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
   });
 
   it("shows word count in footer", () => {

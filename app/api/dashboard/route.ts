@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
+import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB, ProfilesDB } from '@/lib/db';
 import { WorkoutsDB } from '@/lib/db/workouts';
 import { type DashboardData, type HabitLog, type HabitMilestone, ZERO_ABSENCE } from '@/lib/db/types';
 import { getLocalDateString, getNextDateString } from '@/lib/utils';
@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     const habitLogsDB = new HabitLogsDB(supabase);
     const milestonesDB = new HabitMilestonesDB(supabase);
     const workoutsDB = new WorkoutsDB(supabase);
+    const profilesDB = new ProfilesDB(supabase);
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
 
@@ -81,9 +82,12 @@ export async function GET(request: NextRequest) {
     // Derive completed count from todayTasks (no separate DB call needed)
     const tasksCompletedToday = todayTasks.filter(t => t.is_completed).length;
 
-    // Compute week start date for workout count query
-    // Default week_start_day to Monday (1) — matches dashboard convention
-    const weekStartDay = 1;
+    // Compute week start date for workout count query using user's preference
+    const profile = await profilesDB.getProfile(user.id).catch((err) => {
+      log.error('Failed to fetch profile for week_start_day', err, { userId: user.id });
+      return null;
+    });
+    const weekStartDay = profile?.preferences?.week_start_day ?? 1;
     const currentDayOfWeek = new Date(year, month - 1, day).getDay();
     const daysToSubtract = (currentDayOfWeek - weekStartDay + 7) % 7;
     const weekStartDate = getLocalDateString(new Date(year, month - 1, day - daysToSubtract));

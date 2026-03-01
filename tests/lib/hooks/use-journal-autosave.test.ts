@@ -274,6 +274,27 @@ describe("useJournalAutosave", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
+  it("flushNow throws when save fails", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ error: "Server error" }),
+    });
+
+    const { result } = renderHook(() =>
+      useJournalAutosave(null, "2026-02-23")
+    );
+
+    act(() => {
+      result.current.scheduleSave({ content: { type: "doc" }, mood: 3 });
+    });
+
+    await act(async () => {
+      await expect(result.current.flushNow()).rejects.toThrow(
+        "Journal flush failed"
+      );
+    });
+  });
+
   it("flushNow returns null when there is no pending data", async () => {
     const { result } = renderHook(() =>
       useJournalAutosave(null, "2026-02-23")
