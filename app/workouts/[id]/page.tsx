@@ -27,7 +27,14 @@ export default async function WorkoutDetailPage({
   }
 
   const workoutsDB = new WorkoutsDB(supabase);
-  const workout = await workoutsDB.getWorkoutWithExercises(id);
+
+  let workout;
+  try {
+    workout = await workoutsDB.getWorkoutWithExercises(id);
+  } catch (error) {
+    log.error("Failed to fetch workout detail", { workoutId: id, error });
+    notFound();
+  }
 
   if (!workout) {
     notFound();

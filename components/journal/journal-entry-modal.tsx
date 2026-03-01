@@ -60,6 +60,7 @@ export function JournalEntryModal({
         await removeLink(entry.id, linkId);
         await mutateLinks();
       } catch (error) {
+        // Client component — console.error is intentional (no server log module)
         console.error("Failed to remove journal link", error);
         toast.error(t("journal.links.removeError"));
       }
@@ -180,6 +181,7 @@ export function JournalEntryModal({
       toast.success(t("journal.deleteConfirm.title"));
       onOpenChange(false);
     } catch (error) {
+      // Client component — console.error is intentional (no server log module)
       console.error("Failed to delete journal entry", error);
       toast.error(t("journal.deleteError"));
     }
