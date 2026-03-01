@@ -400,6 +400,86 @@ describe("useJournalAutosave", () => {
     expect(body.entry_date).toBe("2026-02-23");
   });
 
+  describe("onSaved callback", () => {
+    it("onSaved called after successful save", async () => {
+      const onSaved = vi.fn();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ entry: { id: "new-id" } }),
+      });
+
+      const { result } = renderHook(() =>
+        useJournalAutosave(null, "2026-02-23", { onSaved })
+      );
+
+      act(() => {
+        result.current.scheduleSave({ content: { type: "doc" } });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      await act(async () => {});
+
+      expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+
+    it("onSaved NOT called on save failure", async () => {
+      const onSaved = vi.fn();
+      mockFetch.mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({ error: "bad" }),
+      });
+
+      const { result } = renderHook(() =>
+        useJournalAutosave(null, "2026-02-23", { onSaved })
+      );
+
+      act(() => {
+        result.current.scheduleSave({ content: { type: "doc" } });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      await act(async () => {});
+
+      expect(onSaved).not.toHaveBeenCalled();
+    });
+
+    it("async onSaved rejection is caught and saveStatus remains saved", async () => {
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const onSaved = vi.fn().mockRejectedValue(new Error("callback boom"));
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ entry: { id: "new-id" } }),
+      });
+
+      const { result } = renderHook(() =>
+        useJournalAutosave(null, "2026-02-23", { onSaved })
+      );
+
+      act(() => {
+        result.current.scheduleSave({ content: { type: "doc" } });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      await act(async () => {});
+
+      expect(result.current.saveStatus).toBe("saved");
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "Journal onSaved callback failed",
+        expect.any(Error)
+      );
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
   it("beforeunload: sendBeacon is NOT called without pending data", () => {
     renderHook(() => useJournalAutosave(null, "2026-02-23"));
 

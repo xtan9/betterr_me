@@ -6,7 +6,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface AutosaveOptions {
   delay?: number;
-  onSaved?: () => void;
+  onSaved?: () => void | Promise<void>;
 }
 
 export function useJournalAutosave(
@@ -55,7 +55,11 @@ export function useJournalAutosave(
 
         pendingRef.current = null;
         setSaveStatus("saved");
-        onSavedRef.current?.();
+        try {
+          await onSavedRef.current?.();
+        } catch (callbackError) {
+          console.error("Journal onSaved callback failed", callbackError);
+        }
         return result.entry;
       } catch (error) {
         console.error("Journal autosave failed", { entryId: entryIdRef.current, entryDate, error });

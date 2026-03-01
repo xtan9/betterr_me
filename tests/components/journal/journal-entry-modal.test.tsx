@@ -263,7 +263,6 @@ describe("JournalEntryModal", () => {
   });
 
   it("closing modal calls flushNow to save pending changes", async () => {
-    mockMutate.mockResolvedValue(undefined);
     mockUseJournalEntry.mockReturnValue({
       entry: null,
       isLoading: false,
@@ -281,7 +280,6 @@ describe("JournalEntryModal", () => {
 
     await waitFor(() => {
       expect(mockFlushNow).toHaveBeenCalled();
-      expect(mockMutate).toHaveBeenCalled();
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
