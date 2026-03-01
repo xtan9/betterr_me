@@ -28,6 +28,20 @@ vi.mock("sonner", () => ({
 
 // Namespace-aware mock matching next-intl's useTranslations behavior
 const allTranslations: Record<string, Record<string, string>> = {
+  categories: {
+    "defaults.Errands": "Errands",
+    "defaults.Health": "Health",
+    "defaults.Finance": "Finance",
+    "defaults.Home": "Home",
+    "defaults.Social": "Social",
+    "defaults.Learning": "Learning",
+    "defaults.Meetings": "Meetings",
+    "defaults.Planning": "Planning",
+    "defaults.Development": "Development",
+    "defaults.Research": "Research",
+    "defaults.Admin": "Admin",
+    "defaults.Review": "Review",
+  },
   tasks: {
     "detail.title": "Task Details",
     "detail.edit": "Edit",
