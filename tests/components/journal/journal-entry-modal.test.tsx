@@ -284,6 +284,27 @@ describe("JournalEntryModal", () => {
     });
   });
 
+  it("closing modal still calls onOpenChange when flushNow rejects", async () => {
+    mockFlushNow.mockRejectedValueOnce(new Error("save failed"));
+    mockUseJournalEntry.mockReturnValue({
+      entry: null,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    const onOpenChange = vi.fn();
+    render(
+      <JournalEntryModal {...defaultProps} onOpenChange={onOpenChange} />
+    );
+
+    const closeButton = screen.getByRole("button", { name: "Close" });
+    fireEvent.click(closeButton);
+
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+
   it("shows word count in footer", () => {
     mockUseJournalEntry.mockReturnValue({
       entry: null,

@@ -40,7 +40,7 @@ export function JournalEntryModal({
   const { saveStatus, scheduleSave, flushNow } = useJournalAutosave(
     entry?.id ?? null,
     date,
-    { onSaved: () => { mutate(); } }
+    { onSaved: async () => { await mutate(); } }
   );
 
   const [mood, setMood] = useState<MoodRating | null>(null);
@@ -192,6 +192,7 @@ export function JournalEntryModal({
           await flushNow();
         } catch (error) {
           console.error("Failed to flush journal changes on close", error);
+          toast.error(t("journal.saveError"));
         }
       }
       onOpenChange(newOpen);
