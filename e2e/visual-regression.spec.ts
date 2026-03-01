@@ -51,6 +51,8 @@ test.describe('Visual Regression', () => {
         page.locator('[data-testid="stat-card"]'),
         // Mask habit checklist and tasks (content varies with parallel tests)
         page.locator('[role="checkbox"]'),
+        // Mask journal widget (dynamic entry text, mood emoji, streak, on-this-day)
+        page.locator('[data-testid="journal-widget"], [data-testid="journal-widget-loading"], [data-testid="journal-widget-error"]'),
       ],
     });
   });
@@ -74,6 +76,8 @@ test.describe('Visual Regression', () => {
         dashboard.greeting,
         page.locator('[data-testid="stat-card"]'),
         page.locator('[role="checkbox"]'),
+        // Mask journal widget (dynamic entry text, mood emoji, streak, on-this-day)
+        page.locator('[data-testid="journal-widget"], [data-testid="journal-widget-loading"], [data-testid="journal-widget-error"]'),
       ],
     });
   });

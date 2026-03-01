@@ -19,6 +19,7 @@ const storedWorkoutSchema = z.object({
   ),
 }).passthrough();
 
+
 /** localStorage key for active workout session state */
 export const STORAGE_KEY = "betterrme_active_workout";
 

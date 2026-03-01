@@ -39,7 +39,8 @@ export function JournalEntryModal({
   const { entry, error: entryError, isLoading, mutate } = useJournalEntry(date);
   const { saveStatus, scheduleSave, flushNow } = useJournalAutosave(
     entry?.id ?? null,
-    date
+    date,
+    { onSaved: async () => { await mutate(); } }
   );
 
   const [mood, setMood] = useState<MoodRating | null>(null);
@@ -88,21 +89,20 @@ export function JournalEntryModal({
     }
   }, [entryError, t]);
 
-  // Sync mood and prompt from loaded entry
-  useEffect(() => {
-    if (entry) {
-      setMood(entry.mood ?? null);
-      setPromptKey(entry.prompt_key ?? null);
-    }
-  }, [entry]);
-
-  // Reset dirty state when modal opens with new data
+  // Reset dirty state when modal opens/date changes
   useEffect(() => {
     if (open) {
       setIsDirty(false);
-      setPromptKey(null);
     }
   }, [open, date]);
+
+  // Sync mood and prompt from entry (runs on open and when entry loads)
+  useEffect(() => {
+    if (open) {
+      setMood(entry?.mood ?? null);
+      setPromptKey(entry?.prompt_key ?? null);
+    }
+  }, [open, entry]);
 
   const handleEditorUpdate = useCallback(
     (json: Record<string, unknown>, wc: number) => {
@@ -193,7 +193,9 @@ export function JournalEntryModal({
         // Closing: flush pending changes — await so we can notify on failure
         try {
           await flushNow();
-        } catch {
+        } catch (error) {
+          // Client component — console.error is intentional (no server log module)
+          console.error("Failed to flush journal changes on close", error);
           toast.error(t("journal.saveError"));
         }
       }

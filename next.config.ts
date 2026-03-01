@@ -6,7 +6,16 @@ const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
 const nextConfig: NextConfig = {
   experimental: {
-    optimizePackageImports: ['lucide-react', 'radix-ui', 'date-fns'],
+    optimizePackageImports: [
+      'lucide-react',
+      'radix-ui',
+      'date-fns',
+      '@tiptap/starter-kit',
+      '@tiptap/react',
+      '@tiptap/pm',
+      '@tiptap/extensions',
+      '@tiptap/extension-list',
+    ],
   },
   images: {
     remotePatterns: [

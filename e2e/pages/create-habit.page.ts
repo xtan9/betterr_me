@@ -51,6 +51,8 @@ export class CreateHabitPage {
   /** Wait for redirect to habits list after successful creation */
   async waitForRedirect() {
     await this.page.waitForURL('/habits', { timeout: 10000 });
+    // Wait for habit list to render after SWR fetch (networkidle hangs due to SWR polling)
+    await this.page.locator('[data-testid^="habit-card"]').first().waitFor({ timeout: 15000 });
   }
 
   /** Validation error message */

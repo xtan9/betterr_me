@@ -275,9 +275,10 @@ describe("useJournalAutosave", () => {
   });
 
   it("flushNow throws when save fails", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     mockFetch.mockResolvedValue({
       ok: false,
-      json: () => Promise.resolve({ error: "Server error" }),
+      json: () => Promise.resolve({ error: "server error" }),
     });
 
     const { result } = renderHook(() =>
@@ -285,14 +286,15 @@ describe("useJournalAutosave", () => {
     );
 
     act(() => {
-      result.current.scheduleSave({ content: { type: "doc" }, mood: 3 });
+      result.current.scheduleSave({ content: { type: "doc" } });
     });
 
     await act(async () => {
-      await expect(result.current.flushNow()).rejects.toThrow(
-        "Journal flush failed"
-      );
+      await expect(result.current.flushNow()).rejects.toThrow("Journal flush failed");
     });
+
+    expect(result.current.saveStatus).toBe("error");
+    consoleErrorSpy.mockRestore();
   });
 
   it("flushNow returns null when there is no pending data", async () => {
@@ -419,6 +421,86 @@ describe("useJournalAutosave", () => {
     // Verify body includes entry_date even for existing entries
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.entry_date).toBe("2026-02-23");
+  });
+
+  describe("onSaved callback", () => {
+    it("onSaved called after successful save", async () => {
+      const onSaved = vi.fn();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ entry: { id: "new-id" } }),
+      });
+
+      const { result } = renderHook(() =>
+        useJournalAutosave(null, "2026-02-23", { onSaved })
+      );
+
+      act(() => {
+        result.current.scheduleSave({ content: { type: "doc" } });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      await act(async () => {});
+
+      expect(onSaved).toHaveBeenCalledTimes(1);
+    });
+
+    it("onSaved NOT called on save failure", async () => {
+      const onSaved = vi.fn();
+      mockFetch.mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({ error: "bad" }),
+      });
+
+      const { result } = renderHook(() =>
+        useJournalAutosave(null, "2026-02-23", { onSaved })
+      );
+
+      act(() => {
+        result.current.scheduleSave({ content: { type: "doc" } });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      await act(async () => {});
+
+      expect(onSaved).not.toHaveBeenCalled();
+    });
+
+    it("async onSaved rejection is caught and saveStatus remains saved", async () => {
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const onSaved = vi.fn().mockRejectedValue(new Error("callback boom"));
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ entry: { id: "new-id" } }),
+      });
+
+      const { result } = renderHook(() =>
+        useJournalAutosave(null, "2026-02-23", { onSaved })
+      );
+
+      act(() => {
+        result.current.scheduleSave({ content: { type: "doc" } });
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      await act(async () => {});
+
+      expect(result.current.saveStatus).toBe("saved");
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "Journal onSaved callback failed",
+        expect.objectContaining({ callbackError: expect.any(Error) })
+      );
+      consoleErrorSpy.mockRestore();
+    });
   });
 
   it("beforeunload: sendBeacon is NOT called without pending data", () => {
