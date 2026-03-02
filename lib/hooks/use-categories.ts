@@ -5,12 +5,13 @@ import { fetcher } from "@/lib/fetcher";
 import type { Category } from "@/lib/db/types";
 
 export function useCategories() {
-  const { data, error, isLoading, mutate } = useSWR<{
+  const { data, error, mutate } = useSWR<{
     categories: Category[];
   }>("/api/money/categories", fetcher, {
-    revalidateOnFocus: false,
     dedupingInterval: 60000,
   });
+
+  const isLoading = !data && !error;
 
   return {
     categories: data?.categories ?? [],

@@ -15,13 +15,14 @@ import { TransactionRow } from "@/components/money/transaction-row";
 import { useTransactions } from "@/lib/hooks/use-transactions";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { formatMoney } from "@/lib/money/arithmetic";
-import type { BudgetCategoryWithSpending } from "@/lib/db/types";
+import type { BudgetCategoryWithSpending, ViewMode } from "@/lib/db/types";
 
 interface CategoryDrillDownProps {
   category: BudgetCategoryWithSpending;
   month: string; // YYYY-MM
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  view?: ViewMode;
 }
 
 export function CategoryDrillDown({
@@ -29,6 +30,7 @@ export function CategoryDrillDown({
   month,
   open,
   onOpenChange,
+  view = "mine",
 }: CategoryDrillDownProps) {
   const t = useTranslations("money.budgets");
   const tTx = useTranslations("money.transactions");
@@ -44,7 +46,7 @@ export function CategoryDrillDown({
     category_id: category.category_id,
     date_from: dateFrom,
     date_to: dateTo,
-  });
+  }, view);
 
   // Find the full category object for the TransactionRow
   const categoryObj = categories.find((c) => c.id === category.category_id);

@@ -41,7 +41,8 @@ export function useTransactionFilters() {
       } else {
         params.delete(key);
       }
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
     [searchParams, router, pathname]
   );
@@ -56,7 +57,8 @@ export function useTransactionFilters() {
           params.delete(key);
         }
       });
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
     [searchParams, router, pathname]
   );

@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import type { ViewMode } from "@/lib/db/types";
 
 interface CategorySpending {
   category_id: string;
@@ -46,9 +47,9 @@ export function useSpendingAnalytics(month: string) {
  *
  * @param months - Number of months to include (default 12, max 24)
  */
-export function useSpendingTrends(months: number = 12) {
+export function useSpendingTrends(months: number = 12, view: ViewMode = "mine") {
   const { data, error } = useSWR<{ trends: MonthlyTrend[] }>(
-    `/api/money/analytics/spending?type=trends&months=${months}`,
+    `/api/money/analytics/spending?type=trends&months=${months}&view=${view}`,
     fetcher,
     { keepPreviousData: true }
   );

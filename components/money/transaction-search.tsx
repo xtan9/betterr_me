@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -15,11 +15,16 @@ export function TransactionSearch({ value, onChange }: TransactionSearchProps) {
   const t = useTranslations("money");
   const [localValue, setLocalValue] = useState(value);
   const debouncedValue = useDebounce(localValue, 300);
+  const lastEmitted = useRef<string | null>(value || null);
 
-  // Sync debounced value to URL
+  // Sync debounced value to URL — only when the value actually changes
   useEffect(() => {
     const trimmed = debouncedValue.trim();
-    onChange(trimmed || null);
+    const next = trimmed || null;
+    if (next !== lastEmitted.current) {
+      lastEmitted.current = next;
+      onChange(next);
+    }
   }, [debouncedValue, onChange]);
 
   // Sync URL value to local state (e.g., when URL changes externally)

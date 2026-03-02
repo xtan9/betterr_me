@@ -55,7 +55,7 @@ export function BudgetOverview() {
   const { budget: previousBudget } = useBudget(previousMonth, viewMode);
 
   // Spending trends for bar chart
-  const { trends } = useSpendingTrends(12);
+  const { trends } = useSpendingTrends(12, viewMode);
 
   // UI state
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -396,6 +396,7 @@ export function BudgetOverview() {
               onOpenChange={(open) => {
                 if (!open) setSelectedCategoryId(null);
               }}
+              view={viewMode}
             />
           )}
         </>
