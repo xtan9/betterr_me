@@ -62,6 +62,7 @@ export function useJournalAutosave(
         }
         return result.entry;
       } catch (error) {
+        // Use console.error in client hook — log.error is server-only
         console.error("Journal autosave failed", { entryId: entryIdRef.current, entryDate, error });
         setSaveStatus("error");
         return null;
@@ -111,7 +112,10 @@ export function useJournalAutosave(
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
             keepalive: true,
-          }).catch(() => {});
+          }).catch((err) => {
+            // Best-effort logging — beforeunload cannot surface UI feedback
+            console.error("Journal beforeunload fallback fetch failed", err);
+          });
         }
       }
     };

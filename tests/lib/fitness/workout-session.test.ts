@@ -147,6 +147,31 @@ describe("workout-session localStorage", () => {
       expect(loadWorkoutFromStorage()).toBeNull();
       expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     });
+
+    it("returns null and clears storage when exercises have invalid structure", () => {
+      // Exercises missing required nested fields (exercise.id, exercise.name, sets)
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          id: "w-1",
+          status: "in_progress",
+          exercises: [{ id: "we-1" }],
+        })
+      );
+
+      expect(loadWorkoutFromStorage()).toBeNull();
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    });
+
+    it("returns null and clears when missing status field", () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ id: "w-1", exercises: [] })
+      );
+
+      expect(loadWorkoutFromStorage()).toBeNull();
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    });
   });
 
   describe("clearWorkoutStorage", () => {

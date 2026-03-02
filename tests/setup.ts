@@ -44,8 +44,10 @@ class MockQueryBuilder {
   gte = vi.fn().mockReturnThis();
   lt = vi.fn().mockReturnThis();
   lte = vi.fn().mockReturnThis();
+  neq = vi.fn().mockReturnThis();
   order = vi.fn().mockReturnThis();
   limit = vi.fn().mockReturnThis();
+  range = vi.fn().mockReturnThis();
 
   // Terminal methods that return a promise
   single = vi.fn(() => Promise.resolve({ data: this.mockData, error: this.mockError }));

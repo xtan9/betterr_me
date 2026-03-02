@@ -61,6 +61,7 @@ export function JournalEntryModal({
         await removeLink(entry.id, linkId);
         await mutateLinks();
       } catch (error) {
+        // Client component — console.error is intentional (no server log module)
         console.error("Failed to remove journal link", error);
         toast.error(t("journal.links.removeError"));
       }
@@ -180,6 +181,7 @@ export function JournalEntryModal({
       toast.success(t("journal.deleteConfirm.title"));
       onOpenChange(false);
     } catch (error) {
+      // Client component — console.error is intentional (no server log module)
       console.error("Failed to delete journal entry", error);
       toast.error(t("journal.deleteError"));
     }
@@ -188,9 +190,11 @@ export function JournalEntryModal({
   const handleOpenChange = useCallback(
     async (newOpen: boolean) => {
       if (!newOpen) {
+        // Closing: flush pending changes — await so we can notify on failure
         try {
           await flushNow();
         } catch (error) {
+          // Client component — console.error is intentional (no server log module)
           console.error("Failed to flush journal changes on close", error);
           toast.error(t("journal.saveError"));
         }

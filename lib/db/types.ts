@@ -529,12 +529,10 @@ export type WorkoutInsert = Omit<
   "id" | "created_at" | "updated_at" | "completed_at" | "duration_seconds"
 > & {
   id?: string;
-  completed_at?: string | null;
-  duration_seconds?: number | null;
 };
 
 export type WorkoutUpdate = Partial<
-  Omit<Workout, "id" | "user_id" | "created_at" | "updated_at">
+  Omit<Workout, "id" | "user_id" | "created_at" | "updated_at" | "completed_at" | "duration_seconds">
 >;
 
 // =============================================================================

@@ -425,28 +425,26 @@ export class WorkoutsDB {
         (s) => s.is_completed && s.set_type === "normal"
       );
 
+      // Filter nulls explicitly — avoid `|| null` which treats 0 as falsy
+      const weights = completedNormal
+        .map((s) => s.weight_kg as number | null)
+        .filter((v): v is number => v !== null);
+      const reps = completedNormal
+        .map((s) => s.reps as number | null)
+        .filter((v): v is number => v !== null);
+      const volume = completedNormal.reduce(
+        (sum: number, s) =>
+          sum +
+          ((s.weight_kg as number) ?? 0) * ((s.reps as number) ?? 0),
+        0
+      );
+
       return {
         started_at: workout.started_at,
         workout_id: workout.id,
-        best_set_weight_kg:
-          completedNormal.length > 0
-            ? Math.max(
-                ...completedNormal.map((s) => (s.weight_kg as number) ?? 0)
-              ) || null
-            : null,
-        best_set_reps:
-          completedNormal.length > 0
-            ? Math.max(
-                ...completedNormal.map((s) => (s.reps as number) ?? 0)
-              ) || null
-            : null,
-        total_volume:
-          completedNormal.reduce(
-            (sum: number, s) =>
-              sum +
-              ((s.weight_kg as number) ?? 0) * ((s.reps as number) ?? 0),
-            0
-          ) || null,
+        best_set_weight_kg: weights.length > 0 ? Math.max(...weights) : null,
+        best_set_reps: reps.length > 0 ? Math.max(...reps) : null,
+        total_volume: completedNormal.length > 0 ? volume : null,
         total_sets: completedNormal.length,
       };
     });
