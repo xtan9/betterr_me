@@ -45,10 +45,11 @@ function formatDateLabel(
   return `${month} ${day}, ${dateYear}`;
 }
 
-function getYesterdayString(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return getLocalDateString(d);
+function getYesterdayString(today: string): string {
+  const [y, m, d] = today.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() - 1);
+  return getLocalDateString(date);
 }
 
 function groupByDate(
@@ -106,7 +107,7 @@ export function TransactionList() {
   }, [handleKeyDown]);
 
   const today = useMemo(() => getLocalDateString(), []);
-  const yesterday = useMemo(() => getYesterdayString(), []);
+  const yesterday = useMemo(() => getYesterdayString(today), [today]);
 
   const categoryMap = useMemo(() => {
     const map = new Map<string, Category>();
