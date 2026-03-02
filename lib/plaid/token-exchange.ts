@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createPlaidClient } from "./client";
 import { toCents } from "@/lib/money/arithmetic";
+import type { AccountType } from "@/lib/db/types";
 import type { ExchangeResult, PlaidAccountData } from "./types";
 
 /**
@@ -115,7 +116,7 @@ export async function exchangeAndStore(
       household_id: householdId,
       bank_connection_id: bankConnectionId,
       name: acc.name,
-      account_type: acc.subtype || acc.type,
+      account_type: (acc.subtype || acc.type) as AccountType,
       balance_cents: balanceCents,
       currency: "USD",
       plaid_account_id: acc.account_id,

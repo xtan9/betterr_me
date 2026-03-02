@@ -21,10 +21,15 @@ export type VisibilityChangeValues = z.infer<typeof visibilityChangeSchema>;
 /**
  * Validation schema for transaction household visibility flags.
  */
-export const transactionVisibilitySchema = z.object({
-  is_hidden_from_household: z.boolean().optional(),
-  is_shared_to_household: z.boolean().optional(),
-});
+export const transactionVisibilitySchema = z
+  .object({
+    is_hidden_from_household: z.boolean().optional(),
+    is_shared_to_household: z.boolean().optional(),
+  })
+  .refine(
+    (d) => !(d.is_hidden_from_household && d.is_shared_to_household),
+    { message: "Transaction cannot be both hidden and shared" }
+  );
 
 export type TransactionVisibilityValues = z.infer<
   typeof transactionVisibilitySchema

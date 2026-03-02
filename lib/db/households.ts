@@ -4,6 +4,8 @@ import type {
   HouseholdMemberWithProfile,
 } from "./types";
 
+const MAX_HOUSEHOLD_MEMBERS = 5;
+
 /**
  * Database access class for household management.
  * Handles invitation lifecycle, member management, and data merge/split
@@ -45,8 +47,13 @@ export class HouseholdsDB {
       .insert({ household_id: household.id, user_id: userId, role: "owner" });
 
     if (memberError) {
-      // 23505 = unique_violation -- race condition
+      // 23505 = unique_violation -- race condition: another request already
+      // created a membership. Delete the orphaned household and retry lookup.
       if (memberError.code === "23505") {
+        await this.supabase
+          .from("households")
+          .delete()
+          .eq("id", household.id);
         const { data: retry } = await this.supabase
           .from("household_members")
           .select("household_id")
@@ -104,7 +111,7 @@ export class HouseholdsDB {
   async getMemberRole(
     householdId: string,
     userId: string
-  ): Promise<string | null> {
+  ): Promise<"owner" | "member" | null> {
     const { data, error } = await this.supabase
       .from("household_members")
       .select("role")
@@ -173,7 +180,7 @@ export class HouseholdsDB {
 
   /**
    * Get an invitation by its token.
-   * Uses adminClient to bypass RLS (invitee is not yet a household member).
+   * Returns null if not found, expired, or already used.
    */
   async getInvitationByToken(
     token: string
@@ -233,8 +240,8 @@ export class HouseholdsDB {
       .eq("household_id", targetHouseholdId);
 
     if (countError) throw countError;
-    if ((count ?? 0) >= 5) {
-      throw new Error("Household has reached the maximum of 5 members");
+    if ((count ?? 0) >= MAX_HOUSEHOLD_MEMBERS) {
+      throw new Error(`Household has reached the maximum of ${MAX_HOUSEHOLD_MEMBERS} members`);
     }
 
     // 3. Get user's current household membership
@@ -265,6 +272,15 @@ export class HouseholdsDB {
           targetHouseholdId,
           userId
         );
+      } else {
+        // User is in a multi-member household — just move their membership
+        const { error: moveError } = await adminClient
+          .from("household_members")
+          .update({ household_id: targetHouseholdId, role: "member" })
+          .eq("household_id", sourceHouseholdId)
+          .eq("user_id", userId);
+
+        if (moveError) throw moveError;
       }
     } else {
       // User has no household -- just insert as member
@@ -300,61 +316,69 @@ export class HouseholdsDB {
     userId: string
   ): Promise<void> {
     // Move accounts: keep owner_id, set visibility to 'mine' (private by default)
-    await adminClient
+    const { error: accountsError } = await adminClient
       .from("accounts")
       .update({
         household_id: targetHouseholdId,
         visibility: "mine",
       })
       .eq("household_id", sourceHouseholdId);
+    if (accountsError) throw accountsError;
 
     // Move transactions
-    await adminClient
+    const { error: txnError } = await adminClient
       .from("transactions")
       .update({ household_id: targetHouseholdId })
       .eq("household_id", sourceHouseholdId);
+    if (txnError) throw txnError;
 
     // Move budgets: set is_shared to false (private by default)
-    await adminClient
+    const { error: budgetsError } = await adminClient
       .from("budgets")
       .update({
         household_id: targetHouseholdId,
         is_shared: false,
       })
       .eq("household_id", sourceHouseholdId);
+    if (budgetsError) throw budgetsError;
 
     // Move savings goals: set is_shared to false
-    await adminClient
+    const { error: goalsError } = await adminClient
       .from("savings_goals")
       .update({
         household_id: targetHouseholdId,
         is_shared: false,
       })
       .eq("household_id", sourceHouseholdId);
+    if (goalsError) throw goalsError;
 
     // Move recurring bills
-    await adminClient
+    const { error: billsError } = await adminClient
       .from("recurring_bills")
       .update({ household_id: targetHouseholdId })
       .eq("household_id", sourceHouseholdId);
+    if (billsError) throw billsError;
 
     // Move manual assets
-    await adminClient
+    const { error: assetsError } = await adminClient
       .from("manual_assets")
       .update({ household_id: targetHouseholdId })
       .eq("household_id", sourceHouseholdId);
+    if (assetsError) throw assetsError;
 
     // Move merchant category rules
-    await adminClient
+    const { error: rulesError } = await adminClient
       .from("merchant_category_rules")
       .update({ household_id: targetHouseholdId })
       .eq("household_id", sourceHouseholdId);
+    if (rulesError) throw rulesError;
 
     // Move bank connections
-    await adminClient
+    const { error: bankError } = await adminClient
       .from("bank_connections")
       .update({ household_id: targetHouseholdId })
       .eq("household_id", sourceHouseholdId);
+    if (bankError) throw bankError;
 
     // Handle categories: skip duplicates by name, remap transactions
     await this.mergeCategories(
@@ -364,13 +388,14 @@ export class HouseholdsDB {
     );
 
     // Delete net worth snapshots for source (will be recalculated)
-    await adminClient
+    const { error: snapshotsError } = await adminClient
       .from("net_worth_snapshots")
       .delete()
       .eq("household_id", sourceHouseholdId);
+    if (snapshotsError) throw snapshotsError;
 
     // Update membership: move to target household as 'member'
-    await adminClient
+    const { error: membershipError } = await adminClient
       .from("household_members")
       .update({
         household_id: targetHouseholdId,
@@ -378,12 +403,14 @@ export class HouseholdsDB {
       })
       .eq("household_id", sourceHouseholdId)
       .eq("user_id", userId);
+    if (membershipError) throw membershipError;
 
     // Delete source household (CASCADE cleans up any remaining references)
-    await adminClient
+    const { error: deleteError } = await adminClient
       .from("households")
       .delete()
       .eq("id", sourceHouseholdId);
+    if (deleteError) throw deleteError;
   }
 
   /**
@@ -397,18 +424,20 @@ export class HouseholdsDB {
     targetHouseholdId: string
   ): Promise<void> {
     // Get source categories
-    const { data: sourceCategories } = await adminClient
+    const { data: sourceCategories, error: srcError } = await adminClient
       .from("categories")
       .select("id, name")
       .eq("household_id", sourceHouseholdId);
+    if (srcError) throw srcError;
 
     if (!sourceCategories || sourceCategories.length === 0) return;
 
     // Get target categories for name matching
-    const { data: targetCategories } = await adminClient
+    const { data: targetCategories, error: tgtError } = await adminClient
       .from("categories")
       .select("id, name")
       .eq("household_id", targetHouseholdId);
+    if (tgtError) throw tgtError;
 
     const targetNameMap = new Map<string, string>();
     for (const tc of targetCategories || []) {
@@ -420,36 +449,42 @@ export class HouseholdsDB {
 
       if (matchingTargetId) {
         // Duplicate name: remap transactions and budget categories, then delete source
-        await adminClient
+        const { error: e1 } = await adminClient
           .from("transactions")
           .update({ category_id: matchingTargetId })
           .eq("category_id", sc.id);
+        if (e1) throw e1;
 
-        await adminClient
+        const { error: e2 } = await adminClient
           .from("budget_categories")
           .update({ category_id: matchingTargetId })
           .eq("category_id", sc.id);
+        if (e2) throw e2;
 
-        await adminClient
+        const { error: e3 } = await adminClient
           .from("merchant_category_rules")
           .update({ category_id: matchingTargetId })
           .eq("category_id", sc.id);
+        if (e3) throw e3;
 
-        await adminClient
+        const { error: e4 } = await adminClient
           .from("transaction_splits")
           .update({ category_id: matchingTargetId })
           .eq("category_id", sc.id);
+        if (e4) throw e4;
 
-        await adminClient
+        const { error: e5 } = await adminClient
           .from("categories")
           .delete()
           .eq("id", sc.id);
+        if (e5) throw e5;
       } else {
         // Unique category: move to target household
-        await adminClient
+        const { error: moveError } = await adminClient
           .from("categories")
           .update({ household_id: targetHouseholdId })
           .eq("id", sc.id);
+        if (moveError) throw moveError;
       }
     }
   }
@@ -478,23 +513,25 @@ export class HouseholdsDB {
     const newHouseholdId = newHousehold.id;
 
     // 2. Move departing member's owned accounts + their transactions
-    const { data: ownedAccounts } = await adminClient
+    const { data: ownedAccounts, error: acctError } = await adminClient
       .from("accounts")
       .select("id")
       .eq("household_id", householdId)
       .eq("owner_id", userId);
+    if (acctError) throw acctError;
 
     if (ownedAccounts && ownedAccounts.length > 0) {
       const accountIds = ownedAccounts.map((a: { id: string }) => a.id);
 
       // Move transactions for owned accounts
-      await adminClient
+      const { error: txnError } = await adminClient
         .from("transactions")
         .update({ household_id: newHouseholdId })
         .in("account_id", accountIds);
+      if (txnError) throw txnError;
 
       // Move the accounts themselves
-      await adminClient
+      const { error: moveAcctError } = await adminClient
         .from("accounts")
         .update({
           household_id: newHouseholdId,
@@ -502,10 +539,11 @@ export class HouseholdsDB {
         })
         .eq("household_id", householdId)
         .eq("owner_id", userId);
+      if (moveAcctError) throw moveAcctError;
     }
 
     // 3. Move member's private budgets to new household
-    await adminClient
+    const { error: budgetsError } = await adminClient
       .from("budgets")
       .update({
         household_id: newHouseholdId,
@@ -514,33 +552,37 @@ export class HouseholdsDB {
       .eq("household_id", householdId)
       .eq("owner_id", userId)
       .eq("is_shared", false);
+    if (budgetsError) throw budgetsError;
 
     // Transfer ownership of shared budgets to household owner
-    const { data: householdOwner } = await adminClient
+    const { data: householdOwner, error: ownerError } = await adminClient
       .from("household_members")
       .select("user_id")
       .eq("household_id", householdId)
       .eq("role", "owner")
       .single();
+    if (ownerError && ownerError.code !== "PGRST116") throw ownerError;
 
     if (householdOwner) {
-      await adminClient
+      const { error: transferBudgetError } = await adminClient
         .from("budgets")
         .update({ owner_id: householdOwner.user_id })
         .eq("household_id", householdId)
         .eq("owner_id", userId)
         .eq("is_shared", true);
+      if (transferBudgetError) throw transferBudgetError;
 
-      await adminClient
+      const { error: transferGoalError } = await adminClient
         .from("savings_goals")
         .update({ owner_id: householdOwner.user_id })
         .eq("household_id", householdId)
         .eq("owner_id", userId)
         .eq("is_shared", true);
+      if (transferGoalError) throw transferGoalError;
     }
 
     // 4. Move member's private goals to new household
-    await adminClient
+    const { error: goalsError } = await adminClient
       .from("savings_goals")
       .update({
         household_id: newHouseholdId,
@@ -549,16 +591,18 @@ export class HouseholdsDB {
       .eq("household_id", householdId)
       .eq("owner_id", userId)
       .eq("is_shared", false);
+    if (goalsError) throw goalsError;
 
     // 5. Move member's bank connections
-    await adminClient
+    const { error: bankError } = await adminClient
       .from("bank_connections")
       .update({ household_id: newHouseholdId })
       .eq("household_id", householdId)
       .eq("connected_by", userId);
+    if (bankError) throw bankError;
 
     // 6. Update membership: new household, role = 'owner'
-    await adminClient
+    const { error: memberError } = await adminClient
       .from("household_members")
       .update({
         household_id: newHouseholdId,
@@ -566,6 +610,7 @@ export class HouseholdsDB {
       })
       .eq("household_id", householdId)
       .eq("user_id", userId);
+    if (memberError) throw memberError;
   }
 
   /**

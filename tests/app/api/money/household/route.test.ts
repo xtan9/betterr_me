@@ -10,7 +10,7 @@ const { mockResolveHousehold, mockGetMemberRole, mockGetMembers, mockGetInvitati
 
 // Mock dependencies
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(() => ({
+  createClient: vi.fn(async () => ({
     auth: {
       getUser: vi.fn(() => ({
         data: { user: { id: "user-123", email: "test@example.com" } },
@@ -42,7 +42,7 @@ describe("GET /api/money/household", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset to authenticated user for each test
-    vi.mocked(createClient).mockReturnValue({
+    vi.mocked(createClient).mockResolvedValue({
       auth: {
         getUser: vi.fn(() => ({
           data: { user: { id: "user-123", email: "test@example.com" } },
@@ -72,7 +72,7 @@ describe("GET /api/money/household", () => {
   });
 
   it("should return 401 if not authenticated", async () => {
-    vi.mocked(createClient).mockReturnValue({
+    vi.mocked(createClient).mockResolvedValue({
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
     } as any);
 

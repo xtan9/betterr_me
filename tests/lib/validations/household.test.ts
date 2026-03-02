@@ -121,4 +121,12 @@ describe("transactionVisibilitySchema", () => {
     const result = transactionVisibilitySchema.safeParse({});
     expect(result.success).toBe(true);
   });
+
+  it("rejects both hidden and shared being true", () => {
+    const result = transactionVisibilitySchema.safeParse({
+      is_hidden_from_household: true,
+      is_shared_to_household: true,
+    });
+    expect(result.success).toBe(false);
+  });
 });

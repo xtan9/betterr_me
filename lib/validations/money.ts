@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Validates a money amount (in dollars) that can be safely converted to cents.
- * Range: -999,999,999.99 to 999,999,999.99 (fits in BIGINT cents)
+ * Range: -999,999,999.99 to 999,999,999.99 (stored as BIGINT cents in DB)
  */
 export const moneyAmountSchema = z
   .number()
@@ -78,7 +78,7 @@ export const transactionSplitSchema = z.object({
 });
 
 // =============================================================================
-// INCOME CONFIRMATION & INSIGHT DISMISS SCHEMAS (Phase 24)
+// INCOME CONFIRMATION & INSIGHT DISMISS SCHEMAS
 // =============================================================================
 
 export const incomeConfirmationSchema = z.object({

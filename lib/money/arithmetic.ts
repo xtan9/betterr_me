@@ -1,7 +1,13 @@
 import Decimal from "decimal.js";
 
-// Configure for financial calculations — high precision, banker's rounding
+// Configure for financial calculations — high precision, standard half-up rounding
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
+
+// Hoisted to module scope — expensive to construct per call
+const usdFormatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 /**
  * Convert a dollar amount to integer cents.
@@ -29,12 +35,7 @@ export function formatMoney(cents: number): string {
   const absCents = Math.abs(cents);
   const dollars = new Decimal(absCents).dividedBy(100).toFixed(2);
 
-  // Use Intl.NumberFormat for consistent comma grouping in Node.js
-  const formatter = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  const formatted = formatter.format(parseFloat(dollars));
+  const formatted = usdFormatter.format(parseFloat(dollars));
 
   return isNegative ? `-$${formatted}` : `$${formatted}`;
 }
@@ -49,20 +50,10 @@ export function centsToDecimal(cents: number): string {
   return new Decimal(cents).dividedBy(100).toFixed(2);
 }
 
-/**
- * Add two cent amounts safely (integer addition — no precision issues).
- *
- * @example addCents(100, 200) → 300
- */
 export function addCents(a: number, b: number): number {
   return a + b;
 }
 
-/**
- * Subtract cent amounts safely (integer subtraction — no precision issues).
- *
- * @example subtractCents(300, 100) → 200
- */
 export function subtractCents(a: number, b: number): number {
   return a - b;
 }

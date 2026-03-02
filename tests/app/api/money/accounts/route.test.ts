@@ -102,7 +102,7 @@ describe("GET /api/money/accounts", () => {
         household_id: "household-abc",
         bank_connection_id: "bc-1",
         name: "Credit Card",
-        account_type: "credit card",
+        account_type: "credit",
         balance_cents: -50000,
         mask: "5678",
         is_hidden: false,

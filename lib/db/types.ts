@@ -439,6 +439,7 @@ export type BankConnectionInsert = Omit<
  * Named MoneyAccount to avoid collision with JS global Account / auth Account.
  * Maps to the `accounts` table in the database.
  */
+export type AccountType = "checking" | "savings" | "credit" | "investment" | "loan" | "other";
 export type AccountVisibility = "mine" | "ours" | "hidden";
 export type ViewMode = "mine" | "household";
 
@@ -447,9 +448,9 @@ export interface MoneyAccount {
   household_id: string;
   bank_connection_id: string | null;
   name: string;
-  account_type: string;
+  account_type: AccountType;
   balance_cents: number;
-  currency: string;
+  currency: "USD";
   is_hidden: boolean;
   owner_id: string | null;
   visibility: AccountVisibility;
