@@ -127,4 +127,94 @@ describe("GET /api/money/accounts", () => {
     expect(data.connections).toHaveLength(0);
     expect(data.net_worth_cents).toBe(0);
   });
+
+  describe("deriveSyncStatus", () => {
+    beforeEach(() => {
+      mockGetByHouseholdAccounts.mockResolvedValue([]);
+    });
+
+    it('should return "error" when connection status is "error"', async () => {
+      mockGetByHouseholdConnections.mockResolvedValue([
+        {
+          id: "bc-1",
+          institution_name: "Chase",
+          institution_id: "ins_1",
+          status: "error",
+          sync_cursor: "cursor-1",
+          last_synced_at: new Date().toISOString(),
+          error_code: "ITEM_LOGIN_REQUIRED",
+          error_message: "Login required",
+        },
+      ]);
+
+      const response = await GET();
+      const data = await response.json();
+
+      expect(data.connections[0].sync_status).toBe("error");
+    });
+
+    it('should return "syncing" when connected with no cursor and no last_synced_at', async () => {
+      mockGetByHouseholdConnections.mockResolvedValue([
+        {
+          id: "bc-1",
+          institution_name: "Chase",
+          institution_id: "ins_1",
+          status: "connected",
+          sync_cursor: null,
+          last_synced_at: null,
+          error_code: null,
+          error_message: null,
+        },
+      ]);
+
+      const response = await GET();
+      const data = await response.json();
+
+      expect(data.connections[0].sync_status).toBe("syncing");
+    });
+
+    it('should return "stale" when last sync was over 24 hours ago', async () => {
+      const twoDaysAgo = new Date(
+        Date.now() - 48 * 60 * 60 * 1000
+      ).toISOString();
+
+      mockGetByHouseholdConnections.mockResolvedValue([
+        {
+          id: "bc-1",
+          institution_name: "Chase",
+          institution_id: "ins_1",
+          status: "connected",
+          sync_cursor: "cursor-1",
+          last_synced_at: twoDaysAgo,
+          error_code: null,
+          error_message: null,
+        },
+      ]);
+
+      const response = await GET();
+      const data = await response.json();
+
+      expect(data.connections[0].sync_status).toBe("stale");
+    });
+
+    it('should return "error" for disconnected status', async () => {
+      mockGetByHouseholdConnections.mockResolvedValue([
+        {
+          id: "bc-1",
+          institution_name: "Chase",
+          institution_id: "ins_1",
+          status: "disconnected",
+          sync_cursor: null,
+          last_synced_at: null,
+          error_code: null,
+          error_message: null,
+        },
+      ]);
+
+      const response = await GET();
+      const data = await response.json();
+
+      expect(data.connections[0].sync_status).toBe("error");
+    });
+  });
 });

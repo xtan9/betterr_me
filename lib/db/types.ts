@@ -705,7 +705,7 @@ export interface HouseholdMember {
 export interface BankConnection {
   id: string;
   household_id: string;
-  provider: string;
+  provider: "plaid";
   status: "pending" | "connected" | "error" | "disconnected";
   plaid_item_id: string | null;
   institution_id: string | null;

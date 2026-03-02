@@ -50,10 +50,7 @@ export function MoneyPageShell() {
         </div>
 
         <div className="mt-4 text-sm text-muted-foreground">
-          {connections.length}{" "}
-          {connections.length === 1
-            ? "connected account"
-            : "connected accounts"}
+          {t("accounts.connectedCount", { count: connections.length })}
         </div>
       </div>
     </div>

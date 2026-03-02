@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createPlaidClient } from "./client";
 import { toCents } from "@/lib/money/arithmetic";
+import { log } from "@/lib/logger";
 import type { SyncResult } from "./types";
 
 /**
@@ -130,9 +131,9 @@ export async function syncTransactions(
     for (const txn of allAdded) {
       const ourAccountId = accountMap.get(txn.plaid_account_id);
       if (!ourAccountId) {
-        console.error(
-          `Skipping transaction: no account found for plaid_account_id ${txn.plaid_account_id}`
-        );
+        log.warn("Skipping transaction: no account found for plaid_account_id", {
+          plaid_account_id: txn.plaid_account_id,
+        });
         continue;
       }
       txn.account_id = ourAccountId;
@@ -141,9 +142,9 @@ export async function syncTransactions(
     for (const txn of allModified) {
       const ourAccountId = accountMap.get(txn.plaid_account_id);
       if (!ourAccountId) {
-        console.error(
-          `Skipping modified transaction: no account found for plaid_account_id ${txn.plaid_account_id}`
-        );
+        log.warn("Skipping modified transaction: no account found for plaid_account_id", {
+          plaid_account_id: txn.plaid_account_id,
+        });
         continue;
       }
       txn.account_id = ourAccountId;

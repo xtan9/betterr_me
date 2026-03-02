@@ -12,6 +12,9 @@ Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
  * @example toCents("19.99") → 1999
  */
 export function toCents(dollars: number | string): number {
+  if (typeof dollars === "number" && !Number.isFinite(dollars)) {
+    throw new Error(`toCents: invalid input ${dollars}`);
+  }
   return new Decimal(dollars).times(100).round().toNumber();
 }
 

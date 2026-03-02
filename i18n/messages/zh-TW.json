@@ -1253,7 +1253,8 @@
       "errorTitle": "載入帳戶失敗",
       "retry": "重試",
       "institutionSubtotal": "小計",
-      "unknownInstitution": "未知機構"
+      "unknownInstitution": "未知機構",
+      "connectedCount": "{count} 個已連接帳戶"
     },
     "transactions": {
       "title": "交易",

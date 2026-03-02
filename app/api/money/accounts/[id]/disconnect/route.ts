@@ -95,6 +95,10 @@ export async function POST(
 
         if (deleteError) {
           log.error("Failed to delete transactions on disconnect", deleteError);
+          return NextResponse.json(
+            { error: "Failed to delete transactions" },
+            { status: 500 }
+          );
         }
       }
     }

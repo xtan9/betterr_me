@@ -6,6 +6,13 @@ import { manualTransactionSchema } from "@/lib/validations/plaid";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
 
+/** Parse a string to an integer, returning undefined if the result is NaN. */
+function safeParseInt(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
 /**
  * GET /api/money/transactions
  * List transactions for the authenticated user's household.
@@ -31,12 +38,8 @@ export async function GET(request: NextRequest) {
       dateFrom: searchParams.get("date_from") || undefined,
       dateTo: searchParams.get("date_to") || undefined,
       category: searchParams.get("category") || undefined,
-      limit: searchParams.get("limit")
-        ? parseInt(searchParams.get("limit")!, 10)
-        : undefined,
-      offset: searchParams.get("offset")
-        ? parseInt(searchParams.get("offset")!, 10)
-        : undefined,
+      limit: safeParseInt(searchParams.get("limit")),
+      offset: safeParseInt(searchParams.get("offset")),
     });
 
     return NextResponse.json({ transactions });

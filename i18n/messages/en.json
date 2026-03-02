@@ -1253,7 +1253,8 @@
       "errorTitle": "Failed to load accounts",
       "retry": "Retry",
       "institutionSubtotal": "Subtotal",
-      "unknownInstitution": "Unknown Institution"
+      "unknownInstitution": "Unknown Institution",
+      "connectedCount": "{count, plural, one {# connected account} other {# connected accounts}}"
     },
     "transactions": {
       "title": "Transactions",

@@ -53,7 +53,7 @@ export async function exchangeAndStore(
       name: acc.name,
       official_name: acc.official_name ?? null,
       mask: acc.mask ?? null,
-      type: acc.type,
+      type: acc.type as PlaidAccountData["type"],
       subtype: acc.subtype ?? null,
       balance_current: acc.balances.current,
       balance_available: acc.balances.available,

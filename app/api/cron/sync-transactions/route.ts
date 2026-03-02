@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
         });
 
         // Update status to error but continue to next connection
-        await adminClient
+        const { error: updateError } = await adminClient
           .from("bank_connections")
           .update({
             status: "error",
@@ -62,6 +62,12 @@ export async function GET(request: NextRequest) {
                 : "Sync failed during cron job",
           })
           .eq("id", conn.id);
+
+        if (updateError) {
+          log.error("Cron: failed to update connection error status", updateError, {
+            bank_connection_id: conn.id,
+          });
+        }
       }
     }
 

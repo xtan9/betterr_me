@@ -1253,7 +1253,8 @@
       "errorTitle": "加载账户失败",
       "retry": "重试",
       "institutionSubtotal": "小计",
-      "unknownInstitution": "未知机构"
+      "unknownInstitution": "未知机构",
+      "connectedCount": "{count} 个已连接账户"
     },
     "transactions": {
       "title": "交易",
