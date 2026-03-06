@@ -1,14 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createPlaidClient } from "./client";
-import { fetchRecurringTransactions } from "./recurring";
 import { toCents } from "@/lib/money/arithmetic";
-import {
-  RecurringBillsDB,
-  NetWorthSnapshotsDB,
-  ManualAssetsDB,
-  MoneyAccountsDB,
-} from "@/lib/db";
-import { getLocalDateString } from "@/lib/utils";
 import { log } from "@/lib/logger";
 import type { SyncResult } from "./types";
 
@@ -43,7 +35,6 @@ export async function syncTransactions(
     description: string;
     merchant_name: string | null;
     category: string | null;
-    category_id: string | null;
     plaid_category_primary: string | null;
     plaid_category_detailed: string | null;
     transaction_date: string;
@@ -76,7 +67,6 @@ export async function syncTransactions(
         description: txn.name,
         merchant_name: txn.merchant_name ?? null,
         category: txn.personal_finance_category?.primary ?? null,
-        category_id: null, // May be set by applyMerchantRules
         plaid_category_primary:
           txn.personal_finance_category?.primary ?? null,
         plaid_category_detailed:
@@ -97,7 +87,6 @@ export async function syncTransactions(
         description: txn.name,
         merchant_name: txn.merchant_name ?? null,
         category: txn.personal_finance_category?.primary ?? null,
-        category_id: null, // May be set by applyMerchantRules
         plaid_category_primary:
           txn.personal_finance_category?.primary ?? null,
         plaid_category_detailed:
@@ -142,9 +131,9 @@ export async function syncTransactions(
     for (const txn of allAdded) {
       const ourAccountId = accountMap.get(txn.plaid_account_id);
       if (!ourAccountId) {
-        log.error(
-          `Skipping transaction: no account found for plaid_account_id ${txn.plaid_account_id}`
-        );
+        log.warn("Skipping transaction: no account found for plaid_account_id", {
+          plaid_account_id: txn.plaid_account_id,
+        });
         continue;
       }
       txn.account_id = ourAccountId;
@@ -153,9 +142,9 @@ export async function syncTransactions(
     for (const txn of allModified) {
       const ourAccountId = accountMap.get(txn.plaid_account_id);
       if (!ourAccountId) {
-        log.error(
-          `Skipping modified transaction: no account found for plaid_account_id ${txn.plaid_account_id}`
-        );
+        log.warn("Skipping modified transaction: no account found for plaid_account_id", {
+          plaid_account_id: txn.plaid_account_id,
+        });
         continue;
       }
       txn.account_id = ourAccountId;
@@ -165,13 +154,6 @@ export async function syncTransactions(
   // Filter out transactions without a resolved account_id
   const validAdded = allAdded.filter((t) => t.account_id);
   const validModified = allModified.filter((t) => t.account_id);
-
-  // Apply merchant category rules before inserting
-  await applyMerchantRules(
-    [...validAdded, ...validModified],
-    householdId,
-    supabaseAdmin
-  );
 
   // Upsert added transactions
   if (validAdded.length > 0) {
@@ -231,163 +213,10 @@ export async function syncTransactions(
 
   if (cursorError) throw cursorError;
 
-  // --- Recurring bill sync (non-blocking) ---
-  // Refresh detected recurring charges from Plaid after transaction sync.
-  // Failures here do NOT fail the transaction sync.
-  try {
-    const { outflows } = await fetchRecurringTransactions(accessToken);
-
-    if (outflows.length > 0) {
-      // Map Plaid account_ids to our internal UUIDs (reuse account lookup)
-      const billPlaidIds = [...new Set(outflows.map((b) => b.account_id))];
-      const { data: billAccounts } = await supabaseAdmin
-        .from("accounts")
-        .select("id, plaid_account_id")
-        .eq("bank_connection_id", bankConnectionId)
-        .in("plaid_account_id", billPlaidIds);
-
-      const billAccountMap = new Map(
-        (billAccounts || []).map(
-          (a: { plaid_account_id: string; id: string }) => [
-            a.plaid_account_id,
-            a.id,
-          ]
-        )
-      );
-
-      const validBills = outflows
-        .filter((bill) => billAccountMap.has(bill.account_id))
-        .map((bill) => ({
-          ...bill,
-          account_id: billAccountMap.get(bill.account_id)!,
-        }));
-
-      if (validBills.length > 0) {
-        const billsDB = new RecurringBillsDB(supabaseAdmin);
-        await billsDB.upsertFromPlaid(householdId, validBills);
-      }
-    }
-  } catch (recurringError) {
-    log.warn("Recurring bill sync failed (non-blocking)", {
-      bankConnectionId,
-      error:
-        recurringError instanceof Error
-          ? recurringError.message
-          : String(recurringError),
-    });
-  }
-
-  // --- Net worth snapshot (non-blocking) ---
-  // Capture a daily net worth snapshot after sync completes.
-  // Failures here do NOT fail the transaction sync.
-  try {
-    const accountsDB = new MoneyAccountsDB(supabaseAdmin);
-    const manualAssetsDB = new ManualAssetsDB(supabaseAdmin);
-    const snapshotsDB = new NetWorthSnapshotsDB(supabaseAdmin);
-
-    const allAccounts = await accountsDB.getByHousehold(householdId);
-    const manualAssets = await manualAssetsDB.getByHousehold(householdId);
-
-    // Sum positive account balances + manual asset values = assets
-    // Sum abs(negative account balances) = liabilities
-    let assetsCents = 0;
-    let liabilitiesCents = 0;
-
-    for (const account of allAccounts) {
-      if (account.balance_cents >= 0) {
-        assetsCents += account.balance_cents;
-      } else {
-        liabilitiesCents += Math.abs(account.balance_cents);
-      }
-    }
-
-    for (const asset of manualAssets) {
-      assetsCents += asset.value_cents;
-    }
-
-    const totalCents = assetsCents - liabilitiesCents;
-    const today = getLocalDateString();
-
-    await snapshotsDB.upsert(
-      householdId,
-      today,
-      totalCents,
-      assetsCents,
-      liabilitiesCents
-    );
-  } catch (snapshotError) {
-    log.warn("Net worth snapshot failed (non-blocking)", {
-      bankConnectionId,
-      error:
-        snapshotError instanceof Error
-          ? snapshotError.message
-          : String(snapshotError),
-    });
-  }
-
   return {
     added: validAdded.length,
     modified: validModified.length,
     removed: allRemovedIds.length,
     cursor: nextCursor!,
   };
-}
-
-/**
- * Apply merchant category rules to transactions before inserting them.
- * Looks up household merchant rules by merchant_name and sets category_id.
- */
-async function applyMerchantRules(
-  transactions: Array<{
-    merchant_name: string | null;
-    category_id: string | null;
-    [key: string]: unknown;
-  }>,
-  householdId: string,
-  supabaseAdmin: SupabaseClient
-): Promise<void> {
-  const merchantNames = [
-    ...new Set(
-      transactions
-        .map((t) => t.merchant_name)
-        .filter((n): n is string => n !== null)
-    ),
-  ];
-
-  if (merchantNames.length === 0) return;
-
-  const { data: rules, error: rulesError } = await supabaseAdmin
-    .from("merchant_category_rules")
-    .select("merchant_name_lower, category_id")
-    .eq("household_id", householdId)
-    .in(
-      "merchant_name_lower",
-      merchantNames.map((n) => n.toLowerCase())
-    );
-
-  if (rulesError) {
-    log.warn("Failed to fetch merchant category rules", {
-      household_id: householdId,
-      error: String(rulesError),
-    });
-    return;
-  }
-
-  if (!rules?.length) return;
-
-  const ruleMap = new Map(
-    rules.map((r: { merchant_name_lower: string; category_id: string }) => [
-      r.merchant_name_lower,
-      r.category_id,
-    ])
-  );
-
-  for (const txn of transactions) {
-    if (txn.merchant_name) {
-      const categoryId = ruleMap.get(txn.merchant_name.toLowerCase());
-      if (categoryId) {
-        txn.category_id = categoryId;
-      }
-    }
-  }
 }

@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
         const errorMessage =
           payload.error?.error_message || "An error occurred";
 
-        const { error: errorUpdateErr } = await adminClient
+        const { error: updateError } = await adminClient
           .from("bank_connections")
           .update({
             status: "error",
@@ -105,16 +105,13 @@ export async function POST(request: NextRequest) {
           })
           .eq("plaid_item_id", item_id);
 
-        if (errorUpdateErr) {
-          log.warn("Webhook: failed to update bank connection status", {
-            item_id,
-            error: String(errorUpdateErr),
-          });
+        if (updateError) {
+          log.error("Webhook: failed to update bank connection status", updateError, { item_id });
         }
 
         log.warn("Webhook: item error", { item_id, errorCode, errorMessage });
       } else if (webhook_code === "PENDING_EXPIRATION") {
-        const { error: expirationUpdateErr } = await adminClient
+        const { error: updateError } = await adminClient
           .from("bank_connections")
           .update({
             status: "error",
@@ -124,11 +121,8 @@ export async function POST(request: NextRequest) {
           })
           .eq("plaid_item_id", item_id);
 
-        if (expirationUpdateErr) {
-          log.warn("Webhook: failed to update bank connection expiration status", {
-            item_id,
-            error: String(expirationUpdateErr),
-          });
+        if (updateError) {
+          log.error("Webhook: failed to update pending expiration status", updateError, { item_id });
         }
 
         log.warn("Webhook: item pending expiration", { item_id });

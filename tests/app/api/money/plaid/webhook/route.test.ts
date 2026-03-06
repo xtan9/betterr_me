@@ -151,6 +151,96 @@ describe("POST /api/money/plaid/webhook", () => {
     );
   });
 
+  it("should return 200 and update status on PENDING_EXPIRATION", async () => {
+    mockVerifyPlaidWebhook.mockResolvedValue(true);
+    const mockUpdate = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+    mockAdminFrom.mockReturnValue({ update: mockUpdate });
+
+    const request = createWebhookRequest({
+      webhook_type: "ITEM",
+      webhook_code: "PENDING_EXPIRATION",
+      item_id: "item-123",
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.received).toBe(true);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "error",
+        error_code: "PENDING_EXPIRATION",
+      })
+    );
+  });
+
+  it("should return 200 when bank connection not found during sync", async () => {
+    mockVerifyPlaidWebhook.mockResolvedValue(true);
+    mockAdminFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: null,
+              error: { code: "PGRST116", message: "not found" },
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const request = createWebhookRequest({
+      webhook_type: "TRANSACTIONS",
+      webhook_code: "SYNC_UPDATES_AVAILABLE",
+      item_id: "item-unknown",
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.received).toBe(true);
+    expect(mockSyncTransactions).not.toHaveBeenCalled();
+  });
+
+  it("should return 200 even when sync fails during webhook", async () => {
+    mockVerifyPlaidWebhook.mockResolvedValue(true);
+    mockAdminFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: {
+                id: "bc-123",
+                household_id: "hh-123",
+                sync_cursor: "cursor-abc",
+              },
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    });
+    mockGetAccessToken.mockResolvedValue("access-sandbox-token");
+    mockSyncTransactions.mockRejectedValue(new Error("Sync failed"));
+
+    const request = createWebhookRequest({
+      webhook_type: "TRANSACTIONS",
+      webhook_code: "SYNC_UPDATES_AVAILABLE",
+      item_id: "item-123",
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    // Should still return 200 — sync failures are logged but don't fail the webhook
+    expect(response.status).toBe(200);
+    expect(data.received).toBe(true);
+  });
+
   it("should return 200 for unknown webhook types (acknowledge but ignore)", async () => {
     mockVerifyPlaidWebhook.mockResolvedValue(true);
 

@@ -14,21 +14,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccounts } from "@/lib/hooks/use-accounts";
-import { useHousehold } from "@/lib/hooks/use-household";
 import { formatMoney } from "@/lib/money/arithmetic";
 import { PlaidLinkButton } from "@/components/money/plaid-link-button";
 import { AccountGroup } from "@/components/money/account-group";
 import { AccountsEmptyState } from "@/components/money/accounts-empty-state";
 import { DisconnectDialog } from "@/components/money/disconnect-dialog";
 import { ManualTransactionDialog } from "@/components/money/manual-transaction-dialog";
-import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
-import { AccountVisibilitySelector } from "@/components/money/account-visibility-selector";
 
 export function AccountsList() {
   const t = useTranslations("money");
-  const { viewMode, setViewMode, isMultiMember } = useHousehold();
   const { connections, netWorthCents, error, isLoading, mutate } =
-    useAccounts(viewMode);
+    useAccounts();
 
   const [errorBannerVisible, setErrorBannerVisible] = useState(true);
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
@@ -64,7 +60,7 @@ export function AccountsList() {
         }
 
         toast.success(t("accounts.syncSuccess"));
-        mutate(undefined, { revalidate: false });
+        mutate();
       } catch (error) {
         console.error("Sync error:", error);
         toast.error(t("accounts.syncError"));
@@ -119,20 +115,8 @@ export function AccountsList() {
     return <AccountsEmptyState mutate={mutate} />;
   }
 
-  const handleVisibilityChange = () => {
-    // Revalidate accounts to reflect visibility change
-    mutate();
-  };
-
   return (
     <div className="space-y-6">
-      {/* Mine/Household tabs */}
-      <HouseholdViewTabs
-        value={viewMode}
-        onValueChange={setViewMode}
-        isMultiMember={isMultiMember}
-      />
-
       {/* Dismissable error banner */}
       {hasErrors && errorBannerVisible && (
         <Alert variant="destructive" className="relative">
@@ -190,23 +174,6 @@ export function AccountsList() {
             connection={connection}
             onSync={handleSync}
             onDisconnect={handleDisconnect}
-            renderAccountExtra={
-              isMultiMember
-                ? (accountId) => {
-                    const account = connection.accounts.find(
-                      (a) => a.id === accountId
-                    );
-                    if (!account) return null;
-                    return (
-                      <AccountVisibilitySelector
-                        accountId={accountId}
-                        currentVisibility={account.visibility}
-                        onVisibilityChange={handleVisibilityChange}
-                      />
-                    );
-                  }
-                : undefined
-            }
           />
         ))}
       </div>
@@ -229,7 +196,7 @@ export function AccountsList() {
         open={manualDialogOpen}
         onOpenChange={setManualDialogOpen}
         accounts={allAccounts}
-        onSuccess={() => mutate(undefined, { revalidate: false })}
+        onSuccess={() => mutate()}
       />
     </div>
   );

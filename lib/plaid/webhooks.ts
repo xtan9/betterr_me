@@ -5,6 +5,7 @@ import {
   jwtVerify,
 } from "jose";
 import type { PlaidApi } from "plaid";
+import { log } from "@/lib/logger";
 
 /**
  * Verifies a Plaid webhook by validating the JWT/ES256 signature
@@ -67,8 +68,9 @@ export async function verifyPlaidWebhook(
 
     // Step 8: All checks passed
     return true;
-  } catch {
+  } catch (error) {
     // Fail closed: any error during verification returns false
+    log.error("Plaid webhook verification error", error);
     return false;
   }
 }

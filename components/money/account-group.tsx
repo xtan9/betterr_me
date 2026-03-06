@@ -12,15 +12,12 @@ interface AccountGroupProps {
   connection: ConnectionWithAccounts;
   onSync: (connectionId: string) => Promise<void>;
   onDisconnect: (connectionId: string) => void;
-  /** Render function for extra content per account (e.g., visibility selector). */
-  renderAccountExtra?: (accountId: string) => React.ReactNode;
 }
 
 export function AccountGroup({
   connection,
   onSync,
   onDisconnect,
-  renderAccountExtra,
 }: AccountGroupProps) {
   const t = useTranslations("money");
   const [isSyncing, setIsSyncing] = useState(false);
@@ -96,7 +93,6 @@ export function AccountGroup({
             key={account.id}
             account={account}
             syncStatus={connection.sync_status}
-            extra={renderAccountExtra?.(account.id)}
           />
         ))}
       </div>

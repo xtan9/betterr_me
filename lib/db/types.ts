@@ -379,8 +379,7 @@ export interface DashboardData {
 
 // =============================================================================
 // JOURNAL ENTRIES
-// =============================================================================
-
+// ======================================================================
 export type MoodRating = 1 | 2 | 3 | 4 | 5;
 
 export interface JournalEntry {
@@ -473,6 +472,15 @@ export interface Exercise {
   equipment: Equipment;
   exercise_type: ExerciseType;
   is_custom: boolean;
+}
+
+// =============================================================================
+// HOUSEHOLDS
+// =============================================================================
+
+export interface Household {
+  id: string;
+  name: string;
   created_at: string;
   updated_at: string;
 }
@@ -496,8 +504,7 @@ export interface ExerciseFilters {
   search?: string;
 }
 
-// =============================================================================
-// FITNESS: WORKOUTS
+// ======================================================================// FITNESS: WORKOUTS
 // =============================================================================
 
 export type WorkoutStatus = (typeof WORKOUT_STATUSES)[number];
@@ -686,38 +693,14 @@ export interface ExerciseHistoryEntry {
 export type WeightUnit = (typeof WEIGHT_UNITS)[number];
 
 // =============================================================================
-// HOUSEHOLDS
+// HOUSEHOLD MEMBERS
 // =============================================================================
-
-export interface Household {
-  id: string;
-  name: string;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface HouseholdMember {
   id: string;
   household_id: string;
   user_id: string;
   role: "owner" | "member";
-  created_at: string;
-}
-
-export interface HouseholdMemberWithProfile extends HouseholdMember {
-  email: string;
-  full_name: string | null;
-  avatar_url: string | null;
-}
-
-export interface HouseholdInvitation {
-  id: string;
-  household_id: string;
-  invited_by: string;
-  email: string;
-  token: string;
-  status: "pending" | "accepted" | "expired" | "revoked";
-  expires_at: string;
   created_at: string;
 }
 
@@ -728,7 +711,7 @@ export interface HouseholdInvitation {
 export interface BankConnection {
   id: string;
   household_id: string;
-  provider: string;
+  provider: "plaid";
   status: "pending" | "connected" | "error" | "disconnected";
   plaid_item_id: string | null;
   institution_id: string | null;
@@ -758,22 +741,15 @@ export type BankConnectionInsert = Omit<
  * Named MoneyAccount to avoid collision with JS global Account / auth Account.
  * Maps to the `accounts` table in the database.
  */
-export type AccountType = "checking" | "savings" | "credit" | "investment" | "loan" | "other";
-export type AccountVisibility = "mine" | "ours" | "hidden";
-export type ViewMode = "mine" | "household";
-
 export interface MoneyAccount {
   id: string;
   household_id: string;
   bank_connection_id: string | null;
   name: string;
-  account_type: AccountType;
+  account_type: string;
   balance_cents: number;
-  currency: "USD";
+  currency: string;
   is_hidden: boolean;
-  owner_id: string | null;
-  visibility: AccountVisibility;
-  shared_since: string | null;
   plaid_account_id: string | null;
   official_name: string | null;
   mask: string | null;
@@ -801,12 +777,8 @@ export interface Transaction {
   description: string;
   merchant_name: string | null;
   category: string | null;
-  category_id: string | null;
-  notes: string | null;
   transaction_date: string;
   is_pending: boolean;
-  is_hidden_from_household: boolean;
-  is_shared_to_household: boolean;
   plaid_transaction_id: string | null;
   plaid_category_primary: string | null;
   plaid_category_detailed: string | null;
@@ -820,331 +792,4 @@ export type TransactionInsert = Omit<
   "id" | "created_at" | "updated_at"
 > & {
   id?: string;
-  category_id?: string | null;
-  notes?: string | null;
 };
-
-// =============================================================================
-// MONEY CATEGORIES (for transaction classification)
-// =============================================================================
-
-/** Money category (system defaults have household_id = null) */
-export interface MoneyCategory {
-  id: string;
-  household_id: string | null;
-  name: string;
-  icon: string | null;
-  is_system: boolean;
-  color: string | null;
-  display_name: string | null;
-  created_at: string;
-}
-
-export type MoneyCategoryInsert = Omit<MoneyCategory, "id" | "created_at"> & {
-  id?: string;
-};
-
-// =============================================================================
-// MERCHANT CATEGORY RULES
-// =============================================================================
-
-export interface MerchantCategoryRule {
-  id: string;
-  household_id: string;
-  merchant_name: string;
-  merchant_name_lower: string;
-  category_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export type MerchantCategoryRuleInsert = Omit<
-  MerchantCategoryRule,
-  "id" | "created_at" | "updated_at"
->;
-
-// =============================================================================
-// TRANSACTION SPLITS
-// =============================================================================
-
-export interface TransactionSplit {
-  id: string;
-  transaction_id: string;
-  category_id: string;
-  amount_cents: number;
-  notes: string | null;
-  created_at: string;
-}
-
-export type TransactionSplitInsert = Omit<TransactionSplit, "id" | "created_at">;
-
-// =============================================================================
-// HIDDEN CATEGORIES
-// =============================================================================
-
-export interface HiddenCategory {
-  household_id: string;
-  category_id: string;
-}
-
-// =============================================================================
-// BUDGETS
-// =============================================================================
-
-export interface Budget {
-  id: string;
-  household_id: string;
-  month: string; // '2026-02-01'
-  total_cents: number;
-  rollover_enabled: boolean;
-  owner_id: string | null;
-  is_shared: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface BudgetCategory {
-  id: string;
-  budget_id: string;
-  category_id: string;
-  allocated_cents: number;
-  rollover_cents: number;
-  created_at: string;
-}
-
-export interface BudgetCategoryWithSpending extends BudgetCategory {
-  spent_cents: number;
-  category_name: string;
-  category_icon: string | null;
-  category_color: string | null;
-}
-
-export interface BudgetWithCategories extends Budget {
-  categories: BudgetCategoryWithSpending[];
-  total_allocated_cents: number;
-  total_spent_cents: number;
-}
-
-// =============================================================================
-// RECURRING BILLS
-// =============================================================================
-
-export type BillFrequency = "WEEKLY" | "BIWEEKLY" | "SEMI_MONTHLY" | "MONTHLY" | "ANNUALLY";
-export type BillUserStatus = "auto" | "confirmed" | "dismissed";
-export type BillSource = "plaid" | "manual";
-
-export interface RecurringBill {
-  id: string;
-  household_id: string;
-  plaid_stream_id: string | null;
-  account_id: string | null;
-  name: string;
-  description: string | null;
-  amount_cents: number;
-  frequency: BillFrequency;
-  next_due_date: string | null;
-  user_status: BillUserStatus;
-  is_active: boolean;
-  plaid_status: string | null;
-  category_primary: string | null;
-  previous_amount_cents: number | null;
-  source: BillSource;
-  created_at: string;
-  updated_at: string;
-}
-
-export type RecurringBillInsert = Omit<
-  RecurringBill,
-  "id" | "created_at" | "updated_at"
-> & {
-  id?: string;
-};
-
-export type RecurringBillUpdate = Partial<
-  Omit<RecurringBill, "id" | "household_id" | "created_at" | "updated_at">
->;
-
-// =============================================================================
-// SAVINGS GOALS
-// =============================================================================
-
-export type GoalFundingType = "manual" | "linked";
-export type GoalStatus = "active" | "completed" | "archived";
-
-export interface SavingsGoal {
-  id: string;
-  household_id: string;
-  name: string;
-  target_cents: number;
-  current_cents: number;
-  deadline: string | null;
-  funding_type: GoalFundingType;
-  linked_account_id: string | null;
-  icon: string | null;
-  color: string | null;
-  status: GoalStatus;
-  owner_id: string | null;
-  is_shared: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export type SavingsGoalInsert = Omit<
-  SavingsGoal,
-  "id" | "created_at" | "updated_at"
-> & {
-  id?: string;
-};
-
-export type SavingsGoalUpdate = Partial<
-  Omit<SavingsGoal, "id" | "household_id" | "created_at" | "updated_at">
->;
-
-// =============================================================================
-// GOAL CONTRIBUTIONS
-// =============================================================================
-
-export interface GoalContribution {
-  id: string;
-  goal_id: string;
-  amount_cents: number;
-  note: string | null;
-  contributed_at: string;
-}
-
-export type GoalContributionInsert = Omit<
-  GoalContribution,
-  "id" | "contributed_at"
-> & {
-  id?: string;
-  contributed_at?: string;
-};
-
-// =============================================================================
-// NET WORTH SNAPSHOTS
-// =============================================================================
-
-export interface NetWorthSnapshot {
-  id: string;
-  household_id: string;
-  snapshot_date: string;
-  total_cents: number;
-  assets_cents: number;
-  liabilities_cents: number;
-  created_at: string;
-}
-
-// =============================================================================
-// MANUAL ASSETS
-// =============================================================================
-
-export type ManualAssetType = "property" | "vehicle" | "investment" | "other";
-
-export interface ManualAsset {
-  id: string;
-  household_id: string;
-  name: string;
-  value_cents: number;
-  asset_type: ManualAssetType;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export type ManualAssetInsert = Omit<
-  ManualAsset,
-  "id" | "created_at" | "updated_at"
-> & {
-  id?: string;
-};
-
-export type ManualAssetUpdate = Partial<
-  Omit<ManualAsset, "id" | "household_id" | "created_at" | "updated_at">
->;
-
-// =============================================================================
-// GOAL PROJECTIONS (consolidated from goal-card.tsx, use-goals.ts, goals/route.ts)
-// =============================================================================
-
-export type StatusColor = "green" | "yellow" | "red";
-
-export interface GoalWithProjection extends SavingsGoal {
-  projected_date: string | null;
-  monthly_rate_cents: number;
-  status_color: StatusColor;
-}
-
-// =============================================================================
-// DISMISSED INSIGHTS
-// =============================================================================
-
-export interface DismissedInsight {
-  id: string;
-  household_id: string;
-  insight_id: string;
-  dismissed_at: string;
-}
-
-// =============================================================================
-// CONFIRMED INCOME PATTERNS
-// =============================================================================
-
-export type IncomeFrequency = "WEEKLY" | "BIWEEKLY" | "SEMI_MONTHLY" | "MONTHLY";
-
-export interface ConfirmedIncomePattern {
-  id: string;
-  household_id: string;
-  merchant_name: string;
-  amount_cents: number;
-  frequency: IncomeFrequency;
-  next_expected_date: string;
-  confirmed_at: string;
-  needs_reconfirmation: boolean;
-}
-
-// =============================================================================
-// INSIGHTS (Phase 24 - Dashboard & AI)
-// =============================================================================
-
-export type InsightType =
-  | "spending_anomaly"
-  | "subscription_increase"
-  | "goal_progress"
-  | "low_balance_warning"
-  | "bill_upcoming";
-
-export type InsightPage = "dashboard" | "budgets" | "bills" | "goals";
-
-export type InsightSeverity = "info" | "attention" | "positive";
-
-export interface Insight {
-  id: string;
-  type: InsightType;
-  page: InsightPage;
-  severity: InsightSeverity;
-  data: Record<string, string | number>;
-}
-
-// =============================================================================
-// DETECTED INCOME (from income pattern detection algorithm)
-// =============================================================================
-
-export interface DetectedIncome {
-  merchant_name: string;
-  amount_cents: number;
-  frequency: string;
-  confidence: number;
-  last_occurrence: string;
-  next_predicted: string;
-}
-
-// =============================================================================
-// DAILY BALANCE (from cash flow projection)
-// =============================================================================
-
-export interface DailyBalance {
-  date: string;
-  projected_balance_cents: number;
-  has_income: boolean;
-  bill_total_cents: number;
-}

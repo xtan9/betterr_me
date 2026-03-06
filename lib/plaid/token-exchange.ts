@@ -1,8 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createPlaidClient } from "./client";
 import { toCents } from "@/lib/money/arithmetic";
-import { log } from "@/lib/logger";
-import type { AccountType } from "@/lib/db/types";
 import type { ExchangeResult, PlaidAccountData } from "./types";
 
 /**
@@ -41,11 +39,8 @@ export async function exchangeAndStore(
         country_codes: ["US" as never],
       });
       institutionName = instResponse.data.institution.name;
-    } catch (instError) {
-      log.warn("Failed to fetch institution name from Plaid", {
-        institution_id: institutionId,
-        error: instError instanceof Error ? instError.message : String(instError),
-      });
+    } catch {
+      // Non-critical: institution name lookup can fail for some sandbox institutions
       institutionName = null;
     }
   }
@@ -58,7 +53,7 @@ export async function exchangeAndStore(
       name: acc.name,
       official_name: acc.official_name ?? null,
       mask: acc.mask ?? null,
-      type: acc.type,
+      type: acc.type as PlaidAccountData["type"],
       subtype: acc.subtype ?? null,
       balance_current: acc.balances.current,
       balance_available: acc.balances.available,
@@ -120,7 +115,7 @@ export async function exchangeAndStore(
       household_id: householdId,
       bank_connection_id: bankConnectionId,
       name: acc.name,
-      account_type: (acc.subtype || acc.type) as AccountType,
+      account_type: acc.subtype || acc.type,
       balance_cents: balanceCents,
       currency: "USD",
       plaid_account_id: acc.account_id,

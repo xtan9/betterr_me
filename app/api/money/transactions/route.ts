@@ -5,43 +5,18 @@ import { TransactionsDB, MoneyAccountsDB } from "@/lib/db";
 import { manualTransactionSchema } from "@/lib/validations/plaid";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
-import type { Transaction, ViewMode } from "@/lib/db/types";
 
-/**
- * Redact transaction details for household view.
- * LOCKED DECISION: In shared views, partners see transactions as category + amount only.
- * Strips: description, merchant_name, notes, plaid_category_detailed.
- * Keeps: id, account_id, amount_cents, category, category_id, transaction_date, is_pending.
- */
-function redactForHousehold(tx: Transaction): Partial<Transaction> {
-  return {
-    id: tx.id,
-    household_id: tx.household_id,
-    account_id: tx.account_id,
-    amount_cents: tx.amount_cents,
-    description: "", // redacted
-    merchant_name: null, // redacted
-    category: tx.category,
-    category_id: tx.category_id,
-    notes: null, // redacted
-    transaction_date: tx.transaction_date,
-    is_pending: tx.is_pending,
-    is_hidden_from_household: tx.is_hidden_from_household,
-    is_shared_to_household: tx.is_shared_to_household,
-    plaid_transaction_id: tx.plaid_transaction_id,
-    plaid_category_primary: tx.plaid_category_primary,
-    plaid_category_detailed: null, // redacted
-    source: tx.source,
-    created_at: tx.created_at,
-    updated_at: tx.updated_at,
-  };
+/** Parse a string to an integer, returning undefined if the result is NaN. */
+function safeParseInt(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
 }
 
 /**
  * GET /api/money/transactions
  * List transactions for the authenticated user's household.
  * Supports optional filters: account_id, date_from, date_to, category, search.
- * Supports ?view=mine|household for view-mode filtering (default: 'mine').
  */
 export async function GET(request: NextRequest) {
   try {
@@ -58,52 +33,16 @@ export async function GET(request: NextRequest) {
     const transactionsDB = new TransactionsDB(supabase);
 
     const searchParams = request.nextUrl.searchParams;
-    const view = (searchParams.get("view") || "mine") as ViewMode;
-    const limit = searchParams.get("limit")
-      ? parseInt(searchParams.get("limit")!, 10)
-      : undefined;
-    const offset = searchParams.get("offset")
-      ? parseInt(searchParams.get("offset")!, 10)
-      : undefined;
-
-    const queryOptions = {
+    const transactions = await transactionsDB.getByHousehold(householdId, {
       accountId: searchParams.get("account_id") || undefined,
       dateFrom: searchParams.get("date_from") || undefined,
       dateTo: searchParams.get("date_to") || undefined,
       category: searchParams.get("category") || undefined,
-      categoryId: searchParams.get("category_id") || undefined,
-      search: searchParams.get("search") || undefined,
-      amountMin: searchParams.get("amount_min")
-        ? parseInt(searchParams.get("amount_min")!, 10)
-        : undefined,
-      amountMax: searchParams.get("amount_max")
-        ? parseInt(searchParams.get("amount_max")!, 10)
-        : undefined,
-      limit,
-      offset,
-    };
-
-    // Use filtered query for view-mode support
-    const { transactions, total } =
-      await transactionsDB.getByHouseholdFiltered(
-        householdId,
-        user.id,
-        view,
-        queryOptions
-      );
-
-    // Redact transaction details in household view
-    const result =
-      view === "household"
-        ? transactions.map(redactForHousehold)
-        : transactions;
-
-    const effectiveOffset = offset ?? 0;
-    return NextResponse.json({
-      transactions: result,
-      total,
-      hasMore: effectiveOffset + transactions.length < total,
+      limit: safeParseInt(searchParams.get("limit")),
+      offset: safeParseInt(searchParams.get("offset")),
     });
+
+    return NextResponse.json({ transactions });
   } catch (error) {
     log.error("GET /api/money/transactions error", error);
     return NextResponse.json(
@@ -165,16 +104,12 @@ export async function POST(request: NextRequest) {
       description: parsed.data.description,
       merchant_name: null,
       category: parsed.data.category || null,
-      category_id: null,
-      notes: null,
       transaction_date: parsed.data.transaction_date,
       is_pending: false,
       plaid_transaction_id: null,
       plaid_category_primary: null,
       plaid_category_detailed: null,
       source: "manual",
-      is_hidden_from_household: false,
-      is_shared_to_household: false,
     });
 
     return NextResponse.json({ transaction }, { status: 201 });

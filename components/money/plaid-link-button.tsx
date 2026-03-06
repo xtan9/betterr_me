@@ -20,7 +20,7 @@ export function PlaidLinkButton({ mutate, className }: PlaidLinkButtonProps) {
   const [isLoadingToken, setIsLoadingToken] = useState(false);
   const [isExchanging, setIsExchanging] = useState(false);
 
-  // Fetch link token on mount (run once only)
+  // Fetch link token on mount
   useEffect(() => {
     let cancelled = false;
 
@@ -40,6 +40,9 @@ export function PlaidLinkButton({ mutate, className }: PlaidLinkButtonProps) {
         }
       } catch (error) {
         console.error("Failed to fetch link token:", error);
+        if (!cancelled) {
+          toast.error(t("plaid.tokenError"));
+        }
       } finally {
         if (!cancelled) {
           setIsLoadingToken(false);
@@ -51,8 +54,7 @@ export function PlaidLinkButton({ mutate, className }: PlaidLinkButtonProps) {
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [t]);
 
   const onSuccess = useCallback(
     async (publicToken: string) => {
@@ -68,7 +70,7 @@ export function PlaidLinkButton({ mutate, className }: PlaidLinkButtonProps) {
           throw new Error(err?.error || "Failed to exchange token");
         }
         toast.success(t("plaid.connectSuccess"));
-        mutate?.(undefined, { revalidate: false });
+        mutate?.();
       } catch (error) {
         console.error("Token exchange error:", error);
         toast.error(t("plaid.exchangeError"));
