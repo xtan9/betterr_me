@@ -472,7 +472,9 @@ export interface Exercise {
   equipment: Equipment;
   exercise_type: ExerciseType;
   is_custom: boolean;
-=======
+}
+
+// =============================================================================
 // HOUSEHOLDS
 // =============================================================================
 
@@ -689,7 +691,11 @@ export interface ExerciseHistoryEntry {
 
 /** Weight unit type */
 export type WeightUnit = (typeof WEIGHT_UNITS)[number];
-=======
+
+// =============================================================================
+// HOUSEHOLD MEMBERS
+// =============================================================================
+
 export interface HouseholdMember {
   id: string;
   household_id: string;

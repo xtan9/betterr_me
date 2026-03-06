@@ -55,7 +55,7 @@ export function loadWorkoutFromStorage(): WorkoutWithExercises | null {
       localStorage.removeItem(STORAGE_KEY);
       return null;
     }
-    return result.data as WorkoutWithExercises;
+    return result.data as unknown as WorkoutWithExercises;
   } catch (err) {
     log.warn("Failed to load workout from localStorage", { error: String(err) });
     return null;
