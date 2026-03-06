@@ -38,13 +38,22 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-// SWR hook mock
+// SWR hook mock for useAccounts (connection detection)
 const { mockUseAccounts } = vi.hoisted(() => ({
   mockUseAccounts: vi.fn(),
 }));
 
 vi.mock("@/lib/hooks/use-accounts", () => ({
   useAccounts: mockUseAccounts,
+}));
+
+// Mock sub-components to isolate MoneyPageShell tests
+vi.mock("@/components/money/money-dashboard", () => ({
+  MoneyDashboard: ({ viewMode }: { viewMode: string }) => (
+    <div data-testid="money-dashboard" data-view-mode={viewMode}>
+      MoneyDashboard
+    </div>
+  ),
 }));
 
 describe("MoneyPageShell", () => {
@@ -66,7 +75,7 @@ describe("MoneyPageShell", () => {
     expect(screen.getByText("emptyState.heading")).toBeInTheDocument();
   });
 
-  it("renders net worth summary when accounts exist", () => {
+  it("renders MoneyDashboard when accounts exist", () => {
     mockUseAccounts.mockReturnValue({
       connections: [
         {
@@ -84,8 +93,33 @@ describe("MoneyPageShell", () => {
 
     render(<MoneyPageShell />);
 
-    expect(screen.getByText("accounts.netWorth")).toBeInTheDocument();
-    expect(screen.getByText("$5000.00")).toBeInTheDocument();
+    expect(screen.getByTestId("money-dashboard")).toBeInTheDocument();
+    expect(screen.getByText("MoneyDashboard")).toBeInTheDocument();
+  });
+
+  it("passes viewMode to MoneyDashboard", () => {
+    mockUseAccounts.mockReturnValue({
+      connections: [
+        {
+          id: "conn-1",
+          institution_name: "Chase",
+          sync_status: "synced",
+          accounts: [],
+        },
+      ],
+      netWorthCents: 500000,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<MoneyPageShell />);
+
+    // Default view mode is "mine"
+    expect(screen.getByTestId("money-dashboard")).toHaveAttribute(
+      "data-view-mode",
+      "mine"
+    );
   });
 
   it("renders loading state", () => {
@@ -97,9 +131,11 @@ describe("MoneyPageShell", () => {
       mutate: vi.fn(),
     });
 
-    render(<MoneyPageShell />);
+    const { container } = render(<MoneyPageShell />);
 
-    expect(screen.getByText("accounts.loading")).toBeInTheDocument();
+    // Loading state renders skeleton placeholders (no text)
+    const skeletons = container.querySelectorAll(".animate-pulse");
+    expect(skeletons.length).toBeGreaterThan(0);
   });
 
   it("has no accessibility violations", async () => {

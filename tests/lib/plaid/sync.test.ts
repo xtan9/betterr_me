@@ -4,8 +4,9 @@ const { mockTransactionsSync } = vi.hoisted(() => ({
   mockTransactionsSync: vi.fn(),
 }));
 
-const { mockLogWarn } = vi.hoisted(() => ({
+const { mockLogWarn, mockLogError } = vi.hoisted(() => ({
   mockLogWarn: vi.fn(),
+  mockLogError: vi.fn(),
 }));
 
 vi.mock("@/lib/plaid/client", () => ({
@@ -15,7 +16,7 @@ vi.mock("@/lib/plaid/client", () => ({
 }));
 
 vi.mock("@/lib/logger", () => ({
-  log: { error: vi.fn(), warn: mockLogWarn, info: vi.fn() },
+  log: { error: mockLogError, warn: mockLogWarn, info: vi.fn() },
 }));
 
 import { syncTransactions } from "@/lib/plaid/sync";
@@ -258,9 +259,8 @@ describe("syncTransactions", () => {
     );
 
     expect(result.added).toBe(0);
-    expect(mockLogWarn).toHaveBeenCalledWith(
-      expect.stringContaining("no account found"),
-      expect.objectContaining({ plaid_account_id: "unknown-plaid-acc" })
+    expect(mockLogError).toHaveBeenCalledWith(
+      expect.stringContaining("no account found")
     );
   });
 
