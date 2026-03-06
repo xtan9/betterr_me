@@ -10,6 +10,7 @@
       "tasks": "任务",
       "journal": "日记",
       "workouts": "训练",
+      "money": "财务",
       "learnMore": "了解更多",
       "profile": "个人资料"
     },
@@ -1196,5 +1197,101 @@
     "addExerciseError": "添加动作失败",
     "updateExerciseError": "更新动作失败",
     "removeExerciseError": "删除动作失败"
+  },
+  "money": {
+    "nav": {
+      "money": "财务"
+    },
+    "page": {
+      "title": "你的财务全景",
+      "subtitle": "平静地查看你的财务状况"
+    },
+    "emptyState": {
+      "heading": "你的平静财务画面从这里开始",
+      "description": "连接你的银行账户，在一个安静的地方查看完整的财务概览。",
+      "comingSoon": "银行连接即将推出",
+      "comingSoonDescription": "我们正在构建一种无缝连接账户的方式。敬请期待。",
+      "manualFallback": "或手动输入交易"
+    },
+    "format": {
+      "currency": "USD"
+    },
+    "syncStatus": {
+      "syncing": "同步中",
+      "synced": "已同步",
+      "stale": "过期",
+      "error": "错误"
+    },
+    "account": {
+      "mask": "\u2022\u2022\u2022\u2022 {mask}"
+    },
+    "plaid": {
+      "connectBank": "连接银行",
+      "connecting": "连接中...",
+      "tokenError": "初始化银行连接失败",
+      "connectSuccess": "银行账户连接成功",
+      "exchangeError": "银行账户连接失败",
+      "linkError": "银行连接失败，请重试。"
+    },
+    "accounts": {
+      "title": "账户",
+      "connectBank": "连接银行账户",
+      "otherOptions": "其他选项",
+      "manualEntry": "手动输入交易",
+      "netWorth": "净资产",
+      "noAccounts": "未连接任何账户",
+      "emptyHeading": "连接你的银行",
+      "emptyDescription": "连接你的银行账户，自动追踪交易和余额。",
+      "orManual": "或手动输入交易",
+      "syncStatus": {
+        "syncing": "同步中",
+        "synced": "已同步",
+        "stale": "过期",
+        "error": "错误"
+      },
+      "syncErrors": "部分账户同步出错。请检查各账户了解详情。",
+      "resync": "重新同步",
+      "disconnect": "断开连接",
+      "disconnectTitle": "断开 {institution}？",
+      "disconnectDescription": "这将撤销对你银行账户的访问。请选择如何处理现有交易。",
+      "keepTransactions": "保留交易",
+      "deleteTransactions": "删除交易",
+      "syncingTransactions": "正在同步交易...",
+      "connectionError": "连接错误：{message}",
+      "subtotal": "小计",
+      "syncSuccess": "同步已开始",
+      "syncError": "启动同步失败",
+      "errorBanner": "部分账户同步出错。请检查各账户了解详情。",
+      "errorBannerDismiss": "关闭",
+      "loading": "加载账户中...",
+      "errorTitle": "加载账户失败",
+      "retry": "重试",
+      "institutionSubtotal": "小计",
+      "unknownInstitution": "未知机构",
+      "connectedCount": "{count} 个已连接账户"
+    },
+    "transactions": {
+      "title": "交易",
+      "manual": {
+        "title": "添加交易",
+        "amount": "金额",
+        "description": "描述",
+        "date": "日期",
+        "category": "分类",
+        "account": "账户",
+        "cashAccount": "现金",
+        "submit": "添加交易",
+        "success": "交易已添加"
+      }
+    },
+    "disconnect": {
+      "title": "断开 {name}？",
+      "description": "这将断开与 {name} 的连接。请选择如何处理现有交易。",
+      "keepTransactions": "保留交易",
+      "deleteTransactions": "删除交易",
+      "cancel": "取消",
+      "success": "银行已断开连接",
+      "error": "断开银行连接失败"
+    }
   }
 }

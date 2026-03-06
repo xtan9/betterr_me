@@ -10,6 +10,7 @@
       "tasks": "Tasks",
       "journal": "Journal",
       "workouts": "Workouts",
+      "money": "Money",
       "learnMore": "Learn More",
       "profile": "Profile"
     },
@@ -1196,5 +1197,101 @@
     "addExerciseError": "Failed to add exercise",
     "updateExerciseError": "Failed to update exercise",
     "removeExerciseError": "Failed to remove exercise"
+  },
+  "money": {
+    "nav": {
+      "money": "Money"
+    },
+    "page": {
+      "title": "Your Financial Picture",
+      "subtitle": "A calm view of your finances"
+    },
+    "emptyState": {
+      "heading": "Your calm financial picture starts here",
+      "description": "Connect your bank accounts to see your complete financial overview in one peaceful place.",
+      "comingSoon": "Bank connection coming soon",
+      "comingSoonDescription": "We're building a seamless way to connect your accounts. Stay tuned.",
+      "manualFallback": "Or enter transactions manually"
+    },
+    "format": {
+      "currency": "USD"
+    },
+    "syncStatus": {
+      "syncing": "Syncing",
+      "synced": "Synced",
+      "stale": "Stale",
+      "error": "Error"
+    },
+    "account": {
+      "mask": "\u2022\u2022\u2022\u2022 {mask}"
+    },
+    "plaid": {
+      "connectBank": "Connect Bank",
+      "connecting": "Connecting...",
+      "tokenError": "Failed to initialize bank connection",
+      "connectSuccess": "Bank account connected successfully",
+      "exchangeError": "Failed to connect bank account",
+      "linkError": "Bank connection failed. Please try again."
+    },
+    "accounts": {
+      "title": "Accounts",
+      "connectBank": "Connect Bank Account",
+      "otherOptions": "Other options",
+      "manualEntry": "Enter transaction manually",
+      "netWorth": "Net Worth",
+      "noAccounts": "No accounts connected",
+      "emptyHeading": "Connect your bank",
+      "emptyDescription": "Link your bank accounts to automatically track transactions and balances.",
+      "orManual": "Or enter transactions manually",
+      "syncStatus": {
+        "syncing": "Syncing",
+        "synced": "Synced",
+        "stale": "Stale",
+        "error": "Error"
+      },
+      "syncErrors": "Some accounts have sync errors. Check individual accounts for details.",
+      "resync": "Re-sync",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect {institution}?",
+      "disconnectDescription": "This will revoke access to your bank account. Choose what to do with existing transactions.",
+      "keepTransactions": "Keep Transactions",
+      "deleteTransactions": "Delete Transactions",
+      "syncingTransactions": "Syncing transactions...",
+      "connectionError": "Connection error: {message}",
+      "subtotal": "Subtotal",
+      "syncSuccess": "Sync started successfully",
+      "syncError": "Failed to start sync",
+      "errorBanner": "Some accounts have sync errors. Check individual accounts for details.",
+      "errorBannerDismiss": "Dismiss",
+      "loading": "Loading accounts...",
+      "errorTitle": "Failed to load accounts",
+      "retry": "Retry",
+      "institutionSubtotal": "Subtotal",
+      "unknownInstitution": "Unknown Institution",
+      "connectedCount": "{count, plural, one {# connected account} other {# connected accounts}}"
+    },
+    "transactions": {
+      "title": "Transactions",
+      "manual": {
+        "title": "Add Transaction",
+        "amount": "Amount",
+        "description": "Description",
+        "date": "Date",
+        "category": "Category",
+        "account": "Account",
+        "cashAccount": "Cash",
+        "submit": "Add Transaction",
+        "success": "Transaction added"
+      }
+    },
+    "disconnect": {
+      "title": "Disconnect {name}?",
+      "description": "This will remove the connection to {name}. Choose what to do with your existing transactions.",
+      "keepTransactions": "Keep Transactions",
+      "deleteTransactions": "Delete Transactions",
+      "cancel": "Cancel",
+      "success": "Bank disconnected successfully",
+      "error": "Failed to disconnect bank"
+    }
   }
 }

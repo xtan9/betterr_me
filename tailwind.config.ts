@@ -127,6 +127,20 @@ export default {
         "empty-state": {
           "celebration-bg": "hsl(var(--empty-state-celebration-bg))",
         },
+        money: {
+          sage: {
+            DEFAULT: "hsl(var(--money-sage))",
+            light: "hsl(var(--money-sage-light))",
+            foreground: "hsl(var(--money-sage-foreground))",
+          },
+          amber: {
+            DEFAULT: "hsl(var(--money-amber))",
+            light: "hsl(var(--money-amber-light))",
+            foreground: "hsl(var(--money-amber-foreground))",
+          },
+          surface: "hsl(var(--money-surface))",
+          border: "hsl(var(--money-border))",
+        },
       },
       fontSize: {
         "page-title": [
