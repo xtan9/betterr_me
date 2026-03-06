@@ -25,7 +25,7 @@ export interface PlaidAccountData {
   name: string;
   official_name: string | null;
   mask: string | null;
-  type: "depository" | "credit" | "loan" | "investment" | "other";
+  type: string; // "depository" | "credit" | "loan" | "investment" | "other"
   subtype: string | null;
   balance_current: number | null;
   balance_available: number | null;

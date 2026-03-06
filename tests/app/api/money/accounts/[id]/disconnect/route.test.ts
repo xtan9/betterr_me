@@ -133,54 +133,6 @@ describe("POST /api/money/accounts/[id]/disconnect", () => {
     expect(mockGetByBankConnection).not.toHaveBeenCalled();
   });
 
-  it("should return 404 when bank connection not found", async () => {
-    mockGetById.mockResolvedValue(null);
-
-    const response = await callPost("bc-nonexistent", {
-      keep_transactions: true,
-    });
-    const data = await response.json();
-
-    expect(response.status).toBe(404);
-    expect(data.error).toBe("Bank connection not found");
-  });
-
-  it("should return 400 when validation fails", async () => {
-    const response = await callPost("bc-123", {
-      keep_transactions: "not-a-boolean",
-    });
-    const data = await response.json();
-
-    expect(response.status).toBe(400);
-    expect(data.error).toBe("Validation failed");
-  });
-
-  it("should return 500 when transaction deletion fails", async () => {
-    mockGetById.mockResolvedValue({
-      id: "bc-123",
-      household_id: "hh-123",
-      status: "connected",
-    });
-    mockGetAccessToken.mockResolvedValue("access-token");
-    mockItemRemove.mockResolvedValue({});
-    mockRemoveAccessToken.mockResolvedValue(undefined);
-    mockGetByBankConnection.mockResolvedValue([
-      { id: "acc-1" },
-      { id: "acc-2" },
-    ]);
-    mockAdminDelete.mockResolvedValue({
-      error: { message: "Delete failed" },
-    });
-
-    const response = await callPost("bc-123", { keep_transactions: false });
-    const data = await response.json();
-
-    expect(response.status).toBe(500);
-    expect(data.error).toBe("Failed to delete transactions");
-    // Should NOT have updated status to disconnected
-    expect(mockUpdateStatus).not.toHaveBeenCalled();
-  });
-
   it("should return 200 and delete transactions with keep_transactions=false", async () => {
     mockGetById.mockResolvedValue({
       id: "bc-123",

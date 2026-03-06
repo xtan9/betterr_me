@@ -34,6 +34,10 @@ describe("toCents", () => {
     expect(toCents("0.1") + toCents("0.2")).toBe(30);
   });
 
+  it("handles pre-computed float 0.1 + 0.2 directly", () => {
+    expect(toCents(0.1 + 0.2)).toBe(30);
+  });
+
   it("handles negative amounts", () => {
     expect(toCents("-5.50")).toBe(-550);
   });
