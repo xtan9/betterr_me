@@ -33,7 +33,7 @@ function getDateCutoff(range: DateRange): Date | null {
 
 export function ExerciseProgressChart({
   exerciseId,
-  exerciseName,
+  exerciseName: _exerciseName,
   weightUnit,
 }: ExerciseProgressChartProps) {
   const t = useTranslations("workouts");

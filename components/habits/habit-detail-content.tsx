@@ -20,6 +20,7 @@ import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { getProjectColor } from "@/lib/projects/colors";
+import { getCategoryDisplayName } from "@/lib/categories/get-category-display-name";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -123,6 +124,7 @@ function formatFrequency(
 export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
   const router = useRouter();
   const t = useTranslations("habits");
+  const tCat = useTranslations("categories");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const { categories } = useCategories();
@@ -361,7 +363,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
                   >
                     <Tag className="size-4 text-white" aria-hidden="true" />
                   </span>
-                  <span>{category.name}</span>
+                  <span>{getCategoryDisplayName(category.name, tCat)}</span>
                   <span>•</span>
                 </>
               )}

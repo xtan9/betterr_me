@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getFrequencyTranslation } from "@/lib/habits/format";
 import { getProjectColor } from "@/lib/projects/colors";
+import { getCategoryDisplayName } from "@/lib/categories/get-category-display-name";
 import type { HabitWithTodayStatus, Category } from "@/lib/db/types";
 
 interface HabitCardProps {
@@ -20,6 +21,7 @@ interface HabitCardProps {
 
 export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: HabitCardProps) {
   const t = useTranslations("habits");
+  const tCat = useTranslations("categories");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
@@ -65,7 +67,7 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
             <div className="min-w-0">
               <h3 className="font-display font-medium truncate">{habit.name}</h3>
               <p className="text-xs text-muted-foreground">
-                {category?.name ?? ""}{category?.name ? " · " : ""}{frequencyLabel}
+                {category ? getCategoryDisplayName(category.name, tCat) : ""}{category ? " · " : ""}{frequencyLabel}
               </p>
             </div>
           </button>

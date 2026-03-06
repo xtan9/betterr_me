@@ -843,7 +843,21 @@
     "create": "Create",
     "creating": "Creating...",
     "namePlaceholder": "Category name",
-    "createError": "Failed to create category"
+    "createError": "Failed to create category",
+    "defaults": {
+      "Errands": "Errands",
+      "Health": "Health",
+      "Finance": "Finance",
+      "Home": "Home",
+      "Social": "Social",
+      "Learning": "Learning",
+      "Meetings": "Meetings",
+      "Planning": "Planning",
+      "Development": "Development",
+      "Research": "Research",
+      "Admin": "Admin",
+      "Review": "Review"
+    }
   },
   "journal": {
     "mood": {

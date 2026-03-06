@@ -110,7 +110,10 @@ test.describe('Visual Regression', () => {
 
   test('settings page', async ({ page }) => {
     await page.goto('/dashboard/settings');
-    await page.waitForLoadState('networkidle');
+    // Avoid networkidle — SWR polling (e.g. WorkoutResumeBanner) prevents it from settling.
+    // Wait for the settings form to render instead.
+    await page.getByRole('heading', { name: /settings/i }).waitFor();
+    await page.locator('input[name="full_name"]').waitFor();
 
     await expect(page).toHaveScreenshot('settings-page.png', {
       maxDiffPixelRatio: 0.01,

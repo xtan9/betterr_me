@@ -7,6 +7,23 @@ import type { Task, Category } from "@/lib/db/types";
 // Mock next-intl
 vi.mock("next-intl", () => ({
   useTranslations: (namespace?: string) => {
+    if (namespace === "categories") {
+      const catMessages: Record<string, string> = {
+        "defaults.Errands": "Errands",
+        "defaults.Health": "Health",
+        "defaults.Finance": "Finance",
+        "defaults.Home": "Home",
+        "defaults.Social": "Social",
+        "defaults.Learning": "Learning",
+        "defaults.Meetings": "Meetings",
+        "defaults.Planning": "Planning",
+        "defaults.Development": "Development",
+        "defaults.Research": "Research",
+        "defaults.Admin": "Admin",
+        "defaults.Review": "Review",
+      };
+      return (key: string) => catMessages[key] ?? key;
+    }
     const allMessages: Record<string, string> = {
       "tasks.card.markComplete": "Mark complete",
       "tasks.card.overdue": "Overdue",

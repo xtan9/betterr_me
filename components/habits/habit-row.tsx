@@ -6,6 +6,7 @@ import { Flame, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getProjectColor } from "@/lib/projects/colors";
+import { getCategoryDisplayName } from "@/lib/categories/get-category-display-name";
 import type { HabitWithTodayStatus, Category } from "@/lib/db/types";
 
 interface HabitRowProps {
@@ -18,6 +19,7 @@ interface HabitRowProps {
 
 export function HabitRow({ habit, categories, onToggle, onClick, isToggling }: HabitRowProps) {
   const t = useTranslations("habits");
+  const tCat = useTranslations("categories");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
@@ -68,7 +70,7 @@ export function HabitRow({ habit, categories, onToggle, onClick, isToggling }: H
           style={bgColor ? { backgroundColor: bgColor, color: "white" } : undefined}
         >
           <Tag className="size-3" aria-hidden="true" />
-          {category.name}
+          {getCategoryDisplayName(category.name, tCat)}
         </span>
       )}
       <div className="flex items-center gap-1 text-sm text-muted-foreground shrink-0">

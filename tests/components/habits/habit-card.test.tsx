@@ -7,8 +7,25 @@ import type { HabitWithTodayStatus, Category } from '@/lib/db/types';
 
 // Mock next-intl
 vi.mock('next-intl', () => ({
-  useTranslations: () => {
+  useTranslations: (namespace?: string) => {
     const t = (key: string, params?: Record<string, unknown>) => {
+      if (namespace === 'categories') {
+        const catMessages: Record<string, string> = {
+          'defaults.Errands': 'Errands',
+          'defaults.Health': 'Health',
+          'defaults.Finance': 'Finance',
+          'defaults.Home': 'Home',
+          'defaults.Social': 'Social',
+          'defaults.Learning': 'Learning',
+          'defaults.Meetings': 'Meetings',
+          'defaults.Planning': 'Planning',
+          'defaults.Development': 'Development',
+          'defaults.Research': 'Research',
+          'defaults.Admin': 'Admin',
+          'defaults.Review': 'Review',
+        };
+        return catMessages[key] ?? key;
+      }
       const messages: Record<string, string> = {
         // Card translations
         'card.currentStreak': 'Current',
