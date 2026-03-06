@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getLocale } from 'next-intl/server';
 import { Toaster } from "@/components/ui/sonner";
+import { SWRProvider } from "@/components/providers/swr-provider";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -57,7 +58,9 @@ export default async function RootLayout({
             storageKey="betterr-theme"
             disableTransitionOnChange
           >
-            {children}
+            <SWRProvider>
+              {children}
+            </SWRProvider>
             <Toaster />
           </ThemeProvider>
         </NextIntlClientProvider>

@@ -15,3 +15,17 @@ export * from "./exercises";
 export * from "./workouts";
 export * from "./workout-exercises";
 export * from "./routines";
+export { HouseholdsDB, resolveHousehold } from "./households";
+
+// Money tracking DB classes
+export { BankConnectionsDB } from "./bank-connections";
+export { MoneyAccountsDB } from "./accounts-money";
+export { TransactionsDB } from "./transactions";
+export { CategoriesDB } from "./categories-db";
+export { MerchantRulesDB } from "./merchant-rules";
+export { TransactionSplitsDB } from "./transaction-splits";
+export { BudgetsDB } from "./budgets";
+export { RecurringBillsDB } from "./recurring-bills";
+export { SavingsGoalsDB } from "./savings-goals";
+export { NetWorthSnapshotsDB } from "./net-worth-snapshots";
+export { ManualAssetsDB } from "./manual-assets";

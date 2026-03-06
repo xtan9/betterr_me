@@ -1,20 +1,33 @@
+---
+gsd_state_version: 1.0
+milestone: v4.0
+milestone_name: Money Tracking
+status: complete
+last_updated: "2026-02-28T00:00:00Z"
+progress:
+  total_phases: 9
+  completed_phases: 9
+  total_plans: 38
+  completed_plans: 38
+---
+
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-27)
+See: .planning/PROJECT.md (updated 2026-02-28)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Planning next milestone
+**Current focus:** v4.0 Money Tracking complete — planning next milestone
 
 ## Current Position
 
-Phase: N/A (between milestones)
-Plan: N/A
-Status: v4.0 Journal + v5.0 Fitness Tracking shipped
-Last activity: 2026-02-27 — Squash-merged v5.0 Fitness Tracking to main (v4.0 Journal already on main)
+Phase: — (between milestones)
+Plan: —
+Status: v4.0 Money Tracking shipped. All 66 requirements satisfied, all 9 phases archived.
+Last activity: 2026-02-28 — Milestone v4.0 archived
 
-Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2.0 | [##########] 100% v2.1 | [##########] 100% v3.0 | [##########] 100% v4.0 | [##########] 100% v5.0
+Progress: All milestones through v4.0 complete.
 
 ## Performance Metrics
 
@@ -38,17 +51,11 @@ Progress: [##########] 100% v1.0 | [##########] 100% v1.1 | [##########] 100% v2
 - Files changed: 97 (+12,769/-156 lines)
 
 **v4.0 Velocity:**
-- Total plans completed: 13
-- Total phases: 7
-- Timeline: 2 days (2026-02-22 → 2026-02-24)
-- Files changed: 126 (+17,573/-74 lines)
-- Tests: 1541 passing
-
-**v5.0 Velocity:**
-- Total plans completed: 20
-- Total phases: 6
-- Timeline: 5 days (2026-02-23 → 2026-02-27)
-- Feature commits: 37
+- Total plans completed: 38
+- Total tasks: 74
+- Files changed: 323 (+53,446/-197 lines)
+- Timeline: 8 days (2026-02-21 → 2026-02-28)
+- Requirements: 66/66 satisfied
 
 ## Accumulated Context
 
@@ -64,10 +71,11 @@ None.
 
 - Vitest picks up .worktrees/ test files causing spurious failures (pre-existing, not blocking)
 - @dnd-kit/core v6 + React 19 peer dep mismatch requires pnpm config (cosmetic, works correctly)
-- v3.0, v4.0, and v5.0 DB migrations must be applied to Supabase before features work in production
+- Plaid API costs ~$1-2/connected account/month — monitor unit economics
+- 7 household human verification items pending live two-user testing
 
 ## Session Continuity
 
-Last session: 2026-02-27
-Stopped at: Completed v5.0 milestone archival
+Last session: 2026-02-28
+Stopped at: v4.0 Money Tracking milestone archived and complete
 Resume: Start next milestone with `/gsd:new-milestone`

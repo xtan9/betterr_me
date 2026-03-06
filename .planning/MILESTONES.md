@@ -1,5 +1,26 @@
 # Milestones
 
+## v4.0 Money Tracking (Shipped: 2026-02-28)
+
+**Phases completed:** 9 phases, 38 plans, 74 tasks
+**Stats:** 323 files changed, +53,446/-197 lines, 147 commits, 8 days (2026-02-21 → 2026-02-28)
+
+**Key accomplishments:**
+- Built household-scoped database foundation with 6 tables, BIGINT cents arithmetic, IN-subquery RLS, and lazy household creation
+- Plaid bank connection pipeline: OAuth linking, Vault-encrypted tokens, JWT/ES256 webhook verification, cursor-based transaction sync
+- Transaction management with search, filters, auto-categorization (16 PFCv2 categories), merchant rules, category overrides, splitting, and CSV import
+- Monthly budgets per category with progress rings, donut/bar charts, drill-down to transactions, and rollover support
+- Bills auto-detection from transaction patterns, bill calendar, savings goals with projections, net worth tracking with line charts
+- Household/couples support: partner invitation, mine/household views, account visibility controls, shared budgets/goals, transaction redaction
+- Future-first dashboard with available money/projected balance, income detection, contextual insights (spending anomalies, price increases), money summary card on main dashboard
+- Data management: CSV export with date range, full data deletion with Plaid revocation, CSV import with column mapping and duplicate detection
+
+**Requirements:** 66/66 satisfied (FOUN-01..08, PLAD-01..08, TXNS-01..08, CATG-01..03, BUDG-01..06, BILL-01..04, GOAL-01..05, NTWT-01..03, HOUS-01..07, DASH-01..07, AIML-01..05, MGMT-01..02)
+
+**Tech debt (1 item):** 7 household human verification items pending live two-user environment testing
+
+---
+
 ## v1.0 Codebase Hardening (Shipped: 2026-02-16)
 
 **Phases completed:** 5 phases, 11 plans, 0 tasks

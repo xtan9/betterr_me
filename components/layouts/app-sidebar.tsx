@@ -9,6 +9,7 @@ import {
   ListChecks,
   BookOpen,
   Dumbbell,
+  Wallet,
   PanelLeftClose,
   PanelLeft,
 } from "lucide-react";
@@ -65,6 +66,12 @@ const mainNavItems = [
     icon: Dumbbell,
     labelKey: "workouts",
     match: (p: string) => p.startsWith("/workouts"),
+  },
+  {
+    href: "/money",
+    icon: Wallet,
+    labelKey: "money",
+    match: (p: string) => p.startsWith("/money"),
   },
 ];
 

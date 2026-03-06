@@ -7,8 +7,7 @@
 - ✅ **v2.0 UI Style Redesign** — Phases 1-9 (shipped 2026-02-17)
 - ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
 - ✅ **v3.0 Projects & Kanban** — Phases 13-17 (shipped 2026-02-21)
-- ✅ **v4.0 Journal** — Phases 20-26 (shipped 2026-02-24)
-- ✅ **v5.0 Fitness Tracking** — Phases 18-23 (shipped 2026-02-27)
+- ✅ **v4.0 Money Tracking** — Phases 18-26 (shipped 2026-02-28)
 
 ## Phases
 
@@ -48,16 +47,19 @@
 </details>
 
 <details>
-<summary>✅ v4.0 Journal (Phases 20-26) — SHIPPED 2026-02-24</summary>
+<summary>✅ v4.0 Money Tracking (Phases 18-26) — SHIPPED 2026-02-28</summary>
 
-7 phases, 13 plans, 17 requirements. See `.planning/milestones/v4.0-ROADMAP.md` for details.
+9 phases, 38 plans, 66 requirements. See `.planning/milestones/v4.0-ROADMAP.md` for details.
 
-</details>
-
-<details>
-<summary>✅ v5.0 Fitness Tracking (Phases 18-23) — SHIPPED 2026-02-27</summary>
-
-6 phases, 20 plans, 36 requirements. See `.planning/milestones/v5.0-ROADMAP.md` for details.
+- [x] Phase 18: Database Foundation & Household Schema (2/2 plans) — completed 2026-02-21
+- [x] Phase 19: Plaid Bank Connection Pipeline (6/6 plans) — completed 2026-02-22
+- [x] Phase 20: Transaction Management & Categorization (5/5 plans) — completed 2026-02-23
+- [x] Phase 21: Budgets & Spending Analytics (5/5 plans) — completed 2026-02-23
+- [x] Phase 22: Bills, Goals & Net Worth (6/6 plans) — completed 2026-02-24
+- [x] Phase 23: Household & Couples (4/4 plans) — completed 2026-02-24
+- [x] Phase 24: Future-First Dashboard & AI Insights (5/5 plans) — completed 2026-02-24
+- [x] Phase 25: Data Management & Polish (2/2 plans) — completed 2026-02-24
+- [x] Phase 26: CSV Import & Integration Polish (3/3 plans) — completed 2026-02-28
 
 </details>
 
@@ -79,16 +81,12 @@
 | 15. Kanban Board | v3.0 | 4/4 | Complete | 2026-02-20 |
 | 16. Integration Bug Fixes | v3.0 | 2/2 | Complete | 2026-02-21 |
 | 17. Fix Archive/Restore Validation | v3.0 | 1/1 | Complete | 2026-02-21 |
-| 20. Database & API Foundation | v4.0 | 2/2 | Complete | 2026-02-23 |
-| 21. Journal Entry CRUD | v4.0 | 2/2 | Complete | 2026-02-23 |
-| 22. Writing Prompts | v4.0 | 2/2 | Complete | 2026-02-23 |
-| 23. Journal Page & Navigation | v4.0 | 2/2 | Complete | 2026-02-24 |
-| 24. Dashboard & Cross-Feature Integration | v4.0 | 3/3 | Complete | 2026-02-24 |
-| 25. i18n & Polish | v4.0 | 1/1 | Complete | 2026-02-24 |
-| 26. Fix Journal Entry Validation | v4.0 | 1/1 | Complete | 2026-02-24 |
-| 18. Database Foundation & Exercise Library | v5.0 | 4/4 | Complete | 2026-02-23 |
-| 19. Workout Logging Core Loop | v5.0 | 7/7 | Complete | 2026-02-24 |
-| 20. Routines & Templates | v5.0 | 3/3 | Complete | 2026-02-24 |
-| 21. History, Personal Records & Progression | v5.0 | 4/4 | Complete | 2026-02-24 |
-| 22. Bug Fix & Dead Code Cleanup | v5.0 | 1/1 | Complete | 2026-02-25 |
-| 23. Fix Save-as-Routine Timing Bug | v5.0 | 1/1 | Complete | 2026-02-27 |
+| 18. Database Foundation | v4.0 | 2/2 | Complete | 2026-02-21 |
+| 19. Plaid Bank Connection | v4.0 | 6/6 | Complete | 2026-02-22 |
+| 20. Transactions & Categorization | v4.0 | 5/5 | Complete | 2026-02-23 |
+| 21. Budgets & Spending | v4.0 | 5/5 | Complete | 2026-02-23 |
+| 22. Bills, Goals & Net Worth | v4.0 | 6/6 | Complete | 2026-02-24 |
+| 23. Household & Couples | v4.0 | 4/4 | Complete | 2026-02-24 |
+| 24. Dashboard & AI Insights | v4.0 | 5/5 | Complete | 2026-02-24 |
+| 25. Data Management | v4.0 | 2/2 | Complete | 2026-02-24 |
+| 26. CSV Import & Polish | v4.0 | 3/3 | Complete | 2026-02-28 |

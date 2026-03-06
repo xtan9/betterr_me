@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A habit tracking, project management, reflective journaling, and fitness tracking web app built with Next.js 16, Supabase, and TypeScript. Supports habits (daily/weekdays/weekly/times_per_week/custom), task management with Work/Personal sections and named projects, 4-column kanban boards per project, daily journal entries with rich-text editing and mood tracking, writing prompts, calendar/timeline browsing, Hevy-inspired workout logging with exercise library, routine templates, progression charts and personal records, streaks, weekly insights, and data export. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
+A habit tracking, project management, and personal finance web app built with Next.js 16, Supabase, and TypeScript. Supports habits (daily/weekdays/weekly/times_per_week/custom), task management with Work/Personal sections and named projects, 4-column kanban boards per project, streaks, weekly insights, and data export. Full money tracking with Plaid bank connections, transaction management with auto-categorization, monthly budgets with spending analytics, bill/subscription detection, savings goals, net worth tracking, couples/household support with privacy controls, future-first dashboard with cash flow projections, and contextual AI insights. Three locales (en, zh, zh-TW), dark mode with semantic design tokens, deployed to Vercel.
 
 ## Core Value
 
@@ -63,40 +63,26 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ 4-column kanban board per project with drag-and-drop between columns — v3.0
 - ✓ Monday.com-style detail modal and column quick-add on kanban board — v3.0
 - ✓ All v3.0 UI strings translated in en, zh, zh-TW — v3.0
-- ✓ User can create a journal entry for a specific date with rich text (Tiptap editor) — v4.0
-- ✓ User can edit and update an existing journal entry — v4.0
-- ✓ User can delete a journal entry — v4.0
-- ✓ User can select a mood emoji (5-point scale) for each entry — v4.0
-- ✓ User sees one entry per day (upsert model) — v4.0
-- ✓ User can choose from a library of writing prompts (gratitude, reflection, goals) — v4.0
-- ✓ User can skip prompts and write free-form — v4.0
-- ✓ Calendar view with mood-colored dot indicators — v4.0
-- ✓ Click calendar day to view or create entry — v4.0
-- ✓ Timeline feed for chronological browsing — v4.0
-- ✓ Sidebar navigation entry for journal — v4.0
-- ✓ Dashboard quick-entry journal widget — v4.0
-- ✓ Habit/task linking on journal entries — v4.0
-- ✓ "On This Day" past reflections — v4.0
-- ✓ Journal streak counter — v4.0
-- ✓ All journal UI strings translated in en, zh, zh-TW — v4.0
-- ✓ Writing prompts available in all three locales — v4.0
-- ✓ Exercise library with 92 preset exercises (browse, search, filter by muscle group/equipment) + custom exercises — v5.0
-- ✓ Real-time workout logging (start session, add exercises, log sets with weight+reps/bodyweight/duration, mark complete) — v5.0
-- ✓ Active workout persists across browser refresh via dual-write (server + localStorage) — v5.0
-- ✓ Rest timer with auto-start on set complete, +15s/-15s adjustment, audio beep, tab-switch accuracy — v5.0
-- ✓ Routine templates with copy-on-start semantics (create, edit, delete, start workout from routine) — v5.0
-- ✓ Save completed workout as new routine template — v5.0
-- ✓ Workout history list and detail view with PR badges — v5.0
-- ✓ Per-exercise progression charts (max weight/volume over time) with date range selector — v5.0
-- ✓ Mid-workout personal record detection with celebratory banner — v5.0
-- ✓ Dashboard workout stats widget (last workout date, weekly count) — v5.0
-- ✓ Weight unit preference (kg/lbs) in settings, all displays respect choice — v5.0
-- ✓ Workouts as top-level sidebar nav item — v5.0
-- ✓ All fitness tracking UI strings translated in en, zh, zh-TW — v5.0
+- ✓ Household schema with RLS, money arithmetic (BIGINT cents + decimal.js), admin client, lazy household creation — v4.0
+- ✓ Plaid bank connections: OAuth flow, Vault-encrypted tokens, JWT/ES256 webhook verification, cursor-based sync, Vercel Cron — v4.0
+- ✓ Transaction list with search, filters (date/amount/category/account), cursor pagination — v4.0
+- ✓ Auto-categorization (16 PFCv2 categories), merchant rules, category overrides, custom categories, transaction splitting — v4.0
+- ✓ CSV import with column mapping, duplicate detection, and manual transaction entry — v4.0
+- ✓ Monthly budgets per category with progress rings, donut/bar charts, drill-down, and rollover — v4.0
+- ✓ Bill auto-detection from transaction patterns, bill calendar, manual bill entry — v4.0
+- ✓ Savings goals with target/deadline, progress rings, projected completion dates — v4.0
+- ✓ Net worth tracking (assets minus liabilities) with line chart over time, manual assets — v4.0
+- ✓ Household/couples: partner invitation, mine/household views, account visibility (mine/ours/hidden), shared budgets/goals — v4.0
+- ✓ Future-first dashboard: available money, upcoming bills, projected balance, income detection — v4.0
+- ✓ Contextual AI insights: spending anomalies, price increases, goal progress, anxiety-aware framing — v4.0
+- ✓ Money summary card on main BetterR.Me dashboard — v4.0
+- ✓ CSV export with date range, full data deletion with Plaid revocation — v4.0
+- ✓ Calm Finance design tokens for money views (muted teal/amber, no red/green) — v4.0
+- ✓ All money UI strings in en, zh, zh-TW — v4.0
 
 ### Active
 
-(No active requirements — start next milestone with `/gsd:new-milestone`)
+(No active requirements — next milestone not yet defined)
 
 ### Out of Scope
 
@@ -115,39 +101,39 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - Custom kanban columns / user-defined statuses — fixed 4-column model for personal use
 - WIP limits, swimlanes, automations — team-oriented features, not aligned with solo use
 - Subtasks, time tracking, card attachments — scope creep for personal task management
-- AI-generated prompts or summaries — no AI API integration planned; static prompt library sufficient
-- Voice-to-text journal entries — requires speech API, out of scope for web-first
-- Journal entry sharing/export — data export exists for habits; journal export deferred
-- Mood notification reminders — no push notification infrastructure
-- Photo/file uploads to journal — no file storage infrastructure (Supabase Storage not configured)
-- Superset grouping (pair exercises back-to-back) — deferred to v5.1+
-- Muscle group distribution chart — deferred to v5.1+
-- Estimated 1RM as PR type — requires formula selection, deferred
-- Workout streak tracking — deferred to v5.1+
-- Social feed / sharing / leaderboards — single-user app
-- AI workout generation — premature for v5.0
-- Cardio distance/pace/route tracking — web can't access GPS
-- Workout programs / periodization — complex program engine, premature
+- AI chatbot for financial advice — SEC/FINRA compliance risk, LLM hallucination liability
+- Bill negotiation service — operational complexity, legal liability
+- Investment advisory / robo-advisor — SEC/FINRA registration required
+- Multi-currency support — massive complexity, US-focused for now
+- Automatic bill payment — money transmitter licensing, ACH complexity
+- Envelope budgeting (YNAB-style) — high complexity, niche audience
+- Receipt scanning / OCR — specialized feature, separate scope
+- Stripe/freemium billing — build features first, add billing in future milestone
 
 ## Context
 
-- **Codebase:** ~400+ files, ~57,500 LOC TypeScript, Next.js 16 App Router, Supabase backend, deployed to Vercel
-- **Test suite:** Vitest + Playwright, 50% coverage threshold
+- **Codebase:** 77,070 LOC TypeScript, 323+ files, Next.js 16 App Router, Supabase backend, deployed to Vercel
+- **Test suite:** 1207+ tests (Vitest + Playwright), 50% coverage threshold
 - **Shipped:** v1.0 Codebase Hardening (2026-02-16) — 5 phases, 11 plans, 26 requirements
 - **Shipped:** v1.1 Dashboard Task Fixes (2026-02-17) — 1 phase, 1 plan, 3 requirements
 - **Shipped:** v2.0 UI Style Redesign (2026-02-17) — 9 phases, 21 plans, 28 requirements
 - **Shipped:** v2.1 UI Polish & Refinement (2026-02-18) — 3 phases, 6 plans, 8 requirements
 - **Shipped:** v3.0 Projects & Kanban (2026-02-21) — 5 phases, 12 plans, 17 requirements
-- **Shipped:** v4.0 Journal (2026-02-24) — 7 phases, 13 plans, 17 requirements
-- **Shipped:** v5.0 Fitness Tracking (2026-02-27) — 6 phases, 20 plans, 36 requirements
-- **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit)
+- **Shipped:** v4.0 Money Tracking (2026-02-28) — 9 phases, 38 plans, 66 requirements
+- **Money feature origin:** Brainstormed as separate "moneyy.me" project, incorporated into BetterR.Me
+- **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit — may need refresh after v4.0)
 - **Known:** Vitest picks up .worktrees/ test files (spurious, not blocking)
 - **Known:** @dnd-kit/core v6 + React 19 peer dep mismatch (cosmetic, works correctly)
-- **Known:** v3.0 + v4.0 + v5.0 DB migrations must be applied to production Supabase
+- **Known:** Plaid API costs ~$1-2/connected account/month — monitor unit economics
+- **Known:** 7 household human verification items pending live two-user testing
 
 ## Constraints
 
 - **Tech stack:** Next.js 16, Supabase, TypeScript, pnpm
+- **Bank data:** Plaid API for account connections
+- **Money arithmetic:** decimal.js for all currency calculations (never native JS floats)
+- **Design:** Calm Finance principles for money views (muted tones, forward-looking framing)
+- **Billing:** No Stripe/freemium in this milestone — all features free
 - **i18n:** All user-facing strings in en, zh, zh-TW
 - **Test coverage:** Must not decrease from current baseline
 
@@ -173,23 +159,19 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | SWR as single source of truth for kanban state | No dual local+server state, optimistic mutations with rollback | ✓ Good — clean data flow, rollbackOnError:true handles failures |
 | ON DELETE SET NULL for project_id FK | Deleted projects orphan tasks as standalone, not cascade delete | ✓ Good — preserves task history, user expectation |
 | Section change clears project_id silently | No confirmation needed, natural form behavior | ✓ Good — clean UX, no modal interruption |
-| next/dynamic ssr:false for KanbanBoard and Tiptap | Avoid hydration issues with complex client libraries | ✓ Good — fixes Next.js 16 build, clean client-only boundary |
-| Tiptap JSONB storage over TEXT | Rich text needs structure for rendering, not plain text | ✓ Good — lossless round-trip, enables content extraction |
-| Supabase .upsert() with onConflict for journal | One-entry-per-day at DB level, no client-side race conditions | ✓ Good — atomic enforcement, POST always returns 201 |
-| Debounced autosave (2s) with sendBeacon fallback | Balance save frequency vs API load; sendBeacon catches nav-away | ✓ Good — reliable save with minimal network chatter |
-| Hardcoded prompts with i18n keys (not database) | Static content, no admin UI needed, i18n via existing system | ✓ Good — zero runtime overhead, culturally appropriate translations |
-| Dashboard widget routes to /journal (not inline editing) | Keep widget simple, journal page is the writing surface | ✓ Good — clear separation, widget as entry point |
-| Streak starts from yesterday if today has no entry | Preserves count during the day before user writes | ✓ Good — no "streak reset" anxiety during the day |
-| On This Day fixed offsets (30d, 90d, 1y) | Predictable, meaningful reflection intervals | ✓ Good — simple computation, relatable time periods |
-| Link chip colors by type (teal/blue/purple) | GitHub-label-style visual grouping by entity type | ✓ Good — instant visual category recognition |
-| i18n parity test (bidirectional key check) | Catch missing and orphan keys automatically | ✓ Good — prevents locale drift, catches both directions |
-| Canonical kg storage (weight_kg NUMERIC(7,2)) | Prevents data corruption on unit switches; convert to user preference on display only | ✓ Good — clean separation of storage vs display |
-| Seed preset exercises via migration SQL | Avoids 5s+ latency the lazy-seed pattern would cause at 80-120 rows | ✓ Good — 92 exercises seeded, zero runtime cost |
-| Dual-write active workout (server + localStorage) | Prevents session loss on browser refresh/crash | ✓ Good — seamless resume with fallback |
-| On-demand PR computation (no personal_records table) | Acceptable for <500 workouts per exercise; avoids expensive backfill | ✓ Good — simple, correct, deferrable optimization |
-| Copy-on-start for routine → workout | Editing routine after starting workout doesn't affect in-progress session | ✓ Good — clean data isolation |
-| EXERCISE_FIELD_MAP for type-aware tracking | Single source of truth for which fields apply to each exercise type | ✓ Good — reused across workout logger, routines, history, PR detection |
-| Remove in_progress guard from save-as-routine | Exercises and sets exist regardless of workout status | ✓ Good — fixed finish dialog timing bug |
+| next/dynamic ssr:false for KanbanBoard | Avoid hydration issues with drag-and-drop library | ✓ Good — fixes Next.js 16 build, clean client-only boundary |
+
+| Keep Supabase for money features | BetterR.Me already uses Supabase auth+DB; no need for Better Auth+Drizzle+Neon | ✓ Good — unified auth/DB, Vault for Plaid encryption, RLS for data isolation |
+| Plaid for bank connections | Best US coverage (12,000+ institutions), industry standard | ✓ Good — OAuth flow, webhooks, PFCv2 categorization all working |
+| Calm Finance for money views only | BetterR.Me design + Calm Finance principles (no red/green, forward framing) for finance UI | ✓ Good — muted teal/amber palette, anxiety-aware language, users feel calm not judged |
+| No billing in v4.0 | Build features first, add Stripe/freemium in future milestone | ✓ Good — 66 features shipped without billing complexity |
+| decimal.js for money arithmetic | JavaScript floats break at 0.1 + 0.2; financial data requires exact arithmetic | ✓ Good — BIGINT cents in DB, decimal.js at API boundary, zero precision errors |
+| Couples/household from day one | Core differentiator; household_id in schema from first migration | ✓ Good — mine/ours/hidden views, shared budgets/goals, solo-to-couple transition seamless |
+| IN-subquery RLS pattern | 99.78% faster than JOIN-based RLS per Supabase docs | ✓ Good — all money tables use this pattern, consistent and performant |
+| Plaid access tokens in Supabase Vault | Encryption at rest required for financial data | ✓ Good — Vault wrapper functions with SECURITY DEFINER for PostgREST access |
+| Cursor-based Plaid sync | Idempotent partial progress, safe for serverless timeouts | ✓ Good — sync_cursor persisted per connection, Vercel Cron handles background |
+| Pure computation modules for insights | No DB imports in lib/money/projections, income-detection, insights | ✓ Good — testable pure functions, all inputs are typed args |
+| SWR deduplication for household state | useHousehold() per-component, no context provider needed | ✓ Good — simpler than React context, SWR handles cache automatically |
 
 ---
-*Last updated: 2026-02-27 after v4.0 Journal + v5.0 Fitness Tracking milestones merged*
+*Last updated: 2026-02-28 after v4.0 milestone completed*
