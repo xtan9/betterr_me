@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useNetWorthHistory } from "@/lib/hooks/use-net-worth";
 import { formatMoney } from "@/lib/money/arithmetic";
-import type { ViewMode } from "@/lib/db/types";
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -91,10 +91,10 @@ function CustomTooltip({
 // Component
 // ---------------------------------------------------------------------------
 
-export function NetWorthChart({ view = "mine" }: { view?: ViewMode }) {
+export function NetWorthChart() {
   const t = useTranslations("money.netWorth");
   const [period, setPeriod] = useState<Period>("6M");
-  const { snapshots, isLoading, error } = useNetWorthHistory(period, view);
+  const { snapshots, isLoading, error } = useNetWorthHistory(period);
 
   // Check if we have assets/liabilities data
   const hasBreakdown = snapshots.some(

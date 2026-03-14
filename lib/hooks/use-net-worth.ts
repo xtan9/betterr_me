@@ -61,10 +61,10 @@ export function useNetWorth(view: ViewMode = "mine") {
  *
  * @param period - "1M" | "3M" | "6M" | "1Y" | "ALL"
  */
-export function useNetWorthHistory(period: string, view: ViewMode = "mine") {
+export function useNetWorthHistory(period: string) {
   const { data, error, mutate } = useSWR<{
     snapshots: SnapshotWithLabel[];
-  }>(`/api/money/net-worth/snapshots?period=${period}&view=${view}`, fetcher, {
+  }>(`/api/money/net-worth/snapshots?period=${period}`, fetcher, {
     keepPreviousData: true,
   });
 
