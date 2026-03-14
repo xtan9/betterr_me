@@ -37,8 +37,8 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ 20-habit limit enforced in POST /api/habits — v1.0
 - ✓ Logger module replaces all console.error/warn in server code — v1.0
 - ✓ Dead cache removed, theme-switcher cleaned, DB constructors hardened — v1.0
-- ✓ Dashboard _warnings for computeMissedDays errors — v1.0
-- ✓ Dashboard uses COUNT(*) for task count — v1.0
+- ✓ Dashboard \_warnings for computeMissedDays errors — v1.0
+- ✓ Dashboard uses COUNT(\*) for task count — v1.0
 - ✓ Adaptive streak lookback (30→365 days) — v1.0
 - ✓ 71 tests backfilled (logs route, Zod schemas, frequency regressions) — v1.0
 - ✓ getTodayTasks uses client-sent date parameter (not server-local time) — v1.1
@@ -136,30 +136,32 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - **Billing:** No Stripe/freemium in this milestone — all features free
 - **i18n:** All user-facing strings in en, zh, zh-TW
 - **Test coverage:** Must not decrease from current baseline
+- **PR workflow:** Create one PR per phase, not one giant PR per milestone. Small PRs are easier to review and catch issues early. After each phase is executed and verified, create a PR for that phase before moving to the next.
+- **When push a change** always pull from origin and rebase and then push to avoid conflicts and always run the latest code on pr check.
 
 ## Key Decisions
 
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Remove in-memory cache entirely | Ineffective on Vercel serverless; HTTP Cache-Control handles client caching | ✓ Good — 669 lines removed, HTTP caching preserved |
-| Fix trigger + shared ensureProfile() helper | Defense-in-depth: trigger primary, helper catches edge cases | ✓ Good — dual defense with COALESCE fallback |
-| Weekly = "any day that week counts" | Per PRD V1.2 §6.2, no day picker needed | ✓ Good — simplified implementation, no migration needed |
-| Wire existing Zod schemas into API routes | Schemas existed but unused server-side | ✓ Good — eliminated parallel validation, all 6 routes wired |
-| Logger with (msg, error?, context?) signature | Matches future Sentry.captureException API | ✓ Good — one-file swap when Sentry added |
-| Adaptive streak lookback (30→365) | Short streaks (majority) need only ~30 days | ✓ Good — reduces data transfer for common case |
-| getTodayTasks accepts client date param | Server-local time wrong on Vercel (UTC ≠ user timezone) | ✓ Good — all 3 call sites pass client date, no duplication |
-| Include completed tasks in getTodayTasks | Removing completed tasks breaks "X of Y" dashboard count | ✓ Good — single array for both total and completed count |
-| Raw HSL convention for CSS custom properties | Matches existing shadcn/ui token pattern, enables opacity modifiers | ✓ Good — 56 tokens defined, all components migrated |
-| Flat sidebar nav (remove collapsible groups) | Chameleon reference uses flat list, cleaner UX with 3 items | ✓ Good — simpler code, cleaner visual hierarchy |
-| Task categories reuse habit category tokens | Same visual intent (work=learning blue, personal=wellness purple) | ✓ Good — unified token system, no category token duplication |
-| Sidebar width 224px with 60px collapsed rail | Matched Chameleon reference measurements | ✓ Good — pixel-matched design reference |
-| API-layer is_completed/status sync (not DB trigger) | Testable in unit tests, explicit sync points | ✓ Good — 23 TDD tests, sync-at-mutation-point pattern |
-| Float-based sort_order for kanban | Single-row updates for reordering, no renumbering | ✓ Good — 65536.0 gap spacing, infrastructure for future reorder |
-| @dnd-kit/core v6 over @dnd-kit/react v0.3.x | Stable API vs pre-1.0 experimental | ✓ Good — reliable drag-drop, well-documented |
-| SWR as single source of truth for kanban state | No dual local+server state, optimistic mutations with rollback | ✓ Good — clean data flow, rollbackOnError:true handles failures |
-| ON DELETE SET NULL for project_id FK | Deleted projects orphan tasks as standalone, not cascade delete | ✓ Good — preserves task history, user expectation |
-| Section change clears project_id silently | No confirmation needed, natural form behavior | ✓ Good — clean UX, no modal interruption |
-| next/dynamic ssr:false for KanbanBoard | Avoid hydration issues with drag-and-drop library | ✓ Good — fixes Next.js 16 build, clean client-only boundary |
+| Decision                                            | Rationale                                                                   | Outcome                                                         |
+| --------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Remove in-memory cache entirely                     | Ineffective on Vercel serverless; HTTP Cache-Control handles client caching | ✓ Good — 669 lines removed, HTTP caching preserved              |
+| Fix trigger + shared ensureProfile() helper         | Defense-in-depth: trigger primary, helper catches edge cases                | ✓ Good — dual defense with COALESCE fallback                    |
+| Weekly = "any day that week counts"                 | Per PRD V1.2 §6.2, no day picker needed                                     | ✓ Good — simplified implementation, no migration needed         |
+| Wire existing Zod schemas into API routes           | Schemas existed but unused server-side                                      | ✓ Good — eliminated parallel validation, all 6 routes wired     |
+| Logger with (msg, error?, context?) signature       | Matches future Sentry.captureException API                                  | ✓ Good — one-file swap when Sentry added                        |
+| Adaptive streak lookback (30→365)                   | Short streaks (majority) need only ~30 days                                 | ✓ Good — reduces data transfer for common case                  |
+| getTodayTasks accepts client date param             | Server-local time wrong on Vercel (UTC ≠ user timezone)                     | ✓ Good — all 3 call sites pass client date, no duplication      |
+| Include completed tasks in getTodayTasks            | Removing completed tasks breaks "X of Y" dashboard count                    | ✓ Good — single array for both total and completed count        |
+| Raw HSL convention for CSS custom properties        | Matches existing shadcn/ui token pattern, enables opacity modifiers         | ✓ Good — 56 tokens defined, all components migrated             |
+| Flat sidebar nav (remove collapsible groups)        | Chameleon reference uses flat list, cleaner UX with 3 items                 | ✓ Good — simpler code, cleaner visual hierarchy                 |
+| Task categories reuse habit category tokens         | Same visual intent (work=learning blue, personal=wellness purple)           | ✓ Good — unified token system, no category token duplication    |
+| Sidebar width 224px with 60px collapsed rail        | Matched Chameleon reference measurements                                    | ✓ Good — pixel-matched design reference                         |
+| API-layer is_completed/status sync (not DB trigger) | Testable in unit tests, explicit sync points                                | ✓ Good — 23 TDD tests, sync-at-mutation-point pattern           |
+| Float-based sort_order for kanban                   | Single-row updates for reordering, no renumbering                           | ✓ Good — 65536.0 gap spacing, infrastructure for future reorder |
+| @dnd-kit/core v6 over @dnd-kit/react v0.3.x         | Stable API vs pre-1.0 experimental                                          | ✓ Good — reliable drag-drop, well-documented                    |
+| SWR as single source of truth for kanban state      | No dual local+server state, optimistic mutations with rollback              | ✓ Good — clean data flow, rollbackOnError:true handles failures |
+| ON DELETE SET NULL for project_id FK                | Deleted projects orphan tasks as standalone, not cascade delete             | ✓ Good — preserves task history, user expectation               |
+| Section change clears project_id silently           | No confirmation needed, natural form behavior                               | ✓ Good — clean UX, no modal interruption                        |
+| next/dynamic ssr:false for KanbanBoard              | Avoid hydration issues with drag-and-drop library                           | ✓ Good — fixes Next.js 16 build, clean client-only boundary     |
 
 | Keep Supabase for money features | BetterR.Me already uses Supabase auth+DB; no need for Better Auth+Drizzle+Neon | ✓ Good — unified auth/DB, Vault for Plaid encryption, RLS for data isolation |
 | Plaid for bank connections | Best US coverage (12,000+ institutions), industry standard | ✓ Good — OAuth flow, webhooks, PFCv2 categorization all working |
@@ -174,4 +176,5 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 | SWR deduplication for household state | useHousehold() per-component, no context provider needed | ✓ Good — simpler than React context, SWR handles cache automatically |
 
 ---
-*Last updated: 2026-02-28 after v4.0 milestone completed*
+
+\_Last updated: 2026-03-13

@@ -1470,7 +1470,9 @@
       "listView": "列表",
       "calendarView": "日历",
       "today": "今天",
-      "noBillsOnDay": "当天无账单"
+      "noBillsOnDay": "当天无账单",
+      "statusUpdateError": "更新账单状态失败",
+      "fetchError": "加载账单失败"
     },
     "goals": {
       "title": "储蓄目标",
@@ -1507,7 +1509,8 @@
       "saveChanges": "保存更改",
       "goalCreated": "目标已创建",
       "goalUpdated": "目标已更新",
-      "contributionAdded": "存款已添加"
+      "contributionAdded": "存款已添加",
+      "fetchError": "加载目标失败"
     },
     "netWorth": {
       "title": "净资产",
@@ -1552,7 +1555,9 @@
       "assetCreated": "资产已添加",
       "assetUpdated": "资产已更新",
       "date": "日期",
-      "netWorthLabel": "净资产"
+      "netWorthLabel": "净资产",
+      "fetchError": "加载净资产数据失败",
+      "chartError": "加载图表数据失败"
     },
     "disconnect": {
       "title": "断开 {name}？",

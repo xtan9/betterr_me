@@ -35,7 +35,7 @@ function sortByDueDate(a: RecurringBill, b: RecurringBill): number {
 
 export function BillsList() {
   const t = useTranslations("money.bills");
-  const { bills, summary, isLoading, mutate } = useBills();
+  const { bills, summary, isLoading, error, mutate } = useBills();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editBill, setEditBill] = useState<RecurringBill | null>(null);
@@ -82,11 +82,12 @@ export function BillsList() {
         });
         if (!res.ok) throw new Error("Failed to update bill status");
         mutate();
-      } catch {
-        toast.error("Failed to update bill status");
+      } catch (error) {
+        console.error("Failed to update bill status", error);
+        toast.error(t("statusUpdateError"));
       }
     },
-    [mutate]
+    [mutate, t]
   );
 
   const handleEdit = useCallback((bill: RecurringBill) => {
@@ -101,7 +102,8 @@ export function BillsList() {
       if (!res.ok) throw new Error("Sync failed");
       toast.success(t("syncSuccess"));
       mutate();
-    } catch {
+    } catch (error) {
+      console.error("Failed to sync bills", error);
       toast.error(t("syncError"));
     } finally {
       setIsSyncing(false);
@@ -113,6 +115,15 @@ export function BillsList() {
     setFormOpen(false);
     mutate();
   }, [mutate]);
+
+  // Error state
+  if (error) {
+    return (
+      <div className="rounded-xl border border-destructive/50 bg-destructive/10 px-6 py-8 text-center">
+        <p className="text-sm text-destructive">{t("fetchError")}</p>
+      </div>
+    );
+  }
 
   // Loading state
   if (isLoading) {

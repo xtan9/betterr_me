@@ -217,8 +217,8 @@ function GoalCreateEditDialog({
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to save goal");
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Failed to save goal");
       }
 
       toast.success(mode === "edit" ? t("goalUpdated") : t("goalCreated"));
@@ -412,8 +412,8 @@ function ContributeDialog({
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to add contribution");
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Failed to add contribution");
       }
 
       toast.success(t("contributionAdded"));

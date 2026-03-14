@@ -7,16 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GoalCard } from "@/components/money/goal-card";
 import { GoalForm } from "@/components/money/goal-form";
-import { InsightList } from "@/components/money/insight-list";
 import { useGoals } from "@/lib/hooks/use-goals";
-import { useHousehold } from "@/lib/hooks/use-household";
-import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
 import type { GoalWithProjection } from "@/lib/db/types";
 
 export function GoalGrid() {
   const t = useTranslations("money.goals");
-  const { viewMode, setViewMode, isMultiMember } = useHousehold();
-  const { goals, isLoading, mutate } = useGoals(viewMode);
+  const { goals, isLoading, error, mutate } = useGoals();
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit" | "contribute">("create");
@@ -76,6 +72,15 @@ export function GoalGrid() {
     }
   };
 
+  // Error state
+  if (error) {
+    return (
+      <div className="rounded-xl border border-destructive/50 bg-destructive/10 px-6 py-8 text-center">
+        <p className="text-sm text-destructive">{t("fetchError")}</p>
+      </div>
+    );
+  }
+
   // Loading state
   if (isLoading) {
     return (
@@ -119,16 +124,6 @@ export function GoalGrid() {
 
   return (
     <>
-      {/* Goal progress insights (AIML-03) */}
-      <InsightList page="goals" className="mb-4" />
-
-      {/* Mine/Household tabs */}
-      <HouseholdViewTabs
-        value={viewMode}
-        onValueChange={setViewMode}
-        isMultiMember={isMultiMember}
-      />
-
       {/* Create button */}
       <div className="flex justify-end">
         <Button onClick={handleCreate}>

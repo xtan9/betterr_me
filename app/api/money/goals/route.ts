@@ -5,84 +5,8 @@ import { SavingsGoalsDB } from "@/lib/db";
 import { goalCreateSchema } from "@/lib/validations/goals";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
-import { addMonths, differenceInDays, format } from "date-fns";
-import type { SavingsGoal, GoalContribution, GoalWithProjection, StatusColor, ViewMode } from "@/lib/db/types";
-
-/**
- * Compute monthly savings rate from contributions over the last 3 months.
- * Returns 0 when there is no data.
- */
-function computeMonthlyRate(contributions: GoalContribution[]): number {
-  if (contributions.length === 0) return 0;
-
-  const now = new Date();
-  const threeMonthsAgo = addMonths(now, -3);
-
-  const recentContribs = contributions.filter(
-    (c) => new Date(c.contributed_at) >= threeMonthsAgo
-  );
-
-  if (recentContribs.length === 0) return 0;
-
-  const totalCents = recentContribs.reduce((sum, c) => sum + c.amount_cents, 0);
-
-  // Find the earliest contribution in the window to determine actual months of data
-  const earliest = new Date(
-    Math.min(...recentContribs.map((c) => new Date(c.contributed_at).getTime()))
-  );
-  const monthsWithData = Math.max(
-    1,
-    (now.getTime() - earliest.getTime()) / (30.44 * 24 * 60 * 60 * 1000)
-  );
-
-  return Math.round(totalCents / monthsWithData);
-}
-
-/**
- * Determine status color based on projected date vs deadline.
- * green = on track, yellow = slightly behind, red = significantly behind.
- */
-function getStatusColor(
-  projectedDate: Date | null,
-  deadline: string | null
-): StatusColor {
-  if (!deadline) return "green"; // No deadline means always on track
-  if (!projectedDate) return "yellow"; // Can't project, slightly behind
-
-  const deadlineDate = new Date(deadline);
-  const daysLate = differenceInDays(projectedDate, deadlineDate);
-  if (daysLate <= 0) return "green";
-  if (daysLate <= 30) return "yellow";
-  return "red";
-}
-
-/**
- * Add projection data to a single goal.
- */
-function computeProjection(
-  goal: SavingsGoal,
-  contributions: GoalContribution[]
-): GoalWithProjection {
-  const monthlyRate = computeMonthlyRate(contributions);
-
-  let projectedDate: Date | null = null;
-
-  if (monthlyRate > 0 && goal.current_cents < goal.target_cents) {
-    const remaining = goal.target_cents - goal.current_cents;
-    const monthsToGo = remaining / monthlyRate;
-    projectedDate = addMonths(new Date(), Math.ceil(monthsToGo));
-  } else if (goal.current_cents >= goal.target_cents) {
-    // Goal already reached
-    projectedDate = new Date();
-  }
-
-  return {
-    ...goal,
-    projected_date: projectedDate ? format(projectedDate, "yyyy-MM-dd") : null,
-    monthly_rate_cents: monthlyRate,
-    status_color: getStatusColor(projectedDate, goal.deadline),
-  };
-}
+import { computeProjection } from "@/lib/money/goal-projections";
+import type { GoalWithProjection } from "@/lib/money/goal-projections";
 
 // ---------------------------------------------------------------------------
 // GET /api/money/goals
@@ -90,12 +14,9 @@ function computeProjection(
 
 /**
  * GET /api/money/goals
- * List goals for the household with projection data.
- * Supports ?view=mine|household (default: 'mine').
- * - view=mine: goals where owner_id = userId AND is_shared = false
- * - view=household: goals where is_shared = true
+ * List all goals for the household with projection data.
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = await createClient();
     const {
@@ -109,12 +30,7 @@ export async function GET(request: NextRequest) {
     const householdId = await resolveHousehold(supabase, user.id);
     const goalsDB = new SavingsGoalsDB(supabase);
 
-    const view = (request.nextUrl.searchParams.get("view") || "mine") as ViewMode;
-    const goals = await goalsDB.getByHouseholdFiltered(
-      householdId,
-      user.id,
-      view
-    );
+    const goals = await goalsDB.getByHousehold(householdId);
 
     // Fetch contributions for all goals to compute projections
     const goalsWithProjections: GoalWithProjection[] = await Promise.all(
@@ -168,8 +84,6 @@ export async function POST(request: NextRequest) {
 
     const goal = await goalsDB.create({
       household_id: householdId,
-      owner_id: user.id,
-      is_shared: false,
       name: parsed.data.name,
       target_cents: toCents(parsed.data.target_amount),
       current_cents: 0,

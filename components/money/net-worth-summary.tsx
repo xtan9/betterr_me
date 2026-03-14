@@ -6,15 +6,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNetWorth } from "@/lib/hooks/use-net-worth";
 import { formatMoney } from "@/lib/money/arithmetic";
-import type { ViewMode } from "@/lib/db/types";
 
-interface NetWorthSummaryProps {
-  view?: ViewMode;
-}
-
-export function NetWorthSummary({ view = "mine" }: NetWorthSummaryProps) {
+export function NetWorthSummary() {
   const t = useTranslations("money.netWorth");
-  const { netWorth, isLoading } = useNetWorth(view);
+  const { netWorth, isLoading, error } = useNetWorth();
 
   if (isLoading) {
     return (
@@ -26,6 +21,16 @@ export function NetWorthSummary({ view = "mine" }: NetWorthSummaryProps) {
             <Skeleton className="h-5 w-32" />
             <Skeleton className="h-5 w-32" />
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="border-destructive/50 bg-destructive/10">
+        <CardContent className="p-6">
+          <p className="text-sm text-destructive">{t("fetchError")}</p>
         </CardContent>
       </Card>
     );

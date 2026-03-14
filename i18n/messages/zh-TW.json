@@ -1470,7 +1470,9 @@
       "listView": "列表",
       "calendarView": "日曆",
       "today": "今天",
-      "noBillsOnDay": "當天無帳單"
+      "noBillsOnDay": "當天無帳單",
+      "statusUpdateError": "更新帳單狀態失敗",
+      "fetchError": "載入帳單失敗"
     },
     "goals": {
       "title": "儲蓄目標",
@@ -1507,7 +1509,8 @@
       "saveChanges": "儲存變更",
       "goalCreated": "目標已建立",
       "goalUpdated": "目標已更新",
-      "contributionAdded": "存款已新增"
+      "contributionAdded": "存款已新增",
+      "fetchError": "載入目標失敗"
     },
     "netWorth": {
       "title": "淨資產",
@@ -1552,7 +1555,9 @@
       "assetCreated": "資產已新增",
       "assetUpdated": "資產已更新",
       "date": "日期",
-      "netWorthLabel": "淨資產"
+      "netWorthLabel": "淨資產",
+      "fetchError": "載入淨資產資料失敗",
+      "chartError": "載入圖表資料失敗"
     },
     "disconnect": {
       "title": "斷開 {name}？",

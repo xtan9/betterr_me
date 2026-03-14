@@ -193,6 +193,33 @@ describe("goalUpdateSchema", () => {
     const result = goalUpdateSchema.safeParse({});
     expect(result.success).toBe(false);
   });
+
+  it("fails when funding_type is linked but linked_account_id is null", () => {
+    const result = goalUpdateSchema.safeParse({
+      funding_type: "linked",
+      linked_account_id: null,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const flatErrors = result.error.flatten();
+      expect(flatErrors.fieldErrors.linked_account_id).toBeDefined();
+    }
+  });
+
+  it("fails when funding_type is linked but linked_account_id is omitted", () => {
+    const result = goalUpdateSchema.safeParse({
+      funding_type: "linked",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("passes when funding_type is linked with a valid linked_account_id", () => {
+    const result = goalUpdateSchema.safeParse({
+      funding_type: "linked",
+      linked_account_id: "550e8400-e29b-41d4-a716-446655440000",
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 // =============================================================================

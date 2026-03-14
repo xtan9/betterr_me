@@ -1470,7 +1470,9 @@
       "listView": "List",
       "calendarView": "Calendar",
       "today": "Today",
-      "noBillsOnDay": "No bills on this day"
+      "noBillsOnDay": "No bills on this day",
+      "statusUpdateError": "Failed to update bill status",
+      "fetchError": "Failed to load bills"
     },
     "goals": {
       "title": "Savings Goals",
@@ -1507,7 +1509,8 @@
       "saveChanges": "Save Changes",
       "goalCreated": "Goal created",
       "goalUpdated": "Goal updated",
-      "contributionAdded": "Contribution added"
+      "contributionAdded": "Contribution added",
+      "fetchError": "Failed to load goals"
     },
     "netWorth": {
       "title": "Net Worth",
@@ -1552,7 +1555,9 @@
       "assetCreated": "Asset added",
       "assetUpdated": "Asset updated",
       "date": "Date",
-      "netWorthLabel": "Net Worth"
+      "netWorthLabel": "Net Worth",
+      "fetchError": "Failed to load net worth data",
+      "chartError": "Failed to load chart data"
     },
     "disconnect": {
       "title": "Disconnect {name}?",

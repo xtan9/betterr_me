@@ -1,24 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RecurringBill, RecurringBillInsert, RecurringBillUpdate } from "./types";
-
-/**
- * Detected bill from Plaid's recurring transaction streams.
- * Used as input to upsertFromPlaid for syncing detected bills.
- */
-export interface DetectedBill {
-  plaid_stream_id: string;
-  account_id: string;
-  merchant_name: string | null;
-  description: string;
-  amount_cents: number;
-  frequency: string;
-  predicted_next_date: string | null;
-  first_date: string;
-  last_date: string;
-  is_active: boolean;
-  status: string;
-  category_primary: string | null;
-}
+import type { DetectedBill } from "@/lib/plaid/recurring";
 
 /**
  * Database access class for the recurring_bills table.

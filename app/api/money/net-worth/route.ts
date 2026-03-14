@@ -70,10 +70,12 @@ export async function GET(request: NextRequest) {
 
       accountsByType[typeKey] += balance;
 
-      if (balance >= 0) {
-        accountAssets += balance;
-      } else {
+      // Classify by account type, not balance sign:
+      // credit/loan accounts are always liabilities, others are assets
+      if (typeKey === "credit" || typeKey === "loan") {
         accountLiabilities += Math.abs(balance);
+      } else {
+        accountAssets += balance;
       }
     }
 

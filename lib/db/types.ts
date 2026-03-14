@@ -997,7 +997,7 @@ export type SavingsGoalInsert = Omit<
 };
 
 export type SavingsGoalUpdate = Partial<
-  Omit<SavingsGoal, "id" | "household_id" | "created_at" | "updated_at">
+  Omit<SavingsGoal, "id" | "household_id" | "current_cents" | "created_at" | "updated_at">
 >;
 
 // =============================================================================

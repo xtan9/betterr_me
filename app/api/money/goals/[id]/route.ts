@@ -2,73 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveHousehold } from "@/lib/db/households";
 import { SavingsGoalsDB } from "@/lib/db";
+import type { SavingsGoalUpdate } from "@/lib/db/types";
 import { goalUpdateSchema } from "@/lib/validations/goals";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
-import { addMonths, differenceInDays, format } from "date-fns";
-import type { SavingsGoal, GoalContribution, GoalWithProjection, StatusColor } from "@/lib/db/types";
-
-function computeMonthlyRate(contributions: GoalContribution[]): number {
-  if (contributions.length === 0) return 0;
-
-  const now = new Date();
-  const threeMonthsAgo = addMonths(now, -3);
-
-  const recentContribs = contributions.filter(
-    (c) => new Date(c.contributed_at) >= threeMonthsAgo
-  );
-
-  if (recentContribs.length === 0) return 0;
-
-  const totalCents = recentContribs.reduce((sum, c) => sum + c.amount_cents, 0);
-  const earliest = new Date(
-    Math.min(...recentContribs.map((c) => new Date(c.contributed_at).getTime()))
-  );
-  const monthsWithData = Math.max(
-    1,
-    (now.getTime() - earliest.getTime()) / (30.44 * 24 * 60 * 60 * 1000)
-  );
-
-  return Math.round(totalCents / monthsWithData);
-}
-
-function getStatusColor(
-  projectedDate: Date | null,
-  deadline: string | null
-): StatusColor {
-  if (!deadline) return "green";
-  if (!projectedDate) return "yellow";
-
-  const deadlineDate = new Date(deadline);
-  const daysLate = differenceInDays(projectedDate, deadlineDate);
-  if (daysLate <= 0) return "green";
-  if (daysLate <= 30) return "yellow";
-  return "red";
-}
-
-function computeProjection(
-  goal: SavingsGoal,
-  contributions: GoalContribution[]
-): GoalWithProjection {
-  const monthlyRate = computeMonthlyRate(contributions);
-
-  let projectedDate: Date | null = null;
-
-  if (monthlyRate > 0 && goal.current_cents < goal.target_cents) {
-    const remaining = goal.target_cents - goal.current_cents;
-    const monthsToGo = remaining / monthlyRate;
-    projectedDate = addMonths(new Date(), Math.ceil(monthsToGo));
-  } else if (goal.current_cents >= goal.target_cents) {
-    projectedDate = new Date();
-  }
-
-  return {
-    ...goal,
-    projected_date: projectedDate ? format(projectedDate, "yyyy-MM-dd") : null,
-    monthly_rate_cents: monthlyRate,
-    status_color: getStatusColor(projectedDate, goal.deadline),
-  };
-}
+import { computeProjection } from "@/lib/money/goal-projections";
 
 // ---------------------------------------------------------------------------
 // GET /api/money/goals/[id]
@@ -134,7 +72,6 @@ export async function GET(
 /**
  * PATCH /api/money/goals/[id]
  * Update a savings goal.
- * Owner-only: only the goal creator can edit (shared goals are read-only for non-creators).
  */
 export async function PATCH(
   request: NextRequest,
@@ -164,10 +101,10 @@ export async function PATCH(
 
     const householdId = await resolveHousehold(supabase, user.id);
 
-    // Verify ownership and check creator
-    const { data: goalData, error: lookupError } = await supabase
+    // Verify ownership
+    const { error: lookupError } = await supabase
       .from("savings_goals")
-      .select("id, owner_id")
+      .select("id")
       .eq("id", id)
       .eq("household_id", householdId)
       .single();
@@ -182,18 +119,10 @@ export async function PATCH(
       throw lookupError;
     }
 
-    // Owner-only write protection
-    if (goalData.owner_id && goalData.owner_id !== user.id) {
-      return NextResponse.json(
-        { error: "Only the goal creator can edit shared goals" },
-        { status: 403 }
-      );
-    }
-
     const goalsDB = new SavingsGoalsDB(supabase);
 
     // Build update payload, converting amounts if present
-    const updates: Record<string, unknown> = {};
+    const updates: SavingsGoalUpdate = {};
     if (parsed.data.name !== undefined) updates.name = parsed.data.name;
     if (parsed.data.target_amount !== undefined)
       updates.target_cents = toCents(parsed.data.target_amount);
@@ -225,7 +154,6 @@ export async function PATCH(
 /**
  * DELETE /api/money/goals/[id]
  * Delete a savings goal (cascades to contributions).
- * Owner-only: only the goal creator can delete.
  */
 export async function DELETE(
   _request: NextRequest,
@@ -244,10 +172,10 @@ export async function DELETE(
     const { id } = await params;
     const householdId = await resolveHousehold(supabase, user.id);
 
-    // Verify ownership and check creator
-    const { data: goalData, error: lookupError } = await supabase
+    // Verify ownership
+    const { error: lookupError } = await supabase
       .from("savings_goals")
-      .select("id, owner_id")
+      .select("id")
       .eq("id", id)
       .eq("household_id", householdId)
       .single();
@@ -260,14 +188,6 @@ export async function DELETE(
         );
       }
       throw lookupError;
-    }
-
-    // Owner-only write protection
-    if (goalData.owner_id && goalData.owner_id !== user.id) {
-      return NextResponse.json(
-        { error: "Only the goal creator can delete shared goals" },
-        { status: 403 }
-      );
     }
 
     const goalsDB = new SavingsGoalsDB(supabase);
