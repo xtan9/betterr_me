@@ -22,7 +22,7 @@ export function NetWorthPageContent() {
         onValueChange={setViewMode}
         isMultiMember={isMultiMember}
       />
-      <NetWorthChart view={viewMode} />
+      <NetWorthChart />
       <NetWorthSummary view={viewMode} />
       <NetWorthAccounts view={viewMode} />
     </div>

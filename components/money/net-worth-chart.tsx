@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { useNetWorthHistory } from "@/lib/hooks/use-net-worth";
 import { formatMoney } from "@/lib/money/arithmetic";
 
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
