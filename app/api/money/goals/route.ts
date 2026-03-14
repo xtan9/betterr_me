@@ -84,6 +84,8 @@ export async function POST(request: NextRequest) {
 
     const goal = await goalsDB.create({
       household_id: householdId,
+      owner_id: user.id,
+      is_shared: false,
       name: parsed.data.name,
       target_cents: toCents(parsed.data.target_amount),
       current_cents: 0,
