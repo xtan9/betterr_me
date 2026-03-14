@@ -38,14 +38,11 @@ export async function GET(request: NextRequest) {
 
     const period = request.nextUrl.searchParams.get("period") || "3M";
 
-    if (!PERIOD_DAYS[period]) {
-      // Only fail if it's a truly unknown period (not ALL)
-      if (period !== "ALL" && !(period in PERIOD_DAYS)) {
-        return NextResponse.json(
-          { error: "Invalid period. Use 1M, 3M, 6M, 1Y, or ALL" },
-          { status: 400 }
-        );
-      }
+    if (!(period in PERIOD_DAYS)) {
+      return NextResponse.json(
+        { error: "Invalid period. Use 1M, 3M, 6M, 1Y, or ALL" },
+        { status: 400 }
+      );
     }
 
     const householdId = await resolveHousehold(supabase, user.id);

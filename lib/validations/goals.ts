@@ -60,7 +60,19 @@ export const goalUpdateSchema = z
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field required",
-  });
+  })
+  .refine(
+    (data) => {
+      if (data.funding_type === "linked" && data.linked_account_id === null) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Linked account is required when funding type is 'linked'",
+      path: ["linked_account_id"],
+    }
+  );
 
 // =============================================================================
 // CONTRIBUTION CREATE

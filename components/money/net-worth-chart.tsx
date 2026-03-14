@@ -90,17 +90,10 @@ function CustomTooltip({
 // Component
 // ---------------------------------------------------------------------------
 
-interface NetWorthChartProps {
-  /** Accepted for interface compatibility but snapshots are household-level. */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  view?: string;
-}
-
-export function NetWorthChart({}: NetWorthChartProps) {
+export function NetWorthChart() {
   const t = useTranslations("money.netWorth");
   const [period, setPeriod] = useState<Period>("6M");
-  // Note: snapshots are household-level aggregates, not affected by view mode
-  const { snapshots, isLoading } = useNetWorthHistory(period);
+  const { snapshots, isLoading, error } = useNetWorthHistory(period);
 
   // Check if we have assets/liabilities data
   const hasBreakdown = snapshots.some(
@@ -134,13 +127,19 @@ export function NetWorthChart({}: NetWorthChartProps) {
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading && (
+        {error && (
+          <div className="flex h-[300px] items-center justify-center">
+            <p className="text-sm text-destructive">{t("chartError")}</p>
+          </div>
+        )}
+
+        {!error && isLoading && (
           <div className="flex h-[300px] items-center justify-center">
             <div className="size-6 animate-spin rounded-full border-2 border-muted border-t-[hsl(var(--money-sage))]" />
           </div>
         )}
 
-        {!isLoading && snapshots.length === 0 && (
+        {!error && !isLoading && snapshots.length === 0 && (
           <div className="flex h-[300px] flex-col items-center justify-center text-center">
             <TrendingUp className="size-10 text-muted-foreground mb-3" />
             <p className="text-sm text-muted-foreground">{t("noData")}</p>
@@ -150,7 +149,7 @@ export function NetWorthChart({}: NetWorthChartProps) {
           </div>
         )}
 
-        {!isLoading && snapshots.length > 0 && (
+        {!error && !isLoading && snapshots.length > 0 && (
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={snapshots}>

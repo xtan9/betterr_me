@@ -121,23 +121,13 @@ export class SavingsGoalsDB {
 
     if (contribError) throw contribError;
 
-    // Fetch current goal to update running total
-    const { data: goal, error: goalError } = await this.supabase
-      .from("savings_goals")
-      .select("current_cents")
-      .eq("id", goalId)
-      .single();
+    // Atomically increment current_cents via RPC to prevent race conditions
+    const { error: rpcError } = await this.supabase.rpc(
+      "increment_goal_current_cents",
+      { p_goal_id: goalId, p_amount_cents: amountCents }
+    );
 
-    if (goalError) throw goalError;
-
-    // Update current_cents with new total
-    const newCents = goal.current_cents + amountCents;
-    const { error: updateError } = await this.supabase
-      .from("savings_goals")
-      .update({ current_cents: newCents })
-      .eq("id", goalId);
-
-    if (updateError) throw updateError;
+    if (rpcError) throw rpcError;
 
     return contribution;
   }
