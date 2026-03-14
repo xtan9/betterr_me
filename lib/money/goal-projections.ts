@@ -1,13 +1,7 @@
-import { addMonths, differenceInDays } from "date-fns";
-import type { SavingsGoal, GoalContribution } from "@/lib/db/types";
+import { addMonths, differenceInDays, format } from "date-fns";
+import type { SavingsGoal, GoalContribution, GoalWithProjection, StatusColor } from "@/lib/db/types";
 
-export type StatusColor = "green" | "yellow" | "red";
-
-export interface GoalWithProjection extends SavingsGoal {
-  projected_date: string | null;
-  monthly_rate_cents: number;
-  status_color: StatusColor;
-}
+export type { GoalWithProjection, StatusColor };
 
 /**
  * Compute monthly savings rate from contributions over the last 3 months.
@@ -85,7 +79,7 @@ export function computeProjection(
   return {
     ...goal,
     projected_date: projectedDate
-      ? projectedDate.toISOString().split("T")[0]
+      ? format(projectedDate, "yyyy-MM-dd")
       : null,
     monthly_rate_cents: monthlyRate,
     status_color: getStatusColor(projectedDate, goal.deadline),

@@ -206,6 +206,13 @@ describe("goalUpdateSchema", () => {
     }
   });
 
+  it("fails when funding_type is linked but linked_account_id is omitted", () => {
+    const result = goalUpdateSchema.safeParse({
+      funding_type: "linked",
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("passes when funding_type is linked with a valid linked_account_id", () => {
     const result = goalUpdateSchema.safeParse({
       funding_type: "linked",

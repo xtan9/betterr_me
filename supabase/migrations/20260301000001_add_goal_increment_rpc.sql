@@ -7,7 +7,8 @@ CREATE OR REPLACE FUNCTION increment_goal_current_cents(
 )
 RETURNS VOID
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
+SET search_path = public
 AS $$
 BEGIN
   UPDATE savings_goals

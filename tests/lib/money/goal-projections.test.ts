@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { format } from "date-fns";
 import {
   computeMonthlyRate,
   getStatusColor,
@@ -144,7 +145,7 @@ describe("computeProjection", () => {
   it("returns today for already-completed goals", () => {
     const goal = makeGoal({ target_cents: 100_000, current_cents: 100_000 });
     const result = computeProjection(goal, []);
-    expect(result.projected_date).toBe("2026-03-01");
+    expect(result.projected_date).toBe(format(new Date(), "yyyy-MM-dd"));
     expect(result.status_color).toBe("green");
   });
 

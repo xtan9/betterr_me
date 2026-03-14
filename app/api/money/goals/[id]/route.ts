@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveHousehold } from "@/lib/db/households";
 import { SavingsGoalsDB } from "@/lib/db";
+import type { SavingsGoalUpdate } from "@/lib/db/types";
 import { goalUpdateSchema } from "@/lib/validations/goals";
 import { toCents } from "@/lib/money/arithmetic";
 import { log } from "@/lib/logger";
@@ -121,7 +122,7 @@ export async function PATCH(
     const goalsDB = new SavingsGoalsDB(supabase);
 
     // Build update payload, converting amounts if present
-    const updates: Record<string, unknown> = {};
+    const updates: SavingsGoalUpdate = {};
     if (parsed.data.name !== undefined) updates.name = parsed.data.name;
     if (parsed.data.target_amount !== undefined)
       updates.target_cents = toCents(parsed.data.target_amount);

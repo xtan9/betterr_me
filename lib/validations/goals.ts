@@ -63,7 +63,7 @@ export const goalUpdateSchema = z
   })
   .refine(
     (data) => {
-      if (data.funding_type === "linked" && data.linked_account_id === null) {
+      if (data.funding_type === "linked" && !data.linked_account_id) {
         return false;
       }
       return true;

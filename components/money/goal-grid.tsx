@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { GoalCard } from "@/components/money/goal-card";
 import { GoalForm } from "@/components/money/goal-form";
 import { useGoals } from "@/lib/hooks/use-goals";
-import type { GoalWithProjection } from "@/components/money/goal-card";
+import type { GoalWithProjection } from "@/lib/db/types";
 
 export function GoalGrid() {
   const t = useTranslations("money.goals");
