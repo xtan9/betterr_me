@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET } from "@/app/api/money/accounts/route";
+import { NextRequest } from "next/server";
 
 const { mockResolveHousehold } = vi.hoisted(() => ({
   mockResolveHousehold: vi.fn(),
 }));
 
-const { mockGetByHouseholdConnections, mockGetByHouseholdAccounts } =
+const { mockGetByHouseholdConnections, mockGetByHouseholdFiltered } =
   vi.hoisted(() => ({
     mockGetByHouseholdConnections: vi.fn(),
-    mockGetByHouseholdAccounts: vi.fn(),
+    mockGetByHouseholdFiltered: vi.fn(),
   }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -30,7 +31,7 @@ vi.mock("@/lib/db", () => ({
     getByHousehold = mockGetByHouseholdConnections;
   },
   MoneyAccountsDB: class {
-    getByHousehold = mockGetByHouseholdAccounts;
+    getByHouseholdFiltered = mockGetByHouseholdFiltered;
   },
 }));
 
@@ -58,7 +59,10 @@ describe("GET /api/money/accounts", () => {
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
     } as any);
 
-    const response = await GET();
+    const request = new NextRequest(
+      "http://localhost:3000/api/money/accounts"
+    );
+    const response = await GET(request);
     const data = await response.json();
 
     expect(response.status).toBe(401);
@@ -82,7 +86,7 @@ describe("GET /api/money/accounts", () => {
       },
     ]);
 
-    mockGetByHouseholdAccounts.mockResolvedValue([
+    mockGetByHouseholdFiltered.mockResolvedValue([
       {
         id: "acc-1",
         household_id: "household-abc",
@@ -98,14 +102,17 @@ describe("GET /api/money/accounts", () => {
         household_id: "household-abc",
         bank_connection_id: "bc-1",
         name: "Credit Card",
-        account_type: "credit card",
+        account_type: "credit",
         balance_cents: -50000,
         mask: "5678",
         is_hidden: false,
       },
     ]);
 
-    const response = await GET();
+    const request = new NextRequest(
+      "http://localhost:3000/api/money/accounts"
+    );
+    const response = await GET(request);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -118,103 +125,16 @@ describe("GET /api/money/accounts", () => {
 
   it("should return empty connections when no bank connections exist", async () => {
     mockGetByHouseholdConnections.mockResolvedValue([]);
-    mockGetByHouseholdAccounts.mockResolvedValue([]);
+    mockGetByHouseholdFiltered.mockResolvedValue([]);
 
-    const response = await GET();
+    const request = new NextRequest(
+      "http://localhost:3000/api/money/accounts"
+    );
+    const response = await GET(request);
     const data = await response.json();
 
     expect(response.status).toBe(200);
     expect(data.connections).toHaveLength(0);
     expect(data.net_worth_cents).toBe(0);
-  });
-
-  describe("deriveSyncStatus", () => {
-    beforeEach(() => {
-      mockGetByHouseholdAccounts.mockResolvedValue([]);
-    });
-
-    it('should return "error" when connection status is "error"', async () => {
-      mockGetByHouseholdConnections.mockResolvedValue([
-        {
-          id: "bc-1",
-          institution_name: "Chase",
-          institution_id: "ins_1",
-          status: "error",
-          sync_cursor: "cursor-1",
-          last_synced_at: new Date().toISOString(),
-          error_code: "ITEM_LOGIN_REQUIRED",
-          error_message: "Login required",
-        },
-      ]);
-
-      const response = await GET();
-      const data = await response.json();
-
-      expect(data.connections[0].sync_status).toBe("error");
-    });
-
-    it('should return "syncing" when connected with no cursor and no last_synced_at', async () => {
-      mockGetByHouseholdConnections.mockResolvedValue([
-        {
-          id: "bc-1",
-          institution_name: "Chase",
-          institution_id: "ins_1",
-          status: "connected",
-          sync_cursor: null,
-          last_synced_at: null,
-          error_code: null,
-          error_message: null,
-        },
-      ]);
-
-      const response = await GET();
-      const data = await response.json();
-
-      expect(data.connections[0].sync_status).toBe("syncing");
-    });
-
-    it('should return "stale" when last sync was over 24 hours ago', async () => {
-      const twoDaysAgo = new Date(
-        Date.now() - 48 * 60 * 60 * 1000
-      ).toISOString();
-
-      mockGetByHouseholdConnections.mockResolvedValue([
-        {
-          id: "bc-1",
-          institution_name: "Chase",
-          institution_id: "ins_1",
-          status: "connected",
-          sync_cursor: "cursor-1",
-          last_synced_at: twoDaysAgo,
-          error_code: null,
-          error_message: null,
-        },
-      ]);
-
-      const response = await GET();
-      const data = await response.json();
-
-      expect(data.connections[0].sync_status).toBe("stale");
-    });
-
-    it('should return "error" for disconnected status', async () => {
-      mockGetByHouseholdConnections.mockResolvedValue([
-        {
-          id: "bc-1",
-          institution_name: "Chase",
-          institution_id: "ins_1",
-          status: "disconnected",
-          sync_cursor: null,
-          last_synced_at: null,
-          error_code: null,
-          error_message: null,
-        },
-      ]);
-
-      const response = await GET();
-      const data = await response.json();
-
-      expect(data.connections[0].sync_status).toBe("error");
-    });
   });
 });

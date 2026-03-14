@@ -13,18 +13,20 @@ export function revalidateSidebarCounts() {
   mutate(`/api/sidebar/counts?date=${date}`).catch(() => {});
 }
 
+// Sidebar counts intentionally always use "mine" view — these are personal
+// habits/tasks and are not affected by household view mode.
 export function useSidebarCounts() {
   const date = getLocalDateString();
-  const { data, error, isLoading, mutate } = useSWR<SidebarCounts>(
+  const { data, error, mutate } = useSWR<SidebarCounts>(
     `/api/sidebar/counts?date=${date}`,
     fetcher,
     {
       refreshInterval: 300_000, // 5 minutes -- badges are informational
-      revalidateOnFocus: false, // Don't refetch on tab switch
       dedupingInterval: 60_000, // 1 minute dedup window
-      keepPreviousData: true, // Prevent flash when date changes at midnight
     }
   );
+
+  const isLoading = !data && !error;
 
   return {
     habitsIncomplete: data?.habits_incomplete ?? 0,

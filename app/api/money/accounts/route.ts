@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveHousehold } from "@/lib/db/households";
 import { BankConnectionsDB, MoneyAccountsDB } from "@/lib/db";
-import type { BankConnection, MoneyAccount } from "@/lib/db/types";
+import type { BankConnection, MoneyAccount, ViewMode } from "@/lib/db/types";
 import type { SyncStatus } from "@/lib/plaid/types";
 import { log } from "@/lib/logger";
 
@@ -34,8 +34,9 @@ function deriveSyncStatus(conn: BankConnection): SyncStatus {
 /**
  * GET /api/money/accounts
  * List all accounts grouped by bank connection with sync status and net worth.
+ * Supports ?view=mine|household for filtering (default: 'mine').
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -50,8 +51,14 @@ export async function GET() {
     const bankConnectionsDB = new BankConnectionsDB(supabase);
     const accountsDB = new MoneyAccountsDB(supabase);
 
+    const view = (request.nextUrl.searchParams.get("view") || "mine") as ViewMode;
     const connections = await bankConnectionsDB.getByHousehold(householdId);
-    const allAccounts = await accountsDB.getByHousehold(householdId);
+
+    // Use filtered query if view param provided, otherwise default to all (mine view)
+    const allAccounts =
+      view === "household"
+        ? await accountsDB.getByHouseholdFiltered(householdId, user.id, "household")
+        : await accountsDB.getByHouseholdFiltered(householdId, user.id, "mine");
 
     // Group accounts by bank_connection_id
     const accountsByConnection = new Map<string, MoneyAccount[]>();

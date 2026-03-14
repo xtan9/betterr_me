@@ -9,9 +9,11 @@ import { SyncStatusBadge } from "@/components/money/sync-status-badge";
 interface AccountCardProps {
   account: MoneyAccount;
   syncStatus: SyncStatus;
+  /** Optional React node to render inline (e.g., visibility selector). */
+  extra?: React.ReactNode;
 }
 
-export function AccountCard({ account, syncStatus }: AccountCardProps) {
+export function AccountCard({ account, syncStatus, extra }: AccountCardProps) {
   const t = useTranslations("money");
 
   return (
@@ -39,6 +41,7 @@ export function AccountCard({ account, syncStatus }: AccountCardProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        {extra}
         <span className="text-sm font-semibold tabular-nums">
           {formatMoney(account.balance_cents)}
         </span>

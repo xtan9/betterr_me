@@ -93,13 +93,7 @@ export async function POST(
           .in("account_id", accountIds)
           .eq("source", "plaid");
 
-        if (deleteError) {
-          log.error("Failed to delete transactions on disconnect", deleteError);
-          return NextResponse.json(
-            { error: "Failed to delete transactions" },
-            { status: 500 }
-          );
-        }
+        if (deleteError) throw deleteError;
       }
     }
 
