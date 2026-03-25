@@ -38,7 +38,7 @@ function setupServiceChain() {
     update: mockServiceUpdate,
   });
   mockServiceSelect.mockReturnValue({ eq: mockServiceEq });
-  mockServiceEq.mockReturnValue({ single: mockServiceSingle });
+  mockServiceEq.mockReturnValue({ maybeSingle: mockServiceSingle });
   // update chain for last_used_at fire-and-forget
   mockServiceUpdate.mockReturnValue({
     eq: vi.fn().mockReturnValue(Promise.resolve({ error: null })),

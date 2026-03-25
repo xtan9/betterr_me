@@ -128,7 +128,7 @@ export async function authenticateRequest(
       .from('api_keys')
       .select('id, user_id, permissions, expires_at')
       .eq('key_hash', keyHash)
-      .single();
+      .maybeSingle();
 
     if (dbError) {
       log.error('API key lookup failed', dbError);
