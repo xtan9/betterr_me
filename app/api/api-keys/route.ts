@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       name: validation.data.name.trim(),
       key_hash: keyHash,
       key_prefix: keyPrefix,
-      permissions: validation.data.permissions,
+      permissions: validation.data.permissions ?? 'read_write',
       expires_at: validation.data.expires_at ?? null,
     });
 
