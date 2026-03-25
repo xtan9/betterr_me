@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest } from '@/lib/auth/api-key';
 import { ProjectsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
@@ -17,14 +17,11 @@ import type { ProjectSection, ProjectStatus } from '@/lib/db/types';
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const projectsDB = new ProjectsDB(supabase);
     const searchParams = request.nextUrl.searchParams;
@@ -42,7 +39,7 @@ export async function GET(request: NextRequest) {
       filters.status = statusParam as ProjectStatus;
     }
 
-    const projects = await projectsDB.getUserProjects(user.id, filters);
+    const projects = await projectsDB.getUserProjects(userId, filters);
     return NextResponse.json({ projects });
   } catch (error) {
     log.error('GET /api/projects error', error);
@@ -59,14 +56,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const body = await request.json();
 
@@ -74,12 +68,17 @@ export async function POST(request: NextRequest) {
     const validation = validateRequestBody(body, projectFormSchema);
     if (!validation.success) return validation.response;
 
-    // Ensure user profile exists (required by FK constraint on projects.user_id)
-    await ensureProfile(supabase, user);
+    // Ensure user profile exists (required by FK constraint on projects.user_id).
+    // Skip for API key auth — users must log in via web to create keys,
+    // so their profile already exists.
+    if (!request.headers.get('authorization')?.startsWith('Bearer brm_')) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await ensureProfile(supabase, user);
+    }
 
     const projectsDB = new ProjectsDB(supabase);
     const project = await projectsDB.createProject({
-      user_id: user.id,
+      user_id: userId,
       name: validation.data.name.trim(),
       section: validation.data.section,
       color: validation.data.color,

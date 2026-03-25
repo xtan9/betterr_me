@@ -11,6 +11,7 @@ import { ProfileForm } from "./profile-form";
 import { WeekStartSelector } from "./week-start-selector";
 import { WeightUnitSelector } from "./weight-unit-selector";
 import { DataExport } from "./data-export";
+import { ApiKeysSection } from "./api-keys-section";
 import { CheckCircle, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { fetcher } from "@/lib/fetcher";
@@ -170,6 +171,12 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
         </CardHeader>
         <CardContent>
           <DataExport />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6 flex flex-col gap-4">
+          <ApiKeysSection />
         </CardContent>
       </Card>
     </div>

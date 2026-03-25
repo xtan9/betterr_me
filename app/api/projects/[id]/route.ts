@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest } from '@/lib/auth/api-key';
 import { ProjectsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
@@ -15,17 +15,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const projectsDB = new ProjectsDB(supabase);
-    const project = await projectsDB.getProject(id, user.id);
+    const project = await projectsDB.getProject(id, userId);
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -51,14 +48,11 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const body = await request.json();
 
@@ -67,7 +61,7 @@ export async function PATCH(
     if (!validation.success) return validation.response;
 
     const projectsDB = new ProjectsDB(supabase);
-    const project = await projectsDB.updateProject(id, user.id, validation.data);
+    const project = await projectsDB.updateProject(id, userId, validation.data);
 
     return NextResponse.json({ project });
   } catch (error: unknown) {
@@ -92,17 +86,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const projectsDB = new ProjectsDB(supabase);
-    await projectsDB.deleteProject(id, user.id);
+    await projectsDB.deleteProject(id, userId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

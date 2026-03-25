@@ -481,6 +481,33 @@
       "tryAgain": "Please try again"
     }
   },
+  "apiKeys": {
+    "title": "API Keys",
+    "description": "Manage API keys for external integrations like Claude Code",
+    "createButton": "Create API Key",
+    "emptyState": "No API keys yet",
+    "name": "Name",
+    "namePlaceholder": "e.g., Claude Code",
+    "permissions": "Permissions",
+    "permissionRead": "Read only",
+    "permissionReadWrite": "Read & Write",
+    "expiresAt": "Expires",
+    "expiresNever": "Never",
+    "lastUsed": "Last used",
+    "lastUsedNever": "Never used",
+    "createdAt": "Created",
+    "create": "Create",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "deleteConfirmTitle": "Delete API Key",
+    "deleteConfirmMessage": "Are you sure you want to delete this API key? Any applications using it will lose access.",
+    "keyCreatedTitle": "API Key Created",
+    "keyCreatedWarning": "This key will only be shown once. Copy it now.",
+    "copyKey": "Copy Key",
+    "keyCopied": "Copied!",
+    "maxKeysReached": "Maximum of 10 API keys reached",
+    "prefix": "Key"
+  },
   "tasks": {
     "breadcrumb": {
       "newTask": "New Task"
@@ -1046,7 +1073,7 @@
     "complete": "Complete",
     "addSet": "+ Add Set",
     "deleteSet": "Delete Set",
-    "noPrevious": "\u2014",
+    "noPrevious": "—",
     "setType": "Set Type",
     "warmup": "Warmup",
     "normal": "Normal",

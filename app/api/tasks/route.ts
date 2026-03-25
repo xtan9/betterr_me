@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest } from '@/lib/auth/api-key';
 import { TasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
@@ -25,14 +25,11 @@ import type { TaskInsert, TaskFilters } from '@/lib/db/types';
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const tasksDB = new TasksDB(supabase);
     const searchParams = request.nextUrl.searchParams;
@@ -52,15 +49,15 @@ export async function GET(request: NextRequest) {
     if (view === 'today' || view === 'upcoming') {
       const [dy, dm, dd] = date.split('-').map(Number);
       const throughDate = getLocalDateString(new Date(dy, dm - 1, dd + 7));
-      await ensureRecurringInstances(supabase, user.id, throughDate).catch((err) => {
-        log.error('ensureRecurringInstances failed on tasks', err, { userId: user.id });
+      await ensureRecurringInstances(supabase, userId, throughDate).catch((err) => {
+        log.error('ensureRecurringInstances failed on tasks', err, { userId });
         recurringGenFailed = true;
       });
     }
 
     // Handle special views
     if (view === 'today') {
-      const tasks = await tasksDB.getTodayTasks(user.id, date);
+      const tasks = await tasksDB.getTodayTasks(userId, date);
       const response: Record<string, unknown> = { tasks };
       if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
       return NextResponse.json(response);
@@ -74,14 +71,14 @@ export async function GET(request: NextRequest) {
           { status: 400 }
         );
       }
-      const tasks = await tasksDB.getUpcomingTasks(user.id, date, days);
+      const tasks = await tasksDB.getUpcomingTasks(userId, date, days);
       const response: Record<string, unknown> = { tasks };
       if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
       return NextResponse.json(response);
     }
 
     if (view === 'overdue') {
-      const tasks = await tasksDB.getOverdueTasks(user.id, date);
+      const tasks = await tasksDB.getOverdueTasks(userId, date);
       return NextResponse.json({ tasks });
     }
 
@@ -108,7 +105,7 @@ export async function GET(request: NextRequest) {
       filters.project_id = projectId === 'null' ? null : projectId;
     }
 
-    const tasks = await tasksDB.getUserTasks(user.id, filters);
+    const tasks = await tasksDB.getUserTasks(userId, filters);
     return NextResponse.json({ tasks });
   } catch (error) {
     log.error('GET /api/tasks error', error);
@@ -125,14 +122,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const body = await request.json();
 
@@ -140,8 +134,13 @@ export async function POST(request: NextRequest) {
     const validation = validateRequestBody(body, taskFormSchema);
     if (!validation.success) return validation.response;
 
-    // Ensure user profile exists (required by FK constraint on tasks.user_id)
-    await ensureProfile(supabase, user);
+    // Ensure user profile exists (required by FK constraint on tasks.user_id).
+    // Skip for API key auth — users must log in via web to create keys,
+    // so their profile already exists.
+    if (!request.headers.get('authorization')?.startsWith('Bearer brm_')) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await ensureProfile(supabase, user);
+    }
 
     const tasksDB = new TasksDB(supabase);
 
@@ -149,13 +148,13 @@ export async function POST(request: NextRequest) {
     const { data: maxRow } = await supabase
       .from('tasks')
       .select('sort_order')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('sort_order', { ascending: false })
       .limit(1)
       .maybeSingle();
 
     const taskData: TaskInsert = {
-      user_id: user.id,
+      user_id: userId,
       title: validation.data.title.trim(),
       description: validation.data.description?.trim() || null,
       is_completed: false,

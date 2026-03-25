@@ -481,6 +481,33 @@
       "tryAgain": "请重试"
     }
   },
+  "apiKeys": {
+    "title": "API 密钥",
+    "description": "管理用于外部集成（如 Claude Code）的 API 密钥",
+    "createButton": "创建 API 密钥",
+    "emptyState": "暂无 API 密钥",
+    "name": "名称",
+    "namePlaceholder": "例如：Claude Code",
+    "permissions": "权限",
+    "permissionRead": "只读",
+    "permissionReadWrite": "读写",
+    "expiresAt": "过期时间",
+    "expiresNever": "永不过期",
+    "lastUsed": "最后使用",
+    "lastUsedNever": "从未使用",
+    "createdAt": "创建时间",
+    "create": "创建",
+    "cancel": "取消",
+    "delete": "删除",
+    "deleteConfirmTitle": "删除 API 密钥",
+    "deleteConfirmMessage": "确定要删除此 API 密钥吗？使用该密钥的应用将无法继续访问。",
+    "keyCreatedTitle": "API 密钥已创建",
+    "keyCreatedWarning": "此密钥仅显示一次，请立即复制。",
+    "copyKey": "复制密钥",
+    "keyCopied": "已复制！",
+    "maxKeysReached": "最多只能创建 10 个 API 密钥",
+    "prefix": "密钥"
+  },
   "tasks": {
     "breadcrumb": {
       "newTask": "新任务"
@@ -1046,7 +1073,7 @@
     "complete": "完成",
     "addSet": "+ 添加组",
     "deleteSet": "删除组",
-    "noPrevious": "\u2014",
+    "noPrevious": "—",
     "setType": "组类型",
     "warmup": "热身",
     "normal": "正式",
