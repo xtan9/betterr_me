@@ -10,7 +10,6 @@ import { getLocalDateString } from '@/lib/utils';
 import { syncTaskCreate } from '@/lib/tasks/sync';
 import { getBottomSortOrder } from '@/lib/tasks/sort-order';
 import type { TaskInsert, TaskFilters } from '@/lib/db/types';
-import type { User } from '@supabase/supabase-js';
 
 /**
  * GET /api/tasks
@@ -135,8 +134,13 @@ export async function POST(request: NextRequest) {
     const validation = validateRequestBody(body, taskFormSchema);
     if (!validation.success) return validation.response;
 
-    // Ensure user profile exists (required by FK constraint on tasks.user_id)
-    await ensureProfile(supabase, { id: userId } as User);
+    // Ensure user profile exists (required by FK constraint on tasks.user_id).
+    // Skip for API key auth — users must log in via web to create keys,
+    // so their profile already exists.
+    if (!request.headers.get('authorization')?.startsWith('Bearer brm_')) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await ensureProfile(supabase, user);
+    }
 
     const tasksDB = new TasksDB(supabase);
 

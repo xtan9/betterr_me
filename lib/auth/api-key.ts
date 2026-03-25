@@ -25,7 +25,7 @@ export type AuthResult = {
 
 export type AuthError = {
   error: string;
-  status: 401 | 403;
+  status: 401 | 403 | 500;
 };
 
 // ---------------------------------------------------------------------------
@@ -107,10 +107,9 @@ export async function authenticateRequest(
     let keyHash: string;
     try {
       keyHash = hashApiKey(apiKey);
-    } catch {
-      // HMAC secret not configured
-      log.error('API key authentication failed: HMAC secret not configured');
-      return { error: 'Internal server error', status: 401 };
+    } catch (err) {
+      log.error('API key authentication failed: could not hash API key', err);
+      return { error: 'Internal server error', status: 500 };
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -120,7 +119,7 @@ export async function authenticateRequest(
       log.error(
         'API key authentication failed: Supabase service role not configured',
       );
-      return { error: 'Internal server error', status: 401 };
+      return { error: 'Internal server error', status: 500 };
     }
 
     const serviceClient = createSupabaseClient(supabaseUrl, serviceRoleKey);
@@ -131,7 +130,11 @@ export async function authenticateRequest(
       .eq('key_hash', keyHash)
       .single();
 
-    if (dbError || !keyRow) {
+    if (dbError) {
+      log.error('API key lookup failed', dbError);
+      return { error: 'Internal server error', status: 500 };
+    }
+    if (!keyRow) {
       return { error: 'Invalid API key', status: 401 };
     }
 
@@ -149,13 +152,18 @@ export async function authenticateRequest(
       };
     }
 
-    // Fire-and-forget last_used_at update
+    // Fire-and-forget last_used_at update (non-blocking).
+    // NOTE: Supabase resolves with { error } rather than rejecting, so we must
+    // check the resolved value — .then(null, handler) would miss DB errors.
     serviceClient
       .from('api_keys')
       .update({ last_used_at: new Date().toISOString() })
       .eq('id', keyRow.id)
-      .then(null, (err: unknown) =>
-        log.error('Failed to update last_used_at', err),
+      .then(
+        ({ error: updateError }) => {
+          if (updateError) log.error('Failed to update last_used_at', updateError);
+        },
+        (err: unknown) => log.error('Failed to update last_used_at (network)', err),
       );
 
     return {
