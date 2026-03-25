@@ -1148,3 +1148,29 @@ export interface DailyBalance {
   has_income: boolean;
   bill_total_cents: number;
 }
+
+// =============================================================================
+// API KEYS
+// =============================================================================
+
+export type ApiKeyPermissions = 'read' | 'read_write';
+
+export interface ApiKey {
+  id: string;
+  user_id: string;
+  name: string;
+  key_hash: string;
+  key_prefix: string;
+  permissions: ApiKeyPermissions;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export type ApiKeyInsert = Omit<ApiKey, 'id' | 'created_at' | 'last_used_at' | 'expires_at'> & {
+  id?: string;
+  expires_at?: string | null;
+};
+
+// What's returned to the client (no hash)
+export type ApiKeyPublic = Omit<ApiKey, 'key_hash'>;

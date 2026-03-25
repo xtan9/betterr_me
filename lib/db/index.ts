@@ -29,3 +29,4 @@ export { RecurringBillsDB } from "./recurring-bills";
 export { SavingsGoalsDB } from "./savings-goals";
 export { NetWorthSnapshotsDB } from "./net-worth-snapshots";
 export { ManualAssetsDB } from "./manual-assets";
+export { ApiKeysDB } from "./api-keys";
