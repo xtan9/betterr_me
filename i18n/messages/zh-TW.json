@@ -481,6 +481,33 @@
       "tryAgain": "請重試"
     }
   },
+  "apiKeys": {
+    "title": "API 金鑰",
+    "description": "管理用於外部整合（如 Claude Code）的 API 金鑰",
+    "createButton": "建立 API 金鑰",
+    "emptyState": "尚無 API 金鑰",
+    "name": "名稱",
+    "namePlaceholder": "例如：Claude Code",
+    "permissions": "權限",
+    "permissionRead": "唯讀",
+    "permissionReadWrite": "讀寫",
+    "expiresAt": "到期時間",
+    "expiresNever": "永不到期",
+    "lastUsed": "最後使用",
+    "lastUsedNever": "從未使用",
+    "createdAt": "建立時間",
+    "create": "建立",
+    "cancel": "取消",
+    "delete": "刪除",
+    "deleteConfirmTitle": "刪除 API 金鑰",
+    "deleteConfirmMessage": "確定要刪除此 API 金鑰嗎？使用該金鑰的應用程式將無法繼續存取。",
+    "keyCreatedTitle": "API 金鑰已建立",
+    "keyCreatedWarning": "此金鑰僅顯示一次，請立即複製。",
+    "copyKey": "複製金鑰",
+    "keyCopied": "已複製！",
+    "maxKeysReached": "最多只能建立 10 組 API 金鑰",
+    "prefix": "金鑰"
+  },
   "tasks": {
     "breadcrumb": {
       "newTask": "新任務"
@@ -1046,7 +1073,7 @@
     "complete": "完成",
     "addSet": "+ 新增組",
     "deleteSet": "刪除組",
-    "noPrevious": "\u2014",
+    "noPrevious": "—",
     "setType": "組類型",
     "warmup": "熱身",
     "normal": "正式",
