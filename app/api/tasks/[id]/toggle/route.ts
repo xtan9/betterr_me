@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest } from '@/lib/auth/api-key';
 import { TasksDB } from '@/lib/db';
 import { log } from '@/lib/logger';
 
@@ -13,17 +13,14 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const tasksDB = new TasksDB(supabase);
-    const task = await tasksDB.toggleTaskCompletion(id, user.id);
+    const task = await tasksDB.toggleTaskCompletion(id, userId);
     return NextResponse.json({ task });
   } catch (error: unknown) {
     log.error('PATCH /api/tasks/[id]/toggle error', error);

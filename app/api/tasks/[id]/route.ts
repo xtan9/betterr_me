@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest } from '@/lib/auth/api-key';
 import { TasksDB, RecurringTasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
@@ -18,17 +18,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const tasksDB = new TasksDB(supabase);
-    const task = await tasksDB.getTask(id, user.id);
+    const task = await tasksDB.getTask(id, userId);
 
     if (!task) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
@@ -54,14 +51,11 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const body = await request.json();
     const searchParams = request.nextUrl.searchParams;
@@ -82,7 +76,7 @@ export async function PATCH(
       if (!validation.success) return validation.response;
 
       const recurringTasksDB = new RecurringTasksDB(supabase);
-      await recurringTasksDB.updateInstanceWithScope(id, user.id, scopeResult.data, validation.data);
+      await recurringTasksDB.updateInstanceWithScope(id, userId, scopeResult.data, validation.data);
       return NextResponse.json({ success: true });
     }
 
@@ -137,7 +131,7 @@ export async function PATCH(
     // Apply sync to keep status/is_completed consistent
     const syncedUpdates = syncTaskUpdate(updates);
     const tasksDB = new TasksDB(supabase);
-    const task = await tasksDB.updateTask(id, user.id, syncedUpdates);
+    const task = await tasksDB.updateTask(id, userId, syncedUpdates);
     return NextResponse.json({ task });
   } catch (error: unknown) {
     log.error('PATCH /api/tasks/[id] error', error);
@@ -164,14 +158,11 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { userId, supabase } = auth;
 
     const searchParams = request.nextUrl.searchParams;
     const scopeParam = searchParams.get('scope');
@@ -187,12 +178,12 @@ export async function DELETE(
       }
 
       const recurringTasksDB = new RecurringTasksDB(supabase);
-      await recurringTasksDB.deleteInstanceWithScope(id, user.id, scopeResult.data);
+      await recurringTasksDB.deleteInstanceWithScope(id, userId, scopeResult.data);
       return NextResponse.json({ success: true });
     }
 
     const tasksDB = new TasksDB(supabase);
-    await tasksDB.deleteTask(id, user.id);
+    await tasksDB.deleteTask(id, userId);
     return NextResponse.json({ success: true });
   } catch (error) {
     log.error('DELETE /api/tasks/[id] error', error);
