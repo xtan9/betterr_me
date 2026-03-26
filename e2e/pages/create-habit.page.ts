@@ -39,8 +39,13 @@ export class CreateHabitPage {
     await this.page.getByRole('button', { name: label }).click();
   }
 
-  /** Click the Create / submit button and wait for the API response */
+  /** Click the Create / submit button */
   async submit() {
+    await this.page.getByRole('button', { name: /create/i }).click();
+  }
+
+  /** Submit and wait for the API response (use for valid submissions only) */
+  async submitAndWaitForApi() {
     await Promise.all([
       this.page.waitForResponse(
         (res) => res.url().includes('/api/habits') && res.request().method() === 'POST',
