@@ -31,3 +31,28 @@ jobs:
 
       - name: Test
         run: pnpm test:run
+
+  check-migrations:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for duplicate migration timestamps
+        run: |
+          echo "Checking for duplicate migration timestamps..."
+          dupes=$(ls supabase/migrations/*.sql 2>/dev/null \
+            | xargs -I{} basename {} \
+            | cut -c1-14 \
+            | sort \
+            | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "❌ Duplicate migration timestamps found:"
+            echo "$dupes"
+            echo ""
+            echo "Each migration file must have a unique timestamp prefix."
+            echo "Use 'npx supabase migration new <name>' to generate unique timestamps."
+            exit 1
+          fi
+          echo "✅ All migration timestamps are unique"
