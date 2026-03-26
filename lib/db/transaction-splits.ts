@@ -16,7 +16,7 @@ export class TransactionSplitsDB {
   ): Promise<(TransactionSplit & { category: { name: string; icon: string | null; display_name: string | null } })[]> {
     const { data, error } = await this.supabase
       .from("transaction_splits")
-      .select("*, category:categories(name, icon, display_name)")
+      .select("*, category:transaction_categories(name, icon, display_name)")
       .eq("transaction_id", transactionId)
       .order("amount_cents", { ascending: false });
 

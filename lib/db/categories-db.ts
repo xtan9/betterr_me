@@ -14,7 +14,7 @@ export class CategoriesDB {
    */
   async getAll(householdId: string): Promise<MoneyCategory[]> {
     const { data, error } = await this.supabase
-      .from("categories")
+      .from("transaction_categories")
       .select("*")
       .or(`household_id.is.null,household_id.eq.${householdId}`)
       .order("is_system", { ascending: false })
@@ -34,7 +34,7 @@ export class CategoriesDB {
 
     // Get all categories
     let query = this.supabase
-      .from("categories")
+      .from("transaction_categories")
       .select("*")
       .or(`household_id.is.null,household_id.eq.${householdId}`)
       .order("is_system", { ascending: false })
@@ -56,7 +56,7 @@ export class CategoriesDB {
    */
   async create(data: MoneyCategoryInsert): Promise<MoneyCategory> {
     const { data: result, error } = await this.supabase
-      .from("categories")
+      .from("transaction_categories")
       .insert(data)
       .select()
       .single();
@@ -73,7 +73,7 @@ export class CategoriesDB {
     data: Partial<Pick<MoneyCategory, "name" | "icon" | "color" | "display_name">>
   ): Promise<MoneyCategory> {
     const { data: result, error } = await this.supabase
-      .from("categories")
+      .from("transaction_categories")
       .update(data)
       .eq("id", id)
       .select()
@@ -89,7 +89,7 @@ export class CategoriesDB {
   async delete(id: string): Promise<void> {
     // Verify not a system category
     const { data: category, error: fetchError } = await this.supabase
-      .from("categories")
+      .from("transaction_categories")
       .select("is_system")
       .eq("id", id)
       .single();
@@ -100,7 +100,7 @@ export class CategoriesDB {
     }
 
     const { error } = await this.supabase
-      .from("categories")
+      .from("transaction_categories")
       .delete()
       .eq("id", id);
 

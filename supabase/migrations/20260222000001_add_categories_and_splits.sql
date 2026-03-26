@@ -7,12 +7,12 @@
 -- ALTER EXISTING TABLES
 -- =============================================================================
 
--- Add color and display_name to categories
-ALTER TABLE categories ADD COLUMN IF NOT EXISTS color TEXT;
-ALTER TABLE categories ADD COLUMN IF NOT EXISTS display_name TEXT;
+-- Add color and display_name to transaction_categories
+ALTER TABLE transaction_categories ADD COLUMN IF NOT EXISTS color TEXT;
+ALTER TABLE transaction_categories ADD COLUMN IF NOT EXISTS display_name TEXT;
 
 -- Add category_id FK and notes to transactions
-ALTER TABLE transactions ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES categories(id) ON DELETE SET NULL;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES transaction_categories(id) ON DELETE SET NULL;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS notes TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
@@ -26,7 +26,7 @@ CREATE TABLE merchant_category_rules (
   household_id UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
   merchant_name TEXT NOT NULL,
   merchant_name_lower TEXT NOT NULL,
-  category_id UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  category_id UUID NOT NULL REFERENCES transaction_categories(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(household_id, merchant_name_lower)
@@ -42,7 +42,7 @@ CREATE INDEX idx_merchant_rules_lookup ON merchant_category_rules(household_id, 
 CREATE TABLE transaction_splits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
-  category_id UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  category_id UUID NOT NULL REFERENCES transaction_categories(id) ON DELETE CASCADE,
   amount_cents BIGINT NOT NULL,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -56,7 +56,7 @@ CREATE INDEX idx_splits_transaction ON transaction_splits(transaction_id);
 
 CREATE TABLE hidden_categories (
   household_id UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
-  category_id UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  category_id UUID NOT NULL REFERENCES transaction_categories(id) ON DELETE CASCADE,
   PRIMARY KEY (household_id, category_id)
 );
 
@@ -162,7 +162,7 @@ CREATE TRIGGER update_merchant_category_rules_updated_at
 -- SEED SYSTEM CATEGORIES (Plaid PFCv2 primary taxonomy)
 -- =============================================================================
 
-INSERT INTO categories (household_id, name, icon, is_system, color, display_name) VALUES
+INSERT INTO transaction_categories (household_id, name, icon, is_system, color, display_name) VALUES
   (NULL, 'INCOME', '💰', true, '#4CAF50', 'Income'),
   (NULL, 'TRANSFER_IN', '📥', true, '#2196F3', 'Transfer In'),
   (NULL, 'TRANSFER_OUT', '📤', true, '#FF9800', 'Transfer Out'),
@@ -186,6 +186,6 @@ ON CONFLICT DO NOTHING;
 -- =============================================================================
 
 UPDATE transactions SET category_id = c.id
-FROM categories c
+FROM transaction_categories c
 WHERE c.name = transactions.category AND c.is_system = true
 AND transactions.category_id IS NULL;

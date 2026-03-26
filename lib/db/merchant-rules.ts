@@ -17,7 +17,7 @@ export class MerchantRulesDB {
   ): Promise<(MerchantCategoryRule & { category: { name: string; icon: string | null; display_name: string | null } })[]> {
     const { data, error } = await this.supabase
       .from("merchant_category_rules")
-      .select("*, category:categories(name, icon, display_name)")
+      .select("*, category:transaction_categories(name, icon, display_name)")
       .eq("household_id", householdId)
       .order("merchant_name", { ascending: true });
 

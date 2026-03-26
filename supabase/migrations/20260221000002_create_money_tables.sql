@@ -1,4 +1,4 @@
--- Create money tables: bank_connections, accounts, transactions, categories
+-- Create money tables: bank_connections, accounts, transactions, transaction_categories
 -- Phase 18: Database Foundation & Household Schema
 -- Stub tables for Phase 19+ — schema established now so RLS pattern and types are ready
 -- All money amounts use BIGINT (integer cents) — NEVER numeric/decimal
@@ -52,10 +52,10 @@ CREATE TABLE transactions (
 );
 
 -- =============================================================================
--- CATEGORIES
+-- TRANSACTION CATEGORIES
 -- =============================================================================
 
-CREATE TABLE categories (
+CREATE TABLE transaction_categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   household_id UUID REFERENCES households(id) ON DELETE CASCADE, -- NULL = system default
   name TEXT NOT NULL,
@@ -73,7 +73,7 @@ CREATE INDEX idx_accounts_household ON accounts(household_id);
 CREATE INDEX idx_transactions_household ON transactions(household_id);
 CREATE INDEX idx_transactions_account ON transactions(account_id);
 CREATE INDEX idx_transactions_date ON transactions(household_id, transaction_date);
-CREATE INDEX idx_categories_household ON categories(household_id);
+CREATE INDEX idx_transaction_categories_household ON transaction_categories(household_id);
 
 -- =============================================================================
 -- ROW LEVEL SECURITY
@@ -82,7 +82,7 @@ CREATE INDEX idx_categories_household ON categories(household_id);
 ALTER TABLE bank_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transaction_categories ENABLE ROW LEVEL SECURITY;
 
 -- Bank connections: household members can view
 CREATE POLICY "Household members can view bank_connections"
@@ -171,9 +171,9 @@ CREATE POLICY "Household members can delete transactions"
     WHERE user_id = (SELECT auth.uid())
   ));
 
--- Categories: household members can view (NULL household_id = system defaults visible to all)
-CREATE POLICY "Household members can view categories"
-  ON categories FOR SELECT TO authenticated
+-- Transaction categories: household members can view (NULL household_id = system defaults visible to all)
+CREATE POLICY "Household members can view transaction_categories"
+  ON transaction_categories FOR SELECT TO authenticated
   USING (
     household_id IS NULL
     OR household_id IN (
@@ -182,22 +182,22 @@ CREATE POLICY "Household members can view categories"
     )
   );
 
-CREATE POLICY "Household members can insert categories"
-  ON categories FOR INSERT TO authenticated
+CREATE POLICY "Household members can insert transaction_categories"
+  ON transaction_categories FOR INSERT TO authenticated
   WITH CHECK (household_id IN (
     SELECT household_id FROM household_members
     WHERE user_id = (SELECT auth.uid())
   ));
 
-CREATE POLICY "Household members can update categories"
-  ON categories FOR UPDATE TO authenticated
+CREATE POLICY "Household members can update transaction_categories"
+  ON transaction_categories FOR UPDATE TO authenticated
   USING (household_id IN (
     SELECT household_id FROM household_members
     WHERE user_id = (SELECT auth.uid())
   ));
 
-CREATE POLICY "Household members can delete categories"
-  ON categories FOR DELETE TO authenticated
+CREATE POLICY "Household members can delete transaction_categories"
+  ON transaction_categories FOR DELETE TO authenticated
   USING (household_id IN (
     SELECT household_id FROM household_members
     WHERE user_id = (SELECT auth.uid())

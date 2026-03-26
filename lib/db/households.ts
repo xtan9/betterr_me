@@ -428,7 +428,7 @@ export class HouseholdsDB {
   ): Promise<void> {
     // Get source categories
     const { data: sourceCategories, error: srcError } = await adminClient
-      .from("categories")
+      .from("transaction_categories")
       .select("id, name")
       .eq("household_id", sourceHouseholdId);
     if (srcError) throw srcError;
@@ -437,7 +437,7 @@ export class HouseholdsDB {
 
     // Get target categories for name matching
     const { data: targetCategories, error: tgtError } = await adminClient
-      .from("categories")
+      .from("transaction_categories")
       .select("id, name")
       .eq("household_id", targetHouseholdId);
     if (tgtError) throw tgtError;
@@ -477,14 +477,14 @@ export class HouseholdsDB {
         if (e4) throw e4;
 
         const { error: e5 } = await adminClient
-          .from("categories")
+          .from("transaction_categories")
           .delete()
           .eq("id", sc.id);
         if (e5) throw e5;
       } else {
         // Unique category: move to target household
         const { error: moveError } = await adminClient
-          .from("categories")
+          .from("transaction_categories")
           .update({ household_id: targetHouseholdId })
           .eq("id", sc.id);
         if (moveError) throw moveError;
