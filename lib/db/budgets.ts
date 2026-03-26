@@ -43,7 +43,7 @@ export class BudgetsDB {
     // Fetch budget categories with joined category info
     const { data: budgetCats, error: catError } = await this.supabase
       .from("budget_categories")
-      .select("*, category:categories(name, icon, color)")
+      .select("*, category:transaction_categories(name, icon, color)")
       .eq("budget_id", budget.id);
 
     if (catError) throw catError;
@@ -132,7 +132,7 @@ export class BudgetsDB {
     // Fetch budget categories with joined category info
     const { data: budgetCats, error: catError } = await this.supabase
       .from("budget_categories")
-      .select("*, category:categories(name, icon, color)")
+      .select("*, category:transaction_categories(name, icon, color)")
       .eq("budget_id", budget.id);
 
     if (catError) throw catError;
