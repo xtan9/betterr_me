@@ -1,17 +1,25 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { log } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
-// Service-role Supabase client (stateless singleton)
+// Service-role Supabase client (lazy singleton — avoids build-time crash
+// when SUPABASE_SERVICE_ROLE_KEY is not set in CI)
 // ---------------------------------------------------------------------------
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+let _supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+  }
+  return _supabase;
+}
 
 // ---------------------------------------------------------------------------
 // Helper: extract userId from MCP extra context
@@ -74,7 +82,7 @@ export function registerTools(server: McpServer): void {
       const userId = getUserId(extra as Record<string, unknown>);
       if (!userId) return errorResponse("Authentication required");
 
-      let query = supabase
+      let query = getSupabase()
         .from("projects")
         .select(
           "id, name, section, color, status, sort_order, created_at",
@@ -117,7 +125,7 @@ export function registerTools(server: McpServer): void {
       const userId = getUserId(extra as Record<string, unknown>);
       if (!userId) return errorResponse("Authentication required");
 
-      let query = supabase
+      let query = getSupabase()
         .from("tasks")
         .select(
           "id, title, description, status, priority, due_date, due_time, section, sort_order, is_completed, category_id, project_id, created_at",
@@ -158,7 +166,7 @@ export function registerTools(server: McpServer): void {
       const userId = getUserId(extra as Record<string, unknown>);
       if (!userId) return errorResponse("Authentication required");
 
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("tasks")
         .select("*")
         .eq("id", params.taskId)
@@ -215,7 +223,7 @@ export function registerTools(server: McpServer): void {
       const isCompleted = status === "done";
 
       // Calculate sort_order: max existing + 65536
-      const { data: maxRow } = await supabase
+      const { data: maxRow } = await getSupabase()
         .from("tasks")
         .select("sort_order")
         .eq("project_id", params.projectId)
@@ -225,9 +233,9 @@ export function registerTools(server: McpServer): void {
         .limit(1)
         .maybeSingle();
 
-      const sortOrder = (maxRow?.sort_order ?? 0) + 65536;
+      const sortOrder = ((maxRow as Record<string, number> | null)?.sort_order ?? 0) + 65536;
 
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("tasks")
         .insert({
           user_id: userId,
@@ -315,7 +323,7 @@ export function registerTools(server: McpServer): void {
         return errorResponse("No fields to update");
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from("tasks")
         .update(updates)
         .eq("id", params.taskId)
@@ -346,7 +354,7 @@ export function registerTools(server: McpServer): void {
       const userId = getUserId(extra as Record<string, unknown>);
       if (!userId) return errorResponse("Authentication required");
 
-      const { error } = await supabase
+      const { error } = await getSupabase()
         .from("tasks")
         .delete()
         .eq("id", params.taskId)
