@@ -18,16 +18,14 @@ vi.mock('@/lib/mcp/token', () => ({
   signMcpToken: vi.fn().mockResolvedValue('mock-access-token'),
 }));
 
-// Mock Supabase service client
+// Mock Supabase service client — chain: .update().eq().eq().select().single()
 const mockSingle = vi.fn();
-const mockEqForSelect = vi.fn().mockReturnValue({ single: mockSingle });
-const mockSelectStar = vi.fn().mockReturnValue({ eq: mockEqForSelect });
-
-const mockUpdateEq = vi.fn().mockResolvedValue({ error: null });
-const mockUpdate = vi.fn().mockReturnValue({ eq: mockUpdateEq });
+const mockSelect = vi.fn().mockReturnValue({ single: mockSingle });
+const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect });
+const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
+const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 });
 
 const mockServiceFrom = vi.fn().mockReturnValue({
-  select: mockSelectStar,
   update: mockUpdate,
 });
 
@@ -41,7 +39,6 @@ import { POST } from '@/app/api/oauth/token/route';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Build a PKCE code_verifier and code_challenge pair. */
 function makePkce() {
   const codeVerifier = crypto.randomBytes(32).toString('hex');
   const codeChallenge = crypto
@@ -51,7 +48,6 @@ function makePkce() {
   return { codeVerifier, codeChallenge };
 }
 
-/** Builds a form-encoded POST request. */
 function makeRequest(body: Record<string, string>): NextRequest {
   const params = new URLSearchParams(body);
   return new NextRequest('http://localhost:3000/api/oauth/token', {
@@ -63,7 +59,6 @@ function makeRequest(body: Record<string, string>): NextRequest {
 
 const REDIRECT_URI = 'http://localhost:3000/callback';
 
-/** Creates a stored code record for mocking the DB lookup. */
 function makeStoredCode(
   overrides: Record<string, unknown> = {},
   pkce = makePkce(),
@@ -77,11 +72,19 @@ function makeStoredCode(
     code_challenge: pkce.codeChallenge,
     redirect_uri: REDIRECT_URI,
     expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-    used: false,
+    used: true, // after atomic update, used is always true
     ...overrides,
   };
 
   return { code, codeHash, stored, pkce };
+}
+
+function setupChain() {
+  mockServiceFrom.mockReturnValue({ update: mockUpdate });
+  mockUpdate.mockReturnValue({ eq: mockEq1 });
+  mockEq1.mockReturnValue({ eq: mockEq2 });
+  mockEq2.mockReturnValue({ select: mockSelect });
+  mockSelect.mockReturnValue({ single: mockSingle });
 }
 
 // ---------------------------------------------------------------------------
@@ -91,14 +94,7 @@ function makeStoredCode(
 describe('POST /api/oauth/token', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockServiceFrom.mockReturnValue({
-      select: mockSelectStar,
-      update: mockUpdate,
-    });
-    mockSelectStar.mockReturnValue({ eq: mockEqForSelect });
-    mockEqForSelect.mockReturnValue({ single: mockSingle });
-    mockUpdate.mockReturnValue({ eq: mockUpdateEq });
-    mockUpdateEq.mockResolvedValue({ error: null });
+    setupChain();
   });
 
   it('returns error for missing grant_type', async () => {
@@ -129,6 +125,7 @@ describe('POST /api/oauth/token', () => {
   });
 
   it('returns invalid_grant for unknown code', async () => {
+    // Atomic update returns no row (code not found or already used)
     mockSingle.mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
 
     const request = makeRequest({
@@ -142,13 +139,13 @@ describe('POST /api/oauth/token', () => {
 
     expect(response.status).toBe(400);
     expect(data.error).toBe('invalid_grant');
-    expect(data.error_description).toContain('not found');
   });
 
   it('returns invalid_grant for used code', async () => {
-    const { code, pkce, stored } = makeStoredCode({ used: true });
-    mockSingle.mockResolvedValue({ data: stored, error: null });
+    // Atomic update with used=false filter returns no row for already-used code
+    mockSingle.mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
 
+    const { code, pkce } = makeStoredCode({ used: true });
     const request = makeRequest({
       grant_type: 'authorization_code',
       code,
@@ -160,13 +157,13 @@ describe('POST /api/oauth/token', () => {
 
     expect(response.status).toBe(400);
     expect(data.error).toBe('invalid_grant');
-    expect(data.error_description).toContain('already used');
   });
 
   it('returns invalid_grant for expired code', async () => {
     const { code, pkce, stored } = makeStoredCode({
-      expires_at: new Date(Date.now() - 60 * 1000).toISOString(), // 1 minute ago
+      expires_at: new Date(Date.now() - 60 * 1000).toISOString(),
     });
+    // Atomic update succeeds (code was unused) but it's expired
     mockSingle.mockResolvedValue({ data: stored, error: null });
 
     const request = makeRequest({
@@ -237,7 +234,7 @@ describe('POST /api/oauth/token', () => {
     expect(data.token_type).toBe('bearer');
     expect(data.expires_in).toBe(86400);
 
-    // Verify code was marked as used
+    // Verify atomic claim was called
     expect(mockUpdate).toHaveBeenCalledWith({ used: true });
   });
 });

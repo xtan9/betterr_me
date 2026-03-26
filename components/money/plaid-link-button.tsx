@@ -51,7 +51,7 @@ export function PlaidLinkButton({ mutate, className }: PlaidLinkButtonProps) {
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   const onSuccess = useCallback(

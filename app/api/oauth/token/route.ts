@@ -84,21 +84,21 @@ export async function POST(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
 
-    const { data: storedCode, error: lookupError } = await serviceClient
+    // Atomically claim the code (prevents TOCTOU race condition).
+    // UPDATE ... WHERE used = false returns the row only if unclaimed.
+    const { data: storedCode, error: claimError } = await serviceClient
       .from("oauth_codes")
-      .select("*")
+      .update({ used: true })
       .eq("code_hash", codeHash)
+      .eq("used", false)
+      .select("*")
       .single();
 
-    if (lookupError || !storedCode) {
-      return oauthError("invalid_grant", "Authorization code not found");
+    if (claimError || !storedCode) {
+      return oauthError("invalid_grant", "Authorization code not found or already used");
     }
 
     // --- Validate code ---
-
-    if (storedCode.used) {
-      return oauthError("invalid_grant", "Authorization code already used");
-    }
 
     if (new Date(storedCode.expires_at) < new Date()) {
       return oauthError("invalid_grant", "Authorization code expired");
@@ -117,21 +117,6 @@ export async function POST(request: NextRequest) {
 
     if (expectedChallenge !== storedCode.code_challenge) {
       return oauthError("invalid_grant", "PKCE verification failed");
-    }
-
-    // --- Mark code as used ---
-
-    const { error: updateError } = await serviceClient
-      .from("oauth_codes")
-      .update({ used: true })
-      .eq("code_hash", codeHash);
-
-    if (updateError) {
-      log.error("Failed to mark authorization code as used", updateError);
-      return NextResponse.json(
-        { error: "server_error", error_description: "Internal server error" },
-        { status: 500 },
-      );
     }
 
     // --- Issue access token ---

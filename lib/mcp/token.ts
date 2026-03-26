@@ -112,11 +112,11 @@ export async function verifyMcpToken(
       crypto.createHmac("sha256", secret).update(data).digest(),
     );
 
+    const sigBuf = Buffer.from(signatureB64);
+    const expectedBuf = Buffer.from(expectedSig);
     if (
-      !crypto.timingSafeEqual(
-        Buffer.from(signatureB64),
-        Buffer.from(expectedSig),
-      )
+      sigBuf.length !== expectedBuf.length ||
+      !crypto.timingSafeEqual(sigBuf, expectedBuf)
     ) {
       return null;
     }
