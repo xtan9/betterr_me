@@ -38,7 +38,7 @@ function setupServiceChain() {
     update: mockServiceUpdate,
   });
   mockServiceSelect.mockReturnValue({ eq: mockServiceEq });
-  mockServiceEq.mockReturnValue({ single: mockServiceSingle });
+  mockServiceEq.mockReturnValue({ maybeSingle: mockServiceSingle });
   // update chain for last_used_at fire-and-forget
   mockServiceUpdate.mockReturnValue({
     eq: vi.fn().mockReturnValue(Promise.resolve({ error: null })),
@@ -183,7 +183,7 @@ describe('authenticateRequest', () => {
   });
 
   it('returns 401 for invalid API key (not found in DB)', async () => {
-    mockServiceSingle.mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
+    mockServiceSingle.mockResolvedValue({ data: null, error: null });
 
     const request = new NextRequest('http://localhost:3000/api/tasks', {
       headers: { authorization: 'Bearer brm_invalidkey1234567890abcdef' },
@@ -192,6 +192,18 @@ describe('authenticateRequest', () => {
     const result = await authenticateRequest(request);
 
     expect(result).toEqual({ error: 'Invalid API key', status: 401 });
+  });
+
+  it('returns 500 when API key DB lookup fails', async () => {
+    mockServiceSingle.mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'DB error' } });
+
+    const request = new NextRequest('http://localhost:3000/api/tasks', {
+      headers: { authorization: 'Bearer brm_invalidkey1234567890abcdef' },
+    });
+
+    const result = await authenticateRequest(request);
+
+    expect(result).toEqual({ error: 'Internal server error', status: 500 });
   });
 
   it('returns 401 for expired API key', async () => {

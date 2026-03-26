@@ -11,8 +11,7 @@ CREATE TABLE api_keys (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Indexes
-CREATE UNIQUE INDEX idx_api_keys_key_hash ON api_keys (key_hash);
+-- Indexes (key_hash already has UNIQUE constraint from column definition)
 CREATE INDEX idx_api_keys_user_id ON api_keys (user_id);
 
 -- Enable Row Level Security
@@ -30,3 +29,8 @@ CREATE POLICY "Users can create their own API keys"
 CREATE POLICY "Users can delete their own API keys"
   ON api_keys FOR DELETE
   USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own API keys"
+  ON api_keys FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
