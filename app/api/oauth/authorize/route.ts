@@ -89,11 +89,14 @@ export async function GET(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
 
-    // Clean up expired codes
-    await serviceClient
+    // Clean up expired codes (non-blocking, log failures)
+    const { error: cleanupError } = await serviceClient
       .from("oauth_codes")
       .delete()
       .lt("expires_at", new Date().toISOString());
+    if (cleanupError) {
+      log.error("Failed to clean up expired OAuth codes", cleanupError);
+    }
 
     // Generate random code and hash it for storage
     const code = crypto.randomBytes(32).toString("hex");

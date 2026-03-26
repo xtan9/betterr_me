@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import { log } from "@/lib/logger";
+
 // ---------------------------------------------------------------------------
 // Service-role Supabase client (stateless singleton)
 // ---------------------------------------------------------------------------
@@ -78,7 +80,10 @@ export function registerTools(server: McpServer): void {
       query = query.eq("status", params.status ?? "active");
 
       const { data, error } = await query;
-      if (error) return errorResponse(error.message);
+      if (error) {
+        log.error("MCP list-projects failed", error);
+        return errorResponse(error.message);
+      }
       return jsonResponse(data);
     },
   );
@@ -116,7 +121,10 @@ export function registerTools(server: McpServer): void {
       }
 
       const { data, error } = await query;
-      if (error) return errorResponse(error.message);
+      if (error) {
+        log.error("MCP tool query failed", error);
+        return errorResponse(error.message);
+      }
       return jsonResponse(data);
     },
   );
@@ -141,7 +149,10 @@ export function registerTools(server: McpServer): void {
         .eq("user_id", userId)
         .single();
 
-      if (error) return errorResponse(error.message);
+      if (error) {
+        log.error("MCP tool query failed", error);
+        return errorResponse(error.message);
+      }
       return jsonResponse(data);
     },
   );
@@ -180,7 +191,7 @@ export function registerTools(server: McpServer): void {
         .eq("status", status)
         .order("sort_order", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
       const sortOrder = (maxRow?.sort_order ?? 0) + 65536;
 
@@ -202,7 +213,10 @@ export function registerTools(server: McpServer): void {
         .select()
         .single();
 
-      if (error) return errorResponse(error.message);
+      if (error) {
+        log.error("MCP tool query failed", error);
+        return errorResponse(error.message);
+      }
       return jsonResponse(data);
     },
   );
@@ -260,7 +274,10 @@ export function registerTools(server: McpServer): void {
         .select()
         .single();
 
-      if (error) return errorResponse(error.message);
+      if (error) {
+        log.error("MCP tool query failed", error);
+        return errorResponse(error.message);
+      }
       return jsonResponse(data);
     },
   );
@@ -284,7 +301,10 @@ export function registerTools(server: McpServer): void {
         .eq("id", params.taskId)
         .eq("user_id", userId);
 
-      if (error) return errorResponse(error.message);
+      if (error) {
+        log.error("MCP tool query failed", error);
+        return errorResponse(error.message);
+      }
       return jsonResponse({ success: true });
     },
   );

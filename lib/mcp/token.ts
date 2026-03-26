@@ -93,55 +93,62 @@ export async function signMcpToken(userId: string): Promise<string> {
 export async function verifyMcpToken(
   bearerToken: string,
 ): Promise<{ userId: string } | null> {
+  const secret = process.env.API_KEY_HMAC_SECRET;
+  if (!secret) {
+    log.error("MCP token verification failed: API_KEY_HMAC_SECRET not configured");
+    return null;
+  }
+
+  // 1. Split & decode
+  const parts = bearerToken.split(".");
+  if (parts.length !== 3) return null;
+
+  const [headerB64, payloadB64, signatureB64] = parts;
+
+  // 2. Verify signature
+  let expectedSig: string;
   try {
-    const secret = process.env.API_KEY_HMAC_SECRET;
-    if (!secret) {
-      log.error("API_KEY_HMAC_SECRET not configured");
-      return null;
-    }
-
-    // 1. Split & decode
-    const parts = bearerToken.split(".");
-    if (parts.length !== 3) return null;
-
-    const [headerB64, payloadB64, signatureB64] = parts;
-
-    // 2. Verify signature
     const data = `${headerB64}.${payloadB64}`;
-    const expectedSig = base64url(
+    expectedSig = base64url(
       crypto.createHmac("sha256", secret).update(data).digest(),
     );
+  } catch (err) {
+    log.error("MCP token verification failed: signature computation error", err);
+    return null;
+  }
 
-    const sigBuf = Buffer.from(signatureB64);
-    const expectedBuf = Buffer.from(expectedSig);
-    if (
-      sigBuf.length !== expectedBuf.length ||
-      !crypto.timingSafeEqual(sigBuf, expectedBuf)
-    ) {
-      return null;
-    }
+  const sigBuf = Buffer.from(signatureB64);
+  const expectedBuf = Buffer.from(expectedSig);
+  if (
+    sigBuf.length !== expectedBuf.length ||
+    !crypto.timingSafeEqual(sigBuf, expectedBuf)
+  ) {
+    return null;
+  }
 
-    // Decode payload
-    const payload = JSON.parse(
+  // Decode payload
+  let payload: { sub?: string; aud?: string; exp?: number };
+  try {
+    payload = JSON.parse(
       Buffer.from(payloadB64, "base64url").toString(),
-    ) as {
-      sub?: string;
-      aud?: string;
-      exp?: number;
-    };
+    );
+  } catch {
+    return null;
+  }
 
-    // 3. Audience check
-    if (payload.aud !== "mcp") return null;
+  // 3. Audience check
+  if (payload.aud !== "mcp") return null;
 
-    // 4. Expiry check
-    const now = Math.floor(Date.now() / 1000);
-    if (!payload.exp || payload.exp <= now) return null;
+  // 4. Expiry check
+  const now = Math.floor(Date.now() / 1000);
+  if (!payload.exp || payload.exp <= now) return null;
 
-    // 5. Subject (userId) must exist
-    const userId = payload.sub;
-    if (!userId) return null;
+  // 5. Subject (userId) must exist
+  const userId = payload.sub;
+  if (!userId) return null;
 
-    // 6. Verify user exists in profiles
+  // 6. Verify user exists in profiles (separate try/catch for Supabase errors)
+  try {
     const supabase = getServiceClient();
     const { data: profile, error } = await supabase
       .from("profiles")
@@ -149,13 +156,17 @@ export async function verifyMcpToken(
       .eq("id", userId)
       .single();
 
-    if (error || !profile) return null;
-
-    return { userId };
+    if (error) {
+      log.error("MCP token verification: profile lookup failed", error);
+      return null;
+    }
+    if (!profile) return null;
   } catch (err) {
-    log.error("Failed to verify MCP token", err);
+    log.error("MCP token verification: Supabase connection error", err);
     return null;
   }
+
+  return { userId };
 }
 
 // ---------------------------------------------------------------------------

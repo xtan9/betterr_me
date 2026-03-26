@@ -20,7 +20,7 @@ function oauthError(
 
 async function parseBody(
   request: NextRequest,
-): Promise<Record<string, string>> {
+): Promise<Record<string, string> | null> {
   const contentType = request.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/x-www-form-urlencoded")) {
@@ -37,7 +37,7 @@ async function parseBody(
   try {
     return (await request.json()) as Record<string, string>;
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -48,6 +48,9 @@ async function parseBody(
 export async function POST(request: NextRequest) {
   try {
     const body = await parseBody(request);
+    if (!body) {
+      return oauthError("invalid_request", "Could not parse request body");
+    }
 
     const { grant_type, code, code_verifier, redirect_uri } = body;
 
