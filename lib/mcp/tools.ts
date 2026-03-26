@@ -46,23 +46,31 @@ function jsonResponse(data: unknown) {
 // ---------------------------------------------------------------------------
 
 export function registerTools(server: McpServer): void {
+  // Cast to avoid "Type instantiation is excessively deep" errors caused by
+  // the deeply nested generics in McpServer.registerTool combined with Zod.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const register = server.registerTool.bind(server) as any;
+
   // -------------------------------------------------------------------------
   // 1. list-projects
   // -------------------------------------------------------------------------
-  server.tool(
+  register(
     "list-projects",
-    "List projects for the authenticated user, optionally filtered by section and status.",
     {
-      section: z
-        .enum(["personal", "work"])
-        .optional()
-        .describe("Filter by section: personal or work"),
-      status: z
-        .enum(["active", "archived"])
-        .optional()
-        .describe("Filter by status (defaults to active)"),
+      description:
+        "List projects for the authenticated user, optionally filtered by section and status.",
+      inputSchema: z.object({
+        section: z
+          .enum(["personal", "work"])
+          .optional()
+          .describe("Filter by section: personal or work"),
+        status: z
+          .enum(["active", "archived"])
+          .optional()
+          .describe("Filter by status (defaults to active)"),
+      }),
     },
-    async (params, extra) => {
+    async (params: { section?: string; status?: string }, extra: unknown) => {
       const userId = getUserId(extra as Record<string, unknown>);
       if (!userId) return errorResponse("Authentication required");
 
@@ -91,15 +99,21 @@ export function registerTools(server: McpServer): void {
   // -------------------------------------------------------------------------
   // 2. get-project-tasks
   // -------------------------------------------------------------------------
-  server.tool(
+  register(
     "get-project-tasks",
-    "List tasks in a project, optionally filtered by status and priority.",
     {
-      projectId: z.string().describe("The project ID"),
-      status: z.string().optional().describe("Filter by task status"),
-      priority: z.number().optional().describe("Filter by priority level"),
+      description:
+        "List tasks in a project, optionally filtered by status and priority.",
+      inputSchema: z.object({
+        projectId: z.string().describe("The project ID"),
+        status: z.string().optional().describe("Filter by task status"),
+        priority: z.number().optional().describe("Filter by priority level"),
+      }),
     },
-    async (params, extra) => {
+    async (
+      params: { projectId: string; status?: string; priority?: number },
+      extra: unknown,
+    ) => {
       const userId = getUserId(extra as Record<string, unknown>);
       if (!userId) return errorResponse("Authentication required");
 
@@ -132,13 +146,15 @@ export function registerTools(server: McpServer): void {
   // -------------------------------------------------------------------------
   // 3. get-task
   // -------------------------------------------------------------------------
-  server.tool(
+  register(
     "get-task",
-    "Get a single task by ID.",
     {
-      taskId: z.string().describe("The task ID"),
+      description: "Get a single task by ID.",
+      inputSchema: z.object({
+        taskId: z.string().describe("The task ID"),
+      }),
     },
-    async (params, extra) => {
+    async (params: { taskId: string }, extra: unknown) => {
       const userId = getUserId(extra as Record<string, unknown>);
       if (!userId) return errorResponse("Authentication required");
 
@@ -160,22 +176,38 @@ export function registerTools(server: McpServer): void {
   // -------------------------------------------------------------------------
   // 4. create-task
   // -------------------------------------------------------------------------
-  server.tool(
+  register(
     "create-task",
-    "Create a new task in a project.",
     {
-      projectId: z.string().describe("The project ID"),
-      title: z.string().describe("Task title"),
-      description: z.string().optional().describe("Task description"),
-      status: z.string().optional().describe("Task status (default: todo)"),
-      priority: z.number().optional().describe("Priority level (default: 0)"),
-      section: z.string().optional().describe("Task section"),
-      due_date: z
-        .string()
-        .optional()
-        .describe("Due date in YYYY-MM-DD format"),
+      description: "Create a new task in a project.",
+      inputSchema: z.object({
+        projectId: z.string().describe("The project ID"),
+        title: z.string().describe("Task title"),
+        description: z.string().optional().describe("Task description"),
+        status: z.string().optional().describe("Task status (default: todo)"),
+        priority: z
+          .number()
+          .optional()
+          .describe("Priority level (default: 0)"),
+        section: z.string().optional().describe("Task section"),
+        due_date: z
+          .string()
+          .optional()
+          .describe("Due date in YYYY-MM-DD format"),
+      }),
     },
-    async (params, extra) => {
+    async (
+      params: {
+        projectId: string;
+        title: string;
+        description?: string;
+        status?: string;
+        priority?: number;
+        section?: string;
+        due_date?: string;
+      },
+      extra: unknown,
+    ) => {
       const userId = getUserId(extra as Record<string, unknown>);
       if (!userId) return errorResponse("Authentication required");
 
@@ -224,23 +256,40 @@ export function registerTools(server: McpServer): void {
   // -------------------------------------------------------------------------
   // 5. update-task
   // -------------------------------------------------------------------------
-  server.tool(
+  register(
     "update-task",
-    "Update an existing task.",
     {
-      taskId: z.string().describe("The task ID"),
-      title: z.string().optional().describe("New title"),
-      description: z.string().optional().describe("New description"),
-      status: z.string().optional().describe("New status"),
-      priority: z.number().optional().describe("New priority"),
-      section: z.string().optional().describe("New section"),
-      due_date: z
-        .string()
-        .optional()
-        .describe("New due date in YYYY-MM-DD format"),
-      project_id: z.string().optional().describe("Move to a different project"),
+      description: "Update an existing task.",
+      inputSchema: z.object({
+        taskId: z.string().describe("The task ID"),
+        title: z.string().optional().describe("New title"),
+        description: z.string().optional().describe("New description"),
+        status: z.string().optional().describe("New status"),
+        priority: z.number().optional().describe("New priority"),
+        section: z.string().optional().describe("New section"),
+        due_date: z
+          .string()
+          .optional()
+          .describe("New due date in YYYY-MM-DD format"),
+        project_id: z
+          .string()
+          .optional()
+          .describe("Move to a different project"),
+      }),
     },
-    async (params, extra) => {
+    async (
+      params: {
+        taskId: string;
+        title?: string;
+        description?: string;
+        status?: string;
+        priority?: number;
+        section?: string;
+        due_date?: string;
+        project_id?: string;
+      },
+      extra: unknown,
+    ) => {
       const userId = getUserId(extra as Record<string, unknown>);
       if (!userId) return errorResponse("Authentication required");
 
@@ -285,13 +334,15 @@ export function registerTools(server: McpServer): void {
   // -------------------------------------------------------------------------
   // 6. delete-task
   // -------------------------------------------------------------------------
-  server.tool(
+  register(
     "delete-task",
-    "Delete a task by ID.",
     {
-      taskId: z.string().describe("The task ID"),
+      description: "Delete a task by ID.",
+      inputSchema: z.object({
+        taskId: z.string().describe("The task ID"),
+      }),
     },
-    async (params, extra) => {
+    async (params: { taskId: string }, extra: unknown) => {
       const userId = getUserId(extra as Record<string, unknown>);
       if (!userId) return errorResponse("Authentication required");
 
