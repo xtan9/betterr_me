@@ -25,7 +25,7 @@ CREATE INDEX idx_budgets_household_month ON budgets(household_id, month);
 CREATE TABLE budget_categories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   budget_id UUID NOT NULL REFERENCES budgets(id) ON DELETE CASCADE,
-  category_id UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+  category_id UUID NOT NULL REFERENCES transaction_categories(id) ON DELETE CASCADE,
   allocated_cents BIGINT NOT NULL,
   rollover_cents BIGINT NOT NULL DEFAULT 0,  -- can be negative (overspend debt carries forward)
   created_at TIMESTAMPTZ DEFAULT NOW(),
