@@ -5,7 +5,8 @@ export class CreateHabitPage {
 
   async goto() {
     await this.page.goto('/habits/new');
-    await this.page.waitForLoadState('networkidle');
+    // Wait for form to be interactive instead of networkidle (SWR polling prevents idle)
+    await this.page.getByRole('button', { name: /create/i }).waitFor({ timeout: 15000 });
   }
 
   /** Name input field */
@@ -38,9 +39,15 @@ export class CreateHabitPage {
     await this.page.getByRole('button', { name: label }).click();
   }
 
-  /** Click the Create / submit button */
+  /** Click the Create / submit button and wait for the API response */
   async submit() {
-    await this.page.getByRole('button', { name: /create/i }).click();
+    await Promise.all([
+      this.page.waitForResponse(
+        (res) => res.url().includes('/api/habits') && res.request().method() === 'POST',
+        { timeout: 15000 },
+      ),
+      this.page.getByRole('button', { name: /create/i }).click(),
+    ]);
   }
 
   /** Click the Cancel button */
@@ -50,9 +57,13 @@ export class CreateHabitPage {
 
   /** Wait for redirect to habits list after successful creation */
   async waitForRedirect() {
-    await this.page.waitForURL('/habits', { timeout: 30000 });
-    // Wait for habit list to render after SWR fetch (networkidle hangs due to SWR polling)
-    await this.page.locator('[data-testid^="habit-card"]').first().waitFor({ timeout: 15000 });
+    // Use regex to match /habits with any query params, and wait for either
+    // a habit card or the heading — whichever appears first confirms the page loaded.
+    await this.page.waitForURL(/\/habits(?:\?|$)/, { timeout: 15000 });
+    await this.page
+      .locator('[data-testid^="habit-card"], h1, [data-testid="empty-state"]')
+      .first()
+      .waitFor({ timeout: 10000 });
   }
 
   /** Validation error message */
