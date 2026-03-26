@@ -6,12 +6,12 @@ export class CreateHabitPage {
   async goto() {
     await this.page.goto('/habits/new');
     // Wait for form to be interactive instead of networkidle (SWR polling prevents idle)
-    await this.page.getByLabel(/name/i).waitFor({ timeout: 15000 });
+    await this.page.getByRole('textbox', { name: /habit name/i }).waitFor({ timeout: 15000 });
   }
 
   /** Name input field */
   get nameInput() {
-    return this.page.getByLabel(/name/i);
+    return this.page.getByRole('textbox', { name: /habit name/i });
   }
 
   /** Description input field */
