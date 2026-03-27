@@ -4,10 +4,18 @@ import { useTasksRealtime } from "@/lib/hooks/use-tasks-realtime";
 import type { Task } from "@/lib/db/types";
 
 // Mock Supabase client
-const mockSubscribe = vi.fn().mockReturnValue({ id: "test-channel" });
 const mockRemoveChannel = vi.fn();
 
+type StatusCallback = (status: string, err?: Error) => void;
+let statusCallback: StatusCallback | undefined;
 let channelCallbacks: Record<string, (payload: unknown) => void> = {};
+
+const mockSubscribe = vi.fn().mockImplementation((cb?: StatusCallback) => {
+  statusCallback = cb;
+  // Simulate successful subscription by default
+  if (cb) cb("SUBSCRIBED");
+  return { id: "test-channel" };
+});
 
 const mockOn = vi.fn().mockImplementation((_event, opts, callback) => {
   const key = `${opts.event}:${opts.table}`;
@@ -56,6 +64,7 @@ describe("useTasksRealtime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     channelCallbacks = {};
+    statusCallback = undefined;
   });
 
   it("subscribes to realtime channel on mount", () => {
@@ -76,12 +85,49 @@ describe("useTasksRealtime", () => {
     expect(mockRemoveChannel).toHaveBeenCalled();
   });
 
+  it("returns connected status on successful subscription", () => {
+    const { result } = renderHook(() =>
+      useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
+    );
+
+    expect(result.current.status).toBe("connected");
+  });
+
+  it("returns error status on CHANNEL_ERROR and revalidates", () => {
+    mockSubscribe.mockImplementationOnce((cb?: StatusCallback) => {
+      statusCallback = cb;
+      if (cb) cb("CHANNEL_ERROR", new Error("connection failed"));
+      return { id: "test-channel" };
+    });
+
+    const { result } = renderHook(() =>
+      useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
+    );
+
+    expect(result.current.status).toBe("error");
+    expect(mockMutate).toHaveBeenCalledWith(undefined, { revalidate: true });
+  });
+
+  it("returns error status on TIMED_OUT and revalidates", () => {
+    mockSubscribe.mockImplementationOnce((cb?: StatusCallback) => {
+      statusCallback = cb;
+      if (cb) cb("TIMED_OUT");
+      return { id: "test-channel" };
+    });
+
+    const { result } = renderHook(() =>
+      useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
+    );
+
+    expect(result.current.status).toBe("error");
+    expect(mockMutate).toHaveBeenCalledWith(undefined, { revalidate: true });
+  });
+
   it("listens for INSERT, UPDATE, and DELETE events", () => {
     renderHook(() =>
       useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
     );
 
-    // mockOn is called 3 times: INSERT, UPDATE, DELETE
     const eventTypes = mockOn.mock.calls.map(
       (call: [string, { event: string }]) => call[1].event
     );
@@ -105,19 +151,16 @@ describe("useTasksRealtime", () => {
     ]);
   });
 
-  it("calls mutate with new task on INSERT", () => {
+  it("adds new task to cache on INSERT", () => {
     renderHook(() =>
       useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
     );
 
     const insertCallback = channelCallbacks["INSERT:tasks"];
-    expect(insertCallback).toBeDefined();
-
     insertCallback({ new: mockTask });
 
     expect(mockMutate).toHaveBeenCalled();
     const mutateArg = mockMutate.mock.calls[0][0];
-    // The mutate arg is a function — call it with existing data
     const result = mutateArg({ tasks: [] });
     expect(result.tasks).toHaveLength(1);
     expect(result.tasks[0].id).toBe("task-1");
@@ -133,11 +176,10 @@ describe("useTasksRealtime", () => {
 
     const mutateArg = mockMutate.mock.calls[0][0];
     const result = mutateArg({ tasks: [mockTask] });
-    // Should not duplicate
     expect(result.tasks).toHaveLength(1);
   });
 
-  it("calls mutate with updated task on UPDATE", () => {
+  it("updates task in cache on UPDATE", () => {
     renderHook(() =>
       useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
     );
@@ -152,6 +194,20 @@ describe("useTasksRealtime", () => {
     expect(result.tasks[0].status).toBe("done");
   });
 
+  it("removes task from cache when UPDATE moves it to another project", () => {
+    renderHook(() =>
+      useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
+    );
+
+    const updateCallback = channelCallbacks["UPDATE:tasks"];
+    const movedTask = { ...mockTask, project_id: "proj-2" };
+    updateCallback({ new: movedTask });
+
+    const mutateArg = mockMutate.mock.calls[0][0];
+    const result = mutateArg({ tasks: [mockTask] });
+    expect(result.tasks).toHaveLength(0);
+  });
+
   it("removes task from cache on DELETE", () => {
     renderHook(() =>
       useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
@@ -164,5 +220,47 @@ describe("useTasksRealtime", () => {
     const mutateArg = mockMutate.mock.calls[0][0];
     const result = mutateArg({ tasks: [mockTask] });
     expect(result.tasks).toHaveLength(0);
+  });
+
+  it("ignores INSERT with invalid payload", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderHook(() =>
+      useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
+    );
+
+    const insertCallback = channelCallbacks["INSERT:tasks"];
+    insertCallback({ new: { invalid: true } });
+
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it("ignores DELETE with missing id in payload.old", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderHook(() =>
+      useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
+    );
+
+    const deleteCallback = channelCallbacks["DELETE:tasks"];
+    deleteCallback({ old: {} });
+
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it("ignores UPDATE with invalid payload", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderHook(() =>
+      useTasksRealtime({ projectId: "proj-1", mutate: mockMutate })
+    );
+
+    const updateCallback = channelCallbacks["UPDATE:tasks"];
+    updateCallback({ new: null });
+
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 });

@@ -827,6 +827,9 @@
   "kanban": {
     "backToTasks": "Back to Tasks",
     "taskCount": "{count, plural, =0 {No tasks} =1 {1 task} other {# tasks}}",
+    "live": "Live — updates appear in real time",
+    "connecting": "Connecting to live updates...",
+    "disconnected": "Disconnected — updates may be delayed",
     "columns": {
       "backlog": "Backlog",
       "todo": "To Do",

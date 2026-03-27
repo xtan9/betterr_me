@@ -827,6 +827,9 @@
   "kanban": {
     "backToTasks": "返回任务",
     "taskCount": "{count, plural, =0 {没有任务} other {# 个任务}}",
+    "live": "实时同步中",
+    "connecting": "正在连接实时更新...",
+    "disconnected": "已断开连接，更新可能延迟",
     "columns": {
       "backlog": "待办池",
       "todo": "待办",
