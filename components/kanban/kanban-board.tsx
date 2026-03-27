@@ -26,6 +26,7 @@ import { KanbanCardOverlay } from "@/components/kanban/kanban-card-overlay";
 import { KanbanDetailModal } from "@/components/kanban/kanban-detail-modal";
 import { KanbanSkeleton } from "@/components/kanban/kanban-skeleton";
 import { cn } from "@/lib/utils";
+import { useTasksRealtime } from "@/lib/hooks/use-tasks-realtime";
 import type { Task, TaskStatus, Project } from "@/lib/db/types";
 
 const STATUSES: TaskStatus[] = ["backlog", "todo", "in_progress", "done"];
@@ -83,6 +84,9 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
     fetcher,
     { revalidateOnFocus: false, keepPreviousData: true }
   );
+
+  // Subscribe to realtime task changes for this project
+  const { status: realtimeStatus } = useTasksRealtime({ projectId, mutate });
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -170,7 +174,8 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
           rollbackOnError: true,
           revalidate: false,
         }
-      ).catch(() => {
+      ).catch((err) => {
+        console.error("Failed to update task status via drag", { taskId, fromStatus: task?.status, toStatus: newStatus, error: err });
         toast.error(t("dragError"));
       });
     },
@@ -220,9 +225,20 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
           </div>
         )}
 
-        <span className="text-xs text-muted-foreground ml-auto shrink-0">
-          {t("taskCount", { count: tasks.length })}
-        </span>
+        <div className="flex items-center gap-2 ml-auto shrink-0">
+          <span
+            className={cn(
+              "size-2 rounded-full",
+              realtimeStatus === "connected" && "bg-green-500",
+              realtimeStatus === "connecting" && "bg-yellow-500 animate-pulse",
+              realtimeStatus === "error" && "bg-red-500"
+            )}
+            title={realtimeStatus === "connected" ? t("live") : realtimeStatus === "error" ? t("disconnected") : t("connecting")}
+          />
+          <span className="text-xs text-muted-foreground">
+            {t("taskCount", { count: tasks.length })}
+          </span>
+        </div>
       </div>
 
       {/* Columns area */}
