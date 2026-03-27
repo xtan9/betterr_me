@@ -148,8 +148,8 @@ export class HabitsDB {
   async getHabitsWithTodayStatus(userId: string, date?: string): Promise<HabitWithTodayStatus[]> {
     const today = date || getLocalDateString();
 
-    // Get active habits
-    const habits = await this.getActiveHabits(userId);
+    // Get all habits (active, paused, archived) so the UI can filter by tab
+    const habits = await this.getUserHabits(userId);
 
     // Get today's logs for all habits
     const { data: logs, error: logsError } = await this.supabase

@@ -211,6 +211,33 @@ describe('HabitsDB', () => {
     });
   });
 
+  describe('getHabitsWithTodayStatus', () => {
+    it('should fetch ALL habits (not just active) so paused/archived appear in their tabs', async () => {
+      const pausedHabit = { ...mockHabit, id: 'habit-paused', status: 'paused' as const };
+      const archivedHabit = { ...mockHabit, id: 'habit-archived', status: 'archived' as const };
+      const allHabits = [mockHabit, pausedHabit, archivedHabit];
+
+      // First call: getUserHabits (no status filter)
+      mockSupabaseClient.setMockResponse(allHabits);
+
+      const result = await habitsDB.getHabitsWithTodayStatus(mockUserId, '2026-02-04');
+
+      // Verify it called getUserHabits WITHOUT a status filter
+      // (i.e. eq should NOT have been called with 'status', 'active')
+      const eqCalls = mockSupabaseClient.eq.mock.calls;
+      const statusFilterCalls = eqCalls.filter(
+        (call: string[]) => call[0] === 'status' && call[1] === 'active'
+      );
+      expect(statusFilterCalls).toHaveLength(0);
+
+      // Should return all 3 habits
+      expect(result).toHaveLength(3);
+      expect(result.map((h: { id: string }) => h.id)).toEqual(
+        expect.arrayContaining(['habit-123', 'habit-paused', 'habit-archived'])
+      );
+    });
+  });
+
   describe('deleteHabit', () => {
     it('should delete a habit', async () => {
       mockSupabaseClient.setMockResponse(null);

@@ -38,7 +38,7 @@ const Heatmap30Day = dynamic(() =>
   })),
 );
 import { fetcher } from "@/lib/fetcher";
-import type { Habit, HabitLog } from "@/lib/db/types";
+import type { Habit, HabitLog, Profile } from "@/lib/db/types";
 
 interface HabitDetailContentProps {
   habitId: string;
@@ -145,6 +145,12 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     habit ? `/api/habits/${habitId}/stats` : null,
     fetcher,
   );
+
+  const { data: profileData } = useSWR<{ profile: Profile }>(
+    "/api/profile",
+    fetcher,
+  );
+  const weekStartDay = profileData?.profile?.preferences?.week_start_day ?? 0;
 
   const logs = useMemo(
     () => (Array.isArray(logsData?.logs) ? logsData.logs : []),
@@ -407,6 +413,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
             frequency={frequency ?? habit.frequency}
             logs={logs}
             onToggleDate={handleToggleDate}
+            weekStartDay={weekStartDay}
           />
 
           {/* Actions */}

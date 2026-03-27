@@ -3,6 +3,7 @@
 ## IMPORTANT Rules
 
 - **Git workflow**: ALWAYS create a feature branch and open a PR. NEVER push directly to main unless explicitly told to.
+- **Testing**: ALWAYS add tests when creating a PR if possible. Especially when fixing a bug, add tests to prevent the bug from regressing.
 - **Documentation lookup**: ALWAYS use the `context7-plugin:documentation-lookup` skill FIRST when looking up docs for any library/framework. Only fall back to WebSearch/WebFetch if the skill doesn't return sufficient results.
 - **GitHub issues**: ALWAYS use the `/github-issues` skill for creating, updating, and managing GitHub issues. Do NOT use `gh` CLI directly for issue operations.
 

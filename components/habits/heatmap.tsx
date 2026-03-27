@@ -17,13 +17,19 @@ interface Heatmap30DayProps {
   logs: HabitLog[];
   onToggleDate: (date: string) => Promise<void>;
   isLoading?: boolean;
+  weekStartDay?: number; // 0 = Sunday, 1 = Monday
 }
 
-const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+const ALL_DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
-function organizeByWeeks(cells: HeatmapCell[]) {
+function getDayKeys(weekStartDay: number) {
+  return [...ALL_DAY_KEYS.slice(weekStartDay), ...ALL_DAY_KEYS.slice(0, weekStartDay)];
+}
+
+function organizeByWeeks(cells: HeatmapCell[], weekStartDay: number) {
   const weeks: (HeatmapCell | null)[][] = [];
   let currentWeek: (HeatmapCell | null)[] = [];
+  const weekEndDay = (weekStartDay + 6) % 7;
 
   for (let i = 0; i < cells.length; i++) {
     const cell = cells[i];
@@ -32,15 +38,16 @@ function organizeByWeeks(cells: HeatmapCell[]) {
 
     // If this is the first cell, fill in empty slots before it
     if (i === 0) {
-      for (let j = 0; j < dayOfWeek; j++) {
+      const offset = (dayOfWeek - weekStartDay + 7) % 7;
+      for (let j = 0; j < offset; j++) {
         currentWeek.push(null);
       }
     }
 
     currentWeek.push(cell);
 
-    // If it's Saturday or the last cell, end the week
-    if (dayOfWeek === 6 || i === cells.length - 1) {
+    // If it's the last day of the week or the last cell, end the week
+    if (dayOfWeek === weekEndDay || i === cells.length - 1) {
       // Fill remaining slots if needed
       while (currentWeek.length < 7) {
         currentWeek.push(null);
@@ -58,10 +65,12 @@ export const Heatmap30Day = memo(function Heatmap30Day({
   logs,
   onToggleDate,
   isLoading = false,
+  weekStartDay = 0,
 }: Heatmap30DayProps) {
   const t = useTranslations("habits.heatmap");
   const cells = useMemo(() => buildHeatmapData(logs, frequency, 30), [logs, frequency]);
-  const weeks = useMemo(() => organizeByWeeks(cells), [cells]);
+  const weeks = useMemo(() => organizeByWeeks(cells, weekStartDay), [cells, weekStartDay]);
+  const dayKeys = useMemo(() => getDayKeys(weekStartDay), [weekStartDay]);
 
   const handleCellClick = (cell: HeatmapCell) => {
     if (isLoading) return;
@@ -137,7 +146,7 @@ export const Heatmap30Day = memo(function Heatmap30Day({
         <h3 className="text-sm font-medium text-muted-foreground">{t("title")}</h3>
         <div className="animate-pulse">
           <div className="grid grid-cols-7 gap-1 mb-2">
-            {DAY_KEYS.map((day) => (
+            {dayKeys.map((day) => (
               <div key={day} className="h-4 bg-muted rounded" />
             ))}
           </div>
@@ -159,7 +168,7 @@ export const Heatmap30Day = memo(function Heatmap30Day({
 
       {/* Day labels */}
       <div className="grid grid-cols-7 gap-1 text-center">
-        {DAY_KEYS.map((day) => (
+        {dayKeys.map((day) => (
           <div key={day} className="text-xs text-muted-foreground">
             {t(`days.${day}`)}
           </div>
