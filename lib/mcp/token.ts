@@ -181,10 +181,16 @@ export async function verifyMcpAuth(
   _req: Request,
   bearerToken?: string,
 ): Promise<McpAuthInfo | undefined> {
-  if (!bearerToken) return undefined;
+  if (!bearerToken) {
+    log.error("verifyMcpAuth: no bearer token provided");
+    return undefined;
+  }
 
   const result = await verifyMcpToken(bearerToken);
-  if (!result) return undefined;
+  if (!result) {
+    log.error("verifyMcpAuth: token verification failed");
+    return undefined;
+  }
 
   return {
     token: bearerToken,
