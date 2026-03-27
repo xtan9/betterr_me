@@ -92,7 +92,6 @@ describe("useTasksRealtime", () => {
 
   it("returns error status on CHANNEL_ERROR and revalidates", () => {
     mockSubscribe.mockImplementationOnce((cb?: StatusCallback) => {
-      statusCallback = cb;
       if (cb) cb("CHANNEL_ERROR", new Error("connection failed"));
       return { id: "test-channel" };
     });
@@ -107,7 +106,6 @@ describe("useTasksRealtime", () => {
 
   it("returns error status on TIMED_OUT and revalidates", () => {
     mockSubscribe.mockImplementationOnce((cb?: StatusCallback) => {
-      statusCallback = cb;
       if (cb) cb("TIMED_OUT");
       return { id: "test-channel" };
     });
