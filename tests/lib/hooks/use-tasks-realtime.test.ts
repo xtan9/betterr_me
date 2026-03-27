@@ -7,11 +7,9 @@ import type { Task } from "@/lib/db/types";
 const mockRemoveChannel = vi.fn();
 
 type StatusCallback = (status: string, err?: Error) => void;
-let statusCallback: StatusCallback | undefined;
 let channelCallbacks: Record<string, (payload: unknown) => void> = {};
 
 const mockSubscribe = vi.fn().mockImplementation((cb?: StatusCallback) => {
-  statusCallback = cb;
   // Simulate successful subscription by default
   if (cb) cb("SUBSCRIBED");
   return { id: "test-channel" };
@@ -64,7 +62,6 @@ describe("useTasksRealtime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     channelCallbacks = {};
-    statusCallback = undefined;
   });
 
   it("subscribes to realtime channel on mount", () => {

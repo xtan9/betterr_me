@@ -36,7 +36,10 @@ function isValidTaskPayload(obj: unknown): obj is Task {
 export function useTasksRealtime({ projectId, mutate }: UseTasksRealtimeOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const mutateRef = useRef(mutate);
-  mutateRef.current = mutate;
+
+  useEffect(() => {
+    mutateRef.current = mutate;
+  }, [mutate]);
 
   const [status, setStatus] = useState<RealtimeStatus>("connecting");
 
