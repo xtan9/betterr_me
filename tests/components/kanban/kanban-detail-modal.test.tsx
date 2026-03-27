@@ -196,12 +196,14 @@ describe("KanbanDetailModal", () => {
       });
     });
 
-    it("reverts title if save fails", async () => {
+    it("reverts title if save fails (HTTP error)", async () => {
       const user = userEvent.setup();
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: false,
         status: 500,
+        json: () => Promise.resolve({ error: "Server error" }),
       });
+      const { toast } = await import("sonner");
       renderModal();
 
       await user.click(screen.getByText("Test Task"));
@@ -213,6 +215,41 @@ describe("KanbanDetailModal", () => {
       await waitFor(() => {
         expect(screen.getByText("Test Task")).toBeInTheDocument();
       });
+      expect(toast.error).toHaveBeenCalled();
+    });
+
+    it("reverts title if save fails (network error)", async () => {
+      const user = userEvent.setup();
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new TypeError("Failed to fetch")
+      );
+      const { toast } = await import("sonner");
+      renderModal();
+
+      await user.click(screen.getByText("Test Task"));
+      const input = screen.getByDisplayValue("Test Task");
+      await user.clear(input);
+      await user.type(input, "Network Fail Title");
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.getByText("Test Task")).toBeInTheDocument();
+      });
+      expect(toast.error).toHaveBeenCalled();
+    });
+
+    it("does not save empty or whitespace-only title", async () => {
+      const user = userEvent.setup();
+      renderModal();
+
+      await user.click(screen.getByText("Test Task"));
+      const input = screen.getByDisplayValue("Test Task");
+      await user.clear(input);
+      await user.type(input, "   ");
+      await user.tab();
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(screen.getByText("Test Task")).toBeInTheDocument();
     });
   });
 
@@ -247,10 +284,9 @@ describe("KanbanDetailModal", () => {
   });
 
   describe("delete task", () => {
-    it("shows delete button", () => {
+    it("shows delete button with accessible label", () => {
       renderModal();
-      // The delete button has a Trash2 icon
-      const deleteButton = screen.getByRole("button", { name: "" });
+      const deleteButton = screen.getByRole("button", { name: "Delete" });
       expect(deleteButton).toBeInTheDocument();
     });
 
@@ -258,13 +294,7 @@ describe("KanbanDetailModal", () => {
       const user = userEvent.setup();
       renderModal();
 
-      // Find the button that triggers the alert dialog (the trash icon button)
-      const buttons = screen.getAllByRole("button");
-      const deleteButton = buttons.find((btn) =>
-        btn.classList.contains("hover:text-destructive")
-      );
-      expect(deleteButton).toBeDefined();
-      await user.click(deleteButton!);
+      await user.click(screen.getByRole("button", { name: "Delete" }));
 
       await waitFor(() => {
         expect(screen.getByText("Delete this task?")).toBeInTheDocument();
@@ -283,18 +313,12 @@ describe("KanbanDetailModal", () => {
       });
       renderModal();
 
-      // Open confirmation dialog
-      const buttons = screen.getAllByRole("button");
-      const deleteButton = buttons.find((btn) =>
-        btn.classList.contains("hover:text-destructive")
-      );
-      await user.click(deleteButton!);
+      await user.click(screen.getByRole("button", { name: "Delete" }));
 
-      // Click the Delete confirmation button
       await waitFor(() => {
-        expect(screen.getByText("Delete")).toBeInTheDocument();
+        expect(screen.getByText("Delete this task?")).toBeInTheDocument();
       });
-      await user.click(screen.getByText("Delete"));
+      await user.click(screen.getByRole("button", { name: "Delete", exact: true }));
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith("/api/tasks/task-1", {
@@ -305,40 +329,55 @@ describe("KanbanDetailModal", () => {
       expect(mockOnTaskDeleted).toHaveBeenCalled();
     });
 
-    it("shows error toast when delete fails", async () => {
+    it("shows error toast when delete fails (HTTP error)", async () => {
       const user = userEvent.setup();
       const { toast } = await import("sonner");
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: false,
         status: 500,
+        json: () => Promise.resolve({ error: "Failed to delete task" }),
       });
       renderModal();
 
-      const buttons = screen.getAllByRole("button");
-      const deleteButton = buttons.find((btn) =>
-        btn.classList.contains("hover:text-destructive")
-      );
-      await user.click(deleteButton!);
+      await user.click(screen.getByRole("button", { name: "Delete" }));
 
       await waitFor(() => {
-        expect(screen.getByText("Delete")).toBeInTheDocument();
+        expect(screen.getByText("Delete this task?")).toBeInTheDocument();
       });
-      await user.click(screen.getByText("Delete"));
+      await user.click(screen.getByRole("button", { name: "Delete", exact: true }));
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith("Failed to delete task");
       });
     });
 
+    it("shows error toast when delete fails (network error)", async () => {
+      const user = userEvent.setup();
+      const { toast } = await import("sonner");
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new TypeError("Failed to fetch")
+      );
+      renderModal();
+
+      await user.click(screen.getByRole("button", { name: "Delete" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Delete this task?")).toBeInTheDocument();
+      });
+      await user.click(screen.getByRole("button", { name: "Delete", exact: true }));
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith("Failed to delete task");
+      });
+      expect(mockOnClose).not.toHaveBeenCalled();
+      expect(mockOnTaskDeleted).not.toHaveBeenCalled();
+    });
+
     it("cancels delete when cancel is clicked", async () => {
       const user = userEvent.setup();
       renderModal();
 
-      const buttons = screen.getAllByRole("button");
-      const deleteButton = buttons.find((btn) =>
-        btn.classList.contains("hover:text-destructive")
-      );
-      await user.click(deleteButton!);
+      await user.click(screen.getByRole("button", { name: "Delete" }));
 
       await waitFor(() => {
         expect(screen.getByText("Cancel")).toBeInTheDocument();
@@ -347,6 +386,94 @@ describe("KanbanDetailModal", () => {
 
       expect(global.fetch).not.toHaveBeenCalled();
       expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it("works when onTaskDeleted is not provided", async () => {
+      const user = userEvent.setup();
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+      });
+      render(
+        <KanbanDetailModal
+          task={mockTask}
+          onClose={mockOnClose}
+          projectName="Test Project"
+          onTaskUpdated={mockOnTaskUpdated}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: "Delete" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Delete this task?")).toBeInTheDocument();
+      });
+      await user.click(screen.getByRole("button", { name: "Delete", exact: true }));
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith("/api/tasks/task-1", {
+          method: "DELETE",
+        });
+      });
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
+
+  describe("description revert on failure", () => {
+    it("reverts description if save fails", async () => {
+      const user = userEvent.setup();
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: "Server error" }),
+      });
+      renderModal();
+
+      const textarea = screen.getByPlaceholderText("Add a description...");
+      await user.clear(textarea);
+      await user.type(textarea, "New failing description");
+      await user.tab();
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue("Test description")).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("task switching", () => {
+    it("resets editing state when task changes", () => {
+      const task2: Task = {
+        ...mockTask,
+        id: "task-2",
+        title: "Second Task",
+        description: "Second description",
+      };
+
+      const { rerender } = render(
+        <KanbanDetailModal
+          task={mockTask}
+          onClose={mockOnClose}
+          projectName="Test Project"
+          onTaskUpdated={mockOnTaskUpdated}
+          onTaskDeleted={mockOnTaskDeleted}
+        />
+      );
+
+      expect(screen.getByText("Test Task")).toBeInTheDocument();
+
+      rerender(
+        <KanbanDetailModal
+          task={task2}
+          onClose={mockOnClose}
+          projectName="Test Project"
+          onTaskUpdated={mockOnTaskUpdated}
+          onTaskDeleted={mockOnTaskDeleted}
+        />
+      );
+
+      expect(screen.getByText("Second Task")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Second description")).toBeInTheDocument();
+      // Should not be in edit mode
+      expect(screen.queryByRole("textbox", { name: "" })).not.toBeInTheDocument();
     });
   });
 

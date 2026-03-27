@@ -84,10 +84,18 @@ export function KanbanDetailModal({
   const [title, setTitle] = useState(task?.title || "");
   const [originalTitle, setOriginalTitle] = useState(task?.title || "");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [savingField, setSavingField] = useState<string | null>(null);
+  const [savingFields, setSavingFields] = useState<Set<string>>(new Set());
   const [savedField, setSavedField] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Cleanup saved indicator timer on unmount
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
 
   // Reset state when task changes
   const currentTaskId = task?.id;
@@ -109,15 +117,16 @@ export function KanbanDetailModal({
   }, [isEditingTitle]);
 
   const showSavedIndicator = useCallback((field: string) => {
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     setSavedField(field);
-    const timer = setTimeout(() => setSavedField(null), 1500);
-    return () => clearTimeout(timer);
+    savedTimerRef.current = setTimeout(() => setSavedField(null), 1500);
   }, []);
 
   const updateField = useCallback(
     async <K extends keyof TaskUpdate>(field: K, value: TaskUpdate[K]): Promise<boolean> => {
       if (!task) return false;
-      setSavingField(String(field));
+      const fieldName = String(field);
+      setSavingFields((prev) => new Set(prev).add(fieldName));
       try {
         const res = await fetch(`/api/tasks/${task.id}`, {
           method: "PATCH",
@@ -125,19 +134,24 @@ export function KanbanDetailModal({
           body: JSON.stringify({ [field]: value }),
         });
         if (!res.ok) {
-          console.error(`Task update failed: field="${String(field)}", status=${res.status}`);
-          toast.error(t("detail.updateError"));
+          const body = await res.json().catch(() => null);
+          console.error(`Task update failed: field="${fieldName}", status=${res.status}, serverError="${body?.error}"`);
+          toast.error(body?.error || t("detail.updateError"));
           return false;
         }
         onTaskUpdated();
-        showSavedIndicator(String(field));
+        showSavedIndicator(fieldName);
         return true;
       } catch (error) {
-        console.error(`Task update network error: field="${String(field)}"`, error);
+        console.error(`Task update network error: field="${fieldName}"`, error);
         toast.error(t("detail.updateError"));
         return false;
       } finally {
-        setSavingField(null);
+        setSavingFields((prev) => {
+          const next = new Set(prev);
+          next.delete(fieldName);
+          return next;
+        });
       }
     },
     [task, onTaskUpdated, t, showSavedIndicator]
@@ -177,6 +191,8 @@ export function KanbanDetailModal({
       const success = await updateField("description", description || null);
       if (success) {
         setOriginalDescription(description);
+      } else {
+        setDescription(originalDescription);
       }
     }
   }, [description, originalDescription, updateField]);
@@ -187,12 +203,15 @@ export function KanbanDetailModal({
     try {
       const res = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
       if (!res.ok) {
-        toast.error(t("detail.deleteError"));
+        const body = await res.json().catch(() => null);
+        console.error(`Task delete failed: taskId="${task.id}", status=${res.status}, serverError="${body?.error}"`);
+        toast.error(body?.error || t("detail.deleteError"));
         return;
       }
       onClose();
       onTaskDeleted?.();
-    } catch {
+    } catch (error) {
+      console.error(`Task delete network error: taskId="${task.id}"`, error);
       toast.error(t("detail.deleteError"));
     } finally {
       setIsDeleting(false);
@@ -225,7 +244,7 @@ export function KanbanDetailModal({
                   onClick={() => setIsEditingTitle(true)}
                   title={t("detail.clickToEdit")}
                 >
-                  {task.title}
+                  {title}
                 </DialogTitle>
               )}
               <AlertDialog>
@@ -233,6 +252,7 @@ export function KanbanDetailModal({
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={t("detail.delete")}
                     className="text-muted-foreground hover:text-destructive shrink-0"
                   >
                     <Trash2 className="size-4" />
@@ -384,7 +404,7 @@ export function KanbanDetailModal({
                     <h3 className="text-base font-semibold">
                       {t("detail.descriptionHeading")}
                     </h3>
-                    {savingField === "description" && (
+                    {savingFields.has("description") && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Loader2 className="size-3 animate-spin" />
                         {t("detail.saving")}
