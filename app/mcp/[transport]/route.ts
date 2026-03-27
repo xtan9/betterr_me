@@ -12,7 +12,7 @@ const handler = createMcpHandler(
       tools: {},
     },
   },
-  { basePath: "/mcp" },
+  { basePath: "/mcp", maxDuration: 60 },
 );
 
 // TODO: Re-enable auth after confirming MCP connection works
@@ -20,5 +20,8 @@ const handler = createMcpHandler(
 //   required: true,
 //   resourceMetadataPath: "/.well-known/oauth-protected-resource",
 // });
+
+// Vercel hobby plan allows up to 60s for streaming responses
+export const maxDuration = 60;
 
 export { handler as GET, handler as POST, handler as DELETE };
