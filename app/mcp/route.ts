@@ -12,7 +12,7 @@ const handler = createMcpHandler(
       tools: {},
     },
   },
-  { basePath: "/mcp", maxDuration: 60 },
+  { streamableHttpEndpoint: "/mcp", disableSse: true, maxDuration: 60 },
 );
 
 // TODO: Re-enable auth after confirming MCP connection works
