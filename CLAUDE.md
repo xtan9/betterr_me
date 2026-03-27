@@ -2,12 +2,27 @@
 
 ## IMPORTANT Rules
 
+- **Git workflow**: ALWAYS create a feature branch and open a PR. NEVER push directly to main unless explicitly told to.
 - **Documentation lookup**: ALWAYS use the `context7-plugin:documentation-lookup` skill FIRST when looking up docs for any library/framework. Only fall back to WebSearch/WebFetch if the skill doesn't return sufficient results.
 - **GitHub issues**: ALWAYS use the `/github-issues` skill for creating, updating, and managing GitHub issues. Do NOT use `gh` CLI directly for issue operations.
 
 ## Project Overview
 
-**BetterR.Me** — habit tracking web app. Next.js 16 (App Router), Supabase, TypeScript (strict), three locales (en, zh, zh-TW), dark mode, tested with Vitest + Playwright.
+**BetterR.Me** — personal productivity & finance web app. Next.js 16 (App Router), Supabase, TypeScript (strict), three locales (en, zh, zh-TW), dark mode, tested with Vitest + Playwright.
+
+### App Domains
+
+| Domain | Route | DB Classes |
+|--------|-------|------------|
+| Dashboard | `app/dashboard` | — |
+| Habits | `app/habits` | `HabitsDB`, `HabitLogsDB`, `HabitMilestonesDB` |
+| Tasks | `app/tasks` | `TasksDB`, `RecurringTasksDB` |
+| Projects | `app/projects` | `ProjectsDB` |
+| Journal | `app/journal` | `JournalEntriesDB`, `JournalEntryLinksDB` |
+| Workouts | `app/workouts` | `WorkoutsDB`, `WorkoutExercisesDB`, `ExercisesDB`, `RoutinesDB` |
+| Money | `app/money` | `TransactionsDB`, `BudgetsDB`, `RecurringBillsDB`, `SavingsGoalsDB`, `NetWorthSnapshotsDB`, `ManualAssetsDB`, `BankConnectionsDB`, `MerchantRulesDB`, `TransactionSplitsDB`, `AccountsMoneyDB` |
+| Auth | `app/auth` | `ProfilesDB` |
+| MCP | `app/mcp` | — |
 
 ## Quick Reference
 
@@ -38,7 +53,7 @@ pnpm test:e2e:chromium  # Playwright (Chromium only — fastest)
 
 ### Supabase Client Pattern
 
-Three clients: **Browser** (`lib/supabase/client.ts`), **Server** (`lib/supabase/server.ts`), **Proxy** (`lib/supabase/proxy.ts`).
+Four clients: **Browser** (`lib/supabase/client.ts`), **Server** (`lib/supabase/server.ts`), **Proxy** (`lib/supabase/proxy.ts`), **Admin** (`lib/supabase/admin.ts` — service-role, bypasses RLS).
 
 API routes must always instantiate DB classes with a fresh server client — no singletons:
 ```ts
