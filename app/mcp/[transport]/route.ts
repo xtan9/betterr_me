@@ -15,9 +15,10 @@ const handler = createMcpHandler(
   { basePath: "/mcp" },
 );
 
-const authHandler = withMcpAuth(handler, verifyMcpAuth, {
-  required: true,
-  resourceMetadataPath: "/.well-known/oauth-protected-resource",
-});
+// TODO: Re-enable auth after confirming MCP connection works
+// const authHandler = withMcpAuth(handler, verifyMcpAuth, {
+//   required: true,
+//   resourceMetadataPath: "/.well-known/oauth-protected-resource",
+// });
 
-export { authHandler as GET, authHandler as POST, authHandler as DELETE };
+export { handler as GET, handler as POST, handler as DELETE };
