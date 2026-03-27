@@ -856,7 +856,16 @@
       "updatesHeading": "Item updates",
       "writeUpdate": "Write an update...",
       "noUpdates": "No updates yet",
-      "updateError": "Failed to update task"
+      "updateError": "Failed to update task",
+      "clickToEdit": "Click to edit title",
+      "saving": "Saving...",
+      "saved": "Saved",
+      "delete": "Delete",
+      "deleting": "Deleting...",
+      "cancel": "Cancel",
+      "deleteError": "Failed to delete task",
+      "deleteConfirmTitle": "Delete this task?",
+      "deleteConfirmDescription": "This action cannot be undone. This will permanently delete the task."
     },
     "priority": {
       "high": "High",

@@ -856,7 +856,16 @@
       "updatesHeading": "项目动态",
       "writeUpdate": "写一条更新...",
       "noUpdates": "暂无更新",
-      "updateError": "更新任务失败"
+      "updateError": "更新任务失败",
+      "clickToEdit": "点击编辑标题",
+      "saving": "保存中...",
+      "saved": "已保存",
+      "delete": "删除",
+      "deleting": "删除中...",
+      "cancel": "取消",
+      "deleteError": "删除任务失败",
+      "deleteConfirmTitle": "删除此任务？",
+      "deleteConfirmDescription": "此操作无法撤销，将永久删除该任务。"
     },
     "priority": {
       "high": "高",
