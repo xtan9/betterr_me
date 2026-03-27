@@ -78,7 +78,7 @@ describe('Heatmap30Day', () => {
     expect(screen.getByText('Last 30 Days')).toBeInTheDocument();
   });
 
-  it('renders day labels (Sun-Sat)', () => {
+  it('renders day labels (Sun-Sat) by default', () => {
     render(<Heatmap30Day {...defaultProps} />);
     expect(screen.getByText('Sun')).toBeInTheDocument();
     expect(screen.getByText('Mon')).toBeInTheDocument();
@@ -87,6 +87,20 @@ describe('Heatmap30Day', () => {
     expect(screen.getByText('Thu')).toBeInTheDocument();
     expect(screen.getByText('Fri')).toBeInTheDocument();
     expect(screen.getByText('Sat')).toBeInTheDocument();
+  });
+
+  it('renders day labels starting from Monday when weekStartDay=1', () => {
+    render(<Heatmap30Day {...defaultProps} weekStartDay={1} />);
+    const dayLabels = screen.getAllByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
+    const labelTexts = dayLabels.map((el) => el.textContent);
+    expect(labelTexts).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+  });
+
+  it('renders day labels starting from Sunday when weekStartDay=0', () => {
+    render(<Heatmap30Day {...defaultProps} weekStartDay={0} />);
+    const dayLabels = screen.getAllByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
+    const labelTexts = dayLabels.map((el) => el.textContent);
+    expect(labelTexts).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
   });
 
   it('renders 30 cells', () => {
