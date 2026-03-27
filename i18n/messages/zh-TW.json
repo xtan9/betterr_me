@@ -856,7 +856,16 @@
       "updatesHeading": "項目動態",
       "writeUpdate": "撰寫更新...",
       "noUpdates": "暫無更新",
-      "updateError": "更新任務失敗"
+      "updateError": "更新任務失敗",
+      "clickToEdit": "點擊編輯標題",
+      "saving": "儲存中...",
+      "saved": "已儲存",
+      "delete": "刪除",
+      "deleting": "刪除中...",
+      "cancel": "取消",
+      "deleteError": "刪除任務失敗",
+      "deleteConfirmTitle": "刪除此任務？",
+      "deleteConfirmDescription": "此操作無法復原，將永久刪除該任務。"
     },
     "priority": {
       "high": "高",

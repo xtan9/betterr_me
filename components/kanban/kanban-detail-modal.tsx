@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { Calendar } from "lucide-react";
+import { Calendar, Trash2, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle as AlertTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { Task, TaskStatus, TaskUpdate } from "@/lib/db/types";
 
 interface KanbanDetailModalProps {
@@ -30,6 +42,7 @@ interface KanbanDetailModalProps {
   onClose: () => void;
   projectName?: string;
   onTaskUpdated: () => void;
+  onTaskDeleted?: () => void;
 }
 
 const STATUS_STYLES: Record<TaskStatus, string> = {
@@ -61,25 +74,50 @@ export function KanbanDetailModal({
   onClose,
   projectName,
   onTaskUpdated,
+  onTaskDeleted,
 }: KanbanDetailModalProps) {
   const t = useTranslations("kanban");
   const [description, setDescription] = useState(task?.description || "");
   const [originalDescription, setOriginalDescription] = useState(
     task?.description || ""
   );
+  const [title, setTitle] = useState(task?.title || "");
+  const [originalTitle, setOriginalTitle] = useState(task?.title || "");
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [savingField, setSavingField] = useState<string | null>(null);
+  const [savedField, setSavedField] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // Reset description state when task changes
+  // Reset state when task changes
   const currentTaskId = task?.id;
   const [prevTaskId, setPrevTaskId] = useState(currentTaskId);
   if (currentTaskId !== prevTaskId) {
     setPrevTaskId(currentTaskId);
     setDescription(task?.description || "");
     setOriginalDescription(task?.description || "");
+    setTitle(task?.title || "");
+    setOriginalTitle(task?.title || "");
+    setIsEditingTitle(false);
   }
+
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  const showSavedIndicator = useCallback((field: string) => {
+    setSavedField(field);
+    const timer = setTimeout(() => setSavedField(null), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const updateField = useCallback(
     async <K extends keyof TaskUpdate>(field: K, value: TaskUpdate[K]): Promise<boolean> => {
       if (!task) return false;
+      setSavingField(String(field));
       try {
         const res = await fetch(`/api/tasks/${task.id}`, {
           method: "PATCH",
@@ -92,14 +130,46 @@ export function KanbanDetailModal({
           return false;
         }
         onTaskUpdated();
+        showSavedIndicator(String(field));
         return true;
       } catch (error) {
         console.error(`Task update network error: field="${String(field)}"`, error);
         toast.error(t("detail.updateError"));
         return false;
+      } finally {
+        setSavingField(null);
       }
     },
-    [task, onTaskUpdated, t]
+    [task, onTaskUpdated, t, showSavedIndicator]
+  );
+
+  const handleTitleBlur = useCallback(async () => {
+    setIsEditingTitle(false);
+    const trimmed = title.trim();
+    if (trimmed && trimmed !== originalTitle) {
+      const success = await updateField("title", trimmed);
+      if (success) {
+        setOriginalTitle(trimmed);
+        setTitle(trimmed);
+      } else {
+        setTitle(originalTitle);
+      }
+    } else {
+      setTitle(originalTitle);
+    }
+  }, [title, originalTitle, updateField]);
+
+  const handleTitleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        (e.target as HTMLInputElement).blur();
+      } else if (e.key === "Escape") {
+        setTitle(originalTitle);
+        setIsEditingTitle(false);
+      }
+    },
+    [originalTitle]
   );
 
   const handleDescriptionBlur = useCallback(async () => {
@@ -111,6 +181,24 @@ export function KanbanDetailModal({
     }
   }, [description, originalDescription, updateField]);
 
+  const handleDelete = useCallback(async () => {
+    if (!task) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error(t("detail.deleteError"));
+        return;
+      }
+      onClose();
+      onTaskDeleted?.();
+    } catch {
+      toast.error(t("detail.deleteError"));
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [task, onClose, onTaskDeleted, t]);
+
   if (!task) return null;
 
   return (
@@ -119,9 +207,57 @@ export function KanbanDetailModal({
         <Tabs defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
           {/* Header area — white bar */}
           <div className="bg-background border-b px-6 pt-5 pb-4 flex-shrink-0">
-            <DialogTitle className="text-2xl font-semibold pr-8 mb-3">
-              {task.title}
-            </DialogTitle>
+            <div className="flex items-start justify-between gap-2 mb-3">
+              {isEditingTitle ? (
+                <DialogTitle asChild>
+                  <input
+                    ref={titleInputRef}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    onBlur={handleTitleBlur}
+                    onKeyDown={handleTitleKeyDown}
+                    className="text-2xl font-semibold bg-transparent border-b-2 border-primary outline-none flex-1 min-w-0"
+                  />
+                </DialogTitle>
+              ) : (
+                <DialogTitle
+                  className="text-2xl font-semibold pr-2 cursor-pointer hover:text-primary/80 transition-colors flex-1"
+                  onClick={() => setIsEditingTitle(true)}
+                  title={t("detail.clickToEdit")}
+                >
+                  {task.title}
+                </DialogTitle>
+              )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-destructive shrink-0"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertTitle>{t("detail.deleteConfirmTitle")}</AlertTitle>
+                    <AlertDialogDescription>
+                      {t("detail.deleteConfirmDescription")}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("detail.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {isDeleting ? t("detail.deleting") : t("detail.delete")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
             <TabsList>
               <TabsTrigger value="details">
                 {t("detail.detailsTab")}
@@ -248,6 +384,18 @@ export function KanbanDetailModal({
                     <h3 className="text-base font-semibold">
                       {t("detail.descriptionHeading")}
                     </h3>
+                    {savingField === "description" && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Loader2 className="size-3 animate-spin" />
+                        {t("detail.saving")}
+                      </span>
+                    )}
+                    {savedField === "description" && (
+                      <span className="flex items-center gap-1 text-xs text-green-500">
+                        <Check className="size-3" />
+                        {t("detail.saved")}
+                      </span>
+                    )}
                   </div>
                   <div className="p-4">
                     <textarea
