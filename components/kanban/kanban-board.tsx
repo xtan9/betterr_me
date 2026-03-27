@@ -26,6 +26,7 @@ import { KanbanCardOverlay } from "@/components/kanban/kanban-card-overlay";
 import { KanbanDetailModal } from "@/components/kanban/kanban-detail-modal";
 import { KanbanSkeleton } from "@/components/kanban/kanban-skeleton";
 import { cn } from "@/lib/utils";
+import { useTasksRealtime } from "@/lib/hooks/use-tasks-realtime";
 import type { Task, TaskStatus, Project } from "@/lib/db/types";
 
 const STATUSES: TaskStatus[] = ["backlog", "todo", "in_progress", "done"];
@@ -83,6 +84,9 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
     fetcher,
     { revalidateOnFocus: false, keepPreviousData: true }
   );
+
+  // Subscribe to realtime task changes for this project
+  useTasksRealtime({ projectId, mutate });
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
