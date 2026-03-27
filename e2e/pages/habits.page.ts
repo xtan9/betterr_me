@@ -6,7 +6,11 @@ export class HabitsPage {
 
   async goto() {
     await this.page.goto('/habits');
-    await this.page.waitForLoadState('networkidle');
+    // Wait for page content instead of networkidle (SWR polling prevents idle)
+    await this.page
+      .locator('[data-testid^="habit-card"], [data-testid="empty-state"], h1')
+      .first()
+      .waitFor({ timeout: 15000 });
   }
 
   /** "Create Habit" button on the habits list page */

@@ -41,7 +41,7 @@ test.describe('Create Habit Flow', () => {
     await createPage.fillDescription('A test habit created by E2E test suite');
     await createPage.selectCategory('Health');
     await createPage.selectFrequency(/every day/i);
-    await createPage.submit();
+    await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
 
     // Verify the habit appears in the list
@@ -54,7 +54,7 @@ test.describe('Create Habit Flow', () => {
 
     await createPage.fillName('E2E Test - Weekday Habit');
     await createPage.selectFrequency(/mon.*fri/i);
-    await createPage.submit();
+    await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
     await expect(page.getByText('E2E Test - Weekday Habit').first()).toBeVisible();
   });
@@ -65,7 +65,7 @@ test.describe('Create Habit Flow', () => {
 
     await createPage.fillName('E2E Test - Weekly Habit');
     await createPage.selectFrequency(/once a week/i);
-    await createPage.submit();
+    await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
     await expect(page.getByText('E2E Test - Weekly Habit').first()).toBeVisible();
   });
@@ -76,7 +76,7 @@ test.describe('Create Habit Flow', () => {
 
     await createPage.fillName('E2E Test - 2x Week Habit');
     await createPage.selectFrequency(/2 times/i);
-    await createPage.submit();
+    await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
     await expect(page.getByText('E2E Test - 2x Week Habit').first()).toBeVisible();
   });
@@ -87,7 +87,7 @@ test.describe('Create Habit Flow', () => {
 
     await createPage.fillName('E2E Test - 3x Week Habit');
     await createPage.selectFrequency(/3 times/i);
-    await createPage.submit();
+    await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
     await expect(page.getByText('E2E Test - 3x Week Habit').first()).toBeVisible();
   });
@@ -104,7 +104,7 @@ test.describe('Create Habit Flow', () => {
     await page.getByRole('button', { name: 'Wed', exact: true }).click();
     await page.getByRole('button', { name: 'Fri', exact: true }).click();
 
-    await createPage.submit();
+    await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
     await expect(page.getByText('E2E Test - Custom Habit').first()).toBeVisible();
   });
@@ -141,7 +141,7 @@ test.describe('Create Habit Flow', () => {
     // Create first habit
     await createPage.goto();
     await createPage.fillName('E2E Test - Sequence Habit 1');
-    await createPage.submit();
+    await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
     await expect(habits.tabPanel.getByText('E2E Test - Sequence Habit 1').first()).toBeVisible();
 
@@ -149,7 +149,7 @@ test.describe('Create Habit Flow', () => {
     await habits.createButton.click();
     await page.waitForURL('/habits/new', { timeout: 5000 });
     await createPage.fillName('E2E Test - Sequence Habit 2');
-    await createPage.submit();
+    await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
 
     // Both habits should be visible in the list

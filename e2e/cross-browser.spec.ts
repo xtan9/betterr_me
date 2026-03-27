@@ -33,7 +33,7 @@ test.describe('Cross-Browser - Core Functionality', () => {
 
     await createPage.fillName('E2E Test - Cross-Browser Habit');
     await createPage.selectFrequency(/every day/i);
-    await createPage.submit();
+    await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
 
     // Verify — use .first() in case duplicates linger from a previous run
