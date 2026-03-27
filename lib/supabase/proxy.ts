@@ -7,6 +7,17 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  // Skip middleware entirely for MCP and OAuth routes — they use Bearer token auth,
+  // not cookies, and the middleware can interfere with the Authorization header.
+  const path = request.nextUrl.pathname;
+  if (
+    path.startsWith("/mcp") ||
+    path.startsWith("/.well-known") ||
+    path.startsWith("/api/oauth")
+  ) {
+    return supabaseResponse;
+  }
+
   // If the env vars are not set, skip middleware check. You can remove this once you setup the project.
   if (!hasEnvVars) {
     return supabaseResponse;
