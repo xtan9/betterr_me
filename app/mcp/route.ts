@@ -12,7 +12,12 @@ const handler = createMcpHandler(
       tools: {},
     },
   },
-  { streamableHttpEndpoint: "/mcp", disableSse: true, maxDuration: 60 },
+  {
+    redisUrl: process.env.REDIS_URL,
+    streamableHttpEndpoint: "/mcp",
+    disableSse: true,
+    maxDuration: 60,
+  },
 );
 
 // TODO: Re-enable auth after confirming MCP connection works
