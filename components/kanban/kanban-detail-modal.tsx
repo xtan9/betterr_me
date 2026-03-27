@@ -88,7 +88,7 @@ export function KanbanDetailModal({
   const [savedField, setSavedField] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Cleanup saved indicator timer on unmount
   useEffect(() => {
