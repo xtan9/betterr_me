@@ -168,7 +168,7 @@ export const Heatmap30Day = memo(function Heatmap30Day({
 
       {/* Day labels */}
       <div className="grid grid-cols-7 gap-1 text-center">
-        {DAY_KEYS.map((day) => (
+        {dayKeys.map((day) => (
           <div key={day} className="text-xs text-muted-foreground">
             {t(`days.${day}`)}
           </div>
