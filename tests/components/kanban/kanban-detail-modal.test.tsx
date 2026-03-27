@@ -472,8 +472,8 @@ describe("KanbanDetailModal", () => {
 
       expect(screen.getByText("Second Task")).toBeInTheDocument();
       expect(screen.getByDisplayValue("Second description")).toBeInTheDocument();
-      // Should not be in edit mode
-      expect(screen.queryByRole("textbox", { name: "" })).not.toBeInTheDocument();
+      // Should not be in title edit mode (no input with the task title)
+      expect(screen.queryByDisplayValue("Second Task")).not.toBeInTheDocument();
     });
   });
 
