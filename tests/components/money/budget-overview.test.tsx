@@ -45,6 +45,14 @@ vi.mock("@/components/money/rollover-prompt", () => ({
   RolloverPrompt: () => <div data-testid="rollover-prompt" />,
 }));
 
+vi.mock("@/components/money/household-view-tabs", () => ({
+  HouseholdViewTabs: () => null,
+}));
+
+vi.mock("@/components/money/insight-list", () => ({
+  InsightList: () => null,
+}));
+
 // Mock formatMoney
 vi.mock("@/lib/money/arithmetic", () => ({
   formatMoney: (cents: number) => `$${(cents / 100).toFixed(2)}`,
@@ -67,6 +75,22 @@ vi.mock("@/lib/hooks/use-budgets", () => ({
 
 vi.mock("@/lib/hooks/use-spending-analytics", () => ({
   useSpendingTrends: (...args: unknown[]) => mockUseSpendingTrends(...args),
+}));
+
+vi.mock("@/lib/hooks/use-household", () => ({
+  useHousehold: () => ({
+    householdId: "hh-1",
+    userId: "user-1",
+    members: [],
+    invitations: [],
+    isMultiMember: false,
+    isOwner: true,
+    isLoading: false,
+    error: undefined,
+    mutate: vi.fn(),
+    viewMode: "mine",
+    setViewMode: vi.fn(),
+  }),
 }));
 
 // Helpers
