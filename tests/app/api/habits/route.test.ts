@@ -242,7 +242,7 @@ describe('POST /api/habits', () => {
     const data = await response.json();
 
     expect(response.status).toBe(500);
-    expect(data.error).toBe('DB connection failed');
+    expect(data.error).toBe('Failed to create habit');
   });
 
   it('should create habit with description', async () => {
@@ -366,7 +366,7 @@ describe('POST /api/habits', () => {
     const data = await response.json();
 
     expect(response.status).toBe(500);
-    expect(data.error).toBe('Profile creation failed');
+    expect(data.error).toBe('Failed to create habit');
   });
 
   it('should return 400 for whitespace-only name', async () => {
