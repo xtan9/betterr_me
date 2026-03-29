@@ -47,7 +47,7 @@ function getServiceClient() {
  *
  * - `sub`  = userId
  * - `aud`  = "mcp"
- * - `exp`  = now + 24 h
+ * - no `exp` — tokens do not expire
  *
  * Signed with `API_KEY_HMAC_SECRET` using Node.js native crypto.
  */
@@ -64,7 +64,6 @@ export async function signMcpToken(userId: string): Promise<string> {
       sub: userId,
       aud: "mcp",
       iat: now,
-      exp: now + 86400, // 24 hours
     }),
   );
 
@@ -87,7 +86,7 @@ export async function signMcpToken(userId: string): Promise<string> {
  * 1. Structural validity (3 parts)
  * 2. HMAC-SHA-256 signature
  * 3. `aud === "mcp"`
- * 4. Token not expired (`exp > now`)
+ * 4. If `exp` is present, token not expired (backwards-compat with legacy tokens)
  * 5. User exists in the `profiles` table (via service-role client)
  */
 export async function verifyMcpToken(
@@ -139,9 +138,11 @@ export async function verifyMcpToken(
   // 3. Audience check
   if (payload.aud !== "mcp") return null;
 
-  // 4. Expiry check
-  const now = Math.floor(Date.now() / 1000);
-  if (!payload.exp || payload.exp <= now) return null;
+  // 4. Expiry check (skipped — tokens do not expire)
+  if (payload.exp) {
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp <= now) return null;
+  }
 
   // 5. Subject (userId) must exist
   const userId = payload.sub;
