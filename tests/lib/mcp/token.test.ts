@@ -39,7 +39,7 @@ describe('signMcpToken', () => {
     parts.forEach((p) => expect(p.length).toBeGreaterThan(0));
   });
 
-  it('payload contains sub, aud:"mcp", iat, exp', async () => {
+  it('payload contains sub, aud:"mcp", iat — no exp', async () => {
     const token = await signMcpToken('user-abc');
     const payloadB64 = token.split('.')[1];
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
@@ -47,15 +47,7 @@ describe('signMcpToken', () => {
     expect(payload.sub).toBe('user-abc');
     expect(payload.aud).toBe('mcp');
     expect(typeof payload.iat).toBe('number');
-    expect(typeof payload.exp).toBe('number');
-  });
-
-  it('exp is ~24 hours after iat', async () => {
-    const token = await signMcpToken('user-123');
-    const payloadB64 = token.split('.')[1];
-    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
-
-    expect(payload.exp - payload.iat).toBe(86400);
+    expect(payload.exp).toBeUndefined();
   });
 
   it('two calls with same userId produce different tokens (different iat)', async () => {
@@ -90,16 +82,38 @@ describe('verifyMcpToken', () => {
     expect(result).toEqual({ userId: 'user-123' });
   });
 
-  it('expired token returns null', async () => {
+  it('token without exp is accepted (non-expiring)', async () => {
     const token = await signMcpToken('user-123');
 
-    // Move time forward past expiry (25 hours)
+    // Move time forward 1 year — should still work since no exp
     const originalNow = Date.now;
-    Date.now = () => originalNow() + 25 * 60 * 60 * 1000;
+    Date.now = () => originalNow() + 365 * 24 * 60 * 60 * 1000;
 
     const result = await verifyMcpToken(token);
     Date.now = originalNow;
 
+    expect(result).toEqual({ userId: 'user-123' });
+  });
+
+  it('legacy token with expired exp returns null (backwards-compat)', async () => {
+    // Manually craft a token WITH exp in the past
+    const crypto = await import('node:crypto');
+    const secret = process.env.API_KEY_HMAC_SECRET!;
+
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const now = Math.floor(Date.now() / 1000);
+    const payload = Buffer.from(
+      JSON.stringify({ sub: 'user-123', aud: 'mcp', iat: now - 86400, exp: now - 1 }),
+    ).toString('base64url');
+    const data = `${header}.${payload}`;
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(data)
+      .digest()
+      .toString('base64url');
+    const token = `${data}.${signature}`;
+
+    const result = await verifyMcpToken(token);
     expect(result).toBeNull();
   });
 
