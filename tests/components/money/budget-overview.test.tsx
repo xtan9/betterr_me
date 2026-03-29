@@ -45,6 +45,14 @@ vi.mock("@/components/money/rollover-prompt", () => ({
   RolloverPrompt: () => <div data-testid="rollover-prompt" />,
 }));
 
+vi.mock("@/components/money/household-view-tabs", () => ({
+  HouseholdViewTabs: () => null,
+}));
+
+vi.mock("@/components/money/insight-list", () => ({
+  InsightList: () => null,
+}));
+
 // Mock formatMoney
 vi.mock("@/lib/money/arithmetic", () => ({
   formatMoney: (cents: number) => `$${(cents / 100).toFixed(2)}`,
@@ -67,6 +75,22 @@ vi.mock("@/lib/hooks/use-budgets", () => ({
 
 vi.mock("@/lib/hooks/use-spending-analytics", () => ({
   useSpendingTrends: (...args: unknown[]) => mockUseSpendingTrends(...args),
+}));
+
+vi.mock("@/lib/hooks/use-household", () => ({
+  useHousehold: () => ({
+    householdId: "hh-1",
+    userId: "user-1",
+    members: [],
+    invitations: [],
+    isMultiMember: false,
+    isOwner: true,
+    isLoading: false,
+    error: undefined,
+    mutate: vi.fn(),
+    viewMode: "mine",
+    setViewMode: vi.fn(),
+  }),
 }));
 
 // Helpers
@@ -109,27 +133,25 @@ function setupDefaultMocks(overrides: {
   isLoading?: boolean;
   previousBudget?: ReturnType<typeof makeBudget> | null;
 } = {}) {
-  // Primary month budget
-  mockUseBudget.mockImplementation((month: string) => {
-    // The component fetches both current and previous month
-    // Detect which call it is based on month value
-    const currentMonth = new Date();
-    const prevMonth = new Date(currentMonth);
-    prevMonth.setMonth(prevMonth.getMonth() - 1);
-    const prevMonthStr = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, "0")}`;
+  // The component calls useBudget(currentMonth, viewMode) and
+  // useBudget(previousMonth, viewMode). We detect which call it is
+  // by comparing the month argument against the current month string.
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    if (month === prevMonthStr) {
+  mockUseBudget.mockImplementation((month: string) => {
+    if (month === currentMonthStr) {
       return {
-        budget: overrides.previousBudget ?? null,
-        isLoading: false,
+        budget: overrides.budget !== undefined ? overrides.budget : null,
+        isLoading: overrides.isLoading ?? false,
         error: undefined,
         mutate: vi.fn(),
       };
     }
-
+    // Any other month = previous month query
     return {
-      budget: overrides.budget !== undefined ? overrides.budget : null,
-      isLoading: overrides.isLoading ?? false,
+      budget: overrides.previousBudget ?? null,
+      isLoading: false,
       error: undefined,
       mutate: vi.fn(),
     };
