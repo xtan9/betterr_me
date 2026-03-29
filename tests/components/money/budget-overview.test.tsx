@@ -133,27 +133,25 @@ function setupDefaultMocks(overrides: {
   isLoading?: boolean;
   previousBudget?: ReturnType<typeof makeBudget> | null;
 } = {}) {
-  // Primary month budget
-  mockUseBudget.mockImplementation((month: string) => {
-    // The component fetches both current and previous month
-    // Detect which call it is based on month value
-    const currentMonth = new Date();
-    const prevMonth = new Date(currentMonth);
-    prevMonth.setMonth(prevMonth.getMonth() - 1);
-    const prevMonthStr = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, "0")}`;
+  // The component calls useBudget(currentMonth, viewMode) and
+  // useBudget(previousMonth, viewMode). We detect which call it is
+  // by comparing the month argument against the current month string.
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    if (month === prevMonthStr) {
+  mockUseBudget.mockImplementation((month: string) => {
+    if (month === currentMonthStr) {
       return {
-        budget: overrides.previousBudget ?? null,
-        isLoading: false,
+        budget: overrides.budget !== undefined ? overrides.budget : null,
+        isLoading: overrides.isLoading ?? false,
         error: undefined,
         mutate: vi.fn(),
       };
     }
-
+    // Any other month = previous month query
     return {
-      budget: overrides.budget !== undefined ? overrides.budget : null,
-      isLoading: overrides.isLoading ?? false,
+      budget: overrides.previousBudget ?? null,
+      isLoading: false,
       error: undefined,
       mutate: vi.fn(),
     };
