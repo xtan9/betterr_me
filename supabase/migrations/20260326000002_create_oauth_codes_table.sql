@@ -1,5 +1,5 @@
 -- OAuth authorization codes table for PKCE flow
--- No RLS needed — only accessed via service-role client
+-- Only accessed via service-role client. RLS enabled in 20260328000001.
 
 CREATE TABLE oauth_codes (
   code_hash TEXT PRIMARY KEY,
