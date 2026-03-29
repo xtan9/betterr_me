@@ -64,7 +64,6 @@ export async function signMcpToken(userId: string): Promise<string> {
       sub: userId,
       aud: "mcp",
       iat: now,
-      exp: now + 86400, // 24 hours
     }),
   );
 
@@ -139,9 +138,11 @@ export async function verifyMcpToken(
   // 3. Audience check
   if (payload.aud !== "mcp") return null;
 
-  // 4. Expiry check
-  const now = Math.floor(Date.now() / 1000);
-  if (!payload.exp || payload.exp <= now) return null;
+  // 4. Expiry check (skipped — tokens do not expire)
+  if (payload.exp) {
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp <= now) return null;
+  }
 
   // 5. Subject (userId) must exist
   const userId = payload.sub;
