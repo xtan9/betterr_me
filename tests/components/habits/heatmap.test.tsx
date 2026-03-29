@@ -160,15 +160,15 @@ describe('Heatmap30Day', () => {
     expect(onToggle).toHaveBeenCalledWith('2026-02-04');
   });
 
-  it('does not call onToggleDate when clicking a non-editable old cell', () => {
+  it('calls onToggleDate when clicking an old cell (no edit window limit)', () => {
     const onToggle = vi.fn();
     render(<Heatmap30Day {...defaultProps} onToggleDate={onToggle} />);
 
-    // Jan 20, 2026 is more than 7 days ago (15 days ago)
+    // Jan 20, 2026 is more than 7 days ago — should still be editable
     const oldCell = screen.getByTestId('cell-2026-01-20');
     fireEvent.click(oldCell);
 
-    expect(onToggle).not.toHaveBeenCalled();
+    expect(onToggle).toHaveBeenCalledWith('2026-01-20');
   });
 
   it('does not call onToggleDate when clicking not_scheduled cell', () => {
@@ -208,11 +208,10 @@ describe('Heatmap30Day', () => {
     expect(todayCell).toHaveClass('cursor-pointer');
   });
 
-  it('non-editable old cells have cursor-not-allowed', () => {
+  it('old cells have cursor-pointer (no edit window limit)', () => {
     render(<Heatmap30Day {...defaultProps} />);
-    // Jan 20 is more than 7 days ago
     const oldCell = screen.getByTestId('cell-2026-01-20');
-    expect(oldCell).toHaveClass('cursor-not-allowed');
+    expect(oldCell).toHaveClass('cursor-pointer');
   });
 
   it('not_scheduled cells have cursor-default', () => {

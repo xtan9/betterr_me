@@ -90,20 +90,6 @@ describe('POST /api/habits/[id]/toggle', () => {
     expect(response.status).toBe(400);
   });
 
-  it('should return 403 when edit window exceeded', async () => {
-    mockToggleLog.mockRejectedValue(new Error('EDIT_WINDOW_EXCEEDED'));
-
-    const request = new NextRequest('http://localhost:3000/api/habits/habit-1/toggle', {
-      method: 'POST',
-      body: JSON.stringify({ date: '2026-01-01' }),
-    });
-    const response = await POST(request, { params });
-    const data = await response.json();
-
-    expect(response.status).toBe(403);
-    expect(data.error).toContain('7 days');
-  });
-
   it('should return 404 when habit not found', async () => {
     mockToggleLog.mockRejectedValue(new Error('Habit not found'));
 

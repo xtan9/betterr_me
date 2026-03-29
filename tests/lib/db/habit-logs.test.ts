@@ -213,14 +213,18 @@ describe("HabitLogsDB", () => {
   });
 
   describe("toggleLog", () => {
-    it("should throw EDIT_WINDOW_EXCEEDED for dates older than 7 days", async () => {
+    it("should allow toggling logs for any date (no edit window)", async () => {
       const oldDate = new Date();
-      oldDate.setDate(oldDate.getDate() - 10);
+      oldDate.setDate(oldDate.getDate() - 30);
       const dateStr = getLocalDateString(oldDate);
 
+      // Mock: no existing log, then insert succeeds
+      mockSupabaseClient.setMockResponse(null, { code: "PGRST116" });
+
+      // Should not throw — edit window has been removed
       await expect(
         habitLogsDB.toggleLog(mockHabitId, mockUserId, dateStr),
-      ).rejects.toThrow("EDIT_WINDOW_EXCEEDED");
+      ).resolves.toBeDefined();
     });
   });
 

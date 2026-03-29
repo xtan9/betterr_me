@@ -69,13 +69,6 @@ export async function POST(
 
     const message = error instanceof Error ? error.message : String(error);
 
-    if (message === 'EDIT_WINDOW_EXCEEDED') {
-      return NextResponse.json(
-        { error: 'Cannot edit logs older than 7 days' },
-        { status: 403 }
-      );
-    }
-
     if (message.includes('not found')) {
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
