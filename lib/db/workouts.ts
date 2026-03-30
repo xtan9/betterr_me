@@ -408,7 +408,7 @@ export class WorkoutsDB {
       query = query.gte("workout.started_at", options.since);
     }
 
-    const { data, error } = await query.order("workout.started_at", {
+    const { data, error } = await query.order("started_at", {
       referencedTable: "workouts",
       ascending: true,
     });
