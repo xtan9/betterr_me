@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { HabitCalendar } from '@/components/habits/heatmap';
 import type { HabitFrequency, HabitLog } from '@/lib/db/types';
+import { makeLog } from '@/tests/helpers/habit-test-utils';
 
 vi.mock('next-intl', () => ({
   useTranslations: () => {
@@ -62,16 +63,6 @@ describe('HabitCalendar', () => {
   });
 
   const dailyFrequency: HabitFrequency = { type: 'daily' };
-
-  const makeLog = (date: string, completed: boolean): HabitLog => ({
-    id: `log-${date}`,
-    habit_id: 'habit-1',
-    user_id: 'user-1',
-    logged_date: date,
-    completed,
-    created_at: `${date}T00:00:00Z`,
-    updated_at: `${date}T00:00:00Z`,
-  });
 
   const defaultProps = {
     habitId: 'habit-1',
@@ -281,5 +272,18 @@ describe('HabitCalendar', () => {
     for (let i = 0; i < 6; i++) {
       expect(firstRow.children[i]).not.toHaveAttribute('data-testid');
     }
+  });
+
+  it('aligns cells correctly when month starts mid-week (weekStartDay=0)', () => {
+    // April 2026 starts on Wednesday (day 3)
+    render(<HabitCalendar {...defaultProps} month={3} />); // April
+    const rows = screen.getByTestId('heatmap-grid').children;
+    const firstRow = rows[0];
+    // Columns 0-2 (Sun, Mon, Tue) should be empty
+    expect(firstRow.children[0]).not.toHaveAttribute('data-testid');
+    expect(firstRow.children[1]).not.toHaveAttribute('data-testid');
+    expect(firstRow.children[2]).not.toHaveAttribute('data-testid');
+    // Column 3 (Wed) should be April 1
+    expect(firstRow.children[3].querySelector('[data-testid="cell-2026-04-01"]')).toBeTruthy();
   });
 });

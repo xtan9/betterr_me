@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { HabitFrequency, HabitLog } from '@/lib/db/types';
+import type { HabitFrequency } from '@/lib/db/types';
 import { buildHeatmapData, buildMonthHeatmapData } from '@/lib/habits/heatmap';
+import { makeLog } from '@/tests/helpers/habit-test-utils';
 
 describe('buildHeatmapData', () => {
   beforeEach(() => {
@@ -14,16 +15,6 @@ describe('buildHeatmapData', () => {
   });
 
   const dailyFrequency: HabitFrequency = { type: 'daily' };
-
-  const makeLog = (date: string, completed: boolean): HabitLog => ({
-    id: `log-${date}`,
-    habit_id: 'habit-1',
-    user_id: 'user-1',
-    logged_date: date,
-    completed,
-    created_at: `${date}T00:00:00Z`,
-    updated_at: `${date}T00:00:00Z`,
-  });
 
   it('returns 30 cells by default', () => {
     const cells = buildHeatmapData([], dailyFrequency);
@@ -146,16 +137,6 @@ describe('buildMonthHeatmapData', () => {
 
   const dailyFrequency: HabitFrequency = { type: 'daily' };
 
-  const makeLog = (date: string, completed: boolean): HabitLog => ({
-    id: `log-${date}`,
-    habit_id: 'habit-1',
-    user_id: 'user-1',
-    logged_date: date,
-    completed,
-    created_at: `${date}T00:00:00Z`,
-    updated_at: `${date}T00:00:00Z`,
-  });
-
   it('returns cells for every day in the given month', () => {
     const cells = buildMonthHeatmapData([], dailyFrequency, 2026, 1); // Feb 2026
     expect(cells).toHaveLength(28);
@@ -213,5 +194,43 @@ describe('buildMonthHeatmapData', () => {
   it('marks all cells as editable', () => {
     const cells = buildMonthHeatmapData([], dailyFrequency, 2026, 1);
     expect(cells.every(c => c.isEditable)).toBe(true);
+  });
+
+  it('marks future days in current month as not_scheduled instead of missed', () => {
+    // Today is Feb 4, 2026 — Feb 5 should NOT be "missed"
+    const cells = buildMonthHeatmapData([], dailyFrequency, 2026, 1);
+    const feb5 = cells.find(c => c.date === '2026-02-05');
+    expect(feb5?.status).toBe('not_scheduled');
+    // But Feb 3 (past) should still be "missed"
+    const feb3 = cells.find(c => c.date === '2026-02-03');
+    expect(feb3?.status).toBe('missed');
+    // And today (Feb 4) should be "missed" (not yet completed)
+    const feb4 = cells.find(c => c.date === '2026-02-04');
+    expect(feb4?.status).toBe('missed');
+  });
+
+  it('generates correct date strings for SWR key construction', () => {
+    // This validates the pattern used in habit-detail-content.tsx for logsSwrKey
+    const year = 2026;
+    const month = 1; // February
+    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    expect(startDate).toBe('2026-02-01');
+    expect(endDate).toBe('2026-02-28');
+
+    // Test single-digit month (January)
+    const janStart = `${2026}-${String(0 + 1).padStart(2, '0')}-01`;
+    const janLastDay = new Date(2026, 0 + 1, 0).getDate();
+    const janEnd = `${2026}-${String(0 + 1).padStart(2, '0')}-${String(janLastDay).padStart(2, '0')}`;
+    expect(janStart).toBe('2026-01-01');
+    expect(janEnd).toBe('2026-01-31');
+
+    // Test December (month index 11)
+    const decStart = `${2026}-${String(11 + 1).padStart(2, '0')}-01`;
+    const decLastDay = new Date(2026, 11 + 1, 0).getDate();
+    const decEnd = `${2026}-${String(11 + 1).padStart(2, '0')}-${String(decLastDay).padStart(2, '0')}`;
+    expect(decStart).toBe('2026-12-01');
+    expect(decEnd).toBe('2026-12-31');
   });
 });

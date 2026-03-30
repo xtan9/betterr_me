@@ -77,11 +77,15 @@ export function buildMonthHeatmapData(
     const isScheduled = shouldTrackOnDate(frequency, date);
     const isToday = isSameDay(date, today);
 
+    const isFuture = !isSameDay(date, today) && date.getTime() > today.getTime();
+
     let status: HeatmapCellStatus;
     if (!isScheduled) {
       status = "not_scheduled";
     } else if (log?.completed) {
       status = "completed";
+    } else if (isFuture) {
+      status = "not_scheduled";
     } else {
       status = "missed";
     }

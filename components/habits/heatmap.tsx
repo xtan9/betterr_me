@@ -76,7 +76,7 @@ export const HabitCalendar = memo(function HabitCalendar({
   weekStartDay = 0,
 }: HabitCalendarProps) {
   const t = useTranslations("habits.heatmap");
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
 
   const cells = useMemo(() => buildMonthHeatmapData(logs, frequency, year, month), [logs, frequency, year, month]);
   const weeks = useMemo(() => organizeByWeeks(cells, weekStartDay), [cells, weekStartDay]);
@@ -88,6 +88,7 @@ export const HabitCalendar = memo(function HabitCalendar({
   const monthName = t(`months.${month}`);
 
   const handlePrevMonth = () => {
+    if (isMinMonth) return;
     if (month === 0) {
       onMonthChange(year - 1, 11);
     } else {
@@ -96,6 +97,7 @@ export const HabitCalendar = memo(function HabitCalendar({
   };
 
   const handleNextMonth = () => {
+    if (isCurrentMonth) return;
     if (month === 11) {
       onMonthChange(year + 1, 0);
     } else {
@@ -288,6 +290,3 @@ export const HabitCalendar = memo(function HabitCalendar({
     </div>
   );
 });
-
-// Backward compatibility alias
-export const Heatmap30Day = HabitCalendar;
