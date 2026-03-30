@@ -30,8 +30,9 @@ describe("ExerciseThumbnail", () => {
       />
     );
 
-    const img = screen.getByRole("img", { name: "Bench Press" });
+    const img = screen.getByAltText("Bench Press");
     expect(img).toBeInTheDocument();
+    expect(img.tagName).toBe("IMG");
     expect(img).toHaveAttribute(
       "src",
       "https://v2.exercisedb.io/image/test.gif"
@@ -132,8 +133,8 @@ describe("ExerciseThumbnail", () => {
       />
     );
 
-    expect(
-      screen.getByRole("img", { name: "Incline Dumbbell Press" })
-    ).toBeInTheDocument();
+    const img = screen.getByAltText("Incline Dumbbell Press");
+    expect(img).toBeInTheDocument();
+    expect(img.tagName).toBe("IMG");
   });
 });
