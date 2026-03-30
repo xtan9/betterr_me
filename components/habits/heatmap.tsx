@@ -75,7 +75,6 @@ export const Heatmap30Day = memo(function Heatmap30Day({
   const handleCellClick = (cell: HeatmapCell) => {
     if (isLoading) return;
     if (cell.status === "not_scheduled") return;
-    if (!cell.isEditable) return;
     onToggleDate(cell.date);
   };
 
@@ -96,14 +95,9 @@ export const Heatmap30Day = memo(function Heatmap30Day({
     const todayClass = cell.isToday ? "ring-2 ring-primary ring-offset-1" : "";
 
     // Cursor style
-    let cursorClass = "";
-    if (cell.status === "not_scheduled") {
-      cursorClass = "cursor-default";
-    } else if (!cell.isEditable) {
-      cursorClass = "cursor-not-allowed";
-    } else {
-      cursorClass = "cursor-pointer hover:opacity-80";
-    }
+    const cursorClass = cell.status === "not_scheduled"
+      ? "cursor-default"
+      : "cursor-pointer hover:opacity-80";
 
     return cn(base, statusClass, todayClass, cursorClass);
   };
@@ -130,11 +124,7 @@ export const Heatmap30Day = memo(function Heatmap30Day({
     parts.push("—", statusText);
 
     if (cell.status !== "not_scheduled") {
-      if (cell.isEditable) {
-        parts.push(`· ${t("clickToToggle")}`);
-      } else {
-        parts.push(`· ${t("cannotEdit")}`);
-      }
+      parts.push(`· ${t("clickToToggle")}`);
     }
 
     return parts.join(" ");
