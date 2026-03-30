@@ -91,3 +91,4 @@
 | 25. Data Management | v4.0 | 2/2 | Complete | 2026-02-24 |
 | 26. CSV Import & Polish | v4.0 | 3/3 | Complete | 2026-02-28 |
 | 27. Data Layer & Sync | v5.1 | 1/3 | Complete    | 2026-03-30 |
+| 28. Thumbnails in Existing UI | v5.1 | 1/2 | Executing | — |
