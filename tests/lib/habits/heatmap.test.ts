@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { HabitFrequency, HabitLog } from '@/lib/db/types';
-import { buildHeatmapData } from '@/lib/habits/heatmap';
+import { buildHeatmapData, buildMonthHeatmapData } from '@/lib/habits/heatmap';
 
 describe('buildHeatmapData', () => {
   beforeEach(() => {
@@ -131,5 +131,87 @@ describe('buildHeatmapData', () => {
     for (const cell of cells) {
       expect(cell.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
+  });
+});
+
+describe('buildMonthHeatmapData', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 1, 4)); // Feb 4, 2026 (Wed)
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const dailyFrequency: HabitFrequency = { type: 'daily' };
+
+  const makeLog = (date: string, completed: boolean): HabitLog => ({
+    id: `log-${date}`,
+    habit_id: 'habit-1',
+    user_id: 'user-1',
+    logged_date: date,
+    completed,
+    created_at: `${date}T00:00:00Z`,
+    updated_at: `${date}T00:00:00Z`,
+  });
+
+  it('returns cells for every day in the given month', () => {
+    const cells = buildMonthHeatmapData([], dailyFrequency, 2026, 1); // Feb 2026
+    expect(cells).toHaveLength(28);
+    expect(cells[0].date).toBe('2026-02-01');
+    expect(cells[27].date).toBe('2026-02-28');
+  });
+
+  it('returns 31 cells for January', () => {
+    const cells = buildMonthHeatmapData([], dailyFrequency, 2026, 0);
+    expect(cells).toHaveLength(31);
+    expect(cells[0].date).toBe('2026-01-01');
+    expect(cells[30].date).toBe('2026-01-31');
+  });
+
+  it('handles leap year February (29 days)', () => {
+    vi.setSystemTime(new Date(2024, 2, 1));
+    const cells = buildMonthHeatmapData([], dailyFrequency, 2024, 1);
+    expect(cells).toHaveLength(29);
+    expect(cells[28].date).toBe('2024-02-29');
+  });
+
+  it('marks today correctly when viewing current month', () => {
+    const cells = buildMonthHeatmapData([], dailyFrequency, 2026, 1);
+    const todayCell = cells.find(c => c.date === '2026-02-04');
+    expect(todayCell?.isToday).toBe(true);
+    const otherCell = cells.find(c => c.date === '2026-02-03');
+    expect(otherCell?.isToday).toBe(false);
+  });
+
+  it('marks no cell as today when viewing a different month', () => {
+    const cells = buildMonthHeatmapData([], dailyFrequency, 2026, 0);
+    expect(cells.every(c => !c.isToday)).toBe(true);
+  });
+
+  it('marks completed logs correctly', () => {
+    const logs = [makeLog('2026-02-03', true)];
+    const cells = buildMonthHeatmapData(logs, dailyFrequency, 2026, 1);
+    expect(cells.find(c => c.date === '2026-02-03')?.status).toBe('completed');
+  });
+
+  it('marks non-scheduled days for weekdays frequency', () => {
+    const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
+    const cells = buildMonthHeatmapData([], weekdaysFrequency, 2026, 1);
+    expect(cells.find(c => c.date === '2026-02-01')?.status).toBe('not_scheduled');
+    expect(cells.find(c => c.date === '2026-02-02')?.status).toBe('missed');
+  });
+
+  it('works for historical months (1990)', () => {
+    const cells = buildMonthHeatmapData([], dailyFrequency, 1990, 0);
+    expect(cells).toHaveLength(31);
+    expect(cells[0].date).toBe('1990-01-01');
+    expect(cells[30].date).toBe('1990-01-31');
+  });
+
+  it('marks all cells as editable', () => {
+    const cells = buildMonthHeatmapData([], dailyFrequency, 2026, 1);
+    expect(cells.every(c => c.isEditable)).toBe(true);
   });
 });
