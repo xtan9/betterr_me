@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { ExerciseFilterBar } from "@/components/fitness/exercise-library/exercise-filter-bar";
+import { ExerciseThumbnail } from "@/components/fitness/exercise-thumbnail";
 import { useExercises } from "@/lib/hooks/use-exercises";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MuscleGroup, Equipment } from "@/lib/db/types";
@@ -128,6 +129,11 @@ export function WorkoutAddExercise({
                             onClick={() => handleSelect(exercise.id)}
                             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent"
                           >
+                            <ExerciseThumbnail
+                              exerciseMedia={exercise.exercise_media}
+                              exerciseName={exercise.name}
+                              size="sm"
+                            />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <span className="truncate text-sm font-medium">
