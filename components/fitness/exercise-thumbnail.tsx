@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Dumbbell } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ExerciseMedia } from "@/lib/db/types";
@@ -30,6 +31,7 @@ export function ExerciseThumbnail({
   size = "md",
   className = "",
 }: ExerciseThumbnailProps) {
+  const t = useTranslations("exercises");
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
@@ -49,7 +51,7 @@ export function ExerciseThumbnail({
           )}
           <img
             src={exerciseMedia.gif_url!}
-            alt={exerciseName}
+            alt={t("exerciseThumbnailAlt", { name: exerciseName })}
             className="h-full w-full object-cover"
             onLoad={() => setIsLoading(false)}
             onError={() => {

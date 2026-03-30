@@ -30,7 +30,7 @@ describe("ExerciseThumbnail", () => {
       />
     );
 
-    const img = screen.getByAltText("Bench Press");
+    const img = screen.getByAltText("exerciseThumbnailAlt");
     expect(img).toBeInTheDocument();
     expect(img.tagName).toBe("IMG");
     expect(img).toHaveAttribute(
@@ -133,7 +133,7 @@ describe("ExerciseThumbnail", () => {
       />
     );
 
-    const img = screen.getByAltText("Incline Dumbbell Press");
+    const img = screen.getByAltText("exerciseThumbnailAlt");
     expect(img).toBeInTheDocument();
     expect(img.tagName).toBe("IMG");
   });
