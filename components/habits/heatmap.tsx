@@ -166,23 +166,36 @@ export const Heatmap30Day = memo(function Heatmap30Day({
       </div>
 
       {/* Heatmap grid */}
-      <div className="space-y-1">
+      <div data-testid="heatmap-grid" className="space-y-1">
         {weeks.map((week, weekIndex) => (
           <div key={weekIndex} className="grid grid-cols-7 gap-1">
             {week.map((cell, dayIndex) =>
               cell ? (
-                <Tooltip key={cell.date}>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      data-testid={`cell-${cell.date}`}
-                      className={cn("heatmap-cell", getCellClasses(cell))}
-                      onClick={() => handleCellClick(cell)}
-                      aria-label={getTooltipContent(cell)}
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent>{getTooltipContent(cell)}</TooltipContent>
-                </Tooltip>
+                <div key={cell.date}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        data-testid={`cell-${cell.date}`}
+                        className={cn("heatmap-cell", getCellClasses(cell), "flex items-center justify-center")}
+                        onClick={() => handleCellClick(cell)}
+                        aria-label={getTooltipContent(cell)}
+                      >
+                        <span className={cn(
+                          "text-[10px] font-medium",
+                          cell.status === "completed"
+                            ? "text-primary-foreground/70"
+                            : cell.status === "not_scheduled"
+                              ? "text-muted-foreground/40"
+                              : "text-foreground/50"
+                        )}>
+                          {new Date(cell.date + "T00:00:00").getDate()}
+                        </span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>{getTooltipContent(cell)}</TooltipContent>
+                  </Tooltip>
+                </div>
               ) : (
                 <div key={`empty-${weekIndex}-${dayIndex}`} className="size-8" />
               )

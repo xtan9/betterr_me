@@ -214,11 +214,101 @@ describe('Heatmap30Day', () => {
     expect(oldCell).toHaveClass('cursor-pointer');
   });
 
+  it('displays the day-of-month number inside each cell', () => {
+    render(<Heatmap30Day {...defaultProps} />);
+
+    // Today is Feb 4 → should show "4"
+    const todayCell = screen.getByTestId('cell-2026-02-04');
+    expect(todayCell).toHaveTextContent('4');
+
+    // Jan 6 → should show "6"
+    const jan6Cell = screen.getByTestId('cell-2026-01-06');
+    expect(jan6Cell).toHaveTextContent('6');
+
+    // Jan 15 → should show "15"
+    const jan15Cell = screen.getByTestId('cell-2026-01-15');
+    expect(jan15Cell).toHaveTextContent('15');
+  });
+
+  it('displays date numbers during loading state skeleton', () => {
+    // Loading state should NOT show date numbers (it shows skeleton placeholders)
+    render(<Heatmap30Day {...defaultProps} isLoading />);
+    expect(screen.queryByText('4')).not.toBeInTheDocument();
+  });
+
+  it('shows date numbers with appropriate contrast for all cell states', () => {
+    const logs = [{ id: 'log-1', habit_id: 'habit-1', user_id: 'user-1', logged_date: '2026-02-03', completed: true, created_at: '2026-02-03T00:00:00Z', updated_at: '2026-02-03T00:00:00Z' }];
+    const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
+    render(<Heatmap30Day habitId="habit-1" frequency={weekdaysFrequency} logs={logs} onToggleDate={vi.fn()} />);
+
+    // Completed cell (Feb 3, Mon) — should have text with primary-foreground color
+    const completedCell = screen.getByTestId('cell-2026-02-03');
+    expect(completedCell).toHaveTextContent('3');
+    const completedSpan = completedCell.querySelector('span');
+    expect(completedSpan).toHaveClass('text-primary-foreground/70');
+
+    // Missed cell (Feb 4, Wed, today) — should have text with foreground color
+    const missedCell = screen.getByTestId('cell-2026-02-04');
+    expect(missedCell).toHaveTextContent('4');
+    const missedSpan = missedCell.querySelector('span');
+    expect(missedSpan).toHaveClass('text-foreground/50');
+
+    // Not scheduled cell (Feb 1, Sun) — should have text with muted color
+    const notScheduledCell = screen.getByTestId('cell-2026-02-01');
+    expect(notScheduledCell).toHaveTextContent('1');
+    const notScheduledSpan = notScheduledCell.querySelector('span');
+    expect(notScheduledSpan).toHaveClass('text-muted-foreground/40');
+  });
+
   it('not_scheduled cells have cursor-default', () => {
     const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
     render(<Heatmap30Day {...defaultProps} frequency={weekdaysFrequency} />);
     // 2026-02-01 is Sunday → not scheduled
     const cell = screen.getByTestId('cell-2026-02-01');
     expect(cell).toHaveClass('cursor-default');
+  });
+
+  it('aligns cells under the correct day-of-week column (weekStartDay=0, Sun start)', () => {
+    // Today is Wed Feb 4 2026. 30 days = Jan 6 (Tue) to Feb 4 (Wed).
+    // With weekStartDay=0 (Sun start), columns are: Sun=0, Mon=1, Tue=2, Wed=3, Thu=4, Fri=5, Sat=6
+    render(<Heatmap30Day {...defaultProps} weekStartDay={0} />);
+
+    // Get all grid rows (each row is a div with grid-cols-7)
+    const rows = screen.getByTestId('heatmap-grid').children;
+
+    // Jan 6 is Tuesday → should be in column index 2 (0-based) of its row
+    // First cell is Jan 6 (Tue). Offset from Sun = (2 - 0 + 7) % 7 = 2.
+    // So row 0 = [null, null, Jan6(Tue), Jan7(Wed), Jan8(Thu), Jan9(Fri), Jan10(Sat)]
+    const firstRow = rows[0];
+    // Column 0 and 1 should be empty divs (null cells)
+    expect(firstRow.children[0]).not.toHaveAttribute('data-testid');
+    expect(firstRow.children[1]).not.toHaveAttribute('data-testid');
+    // Column 2 should be Jan 6
+    expect(firstRow.children[2].querySelector('[data-testid="cell-2026-01-06"]')).toBeTruthy();
+    // Column 6 should be Jan 10 (Sat)
+    expect(firstRow.children[6].querySelector('[data-testid="cell-2026-01-10"]')).toBeTruthy();
+
+    // Today (Feb 4, Wed) should be in column 3
+    const lastRow = rows[rows.length - 1];
+    expect(lastRow.children[3].querySelector('[data-testid="cell-2026-02-04"]')).toBeTruthy();
+  });
+
+  it('aligns cells under the correct day-of-week column (weekStartDay=1, Mon start)', () => {
+    // Today is Wed Feb 4 2026. 30 days = Jan 6 (Tue) to Feb 4 (Wed).
+    // With weekStartDay=1 (Mon start), columns are: Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
+    render(<Heatmap30Day {...defaultProps} weekStartDay={1} />);
+
+    const rows = screen.getByTestId('heatmap-grid').children;
+
+    // Jan 6 is Tuesday → offset from Mon = (2 - 1 + 7) % 7 = 1
+    // Row 0 = [null, Jan6(Tue), Jan7(Wed), Jan8(Thu), Jan9(Fri), Jan10(Sat), Jan11(Sun)]
+    const firstRow = rows[0];
+    expect(firstRow.children[0]).not.toHaveAttribute('data-testid');
+    expect(firstRow.children[1].querySelector('[data-testid="cell-2026-01-06"]')).toBeTruthy();
+    expect(firstRow.children[6].querySelector('[data-testid="cell-2026-01-11"]')).toBeTruthy();
+
+    // Today (Feb 4, Wed) should be in column 2 (Wed position in Mon-start grid)
+    const lastRow = rows[rows.length - 1];
+    expect(lastRow.children[2].querySelector('[data-testid="cell-2026-02-04"]')).toBeTruthy();
   });
 });
