@@ -39,6 +39,13 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      // ExerciseDB animated GIF CDN
+      {
+        protocol: 'https',
+        hostname: 'v2.exercisedb.io',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };
