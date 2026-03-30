@@ -57,7 +57,7 @@ export function CategoryPicker({ value, onChange, disabled }: CategoryPickerProp
   };
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2" data-testid="category-picker">
       {categories.map((cat: Category) => {
         const color = getProjectColor(cat.color);
         const bgColor = isDark ? color.hslDark : color.hsl;
