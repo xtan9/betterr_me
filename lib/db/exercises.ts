@@ -25,7 +25,7 @@ export class ExercisesDB {
   async getAllExercises(): Promise<Exercise[]> {
     const { data, error } = await this.supabase
       .from("exercises")
-      .select("*")
+      .select("*, exercise_media(gif_url, thumbnail_url, instructions, alternative_names, exercisedb_id, media_status)")
       .order("name", { ascending: true });
     if (error) { log.error("Failed to get exercises", error); throw error; }
     return data ?? [];
@@ -35,7 +35,7 @@ export class ExercisesDB {
   async getExercise(id: string): Promise<Exercise | null> {
     const { data, error } = await this.supabase
       .from("exercises")
-      .select("*")
+      .select("*, exercise_media(gif_url, thumbnail_url, instructions, alternative_names, exercisedb_id, media_status)")
       .eq("id", id)
       .single();
     if (error) {
