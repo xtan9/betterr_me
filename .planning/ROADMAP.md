@@ -63,6 +63,42 @@
 
 </details>
 
+### 🚧 v5.1 Exercise Illustrations & Detail Page (In Progress)
+
+**Milestone Goal:** Add animated exercise illustrations, step-by-step instructions, and a Hevy-style exercise detail page using ExerciseDB API data.
+
+- [x] **Phase 27: Data Layer & Sync** - ExerciseDB integration, exercise_media table, fuzzy name matching, and API enrichment — completed 2026-03-30
+- [ ] **Phase 28: Thumbnails in Existing UI** - Exercise thumbnail component integrated into exercise picker, workout logger, and exercise library
+- [ ] **Phase 29: Exercise Detail Page** - Three-tab detail page (Summary, History, How To) with navigation from existing UI
+
+## Phase Details
+
+### Phase 28: Thumbnails in Existing UI
+**Goal**: Users see animated exercise illustrations inline in the exercise picker, workout logger, and exercise library
+**Depends on**: Phase 27 (exercise_media data must be populated)
+**Requirements**: THUMB-01, THUMB-02, THUMB-03, THUMB-04, I18N-01 (partial — thumbnail alt text strings)
+**Success Criteria** (what must be TRUE):
+  1. User sees a circular GIF thumbnail next to each exercise name in the exercise picker when adding exercises to a workout
+  2. User sees a circular GIF thumbnail next to each exercise name on workout logger exercise cards during an active workout
+  3. User sees a GIF preview at the top of each exercise library card when browsing exercises
+  4. When an exercise has no matched media (custom exercises or failed matches), a fallback muscle group icon displays instead of a broken image
+  5. All thumbnail alt text strings are translated in en, zh, and zh-TW
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 29: Exercise Detail Page
+**Goal**: Users can view a comprehensive exercise detail page with animated demonstration, progress history, and step-by-step instructions
+**Depends on**: Phase 28 (thumbnail component and data layer validated in real UI)
+**Requirements**: DETL-01, DETL-02, DETL-03, DETL-04, DETL-05, I18N-01 (partial — detail page strings)
+**Success Criteria** (what must be TRUE):
+  1. User can navigate to /workouts/exercises/[id] from both the workout logger (exercise name link) and exercise library (card click) and see a three-tab layout
+  2. Summary tab displays an animated GIF demonstration, primary/secondary muscle groups, alternative names, a progress chart, and personal records
+  3. History tab shows past workout sets for the exercise, reusing existing exercise history display
+  4. How To tab shows step-by-step instructions as a numbered list (tab hidden when no instructions available)
+  5. All detail page tab labels, headings, and UI strings are translated in en, zh, and zh-TW
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -90,4 +126,6 @@
 | 24. Dashboard & AI Insights | v4.0 | 5/5 | Complete | 2026-02-24 |
 | 25. Data Management | v4.0 | 2/2 | Complete | 2026-02-24 |
 | 26. CSV Import & Polish | v4.0 | 3/3 | Complete | 2026-02-28 |
-| 27. Data Layer & Sync | v5.1 | 1/3 | Complete    | 2026-03-30 |
+| 27. Data Layer & Sync | v5.1 | 3/3 | Complete    | 2026-03-30 |
+| 28. Thumbnails in Existing UI | v5.1 | 0/? | Not started | - |
+| 29. Exercise Detail Page | v5.1 | 0/? | Not started | - |
