@@ -26,10 +26,10 @@ CREATE POLICY "exercise_media_select" ON exercise_media
 CREATE TABLE exercise_name_mappings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   exercise_id UUID NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
-  exercisedb_id TEXT NOT NULL,
+  exercisedb_id TEXT,
   our_name TEXT NOT NULL,
-  matched_name TEXT NOT NULL,
-  match_confidence REAL DEFAULT 1.0,
+  matched_name TEXT,
+  match_confidence REAL DEFAULT 0.0,
   equipment_match BOOLEAN DEFAULT false,
   muscle_match BOOLEAN DEFAULT false,
   verified BOOLEAN DEFAULT false,

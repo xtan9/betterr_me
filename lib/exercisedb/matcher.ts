@@ -52,6 +52,18 @@ export function matchExercises(
 
   return ourExercises.map((exercise) => {
     const normalizedName = normalizeName(exercise.name);
+
+    if (!normalizedName) {
+      return {
+        exercise,
+        match: null,
+        confidence: 0,
+        equipmentMatch: false,
+        muscleMatch: false,
+        verified: false,
+      };
+    }
+
     const result = findBestMatch(normalizedName, normalizedDbNames);
     const bestMatchIndex = result.bestMatchIndex;
     const confidence = result.bestMatch.rating;

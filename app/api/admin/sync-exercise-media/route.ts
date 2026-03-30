@@ -40,9 +40,15 @@ export async function POST(request: NextRequest) {
     // 3. Parse body (optional -- defaults are fine)
     let body = {};
     try {
-      body = await request.json();
+      const text = await request.text();
+      if (text.trim()) {
+        body = JSON.parse(text);
+      }
     } catch {
-      // Empty body is OK -- defaults will be used
+      return NextResponse.json(
+        { error: "Invalid JSON in request body" },
+        { status: 400 }
+      );
     }
 
     const parsed = syncExerciseMediaSchema.safeParse(body);
@@ -83,8 +89,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Run fuzzy matching
+    if (!presetExercises || presetExercises.length === 0) {
+      return NextResponse.json(
+        { error: "No preset exercises found" },
+        { status: 404 }
+      );
+    }
+
     const matchResults = matchExercises(
-      presetExercises ?? [],
+      presetExercises,
       dbExercises,
       threshold
     );
@@ -125,7 +138,7 @@ export async function POST(request: NextRequest) {
         our_name: r.exercise.name,
         matched_name: r.match?.name ?? null,
         exercisedb_id: r.match?.id ?? null,
-        confidence: r.confidence,
+        match_confidence: r.confidence,
         equipment_match: r.equipmentMatch,
         muscle_match: r.muscleMatch,
         verified: r.verified,
