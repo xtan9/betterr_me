@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import Link from "next/link";
 import {
   SidebarProvider,
   SidebarInset,
@@ -67,9 +68,9 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
       <SidebarInset>
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 md:hidden">
           <SidebarTrigger className="-ml-1" />
-          <span className="font-display font-bold text-lg text-primary">
+          <Link href="/dashboard" className="font-display font-bold text-lg text-primary">
             BetterR.me
-          </span>
+          </Link>
         </header>
         <div className="flex-1 overflow-auto bg-background">
           <div className="w-full px-4 py-6 sm:px-6 md:px-8 md:pt-10">
