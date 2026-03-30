@@ -56,6 +56,7 @@
     "react-plaid-link": "^4.1.1",
     "recharts": "2.15.4",
     "sonner": "^2.0.4",
+    "string-similarity": "^4.0.4",
     "swr": "^2.4.0",
     "tailwind-merge": "^3.3.0",
     "zod": "^3.25.46"
@@ -73,6 +74,7 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/string-similarity": "^4.0.2",
     "@vitejs/plugin-react": "^5.1.2",
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",

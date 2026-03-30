@@ -47,8 +47,8 @@ describe("GET /api/exercises", () => {
 
   it("returns exercises list", async () => {
     const exercises = [
-      { id: "ex-1", name: "Bench Press" },
-      { id: "ex-2", name: "Squat" },
+      { id: "ex-1", name: "Bench Press", exercise_media: null },
+      { id: "ex-2", name: "Squat", exercise_media: null },
     ];
     mockGetAllExercises.mockResolvedValue(exercises);
 
@@ -57,6 +57,44 @@ describe("GET /api/exercises", () => {
 
     expect(response.status).toBe(200);
     expect(data.exercises).toEqual(exercises);
+  });
+
+  it("includes exercise_media in response (null for custom, object for preset)", async () => {
+    const exercises = [
+      {
+        id: "ex-1",
+        name: "Custom Exercise",
+        is_custom: true,
+        exercise_media: null,
+      },
+      {
+        id: "ex-2",
+        name: "Barbell Bench Press",
+        is_custom: false,
+        exercise_media: {
+          gif_url: "https://v2.exercisedb.io/image/test.gif",
+          thumbnail_url: "https://v2.exercisedb.io/image/test.gif",
+          instructions: ["Step 1"],
+          alternative_names: ["Alt name"],
+          exercisedb_id: "0001",
+          media_status: "active",
+        },
+      },
+    ];
+    mockGetAllExercises.mockResolvedValue(exercises);
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.exercises).toHaveLength(2);
+    expect(data.exercises[0].exercise_media).toBeNull();
+    expect(data.exercises[1].exercise_media).toMatchObject({
+      gif_url: "https://v2.exercisedb.io/image/test.gif",
+      instructions: ["Step 1"],
+      exercisedb_id: "0001",
+      media_status: "active",
+    });
   });
 
   it("returns 401 for unauthenticated user", async () => {
