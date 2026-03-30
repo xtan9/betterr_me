@@ -242,17 +242,23 @@ describe('Heatmap30Day', () => {
     const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
     render(<Heatmap30Day habitId="habit-1" frequency={weekdaysFrequency} logs={logs} onToggleDate={vi.fn()} />);
 
-    // Completed cell (Feb 3, Mon) — should have text
+    // Completed cell (Feb 3, Mon) — should have text with primary-foreground color
     const completedCell = screen.getByTestId('cell-2026-02-03');
     expect(completedCell).toHaveTextContent('3');
+    const completedSpan = completedCell.querySelector('span');
+    expect(completedSpan).toHaveClass('text-primary-foreground/70');
 
-    // Missed cell (Feb 4, Wed, today) — should have text
+    // Missed cell (Feb 4, Wed, today) — should have text with foreground color
     const missedCell = screen.getByTestId('cell-2026-02-04');
     expect(missedCell).toHaveTextContent('4');
+    const missedSpan = missedCell.querySelector('span');
+    expect(missedSpan).toHaveClass('text-foreground/50');
 
-    // Not scheduled cell (Feb 1, Sun) — should have text
+    // Not scheduled cell (Feb 1, Sun) — should have text with muted color
     const notScheduledCell = screen.getByTestId('cell-2026-02-01');
     expect(notScheduledCell).toHaveTextContent('1');
+    const notScheduledSpan = notScheduledCell.querySelector('span');
+    expect(notScheduledSpan).toHaveClass('text-muted-foreground/40');
   });
 
   it('not_scheduled cells have cursor-default', () => {
