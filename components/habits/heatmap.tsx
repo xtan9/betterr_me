@@ -191,7 +191,14 @@ export const Heatmap30Day = memo(function Heatmap30Day({
                         onClick={() => handleCellClick(cell)}
                         aria-label={getTooltipContent(cell)}
                       >
-                        <span className="text-[10px] font-medium text-foreground/60">
+                        <span className={cn(
+                          "text-[10px] font-medium",
+                          cell.status === "completed"
+                            ? "text-primary-foreground/70"
+                            : cell.status === "not_scheduled"
+                              ? "text-muted-foreground/40"
+                              : "text-foreground/50"
+                        )}>
                           {new Date(cell.date + "T00:00:00").getDate()}
                         </span>
                       </button>

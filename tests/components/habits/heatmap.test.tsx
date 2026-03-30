@@ -237,6 +237,24 @@ describe('Heatmap30Day', () => {
     expect(screen.queryByText('4')).not.toBeInTheDocument();
   });
 
+  it('shows date numbers with appropriate contrast for all cell states', () => {
+    const logs = [{ id: 'log-1', habit_id: 'habit-1', user_id: 'user-1', logged_date: '2026-02-03', completed: true, created_at: '2026-02-03T00:00:00Z', updated_at: '2026-02-03T00:00:00Z' }];
+    const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
+    render(<Heatmap30Day habitId="habit-1" frequency={weekdaysFrequency} logs={logs} onToggleDate={vi.fn()} />);
+
+    // Completed cell (Feb 3, Mon) — should have text
+    const completedCell = screen.getByTestId('cell-2026-02-03');
+    expect(completedCell).toHaveTextContent('3');
+
+    // Missed cell (Feb 4, Wed, today) — should have text
+    const missedCell = screen.getByTestId('cell-2026-02-04');
+    expect(missedCell).toHaveTextContent('4');
+
+    // Not scheduled cell (Feb 1, Sun) — should have text
+    const notScheduledCell = screen.getByTestId('cell-2026-02-01');
+    expect(notScheduledCell).toHaveTextContent('1');
+  });
+
   it('not_scheduled cells have cursor-default', () => {
     const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
     render(<Heatmap30Day {...defaultProps} frequency={weekdaysFrequency} />);
