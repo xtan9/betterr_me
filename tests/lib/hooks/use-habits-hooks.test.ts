@@ -293,13 +293,13 @@ describe('useHabitToggle', () => {
     const onError = vi.fn();
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
-      json: () => Promise.resolve({ error: 'EDIT_WINDOW_EXCEEDED' }),
+      json: () => Promise.resolve({ error: 'Failed to toggle habit' }),
     });
 
     const { useHabitToggle } = await import('@/lib/hooks/use-habit-toggle');
     const { toggleHabit } = useHabitToggle();
 
-    await expect(toggleHabit('habit-1', undefined, { onError })).rejects.toThrow('EDIT_WINDOW_EXCEEDED');
+    await expect(toggleHabit('habit-1', undefined, { onError })).rejects.toThrow('Failed to toggle habit');
     expect(onError).toHaveBeenCalled();
   });
 

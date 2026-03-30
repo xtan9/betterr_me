@@ -1,4 +1,4 @@
-import { format, subDays, isSameDay, differenceInDays } from "date-fns";
+import { format, subDays, isSameDay } from "date-fns";
 import type { HabitFrequency, HabitLog } from "@/lib/db/types";
 import { shouldTrackOnDate } from "./format";
 
@@ -32,8 +32,7 @@ export function buildHeatmapData(
     const log = logMap.get(dateStr);
     const isScheduled = shouldTrackOnDate(frequency, date);
     const isToday = isSameDay(date, today);
-    const daysDiff = differenceInDays(today, date);
-    const isEditable = daysDiff <= 7;
+    const isEditable = true;
 
     let status: HeatmapCellStatus;
     if (!isScheduled) {

@@ -81,18 +81,10 @@ describe('buildHeatmapData', () => {
     expect(todayCell?.isEditable).toBe(true);
   });
 
-  it('marks days within last 7 days as editable', () => {
+  it('marks all days as editable (no edit window)', () => {
     const cells = buildHeatmapData([], dailyFrequency);
-    // Jan 29 is 6 days ago → editable
-    const cell6DaysAgo = cells.find(c => c.date === '2026-01-29');
-    expect(cell6DaysAgo?.isEditable).toBe(true);
-  });
-
-  it('marks days older than 7 days as not editable', () => {
-    const cells = buildHeatmapData([], dailyFrequency);
-    // Jan 27 is 8 days ago → not editable
-    const cell8DaysAgo = cells.find(c => c.date === '2026-01-27');
-    expect(cell8DaysAgo?.isEditable).toBe(false);
+    // All cells should be editable regardless of age
+    expect(cells.every(c => c.isEditable)).toBe(true);
   });
 
   it('correctly handles a log with completed=false as missed', () => {

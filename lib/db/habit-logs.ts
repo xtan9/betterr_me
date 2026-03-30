@@ -95,17 +95,6 @@ export class HabitLogsDB {
     userId: string,
     date: string
   ): Promise<{ log: HabitLog; currentStreak: number; bestStreak: number }> {
-    // Check 7-day edit window
-    const logDate = new Date(date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    if (logDate < sevenDaysAgo) {
-      throw new Error('EDIT_WINDOW_EXCEEDED');
-    }
-
     // Get existing log
     const existingLog = await this.getLogForDate(habitId, userId, date);
 

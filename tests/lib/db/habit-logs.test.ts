@@ -213,14 +213,22 @@ describe("HabitLogsDB", () => {
   });
 
   describe("toggleLog", () => {
-    it("should throw EDIT_WINDOW_EXCEEDED for dates older than 7 days", async () => {
+    it("should not throw for dates older than 7 days (no edit window)", async () => {
       const oldDate = new Date();
-      oldDate.setDate(oldDate.getDate() - 10);
+      oldDate.setDate(oldDate.getDate() - 30);
       const dateStr = getLocalDateString(oldDate);
 
-      await expect(
-        habitLogsDB.toggleLog(mockHabitId, mockUserId, dateStr),
-      ).rejects.toThrow("EDIT_WINDOW_EXCEEDED");
+      // The edit window check has been removed, so toggleLog should
+      // proceed to getLogForDate without throwing EDIT_WINDOW_EXCEEDED.
+      // We just verify it doesn't throw the edit window error.
+      // (It may throw other errors from the mock chain — that's fine.)
+      try {
+        await habitLogsDB.toggleLog(mockHabitId, mockUserId, dateStr);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        // Should NOT be an edit window error
+        expect(msg).not.toBe("EDIT_WINDOW_EXCEEDED");
+      }
     });
   });
 
