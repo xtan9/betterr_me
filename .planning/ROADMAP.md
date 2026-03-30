@@ -63,7 +63,7 @@
 
 </details>
 
-### 🚧 v5.1 Exercise Illustrations & Detail Page (In Progress)
+### v5.1 Exercise Illustrations & Detail Page (In Progress)
 
 **Milestone Goal:** Add animated exercise illustrations, step-by-step instructions, and a Hevy-style exercise detail page using ExerciseDB API data.
 
@@ -83,7 +83,10 @@
   3. User sees a GIF preview at the top of each exercise library card when browsing exercises
   4. When an exercise has no matched media (custom exercises or failed matches), a fallback muscle group icon displays instead of a broken image
   5. All thumbnail alt text strings are translated in en, zh, and zh-TW
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 28-01-PLAN.md — ExerciseThumbnail component, tests, and i18n alt text strings
+- [ ] 28-02-PLAN.md — Integrate thumbnail into exercise picker, workout logger, and exercise library
 **UI hint**: yes
 
 ### Phase 29: Exercise Detail Page
@@ -127,5 +130,5 @@
 | 25. Data Management | v4.0 | 2/2 | Complete | 2026-02-24 |
 | 26. CSV Import & Polish | v4.0 | 3/3 | Complete | 2026-02-28 |
 | 27. Data Layer & Sync | v5.1 | 3/3 | Complete    | 2026-03-30 |
-| 28. Thumbnails in Existing UI | v5.1 | 0/? | Not started | - |
+| 28. Thumbnails in Existing UI | v5.1 | 0/2 | Not started | - |
 | 29. Exercise Detail Page | v5.1 | 0/? | Not started | - |
