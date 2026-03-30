@@ -16,6 +16,7 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? 'html' : 'list',
   timeout: 30000,
+  updateSnapshots: 'missing',
   globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
 
