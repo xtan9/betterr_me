@@ -9,6 +9,30 @@
             "command": "jq -r '.tool_input.file_path' | xargs prettier --write"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "if": "Bash(gh pr create:*)",
+            "prompt": "A pull request was just created. Run /pr-review-toolkit:review-pr to review it automatically. Use the Skill tool to invoke it.",
+            "statusMessage": "Triggering PR review..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(gh pr merge:*)",
+            "command": "CMD=$(cat | python3 -c \"import sys,json; print(json.load(sys.stdin)['tool_input']['command'])\") && PR_NUM=$(echo \"$CMD\" | grep -oE '[0-9]+' | head -1) && REPO=$(echo \"$CMD\" | grep -oE -- '--repo [^ ]+' | sed 's/--repo //' || echo '') && if [ -z \"$REPO\" ]; then REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github.com[:\\/]//;s/.git$//'); fi && if gh pr checks \"$PR_NUM\" --repo \"$REPO\" 2>&1 | grep -q 'fail'; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"PR #%s has failing CI checks. Fix them before merging.\"}}' \"$PR_NUM\"; fi",
+            "statusMessage": "Verifying PR checks pass..."
+          }
+        ]
       }
     ]
   },
