@@ -215,6 +215,28 @@ describe('Heatmap30Day', () => {
     expect(oldCell).toHaveClass('cursor-not-allowed');
   });
 
+  it('displays the day-of-month number inside each cell', () => {
+    render(<Heatmap30Day {...defaultProps} />);
+
+    // Today is Feb 4 → should show "4"
+    const todayCell = screen.getByTestId('cell-2026-02-04');
+    expect(todayCell).toHaveTextContent('4');
+
+    // Jan 6 → should show "6"
+    const jan6Cell = screen.getByTestId('cell-2026-01-06');
+    expect(jan6Cell).toHaveTextContent('6');
+
+    // Jan 15 → should show "15"
+    const jan15Cell = screen.getByTestId('cell-2026-01-15');
+    expect(jan15Cell).toHaveTextContent('15');
+  });
+
+  it('displays date numbers during loading state skeleton', () => {
+    // Loading state should NOT show date numbers (it shows skeleton placeholders)
+    render(<Heatmap30Day {...defaultProps} isLoading />);
+    expect(screen.queryByText('4')).not.toBeInTheDocument();
+  });
+
   it('not_scheduled cells have cursor-default', () => {
     const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
     render(<Heatmap30Day {...defaultProps} frequency={weekdaysFrequency} />);

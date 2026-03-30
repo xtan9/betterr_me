@@ -187,10 +187,14 @@ export const Heatmap30Day = memo(function Heatmap30Day({
                       <button
                         type="button"
                         data-testid={`cell-${cell.date}`}
-                        className={cn("heatmap-cell", getCellClasses(cell))}
+                        className={cn("heatmap-cell", getCellClasses(cell), "flex items-center justify-center")}
                         onClick={() => handleCellClick(cell)}
                         aria-label={getTooltipContent(cell)}
-                      />
+                      >
+                        <span className="text-[10px] font-medium text-foreground/60">
+                          {new Date(cell.date + "T00:00:00").getDate()}
+                        </span>
+                      </button>
                     </TooltipTrigger>
                     <TooltipContent>{getTooltipContent(cell)}</TooltipContent>
                   </Tooltip>
