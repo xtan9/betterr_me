@@ -100,23 +100,24 @@ describe("AppSidebar", () => {
     });
   });
 
-  it("renders all 6 nav items as links (flat list, no settings)", () => {
+  it("renders logo link + 6 nav items as links", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(6);
+    expect(links).toHaveLength(7); // 1 logo + 6 nav
   });
 
-  it("renders correct hrefs for all nav items", () => {
+  it("renders correct hrefs for logo and all nav items", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
-    expect(links[0]).toHaveAttribute("href", "/dashboard");
-    expect(links[1]).toHaveAttribute("href", "/habits");
-    expect(links[2]).toHaveAttribute("href", "/tasks");
-    expect(links[3]).toHaveAttribute("href", "/journal");
-    expect(links[4]).toHaveAttribute("href", "/workouts");
-    expect(links[5]).toHaveAttribute("href", "/money");
+    expect(links[0]).toHaveAttribute("href", "/dashboard"); // logo
+    expect(links[1]).toHaveAttribute("href", "/dashboard");
+    expect(links[2]).toHaveAttribute("href", "/habits");
+    expect(links[3]).toHaveAttribute("href", "/tasks");
+    expect(links[4]).toHaveAttribute("href", "/journal");
+    expect(links[5]).toHaveAttribute("href", "/workouts");
+    expect(links[6]).toHaveAttribute("href", "/money");
   });
 
   it("renders i18n translation keys as labels", () => {
@@ -141,7 +142,8 @@ describe("AppSidebar", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
-    links.forEach((link) => {
+    // Skip the first link (logo) — nav items start at index 1
+    links.slice(1).forEach((link) => {
       const iconContainer = link.querySelector(".size-6");
       expect(iconContainer).toBeInTheDocument();
     });
