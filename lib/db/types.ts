@@ -464,6 +464,15 @@ export type ExerciseType = (typeof EXERCISE_TYPES)[number];
 export type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
 export type Equipment = (typeof EQUIPMENT)[number];
 
+export interface ExerciseMedia {
+  gif_url: string | null;
+  thumbnail_url: string | null;
+  instructions: string[] | null;
+  alternative_names: string[] | null;
+  exercisedb_id: string | null;
+  media_status: "active" | "broken" | "fallback";
+}
+
 export interface Exercise {
   id: string;
   user_id: string | null; // NULL for preset exercises
@@ -475,6 +484,7 @@ export interface Exercise {
   is_custom: boolean;
   created_at: string;
   updated_at: string;
+  exercise_media: ExerciseMedia | null;
 }
 
 export type ExerciseInsert = Omit<
