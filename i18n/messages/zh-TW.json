@@ -288,13 +288,29 @@
       "markComplete": "標記完成："
     },
     "heatmap": {
-      "title": "最近30天",
+      "title": "{year}年{month}",
+      "prevMonth": "上個月",
+      "nextMonth": "下個月",
+      "today": "今天",
       "completed": "已完成",
       "missed": "未完成",
       "notScheduled": "非計畫日",
-      "today": "今天",
       "cannotEdit": "無法編輯超過7天前的紀錄",
       "clickToToggle": "點擊切換",
+      "months": {
+        "0": "1月",
+        "1": "2月",
+        "2": "3月",
+        "3": "4月",
+        "4": "5月",
+        "5": "6月",
+        "6": "7月",
+        "7": "8月",
+        "8": "9月",
+        "9": "10月",
+        "10": "11月",
+        "11": "12月"
+      },
       "days": {
         "sun": "週日",
         "mon": "週一",
