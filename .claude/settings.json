@@ -14,10 +14,16 @@
         "matcher": "Bash",
         "hooks": [
           {
-            "type": "prompt",
+            "type": "command",
             "if": "Bash(gh pr create:*)",
-            "prompt": "A pull request was just created. Run /pr-review-toolkit:review-pr to review it automatically. Use the Skill tool to invoke it.",
+            "command": "jq -r '.tool_response.stdout // .tool_response.output // empty' | grep -oP 'https://github\\.com/[^ ]+/pull/\\d+' | { read -r url; if [ -n \"$url\" ]; then echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"A PR was just created at $url. You MUST now invoke the pr-review-toolkit:review-pr skill to review this PR before continuing.\\\"}}\"; fi; } 2>/dev/null || true",
             "statusMessage": "Triggering PR review..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push:*)",
+            "command": "url=$(gh pr view --json url -q .url 2>/dev/null) && if [ -n \"$url\" ]; then echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"Code was pushed to PR at $url. You MUST now invoke the pr-review-toolkit:review-pr skill to review the updated PR before continuing.\\\"}}\"; fi 2>/dev/null || true",
+            "statusMessage": "Checking for open PR..."
           }
         ]
       }

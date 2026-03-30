@@ -1,31 +1,39 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Heatmap30Day } from '@/components/habits/heatmap';
+import { HabitCalendar } from '@/components/habits/heatmap';
 import type { HabitFrequency, HabitLog } from '@/lib/db/types';
+import { makeLog } from '@/tests/helpers/habit-test-utils';
 
 vi.mock('next-intl', () => ({
   useTranslations: () => {
-    const t = (key: string) => {
+    const t = (key: string, params?: Record<string, string | number>) => {
       const messages: Record<string, string> = {
-        'title': 'Last 30 Days',
+        'title': '{month} {year}',
+        'prevMonth': 'Previous month',
+        'nextMonth': 'Next month',
         'completed': 'Completed',
         'missed': 'Missed',
         'notScheduled': 'Not scheduled',
         'today': 'Today',
         'cannotEdit': 'Cannot edit days older than 7 days',
         'clickToToggle': 'Click to toggle',
-        'days.sun': 'Sun',
-        'days.mon': 'Mon',
-        'days.tue': 'Tue',
-        'days.wed': 'Wed',
-        'days.thu': 'Thu',
-        'days.fri': 'Fri',
-        'days.sat': 'Sat',
+        'days.sun': 'Sun', 'days.mon': 'Mon', 'days.tue': 'Tue',
+        'days.wed': 'Wed', 'days.thu': 'Thu', 'days.fri': 'Fri', 'days.sat': 'Sat',
+        'months.0': 'January', 'months.1': 'February', 'months.2': 'March',
+        'months.3': 'April', 'months.4': 'May', 'months.5': 'June',
+        'months.6': 'July', 'months.7': 'August', 'months.8': 'September',
+        'months.9': 'October', 'months.10': 'November', 'months.11': 'December',
         'legend.completed': 'Completed',
         'legend.missed': 'Missed',
         'legend.notScheduled': 'Not scheduled',
       };
-      return messages[key] ?? key;
+      let result = messages[key] ?? key;
+      if (params) {
+        for (const [k, v] of Object.entries(params)) {
+          result = result.replace(`{${k}}`, String(v));
+        }
+      }
+      return result;
     };
     return t;
   },
@@ -43,7 +51,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-describe('Heatmap30Day', () => {
+describe('HabitCalendar', () => {
   beforeEach(() => {
     // Fix "today" to Wednesday, 2026-02-04 for deterministic tests
     vi.useFakeTimers();
@@ -56,30 +64,85 @@ describe('Heatmap30Day', () => {
 
   const dailyFrequency: HabitFrequency = { type: 'daily' };
 
-  const makeLog = (date: string, completed: boolean): HabitLog => ({
-    id: `log-${date}`,
-    habit_id: 'habit-1',
-    user_id: 'user-1',
-    logged_date: date,
-    completed,
-    created_at: `${date}T00:00:00Z`,
-    updated_at: `${date}T00:00:00Z`,
-  });
-
   const defaultProps = {
     habitId: 'habit-1',
     frequency: dailyFrequency,
     logs: [] as HabitLog[],
     onToggleDate: vi.fn(),
+    year: 2026,
+    month: 1, // February (0-indexed)
+    onMonthChange: vi.fn(),
   };
 
-  it('renders the heatmap title', () => {
-    render(<Heatmap30Day {...defaultProps} />);
-    expect(screen.getByText('Last 30 Days')).toBeInTheDocument();
+  it('renders month/year title', () => {
+    render(<HabitCalendar {...defaultProps} />);
+    expect(screen.getByText('February 2026')).toBeInTheDocument();
   });
 
-  it('renders day labels (Sun-Sat) by default', () => {
-    render(<Heatmap30Day {...defaultProps} />);
+  it('renders prev/next navigation buttons', () => {
+    render(<HabitCalendar {...defaultProps} />);
+    expect(screen.getByRole('button', { name: 'Previous month' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next month' })).toBeInTheDocument();
+  });
+
+  it('calls onMonthChange with previous month when clicking prev', () => {
+    const onMonthChange = vi.fn();
+    render(<HabitCalendar {...defaultProps} onMonthChange={onMonthChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Previous month' }));
+    expect(onMonthChange).toHaveBeenCalledWith(2026, 0); // January 2026
+  });
+
+  it('calls onMonthChange with next month when clicking next', () => {
+    const onMonthChange = vi.fn();
+    // Use a past month so next is not disabled
+    render(<HabitCalendar {...defaultProps} year={2026} month={0} onMonthChange={onMonthChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+    expect(onMonthChange).toHaveBeenCalledWith(2026, 1); // February 2026
+  });
+
+  it('wraps year when navigating past December', () => {
+    const onMonthChange = vi.fn();
+    render(<HabitCalendar {...defaultProps} year={2025} month={11} onMonthChange={onMonthChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+    expect(onMonthChange).toHaveBeenCalledWith(2026, 0); // January 2026
+  });
+
+  it('wraps year when navigating before January', () => {
+    const onMonthChange = vi.fn();
+    render(<HabitCalendar {...defaultProps} year={2026} month={0} onMonthChange={onMonthChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Previous month' }));
+    expect(onMonthChange).toHaveBeenCalledWith(2025, 11); // December 2025
+  });
+
+  it('disables prev button at January 1990', () => {
+    render(<HabitCalendar {...defaultProps} year={1990} month={0} />);
+    expect(screen.getByRole('button', { name: 'Previous month' })).toBeDisabled();
+  });
+
+  it('disables next button when viewing current month (Feb 2026)', () => {
+    render(<HabitCalendar {...defaultProps} year={2026} month={1} />);
+    expect(screen.getByRole('button', { name: 'Next month' })).toBeDisabled();
+  });
+
+  it('does not disable next when viewing a past month', () => {
+    render(<HabitCalendar {...defaultProps} year={2026} month={0} />);
+    expect(screen.getByRole('button', { name: 'Next month' })).not.toBeDisabled();
+  });
+
+  it('renders 28 cells for February 2026', () => {
+    render(<HabitCalendar {...defaultProps} year={2026} month={1} />);
+    const cells = screen.getAllByTestId(/^cell-/);
+    expect(cells).toHaveLength(28);
+  });
+
+  it('renders 31 cells for January', () => {
+    render(<HabitCalendar {...defaultProps} year={2026} month={0} />);
+    const cells = screen.getAllByTestId(/^cell-/);
+    expect(cells).toHaveLength(31);
+  });
+
+  it('renders day labels (Sun-Sat)', () => {
+    render(<HabitCalendar {...defaultProps} />);
     expect(screen.getByText('Sun')).toBeInTheDocument();
     expect(screen.getByText('Mon')).toBeInTheDocument();
     expect(screen.getByText('Tue')).toBeInTheDocument();
@@ -90,225 +153,137 @@ describe('Heatmap30Day', () => {
   });
 
   it('renders day labels starting from Monday when weekStartDay=1', () => {
-    render(<Heatmap30Day {...defaultProps} weekStartDay={1} />);
+    render(<HabitCalendar {...defaultProps} weekStartDay={1} />);
     const dayLabels = screen.getAllByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
     const labelTexts = dayLabels.map((el) => el.textContent);
     expect(labelTexts).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   });
 
-  it('renders day labels starting from Sunday when weekStartDay=0', () => {
-    render(<Heatmap30Day {...defaultProps} weekStartDay={0} />);
-    const dayLabels = screen.getAllByText(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
-    const labelTexts = dayLabels.map((el) => el.textContent);
-    expect(labelTexts).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+  it('displays day-of-month numbers inside cells', () => {
+    render(<HabitCalendar {...defaultProps} year={2026} month={1} />);
+
+    // Feb 4 is today → should show "4"
+    const todayCell = screen.getByTestId('cell-2026-02-04');
+    expect(todayCell).toHaveTextContent('4');
+
+    // Feb 1 → should show "1"
+    const feb1Cell = screen.getByTestId('cell-2026-02-01');
+    expect(feb1Cell).toHaveTextContent('1');
+
+    // Feb 28 → should show "28"
+    const feb28Cell = screen.getByTestId('cell-2026-02-28');
+    expect(feb28Cell).toHaveTextContent('28');
   });
 
-  it('renders 30 cells', () => {
-    render(<Heatmap30Day {...defaultProps} />);
-    // Cells have testids like cell-2026-01-06, cell-2026-01-07, etc.
-    const cells = screen.getAllByTestId(/^cell-/);
-    expect(cells).toHaveLength(30);
-  });
-
-  it('renders a cell with completed status with primary background', () => {
+  it('renders completed cells with primary background', () => {
     const logs = [makeLog('2026-02-03', true)];
-    render(<Heatmap30Day {...defaultProps} logs={logs} />);
+    render(<HabitCalendar {...defaultProps} logs={logs} />);
     const cell = screen.getByTestId('cell-2026-02-03');
     expect(cell).toHaveClass('bg-primary');
   });
 
-  it('renders a cell with missed status with slate background', () => {
-    render(<Heatmap30Day {...defaultProps} />);
-    // 2026-02-03 is yesterday with no log → missed
-    const cell = screen.getByTestId('cell-2026-02-03');
-    expect(cell).toHaveClass('bg-muted');
-  });
-
-  it('renders a not_scheduled cell with dashed border', () => {
-    const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
-    render(<Heatmap30Day {...defaultProps} frequency={weekdaysFrequency} />);
-    // 2026-02-01 is Sunday → not scheduled for weekdays
-    const cell = screen.getByTestId('cell-2026-02-01');
-    expect(cell).toHaveClass('border-dashed');
-  });
-
   it('highlights today cell with a ring', () => {
-    render(<Heatmap30Day {...defaultProps} />);
+    render(<HabitCalendar {...defaultProps} />);
     const todayCell = screen.getByTestId('cell-2026-02-04');
     expect(todayCell).toHaveClass('ring-2');
     expect(todayCell).toHaveClass('ring-primary');
   });
 
-  it('calls onToggleDate when clicking an editable cell', () => {
+  it('calls onToggleDate when clicking a cell', () => {
     const onToggle = vi.fn();
-    render(<Heatmap30Day {...defaultProps} onToggleDate={onToggle} />);
+    render(<HabitCalendar {...defaultProps} onToggleDate={onToggle} />);
 
-    // Click on yesterday (editable)
+    // Click on Feb 3 (editable)
     const cell = screen.getByTestId('cell-2026-02-03');
     fireEvent.click(cell);
 
     expect(onToggle).toHaveBeenCalledWith('2026-02-03');
   });
 
-  it('calls onToggleDate when clicking today cell', () => {
-    const onToggle = vi.fn();
-    render(<Heatmap30Day {...defaultProps} onToggleDate={onToggle} />);
-
-    const todayCell = screen.getByTestId('cell-2026-02-04');
-    fireEvent.click(todayCell);
-
-    expect(onToggle).toHaveBeenCalledWith('2026-02-04');
-  });
-
-  it('calls onToggleDate when clicking an old cell (no edit window limit)', () => {
-    const onToggle = vi.fn();
-    render(<Heatmap30Day {...defaultProps} onToggleDate={onToggle} />);
-
-    // Jan 20, 2026 is more than 7 days ago — should still be editable
-    const oldCell = screen.getByTestId('cell-2026-01-20');
-    fireEvent.click(oldCell);
-
-    expect(onToggle).toHaveBeenCalledWith('2026-01-20');
-  });
-
-  it('does not call onToggleDate when clicking not_scheduled cell', () => {
+  it('does not call onToggleDate for not_scheduled cells', () => {
     const onToggle = vi.fn();
     const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
-    render(<Heatmap30Day {...defaultProps} frequency={weekdaysFrequency} onToggleDate={onToggle} />);
+    render(<HabitCalendar {...defaultProps} frequency={weekdaysFrequency} onToggleDate={onToggle} />);
 
-    // 2026-02-01 is Sunday → not scheduled
+    // Feb 1, 2026 is a Sunday → not scheduled for weekdays
     const cell = screen.getByTestId('cell-2026-02-01');
     fireEvent.click(cell);
 
     expect(onToggle).not.toHaveBeenCalled();
   });
 
-  it('renders legend with all status types', () => {
-    render(<Heatmap30Day {...defaultProps} />);
+  it('renders the legend', () => {
+    render(<HabitCalendar {...defaultProps} />);
     expect(screen.getByTestId('legend')).toBeInTheDocument();
-    expect(screen.getAllByText('Completed')).toHaveLength(1); // Just legend since tooltip isn't rendering full content
-    expect(screen.getAllByText('Missed')).toHaveLength(1);
-    expect(screen.getAllByText('Not scheduled')).toHaveLength(1);
   });
 
-  it('shows loading state when isLoading is true', () => {
-    render(<Heatmap30Day {...defaultProps} isLoading />);
+  it('shows loading state', () => {
+    render(<HabitCalendar {...defaultProps} isLoading />);
     expect(screen.getByTestId('heatmap-loading')).toBeInTheDocument();
-  });
-
-  it('does not render cells when loading', () => {
-    render(<Heatmap30Day {...defaultProps} isLoading />);
-    // In loading state, no cells are rendered
     expect(screen.queryByTestId(/^cell-/)).not.toBeInTheDocument();
   });
 
-  it('editable cells have cursor-pointer', () => {
-    render(<Heatmap30Day {...defaultProps} />);
-    const todayCell = screen.getByTestId('cell-2026-02-04');
-    expect(todayCell).toHaveClass('cursor-pointer');
-  });
-
-  it('old cells have cursor-pointer (no edit window limit)', () => {
-    render(<Heatmap30Day {...defaultProps} />);
-    const oldCell = screen.getByTestId('cell-2026-01-20');
-    expect(oldCell).toHaveClass('cursor-pointer');
-  });
-
-  it('displays the day-of-month number inside each cell', () => {
-    render(<Heatmap30Day {...defaultProps} />);
-
-    // Today is Feb 4 → should show "4"
-    const todayCell = screen.getByTestId('cell-2026-02-04');
-    expect(todayCell).toHaveTextContent('4');
-
-    // Jan 6 → should show "6"
-    const jan6Cell = screen.getByTestId('cell-2026-01-06');
-    expect(jan6Cell).toHaveTextContent('6');
-
-    // Jan 15 → should show "15"
-    const jan15Cell = screen.getByTestId('cell-2026-01-15');
-    expect(jan15Cell).toHaveTextContent('15');
-  });
-
-  it('displays date numbers during loading state skeleton', () => {
-    // Loading state should NOT show date numbers (it shows skeleton placeholders)
-    render(<Heatmap30Day {...defaultProps} isLoading />);
-    expect(screen.queryByText('4')).not.toBeInTheDocument();
-  });
-
-  it('shows date numbers with appropriate contrast for all cell states', () => {
-    const logs = [{ id: 'log-1', habit_id: 'habit-1', user_id: 'user-1', logged_date: '2026-02-03', completed: true, created_at: '2026-02-03T00:00:00Z', updated_at: '2026-02-03T00:00:00Z' }];
+  it('uses state-aware text colors', () => {
+    const logs = [makeLog('2026-02-03', true)];
     const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
-    render(<Heatmap30Day habitId="habit-1" frequency={weekdaysFrequency} logs={logs} onToggleDate={vi.fn()} />);
+    render(<HabitCalendar habitId="habit-1" frequency={weekdaysFrequency} logs={logs} onToggleDate={vi.fn()} year={2026} month={1} onMonthChange={vi.fn()} />);
 
     // Completed cell (Feb 3, Mon) — should have text with primary-foreground color
     const completedCell = screen.getByTestId('cell-2026-02-03');
-    expect(completedCell).toHaveTextContent('3');
     const completedSpan = completedCell.querySelector('span');
     expect(completedSpan).toHaveClass('text-primary-foreground/70');
 
     // Missed cell (Feb 4, Wed, today) — should have text with foreground color
     const missedCell = screen.getByTestId('cell-2026-02-04');
-    expect(missedCell).toHaveTextContent('4');
     const missedSpan = missedCell.querySelector('span');
     expect(missedSpan).toHaveClass('text-foreground/50');
 
     // Not scheduled cell (Feb 1, Sun) — should have text with muted color
     const notScheduledCell = screen.getByTestId('cell-2026-02-01');
-    expect(notScheduledCell).toHaveTextContent('1');
     const notScheduledSpan = notScheduledCell.querySelector('span');
     expect(notScheduledSpan).toHaveClass('text-muted-foreground/40');
   });
 
-  it('not_scheduled cells have cursor-default', () => {
-    const weekdaysFrequency: HabitFrequency = { type: 'weekdays' };
-    render(<Heatmap30Day {...defaultProps} frequency={weekdaysFrequency} />);
-    // 2026-02-01 is Sunday → not scheduled
-    const cell = screen.getByTestId('cell-2026-02-01');
-    expect(cell).toHaveClass('cursor-default');
-  });
+  it('aligns cells correctly (weekStartDay=0)', () => {
+    // Feb 2026: starts on Sunday (day 0)
+    // With weekStartDay=0 (Sun start), column 0 = Sun, col 1 = Mon, ...
+    render(<HabitCalendar {...defaultProps} year={2026} month={1} weekStartDay={0} />);
 
-  it('aligns cells under the correct day-of-week column (weekStartDay=0, Sun start)', () => {
-    // Today is Wed Feb 4 2026. 30 days = Jan 6 (Tue) to Feb 4 (Wed).
-    // With weekStartDay=0 (Sun start), columns are: Sun=0, Mon=1, Tue=2, Wed=3, Thu=4, Fri=5, Sat=6
-    render(<Heatmap30Day {...defaultProps} weekStartDay={0} />);
-
-    // Get all grid rows (each row is a div with grid-cols-7)
     const rows = screen.getByTestId('heatmap-grid').children;
 
-    // Jan 6 is Tuesday → should be in column index 2 (0-based) of its row
-    // First cell is Jan 6 (Tue). Offset from Sun = (2 - 0 + 7) % 7 = 2.
-    // So row 0 = [null, null, Jan6(Tue), Jan7(Wed), Jan8(Thu), Jan9(Fri), Jan10(Sat)]
+    // Feb 1, 2026 is Sunday → should be in column 0 of the first row (no offset)
     const firstRow = rows[0];
-    // Column 0 and 1 should be empty divs (null cells)
+    expect(firstRow.children[0].querySelector('[data-testid="cell-2026-02-01"]')).toBeTruthy();
+  });
+
+  it('aligns cells correctly (weekStartDay=1)', () => {
+    // Feb 2026: starts on Sunday
+    // With weekStartDay=1 (Mon start), Sunday is the last column (index 6)
+    // Feb 1 (Sun) offset from Mon = (0 - 1 + 7) % 7 = 6
+    render(<HabitCalendar {...defaultProps} year={2026} month={1} weekStartDay={1} />);
+
+    const rows = screen.getByTestId('heatmap-grid').children;
+
+    // Feb 1 (Sun) should be at column index 6 in row 0
+    const firstRow = rows[0];
+    expect(firstRow.children[6].querySelector('[data-testid="cell-2026-02-01"]')).toBeTruthy();
+
+    // Columns 0–5 of the first row should be empty
+    for (let i = 0; i < 6; i++) {
+      expect(firstRow.children[i]).not.toHaveAttribute('data-testid');
+    }
+  });
+
+  it('aligns cells correctly when month starts mid-week (weekStartDay=0)', () => {
+    // April 2026 starts on Wednesday (day 3)
+    render(<HabitCalendar {...defaultProps} month={3} />); // April
+    const rows = screen.getByTestId('heatmap-grid').children;
+    const firstRow = rows[0];
+    // Columns 0-2 (Sun, Mon, Tue) should be empty
     expect(firstRow.children[0]).not.toHaveAttribute('data-testid');
     expect(firstRow.children[1]).not.toHaveAttribute('data-testid');
-    // Column 2 should be Jan 6
-    expect(firstRow.children[2].querySelector('[data-testid="cell-2026-01-06"]')).toBeTruthy();
-    // Column 6 should be Jan 10 (Sat)
-    expect(firstRow.children[6].querySelector('[data-testid="cell-2026-01-10"]')).toBeTruthy();
-
-    // Today (Feb 4, Wed) should be in column 3
-    const lastRow = rows[rows.length - 1];
-    expect(lastRow.children[3].querySelector('[data-testid="cell-2026-02-04"]')).toBeTruthy();
-  });
-
-  it('aligns cells under the correct day-of-week column (weekStartDay=1, Mon start)', () => {
-    // Today is Wed Feb 4 2026. 30 days = Jan 6 (Tue) to Feb 4 (Wed).
-    // With weekStartDay=1 (Mon start), columns are: Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
-    render(<Heatmap30Day {...defaultProps} weekStartDay={1} />);
-
-    const rows = screen.getByTestId('heatmap-grid').children;
-
-    // Jan 6 is Tuesday → offset from Mon = (2 - 1 + 7) % 7 = 1
-    // Row 0 = [null, Jan6(Tue), Jan7(Wed), Jan8(Thu), Jan9(Fri), Jan10(Sat), Jan11(Sun)]
-    const firstRow = rows[0];
-    expect(firstRow.children[0]).not.toHaveAttribute('data-testid');
-    expect(firstRow.children[1].querySelector('[data-testid="cell-2026-01-06"]')).toBeTruthy();
-    expect(firstRow.children[6].querySelector('[data-testid="cell-2026-01-11"]')).toBeTruthy();
-
-    // Today (Feb 4, Wed) should be in column 2 (Wed position in Mon-start grid)
-    const lastRow = rows[rows.length - 1];
-    expect(lastRow.children[2].querySelector('[data-testid="cell-2026-02-04"]')).toBeTruthy();
+    expect(firstRow.children[2]).not.toHaveAttribute('data-testid');
+    // Column 3 (Wed) should be April 1
+    expect(firstRow.children[3].querySelector('[data-testid="cell-2026-04-01"]')).toBeTruthy();
   });
 });

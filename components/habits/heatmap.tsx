@@ -2,20 +2,25 @@
 
 import { memo, useMemo } from "react";
 import { useTranslations } from "next-intl";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buildHeatmapData, type HeatmapCell } from "@/lib/habits/heatmap";
+import { buildMonthHeatmapData, type HeatmapCell } from "@/lib/habits/heatmap";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import type { HabitFrequency, HabitLog } from "@/lib/db/types";
 
-interface Heatmap30DayProps {
+interface HabitCalendarProps {
   habitId: string;
   frequency: HabitFrequency;
   logs: HabitLog[];
   onToggleDate: (date: string) => Promise<void>;
+  year: number;
+  month: number; // 0-indexed
+  onMonthChange: (year: number, month: number) => void;
   isLoading?: boolean;
   weekStartDay?: number; // 0 = Sunday, 1 = Monday
 }
@@ -60,17 +65,45 @@ function organizeByWeeks(cells: HeatmapCell[], weekStartDay: number) {
   return weeks;
 }
 
-export const Heatmap30Day = memo(function Heatmap30Day({
+export const HabitCalendar = memo(function HabitCalendar({
   frequency,
   logs,
   onToggleDate,
+  year,
+  month,
+  onMonthChange,
   isLoading = false,
   weekStartDay = 0,
-}: Heatmap30DayProps) {
+}: HabitCalendarProps) {
   const t = useTranslations("habits.heatmap");
-  const cells = useMemo(() => buildHeatmapData(logs, frequency, 30), [logs, frequency]);
+  const today = useMemo(() => new Date(), []);
+
+  const cells = useMemo(() => buildMonthHeatmapData(logs, frequency, year, month), [logs, frequency, year, month]);
   const weeks = useMemo(() => organizeByWeeks(cells, weekStartDay), [cells, weekStartDay]);
   const dayKeys = useMemo(() => getDayKeys(weekStartDay), [weekStartDay]);
+
+  const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+  const isMinMonth = year === 1990 && month === 0;
+
+  const monthName = t(`months.${month}`);
+
+  const handlePrevMonth = () => {
+    if (isMinMonth) return;
+    if (month === 0) {
+      onMonthChange(year - 1, 11);
+    } else {
+      onMonthChange(year, month - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (isCurrentMonth) return;
+    if (month === 11) {
+      onMonthChange(year + 1, 0);
+    } else {
+      onMonthChange(year, month + 1);
+    }
+  };
 
   const handleCellClick = (cell: HeatmapCell) => {
     if (isLoading) return;
@@ -133,7 +166,17 @@ export const Heatmap30Day = memo(function Heatmap30Day({
   if (isLoading) {
     return (
       <div data-testid="heatmap-loading" className="space-y-3">
-        <h3 className="text-sm font-medium text-muted-foreground">{t("title")}</h3>
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="icon" className="size-8" disabled aria-label={t("prevMonth")}>
+            <ChevronLeft className="size-4" />
+          </Button>
+          <h3 className="text-sm font-medium text-muted-foreground">
+            {t("title", { month: monthName, year: String(year) })}
+          </h3>
+          <Button variant="ghost" size="icon" className="size-8" disabled aria-label={t("nextMonth")}>
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
         <div className="animate-pulse">
           <div className="grid grid-cols-7 gap-1 mb-2">
             {dayKeys.map((day) => (
@@ -154,7 +197,32 @@ export const Heatmap30Day = memo(function Heatmap30Day({
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-medium text-muted-foreground">{t("title")}</h3>
+      {/* Navigation header */}
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={handlePrevMonth}
+          disabled={isMinMonth}
+          aria-label={t("prevMonth")}
+        >
+          <ChevronLeft className="size-4" />
+        </Button>
+        <h3 className="text-sm font-medium text-muted-foreground">
+          {t("title", { month: monthName, year: String(year) })}
+        </h3>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={handleNextMonth}
+          disabled={isCurrentMonth}
+          aria-label={t("nextMonth")}
+        >
+          <ChevronRight className="size-4" />
+        </Button>
+      </div>
 
       {/* Day labels */}
       <div className="grid grid-cols-7 gap-1 text-center">

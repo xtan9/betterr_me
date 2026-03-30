@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useTranslations } from "next-intl";
@@ -32,9 +32,9 @@ import { StreakCounter } from "@/components/habits/streak-counter";
 import { NextMilestone } from "@/components/habits/next-milestone";
 import dynamic from "next/dynamic";
 
-const Heatmap30Day = dynamic(() =>
+const HabitCalendar = dynamic(() =>
   import("@/components/habits/heatmap").then((m) => ({
-    default: m.Heatmap30Day,
+    default: m.HabitCalendar,
   })),
 );
 import { fetcher } from "@/lib/fetcher";
@@ -136,9 +136,26 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     mutate: mutateHabit,
   } = useSWR<Habit>(`/api/habits/${habitId}`, habitFetcher);
 
+  const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
+
+  const handleMonthChange = useCallback((newYear: number, newMonth: number) => {
+    setCalendarYear(newYear);
+    setCalendarMonth(newMonth);
+  }, []);
+
+  const logsSwrKey = useMemo(() => {
+    if (!habit) return null;
+    const startDate = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    const endDate = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    return `/api/habits/${habitId}/logs?start_date=${startDate}&end_date=${endDate}`;
+  }, [habit, habitId, calendarYear, calendarMonth]);
+
   const { data: logsData, mutate: mutateLogs } = useSWR<{ logs: HabitLog[] }>(
-    habit ? `/api/habits/${habitId}/logs?days=30` : null,
+    logsSwrKey,
     fetcher,
+    { keepPreviousData: true },
   );
 
   const { data: statsData } = useSWR<HabitStats>(
@@ -408,12 +425,15 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
           </div>
 
           {/* Heatmap */}
-          <Heatmap30Day
+          <HabitCalendar
             habitId={habitId}
             frequency={frequency ?? habit.frequency}
             logs={logs}
             onToggleDate={handleToggleDate}
             weekStartDay={weekStartDay}
+            year={calendarYear}
+            month={calendarMonth}
+            onMonthChange={handleMonthChange}
           />
 
           {/* Actions */}
