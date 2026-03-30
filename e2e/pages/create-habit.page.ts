@@ -5,8 +5,11 @@ export class CreateHabitPage {
 
   async goto() {
     await this.page.goto('/habits/new');
-    // Wait for form to be interactive instead of networkidle (SWR polling prevents idle)
-    await this.page.getByRole('textbox', { name: /habit name/i }).waitFor({ timeout: 15000 });
+    // Wait for DOM content to be ready before looking for form elements
+    await this.page.waitForLoadState('domcontentloaded');
+    // Wait for form to be interactive instead of networkidle (SWR polling prevents idle).
+    // Use 30s timeout — CI production builds can be slow on first page load.
+    await this.page.getByRole('textbox', { name: /habit name/i }).waitFor({ timeout: 30000 });
   }
 
   /** Name input field */
@@ -49,7 +52,7 @@ export class CreateHabitPage {
     await Promise.all([
       this.page.waitForResponse(
         (res) => res.url().includes('/api/habits') && res.request().method() === 'POST',
-        { timeout: 15000 },
+        { timeout: 30000 },
       ),
       this.page.getByRole('button', { name: /create/i }).click(),
     ]);
@@ -64,11 +67,12 @@ export class CreateHabitPage {
   async waitForRedirect() {
     // Use regex to match /habits with any query params, and wait for either
     // a habit card or the heading — whichever appears first confirms the page loaded.
-    await this.page.waitForURL(/\/habits(?:\?|$)/, { timeout: 15000 });
+    // Use 30s timeout — CI production builds can be slow with parallel tests.
+    await this.page.waitForURL(/\/habits(?:\?|$)/, { timeout: 30000 });
     await this.page
       .locator('[data-testid^="habit-card"], h1, [data-testid="empty-state"]')
       .first()
-      .waitFor({ timeout: 10000 });
+      .waitFor({ timeout: 15000 });
   }
 
   /** Validation error message */

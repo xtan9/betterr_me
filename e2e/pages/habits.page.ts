@@ -6,11 +6,14 @@ export class HabitsPage {
 
   async goto() {
     await this.page.goto('/habits');
-    // Wait for page content instead of networkidle (SWR polling prevents idle)
+    // Wait for DOM content to be ready before looking for page elements
+    await this.page.waitForLoadState('domcontentloaded');
+    // Wait for page content instead of networkidle (SWR polling prevents idle).
+    // Use 30s timeout — CI production builds can be slow on first page load.
     await this.page
       .locator('[data-testid^="habit-card"], [data-testid="empty-state"], h1')
       .first()
-      .waitFor({ timeout: 15000 });
+      .waitFor({ timeout: 30000 });
   }
 
   /** "Create Habit" button on the habits list page */
