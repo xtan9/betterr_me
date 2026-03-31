@@ -5,8 +5,8 @@ self.addEventListener('push', (event) => {
   let data = {};
   try {
     data = event.data?.json() ?? {};
-  } catch {
-    // Malformed JSON payload — show fallback notification
+  } catch (err) {
+    console.error('[sw] Failed to parse push payload:', err);
     data = {};
   }
   const { title, body, icon, url, tag } = data;
@@ -31,8 +31,8 @@ self.addEventListener('notificationclick', (event) => {
         }
       }
       return clients.openWindow(targetUrl);
-    }).catch(() => {
-      // Fallback — open new window if focus/matchAll fails
+    }).catch((err) => {
+      console.error('[sw] notificationclick handler failed, opening new window:', err);
       return clients.openWindow(targetUrl);
     })
   );

@@ -41,6 +41,8 @@ export function useTimezoneDetection(profileTimezone: string | null | undefined)
           } catch {
             // localStorage unavailable — will retry next load but that's acceptable
           }
+        } else {
+          console.error(`Timezone detection API returned ${res.status}`);
         }
       })
       .catch((err) => {
