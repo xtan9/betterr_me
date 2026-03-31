@@ -63,29 +63,112 @@
 
 </details>
 
-### 🚧 v5.1 Exercise Illustrations & Detail Page (In Progress)
+## v6.0 Calendar & Reminder Notifications (Phases 29-36)
 
-**Milestone Goal:** Add animated exercise illustrations, step-by-step instructions, and a Hevy-style exercise detail page using ExerciseDB API data.
+**Goal:** Full calendar/scheduling domain with unified Day/Week/Month views, standalone event management, cross-domain aggregation, and push + email reminder notifications with smart defaults.
 
-- [x] **Phase 27: Data Layer & Sync** — completed 2026-03-30
-- [x] **Phase 28: Thumbnails in Existing UI** — completed 2026-03-31
-- [ ] **Phase 29: Exercise Detail Page** - Three-tab detail page (Summary, History, How To) with navigation from existing UI
+**Design spec:** `docs/superpowers/specs/2026-03-30-calendar-reminders-design.md`
 
-### Phase 29: Exercise Detail Page
-**Goal**: Users can view a comprehensive exercise detail page with animated demonstration, progress history, and step-by-step instructions
-**Depends on**: Phase 28 (thumbnail component and data layer validated in real UI)
-**Requirements**: DETL-01, DETL-02, DETL-03, DETL-04, DETL-05, I18N-01 (partial — detail page strings)
-**Success Criteria** (what must be TRUE):
-  1. User can navigate to /workouts/exercises/[id] from both the workout logger (exercise name link) and exercise library (card click) and see a three-tab layout
-  2. Summary tab displays an animated GIF demonstration, primary/secondary muscle groups, alternative names, a progress chart, and personal records
-  3. History tab shows past workout sets for the exercise, reusing existing exercise history display
-  4. How To tab shows step-by-step instructions as a numbered list (tab hidden when no instructions available)
-  5. All detail page tab labels, headings, and UI strings are translated in en, zh, and zh-TW
-**Plans**: 2 plans
-Plans:
-- [ ] 29-01-PLAN.md — Detail page components + tabs + i18n
-- [ ] 29-02-PLAN.md — Navigation links from exercise library and workout logger
-**UI hint**: yes
+### Phase 29: Database Schema & Infrastructure Foundation
+
+**Goal:** Create all database tables, DB classes, Zod schemas, and timezone infrastructure needed by every subsequent phase.
+
+**Requirements:** INFR-01, INFR-02, INFR-03, INFR-04, INFR-05, INFR-06, INFR-07, INFR-08
+
+**Success criteria:**
+1. User's IANA timezone is stored in profiles and auto-detected on first visit
+2. All 4 new tables (calendar_events, reminders, reminder_defaults, push_subscriptions) exist with RLS policies
+3. CalendarEventsDB, RemindersDB, PushSubscriptionsDB, ReminderDefaultsDB classes pass unit tests
+4. Zod validation schemas reject invalid event and reminder payloads
+5. Service worker file exists at public/sw.js and registers without errors
+
+### Phase 30: Calendar Event CRUD API
+
+**Goal:** Full event create/read/update/delete API with recurrence support, testable independently before any UI.
+
+**Requirements:** EVNT-01, EVNT-02, EVNT-03, EVNT-04, EVNT-05, EVNT-06
+
+**Success criteria:**
+1. User can create an event with title, dates, times, location, description, category, and color via API
+2. User can create all-day events (no start/end time) via API
+3. User can edit and delete events via API
+4. Recurring events expand correctly for a date range query (daily, weekly, monthly, yearly with interval)
+5. Single-occurrence edits create exception records without affecting other occurrences
+
+### Phase 31: Calendar UI — Month View & Navigation
+
+**Goal:** First visible calendar page with month grid, sidebar with mini-cal and layer toggles, and core navigation.
+
+**Requirements:** VIEW-01, VIEW-04, VIEW-05, VIEW-06, VIEW-09, VIEW-10, VIEW-11
+
+**Success criteria:**
+1. User can see a monthly calendar grid with day cells showing event chips and "+N more" overflow
+2. User can switch between Day/Week/Month views via header toggle
+3. User can navigate previous/next month and jump to today
+4. Left sidebar shows mini month picker for quick date navigation
+5. Calendar uses BetterR.Me design tokens and defaults to Week on desktop, Day on mobile
+
+### Phase 32: Calendar UI — Week & Day Views
+
+**Goal:** Time grid views with hourly rows, quick-create interactions, current time indicator, and keyboard shortcuts.
+
+**Requirements:** VIEW-02, VIEW-03, VIEW-07, VIEW-08, VIEW-12, EVNT-07, EVNT-08, EVNT-09, EVNT-10
+
+**Success criteria:**
+1. User can see a weekly time grid with 7 day columns and hourly rows with events as colored blocks
+2. User can see a daily time grid with full-width events and a current time indicator (teal line)
+3. All-day events render in a dedicated row above the time grid
+4. User can quick-create events by clicking a time slot or click-and-dragging a range
+5. Keyboard shortcuts work: D/W/M (views), T (today), arrows (navigate), C (quick-create), N (new event), / (search), Esc (close)
+
+### Phase 33: Cross-Domain Feed Aggregation
+
+**Goal:** Unified feed API returning tasks, habits, bills, and workouts on the calendar with inline actions.
+
+**Requirements:** AGGR-01, AGGR-02, AGGR-03, AGGR-04, AGGR-05, AGGR-06, AGGR-07, AGGR-08, AGGR-09, AGGR-10, AGGR-11
+
+**Success criteria:**
+1. `/api/calendar/feed` returns all domain items (events, tasks, habits, bills, workouts) for a date range
+2. Each domain renders with its distinct color (teal/blue/amber/red/purple) and user can toggle visibility per domain
+3. User can complete/uncomplete tasks and toggle habit completion directly from the calendar
+4. User can mark bills as paid/dismissed and clicking a workout navigates to its detail page
+
+### Phase 34: Push Notification Infrastructure
+
+**Goal:** Web Push API integration with service worker, VAPID keys, subscription management, and browser permission flow.
+
+**Requirements:** PUSH-01, PUSH-02, PUSH-03, PUSH-04, PUSH-05
+
+**Success criteria:**
+1. User can enable push notifications from settings and sees a browser permission prompt with in-app explainer
+2. Service worker receives push events and displays native browser notifications
+3. Clicking a notification navigates to the relevant item (event, task, habit, or bill)
+4. Push subscriptions are stored per-device and VAPID keys are configured via environment variables
+
+### Phase 35: Email Notification Infrastructure
+
+**Goal:** Resend integration with React Email templates for all reminder types, with unsubscribe support.
+
+**Requirements:** MAIL-01, MAIL-02, MAIL-03, MAIL-04
+
+**Success criteria:**
+1. User can enable email notifications from settings
+2. Email reminders are sent via Resend with distinct React Email templates per source type
+3. Every reminder email includes a working unsubscribe link
+4. Templates exist for event reminder, task due, habit nudge, and bill due
+
+### Phase 36: Reminder Cron, Preferences & Polish
+
+**Goal:** Cron-based reminder dispatch, smart defaults, quiet hours, user preferences, responsive mobile layout, and i18n.
+
+**Requirements:** REMN-01, REMN-02, REMN-03, REMN-04, REMN-05, REMN-06, REMN-07, REMN-08, REMN-09, REMN-10, I18N-01, RESP-01, RESP-02, RESP-03
+
+**Success criteria:**
+1. User can add multiple reminders per event with relative (5m/15m/30m/1h/1d) or absolute timing, targeting push, email, or both
+2. Smart defaults auto-apply per source type and user can customize defaults in settings
+3. Quiet hours prevent push notifications during configured sleep window
+4. Vercel Cron dispatches pending reminders every minute with fire_at recomputation on reschedule
+5. All calendar/reminder strings are translated in en, zh, zh-TW; mobile layout has collapsed sidebar, day-view default with swipe, and floating action button
 
 ## Progress
 
@@ -114,6 +197,13 @@ Plans:
 | 24. Dashboard & AI Insights | v4.0 | 5/5 | Complete | 2026-02-24 |
 | 25. Data Management | v4.0 | 2/2 | Complete | 2026-02-24 |
 | 26. CSV Import & Polish | v4.0 | 3/3 | Complete | 2026-02-28 |
-| 27. Data Layer & Sync | v5.1 | 3/3 | Complete    | 2026-03-30 |
-| 28. Thumbnails in Existing UI | v5.1 | 2/2 | Complete | 2026-03-31 |
-| 29. Exercise Detail Page | v5.1 | 0/2 | Not started | - |
+| 27. Data Layer & Sync | v5.1 | 1/3 | Complete    | 2026-03-30 |
+| 28. Thumbnails in Existing UI | v5.1 | 1/2 | Executing | — |
+| 29. Database Schema & Infrastructure | v6.0 | 0/? | Not started | — |
+| 30. Calendar Event CRUD API | v6.0 | 0/? | Not started | — |
+| 31. Calendar UI — Month View | v6.0 | 0/? | Not started | — |
+| 32. Calendar UI — Week & Day Views | v6.0 | 0/? | Not started | — |
+| 33. Cross-Domain Feed Aggregation | v6.0 | 0/? | Not started | — |
+| 34. Push Notification Infrastructure | v6.0 | 0/? | Not started | — |
+| 35. Email Notification Infrastructure | v6.0 | 0/? | Not started | — |
+| 36. Reminder Cron & Preferences | v6.0 | 0/? | Not started | — |

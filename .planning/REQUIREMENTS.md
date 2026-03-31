@@ -120,7 +120,14 @@
 
 | Phase | Requirements |
 |-------|-------------|
-| (filled by roadmapper) | |
+| 29 — Database Schema & Infrastructure Foundation | INFR-01, INFR-02, INFR-03, INFR-04, INFR-05, INFR-06, INFR-07, INFR-08 |
+| 30 — Calendar Event CRUD API | EVNT-01, EVNT-02, EVNT-03, EVNT-04, EVNT-05, EVNT-06 |
+| 31 — Calendar UI — Month View & Navigation | VIEW-01, VIEW-04, VIEW-05, VIEW-06, VIEW-09, VIEW-10, VIEW-11 |
+| 32 — Calendar UI — Week & Day Views | VIEW-02, VIEW-03, VIEW-07, VIEW-08, VIEW-12, EVNT-07, EVNT-08, EVNT-09, EVNT-10 |
+| 33 — Cross-Domain Feed Aggregation | AGGR-01, AGGR-02, AGGR-03, AGGR-04, AGGR-05, AGGR-06, AGGR-07, AGGR-08, AGGR-09, AGGR-10, AGGR-11 |
+| 34 — Push Notification Infrastructure | PUSH-01, PUSH-02, PUSH-03, PUSH-04, PUSH-05 |
+| 35 — Email Notification Infrastructure | MAIL-01, MAIL-02, MAIL-03, MAIL-04 |
+| 36 — Reminder Cron, Preferences & Polish | REMN-01, REMN-02, REMN-03, REMN-04, REMN-05, REMN-06, REMN-07, REMN-08, REMN-09, REMN-10, I18N-01, RESP-01, RESP-02, RESP-03 | |
 
 ---
 *v6.0 Calendar & Reminder Notifications*

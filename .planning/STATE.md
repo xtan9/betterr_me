@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v6.0
 milestone_name: Calendar & Reminder Notifications
-status: defining_requirements
+status: roadmap_defined
 stopped_at: null
-last_updated: "2026-03-30T22:00:00.000Z"
-last_activity: 2026-03-30 -- Milestone v6.0 started
+last_updated: "2026-03-30T23:00:00.000Z"
+last_activity: 2026-03-30 -- Roadmap defined for v6.0 (Phases 29-36)
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Defining requirements for v6.0 Calendar & Reminder Notifications
+**Current focus:** v6.0 Calendar & Reminder Notifications — Phase 29 (Database Schema & Infrastructure Foundation)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-30 — Milestone v6.0 started
+Phase: 29 — Database Schema & Infrastructure Foundation
+Plan: Not yet planned
+Status: Roadmap defined, ready to plan Phase 29
+Last activity: 2026-03-30 — Roadmap defined for v6.0 (Phases 29-36, 57 requirements)
 
-Progress: [█████░░░░░] 50%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
