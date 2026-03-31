@@ -1,183 +1,203 @@
 # Feature Landscape
 
-**Domain:** Personal finance management added to an existing habit/task tracking app (BetterR.Me v4.0)
-**Researched:** 2026-02-21
+**Domain:** Calendar/scheduling domain with push + email reminder notifications added to existing BetterR.Me app (v6.0)
+**Researched:** 2026-03-30
 **Overall confidence:** HIGH
 
-Research adapted from standalone moneyy.me feature research (2026-02-20), competitor analysis (Monarch Money, YNAB, Copilot Money, Honeydue, Rocket Money, PocketGuard), and Plaid integration documentation. Adjusted for the reality that this is a feature module within an existing app, not a standalone finance product.
+Research based on the design spec (`docs/superpowers/specs/2026-03-30-calendar-reminders-design.md`), analysis of existing BetterR.Me domains (habits, tasks, journal, money, workouts), and competitive landscape of personal productivity calendar/notification features (Google Calendar, Todoist, Notion Calendar, Fantastical, Apple Calendar, Any.do, TickTick).
 
 ---
 
 ## Context: What Exists Today
 
-BetterR.Me is a working habit tracking and task management app with:
+BetterR.Me is a personal productivity + finance web app (77,070+ LOC TypeScript) with:
 
-- **Auth:** Email/password signup, login, logout (Supabase Auth) -- single-user per account
-- **Dashboard:** Habits overview with streaks, tasks due today/tomorrow, milestones
-- **Habits:** Create/edit/delete with 5 frequency types, daily completion tracking, streaks, monthly stats
-- **Tasks:** Work/Personal sections, named projects with color presets, 4-column kanban boards, drag-and-drop, recurring tasks
-- **Settings:** Profile (name, avatar), preferences (week start day, theme, locale)
-- **Data export:** Habit data as ZIP
-- **i18n:** Three locales (en, zh, zh-TW) using next-intl
-- **UI:** shadcn/ui + Radix + Tailwind CSS 3, dark mode via next-themes, semantic design tokens
-- **Data layer:** Supabase (Postgres + auth), SWR for client data fetching, DB class pattern with per-request client instances
-- **Testing:** 1207+ tests (Vitest + Playwright), 50% coverage threshold
+- **Habits:** Daily/weekdays/weekly/times_per_week/custom frequency tracking, heatmap calendar, streaks, milestones, `shouldTrackOnDate()` utility
+- **Tasks:** Work/Personal sections, projects, 4-column kanban, recurring tasks with `RecurrenceRule` discriminated union, `due_date` + `due_time` fields
+- **Journal:** Calendar view, mood tracking, entry links
+- **Money:** Plaid bank connections, transactions, budgets, bill calendar with `next_due_date`, recurring bills auto-detection, savings goals, net worth
+- **Workouts:** Exercise logging, routines, PRs, `created_at` timestamp per workout
+- **Dashboard:** Aggregates habits, tasks, money summary into a unified view
+- **Infrastructure:** Supabase (Postgres + Auth + Vault), SWR, next-intl (3 locales), dark mode, Vercel Cron, `RecurrenceRule` type system, design tokens
 
-The v4.0 milestone adds an entirely new product domain -- personal finance -- alongside the existing habit and task domains.
+### Key Integration Points for Calendar + Notifications
 
-### Key Integration Points
-
-| Existing System | How Money Features Touch It |
+| Existing System | How Calendar/Notifications Touch It |
 |---|---|
-| **Sidebar navigation** | Add "Money" nav item (or sub-items) to the 3-item flat nav (Dashboard, Habits, Tasks) |
-| **Dashboard** | Either extend existing dashboard with a money summary card, or create a separate Money Dashboard page |
-| **User profile (profiles table)** | Add money-related preferences (currency, default view, household_id) |
-| **Supabase Auth** | Reuse existing auth for money features; add household/couples invitation flow |
-| **SWR data fetching** | Extend pattern to money endpoints with appropriate stale times |
-| **i18n (3 locales)** | All money UI strings must exist in en, zh, zh-TW |
-| **Design tokens** | Money views use existing tokens + "Calm Finance" palette additions |
-| **API route pattern** | Money API routes follow same try/catch + Zod validation + DB class pattern |
-| **Test infrastructure** | Money features need Vitest unit tests + Playwright e2e, same mocking patterns |
+| **Tasks (`due_date`, `due_time`)** | Tasks with due dates appear on calendar. Inline checkbox toggles `is_completed`. Reminder on task due time. |
+| **Habits (`shouldTrackOnDate()`)** | Active habits scheduled for a given day appear in all-day row. Inline toggle creates/removes `HabitLog`. Daily reminder nudge. |
+| **Bills (`next_due_date`, `RecurringBillsDB`)** | Bills with due dates appear in all-day row. Click marks paid/dismissed. Bill due reminder (3 days before default). |
+| **Workouts (`created_at`)** | Logged workouts appear at their start time. Click navigates to workout detail. No reminder (retrospective data). |
+| **Journal** | Not aggregated on calendar (journal entries are reflective, not scheduled). Could show mood dots on day cells in future. |
+| **RecurrenceRule type** | Reused directly for calendar event recurrence. Same `DailyRule`, `WeeklyRule`, `MonthlyByDateRule`, `MonthlyByWeekdayRule`, `YearlyRule` discriminated union. Zero new recurrence logic needed. |
+| **Recurring tasks pattern** | `recurring_event_id` + `is_exception` + `original_date` pattern for "edit this occurrence only" is identical to existing recurring task architecture. |
+| **Categories table** | Calendar events use same `category_id` FK. Reuse existing user-defined categories with colors. |
+| **Supabase Auth + RLS** | Calendar events and reminders scoped by `user_id`. RLS policies follow existing pattern. |
+| **SWR data fetching** | Calendar feed uses SWR with date range in key. `keepPreviousData: true` for smooth navigation. |
+| **Vercel Cron** | Reminder delivery cron (every minute) follows same pattern as Plaid sync cron. |
+| **Design tokens** | Calendar uses existing tokens. Domain color-coding uses existing semantic colors (teal, blue, amber, red) + new purple for workouts. |
+| **Sidebar navigation** | Add "Calendar" nav item. Current sidebar: Dashboard, Habits, Tasks, Projects, Journal, Workouts, Money. |
+| **i18n (3 locales)** | All calendar + reminder strings in en, zh, zh-TW. |
 
 ---
 
 ## Table Stakes
 
-Features users expect once BetterR.Me claims to offer money tracking. Missing any of these makes the finance section feel broken.
+Features users expect once BetterR.Me claims to offer a calendar. Missing any of these makes the calendar feel broken or incomplete.
 
 | Feature | Why Expected | Complexity | Dependencies on Existing App | Notes |
 |---------|--------------|------------|------------------------------|-------|
-| **Plaid bank account connection** | Every modern finance tool syncs automatically. Manual-only feels broken in 2026. Core data pipeline for everything else. | HIGH | Reuse Supabase Auth user_id. New plaid_items, accounts tables. New API routes for link-token and exchange-token. | Plaid free tier = 200 Items. OAuth required for major banks. Need webhook endpoint on Vercel. Cost: ~$0.30-$1.50/connected-account/month at scale. |
-| **Transaction list with search and filter** | Core interaction loop. Users must find, review, and understand their spending. This is the "home screen" of the money section. | MEDIUM | New `/money/transactions` page. SWR for client-side pagination. Reuse existing page layout patterns (sidebar-layout). | Date range, amount range, category, account, keyword search. Cursor-based pagination (not OFFSET) because transaction tables grow fast. |
-| **Auto-categorization with manual override** | Mint trained a generation to expect this. Without it, users categorize hundreds of transactions by hand and abandon the product. | MEDIUM | Depends on Plaid transaction data being present. New categories table (system defaults + user custom). | Use Plaid PFCv2 (shipped Dec 2025, claims >90% primary accuracy) as base. Build merchant-name rule system: user corrects "AMZN MKTP US" to Shopping, all future AMZN MKTP US auto-categorize. No custom ML in v4.0. |
-| **Custom categories** | Auto-categorization is never perfect. Users need "Dining Out" separate from "Groceries", or domain-specific categories like "Dog expenses." | LOW | New user_categories table with household_id scoping. | Allow creation + editing. System categories cannot be deleted, only hidden. Custom categories are household-scoped (shared between partners). |
-| **Monthly budgets per category with progress bars** | Core budgeting loop. YNAB, Monarch, Copilot all have this. Without budgets, transaction data has no context. | MEDIUM | Depends on working categorization. New budgets table. New `/money/budgets` page. | Show spent vs. remaining per category. Support rollover (unused budget carries to next month) as a per-budget toggle. Budget period = calendar month. |
-| **Spending breakdown charts** | The primary "aha moment" -- visual spending by category is what convinces users the tool is valuable. Every competitor has this. | MEDIUM | Depends on categorized transactions. Chart library needed (recharts or similar). Reuse existing Tailwind/shadcn styling. | Donut chart by category. Bar chart over time. Category drill-down to individual transactions. Month-over-month comparison. Compute server-side (SQL aggregations), not client-side. |
-| **Bill and subscription auto-detection** | Rocket Money popularized this. Monarch, Copilot, Simplifi all detect recurring charges. Users expect to see "Netflix $15.99/mo" without manually entering it. | MEDIUM | Depends on 2-3 months of transaction history for pattern detection. Algorithm runs server-side after each sync. | Detect recurring charges by merchant name + similar amount + regular interval. Show due dates, amounts, frequency. Start detection after ~60 days of data. False positive handling: user can dismiss/confirm detected bills. |
-| **Savings goals with progress** | Monarch, Copilot, YNAB all have goals. Users want to save for a vacation, emergency fund, or down payment and see progress. | MEDIUM | New goals table. Optional link to specific account balance. New `/money/goals` page. | Target amount + optional deadline. Visual progress bar/ring. "At current pace, you'll reach this by [date]" projection. Goals can be individual or shared (household). |
-| **Net worth tracking** | Once accounts are connected, summing assets minus liabilities is trivial and expected. Monarch, Copilot, Fina all show this. | LOW | Depends on connected accounts with balance data. Simple aggregation. | Sum all account balances (checking + savings + investment = assets; credit cards + loans = liabilities). Track over time with a line chart. Updates automatically on each Plaid sync. |
-| **CSV/manual transaction import** | Fallback for institutions Plaid doesn't cover. Critical for users uncomfortable connecting banks. Also the free-tier-friendly path (no Plaid cost per user). | MEDIUM | New import flow in UI. Duplicate detection against existing transactions. Reuse existing data-export component patterns. | CSV column mapping with auto-detect for common formats (Mint export, bank CSV). Manual single-transaction entry form for cash purchases. Source field on transactions: 'plaid' vs 'manual' vs 'csv'. |
-| **Account management page** | Users need to see which accounts are connected, their balances, sync status, and the ability to disconnect. | LOW | New `/money/accounts` page. Reads from accounts + plaid_items tables. | Show: institution name, account mask (last 4 digits), type, balance, last sync time, health status. Actions: disconnect, re-authenticate (Plaid Update Mode), manual refresh. |
-| **Money section in sidebar** | Users need to navigate to money features. Current sidebar has Dashboard, Habits, Tasks. Money needs its own entry point. | LOW | Modify `app-sidebar.tsx` to add money nav items. Add i18n keys. | Single "Money" top-level nav item expanding to sub-pages (Overview, Transactions, Budgets, etc.) or just a Money link leading to a money dashboard with sub-navigation. |
-| **Data export for transactions** | Users must own their data. BetterR.Me already exports habit data as ZIP; transaction export follows naturally. | LOW | Extend existing export infrastructure (`lib/export/`). Add money data to export options. | CSV export of transactions with all fields. Period selectable. Include categories and account names. |
+| **Month view with day cells** | The mental model of "calendar" starts with a month grid. Every calendar app has this. Users need the big picture. | MEDIUM | None new. Render `CalendarItem[]` from feed API into day cells. | Max 3-4 visible items per cell with "+N more" overflow. Click day drills into Day view. Week numbers optional. |
+| **Week view with time grid** | The primary working view for scheduling. Google Calendar, Outlook, Fantastical all default to week view on desktop. Where events get placed on a timeline. | HIGH | None new. Time grid renders timed events as positioned blocks. All-day row for untimed items. | 7-column grid with hourly rows. Current time indicator (teal line). Event blocks with left border accent. This is the most complex UI component. |
+| **Day view** | Mobile-first view. Single column time grid. Essential for detailed daily planning. | MEDIUM | Shares time grid component with week view. | Default on mobile. Full-width events. Swipe navigation on touch devices. |
+| **Standalone event CRUD** | Users need to create events that are not tasks, habits, or bills. Meetings, appointments, personal plans. Without this, it is just an aggregation viewer. | MEDIUM | Reuses `categories` table for `category_id`. New `calendar_events` table + `CalendarEventsDB`. New Zod validation schema. | Title, date/time, location, description, category, color override, recurrence. Same API route pattern as all other domains. |
+| **Event recurrence** | Repeating events (weekly meeting, monthly dinner) are fundamental. Every calendar app supports this. | LOW | Reuses existing `RecurrenceRule` discriminated union from `lib/db/types.ts`. Same expansion logic as recurring tasks. | Same `is_recurring` + `recurrence_rule` JSONB + `end_type` pattern. Same "edit this / edit all" exception handling. Near-zero new logic. |
+| **Cross-domain aggregation** | The entire value proposition of a calendar in BetterR.Me. Users already track tasks, habits, bills, and workouts. Showing them on a timeline is the minimum justification for building a calendar. | MEDIUM | Depends on existing DB classes: `TasksDB`, `HabitsDB`/`HabitLogsDB`, `RecurringBillsDB`, `WorkoutsDB`. Unified feed API queries all in parallel. | Feed endpoint: `GET /api/calendar/feed?start=YYYY-MM-DD&end=YYYY-MM-DD`. Returns `CalendarItem[]` with `source` discriminator. Each domain maps to a color. |
+| **Domain color coding** | Users need to visually distinguish what type of item they are looking at. Google Calendar uses calendar colors. BetterR.Me needs domain colors. | LOW | Reuses existing design tokens (teal=events, blue=tasks, amber=habits, red=bills, purple=workouts). | Consistent dot + background fill pattern. Matches existing color language from other views. |
+| **Layer toggles (show/hide domains)** | Users may want to see only tasks, or only events, without the noise of habits and bills. Every multi-calendar app has this. | LOW | Client-side filter on the SWR-fetched `CalendarItem[]`. No API change needed. | Sidebar checkboxes (desktop) or dropdown filters (mobile). State persisted in localStorage or user preferences. |
+| **Navigation (prev/next, today button)** | Users must move through time. "Today" button is expected. Arrow navigation is expected. Every calendar has this. | LOW | None. Pure UI state management (current date + view type). | Keyboard shortcuts: `T` for today, arrows for prev/next. View switcher: `D`/`W`/`M` keys. |
+| **All-day events** | Events without a specific time (birthdays, deadlines, habits). Rendered in a separate row above the time grid. | LOW | Habits and bills are inherently all-day. Tasks without `due_time` are all-day. Events with `start_time: null` are all-day. | All-day row at top of day/week view. Compact chip rendering. |
+| **Quick-create from time slot click** | Clicking an empty time slot to create an event is the most intuitive creation pattern. Google Calendar, Outlook, Fantastical all do this. | MEDIUM | Depends on event CRUD being built. Pre-fills date/time from click position. | Popover with title input, pre-filled time, Enter to save. "More options" expands to full dialog. |
+| **Push notification for reminders** | The core reason notifications exist. Users set a reminder, they expect to be notified. Web Push is the web-native approach. | HIGH | New infrastructure: service worker (`public/sw.js`), VAPID keys, `push_subscriptions` table, `PushSubscriptionsDB`. Browser permission flow. | Web Push API + service worker. Works on desktop browsers and Android Chrome. Does NOT work on iOS Safari without PWA installation (platform limitation). |
+| **Reminder creation per event/task/bill** | Users must be able to set "remind me 15 minutes before" on individual items. This is the basic reminder UX. | MEDIUM | New `reminders` table + `RemindersDB`. `fire_at` pre-computation for efficient cron queries. | Multiple reminders per item. Relative (15 min before, 1 hour before) or absolute (specific time). Default channel: push. |
+| **Cron-based reminder delivery** | Reminders must actually fire at the right time. Vercel Cron running every minute checks `WHERE fire_at <= NOW() AND status = 'pending'`. | MEDIUM | Follows existing Vercel Cron pattern from Plaid sync. New `api/cron/send-reminders/route.ts`. | Must handle: multiple reminders due at once, multiple push subscriptions per user, failure/retry logic. |
+| **Reminder defaults per domain** | Users should not have to set reminders manually for every task and habit. Smart defaults (15 min before events, 1 hour before tasks, etc.) reduce friction. | LOW | New `reminder_defaults` table + `ReminderDefaultsDB`. System defaults as fallback. | Per source type: calendar_event (15 min), task (1 hour), habit (8 AM), bill (3 days). User can override in settings. |
+| **Responsive layout** | Calendar must work on mobile. Day view default on small screens. No sidebar on mobile. | MEDIUM | Follows existing responsive patterns (sidebar collapses to icon-rail on tablet, hidden on mobile). | Desktop: sidebar + full week grid. Tablet: icon-rail + 5-day week. Mobile: no sidebar, day view, FAB for new event, swipe navigation. |
 
 ---
 
 ## Differentiators
 
-Features that set BetterR.Me apart. Not expected in a finance module, but high-value. Aligned with "Calm Finance" philosophy and couples-first positioning from the moneyy.me vision.
+Features that set BetterR.Me's calendar apart from standalone calendar apps. Not expected in a basic calendar, but high-value given the app's multi-domain nature.
 
 | Feature | Value Proposition | Complexity | Dependencies on Existing App | Notes |
 |---------|-------------------|------------|------------------------------|-------|
-| **Couples/household multi-user** | Honeydue is the only couples-first finance app and it is feature-weak (no desktop, poor auto-categorization). Monarch bolts couples on. Copilot has no partner support. Ground-up household architecture is the core differentiator of this entire feature set. | HIGH | Requires household_id on ALL money tables. New households table. Invitation flow (email). Two separate Supabase Auth users linked by household_id. Existing BetterR.Me features (habits, tasks) remain single-user -- household only applies to money. | Each partner has own login. Shared household view for combined spending/budgets/net-worth. Per-account privacy: "mine" (only I see), "ours" (both see), "hidden" (partner sees balance only). Individual + shared budgets. Partner 1 can use the app solo; Partner 2 joins asynchronously. |
-| **Future-first dashboard** | No competitor defaults to forward-looking. All show "where money went." Answering "Am I going to be okay this month?" is genuinely novel. | HIGH | Depends on: bill detection (recurring outflows), income detection (recurring inflows), projection engine (extrapolate spending pace). New `/money` overview page replacing or augmenting the standard dashboard. | Show: available money until next paycheck, upcoming bills for next 30 days, projected end-of-month balance. Calendar-based cash flow visualization. This is the signature feature -- the money "home page" should default to this. |
-| **Contextual AI insights (not a chatbot)** | Monarch/Copilot added chatbot-style AI. Surface-level. Proactive insights woven into the UI are more valuable: they appear where relevant, not in a separate chat window. | HIGH | Depends on: sufficient transaction history (2+ months), working categorization, spending trend data. LLM API calls (OpenAI/Anthropic) for natural language generation. | Examples: "Your grocery spending is up 15% vs your 3-month average" on the spending chart. "This Netflix subscription increased $3 since last year" on the bills page. "At your current savings rate, you'll hit your vacation goal 2 weeks early" on the goals page. Embedded, not chatbot. |
-| **"Calm Finance" design language** | No competitor explicitly addresses financial anxiety in their design. Red/green color coding and deficit-focused language trigger stress. This is a UX differentiator, not a feature. | MEDIUM | Extend existing BetterR.Me design tokens with Calm Finance palette. Add new semantic tokens for money views. All money UI components follow these principles. | Warm amber/slate instead of aggressive red/green for over/under-budget. Forward-looking language: "You have $X remaining" not "You overspent by $X." Progress framing: "You've saved 60% of your goal" not "You still need $Y." Gentle notifications. This applies across ALL money UI, not a single component. |
-| **Smart bill calendar** | Beyond listing upcoming bills: a calendar view with projected balance overlaid, highlighting days where balance dips dangerously low. Combines bill tracking + cash flow. | MEDIUM | Depends on: bill detection, future-first projection engine. Calendar UI component. | Calendar with bill markers. Balance projection line drawn across the month. "Danger zone" highlighting when projected balance drops below a configurable threshold. This is the visual form of the future-first dashboard concept. |
-| **Integrated life dashboard** | BetterR.Me uniquely combines habits + tasks + money. No competitor has all three. A unified dashboard showing "habits on track, tasks due today, money healthy" is genuinely novel. | MEDIUM | Extends existing dashboard with money summary card(s). Reuse DashboardData pattern with money fields. | Existing dashboard shows habits + tasks. Add a money summary: available balance, upcoming bills, budget status. Not a replacement -- an augmentation. The full money dashboard is a separate page; the integrated dashboard shows highlights. |
-| **Partner spending comparisons** | Unique to couples apps. "You spent $X on dining, your partner spent $Y" with neutral, informational framing (not competitive). | LOW | Depends on: couples household, categorized transactions. Simple query grouping by user_id within household. | Side-by-side category breakdowns. Neutral tone aligned with Calm Finance. Only available in household view, not individual view. |
-| **Anxiety-aware onboarding** | Finance apps throw users into a full dashboard immediately. Step-by-step, one-thing-at-a-time onboarding that shows value before asking for bank credentials. | MEDIUM | New onboarding flow for money features. Could be a guided wizard or progressive disclosure. | "Connect one account first" then "Here's your spending breakdown" then "Want to set a budget?" then "Invite your partner." Each step demonstrates value before requesting more. |
+| **Unified life-on-a-timeline view** | No other app shows habits, tasks, bills, workouts, AND calendar events on a single timeline. Google Calendar shows only events. Todoist shows only tasks. BetterR.Me uniquely has all five domains. This is the signature feature. | MEDIUM | All existing domain DB classes must expose date-range queries. The feed API orchestrates parallel queries. | The aggregation itself is moderate complexity. The value is the data already existing in the app -- users get this "for free" by having used BetterR.Me's other features. |
+| **Inline cross-domain actions** | Toggle a task complete, log a habit, mark a bill paid -- directly from the calendar without navigating away. Transforms the calendar from a viewer into a command center. | MEDIUM | Depends on existing mutation APIs: `PATCH /api/tasks/[id]`, `POST /api/habits/logs`, bill payment toggle. SWR optimistic updates on the calendar feed. | Each inline action calls the existing domain API and optimistically updates the calendar SWR cache. No new backend logic -- only new UI interaction handlers. |
+| **Email notification channel** | Push alone is insufficient -- users miss push notifications, browsers get closed, devices go silent. Email is the reliable fallback for important reminders (bill due in 3 days). | MEDIUM | New dependency: Resend or SendGrid for transactional email. Email templates per source type. Unsubscribe link compliance. | Bill reminders default to push + email. Event reminders default to push only. User can configure per-reminder. Sender: `reminders@betterr.me`. |
+| **Quiet hours** | Respect that users do not want push notifications at 2 AM. Configurable quiet window (e.g., 10 PM - 7 AM). Reminders during quiet hours are held until quiet hours end. | LOW | Extends `ProfilePreferences` with `quiet_hours_start` and `quiet_hours_end`. Cron checks quiet hours before sending. | Simple time-range check in the delivery pipeline. Deferred reminders get a new `fire_at` at quiet-hours-end. |
+| **Click-and-drag event creation** | Drag across a time range to create an event with duration pre-filled. Power user feature from Google Calendar and Fantastical. | HIGH | Depends on time grid being interactive. Mouse/touch event handling for drag selection. | Desktop-only (touch drag conflicts with scroll on mobile). Pre-fills start time and end time from the drag range. Opens quick-create popover. |
+| **Keyboard shortcuts** | `D`/`W`/`M` for views, `T` for today, arrows for navigation, `N` for new event, `C` for quick-create, `/` for search, `Esc` to close. Power user productivity. | LOW | Pure client-side key handler. No backend changes. | Follow existing app pattern (if any keyboard shortcuts exist). Use `useHotkeys` or similar. Ensure no conflicts with browser shortcuts. |
+| **Mini month picker in sidebar** | Quick date navigation without leaving the current view. Click any day in the mini calendar to jump there. Standard in Outlook and Google Calendar. | LOW | Pure UI component. Updates the calendar's current date state. | Small month grid in the left sidebar. Highlights current day and selected date range. Arrows to navigate months. |
+| **Snooze reminders** | When a push notification fires, "Snooze 10 min" action. Creates a new reminder with adjusted `fire_at`. Useful for "not right now but don't forget." | LOW | Extends reminder `status` to include `snoozed`. Service worker notification action button. New snooze API endpoint. | Snooze durations: 5 min, 10 min, 1 hour. Creates a new pending reminder row. Original marked `snoozed`. |
+| **Notification click-through navigation** | Clicking a push notification navigates to the relevant item: calendar event opens calendar at that date, task opens task detail, bill opens money/bills. | LOW | Service worker `notificationclick` handler with action URL. Each reminder stores a `click_url` or computes it from `source_type` + `source_id`. | Standard Web Push pattern. URL mapping: `event` -> `/calendar?date=YYYY-MM-DD`, `task` -> `/tasks?id=UUID`, `habit` -> `/habits`, `bill` -> `/money/bills`. |
 
 ---
 
 ## Anti-Features
 
-Features to explicitly NOT build. Either wrong for BetterR.Me's context, premature, legally risky, or scope creep.
+Features to explicitly NOT build. Either premature, wrong for BetterR.Me's context, or scope creep that would delay the core calendar/notification value.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| **AI chatbot for financial advice** | SEC/FINRA compliance risk. LLM hallucinations with financial advice cause real harm. Liability exposure. Conflicts with the "contextual insights" differentiator. | Contextual AI insights embedded in the UI. Show what is happening and why. Never recommend specific financial actions. "Your utility bill spiked" not "You should switch providers." |
-| **Bill negotiation / cancellation service** | Rocket Money charges 35-60% of savings. Requires human agents or complex integrations. Legal liability. Not a software feature, it is a service business. | Surface the insight: "This subscription increased $3/month since you signed up." Let users act on it themselves. |
-| **Investment advisory / robo-advisor** | SEC/FINRA registration required. Different product category entirely. Massive compliance burden. | Read-only investment account tracking via Plaid. Show portfolio value and allocation for net worth. No buy/sell recommendations. |
-| **Real-time chat between partners** | Turns a finance tool into a messaging app. Massive scope (notifications, message storage, read receipts). Partners already have iMessage/WhatsApp. | Transaction commenting or emoji reactions. Shared notes on budget categories. Lightweight, asynchronous. |
-| **Gamification (streaks, badges, leaderboards for money)** | BetterR.Me has habit streaks, but applying gamification to finances conflicts with Calm Finance philosophy. "7-day spending streak!" creates anxiety. Financial competition between partners is toxic. | Gentle progress celebrations. "You're ahead of your savings goal this month." Milestone acknowledgments, not performance scores. Notably, habit streaks stay -- they make sense for habits, not money. |
-| **Multi-currency support** | Massive complexity: exchange rates, conversion timing, reporting currency, edge cases multiply with couples in different countries. | US-focused for v4.0. Plaid's US institution coverage is the constraint. Add later if demand warrants it. |
-| **Automatic bill payment / money movement** | Money transmitter licensing required. ACH integration complexity. Liability for failed/wrong payments. Entirely different risk profile from read-only finance tracking. | Bill reminders and due date alerts. Link to pay at the biller's site. "Your electric bill of $127 is due in 3 days." |
-| **Social features / financial community** | Privacy nightmare. Financial comparison triggers anxiety. Moderation burden. | None. Possibly anonymous aggregated benchmarks in far future: "Households like yours typically spend X on groceries." |
-| **Native mobile apps (iOS/Android)** | Doubles development effort. BetterR.Me is web-only. PWA capabilities cover most mobile use cases. | Responsive web that feels native on mobile. Optimize for mobile Safari and Chrome. Same approach as existing habit/task features. |
-| **Separate "moneyy.me" branding/domain** | The original plan was a standalone app. But maintaining two codebases, two auth systems, two deployments is wasteful. BetterR.Me already has the infrastructure. | Money features live inside BetterR.Me as a first-class section alongside Habits and Tasks. Single codebase, single deployment, single auth. |
-| **Envelope budgeting (YNAB-style)** | "Give every dollar a job" methodology requires fundamentally different UX -- users assign income to categories before spending. High complexity, niche audience. Most users want category limits, not income allocation. | Standard category-limit budgeting. Set a target per category per month. Show progress. Support rollover. This is what Monarch, Copilot, and most competitors do. |
-| **Receipt scanning / OCR** | Monarch added this in 2026 but it is a specialized feature requiring camera integration, OCR pipeline, and transaction matching. Out of scope. | Manual transaction entry form for cash purchases not covered by Plaid. |
-| **Stripe/freemium billing** | PROJECT.md explicitly states: "No billing in v4.0." Build features first, validate them, add monetization in a future milestone. | All v4.0 features are free. Household sharing, AI insights, and unlimited accounts are natural future upgrade triggers. |
+| **Google Calendar / iCal sync** | Massive complexity: OAuth for Google, iCal parsing, two-way sync conflict resolution, real-time webhook subscriptions. This is a product in itself. Users will ask for it but it can wait. | Build a standalone calendar that is great on its own. Add import/sync in a future milestone once the core calendar is validated. Design spec already lists this as out of scope. |
+| **Drag-and-drop rescheduling on the grid** | Dragging an event to a new time slot requires complex hit-testing, snap-to-grid logic, recurring event handling ("move this or all?"), and undo support. High effort for a nice-to-have. | Edit event via click -> dialog -> change time. Functional and clear. Design spec already defers this. |
+| **Collaborative calendars / sharing** | BetterR.Me is a personal productivity app. Shared calendars require invitation flows, permission models, real-time sync, and conflict resolution. The money domain has household sharing, but calendar sharing is a different beast. | Personal calendar only. Household members see their own calendars. No shared event editing. |
+| **Natural language event creation** | "Lunch with Sarah tomorrow at noon" parsing requires NLP, timezone inference, and ambiguity resolution. Fun demo, hard to make reliable. | Structured form with pre-filled defaults from click context. Quick-create popover is fast enough. |
+| **Time analytics / "how I spent my week"** | Requires time tracking (start/end for every activity), which the calendar does not enforce. Events have durations, but habits and tasks do not. Incomplete data produces misleading analytics. | Show event count per domain as a simple stat. Full time analytics requires a dedicated time-tracking feature (future milestone). |
+| **Custom notification sounds** | Web Push API does not support custom sounds on most platforms. Browser-level limitation. Attempting to work around it adds complexity for no benefit. | Use the system default notification sound. |
+| **In-app notification center / inbox** | A bell icon with a feed of past notifications adds a persistent UI element, read/unread state, pagination, and cleanup logic. Overengineered for a personal app where push + email suffice. | Reminders fire via push and email. No in-app feed. If a user misses a notification, the item is still visible on the calendar. |
+| **SMS notifications** | Requires Twilio or similar, per-message cost, phone number verification, compliance with SMS regulations (opt-in, STOP handling). Expensive and complex for minimal benefit over push + email. | Push (instant, free) + email (reliable, free via Resend free tier). |
+| **Calendar event attachments** | File upload, storage, preview -- significant scope for a feature that most personal calendars do not need. Google Calendar only recently added this. | Text description field and location field cover most use cases. Link to external files via URL in description. |
+| **Multi-day event spanning** | Events spanning multiple days (3-day conference) require complex rendering across day cells, split rendering in week view, and special handling in the all-day row. | Support multi-day via `start_date` != `end_date` in the data model (design spec includes `end_date`), but render as a single chip on the start date with a date range label. Full visual spanning is a future enhancement. |
+| **Recurring event bulk delete** | "Delete all future occurrences" requires cascading logic, exception cleanup, and careful UX. Edge cases multiply. | Support "delete this event" (single occurrence -> exception) and "delete all events" (delete parent + all exceptions). "Delete future only" deferred. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Supabase Auth (existing)] --------> [All money features]
-
-[New DB schema: households, plaid_items, accounts, transactions, categories, budgets, goals, bills]
+[Existing infrastructure (Auth, Supabase, SWR, Cron, Design Tokens, i18n)]
     |
-    +--> [Plaid Link integration] (connect bank accounts)
+    +--> [DB schema: calendar_events, reminders, push_subscriptions, reminder_defaults]
     |       |
-    |       +--> [Plaid webhook handler + transaction sync]
+    |       +--> [CalendarEventsDB + Zod validations]
+    |       |       |
+    |       |       +--> [Event CRUD API routes]
+    |       |       |       |
+    |       |       |       +--> [Event creation UI (quick-create + full dialog)]
+    |       |       |       +--> [Event recurrence (reuses RecurrenceRule)]
+    |       |       |       +--> [Recurring event exceptions ("edit this only")]
+    |       |       |
+    |       |       +--> [Calendar feed API] (also depends on existing domain DB classes)
+    |       |               |
+    |       |               +--> [Calendar UI views (Month, Week, Day)]
+    |       |               |       |
+    |       |               |       +--> [Domain color coding + layer toggles]
+    |       |               |       +--> [Inline cross-domain actions]
+    |       |               |       +--> [Navigation + keyboard shortcuts]
+    |       |               |       +--> [Responsive layout (desktop/tablet/mobile)]
+    |       |               |
+    |       |               +--> [Mini month picker in sidebar]
+    |       |
+    |       +--> [RemindersDB + fire_at computation]
+    |       |       |
+    |       |       +--> [Reminder creation UI (per event/task/bill)]
+    |       |       +--> [Reminder defaults per domain]
+    |       |       +--> [Cron job: send-reminders (every minute)]
+    |       |               |
+    |       |               +--> [Push delivery] (depends on push_subscriptions)
+    |       |               +--> [Email delivery] (depends on Resend/SendGrid)
+    |       |               +--> [Quiet hours enforcement]
+    |       |
+    |       +--> [PushSubscriptionsDB + VAPID keys + service worker]
+    |       |       |
+    |       |       +--> [Browser permission flow UI]
+    |       |       +--> [Push subscription registration]
+    |       |       +--> [Notification click-through navigation]
+    |       |       +--> [Snooze action on notifications]
+    |       |
+    |       +--> [ReminderDefaultsDB]
     |               |
-    |               +--> [Transaction list with search/filter]
-    |               |       |
-    |               |       +--> [Auto-categorization (Plaid PFCv2 + merchant rules)]
-    |               |       |       |
-    |               |       |       +--> [Monthly budgets per category]
-    |               |       |       |       |
-    |               |       |       |       +--> [Budget progress tracking + charts]
-    |               |       |       |       +--> [Spending breakdown charts]
-    |               |       |       |
-    |               |       |       +--> [Spending trends / reports]
-    |               |       |
-    |               |       +--> [Bill & subscription auto-detection]
-    |               |       |       |
-    |               |       |       +--> [Bill calendar & reminders]
-    |               |       |       +--> [Future-first dashboard] (also needs income detection)
-    |               |       |
-    |               |       +--> [Net worth tracking]
-    |               |
-    |               +--> [Account management page]
+    |               +--> [Reminder preferences settings page]
     |
-    +--> [CSV/manual import] (alternative data input, no Plaid dependency)
-    |       |
-    |       +--> [Same downstream: transaction list, categorization, budgets, etc.]
-    |
-    +--> [Household/couples multi-user]
-    |       |
-    |       +--> [Partner invitation flow]
-    |       +--> [Privacy controls (mine/theirs/ours per account)]
-    |       +--> [Shared + individual budgets]
-    |       +--> [Shared savings goals]
-    |       +--> [Partner spending comparisons]
-    |
-    +--> [Savings goals] (needs account balances OR manual tracking)
-
-[Auto-categorization] + [Spending trends] + [2+ months of data]
-    |
-    +--> [Contextual AI insights]
-
-[Bill detection] + [Income detection]
-    |
-    +--> [Cash flow projection engine]
-          |
-          +--> [Future-first dashboard]
-          +--> [Smart bill calendar with balance overlay]
-
-[Existing dashboard]
-    |
-    +--> [Money summary card on integrated dashboard] (needs account balances + budget status)
+    +--> [Existing DB classes queried by feed API]
+            |
+            +--> TasksDB.getTasksByDateRange() -- tasks with due_date in range
+            +--> HabitsDB + shouldTrackOnDate() -- habits active on each day
+            +--> HabitLogsDB -- check if habits are logged for inline status
+            +--> RecurringBillsDB -- bills with next_due_date in range
+            +--> WorkoutsDB -- workouts by created_at date
 ```
 
 ### Dependency Notes
 
-1. **DB schema is the foundation.** Everything depends on the money-specific tables existing. The schema must include `household_id` on every money table from the first migration -- retrofitting multi-tenancy is extremely painful.
+1. **RecurrenceRule reuse is the biggest win.** The existing `RecurrenceRule` discriminated union (`DailyRule`, `WeeklyRule`, `MonthlyByDateRule`, `MonthlyByWeekdayRule`, `YearlyRule`) with `EndType` and the `recurring_event_id` + `is_exception` + `original_date` exception pattern is directly reusable. This eliminates the highest-risk part of calendar event recurrence (the logic is already tested in recurring tasks).
 
-2. **Two parallel data input paths.** Plaid and CSV/manual import feed the same transaction table. The rest of the app should not care where a transaction came from. Design the `transactions` table with a `source` field ('plaid' | 'csv' | 'manual') but the downstream features (budgets, charts, bills) are source-agnostic.
+2. **The feed API is the integration linchpin.** It must query 5 domain DB classes in parallel and merge into a unified `CalendarItem[]`. Performance matters here -- querying a month of data across 5 tables must stay under ~200ms. Existing DB classes already support date-range queries for most domains.
 
-3. **Categorization unlocks the entire budgeting stack.** Without categorized transactions, budgets and spending charts require manual entry for every transaction, which kills engagement. Plaid PFCv2 + merchant rules is the minimum viable categorization.
+3. **Push notifications are a new infrastructure concern.** BetterR.Me has no service worker today. Adding one requires: VAPID key generation, `public/sw.js`, service worker registration in the app shell, `push_subscriptions` table, and the Web Push API send logic. This is the most "greenfield" part of the project.
 
-4. **Bill detection enables the future-first dashboard.** The signature differentiator requires detecting recurring outflows AND income patterns to project forward. This is why bill detection is table stakes but the dashboard is a differentiator.
+4. **Email delivery is a new external dependency.** Resend (or SendGrid) adds an API key, email templates, sender domain verification, and unsubscribe compliance. The Vercel Cron pattern for delivery is familiar (same as Plaid sync), but email-specific concerns (bounce handling, deliverability) are new.
 
-5. **Household must be in the schema from day one.** Even if the UI for couples is built in a later phase, every money table must have `household_id` from the first migration. Adding it retroactively requires migrating every row of every table.
+5. **Cron frequency matters.** The design spec calls for every-minute cron for reminder delivery. Vercel Cron's minimum interval is 1 minute, which works. But this means ~1440 cron invocations/day even when no reminders are pending. The query `WHERE fire_at <= NOW() AND status = 'pending'` must be indexed on `(fire_at, status)` for performance.
 
-6. **AI insights require data maturity.** Contextual insights are meaningless with only 2 weeks of transaction data. Ship this feature last, after users have accumulated 2+ months of history.
+6. **iOS Safari limitation.** Web Push does NOT work on iOS Safari unless the app is installed as a PWA (Add to Home Screen). This is a platform limitation, not a bug. Users on iOS Safari will only receive email reminders. This should be documented in the UI.
 
-7. **Existing features are unaffected.** Habits and tasks remain single-user. Household scope applies only to money tables. The existing `profiles` table gains a `household_id` FK but existing queries are unchanged.
+7. **Habit reminders need special handling.** Habits do not have a "start time" -- they are tracked as daily completions. The reminder for habits is a nudge at a fixed time (default 8 AM) rather than a "15 minutes before" relative reminder. The `fire_at` computation differs from events/tasks.
+
+8. **Existing domain queries may need extension.** `TasksDB` needs a `getTasksByDateRange(userId, start, end)` method if one does not exist. `WorkoutsDB` may need a similar range query. These are minor additions to existing DB classes.
+
+---
+
+## Complexity Assessment
+
+| Component | Complexity | Rationale |
+|-----------|------------|-----------|
+| **Week view time grid** | HIGH | Most complex UI component. 7-column grid with hourly rows, positioned event blocks, current time indicator, all-day row, overlapping event handling, click-to-create interaction. |
+| **Push notification infrastructure** | HIGH | New territory: service worker, VAPID keys, browser permission flow, subscription storage, Web Push send API. Multiple failure modes (permission denied, subscription expired, browser closed). |
+| **Feed aggregation API** | MEDIUM | 5 parallel DB queries, type-safe merge into `CalendarItem[]`, habit schedule expansion via `shouldTrackOnDate()`, date range handling. Performance-sensitive. |
+| **Event CRUD + recurrence** | LOW-MEDIUM | Recurrence logic is reused. CRUD follows existing patterns. Exception handling is a known pattern. The "low" is the logic; the "medium" is the UI for the full event dialog. |
+| **Email delivery pipeline** | MEDIUM | External service integration (Resend/SendGrid), email templates per source type, unsubscribe handling, bounce/failure tracking. |
+| **Cron reminder delivery** | MEDIUM | Query pending reminders, fan out to push + email channels, handle failures, update status. Follows existing Plaid sync cron pattern but with two delivery channels. |
+| **Month view** | MEDIUM | Standard month grid, but rendering compact chips per day, overflow handling ("+N more"), and drill-down to day view adds interaction complexity. |
+| **Day view** | LOW-MEDIUM | Single-column time grid. Shares components with week view. Simpler than week view but needs swipe navigation on mobile. |
+| **Reminder preferences UI** | LOW | Settings page with toggles and dropdowns. Per-domain default editing. Quiet hours time picker. Standard form. |
+| **Sidebar mini calendar + layer toggles** | LOW | Small month grid component, checkbox list for domain layers. Standard UI patterns. |
+| **Keyboard shortcuts** | LOW | Client-side key handler. Map keys to actions. No backend involvement. |
+| **Responsive layout** | MEDIUM | Three breakpoints (desktop/tablet/mobile) with different layouts. Mobile needs swipe, FAB, no sidebar. Tablet needs icon-rail. Following existing patterns helps. |
+
+**Overall estimate:** This milestone is comparable in scope to v4.0 Money Tracking. The calendar UI (especially the week view time grid) is the most complex single component. The notification infrastructure is the most "new" (no precedent in the codebase). But the aggregation layer benefits enormously from existing domain data and patterns.
 
 ---
 
@@ -185,135 +205,55 @@ Features to explicitly NOT build. Either wrong for BetterR.Me's context, prematu
 
 ### Navigation Structure
 
-Current sidebar: Dashboard | Habits | Tasks
+Current sidebar: Dashboard | Habits | Tasks | Projects | Journal | Workouts | Money
 
 Recommended addition:
 ```
-Dashboard    (existing -- add money summary card)
+Dashboard    (existing -- unchanged)
+Calendar     (NEW -- between Dashboard and Habits for prominence)
 Habits       (existing -- unchanged)
 Tasks        (existing -- unchanged)
-Money        (new top-level -- click to expand/navigate)
-  Overview   (future-first dashboard / money home)
-  Transactions
-  Budgets
-  Bills
-  Goals
-  Accounts
+Projects     (existing -- unchanged)
+Journal      (existing -- unchanged)
+Workouts     (existing -- unchanged)
+Money        (existing -- unchanged)
+Settings     (existing -- add Reminder Preferences section)
 ```
 
-The sidebar currently supports 3 items with badge counts. Adding "Money" as a 4th top-level item fits naturally. The sub-navigation within Money can be handled as secondary nav within the money layout (tab bar or left sub-nav), keeping the sidebar clean.
+Calendar should be high in the nav hierarchy because it is the unified view of all domains -- a natural "second home" after the dashboard.
 
 ### Dashboard Integration
 
-Two approaches, recommend both:
+The dashboard already aggregates habits and tasks. Calendar does NOT replace the dashboard -- it complements it:
 
-1. **Existing dashboard gets a money summary card** alongside habit and task cards. Shows: total available balance, budget status (on track / over in N categories), upcoming bills this week. This is low complexity and high value.
+- **Dashboard** = "What do I need to do today?" (habit checklist, task list, money summary)
+- **Calendar** = "What does my week/month look like?" (timeline view of all domains)
 
-2. **Money Overview page is the dedicated money dashboard** with the future-first view, detailed charts, and full financial picture. This is the full-featured money home.
+No changes to the existing dashboard are needed for v6.0. The calendar is an additional view, not a replacement.
 
 ### Shared UI Patterns
 
-| Pattern | Existing Usage | Money Usage |
+| Pattern | Existing Usage | Calendar Usage |
 |---|---|---|
-| Card grid layout | Habit cards, project cards | Account cards, budget category cards, goal cards |
-| Progress bars | Habit monthly completion rate | Budget spent/remaining, savings goal progress |
-| SWR + keepPreviousData | Habit/task data with date in key | Transaction data with date filters in key |
-| Zod validation at API boundary | All existing POST/PATCH routes | All money API routes (transactions, budgets, goals) |
-| DB class pattern | HabitsDB, TasksDB, ProjectsDB | TransactionsDB, BudgetsDB, AccountsDB, GoalsDB, BillsDB |
-| i18n message keys | common.nav, habits.*, tasks.* | money.* namespace for all money strings |
-| Design tokens | bg-card, text-muted-foreground, etc. | Same tokens + Calm Finance additions (warm amber for over-budget, muted green for healthy) |
+| SWR + keepPreviousData | Habit/task data with date in key | Calendar feed with date range in key |
+| Zod validation | All POST/PATCH routes | Event CRUD, reminder CRUD |
+| DB class pattern | HabitsDB, TasksDB, etc. | CalendarEventsDB, RemindersDB, PushSubscriptionsDB, ReminderDefaultsDB |
+| RecurrenceRule type | RecurringTasksDB | CalendarEventsDB (same type, same expansion logic) |
+| Exception pattern | `recurring_task_id` + `is_exception` | `recurring_event_id` + `is_exception` (identical) |
+| Design tokens | All existing views | Calendar views + domain color tokens |
+| Vercel Cron | Plaid sync cron job | Reminder delivery cron job |
+| i18n message keys | habits.*, tasks.*, money.* | calendar.*, reminders.* namespaces |
 
-### Data Layer Integration
+### Notification System is App-Wide
 
-Money features follow the exact same pattern as habits and tasks:
+The reminder/notification system is NOT calendar-specific. It serves all domains:
 
-```typescript
-// API route pattern (same as existing)
-export async function GET(request: NextRequest) {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+- Calendar events -> "Meeting in 15 minutes"
+- Tasks -> "Report due in 1 hour"
+- Habits -> "Time to meditate" (daily nudge)
+- Bills -> "Electric bill due in 3 days"
 
-    const transactionsDB = new TransactionsDB(supabase);
-    const transactions = await transactionsDB.getTransactions(user.household_id, filters);
-    return NextResponse.json(transactions);
-  } catch (error) {
-    console.error("Failed to fetch transactions:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
-```
-
-Key difference from existing patterns: money queries filter by `household_id` (from the user's profile), not `user_id` directly. This enables the couples/household feature.
-
----
-
-## MVP Recommendation
-
-Given that this is a feature addition to an existing app (not a standalone launch), the MVP should prioritize getting transaction data visible quickly and demonstrating value before adding complexity.
-
-### Phase 1: Schema + Plaid Pipeline + Accounts
-
-Minimum to get financial data flowing:
-
-1. Database migration: households, plaid_items, accounts, transactions, categories tables (all with household_id)
-2. Plaid Link integration: create-link-token, exchange-public-token, store encrypted access_token
-3. Plaid webhook receiver + transaction sync (Inngest or Vercel Cron for background processing)
-4. Account management page: see connected accounts, balances, sync status
-5. Sidebar navigation: add "Money" section
-6. CSV import as alternative data input (first-class, not afterthought)
-
-### Phase 2: Transactions + Categorization
-
-The core interaction loop:
-
-7. Transaction list page with search, filter, pagination
-8. Auto-categorization using Plaid PFCv2 + merchant-name rule system
-9. Manual category override (user corrections train future assignments)
-10. Custom category creation
-11. Spending breakdown charts (donut + bar)
-
-### Phase 3: Budgets + Bills + Goals
-
-The "management" layer:
-
-12. Monthly budgets per category with progress bars
-13. Budget rollover toggle
-14. Bill & subscription auto-detection from transaction patterns
-15. Bill list with due dates and amounts
-16. Savings goals with progress visualization
-17. Net worth tracking (aggregate account balances)
-
-### Phase 4: Household/Couples
-
-The differentiator:
-
-18. Household creation and partner invitation flow
-19. Per-account privacy controls (mine / ours / hidden)
-20. Shared household view (combined spending, budgets, net worth)
-21. Individual + shared budgets
-22. Shared savings goals
-
-### Phase 5: Intelligence + Future-First
-
-The advanced layer (requires data maturity):
-
-23. Income pattern detection
-24. Cash flow projection engine
-25. Future-first dashboard (money overview page)
-26. Smart bill calendar with balance overlay
-27. Contextual AI insights embedded in relevant pages
-28. Money summary card on existing dashboard
-
-### Defer to future milestones:
-
-- **Partner spending comparisons:** Needs mature couples usage first
-- **Advanced reporting:** Custom date ranges, YoY, tax categories
-- **Anxiety-aware onboarding wizard:** Optimize after watching real usage
-- **2FA / TOTP:** Add when user base grows
-- **Email notifications for bills/budgets:** Add after bill detection is reliable
-- **Stripe billing / freemium tier:** Separate milestone entirely
+This means the notification infrastructure (push subscriptions, cron delivery, email templates, preferences) benefits the entire app, not just the calendar feature. It is a horizontal platform capability.
 
 ---
 
@@ -321,89 +261,58 @@ The advanced layer (requires data maturity):
 
 | Feature | User Value | Implementation Cost | Priority | Phase |
 |---------|------------|---------------------|----------|-------|
-| DB schema with household_id | Foundation | MEDIUM | P0 | 1 |
-| Plaid bank connection | HIGH | HIGH | P1 | 1 |
-| CSV/manual import | HIGH | MEDIUM | P1 | 1 |
-| Transaction list + search | HIGH | MEDIUM | P1 | 2 |
-| Auto-categorization (Plaid PFCv2 + rules) | HIGH | MEDIUM | P1 | 2 |
-| Spending breakdown charts | HIGH | MEDIUM | P1 | 2 |
-| Monthly budgets per category | HIGH | MEDIUM | P1 | 3 |
-| Net worth tracking | MEDIUM | LOW | P1 | 3 |
-| Bill & subscription detection | HIGH | MEDIUM | P2 | 3 |
-| Savings goals + progress | MEDIUM | MEDIUM | P2 | 3 |
-| Account management page | MEDIUM | LOW | P1 | 1 |
-| Sidebar + money navigation | Foundation | LOW | P0 | 1 |
-| Custom categories | MEDIUM | LOW | P1 | 2 |
-| Couples/household multi-user | HIGH | HIGH | P2 | 4 |
-| Privacy controls (mine/ours/hidden) | MEDIUM | MEDIUM | P2 | 4 |
-| Data export (transactions CSV) | MEDIUM | LOW | P2 | 3 |
-| Future-first dashboard | HIGH | HIGH | P3 | 5 |
-| Contextual AI insights | HIGH | HIGH | P3 | 5 |
-| Smart bill calendar | MEDIUM | MEDIUM | P3 | 5 |
-| Dashboard money summary card | MEDIUM | LOW | P2 | 5 |
-| Calm Finance design tokens | MEDIUM (UX) | LOW | P1 | 1 |
+| DB schema (calendar_events, reminders, push_subscriptions, reminder_defaults) | Foundation | MEDIUM | P0 | 1 |
+| CalendarEventsDB + Zod validations | Foundation | LOW | P0 | 1 |
+| Event CRUD API routes | Foundation | LOW | P0 | 1 |
+| Calendar feed aggregation API | HIGH | MEDIUM | P0 | 1 |
+| Month view | HIGH | MEDIUM | P1 | 2 |
+| Week view with time grid | HIGH | HIGH | P1 | 2 |
+| Day view | HIGH | LOW-MEDIUM | P1 | 2 |
+| View switcher + navigation | HIGH | LOW | P1 | 2 |
+| Domain color coding | MEDIUM | LOW | P1 | 2 |
+| Event quick-create (click time slot) | HIGH | MEDIUM | P1 | 3 |
+| Full event creation/edit dialog | HIGH | MEDIUM | P1 | 3 |
+| Event recurrence (reuse RecurrenceRule) | MEDIUM | LOW | P1 | 3 |
+| Recurring event exceptions | MEDIUM | LOW | P1 | 3 |
+| Layer toggles (show/hide domains) | MEDIUM | LOW | P1 | 2 |
+| Inline cross-domain actions | HIGH | MEDIUM | P2 | 4 |
+| Mini month picker in sidebar | MEDIUM | LOW | P2 | 2 |
+| Responsive layout | HIGH | MEDIUM | P1 | 2 |
+| Keyboard shortcuts | LOW | LOW | P2 | 2 |
+| Service worker + VAPID + push subscriptions | Foundation | HIGH | P0 | 5 |
+| Push notification delivery | HIGH | HIGH | P1 | 5 |
+| Reminder creation per item | HIGH | MEDIUM | P1 | 5 |
+| Reminder defaults per domain | MEDIUM | LOW | P1 | 5 |
+| Cron-based reminder delivery | HIGH | MEDIUM | P1 | 5 |
+| Email notification delivery (Resend) | MEDIUM | MEDIUM | P2 | 5 |
+| Quiet hours | LOW | LOW | P2 | 6 |
+| Reminder preferences settings page | MEDIUM | LOW | P2 | 6 |
+| Snooze reminders | LOW | LOW | P3 | 6 |
+| Click-and-drag event creation | LOW | HIGH | P3 | Defer |
+| Sidebar + calendar navigation item | Foundation | LOW | P0 | 1 |
+| i18n calendar + reminder strings | Foundation | LOW | P0 | All |
+| All-day events | MEDIUM | LOW | P1 | 2 |
 
 **Priority key:**
 - P0: Foundation -- everything else depends on it
-- P1: Must have for the money feature to feel complete
+- P1: Must have for the calendar + notifications to feel complete
 - P2: Should have, adds significant value
-- P3: Differentiators, build after core is solid
+- P3: Nice-to-have, defer if timeline is tight
 
 ---
 
-## Calm Finance Design Principles (Cross-Cutting)
+## Risk Assessment
 
-These are not a feature -- they are constraints that apply to every money UI component.
-
-| Principle | Implementation | Example |
-|---|---|---|
-| **No aggressive red/green** | Use warm amber/ochre for over-budget, muted teal/sage for on-track. Leverage existing BetterR.Me design token system. | Budget progress bar: sage green when under 80%, warm amber when 80-100%, muted coral when over. Never bright red. |
-| **Forward-looking language** | UI copy emphasizes what's ahead, not what's behind. | "You have $340 remaining this month" not "You've spent $660 of your $1000 budget." |
-| **Progress framing** | Show how far you've come, not how far you have to go. | Savings goal: "You've saved 60% of your vacation fund!" not "You still need $2,000." |
-| **Gentle notifications** | No alarming language or urgent styling for financial alerts. | "Your grocery spending is trending higher than usual this month" not "WARNING: Budget exceeded!" |
-| **No financial judgment** | Especially in couples view -- never frame one partner's spending as "worse." | "Sarah: $120 dining. Alex: $80 dining." Not "Sarah spent 50% more than Alex on dining." |
-
----
-
-## Competitor Feature Gap Analysis (BetterR.Me Context)
-
-| Feature | Monarch ($15/mo) | YNAB ($15/mo) | Copilot ($13/mo) | Honeydue (Free) | BetterR.Me v4.0 |
-|---------|-------------------|---------------|-------------------|-----------------|-----------------|
-| Habits + Tasks + Money | No | No | No | No | **Yes -- unique** |
-| Bank sync | Yes | Yes | Yes | Yes | Yes (Plaid) |
-| Couples | Bolt-on | Shared budget only | No | Yes (primary) | Ground-up household |
-| Forward-looking dashboard | Spending forecast | "Age of money" | Cash flow chart | No | **Future-first (signature)** |
-| AI insights | Chatbot | No | AI suggestions | No | Contextual, embedded |
-| Calm/anxiety-aware design | No | No | No | No | **Yes (Calm Finance)** |
-| Free tier | No | No (trial only) | No (trial only) | Yes | Yes (no billing in v4.0) |
-| Web app | Yes | Yes | New in 2026 | No (mobile only) | Yes (web-first) |
-
-The unique positioning: **BetterR.Me is the only product that combines habit tracking, task management, and personal finance in one app with ground-up couples support, a forward-looking dashboard, and anxiety-aware design.**
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| **Week view time grid complexity** | HIGH | HIGH | Build incrementally: static render first, then click-to-create, then overlapping events. Consider existing open-source time grid components for reference. |
+| **iOS Safari push limitation** | CERTAIN | MEDIUM | Document in UI. Ensure email channel works well as fallback. Show "Install as app for push notifications" prompt on iOS. |
+| **Cron cost on Vercel** | LOW | LOW | Every-minute cron is within Vercel Pro limits. The query is indexed and fast when no reminders are pending. |
+| **Push subscription expiry** | MEDIUM | MEDIUM | Web Push subscriptions can expire silently. Handle `410 Gone` responses by removing stale subscriptions. Re-prompt on next visit if no active subscription. |
+| **Feed API performance** | MEDIUM | HIGH | 5 parallel DB queries must complete fast. Add database indexes on date columns. Consider caching strategy for month-view queries. Monitor with Vercel analytics. |
+| **Email deliverability** | LOW | MEDIUM | Use Resend with verified domain. Keep email volume low (personal app, not marketing). Include unsubscribe link. |
 
 ---
 
-## Sources
-
-### Competitor & Market Research (MEDIUM confidence -- web search, multiple sources corroborating)
-- [NerdWallet: Best Budget Apps 2026](https://www.nerdwallet.com/finance/learn/best-budget-apps)
-- [CNBC Select: Best Budgeting Apps 2026](https://www.cnbc.com/select/best-budgeting-apps/)
-- [Monarch Money: What's New](https://www.monarch.com/whats-new)
-- [FinanceBuzz: Monarch Money Review 2026](https://financebuzz.com/monarch-money-review)
-- [NerdWallet: Honeydue Review](https://www.nerdwallet.com/finance/learn/honeydue-app-review)
-- [U.S. News: Best Budget Apps for Couples](https://money.usnews.com/money/personal-finance/articles/best-budget-apps-for-couples)
-
-### Technical (HIGH confidence -- official documentation)
-- [Plaid Transactions Documentation](https://plaid.com/docs/transactions/)
-- [Plaid Link Overview](https://plaid.com/docs/link/)
-- [Plaid AI-Enhanced Transaction Categorization (PFCv2)](https://plaid.com/blog/ai-enhanced-transaction-categorization/)
-- [Plaid Pricing](https://plaid.com/pricing/)
-
-### Prior Research (HIGH confidence -- direct source)
-- moneyy.me FEATURES.md (2026-02-20) -- standalone finance app feature research, adapted for integration context
-- moneyy.me REQUIREMENTS.md (2026-02-20) -- formal requirements, mapped to phases
-- moneyy.me ARCHITECTURE.md (2026-02-20) -- system architecture patterns
-- moneyy.me PITFALLS.md (2026-02-20) -- domain pitfalls and prevention strategies
-
----
-*Feature research for: BetterR.Me v4.0 Money Tracking (personal finance as a feature module within existing habit/task app)*
-*Researched: 2026-02-21*
+*Feature research for: BetterR.Me v6.0 Calendar & Reminder Notifications*
+*Researched: 2026-03-30*

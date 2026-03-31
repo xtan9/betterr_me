@@ -1,348 +1,337 @@
-# Technology Stack: Money Tracking Features
+# Technology Stack: Calendar & Reminder Notifications
 
-**Project:** BetterR.Me v4.0 Money Tracking
-**Researched:** 2026-02-21
-**Scope:** Stack ADDITIONS only for money tracking. Existing stack (Next.js 16, React 19, Supabase auth+DB, SWR, shadcn/ui, Tailwind CSS 3, react-hook-form, zod v3, next-intl, date-fns, etc.) is validated and unchanged.
-
----
-
-## Context: Divergence from moneyy.me Research
-
-The moneyy.me research (2026-02-20) assumed a greenfield project and recommended Neon + Drizzle + Better Auth + TanStack Query + Zustand + Tailwind v4. BetterR.Me already has a mature, deployed stack. This document identifies ONLY what must be ADDED. The following moneyy.me recommendations are explicitly **NOT adopted**:
-
-| moneyy.me Recommendation | BetterR.Me Decision | Rationale |
-|--------------------------|---------------------|-----------|
-| Neon Postgres | **Keep Supabase Postgres** | Already deployed with RLS, auth, 20+ tables, 1200+ tests. Migration cost is prohibitive and unnecessary. |
-| Drizzle ORM | **Keep Supabase JS client** | Existing DB layer uses `SupabaseClient` with typed class pattern (HabitsDB, TasksDB, etc.). Adding Drizzle means two ORMs in one codebase. |
-| Better Auth | **Keep Supabase Auth** | Already integrated with proxy middleware, session management, RLS policies. Better Auth solves a problem we do not have. |
-| TanStack Query | **Keep SWR** | 26 files already use SWR with established patterns (optimistic updates, date-keyed cache). Switching data fetching libraries mid-project adds risk for no gain. |
-| Zustand | **Not needed** | SWR handles server state. React useState/useReducer handles local UI state. Same decision as v3.0 kanban milestone. |
-| Tailwind CSS v4 | **Keep Tailwind CSS v3** | 174-line tailwind.config.ts with 56+ custom design tokens. Migration to v4 (CSS-first config) is a separate effort, not part of money features. |
-| Zod v4 | **Keep Zod v3** | 12+ validation schemas already use Zod v3 API. Zod v4 has breaking changes. Upgrade separately. |
-| Stripe | **Not in v4.0 scope** | PROJECT.md explicitly states "No Stripe/freemium in this milestone." |
-| Resend / React Email | **Not in v4.0 scope** | Email notifications are P2 features. Add when needed. |
+**Project:** BetterR.Me v6.0 Calendar & Reminder Notifications
+**Researched:** 2026-03-30
+**Scope:** Stack ADDITIONS only for calendar/scheduling and notification features. Existing stack (Next.js 16, React 19, Supabase auth+DB, SWR, shadcn/ui, Tailwind CSS 3, react-hook-form, zod v3, next-intl, date-fns ^4.1.0, Vercel Cron, etc.) is validated and unchanged.
 
 ---
 
-## Recommended Stack Additions
+## 1. Calendar Grid Library
 
-### Banking Integration
+### Decision: Build custom time grid (DO NOT use react-big-calendar)
+
+| Option | Version | Verdict | Rationale |
+|--------|---------|---------|-----------|
+| **Custom time grid** | N/A | **CHOSEN** | Full control over design tokens, dark mode, i18n, and BetterR.Me's specific needs (aggregated multi-domain items, inline checkboxes, color-coded layers) |
+| react-big-calendar | 1.19.4 | Rejected | Heavy opinionated CSS that fights Tailwind/shadcn design tokens. Requires moment.js or date-fns localizer wrapper. Custom styling is done via inline `style` objects (not CSS classes), making dark mode and design token integration painful. The library is designed for full calendar apps, not aggregated multi-domain views. |
+| @schedule-x/react | 4.1.0 | Rejected | Better architecture than react-big-calendar but still brings its own CSS framework. Drag-and-drop is a paid plugin ($). The design spec explicitly puts drag-and-drop rescheduling as "Out of Scope" -- paying for a feature we will not use is wasteful. |
+
+**Why custom is the right call for BetterR.Me:**
+
+1. **Design token control:** BetterR.Me has 56+ CSS custom properties for colors, spacing, radii. Calendar libraries bring their own CSS that must be overridden line by line. A custom grid uses design tokens natively from the start.
+
+2. **Dark mode:** Existing dark mode is class-based via `next-themes`. Calendar libraries use hardcoded colors or their own theming systems that do not integrate with CSS variable-based dark mode without significant overrides.
+
+3. **Multi-domain aggregation:** The calendar shows items from 5 sources (events, tasks, habits, bills, workouts) with inline actions (checkbox toggles, mark-paid). No calendar library supports this -- custom rendering is required regardless. Using a library for the grid and then replacing all its rendering components negates the library's value.
+
+4. **i18n:** next-intl provides translations. Calendar libraries have their own i18n systems (moment locales, date-fns locales) that conflict with or duplicate the existing approach.
+
+5. **Complexity is manageable:** The time grid is a CSS Grid with hourly rows and day columns. The hard parts (recurrence expansion, event positioning/overlap) are algorithmic problems solved in utility functions, not UI library problems. BetterR.Me already has recurrence expansion logic from recurring tasks.
+
+6. **No drag-and-drop rescheduling:** The design spec explicitly lists "Drag-and-drop rescheduling of events on the grid" as out of scope. The only drag interaction is click-and-drag to CREATE events (select a time range), which is a mousedown/mousemove/mouseup handler -- far simpler than full drag-and-drop reordering.
+
+**Implementation approach:**
+- `components/calendar/time-grid.tsx` — CSS Grid with `grid-template-rows` for hours, `grid-template-columns` for days
+- Event positioning: absolute positioning within grid cells, calculated from `start_time` / `end_time`
+- Overlap handling: column-packing algorithm (same approach as Google Calendar) -- pure function, well-documented algorithm
+- Click-and-drag selection: mousedown sets start, mousemove updates preview, mouseup fires `onSelectSlot({ start, end })`
+- Current time indicator: `useEffect` with 60-second interval updating a CSS `top` position
+
+**What date-fns functions will be needed (already installed at ^4.1.0):**
+- `startOfWeek`, `endOfWeek`, `eachDayOfInterval` -- week view column generation
+- `startOfMonth`, `endOfMonth`, `eachWeekOfInterval` -- month view grid
+- `addDays`, `addWeeks`, `addMonths`, `subDays`, `subWeeks`, `subMonths` -- navigation
+- `isSameDay`, `isToday`, `isSameMonth` -- highlighting
+- `format`, `parse` -- display formatting
+- `getHours`, `getMinutes`, `differenceInMinutes` -- time grid positioning
+- `setHours`, `setMinutes` -- creating events from time slot clicks
+
+All of these are already available in `date-fns@4.1.0`. **No new date library needed.**
+
+---
+
+## 2. Web Push Notifications
+
+### Recommended: `web-push` (server-side)
 
 | Technology | Version | Purpose | Why | Confidence |
 |------------|---------|---------|-----|------------|
-| `plaid` | ^41.1.0 | Server-side Plaid API client | Official Node.js SDK. Monthly updates. Handles token exchange, /transactions/sync, webhook verification, account balance queries. 12,000+ US institutions. Required by PROJECT.md. | HIGH |
-| `react-plaid-link` | ^4.1.1 | Client-side Plaid Link modal | Official React hook (`usePlaidLink`) for bank account connection OAuth flow. Drop-in integration. TypeScript definitions included. | HIGH |
-
-**Integration with Supabase:**
-- Plaid access tokens stored encrypted in Supabase using `vault.secrets` (Supabase Vault extension) -- NOT plain text columns
-- Plaid Item metadata (institution, last sync cursor, connection status) stored in a `plaid_items` table with RLS policies scoped to `household_id`
-- Transaction data from Plaid normalized into our `transactions` table schema, not stored as raw Plaid JSON
-
-**Sources:** [plaid npm](https://www.npmjs.com/package/plaid) v41.1.0, [react-plaid-link npm](https://www.npmjs.com/package/react-plaid-link) v4.1.1, [Plaid Link Web SDK docs](https://plaid.com/docs/link/web/)
-
-### Money Arithmetic
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `decimal.js` | ^10.6.0 | Precise decimal arithmetic for all currency | JavaScript floats break: `0.1 + 0.2 !== 0.3`. Every budget calculation, transaction sum, balance check, and net worth computation MUST use decimal.js. Store as integers (cents) in Postgres, convert with decimal.js in application layer. | HIGH |
-
-**Integration pattern:**
-```typescript
-import Decimal from "decimal.js";
-
-// All money amounts stored as integer cents in DB
-// Application layer converts: 1599 cents -> Decimal("15.99")
-function centsToDecimal(cents: number): Decimal {
-  return new Decimal(cents).dividedBy(100);
-}
-
-function decimalToCents(amount: Decimal): number {
-  return amount.times(100).round().toNumber();
-}
-
-// Budget remaining calculation
-function budgetRemaining(budgetCents: number, spentCents: number): Decimal {
-  return centsToDecimal(budgetCents).minus(centsToDecimal(spentCents));
-}
-```
-
-**Source:** [decimal.js npm](https://www.npmjs.com/package/decimal.js) v10.6.0, [decimal.js API docs](https://mikemcl.github.io/decimal.js/)
-
-### Data Visualization (Charts)
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `recharts` | ^3.7.0 | Charts for spending breakdowns, budget progress, net worth trends | shadcn/ui's Chart component is built on Recharts. BetterR.Me already has chart color tokens (`--chart-1` through `--chart-5`) in the Tailwind config. Zero additional theming work. Dark mode works automatically through shadcn theme integration. | HIGH |
+| `web-push` | ^3.6.7 | Server-side push notification delivery | Official Web Push Protocol implementation for Node.js. Handles VAPID authentication, payload encryption (aes128gcm), and HTTP/2 delivery to push services (FCM, Mozilla, Apple). Zero browser dependencies -- server-only. 3.5M+ weekly downloads. | HIGH |
 
 **Integration with existing stack:**
-- Install Recharts, then add shadcn/ui Chart component: `npx shadcn@latest add chart`
-- Chart colors already defined in `tailwind.config.ts` (`chart["1"]` through `chart["5"]`)
-- shadcn Chart component provides `ChartContainer`, `ChartTooltip`, `ChartLegend` wrappers
-- All chart components are client components (`"use client"`) -- standard App Router pattern
-- Calm Finance design: use muted color palette (blues, grays, soft greens) not aggressive red/green
 
-**Chart types needed:**
-| Chart | Recharts Component | Purpose |
-|-------|-------------------|---------|
-| Spending by category | `PieChart` / `RadialBarChart` | Monthly spending breakdown |
-| Spending over time | `AreaChart` / `BarChart` | Trend visualization |
-| Budget progress | `BarChart` (horizontal) | Category budget vs. spent |
-| Net worth trend | `LineChart` / `AreaChart` | Assets minus liabilities over time |
-| Cash flow | `BarChart` (stacked) | Income vs. expenses by month |
-| Savings goal progress | `RadialBarChart` | Visual progress toward goal |
-
-**Source:** [recharts npm](https://www.npmjs.com/package/recharts) v3.7.0, [shadcn/ui Charts](https://ui.shadcn.com/docs/components/radix/chart)
-
-### Webhook Verification
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `jose` | ^6.1.3 | JWT/JWK verification for Plaid webhooks | Plaid signs outgoing webhooks with ES256 JWTs. The `jose` library verifies these signatures using JWKs from Plaid's `/webhook_verification_key/get` endpoint. Zero dependencies, Web Crypto API based, works in Node.js and Edge Runtime. Plaid's own docs reference this library pattern. | HIGH |
-
-**Why `jose` and not `jsonwebtoken`:**
-- `jose` uses Web Crypto API (works in Edge Runtime and serverless)
-- `jsonwebtoken` uses Node.js `crypto` module (fails in Edge Runtime)
-- `jose` supports ES256 algorithm natively
-- `jose` has JWK import built-in (`importJWK`)
-
-**Webhook verification pattern:**
 ```typescript
-import { jwtVerify, importJWK } from "jose";
+// lib/push/send.ts
+import webpush from "web-push";
 
-async function verifyPlaidWebhook(
-  body: string,
-  plaidVerificationHeader: string
-): Promise<boolean> {
-  // 1. Decode JWT header to get key_id
-  // 2. Fetch JWK from Plaid: /webhook_verification_key/get
-  // 3. Import JWK and verify JWT with ES256
-  // 4. Verify iat is within 5 minutes (replay protection)
-  // 5. Verify SHA-256 of body matches request_body_sha256 claim
-  const key = await importJWK(jwk, "ES256");
-  const { payload } = await jwtVerify(plaidVerificationHeader, key);
-  // ... verify claims
+webpush.setVapidDetails(
+  "mailto:reminders@betterr.me",
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+  process.env.VAPID_PRIVATE_KEY!
+);
+
+export async function sendPushNotification(
+  subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
+  payload: { title: string; body: string; url: string }
+) {
+  return webpush.sendNotification(
+    subscription,
+    JSON.stringify(payload),
+    { TTL: 3600, urgency: "normal" }
+  );
 }
 ```
 
-**Source:** [jose npm](https://www.npmjs.com/package/jose) v6.1.3, [Plaid webhook verification docs](https://plaid.com/docs/api/webhooks/webhook-verification/)
+**VAPID key generation** (one-time setup):
+```bash
+npx web-push generate-vapid-keys
+```
+Output goes to `.env.local` as `NEXT_PUBLIC_VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`. The CLI command is included with the `web-push` package -- no separate utility needed.
 
-### CSV Import
+**Error handling for stale subscriptions:**
+- `410 Gone` or `404 Not Found` → delete subscription from `push_subscriptions` table
+- `429 Too Many Requests` → retry with backoff
+- Network errors → mark reminder as `failed` for retry
+
+**Works with Vercel Cron:** The cron endpoint (`api/cron/send-reminders/route.ts`) calls `sendPushNotification()` for each due reminder. Same pattern as existing `api/cron/sync-transactions/route.ts` -- protected by `CRON_SECRET` bearer token.
+
+---
+
+## 3. Service Worker for Push Notifications
+
+### Decision: Hand-written `public/sw.js` (DO NOT use Serwist/@serwist/next)
+
+| Option | Version | Verdict | Rationale |
+|--------|---------|---------|-----------|
+| **Hand-written `public/sw.js`** | N/A | **CHOSEN** | Service worker only needs to handle `push` and `notificationclick` events. 20-30 lines of code. No caching strategy needed (Next.js handles its own caching). |
+| @serwist/next | 9.5.7 | Rejected | Full PWA framework with precaching, runtime caching strategies, workbox integration. Massive overkill for "listen for push events and show a notification." Adds build-time complexity (webpack/Turbopack plugin), runtime overhead, and config surface area for zero benefit. |
+| next-pwa | Unmaintained | Rejected | Abandoned. Serwist is its successor, but same overkill argument applies. |
+
+**The service worker is trivial:**
+
+```javascript
+// public/sw.js
+self.addEventListener("push", (event) => {
+  const data = event.data?.json() ?? {};
+  event.waitUntil(
+    self.registration.showNotification(data.title ?? "BetterR.Me", {
+      body: data.body,
+      icon: "/icon-192.png",
+      badge: "/badge-72.png",
+      data: { url: data.url ?? "/dashboard" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window" }).then((windowClients) => {
+      const existing = windowClients.find((c) => c.url === event.notification.data.url);
+      if (existing) return existing.focus();
+      return clients.openWindow(event.notification.data.url);
+    })
+  );
+});
+```
+
+**Next.js configuration for service worker headers:**
+
+```typescript
+// next.config.ts — add to existing headers()
+{
+  source: "/sw.js",
+  headers: [
+    { key: "Service-Worker-Allowed", value: "/" },
+    { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+  ],
+},
+```
+
+**Client-side registration** (in a `useEffect` or layout component):
+
+```typescript
+// lib/push/register.ts
+export async function registerServiceWorker() {
+  if ("serviceWorker" in navigator) {
+    return navigator.serviceWorker.register("/sw.js");
+  }
+  return null;
+}
+
+export async function subscribeToPush(registration: ServiceWorkerRegistration) {
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+    ),
+  });
+  // POST subscription to /api/push/subscribe
+  await fetch("/api/push/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(subscription),
+  });
+  return subscription;
+}
+```
+
+---
+
+## 4. Email Delivery
+
+### Recommended: `resend` + `@react-email/components`
 
 | Technology | Version | Purpose | Why | Confidence |
 |------------|---------|---------|-----|------------|
-| `papaparse` | ^5.5.3 | CSV parsing for bank statement import | Battle-tested CSV parser (10M+ weekly downloads). Handles malformed input, streaming large files, header detection, type inference. No dependencies. Works in browser (Web Workers) and Node.js. CSV import is the cost-management strategy -- users who do not want Plaid can still import bank data. | HIGH |
-| `@types/papaparse` | ^5.3.x | TypeScript definitions | Type definitions for papaparse. | HIGH |
+| `resend` | ^6.10.0 | Transactional email API client | Developer-focused email API. Simple SDK (`resend.emails.send()`). React Email integration for type-safe templates. Free tier: 3,000 emails/month (ample for personal productivity app). No SMTP config. Vercel partnership for easy deployment. | HIGH |
+| `@react-email/components` | ^1.0.10 | Email template components | Write email templates as React components with TypeScript. Components render to cross-client HTML. Reuses React mental model -- no separate templating language. | HIGH |
+| `@react-email/render` | ^2.0.4 | Server-side email rendering | Renders React Email components to HTML string for Resend's `html` parameter. Required peer dependency. | HIGH |
 
-**Why CSV import matters architecturally:**
-- Validates the core experience without Plaid API costs
-- Free-tier users can still import bank data manually
-- Transaction source abstraction: the app does not care whether data came from Plaid or CSV
-- Provides a fallback if Plaid connection fails or user's bank is unsupported
+**Why Resend over SendGrid:**
 
-**Source:** [papaparse npm](https://www.npmjs.com/package/papaparse) v5.5.3
-
-### URL State for Filters
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `nuqs` | ^2.x | Type-safe URL search params state | Transaction list needs shareable/bookmarkable filter states (date range, category, account, search term). `nuqs` provides a `useState`-like API synced to URL params. 6 kB gzipped. Next.js App Router native support. No conflict with SWR -- `nuqs` manages URL state, SWR manages server data cache. | MEDIUM |
-
-**Why `nuqs` and not manual `useSearchParams`:**
-- Type-safe parsers for dates, numbers, enums (not just strings)
-- Batched URL updates (multiple params in one history entry)
-- Server Component access via `createSearchParamsCache`
-- Shallow routing (no server round-trip on filter change)
-- SWR keys can derive from `nuqs` state for automatic refetch on filter change
+| Criteria | Resend | SendGrid |
+|----------|--------|----------|
+| DX | `resend.emails.send({ react: <Template /> })` — one function call with JSX | Template IDs, dynamic template data, separate template management |
+| Free tier | 3,000 emails/month | 100 emails/day (3,000/month effective, but daily cap is annoying) |
+| React Email | Native integration — pass JSX directly | Must render to HTML first, then pass as string |
+| SDK size | Minimal, focused on email sending | Large SDK covering marketing, contacts, webhooks, stats |
+| Setup | API key + verified domain | API key + verified domain + sender identity verification |
+| Next.js | First-class support, Vercel partnership | Works but not purpose-built for Next.js |
 
 **Integration pattern:**
+
 ```typescript
-import { useQueryState, parseAsString, parseAsIsoDate } from "nuqs";
+// lib/email/send-reminder.ts
+import { Resend } from "resend";
+import { render } from "@react-email/render";
+import { ReminderEmail } from "@/components/email/reminder-email";
 
-// In transaction list component
-const [category, setCategory] = useQueryState("category", parseAsString);
-const [dateFrom, setDateFrom] = useQueryState("from", parseAsIsoDate);
-const [dateTo, setDateTo] = useQueryState("to", parseAsIsoDate);
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// SWR key derives from URL state
-const { data } = useSWR(
-  `/api/transactions?category=${category}&from=${dateFrom}&to=${dateTo}`,
-  fetcher,
-  { keepPreviousData: true }
-);
+export async function sendReminderEmail(
+  to: string,
+  reminder: { title: string; body: string; url: string; sourceType: string }
+) {
+  const html = await render(<ReminderEmail {...reminder} />);
+  
+  const { data, error } = await resend.emails.send({
+    from: "BetterR.Me <reminders@betterr.me>",
+    to: [to],
+    subject: reminder.title,
+    html,
+  });
+
+  if (error) throw new Error(`Email send failed: ${error.message}`);
+  return data;
+}
 ```
 
-**Source:** [nuqs docs](https://nuqs.dev), [nuqs npm](https://www.npmjs.com/package/nuqs)
+**Email templates needed (React components):**
+
+| Template | Source Type | Subject Pattern |
+|----------|-----------|-----------------|
+| `event-reminder.tsx` | calendar_event | "Reminder: {event title} in {time}" |
+| `task-due.tsx` | task | "Task due: {task title}" |
+| `habit-nudge.tsx` | habit | "Time for: {habit title}" |
+| `bill-due.tsx` | bill | "Bill due in {days}: {bill name} — ${amount}" |
+
+**Unsubscribe handling:** Every email includes an unsubscribe link pointing to `/settings/notifications` where users can toggle email notifications per source type. Resend supports `List-Unsubscribe` headers for one-click unsubscribe in email clients.
 
 ---
 
-## Background Jobs Strategy
+## 5. No New Date/Time Libraries Needed
 
-### Supabase pg_cron + Edge Functions (NOT Inngest)
+`date-fns@4.1.0` is already installed and used across 18+ source files. It covers every date manipulation need for the calendar:
 
-The moneyy.me research recommended Inngest for background jobs. For BetterR.Me, **use Supabase's native pg_cron + Edge Functions** instead.
+| Need | date-fns Function | Already Used? |
+|------|-------------------|---------------|
+| Week boundaries | `startOfWeek`, `endOfWeek` | New usage |
+| Month boundaries | `startOfMonth`, `endOfMonth` | Yes (money/bill-calendar) |
+| Day iteration | `eachDayOfInterval` | New usage |
+| Navigation | `addDays`, `addWeeks`, `addMonths`, `subDays` | Yes (money features) |
+| Comparisons | `isSameDay`, `isToday`, `isSameMonth` | Yes (heatmap, bill-calendar) |
+| Formatting | `format` | Yes (18+ files) |
+| Time math | `differenceInMinutes`, `getHours`, `getMinutes` | New usage |
+| Parsing | `parseISO`, `parse` | Yes (money features) |
 
-| Approach | Why |
-|----------|-----|
-| **Supabase pg_cron** | Already included in Supabase (no additional service). Triggers Edge Functions or database functions on a schedule. Supports sub-minute intervals. No vendor addition. |
-| **Supabase Edge Functions** | Deno-based serverless functions hosted alongside your database. Can call Plaid's `/transactions/sync`, process webhooks, run categorization. No cold start issues since they run on Supabase's infrastructure, not Vercel. |
-| **NOT Inngest** | Adding Inngest means another vendor, another billing relationship, another failure point. Supabase pg_cron + Edge Functions handle the same use cases (scheduled sync, webhook processing) without leaving the Supabase ecosystem. |
-
-**Background job use cases:**
-1. **Scheduled transaction sync** -- pg_cron triggers Edge Function every 4-6 hours to call `/transactions/sync` for each connected Plaid Item
-2. **Webhook processing** -- Plaid webhook hits a Next.js API route, which writes a job to a `sync_jobs` table, pg_cron picks it up
-3. **Bill detection** -- After new transactions sync, Edge Function runs bill/subscription detection logic
-4. **Stale connection cleanup** -- pg_cron checks for Items that have not synced in 7+ days and marks them for re-auth
-
-**Fallback:** If Supabase Edge Functions prove too limited (execution time, memory), Inngest (`^3.52.3`, free tier: 50K executions/month) is the escape hatch. But start with Supabase-native.
-
-**Sources:** [Supabase Cron docs](https://supabase.com/docs/guides/cron), [Scheduling Edge Functions](https://supabase.com/docs/guides/functions/schedule-functions), [Supabase Cron module](https://supabase.com/modules/cron)
+**DO NOT add:** `dayjs`, `luxon`, `moment`, `temporal-polyfill`. date-fns is tree-shakeable, already optimized in `next.config.ts` (`optimizePackageImports`), and sufficient for all calendar operations.
 
 ---
 
-## Supabase-Specific Patterns for Money Features
+## 6. Vercel Cron for Reminder Delivery
 
-### Supabase Vault for Plaid Token Encryption
+**Already available** -- the existing `api/cron/sync-transactions/route.ts` proves the pattern works. The reminder cron needs to run more frequently.
 
-Plaid access tokens grant permanent read access to bank accounts. They MUST be encrypted at rest.
+**Configuration change in `vercel.json`:**
 
-**Supabase Vault** is a Postgres extension that encrypts secrets at rest using Transparent Column Encryption. It is already available in every Supabase project -- no additional library needed.
-
-```sql
--- Store Plaid access token in Vault
-SELECT vault.create_secret('plaid_access_token_item_123', 'access-sandbox-xxx-yyy');
-
--- Retrieve decrypted token (only via SQL function, never exposed to client)
-SELECT decrypted_secret FROM vault.decrypted_secrets
-WHERE name = 'plaid_access_token_item_123';
-```
-
-**Why Vault and not application-layer encryption (e.g., AES-256 in Node.js):**
-- Vault encryption key is managed by Supabase, separate from database data
-- Backups and replication streams preserve encryption
-- No encryption key management in application code
-- No key rotation logic to implement
-- Works with RLS -- server-side functions access tokens, clients never see them
-
-**Source:** [Supabase Vault docs](https://supabase.com/docs/guides/database/vault), [Supabase Vault blog](https://supabase.com/blog/supabase-vault)
-
-### Supabase RLS for Household Isolation
-
-Every money table (`transactions`, `accounts`, `budgets`, `bills`, `savings_goals`, `plaid_items`) gets a `household_id` column with RLS policies.
-
-**Pattern:** Use Supabase Auth `auth.uid()` to look up the user's `household_id` from a `household_members` table, then filter all queries by that household.
-
-```sql
--- RLS policy for transactions table
-CREATE POLICY "Users can view their household's transactions"
-ON transactions FOR SELECT
-USING (
-  household_id IN (
-    SELECT household_id FROM household_members
-    WHERE user_id = auth.uid()
-  )
-);
-```
-
-**Defense-in-depth:** The DB layer classes (e.g., `TransactionsDB`) also filter by `household_id` in application code. RLS is the safety net, not the only layer.
-
-**Source:** [Supabase RLS docs](https://supabase.com/docs/guides/database/postgres/row-level-security), [Multi-tenant RLS patterns](https://www.antstack.com/blog/multi-tenant-applications-with-rls-on-supabase-postgress/)
-
-### Supabase Realtime for Household Sync
-
-When one partner adds a transaction or updates a budget, the other partner's view should update. Supabase Realtime's Postgres Changes feature listens to table changes and pushes them to authorized clients.
-
-**No additional library needed** -- `@supabase/supabase-js` already includes Realtime support. SWR cache invalidation triggered by Realtime events:
-
-```typescript
-// Listen for transaction changes in household
-const channel = supabase
-  .channel("household-transactions")
-  .on(
-    "postgres_changes",
-    { event: "*", schema: "public", table: "transactions",
-      filter: `household_id=eq.${householdId}` },
-    () => {
-      // Invalidate SWR cache to refetch
-      mutate("/api/transactions");
+```json
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-transactions",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/send-reminders",
+      "schedule": "* * * * *"
     }
-  )
-  .subscribe();
+  ]
+}
 ```
 
-**Source:** [Supabase Realtime docs](https://supabase.com/docs/guides/realtime)
+**Note on Vercel Cron frequency:**
+- Hobby plan: minimum 1-minute interval (sufficient for reminders)
+- Pro plan: same minimum, but with guaranteed execution
+- The cron endpoint processes all reminders with `fire_at <= NOW() AND status = 'pending'` in a single batch
+- Execution limit: 10s on Hobby, 60s on Pro. Batch processing must be fast -- query pending reminders, fan out push/email sends in parallel, update statuses
+
+**No new library needed** for the cron infrastructure itself.
 
 ---
 
-## Existing Stack Serving Money Features
+## Recommended Stack Additions — Summary
 
-These technologies are already installed and require NO additions:
+| Technology | Version | Purpose | Bundle Impact |
+|------------|---------|---------|--------------|
+| `web-push` | ^3.6.7 | Server-side push notification delivery | **Server-only** — zero client bundle impact |
+| `resend` | ^6.10.0 | Transactional email API | **Server-only** — zero client bundle impact |
+| `@react-email/components` | ^1.0.10 | Email template components | **Server-only** — zero client bundle impact |
+| `@react-email/render` | ^2.0.4 | Render React Email to HTML | **Server-only** — zero client bundle impact |
 
-| Existing Technology | How It Serves Money Features |
-|---------------------|------------------------------|
-| **Supabase (auth + DB)** | User authentication, Postgres database, RLS policies, Vault for token encryption, Realtime for household sync, Edge Functions for background jobs, pg_cron for scheduled sync |
-| **SWR** | Fetching transactions, budgets, accounts, goals. Optimistic updates on categorization. `keepPreviousData: true` for filter changes. Cache invalidation on Supabase Realtime events. |
-| **react-hook-form + zod** | Budget creation forms, savings goal forms, manual transaction entry, CSV column mapping, category rule editing |
-| **shadcn/ui + Radix UI** | Card, Table, Dialog, Select, Badge, Progress, Tabs, Sheet, Popover, Calendar (react-day-picker already installed), Skeleton -- all needed for money UI |
-| **next-intl** | All money feature strings in en, zh, zh-TW. Currency formatting uses `Intl.NumberFormat` (built-in), not a library. |
-| **next-themes** | Dark mode for money views. Calm Finance color tokens extend existing design token system. |
-| **date-fns** | Transaction date formatting, date range calculations, bill due date logic, month boundaries for budget periods. Already installed at ^4.1.0. |
-| **lucide-react** | Icons for accounts, categories, budgets, bills, goals, trends. Already has finance-related icons (Wallet, CreditCard, PiggyBank, TrendingUp, Receipt, etc.) |
-| **sonner** | Toast notifications for sync completion, budget alerts, goal milestones. |
-| **Tailwind CSS 3** | All money feature layout and styling. Extend with Calm Finance color tokens in CSS variables. |
-| **Vitest + Playwright** | Unit/integration tests for money logic, E2E tests for Plaid Link flow, budget creation, transaction filtering. |
-| **jszip** | Already installed -- can extend data export to include financial data alongside habit data. |
+**Total new runtime dependencies: 4** (all server-only)
+**Total new dev dependencies: 0**
+**Client bundle increase: 0 bytes**
+
+The calendar UI, service worker, and VAPID key generation require no new packages.
 
 ---
 
 ## Installation
 
 ```bash
-# Banking integration
-pnpm add plaid react-plaid-link
+# Push notifications (server-side only)
+pnpm add web-push
 
-# Money arithmetic (CRITICAL -- never use native JS floats for currency)
-pnpm add decimal.js
+# Email delivery
+pnpm add resend @react-email/components @react-email/render
 
-# Charts (then: npx shadcn@latest add chart)
-pnpm add recharts
+# VAPID key generation (one-time, using web-push CLI)
+npx web-push generate-vapid-keys
+# Copy output to .env.local:
+#   NEXT_PUBLIC_VAPID_PUBLIC_KEY=...
+#   VAPID_PRIVATE_KEY=...
 
-# Webhook verification (Plaid ES256 JWT)
-pnpm add jose
-
-# CSV import
-pnpm add papaparse
-pnpm add -D @types/papaparse
-
-# URL state for transaction filters (optional, can defer to Phase 3)
-pnpm add nuqs
+# Add to .env.local:
+#   RESEND_API_KEY=re_...
 ```
 
-**Total new runtime dependencies: 6** (plaid, react-plaid-link, decimal.js, recharts, jose, papaparse)
-**Total new dev dependencies: 1** (@types/papaparse)
-**Optional: 1** (nuqs -- can be deferred)
-
-No new testing libraries needed -- existing Vitest + Testing Library + Playwright cover all needs.
-
----
-
-## Alternatives Considered
-
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Banking API | Plaid | MX / Finicity | Plaid has 12,000+ US institutions, best documentation, largest developer community. MX/Finicity are viable if Plaid costs become prohibitive at scale. |
-| Money math | decimal.js | dinero.js | dinero.js is higher-level (money objects with currency), but BetterR.Me is US-only initially. decimal.js is simpler, sufficient, and more widely used. Upgrade to dinero.js if multi-currency support is added. |
-| Money math | decimal.js | big.js | decimal.js handles both arbitrary precision AND scientific notation. big.js is slightly smaller but less capable. The size difference is negligible. |
-| Charts | Recharts (via shadcn) | Tremor | Tremor wraps Recharts but adds an abstraction layer. Since shadcn/ui Charts already wrap Recharts with our design tokens, Tremor is redundant. |
-| Charts | Recharts (via shadcn) | Chart.js / react-chartjs-2 | Chart.js uses canvas (not SVG). Worse accessibility, harder to style with Tailwind/CSS variables, less React-idiomatic. Recharts is the shadcn/ui default. |
-| Charts | Recharts (via shadcn) | Nivo | Nivo has SSR support but is heavier and less customizable. Recharts wins because shadcn/ui integrates it directly. |
-| CSV parsing | papaparse | csv-parse | csv-parse is Node.js only. papaparse works in both browser (for client-side preview) and Node.js (for server-side processing). |
-| Webhook JWT | jose | jsonwebtoken | jsonwebtoken uses Node.js `crypto` module, which fails in Vercel Edge Runtime. jose uses Web Crypto API -- works everywhere. |
-| Background jobs | Supabase pg_cron + Edge Functions | Inngest | Adding another vendor is unnecessary when Supabase provides native scheduling. Inngest is the fallback if Edge Functions prove limited. |
-| Background jobs | Supabase pg_cron + Edge Functions | Vercel Cron | Vercel Cron has a 10s execution limit on Hobby plan (30s on Pro). Plaid transaction sync can take longer. Supabase Edge Functions have 150s default timeout. |
-| URL state | nuqs | Manual useSearchParams | useSearchParams returns raw strings, requires manual parsing/serialization, no batching, no type safety. nuqs solves all of these. |
-| Data fetching | Keep SWR | TanStack Query | 26 files already use SWR. Migration cost is high, benefit is marginal. SWR handles all needed patterns (optimistic updates, keepPreviousData, revalidation). |
-| State management | Keep React state | Zustand | Same conclusion as v3.0: SWR for server state, React state for local UI. No global client state complex enough to justify a state library. |
-| ORM | Keep Supabase client | Drizzle | Running two ORMs in one project is a maintenance nightmare. The Supabase client with typed DB classes works. Financial queries (aggregations, date ranges) can use `.rpc()` for Postgres functions when the query builder is insufficient. |
+No `pnpm add` needed for:
+- Calendar grid (custom-built)
+- Service worker (hand-written `public/sw.js`)
+- Date manipulation (`date-fns` already installed)
+- Cron jobs (Vercel Cron already configured)
+- VAPID keys (CLI included with `web-push`)
 
 ---
 
@@ -350,87 +339,92 @@ No new testing libraries needed -- existing Vitest + Testing Library + Playwrigh
 
 | Do NOT Add | Why | What to Use Instead |
 |------------|-----|---------------------|
-| Drizzle ORM | Would create two data access layers in one codebase. All existing DB classes use Supabase client. | Supabase JS client + typed DB classes (existing pattern) |
-| Better Auth | Supabase Auth is already deployed, tested, integrated with RLS. Replacing it gains nothing. | Supabase Auth (existing) |
-| TanStack Query | 26 files use SWR. Migration mid-project is risky for zero gain. | SWR (existing) |
-| Zustand | No complex global client state justifies it. | React useState/useReducer (existing) |
-| Tailwind CSS v4 | Massive config migration (56+ tokens, 174-line config). Separate milestone. | Tailwind CSS v3 (existing) |
-| Zod v4 | Breaking changes from v3. 12+ validation schemas would need updating. Separate migration. | Zod v3 (existing) |
-| Stripe | Explicitly out of scope for v4.0. "No Stripe/freemium in this milestone." | Nothing -- all features free in v4.0 |
-| Resend / React Email | Email notifications are P2. Add when shipping bill reminders. | Nothing for now |
-| Inngest (initially) | Supabase pg_cron + Edge Functions cover same use cases without adding a vendor. | Supabase Cron + Edge Functions |
-| framer-motion | Chart animations handled by Recharts. Page transitions not needed. | Recharts built-in animations + Tailwind transitions |
-| dinero.js | Overkill for single-currency (USD). decimal.js is sufficient. | decimal.js |
+| react-big-calendar | Opinionated CSS fights design tokens. Inline style overrides for dark mode. Does not support multi-domain aggregation with inline actions. | Custom CSS Grid time grid with BetterR.Me design tokens |
+| @schedule-x/react | Drag-and-drop is paid. Calendar drag rescheduling is out of scope. Own CSS system conflicts with Tailwind. | Custom CSS Grid time grid |
+| @serwist/next (or next-pwa) | Full PWA framework with precaching/caching strategies. We only need push event handling (20 lines of JS). Massive overkill. | Hand-written `public/sw.js` |
+| SendGrid (@sendgrid/mail) | Larger SDK, daily sending caps on free tier, no React Email native integration, worse DX for simple transactional email. | Resend |
+| dayjs / luxon / moment | date-fns ^4.1.0 already installed, tree-shakeable, covers all needs. Adding a second date library is waste. | date-fns (existing) |
+| FullCalendar | Commercial license required for premium features. Even the open-source version has its own DOM rendering and CSS. | Custom CSS Grid time grid |
+| node-cron / bull / bullmq | Server-side job scheduling libraries for long-running Node processes. Vercel is serverless -- these do not work. | Vercel Cron (existing pattern) |
+| firebase-admin (FCM) | Web Push API + VAPID is the standard. FCM is Google-specific and requires Firebase project setup. web-push sends to ALL push services (FCM, Mozilla, Apple) via the standard protocol. | web-push |
+| OneSignal / Pusher | Third-party notification services. Unnecessary abstraction when Web Push API + web-push library gives full control. Adds vendor dependency and costs. | web-push + custom service worker |
+| temporal-polyfill | TC39 Temporal API is not yet stable in all runtimes. date-fns is the existing, working solution. | date-fns (existing) |
+| react-email (CLI/dev server) | The CLI and dev server are development tools for previewing email templates. Not needed in production. Templates can be previewed with Storybook or a dedicated dev route. | `@react-email/components` + `@react-email/render` (the actual libraries) |
 
 ---
 
 ## Version Compatibility Matrix
 
-| New Package | Compatible With | Notes |
-|-------------|-----------------|-------|
-| plaid ^41.1.0 | Node.js 18+ | Monthly releases. Works with Next.js API routes. |
-| react-plaid-link ^4.1.1 | React 18-19 | TypeScript included. `usePlaidLink` hook. |
-| decimal.js ^10.6.0 | Any JS runtime | Zero dependencies. Works everywhere. |
-| recharts ^3.7.0 | React 18-19 | shadcn/ui Chart component wraps Recharts. |
-| jose ^6.1.3 | Web Crypto API (Node 18+, Edge Runtime) | Zero dependencies. Works in Vercel serverless AND edge. |
-| papaparse ^5.5.3 | Browser + Node.js | @types/papaparse for TypeScript. |
-| nuqs ^2.x | Next.js >=14.2.0, React 18-19 | Requires NuqsAdapter in root layout. |
+| New Package | React 19 | Next.js 16 | Node.js 24 | TypeScript 5 | Notes |
+|-------------|----------|------------|------------|--------------|-------|
+| web-push ^3.6.7 | N/A (server) | Yes | Yes (>=16) | `@types/web-push` included | Server-only, no React dependency |
+| resend ^6.10.0 | N/A (server) | Yes | Yes (>=20) | Types included | Server-only, optional `@react-email/render` peer dep |
+| @react-email/components ^1.0.10 | Yes | Yes | Yes | Types included | React components for email templates |
+| @react-email/render ^2.0.4 | Yes | Yes | Yes | Types included | Renders React to HTML string |
 
-All packages are compatible with the existing stack: Next.js 16.1.6, React 19, TypeScript 5, pnpm 10.11.
+All packages are compatible with: Next.js 16.1.6, React 19, TypeScript 5, Node.js 24, pnpm 10.11.
 
 ---
 
-## New Database Tables (Supabase Migrations)
+## Environment Variables to Add
 
-No new libraries -- these are Supabase migration files using the existing migration pattern:
+| Variable | Where | Purpose |
+|----------|-------|---------|
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | `.env.local` + Vercel | Public VAPID key for browser push subscription (client-exposed) |
+| `VAPID_PRIVATE_KEY` | `.env.local` + Vercel | Private VAPID key for signing push messages (server-only) |
+| `RESEND_API_KEY` | `.env.local` + Vercel | Resend API key for sending emails (server-only) |
 
-| Table | Key Columns | Purpose |
-|-------|-------------|---------|
-| `households` | id, name, created_by, created_at | Household entity. Every money table references this. |
-| `household_members` | household_id, user_id, role, joined_at | Maps users to households. Roles: owner, member. |
-| `plaid_items` | id, household_id, institution_id, institution_name, status, consent_expiration, last_synced_at, sync_cursor | Plaid connection metadata. Access token stored in Vault, NOT here. |
-| `accounts` | id, household_id, plaid_item_id (nullable), name, type, subtype, balance_cents, currency, visibility (mine/theirs/ours), is_manual | Financial accounts -- linked via Plaid or manually created. |
-| `transactions` | id, household_id, account_id, plaid_transaction_id (nullable), amount_cents, date, name, merchant_name, category, subcategory, is_pending, source (plaid/csv/manual) | All transactions regardless of source. |
-| `budgets` | id, household_id, category, amount_cents, period (monthly), start_date | Budget per category per month. |
-| `bills` | id, household_id, name, amount_cents, frequency, next_due_date, account_id, is_auto_detected | Recurring bills and subscriptions. |
-| `savings_goals` | id, household_id, name, target_cents, current_cents, target_date, icon | Savings goals with progress tracking. |
-| `category_rules` | id, household_id, pattern (merchant name match), category, subcategory | User-defined auto-categorization rules. |
+`CRON_SECRET` already exists (used by `sync-transactions` cron).
 
-All tables include `household_id` with RLS policies from day one.
+---
+
+## Existing Stack Serving Calendar & Notification Features
+
+These technologies are already installed and require NO additions:
+
+| Existing Technology | How It Serves Calendar/Notification Features |
+|---------------------|----------------------------------------------|
+| **date-fns ^4.1.0** | All date math: week/month boundaries, navigation, formatting, time grid positioning. Already used in 18+ files. Already in `optimizePackageImports`. |
+| **react-day-picker 8.10.1** | Mini month picker in calendar sidebar (same component used in journal). Already installed and working. |
+| **Supabase (auth + DB)** | `calendar_events`, `reminders`, `push_subscriptions`, `reminder_defaults` tables with RLS policies. Same DB class pattern as all other domains. |
+| **SWR** | Calendar feed fetching with `keepPreviousData: true` for smooth navigation. Optimistic updates for inline task/habit toggling. Date-range-keyed SWR keys. |
+| **react-hook-form + zod** | Event creation/edit forms. Reminder preferences form. Reuses existing form patterns and Zod validation at API boundaries. |
+| **shadcn/ui + Radix UI** | Dialog (event creation), Popover (quick-create), Select (view switcher), Button, Badge, Checkbox (inline actions), Sheet (mobile sidebar), Tooltip. |
+| **next-intl** | Calendar/reminder UI strings in en, zh, zh-TW. Date formatting localization. |
+| **next-themes** | Dark mode for all calendar views via existing CSS variable system. |
+| **lucide-react** | Calendar, Clock, Bell, BellRing, ChevronLeft, ChevronRight, Plus, Filter, Eye/EyeOff icons. |
+| **sonner** | Toast notifications for event CRUD confirmations, reminder creation feedback. |
+| **Vercel Cron** | `api/cron/send-reminders` endpoint. Same `CRON_SECRET` auth pattern as existing `sync-transactions` cron. |
+| **Tailwind CSS 3** | Calendar grid layout, responsive breakpoints, dark mode classes, design token usage. |
+| **Vitest + Playwright** | Unit tests for recurrence expansion, fire_at computation, event overlap algorithm. E2E tests for event creation flow, view navigation. |
 
 ---
 
 ## Sources
 
-### Package Versions (HIGH confidence -- verified via npm registry)
-- [plaid npm v41.1.0](https://www.npmjs.com/package/plaid) -- published 2026-02-03
-- [react-plaid-link npm v4.1.1](https://www.npmjs.com/package/react-plaid-link) -- published 2025-12
-- [decimal.js npm v10.6.0](https://www.npmjs.com/package/decimal.js) -- published 2025-07
-- [recharts npm v3.7.0](https://www.npmjs.com/package/recharts) -- published 2026-01
-- [jose npm v6.1.3](https://www.npmjs.com/package/jose) -- published 2025-11
-- [papaparse npm v5.5.3](https://www.npmjs.com/package/papaparse) -- published 2025-05
-- [nuqs npm](https://www.npmjs.com/package/nuqs) -- v2.x series
-- [inngest npm v3.52.3](https://www.npmjs.com/package/inngest) -- fallback option
+### Package Versions (verified via npm registry, 2026-03-30)
+- [web-push npm v3.6.7](https://www.npmjs.com/package/web-push) — Node.js >=16, includes VAPID key generator CLI
+- [resend npm v6.10.0](https://www.npmjs.com/package/resend) — Node.js >=20, optional `@react-email/render` peer dep
+- [@react-email/components npm v1.0.10](https://www.npmjs.com/package/@react-email/components) — React 18-19 compatible
+- [@react-email/render npm v2.0.4](https://www.npmjs.com/package/@react-email/render) — Server-side HTML rendering
+- [react-big-calendar npm v1.19.4](https://www.npmjs.com/package/react-big-calendar) — React 16-19 (evaluated, rejected)
+- [@schedule-x/react npm v4.1.0](https://www.npmjs.com/package/@schedule-x/react) — React 16-19 (evaluated, rejected)
+- [@serwist/next npm v9.5.7](https://www.npmjs.com/package/@serwist/next) — Next.js >=14 (evaluated, rejected)
 
-### Integration Patterns (HIGH confidence -- official documentation)
-- [Plaid Link Web SDK](https://plaid.com/docs/link/web/) -- React integration
-- [Plaid Webhook Verification](https://plaid.com/docs/api/webhooks/webhook-verification/) -- JWT/ES256 pattern
-- [Plaid Transactions Sync](https://plaid.com/docs/transactions/) -- Cursor-based sync
-- [Supabase Vault](https://supabase.com/docs/guides/database/vault) -- Token encryption at rest
-- [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) -- Multi-tenant isolation
-- [Supabase Realtime](https://supabase.com/docs/guides/realtime) -- Household sync
-- [Supabase Cron](https://supabase.com/docs/guides/cron) -- Scheduled background jobs
-- [Supabase Edge Functions Scheduling](https://supabase.com/docs/guides/functions/schedule-functions) -- Cron + Edge Functions
-- [shadcn/ui Charts](https://ui.shadcn.com/docs/components/radix/chart) -- Recharts integration
-- [nuqs docs](https://nuqs.dev) -- URL state management
+### Integration Patterns (Context7 + official docs)
+- [web-push library docs](https://github.com/web-push-libs/web-push) — VAPID setup, sendNotification API, error handling
+- [Resend Next.js integration](https://resend.com/docs/send-with-nextjs) — SDK usage in API routes
+- [React Email docs](https://react.email) — Component-based email templates
+- [Web Push API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Push_API) — Browser push subscription, service worker events
+- [Service Worker API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API) — Registration, push event handling
 
-### Architecture Patterns (MEDIUM confidence -- community sources)
-- [Multi-tenant RLS on Supabase](https://www.antstack.com/blog/multi-tenant-applications-with-rls-on-supabase-postgress/) -- Household isolation
-- [Supabase Vault tutorial](https://makerkit.dev/blog/tutorials/supabase-vault) -- Secret storage
-- [Background jobs with Supabase](https://www.jigz.dev/blogs/how-i-solved-background-jobs-using-supabase-tables-and-edge-functions) -- Job runner pattern
-- [Inngest + Vercel + Supabase](https://www.inngest.com/blog/vercel-integration) -- Fallback option
+### Architecture Decisions (project-specific reasoning)
+- Design spec: `docs/superpowers/specs/2026-03-30-calendar-reminders-design.md`
+- Existing cron pattern: `app/api/cron/sync-transactions/route.ts`
+- Existing recurrence logic: `lib/db/types.ts` (RecurrenceRule discriminated union)
+- Existing design tokens: `tailwind.config.ts` (56+ CSS custom properties)
 
 ---
-*Stack research for: BetterR.Me v4.0 Money Tracking*
-*Researched: 2026-02-21*
+*Stack research for: BetterR.Me v6.0 Calendar & Reminder Notifications*
+*Researched: 2026-03-30*
 *Scope: Additions only -- existing stack unchanged*
