@@ -1064,7 +1064,30 @@
       "weight_distance": "負重 + 距離"
     },
     "loadError": "載入動作失敗",
-    "exerciseThumbnailAlt": "{name} 動作演示"
+    "exerciseThumbnailAlt": "{name} 動作演示",
+    "exerciseDetail": {
+      "summaryTab": "概覽",
+      "historyTab": "歷史",
+      "howToTab": "動作指南",
+      "alsoKnownAs": "又稱",
+      "primaryMuscle": "主要",
+      "secondaryMuscles": "次要",
+      "equipmentLabel": "器材",
+      "typeLabel": "類型",
+      "personalRecords": "個人紀錄",
+      "bestWeight": "最大重量",
+      "bestReps": "最多次數",
+      "bestVolume": "最大容量",
+      "bestDuration": "最長時長",
+      "achievedOn": "達成於 {date}",
+      "noRecordsYet": "暫無個人紀錄。完成一次包含此動作的訓練即可開始記錄。",
+      "noHistoryYet": "此動作暫無訓練歷史。",
+      "instructions": "動作說明",
+      "step": "第 {number} 步",
+      "backToExercises": "動作庫",
+      "sets": "{count} 組",
+      "volume": "總容量"
+    }
   },
   "workouts": {
     "title": "訓練",
