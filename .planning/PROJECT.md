@@ -82,7 +82,23 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ### Active
 
-(No active requirements — next milestone not yet defined)
+(Defined in REQUIREMENTS.md for v6.0 Calendar & Reminder Notifications)
+
+## Current Milestone: v6.0 Calendar & Reminder Notifications
+
+**Goal:** Add a full calendar/scheduling domain with unified Day/Week/Month views, standalone event management, cross-domain aggregation (tasks, habits, bills, workouts), and push + email reminder notifications with smart defaults.
+
+**Target features:**
+- Calendar UI with Day/Week/Month views using BetterR.Me design tokens
+- Standalone event CRUD with recurrence (reusing existing RecurrenceRule)
+- Aggregated views from tasks, habits, bills, workouts with inline interaction
+- Push notifications via Web Push API + service worker
+- Email notifications via Resend/SendGrid
+- Smart reminder defaults per domain with user overrides
+- Reminder preferences with quiet hours
+- Keyboard shortcuts and responsive mobile layout
+
+**Design spec:** `docs/superpowers/specs/2026-03-30-calendar-reminders-design.md`
 
 ### Out of Scope
 
@@ -177,4 +193,4 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ---
 
-\_Last updated: 2026-03-13
+\_Last updated: 2026-03-30

@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: verifying
-stopped_at: Completed 29-02-PLAN.md
-last_updated: "2026-03-31T02:14:09.757Z"
-last_activity: 2026-03-31
+milestone: v6.0
+milestone_name: Calendar & Reminder Notifications
+status: defining_requirements
+stopped_at: null
+last_updated: "2026-03-30T22:00:00.000Z"
+last_activity: 2026-03-30 -- Milestone v6.0 started
 progress:
-  total_phases: 6
-  completed_phases: 2
-  total_plans: 10
-  completed_plans: 13
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Phase 28 — Thumbnails in Existing UI
+**Current focus:** Defining requirements for v6.0 Calendar & Reminder Notifications
 
 ## Current Position
 
-Phase: 28 (Thumbnails in Existing UI) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-03-31
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-30 — Milestone v6.0 started
 
 Progress: [█████░░░░░] 50%
 
@@ -73,7 +73,6 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 
 - [Phase 27]: Admin sync uses x-admin-secret header + user auth for double protection
 - [Phase 28-01]: Used native img tag instead of next/image for small GIF thumbnails (animation preservation)
-- [Phase 29]: Used preventDefault/stopPropagation on dropdown to prevent Link navigation conflicts in exercise card
 
 ### Pending Todos
 
@@ -91,6 +90,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-31T02:14:09.752Z
-Stopped at: Completed 29-02-PLAN.md
+Last session: 2026-03-30T19:31:00Z
+Stopped at: Completed 28-01-PLAN.md
 Resume: Continue with Phase 28 Plan 02
