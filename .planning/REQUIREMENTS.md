@@ -76,14 +76,14 @@
 
 ## Database & Infrastructure
 
-- [ ] **INFR-01**: calendar_events table with all fields from design spec (title, dates, times, location, recurrence, exceptions)
-- [ ] **INFR-02**: reminders table (source-agnostic: calendar_event/task/habit/bill) with fire_at index
-- [ ] **INFR-03**: reminder_defaults table for per-user smart defaults by source type
-- [ ] **INFR-04**: push_subscriptions table for Web Push API subscriptions
-- [ ] **INFR-05**: User's IANA timezone stored in profiles table for fire_at UTC computation
-- [ ] **INFR-06**: CalendarEventsDB, RemindersDB, PushSubscriptionsDB, ReminderDefaultsDB classes following existing patterns
-- [ ] **INFR-07**: Zod validation schemas for event CRUD and reminder CRUD at API boundaries
-- [ ] **INFR-08**: Service worker at public/sw.js handles push and notificationclick events only (no fetch interception)
+- [x] **INFR-01**: calendar_events table with all fields from design spec (title, dates, times, location, recurrence, exceptions)
+- [x] **INFR-02**: reminders table (source-agnostic: calendar_event/task/habit/bill) with fire_at index
+- [x] **INFR-03**: reminder_defaults table for per-user smart defaults by source type
+- [x] **INFR-04**: push_subscriptions table for Web Push API subscriptions
+- [x] **INFR-05**: User's IANA timezone stored in profiles table for fire_at UTC computation
+- [x] **INFR-06**: CalendarEventsDB, RemindersDB, PushSubscriptionsDB, ReminderDefaultsDB classes following existing patterns
+- [x] **INFR-07**: Zod validation schemas for event CRUD and reminder CRUD at API boundaries
+- [x] **INFR-08**: Service worker at public/sw.js handles push and notificationclick events only (no fetch interception)
 
 ## Internationalization
 
