@@ -1,221 +1,127 @@
-# Requirements: BetterR.Me v4.0 Money Tracking
+# Requirements — v6.0 Calendar & Reminder Notifications
 
-**Defined:** 2026-02-21
+**Defined:** 2026-03-30
 **Core Value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
+**Design Spec:** `docs/superpowers/specs/2026-03-30-calendar-reminders-design.md`
 
-## v4.0 Requirements
+## Calendar Views
 
-Requirements for money tracking milestone. Each maps to roadmap phases.
+- [ ] **VIEW-01**: User can see a monthly calendar grid with day cells showing compact event chips and "+N more" overflow
+- [ ] **VIEW-02**: User can see a weekly time grid with 7 day columns, hourly rows, and events rendered as colored blocks
+- [ ] **VIEW-03**: User can see a daily time grid with single-column full-width events
+- [ ] **VIEW-04**: User can switch between Day, Week, and Month views via header toggle
+- [ ] **VIEW-05**: User can navigate to previous/next period (day, week, or month) with arrow buttons
+- [ ] **VIEW-06**: User can jump to today with a "Today" button
+- [ ] **VIEW-07**: User can see a current time indicator (teal line) on Week and Day views
+- [ ] **VIEW-08**: User can see all-day events in a dedicated all-day row above the time grid
+- [ ] **VIEW-09**: Calendar page has a left sidebar with mini month picker for quick date navigation
+- [ ] **VIEW-10**: Calendar uses BetterR.Me design tokens (teal primary, rounded-xl, sidebar tokens, dark mode)
+- [ ] **VIEW-11**: Calendar defaults to Week view on desktop and Day view on mobile (sm breakpoint)
+- [ ] **VIEW-12**: User can use keyboard shortcuts: D (day), W (week), M (month), T (today), ← → (navigate), C (quick-create), N (new event dialog), / (search), Esc (close)
 
-### Foundation
+## Event Management
 
-- [x] **FOUN-01**: Household schema with `households` and `household_members` tables, RLS policies gating all money tables through `household_id`
-- [x] **FOUN-02**: All money amounts stored as integer cents (BIGINT), with `lib/money/arithmetic.ts` for cents-to-display conversion using decimal.js
-- [x] **FOUN-03**: Service-role Supabase admin client (`lib/supabase/admin.ts`) for cron jobs and webhook handlers that bypass RLS
-- [x] **FOUN-04**: `resolveHousehold()` helper derives household_id server-side from authenticated user — never from client input
-- [x] **FOUN-05**: Sidebar navigation includes "Money" top-level item with sub-navigation to money pages
-- [x] **FOUN-06**: Calm Finance design tokens (`--money-*` CSS variables) for money views — muted teal/amber palette, no aggressive red/green
-- [x] **FOUN-07**: i18n `money.*` namespace with all money UI strings in en, zh, zh-TW
-- [x] **FOUN-08**: Default household auto-created for each user on first money feature access (lazy creation)
+- [ ] **EVNT-01**: User can create a calendar event with title, date, start/end time, location, description, category, and color
+- [ ] **EVNT-02**: User can create all-day events (no start/end time)
+- [ ] **EVNT-03**: User can edit and delete calendar events
+- [ ] **EVNT-04**: User can create recurring events using the existing RecurrenceRule system (daily, weekly, monthly, yearly with interval)
+- [ ] **EVNT-05**: User can edit a single occurrence of a recurring event ("edit this event only") creating an exception record
+- [ ] **EVNT-06**: User can edit all occurrences of a recurring event ("edit all events")
+- [ ] **EVNT-07**: User can quick-create an event by clicking a time slot (popover with title, pre-filled time, Enter to save)
+- [ ] **EVNT-08**: User can create an event by click-and-dragging on the time grid (duration pre-filled from drag range)
+- [ ] **EVNT-09**: User can open a full event creation dialog via "+ New Event" button or N key
+- [ ] **EVNT-10**: Full event dialog has a "More options" expansion from quick-create for location, description, recurrence, reminders
 
-### Plaid Integration
+## Cross-Domain Aggregation
 
-- [x] **PLAD-01**: User can connect bank accounts via Plaid Link OAuth flow
-- [x] **PLAD-02**: Connected accounts sync transactions automatically via Plaid webhooks with cursor-based pagination
-- [x] **PLAD-03**: Plaid access tokens encrypted at rest via Supabase Vault before storage
-- [x] **PLAD-04**: Plaid webhook endpoint verifies JWT/ES256 signatures via jose before processing any payload
-- [x] **PLAD-05**: User can see sync status for each connected account (healthy/stale/error)
-- [x] **PLAD-06**: User can manually trigger a re-sync for a connected account
-- [x] **PLAD-07**: User can disconnect a bank connection
-- [x] **PLAD-08**: Background sync runs via Vercel Cron, cursor-based and idempotent (partial progress safe)
+- [ ] **AGGR-01**: Calendar shows tasks with due_date at their due_time (or in the all-day row if no time)
+- [ ] **AGGR-02**: Calendar shows active habits scheduled for each day in the all-day row
+- [ ] **AGGR-03**: Calendar shows bills with next_due_date in the all-day row
+- [ ] **AGGR-04**: Calendar shows logged workouts at their start time
+- [ ] **AGGR-05**: Each domain has a distinct color: events (teal/primary), tasks (blue), habits (amber), bills (red), workouts (purple)
+- [ ] **AGGR-06**: User can toggle visibility of each domain via sidebar layer checkboxes
+- [ ] **AGGR-07**: User can complete/uncomplete tasks directly from the calendar (circle checkbox)
+- [ ] **AGGR-08**: User can toggle habit completion directly from the calendar (square checkbox)
+- [ ] **AGGR-09**: User can mark bills as paid/dismissed directly from the calendar
+- [ ] **AGGR-10**: Clicking a workout on the calendar navigates to the workout detail page
+- [ ] **AGGR-11**: Unified feed API (`/api/calendar/feed`) returns all domain items for a date range in a single request
 
-### Transactions
+## Push Notifications
 
-- [ ] **TXNS-01**: User can view a cursor-paginated list of all transactions across accounts
-- [ ] **TXNS-02**: User can search transactions by keyword, date range, amount range, and category
-- [ ] **TXNS-03**: User can filter transactions by account
-- [ ] **TXNS-04**: User can manually override the category of any transaction
-- [ ] **TXNS-05**: User can create custom categories (household-scoped, shared between partners)
-- [ ] **TXNS-06**: User can split a transaction across multiple categories
-- [ ] **TXNS-07**: User can import transactions via CSV file upload with column mapping and duplicate detection
-- [ ] **TXNS-08**: User can manually enter individual transactions (for cash purchases)
+- [ ] **PUSH-01**: User can enable push notifications from settings with browser permission flow
+- [ ] **PUSH-02**: Service worker handles push events and displays native browser notifications
+- [ ] **PUSH-03**: Clicking a push notification navigates to the relevant item (event, task, habit, or bill)
+- [ ] **PUSH-04**: Push subscriptions stored per-device in push_subscriptions table
+- [ ] **PUSH-05**: VAPID keys stored as environment variables, generated once during setup
 
-### Categorization
+## Email Notifications
 
-- [ ] **CATG-01**: Transactions are auto-categorized using Plaid PFCv2 categories on sync
-- [ ] **CATG-02**: Merchant-name rule engine: user corrections auto-apply to future transactions from the same merchant
-- [ ] **CATG-03**: System default categories cannot be deleted, only hidden; custom categories are household-scoped
+- [ ] **MAIL-01**: User can enable email notifications from settings
+- [ ] **MAIL-02**: Email reminders sent via Resend with React Email templates per source type
+- [ ] **MAIL-03**: Every reminder email includes an unsubscribe link
+- [ ] **MAIL-04**: Email templates exist for: event reminder, task due, habit nudge, bill due
 
-### Budgets & Spending
+## Reminders
 
-- [ ] **BUDG-01**: User can create monthly budgets with spending limits per category
-- [ ] **BUDG-02**: User can see budget progress bars showing spent vs. remaining
-- [ ] **BUDG-03**: User can view spending breakdown charts by category (donut chart)
-- [ ] **BUDG-04**: User can view spending trends over time (bar charts, month-over-month)
-- [ ] **BUDG-05**: User can drill down from a category chart to see individual transactions
-- [ ] **BUDG-06**: Unused budget can roll over to the next month (configurable per budget)
+- [ ] **REMN-01**: User can add multiple reminders per calendar event (relative or absolute)
+- [ ] **REMN-02**: Relative reminders support: 5 min, 15 min, 30 min, 1 hour, 1 day before, and custom minutes
+- [ ] **REMN-03**: Absolute reminders support a specific date + time
+- [ ] **REMN-04**: Each reminder can target push, email, or both channels
+- [ ] **REMN-05**: Smart defaults auto-apply reminders based on source type (event: 15min/push, task: 1hr/push, habit: 8am/push, bill: 3days/push+email)
+- [ ] **REMN-06**: User can customize default reminders per source type in settings
+- [ ] **REMN-07**: User can set quiet hours (no push between configurable start/end times)
+- [ ] **REMN-08**: Vercel Cron job runs every minute to dispatch pending reminders
+- [ ] **REMN-09**: Reminders have fire_at pre-computed and recomputed on event reschedule
+- [ ] **REMN-10**: Failed reminder deliveries are logged with status='failed' for retry
 
-### Bills & Subscriptions
+## Database & Infrastructure
 
-- [ ] **BILL-01**: App auto-detects recurring charges from transaction history (merchant + similar amount + regular interval)
-- [ ] **BILL-02**: User can see a list of all detected bills and subscriptions with amounts and frequency
-- [ ] **BILL-03**: User can view a bill calendar showing upcoming charges
-- [ ] **BILL-04**: User can confirm or dismiss auto-detected bills (false positive handling)
+- [ ] **INFR-01**: calendar_events table with all fields from design spec (title, dates, times, location, recurrence, exceptions)
+- [ ] **INFR-02**: reminders table (source-agnostic: calendar_event/task/habit/bill) with fire_at index
+- [ ] **INFR-03**: reminder_defaults table for per-user smart defaults by source type
+- [ ] **INFR-04**: push_subscriptions table for Web Push API subscriptions
+- [ ] **INFR-05**: User's IANA timezone stored in profiles table for fire_at UTC computation
+- [ ] **INFR-06**: CalendarEventsDB, RemindersDB, PushSubscriptionsDB, ReminderDefaultsDB classes following existing patterns
+- [ ] **INFR-07**: Zod validation schemas for event CRUD and reminder CRUD at API boundaries
+- [ ] **INFR-08**: Service worker at public/sw.js handles push and notificationclick events only (no fetch interception)
 
-### Savings Goals
+## Internationalization
 
-- [ ] **GOAL-01**: User can create savings goals with target amount and optional deadline
-- [ ] **GOAL-02**: User can see visual progress toward each goal (progress bar/ring)
-- [ ] **GOAL-03**: User can track multiple goals simultaneously
-- [ ] **GOAL-04**: Goals can be individual or shared with partner (household-scoped)
-- [ ] **GOAL-05**: App shows projected completion date based on current savings rate
+- [ ] **I18N-01**: All calendar and reminder UI strings translated in en, zh, and zh-TW
 
-### Net Worth
+## Responsive & Accessibility
 
-- [ ] **NTWT-01**: User can see total net worth (assets minus liabilities) across all connected accounts
-- [ ] **NTWT-02**: Net worth is tracked over time with a line chart
-- [ ] **NTWT-03**: Net worth updates automatically as accounts sync
+- [ ] **RESP-01**: On mobile (sm), sidebar collapses; layer toggles move to header filter dropdown
+- [ ] **RESP-02**: On mobile, default view is Day with swipe left/right to navigate
+- [ ] **RESP-03**: "+ New Event" becomes a floating action button on mobile
 
-### Household/Couples
+## Future Requirements (deferred)
 
-- [ ] **HOUS-01**: User can invite a partner to join their household via email
-- [ ] **HOUS-02**: Each partner has their own login and personal view
-- [ ] **HOUS-03**: Both partners can see a combined household spending view
-- [ ] **HOUS-04**: User can set accounts as "mine", "ours", or "hidden" (balance-only) for privacy controls
-- [ ] **HOUS-05**: Each partner can have individual budgets alongside shared household budgets
-- [ ] **HOUS-06**: Household view shows combined net worth, spending, and budgets
-- [ ] **HOUS-07**: Partner 1 can use the app solo; Partner 2 joins asynchronously without disruption
-
-### Future-First Dashboard
-
-- [ ] **DASH-01**: Default money home view shows forward-looking financial picture
-- [ ] **DASH-02**: Dashboard shows available money until next paycheck
-- [ ] **DASH-03**: Dashboard shows upcoming bills for the next 30 days with total amounts
-- [ ] **DASH-04**: Dashboard shows projected end-of-month balance at current spending pace
-- [ ] **DASH-05**: Income patterns auto-detected from transaction history
-- [ ] **DASH-06**: Smart bill calendar with projected balance overlay and danger-zone highlighting
-- [ ] **DASH-07**: Money summary card on existing BetterR.Me habit/task dashboard
-
-### AI Insights
-
-- [ ] **AIML-01**: App surfaces spending anomalies with context (e.g., "Groceries up 15% vs 3-month average")
-- [ ] **AIML-02**: App detects subscription price increases and alerts user
-- [ ] **AIML-03**: App shows progress toward goals with projected completion date
-- [ ] **AIML-04**: Insights are embedded in relevant pages (dashboard, budgets, bills, goals), not in a chatbot
-- [ ] **AIML-05**: Insights use anxiety-aware, progress-framing language consistent with Calm Finance
-
-### Data Management
-
-- [ ] **MGMT-01**: User can export transactions as CSV with selectable date range
-- [ ] **MGMT-02**: User can delete their money data and household membership
-
-## v5 Requirements
-
-Deferred to future release. Tracked but not in current roadmap.
-
-### Enhanced Features
-
-- **ADVN-01**: Partner spending comparisons (side-by-side category breakdowns, neutral framing)
-- **ADVN-02**: Advanced reporting (custom date ranges, year-over-year, tax categories)
-- **ADVN-03**: Anxiety-aware progressive onboarding wizard
-- **ADVN-04**: Email notifications for bill due dates and budget threshold alerts
-- **ADVN-05**: Stripe billing integration with freemium tier enforcement
+- Google Calendar / iCal import/sync
+- Drag-and-drop rescheduling of events on the grid
+- Collaborative calendars / sharing
+- Natural language event creation
+- Time analytics ("how I spent my week")
+- SMS notification channel
+- Notification snooze
 
 ## Out of Scope
 
-| Feature | Reason |
-|---------|--------|
-| AI chatbot for financial advice | SEC/FINRA compliance risk, LLM hallucination liability with financial advice |
-| Bill negotiation service | Operational complexity, legal liability, 35-60% fee structure erodes trust |
-| Investment advisory / robo-advisor | SEC/FINRA registration required, different product category |
-| Real-time chat between partners | Scope creep, couples already have messaging apps |
-| Gamification for money (streaks, badges) | Conflicts with Calm Finance philosophy — financial anxiety |
-| Multi-currency support | Massive complexity, US-focused for v4.0 |
-| Automatic bill payment | Money transmitter licensing, ACH complexity, liability |
-| Native mobile apps | Web-only, responsive design covers mobile |
-| Envelope budgeting (YNAB-style) | High complexity, niche audience — standard category-limit budgeting instead |
-| Receipt scanning / OCR | Specialized feature requiring camera integration and OCR pipeline |
-| Separate moneyy.me branding | Single codebase, single deployment, single auth inside BetterR.Me |
-| Stripe/freemium billing | Build features first (explicit decision), add billing in future milestone |
+- **Google Calendar sync** — complex OAuth + bidirectional sync, separate milestone
+- **Drag-and-drop rescheduling** — high complexity for marginal value in personal use
+- **Collaborative calendars** — single-user focus for now
+- **Natural language creation** — nice-to-have, not essential for launch
+- **Time analytics** — requires usage data, better as future enhancement
+- **SMS notifications** — cost per message, push + email sufficient
+- **Custom notification sounds** — browser API limitations, minimal user value
+- **In-app notification center** — toast notifications (sonner) sufficient for now
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| FOUN-01 | Phase 18 | Complete |
-| FOUN-02 | Phase 18 | Complete |
-| FOUN-03 | Phase 18 | Complete |
-| FOUN-04 | Phase 18 | Complete |
-| FOUN-05 | Phase 18 | Complete |
-| FOUN-06 | Phase 18 | Complete |
-| FOUN-07 | Phase 18 | Complete |
-| FOUN-08 | Phase 18 | Complete |
-| PLAD-01 | Phase 19 | Complete |
-| PLAD-02 | Phase 19 | Complete |
-| PLAD-03 | Phase 19 | Complete |
-| PLAD-04 | Phase 19 | Complete |
-| PLAD-05 | Phase 19 | Complete |
-| PLAD-06 | Phase 19 | Complete |
-| PLAD-07 | Phase 19 | Complete |
-| PLAD-08 | Phase 19 | Complete |
-| TXNS-01 | Phase 20 | Pending |
-| TXNS-02 | Phase 20 | Pending |
-| TXNS-03 | Phase 20 | Pending |
-| TXNS-04 | Phase 20 | Pending |
-| TXNS-05 | Phase 20 | Pending |
-| TXNS-06 | Phase 20 | Pending |
-| TXNS-07 | Phase 20 | Pending |
-| TXNS-08 | Phase 20 | Pending |
-| CATG-01 | Phase 20 | Pending |
-| CATG-02 | Phase 20 | Pending |
-| CATG-03 | Phase 20 | Pending |
-| BUDG-01 | Phase 21 | Pending |
-| BUDG-02 | Phase 21 | Pending |
-| BUDG-03 | Phase 21 | Pending |
-| BUDG-04 | Phase 21 | Pending |
-| BUDG-05 | Phase 21 | Pending |
-| BUDG-06 | Phase 21 | Pending |
-| BILL-01 | Phase 22 | Pending |
-| BILL-02 | Phase 22 | Pending |
-| BILL-03 | Phase 22 | Pending |
-| BILL-04 | Phase 22 | Pending |
-| GOAL-01 | Phase 22 | Pending |
-| GOAL-02 | Phase 22 | Pending |
-| GOAL-03 | Phase 22 | Pending |
-| GOAL-04 | Phase 22 | Pending |
-| GOAL-05 | Phase 22 | Pending |
-| NTWT-01 | Phase 22 | Pending |
-| NTWT-02 | Phase 22 | Pending |
-| NTWT-03 | Phase 22 | Pending |
-| HOUS-01 | Phase 23 | Pending |
-| HOUS-02 | Phase 23 | Pending |
-| HOUS-03 | Phase 23 | Pending |
-| HOUS-04 | Phase 23 | Pending |
-| HOUS-05 | Phase 23 | Pending |
-| HOUS-06 | Phase 23 | Pending |
-| HOUS-07 | Phase 23 | Pending |
-| DASH-01 | Phase 24 | Pending |
-| DASH-02 | Phase 24 | Pending |
-| DASH-03 | Phase 24 | Pending |
-| DASH-04 | Phase 24 | Pending |
-| DASH-05 | Phase 24 | Pending |
-| DASH-06 | Phase 24 | Pending |
-| DASH-07 | Phase 24 | Pending |
-| AIML-01 | Phase 24 | Pending |
-| AIML-02 | Phase 24 | Pending |
-| AIML-03 | Phase 24 | Pending |
-| AIML-04 | Phase 24 | Pending |
-| AIML-05 | Phase 24 | Pending |
-| MGMT-01 | Phase 25 | Pending |
-| MGMT-02 | Phase 25 | Pending |
-
-**Coverage:**
-- v4.0 requirements: 66 total
-- Mapped to phases: 66
-- Unmapped: 0
+| Phase | Requirements |
+|-------|-------------|
+| (filled by roadmapper) | |
 
 ---
-*Requirements defined: 2026-02-21*
-*Last updated: 2026-02-21 after roadmap creation*
+*v6.0 Calendar & Reminder Notifications*
+*57 requirements across 9 categories*
