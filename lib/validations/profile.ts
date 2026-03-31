@@ -16,6 +16,7 @@ export const profileUpdateSchema = profileFormSchema
   .partial()
   .extend({
     preferences: z.record(z.unknown()).optional(),
+    timezone: z.string().min(1).max(100).optional().nullable(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
