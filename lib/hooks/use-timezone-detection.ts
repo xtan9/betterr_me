@@ -17,8 +17,12 @@ export function useTimezoneDetection(profileTimezone: string | null | undefined)
     if (profileTimezone) return; // Already set, nothing to do
 
     // Check localStorage to avoid repeated calls across page navigations
-    const flag = localStorage.getItem("betterrme_tz_detected");
-    if (flag) return;
+    try {
+      const flag = localStorage.getItem("betterrme_tz_detected");
+      if (flag) return;
+    } catch {
+      // localStorage unavailable (Safari private browsing, sandboxed iframes)
+    }
 
     const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!detectedTimezone) return;
@@ -32,11 +36,15 @@ export function useTimezoneDetection(profileTimezone: string | null | undefined)
     })
       .then((res) => {
         if (res.ok) {
-          localStorage.setItem("betterrme_tz_detected", "1");
+          try {
+            localStorage.setItem("betterrme_tz_detected", "1");
+          } catch {
+            // localStorage unavailable — will retry next load but that's acceptable
+          }
         }
       })
-      .catch(() => {
-        // Silent failure — timezone detection is non-critical
+      .catch((err) => {
+        console.error("Timezone detection failed:", err);
         // Will retry on next page load since localStorage flag wasn't set
       });
   }, [profileTimezone]);

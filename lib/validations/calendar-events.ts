@@ -14,10 +14,7 @@ export const calendarEventCreateSchema = z
       .regex(timeRegex, "Must be HH:MM or HH:MM:SS")
       .nullable()
       .optional(),
-    end_date: z
-      .string()
-      .regex(dateRegex, "Must be YYYY-MM-DD")
-      .optional(),
+    end_date: z.string().regex(dateRegex, "Must be YYYY-MM-DD"),
     end_time: z
       .string()
       .regex(timeRegex, "Must be HH:MM or HH:MM:SS")
@@ -52,12 +49,19 @@ export const calendarEventCreateSchema = z
       return true;
     },
     { message: "recurrence_rule is required when is_recurring is true" },
+  )
+  .refine(
+    (data) => data.end_date >= data.start_date,
+    { message: "end_date must be on or after start_date" },
   );
 
 export type CalendarEventCreateValues = z.infer<
   typeof calendarEventCreateSchema
 >;
 
+// Update schema uses PATCH semantics — cross-field refinements (end_time requires
+// start_time, is_recurring requires recurrence_rule) are intentionally omitted because
+// the server merges partial updates with the existing record.
 export const calendarEventUpdateSchema = z
   .object({
     title: z.string().trim().min(1).max(200).optional(),

@@ -214,10 +214,11 @@ describe('CalendarEventsDB', () => {
       const exception = { ...mockEvent, is_exception: true, recurring_event_id: 'parent-123' };
       mockSupabaseClient.setMockResponse([exception]);
 
-      const events = await calendarEventsDB.getExceptions('parent-123');
+      const events = await calendarEventsDB.getExceptions(mockUserId, 'parent-123');
 
       expect(events).toEqual([exception]);
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('calendar_events');
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('recurring_event_id', 'parent-123');
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('is_exception', true);
     });
@@ -225,7 +226,7 @@ describe('CalendarEventsDB', () => {
     it('should return empty array when no exceptions', async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      const events = await calendarEventsDB.getExceptions('parent-123');
+      const events = await calendarEventsDB.getExceptions(mockUserId, 'parent-123');
 
       expect(events).toEqual([]);
     });

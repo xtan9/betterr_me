@@ -38,13 +38,14 @@ export class RemindersDB {
     return data || [];
   }
 
-  async updateReminderStatus(reminderId: string, status: ReminderStatus, sentAt?: string): Promise<Reminder> {
+  async updateReminderStatus(userId: string, reminderId: string, status: ReminderStatus, sentAt?: string): Promise<Reminder> {
     const updates: ReminderUpdate = { status };
     if (sentAt) updates.sent_at = sentAt;
     const { data, error } = await this.supabase
       .from('reminders')
       .update(updates)
       .eq('id', reminderId)
+      .eq('user_id', userId)
       .select()
       .single();
     if (error) throw error;

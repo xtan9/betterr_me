@@ -175,4 +175,9 @@ describe('reminderUpdateSchema', () => {
     const result = reminderUpdateSchema.safeParse({ status: 'cancelled' });
     expect(result.success).toBe(false);
   });
+
+  it('should reject empty channels array', () => {
+    const result = reminderUpdateSchema.safeParse({ channels: [] });
+    expect(result.success).toBe(false);
+  });
 });

@@ -182,6 +182,39 @@ describe('calendarEventCreateSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('should reject description longer than 2000 characters', () => {
+    const result = calendarEventCreateSchema.safeParse({
+      ...validMinimal,
+      description: 'a'.repeat(2001),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject location longer than 500 characters', () => {
+    const result = calendarEventCreateSchema.safeParse({
+      ...validMinimal,
+      location: 'a'.repeat(501),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should require end_date', () => {
+    const result = calendarEventCreateSchema.safeParse({
+      title: 'Meeting',
+      start_date: '2026-04-01',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject end_date before start_date', () => {
+    const result = calendarEventCreateSchema.safeParse({
+      title: 'Meeting',
+      start_date: '2026-04-05',
+      end_date: '2026-04-01',
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('calendarEventUpdateSchema', () => {

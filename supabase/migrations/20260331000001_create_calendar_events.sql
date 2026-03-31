@@ -35,7 +35,9 @@ CREATE TABLE calendar_events (
   is_exception BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT chk_allday_consistency CHECK (start_time IS NOT NULL OR (start_time IS NULL AND end_time IS NULL))
+  CONSTRAINT chk_allday_consistency CHECK (start_time IS NOT NULL OR (start_time IS NULL AND end_time IS NULL)),
+  CONSTRAINT chk_recurring_has_rule CHECK (NOT is_recurring OR recurrence_rule IS NOT NULL),
+  CONSTRAINT chk_exception_has_parent CHECK (NOT is_exception OR recurring_event_id IS NOT NULL)
 );
 
 CREATE INDEX idx_calendar_events_user_date ON calendar_events(user_id, start_date);
@@ -70,7 +72,9 @@ CREATE TABLE reminders (
   status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed', 'snoozed')) DEFAULT 'pending',
   fire_at TIMESTAMPTZ NOT NULL,
   sent_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT chk_relative_has_minutes CHECK (reminder_type != 'relative' OR relative_minutes IS NOT NULL),
+  CONSTRAINT chk_absolute_has_time CHECK (reminder_type != 'absolute' OR absolute_time IS NOT NULL)
 );
 
 CREATE INDEX idx_reminders_fire_at ON reminders(fire_at) WHERE status = 'pending';

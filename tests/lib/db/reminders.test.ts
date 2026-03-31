@@ -121,19 +121,20 @@ describe('RemindersDB', () => {
       const updatedReminder = { ...mockReminder, status: 'sent' as const, sent_at: '2026-03-30T09:45:00Z' };
       mockSupabaseClient.setMockResponse(updatedReminder);
 
-      const result = await remindersDB.updateReminderStatus('reminder-123', 'sent', '2026-03-30T09:45:00Z');
+      const result = await remindersDB.updateReminderStatus(mockUserId, 'reminder-123', 'sent', '2026-03-30T09:45:00Z');
 
       expect(result).toEqual(updatedReminder);
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('reminders');
       expect(mockSupabaseClient.update).toHaveBeenCalledWith({ status: 'sent', sent_at: '2026-03-30T09:45:00Z' });
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'reminder-123');
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
     });
 
     it('should update status without sentAt', async () => {
       const snoozedReminder = { ...mockReminder, status: 'snoozed' as const };
       mockSupabaseClient.setMockResponse(snoozedReminder);
 
-      const result = await remindersDB.updateReminderStatus('reminder-123', 'snoozed');
+      const result = await remindersDB.updateReminderStatus(mockUserId, 'reminder-123', 'snoozed');
 
       expect(result).toEqual(snoozedReminder);
       expect(mockSupabaseClient.update).toHaveBeenCalledWith({ status: 'snoozed' });
@@ -142,7 +143,7 @@ describe('RemindersDB', () => {
     it('should throw on database error', async () => {
       mockSupabaseClient.setMockResponse(null, { message: 'Update error' });
 
-      await expect(remindersDB.updateReminderStatus('reminder-123', 'sent'))
+      await expect(remindersDB.updateReminderStatus(mockUserId, 'reminder-123', 'sent'))
         .rejects.toEqual({ message: 'Update error' });
     });
   });

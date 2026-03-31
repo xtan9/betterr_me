@@ -1192,8 +1192,6 @@ export type ApiKeyPublic = Omit<ApiKey, 'key_hash'>;
 // CALENDAR EVENTS
 // =============================================================================
 
-export type CalendarEventEndType = "never" | "after_count" | "on_date";
-
 export interface CalendarEvent {
   id: string;
   user_id: string;
@@ -1208,7 +1206,7 @@ export interface CalendarEvent {
   category_id: string | null;
   is_recurring: boolean;
   recurrence_rule: RecurrenceRule | null;
-  end_type: CalendarEventEndType | null;
+  end_type: EndType | null;
   end_date_recurrence: string | null;
   end_count: number | null;
   recurring_event_id: string | null;

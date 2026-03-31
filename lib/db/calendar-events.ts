@@ -74,10 +74,11 @@ export class CalendarEventsDB {
     return data || [];
   }
 
-  async getExceptions(recurringEventId: string): Promise<CalendarEvent[]> {
+  async getExceptions(userId: string, recurringEventId: string): Promise<CalendarEvent[]> {
     const { data, error } = await this.supabase
       .from('calendar_events')
       .select('*')
+      .eq('user_id', userId)
       .eq('recurring_event_id', recurringEventId)
       .eq('is_exception', true);
     if (error) throw error;
