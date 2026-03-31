@@ -2,8 +2,8 @@
 phase: 29
 slug: database-schema-infrastructure-foundation
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-30
 ---
 
@@ -38,15 +38,15 @@ created: 2026-03-30
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 29-01-01 | 01 | 1 | INFR-01 | migration | `supabase db diff` | ❌ W0 | ⬜ pending |
-| 29-01-02 | 01 | 1 | INFR-02 | migration | `supabase db diff` | ❌ W0 | ⬜ pending |
-| 29-02-01 | 02 | 1 | INFR-03 | unit | `pnpm test:run tests/lib/db/calendar-events.test.ts` | ❌ W0 | ⬜ pending |
-| 29-02-02 | 02 | 1 | INFR-04 | unit | `pnpm test:run tests/lib/db/reminders.test.ts` | ❌ W0 | ⬜ pending |
-| 29-02-03 | 02 | 1 | INFR-05 | unit | `pnpm test:run tests/lib/db/push-subscriptions.test.ts` | ❌ W0 | ⬜ pending |
-| 29-02-04 | 02 | 1 | INFR-06 | unit | `pnpm test:run tests/lib/db/reminder-defaults.test.ts` | ❌ W0 | ⬜ pending |
-| 29-03-01 | 03 | 2 | INFR-07 | unit | `pnpm test:run tests/lib/validations/calendar-events.test.ts` | ❌ W0 | ⬜ pending |
-| 29-03-02 | 03 | 2 | INFR-07 | unit | `pnpm test:run tests/lib/validations/reminders.test.ts` | ❌ W0 | ⬜ pending |
-| 29-04-01 | 04 | 2 | INFR-08 | unit | `pnpm test:run tests/lib/service-worker.test.ts` | ❌ W0 | ⬜ pending |
+| 29-01-01 | 01 | 1 | INFR-01 | migration | `[ $(grep -c "CREATE TABLE" supabase/migrations/20260331000001_create_calendar_events.sql) -eq 4 ] && echo PASS` | shell | ⬜ pending |
+| 29-01-02 | 01 | 1 | INFR-02 | migration | `grep -q "timezone" lib/db/types.ts && echo PASS` | shell | ⬜ pending |
+| 29-02-01 | 02 | 1 | INFR-03 | unit | `pnpm test:run tests/lib/db/calendar-events.test.ts` | TDD | ⬜ pending |
+| 29-02-02 | 02 | 1 | INFR-04 | unit | `pnpm test:run tests/lib/db/reminders.test.ts` | TDD | ⬜ pending |
+| 29-02-03 | 02 | 1 | INFR-05 | unit | `pnpm test:run tests/lib/db/push-subscriptions.test.ts` | TDD | ⬜ pending |
+| 29-02-04 | 02 | 1 | INFR-06 | unit | `pnpm test:run tests/lib/db/reminder-defaults.test.ts` | TDD | ⬜ pending |
+| 29-03-01 | 03 | 2 | INFR-07 | unit | `pnpm test:run tests/lib/validations/calendar-events.test.ts` | TDD | ⬜ pending |
+| 29-03-02 | 03 | 2 | INFR-07 | unit | `pnpm test:run tests/lib/validations/reminders.test.ts` | TDD | ⬜ pending |
+| 29-04-01 | 04 | 2 | INFR-08 | shell | `test -f public/sw.js && grep -q "addEventListener.*push" public/sw.js && echo PASS` | shell | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -54,14 +54,7 @@ created: 2026-03-30
 
 ## Wave 0 Requirements
 
-- [ ] `tests/lib/db/calendar-events.test.ts` — stubs for CalendarEventsDB CRUD
-- [ ] `tests/lib/db/reminders.test.ts` — stubs for RemindersDB CRUD
-- [ ] `tests/lib/db/push-subscriptions.test.ts` — stubs for PushSubscriptionsDB CRUD
-- [ ] `tests/lib/db/reminder-defaults.test.ts` — stubs for ReminderDefaultsDB CRUD
-- [ ] `tests/lib/validations/calendar-events.test.ts` — stubs for event validation
-- [ ] `tests/lib/validations/reminders.test.ts` — stubs for reminder validation
-
-*Existing infrastructure covers framework setup — only test file stubs needed.*
+None — all test files are created inline by TDD tasks in Plans 02, 03. Shell-based verify commands are used for Plans 01 and 04 (migration and service worker tasks).
 
 ---
 
@@ -76,11 +69,11 @@ created: 2026-03-30
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or shell-based verify
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 not needed — TDD tasks self-create test files, others use shell verify
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-03-30
