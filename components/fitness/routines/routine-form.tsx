@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
@@ -63,6 +63,16 @@ export function RoutineForm({
       notes: routine?.notes ?? "",
     },
   });
+
+  // Reset form values when the dialog opens or routine changes
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        name: routine?.name ?? "",
+        notes: routine?.notes ?? "",
+      });
+    }
+  }, [open, routine, form]);
 
   // Handle adding an exercise to the routine (edit mode only)
   const handleAddExercise = useCallback(

@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { useSWRConfig } from "swr";
 import { log } from "@/lib/logger";
 import { Plus, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export function RoutinesPageContent() {
   const t = useTranslations("routines");
   const router = useRouter();
   const { routines, error, isLoading, mutate } = useRoutines();
+  const { mutate: globalMutate } = useSWRConfig();
 
   // Form dialog state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -56,13 +58,15 @@ export function RoutinesPageContent() {
           throw new Error("Failed to start workout");
         }
 
+        // Invalidate active workout SWR cache so the page fetches fresh data
+        await globalMutate("/api/workouts/active");
         router.push("/workouts/active");
       } catch (error) {
         log.error("Failed to start workout from routine", error);
         toast.error(t("startError"));
       }
     },
-    [router, t]
+    [router, t, globalMutate]
   );
 
   // Edit routine
