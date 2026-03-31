@@ -1064,7 +1064,30 @@
       "weight_distance": "Weight + Distance"
     },
     "loadError": "Failed to load exercises",
-    "exerciseThumbnailAlt": "{name} exercise demonstration"
+    "exerciseThumbnailAlt": "{name} exercise demonstration",
+    "exerciseDetail": {
+      "summaryTab": "Summary",
+      "historyTab": "History",
+      "howToTab": "How To",
+      "alsoKnownAs": "Also known as",
+      "primaryMuscle": "Primary",
+      "secondaryMuscles": "Secondary",
+      "equipmentLabel": "Equipment",
+      "typeLabel": "Type",
+      "personalRecords": "Personal Records",
+      "bestWeight": "Best Weight",
+      "bestReps": "Best Reps",
+      "bestVolume": "Best Volume",
+      "bestDuration": "Best Duration",
+      "achievedOn": "Achieved {date}",
+      "noRecordsYet": "No personal records yet. Complete a workout with this exercise to start tracking.",
+      "noHistoryYet": "No workout history for this exercise yet.",
+      "instructions": "Instructions",
+      "step": "Step {number}",
+      "backToExercises": "Exercises",
+      "sets": "{count} sets",
+      "volume": "Volume"
+    }
   },
   "workouts": {
     "title": "Workouts",

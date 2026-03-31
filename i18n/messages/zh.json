@@ -1064,7 +1064,30 @@
       "weight_distance": "负重 + 距离"
     },
     "loadError": "加载动作失败",
-    "exerciseThumbnailAlt": "{name} 动作演示"
+    "exerciseThumbnailAlt": "{name} 动作演示",
+    "exerciseDetail": {
+      "summaryTab": "概览",
+      "historyTab": "历史",
+      "howToTab": "动作指南",
+      "alsoKnownAs": "又称",
+      "primaryMuscle": "主要",
+      "secondaryMuscles": "次要",
+      "equipmentLabel": "器械",
+      "typeLabel": "类型",
+      "personalRecords": "个人纪录",
+      "bestWeight": "最大重量",
+      "bestReps": "最多次数",
+      "bestVolume": "最大容量",
+      "bestDuration": "最长时长",
+      "achievedOn": "达成于 {date}",
+      "noRecordsYet": "暂无个人纪录。完成一次包含此动作的训练即可开始记录。",
+      "noHistoryYet": "此动作暂无训练历史。",
+      "instructions": "动作说明",
+      "step": "第 {number} 步",
+      "backToExercises": "动作库",
+      "sets": "{count} 组",
+      "volume": "总容量"
+    }
   },
   "workouts": {
     "title": "训练",
