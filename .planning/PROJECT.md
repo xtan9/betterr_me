@@ -84,6 +84,15 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 (Defined in REQUIREMENTS.md for v6.0 Calendar & Reminder Notifications)
 
+### Recently Validated (v6.0 Phase 29)
+
+- ✓ Database schema for calendar_events, reminders, reminder_defaults, push_subscriptions tables with RLS — v6.0 Phase 29
+- ✓ TypeScript types for all calendar/reminder domain entities — v6.0 Phase 29
+- ✓ DB classes (CalendarEventsDB, RemindersDB, PushSubscriptionsDB, ReminderDefaultsDB) with unit tests — v6.0 Phase 29
+- ✓ Zod validation schemas for calendar events and reminders with cross-field refinements — v6.0 Phase 29
+- ✓ Service worker for push notifications (no fetch interception) — v6.0 Phase 29
+- ✓ Timezone infrastructure (profiles.timezone column, detection hook, profile validation) — v6.0 Phase 29
+
 ## Current Milestone: v6.0 Calendar & Reminder Notifications
 
 **Goal:** Add a full calendar/scheduling domain with unified Day/Week/Month views, standalone event management, cross-domain aggregation (tasks, habits, bills, workouts), and push + email reminder notifications with smart defaults.
@@ -193,4 +202,4 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ---
 
-\_Last updated: 2026-03-30
+\_Last updated: 2026-03-31
