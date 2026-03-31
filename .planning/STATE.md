@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 27-03-PLAN.md
-last_updated: "2026-03-30T18:28:08.364Z"
-last_activity: 2026-03-30
+stopped_at: Completed 28-01-PLAN.md
+last_updated: "2026-03-30T19:31:25.180Z"
+last_activity: 2026-03-30 -- Completed 28-01 ExerciseThumbnail component
 progress:
-  total_phases: 4
-  completed_phases: 2
-  total_plans: 8
-  completed_plans: 11
-  percent: 33
+  total_phases: 2
+  completed_phases: 0
+  total_plans: 2
+  completed_plans: 1
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Phase 27 — Data Layer & Sync
+**Current focus:** Phase 28 — Thumbnails in Existing UI
 
 ## Current Position
 
-Phase: 27
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-03-30
+Phase: 28 (Thumbnails in Existing UI) — EXECUTING
+Plan: 2 of 2
+Status: Plan 28-01 complete, executing Plan 28-02
+Last activity: 2026-03-30 -- Completed 28-01 ExerciseThumbnail component
 
-Progress: [███░░░░░░░] 33%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -72,6 +72,7 @@ Progress: [███░░░░░░░] 33%
 See PROJECT.md Key Decisions table for full log with outcomes.
 
 - [Phase 27]: Admin sync uses x-admin-secret header + user auth for double protection
+- [Phase 28-01]: Used native img tag instead of next/image for small GIF thumbnails (animation preservation)
 
 ### Pending Todos
 
@@ -89,6 +90,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-30T18:21:12.349Z
-Stopped at: Completed 27-03-PLAN.md
-Resume: Continue with Phase 27 Plan 03
+Last session: 2026-03-30T19:31:00Z
+Stopped at: Completed 28-01-PLAN.md
+Resume: Continue with Phase 28 Plan 02

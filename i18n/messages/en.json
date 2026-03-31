@@ -1063,7 +1063,8 @@
       "distance_duration": "Distance + Duration",
       "weight_distance": "Weight + Distance"
     },
-    "loadError": "Failed to load exercises"
+    "loadError": "Failed to load exercises",
+    "exerciseThumbnailAlt": "{name} exercise demonstration"
   },
   "workouts": {
     "title": "Workouts",

@@ -1063,7 +1063,8 @@
       "distance_duration": "距离 + 时长",
       "weight_distance": "负重 + 距离"
     },
-    "loadError": "加载动作失败"
+    "loadError": "加载动作失败",
+    "exerciseThumbnailAlt": "{name} 动作演示"
   },
   "workouts": {
     "title": "训练",

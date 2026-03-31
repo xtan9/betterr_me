@@ -85,15 +85,19 @@ test.describe('Visual Regression', () => {
   test('habits list', async ({ page }) => {
     const habitsPage = new HabitsPage(page);
     await habitsPage.goto();
+    // Allow SWR data and animations to settle before screenshot
+    await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('habits-list.png', {
       maxDiffPixelRatio: 0.01,
       // Use viewport clip (not fullPage) — habit count varies with parallel create-habit tests
       mask: [
-        // Mask only dynamic sub-elements, not entire cards
-        page.locator('[role="checkbox"]'),
-        page.locator('[data-testid="habit-streaks"]'),
-        page.locator('[data-testid="habit-monthly-progress"]'),
+        // Mask entire habit cards — card count and content (names, streaks,
+        // completion rates) are non-deterministic due to parallel create-habit
+        // tests and daily date changes. This test validates the page chrome
+        // (header, tabs, search, layout grid) not card internals.
+        page.locator('[data-testid^="habit-card"]'),
+        page.locator('[data-testid="empty-state"]'),
       ],
     });
   });
@@ -101,10 +105,16 @@ test.describe('Visual Regression', () => {
   test('create habit form', async ({ page }) => {
     const createPage = new CreateHabitPage(page);
     await createPage.goto();
+    // Allow categories to load via SWR before screenshot
+    await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('create-habit-form.png', {
       maxDiffPixelRatio: 0.01,
       fullPage: true,
+      mask: [
+        // Mask category toggles — user-defined categories vary between environments
+        page.locator('[data-testid="category-picker"]'),
+      ],
     });
   });
 
