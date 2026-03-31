@@ -30,3 +30,9 @@ export { SavingsGoalsDB } from "./savings-goals";
 export { NetWorthSnapshotsDB } from "./net-worth-snapshots";
 export { ManualAssetsDB } from "./manual-assets";
 export { ApiKeysDB } from "./api-keys";
+
+// Calendar & Reminders DB classes
+export { CalendarEventsDB, calendarEventsDB } from "./calendar-events";
+export { RemindersDB, remindersDB } from "./reminders";
+export { PushSubscriptionsDB, pushSubscriptionsDB } from "./push-subscriptions";
+export { ReminderDefaultsDB, reminderDefaultsDB } from "./reminder-defaults";
