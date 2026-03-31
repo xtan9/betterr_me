@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
   ChevronDown,
@@ -138,7 +139,14 @@ export function WorkoutExerciseCard({
               className="mt-0.5"
             />
             <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold">{exerciseInfo.name}</h3>
+            <Link
+              href={`/workouts/exercises/${exerciseInfo.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-semibold hover:underline"
+            >
+              {exerciseInfo.name}
+            </Link>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <Badge variant="secondary" className="text-[10px]">
                 {tExercises(
