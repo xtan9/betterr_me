@@ -29,6 +29,7 @@ import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
 import { isNewPR, type PRCheckResult } from "@/lib/fitness/personal-records";
 import { useExerciseRecords } from "@/lib/hooks/use-exercise-history";
 import type { WorkoutExerciseWithPrevious } from "@/lib/hooks/use-active-workout";
+import { ExerciseThumbnail } from "@/components/fitness/exercise-thumbnail";
 import { PRBanner } from "@/components/fitness/progress/pr-banner";
 import { WorkoutSetRow } from "./workout-set-row";
 
@@ -129,7 +130,14 @@ export function WorkoutExerciseCard({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-2.5 min-w-0 flex-1">
+            <ExerciseThumbnail
+              exerciseMedia={exerciseInfo.exercise_media}
+              exerciseName={exerciseInfo.name}
+              size="md"
+              className="mt-0.5"
+            />
+            <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold">{exerciseInfo.name}</h3>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <Badge variant="secondary" className="text-[10px]">
@@ -181,6 +189,7 @@ export function WorkoutExerciseCard({
                   </div>
                 </PopoverContent>
               </Popover>
+            </div>
             </div>
           </div>
 

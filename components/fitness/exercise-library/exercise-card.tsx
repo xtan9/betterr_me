@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ExerciseThumbnail } from "@/components/fitness/exercise-thumbnail";
 import { EXERCISE_FIELD_MAP } from "@/lib/fitness/exercise-fields";
 import type { Exercise } from "@/lib/db/types";
 
@@ -32,14 +33,52 @@ export function ExerciseCard({ exercise, onEdit, onDelete }: ExerciseCardProps) 
 
   return (
     <Card className="group relative">
-      <CardContent className="flex items-start justify-between gap-2 p-4">
+      <CardContent className="flex items-start gap-3 p-4">
+        <ExerciseThumbnail
+          exerciseMedia={exercise.exercise_media}
+          exerciseName={exercise.name}
+          size="md"
+        />
         <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-medium">{exercise.name}</h3>
-            {exercise.is_custom && (
-              <Badge variant="outline" className="shrink-0 text-[10px]">
-                {t("custom")}
-              </Badge>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <h3 className="truncate text-sm font-medium">{exercise.name}</h3>
+              {exercise.is_custom && (
+                <Badge variant="outline" className="shrink-0 text-[10px]">
+                  {t("custom")}
+                </Badge>
+              )}
+            </div>
+            {exercise.is_custom && (onEdit || onDelete) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                    <span className="sr-only">Actions</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {onEdit && (
+                    <DropdownMenuItem onClick={() => onEdit(exercise)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      {t("editExercise")}
+                    </DropdownMenuItem>
+                  )}
+                  {onDelete && (
+                    <DropdownMenuItem
+                      onClick={() => onDelete(exercise)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {t("deleteExercise")}
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
 
@@ -70,38 +109,6 @@ export function ExerciseCard({ exercise, onEdit, onDelete }: ExerciseCardProps) 
             )}
           </p>
         </div>
-
-        {exercise.is_custom && (onEdit || onDelete) && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">Actions</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(exercise)}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  {t("editExercise")}
-                </DropdownMenuItem>
-              )}
-              {onDelete && (
-                <DropdownMenuItem
-                  onClick={() => onDelete(exercise)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {t("deleteExercise")}
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
       </CardContent>
     </Card>
   );
