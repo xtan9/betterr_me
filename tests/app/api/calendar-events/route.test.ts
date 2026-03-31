@@ -306,7 +306,7 @@ describe('POST /api/calendar-events', () => {
     const exceptionEvent = {
       ...mockEvent,
       is_exception: true,
-      recurring_event_id: 'parent-evt-1',
+      recurring_event_id: '550e8400-e29b-41d4-a716-446655440099',
       original_date: '2026-04-08',
     };
     mockCreateEvent.mockResolvedValue(exceptionEvent);
@@ -319,7 +319,7 @@ describe('POST /api/calendar-events', () => {
         start_time: '14:00:00',
         end_date: '2026-04-08',
         end_time: '15:00:00',
-        recurring_event_id: 'parent-evt-1',
+        recurring_event_id: '550e8400-e29b-41d4-a716-446655440099',
         original_date: '2026-04-08',
       }),
     });
@@ -332,7 +332,7 @@ describe('POST /api/calendar-events', () => {
       'user-123',
       expect.objectContaining({
         is_exception: true,
-        recurring_event_id: 'parent-evt-1',
+        recurring_event_id: '550e8400-e29b-41d4-a716-446655440099',
         original_date: '2026-04-08',
       })
     );

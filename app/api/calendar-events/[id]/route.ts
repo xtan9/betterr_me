@@ -6,6 +6,8 @@ import { calendarEventUpdateSchema } from '@/lib/validations/calendar-events';
 import { log } from '@/lib/logger';
 import type { CalendarEventUpdate } from '@/lib/db/types';
 
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * GET /api/calendar-events/[id]
  * Get a single calendar event by ID.
@@ -16,6 +18,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    if (!uuidRegex.test(id)) {
+      return NextResponse.json({ error: 'Invalid event ID format' }, { status: 400 });
+    }
     const supabase = await createClient();
     const {
       data: { user },
@@ -51,6 +56,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    if (!uuidRegex.test(id)) {
+      return NextResponse.json({ error: 'Invalid event ID format' }, { status: 400 });
+    }
     const supabase = await createClient();
     const {
       data: { user },
@@ -120,8 +128,7 @@ export async function PATCH(
   } catch (error: unknown) {
     log.error('PATCH /api/calendar-events/[id] error', error);
 
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('not found')) {
+    if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'PGRST116') {
       return NextResponse.json({ error: 'Calendar event not found' }, { status: 404 });
     }
 
@@ -141,6 +148,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    if (!uuidRegex.test(id)) {
+      return NextResponse.json({ error: 'Invalid event ID format' }, { status: 400 });
+    }
     const supabase = await createClient();
     const {
       data: { user },

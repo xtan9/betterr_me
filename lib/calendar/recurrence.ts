@@ -50,6 +50,8 @@ function isInRange(date: string, rangeStart: string, rangeEnd: string): boolean 
  *
  * Results are sorted by start_date, then start_time (nulls first for all-day events).
  */
+const MAX_OCCURRENCES_PER_EVENT = 500;
+
 export function expandEventsForRange(
   events: CalendarEvent[],
   startDate: string,
@@ -73,6 +75,9 @@ export function expandEventsForRange(
       }
       if (event.original_date) {
         parentMap.set(event.original_date, event);
+      } else {
+        // Exception without original_date — treat as standalone
+        standaloneEvents.push(event);
       }
     } else if (event.is_recurring) {
       recurringParents.push(event);
@@ -91,8 +96,13 @@ export function expandEventsForRange(
 
   // Expand each recurring parent
   for (const parent of recurringParents) {
-    // Guard: skip if no recurrence_rule
-    if (!parent.recurrence_rule) continue;
+    // Guard: if no recurrence_rule, treat as standalone (data integrity issue)
+    if (!parent.recurrence_rule) {
+      if (parent.end_date >= startDate && parent.start_date <= endDate) {
+        result.push({ ...parent, is_virtual: false });
+      }
+      continue;
+    }
 
     const exceptions = exceptionsByParent.get(parent.id);
     const durationDays = daysBetween(parent.start_date, parent.end_date);
@@ -121,12 +131,13 @@ export function expandEventsForRange(
       // Filter to only those in the requested range
       occurrences = limited.filter((d) => d >= startDate && d <= endDate);
     } else {
-      occurrences = getOccurrencesInRange(
+      const raw = getOccurrencesInRange(
         parent.recurrence_rule,
         parent.start_date,
         startDate,
         effectiveEndDate,
       );
+      occurrences = raw.slice(0, MAX_OCCURRENCES_PER_EVENT);
     }
 
     // Track which exception original_dates were covered by expansion

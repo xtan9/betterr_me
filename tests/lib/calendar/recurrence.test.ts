@@ -286,8 +286,8 @@ describe("expandEventsForRange", () => {
     expect(result).toEqual([]);
   });
 
-  // Case 10: Recurring parent without recurrence_rule is skipped
-  it("skips recurring events without a recurrence_rule", () => {
+  // Case 10: Recurring parent without recurrence_rule is treated as standalone
+  it("treats recurring events without recurrence_rule as standalone", () => {
     const event = makeEvent({
       id: "r-bad",
       is_recurring: true,
@@ -295,7 +295,9 @@ describe("expandEventsForRange", () => {
       end_type: "never",
     });
     const result = expandEventsForRange([event], "2026-04-01", "2026-04-30");
-    expect(result).toEqual([]);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("r-bad");
+    expect(result[0].is_virtual).toBe(false);
   });
 
   // Case 11: Sorting by start_date then start_time

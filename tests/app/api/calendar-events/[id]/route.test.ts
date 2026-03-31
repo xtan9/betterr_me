@@ -29,7 +29,7 @@ vi.mock('@/lib/db', () => ({
 import { createClient } from '@/lib/supabase/server';
 
 const mockEvent = {
-  id: 'evt-1',
+  id: '550e8400-e29b-41d4-a716-446655440001',
   user_id: 'user-123',
   title: 'Test Event',
   description: null,
@@ -52,7 +52,7 @@ const mockEvent = {
   updated_at: '2026-04-01T00:00:00Z',
 };
 
-const params = Promise.resolve({ id: 'evt-1' });
+const params = Promise.resolve({ id: '550e8400-e29b-41d4-a716-446655440001' });
 
 describe('GET /api/calendar-events/[id]', () => {
   beforeEach(() => {
@@ -71,7 +71,7 @@ describe('GET /api/calendar-events/[id]', () => {
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
     } as any);
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1');
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001');
     const response = await GET(request, { params });
 
     expect(response.status).toBe(401);
@@ -80,21 +80,22 @@ describe('GET /api/calendar-events/[id]', () => {
   it('should return event for valid ID', async () => {
     mockGetEvent.mockResolvedValue(mockEvent);
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1');
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001');
     const response = await GET(request, { params });
     const data = await response.json();
 
     expect(response.status).toBe(200);
     expect(data.event).toEqual(mockEvent);
-    expect(mockGetEvent).toHaveBeenCalledWith('evt-1', 'user-123');
+    expect(mockGetEvent).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440001', 'user-123');
   });
 
   it('should return 404 when event not found', async () => {
     mockGetEvent.mockResolvedValue(null);
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/nonexistent');
+    const notFoundId = '550e8400-e29b-41d4-a716-446655440099';
+    const request = new NextRequest(`http://localhost:3000/api/calendar-events/${notFoundId}`);
     const response = await GET(request, {
-      params: Promise.resolve({ id: 'nonexistent' }),
+      params: Promise.resolve({ id: notFoundId }),
     });
 
     expect(response.status).toBe(404);
@@ -103,7 +104,7 @@ describe('GET /api/calendar-events/[id]', () => {
   it('should return 500 on DB error', async () => {
     mockGetEvent.mockRejectedValue(new Error('DB connection failed'));
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1');
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001');
     const response = await GET(request, { params });
     const data = await response.json();
 
@@ -129,7 +130,7 @@ describe('PATCH /api/calendar-events/[id]', () => {
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
     } as any);
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1', {
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
       body: JSON.stringify({ title: 'Updated' }),
     });
@@ -139,7 +140,7 @@ describe('PATCH /api/calendar-events/[id]', () => {
   });
 
   it('should return 400 for empty update body', async () => {
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1', {
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
       body: JSON.stringify({}),
     });
@@ -152,7 +153,7 @@ describe('PATCH /api/calendar-events/[id]', () => {
     const updatedEvent = { ...mockEvent, title: 'Updated Title' };
     mockUpdateEvent.mockResolvedValue(updatedEvent);
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1', {
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
       body: JSON.stringify({ title: 'Updated Title' }),
     });
@@ -161,7 +162,7 @@ describe('PATCH /api/calendar-events/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.event.title).toBe('Updated Title');
-    expect(mockUpdateEvent).toHaveBeenCalledWith('evt-1', 'user-123', { title: 'Updated Title' });
+    expect(mockUpdateEvent).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440001', 'user-123', { title: 'Updated Title' });
   });
 
   it('should update recurring event parent (edit all occurrences)', async () => {
@@ -173,7 +174,7 @@ describe('PATCH /api/calendar-events/[id]', () => {
     };
     mockUpdateEvent.mockResolvedValue(updatedEvent);
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1', {
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
       body: JSON.stringify({
         recurrence_rule: recurrenceRule,
@@ -185,16 +186,16 @@ describe('PATCH /api/calendar-events/[id]', () => {
     expect(response.status).toBe(200);
     expect(data.event.recurrence_rule).toEqual(recurrenceRule);
     expect(mockUpdateEvent).toHaveBeenCalledWith(
-      'evt-1',
+      '550e8400-e29b-41d4-a716-446655440001',
       'user-123',
       expect.objectContaining({ recurrence_rule: recurrenceRule })
     );
   });
 
   it('should return 404 when event not found', async () => {
-    mockUpdateEvent.mockRejectedValue(new Error('Calendar event not found'));
+    mockUpdateEvent.mockRejectedValue({ code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' });
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1', {
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
       body: JSON.stringify({ title: 'Updated' }),
     });
@@ -206,7 +207,7 @@ describe('PATCH /api/calendar-events/[id]', () => {
   it('should return 500 on DB error', async () => {
     mockUpdateEvent.mockRejectedValue(new Error('DB connection failed'));
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1', {
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
       body: JSON.stringify({ title: 'Updated' }),
     });
@@ -235,7 +236,7 @@ describe('DELETE /api/calendar-events/[id]', () => {
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
     } as any);
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1', {
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'DELETE',
     });
     const response = await DELETE(request, { params });
@@ -246,7 +247,7 @@ describe('DELETE /api/calendar-events/[id]', () => {
   it('should delete event successfully', async () => {
     mockDeleteEvent.mockResolvedValue(undefined);
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1', {
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'DELETE',
     });
     const response = await DELETE(request, { params });
@@ -254,13 +255,13 @@ describe('DELETE /api/calendar-events/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockDeleteEvent).toHaveBeenCalledWith('evt-1', 'user-123');
+    expect(mockDeleteEvent).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440001', 'user-123');
   });
 
   it('should return 500 on DB error', async () => {
     mockDeleteEvent.mockRejectedValue(new Error('DB connection failed'));
 
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/evt-1', {
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'DELETE',
     });
     const response = await DELETE(request, { params });

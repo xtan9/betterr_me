@@ -6,12 +6,14 @@ export class CalendarEventsDB {
   constructor(private supabase: SupabaseClient) {}
 
   async getUserEvents(userId: string, startDate: string, endDate: string): Promise<CalendarEvent[]> {
+    // Fetch standalone events in range OR recurring parents that could have
+    // occurrences in range OR exceptions for those recurring parents.
+    // Recurring parents may start before the range but generate occurrences within it.
     const { data, error } = await this.supabase
       .from('calendar_events')
       .select('*')
       .eq('user_id', userId)
-      .lte('start_date', endDate)
-      .gte('end_date', startDate)
+      .or(`and(start_date.lte.${endDate},end_date.gte.${startDate},is_recurring.eq.false,is_exception.eq.false),and(is_recurring.eq.true,start_date.lte.${endDate}),and(is_exception.eq.true)`)
       .order('start_date', { ascending: true })
       .order('start_time', { ascending: true });
     if (error) throw error;

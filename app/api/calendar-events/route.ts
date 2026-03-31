@@ -6,6 +6,7 @@ import { calendarEventCreateSchema } from '@/lib/validations/calendar-events';
 import { expandEventsForRange } from '@/lib/calendar/recurrence';
 import { log } from '@/lib/logger';
 import { ensureProfile } from '@/lib/db/ensure-profile';
+import type { CalendarEventInsert } from '@/lib/db/types';
 
 /**
  * GET /api/calendar-events
@@ -30,9 +31,16 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('start_date');
     const endDate = searchParams.get('end_date');
 
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!startDate || !endDate) {
       return NextResponse.json(
         { error: 'start_date and end_date query parameters are required' },
+        { status: 400 }
+      );
+    }
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      return NextResponse.json(
+        { error: 'start_date and end_date must be in YYYY-MM-DD format' },
         { status: 400 }
       );
     }
@@ -78,7 +86,7 @@ export async function POST(request: NextRequest) {
     const db = new CalendarEventsDB(supabase);
 
     // Build insert data from validated fields
-    const insertData: Record<string, unknown> = {
+    const insertData: Omit<CalendarEventInsert, 'user_id'> = {
       title: validation.data.title.trim(),
       description: validation.data.description ?? null,
       start_date: validation.data.start_date,
@@ -93,13 +101,16 @@ export async function POST(request: NextRequest) {
       end_type: validation.data.end_type ?? null,
       end_date_recurrence: validation.data.end_date_recurrence ?? null,
       end_count: validation.data.end_count ?? null,
+      is_exception: false,
+      recurring_event_id: null,
+      original_date: null,
     };
 
-    // Support exception creation (edit this occurrence)
-    if (body.recurring_event_id) {
+    // Support exception creation (edit this occurrence) — fields validated by Zod
+    if (validation.data.recurring_event_id) {
       insertData.is_exception = true;
-      insertData.recurring_event_id = body.recurring_event_id;
-      insertData.original_date = body.original_date ?? null;
+      insertData.recurring_event_id = validation.data.recurring_event_id;
+      insertData.original_date = validation.data.original_date ?? null;
     }
 
     const event = await db.createEvent(user.id, insertData);
