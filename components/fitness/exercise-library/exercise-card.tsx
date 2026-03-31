@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,7 +33,8 @@ export function ExerciseCard({ exercise, onEdit, onDelete }: ExerciseCardProps) 
   if (fieldConfig.showDistance) trackingFields.push("Distance");
 
   return (
-    <Card className="group relative">
+    <Link href={`/workouts/exercises/${exercise.id}`} className="block">
+    <Card className="group relative hover:border-primary/50 transition-colors cursor-pointer">
       <CardContent className="flex items-start gap-3 p-4">
         <ExerciseThumbnail
           exerciseMedia={exercise.exercise_media}
@@ -56,12 +58,13 @@ export function ExerciseCard({ exercise, onEdit, onDelete }: ExerciseCardProps) 
                     variant="ghost"
                     size="sm"
                     className="h-8 w-8 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                   >
                     <MoreHorizontal className="h-4 w-4" />
                     <span className="sr-only">Actions</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
                   {onEdit && (
                     <DropdownMenuItem onClick={() => onEdit(exercise)}>
                       <Pencil className="mr-2 h-4 w-4" />
@@ -111,5 +114,6 @@ export function ExerciseCard({ exercise, onEdit, onDelete }: ExerciseCardProps) 
         </div>
       </CardContent>
     </Card>
+    </Link>
   );
 }
