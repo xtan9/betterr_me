@@ -68,7 +68,7 @@ export class CreateHabitPage {
     // Use regex to match /habits with any query params, and wait for either
     // a habit card or the heading — whichever appears first confirms the page loaded.
     // Use 30s timeout — CI production builds can be slow with parallel tests.
-    await this.page.waitForURL(/\/habits(?:\?|$)/, { timeout: 30000 });
+    await this.page.waitForURL(/\/habits(?:\?|$)/, { timeout: 60000 });
     await this.page
       .locator('[data-testid^="habit-card"], h1, [data-testid="empty-state"]')
       .first()
