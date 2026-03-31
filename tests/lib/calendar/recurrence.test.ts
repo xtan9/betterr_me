@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  expandEventsForRange,
-  type ExpandedCalendarEvent,
-} from "@/lib/calendar/recurrence";
+import { expandEventsForRange } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
 
 /** Helper to create a minimal CalendarEvent for testing */
@@ -198,8 +195,9 @@ describe("expandEventsForRange", () => {
       "2026-04-05"
     );
 
-    // 04-01 virtual, 04-02 suppressed (no occurrence), 04-03 virtual, 04-04 virtual, 04-05 exception (moved here)
-    expect(result).toHaveLength(4);
+    // 04-01 virtual, 04-02 suppressed, 04-03 virtual, 04-04 virtual,
+    // 04-05 virtual (from parent schedule) + exception (moved here)
+    expect(result).toHaveLength(5);
 
     const dates = result.map((e) => e.start_date);
     expect(dates).toEqual([
@@ -207,12 +205,15 @@ describe("expandEventsForRange", () => {
       "2026-04-03",
       "2026-04-04",
       "2026-04-05",
+      "2026-04-05",
     ]);
 
-    // The event at 04-05 should be the exception, not a virtual
-    const movedEvent = result.find((e) => e.start_date === "2026-04-05");
+    // The moved exception should appear at 04-05 alongside the virtual
+    const movedEvent = result.find(
+      (e) => e.start_date === "2026-04-05" && !e.is_virtual
+    );
+    expect(movedEvent).toBeDefined();
     expect(movedEvent!.id).toBe("exc2");
-    expect(movedEvent!.is_virtual).toBe(false);
     expect(movedEvent!.title).toBe("Moved Event");
   });
 
