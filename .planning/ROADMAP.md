@@ -200,7 +200,7 @@
 | 27. Data Layer & Sync | v5.1 | 1/3 | Complete    | 2026-03-30 |
 | 28. Thumbnails in Existing UI | v5.1 | 1/2 | Executing | — |
 | 29. Database Schema & Infrastructure | v6.0 | 3/4 | Complete    | 2026-03-31 |
-| 30. Calendar Event CRUD API | v6.0 | 3/3 | Complete | 2026-03-31 |
+| 30. Calendar Event CRUD API | v6.0 | 3/3 | Complete    | 2026-03-31 |
 | 31. Calendar UI — Month View | v6.0 | 0/? | Not started | — |
 | 32. Calendar UI — Week & Day Views | v6.0 | 0/? | Not started | — |
 | 33. Cross-Domain Feed Aggregation | v6.0 | 0/? | Not started | — |

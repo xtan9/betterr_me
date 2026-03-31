@@ -21,12 +21,12 @@
 
 ## Event Management
 
-- [ ] **EVNT-01**: User can create a calendar event with title, date, start/end time, location, description, category, and color
-- [ ] **EVNT-02**: User can create all-day events (no start/end time)
-- [ ] **EVNT-03**: User can edit and delete calendar events
-- [ ] **EVNT-04**: User can create recurring events using the existing RecurrenceRule system (daily, weekly, monthly, yearly with interval)
-- [ ] **EVNT-05**: User can edit a single occurrence of a recurring event ("edit this event only") creating an exception record
-- [ ] **EVNT-06**: User can edit all occurrences of a recurring event ("edit all events")
+- [x] **EVNT-01**: User can create a calendar event with title, date, start/end time, location, description, category, and color
+- [x] **EVNT-02**: User can create all-day events (no start/end time)
+- [x] **EVNT-03**: User can edit and delete calendar events
+- [x] **EVNT-04**: User can create recurring events using the existing RecurrenceRule system (daily, weekly, monthly, yearly with interval)
+- [x] **EVNT-05**: User can edit a single occurrence of a recurring event ("edit this event only") creating an exception record
+- [x] **EVNT-06**: User can edit all occurrences of a recurring event ("edit all events")
 - [ ] **EVNT-07**: User can quick-create an event by clicking a time slot (popover with title, pre-filled time, Enter to save)
 - [ ] **EVNT-08**: User can create an event by click-and-dragging on the time grid (duration pre-filled from drag range)
 - [ ] **EVNT-09**: User can open a full event creation dialog via "+ New Event" button or N key
