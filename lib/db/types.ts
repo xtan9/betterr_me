@@ -10,6 +10,7 @@ export interface Profile {
   email: string;
   full_name: string | null;
   avatar_url: string | null;
+  timezone: string | null;
   preferences: ProfilePreferences;
   created_at: string;
   updated_at: string;
@@ -20,6 +21,8 @@ export interface ProfilePreferences {
   week_start_day: number;
   theme: "system" | "light" | "dark";
   weight_unit: "kg" | "lbs";
+  quiet_hours_start?: string | null;  // HH:MM format
+  quiet_hours_end?: string | null;    // HH:MM format
 }
 
 export type ProfileInsert = Omit<
@@ -1184,3 +1187,108 @@ export type ApiKeyInsert = Omit<ApiKey, 'id' | 'created_at' | 'last_used_at' | '
 
 // What's returned to the client (no hash)
 export type ApiKeyPublic = Omit<ApiKey, 'key_hash'>;
+
+// =============================================================================
+// CALENDAR EVENTS
+// =============================================================================
+
+export type CalendarEventEndType = "never" | "after_count" | "on_date";
+
+export interface CalendarEvent {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  start_date: string;       // DATE (YYYY-MM-DD)
+  start_time: string | null; // TIME (HH:MM:SS), null = all-day
+  end_date: string;          // DATE (YYYY-MM-DD)
+  end_time: string | null;
+  location: string | null;
+  color: string | null;
+  category_id: string | null;
+  is_recurring: boolean;
+  recurrence_rule: RecurrenceRule | null;
+  end_type: CalendarEventEndType | null;
+  end_date_recurrence: string | null;
+  end_count: number | null;
+  recurring_event_id: string | null;
+  original_date: string | null;
+  is_exception: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CalendarEventInsert = Omit<CalendarEvent, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+};
+
+export type CalendarEventUpdate = Partial<Omit<CalendarEvent, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
+// =============================================================================
+// REMINDERS
+// =============================================================================
+
+export type ReminderSourceType = 'calendar_event' | 'task' | 'habit' | 'bill';
+export type ReminderType = 'relative' | 'absolute';
+export type ReminderChannel = 'push' | 'email';
+export type ReminderStatus = 'pending' | 'sent' | 'failed' | 'snoozed';
+
+export interface Reminder {
+  id: string;
+  user_id: string;
+  source_type: ReminderSourceType;
+  source_id: string;
+  reminder_type: ReminderType;
+  relative_minutes: number | null;
+  absolute_time: string | null;
+  channels: ReminderChannel[];
+  status: ReminderStatus;
+  fire_at: string;         // TIMESTAMPTZ as ISO string
+  sent_at: string | null;
+  created_at: string;
+}
+
+export type ReminderInsert = Omit<Reminder, 'id' | 'created_at' | 'status' | 'sent_at'> & {
+  id?: string;
+  status?: ReminderStatus;
+  sent_at?: string | null;
+};
+
+export type ReminderUpdate = Partial<Pick<Reminder, 'status' | 'fire_at' | 'sent_at' | 'channels'>>;
+
+// =============================================================================
+// REMINDER DEFAULTS
+// =============================================================================
+
+export interface ReminderDefault {
+  id: string;
+  user_id: string;
+  source_type: ReminderSourceType;
+  relative_minutes: number;
+  channels: ReminderChannel[];
+  created_at: string;
+}
+
+export type ReminderDefaultInsert = Omit<ReminderDefault, 'id' | 'created_at'> & {
+  id?: string;
+};
+
+export type ReminderDefaultUpdate = Partial<Pick<ReminderDefault, 'relative_minutes' | 'channels'>>;
+
+// =============================================================================
+// PUSH SUBSCRIPTIONS
+// =============================================================================
+
+export interface PushSubscription {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: string;
+}
+
+export type PushSubscriptionInsert = Omit<PushSubscription, 'id' | 'created_at'> & {
+  id?: string;
+};
