@@ -10,6 +10,7 @@ import {
   BookOpen,
   Dumbbell,
   Wallet,
+  CalendarDays,
   PanelLeftClose,
   PanelLeft,
 } from "lucide-react";
@@ -72,6 +73,12 @@ const mainNavItems = [
     icon: Wallet,
     labelKey: "money",
     match: (p: string) => p.startsWith("/money"),
+  },
+  {
+    href: "/calendar",
+    icon: CalendarDays,
+    labelKey: "calendar",
+    match: (p: string) => p.startsWith("/calendar"),
   },
 ];
 

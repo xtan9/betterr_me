@@ -144,6 +144,18 @@
     --stat-icon-purple: 270 60% 50%;
     --stat-icon-purple-bg: 270 60% 93%;
 
+    /* === Calendar domain colors === */
+    --calendar-event: 157 63% 45%;
+    --calendar-event-muted: 157 63% 93%;
+    --calendar-task: 215 75% 55%;
+    --calendar-task-muted: 215 75% 93%;
+    --calendar-habit: 40 85% 55%;
+    --calendar-habit-muted: 40 85% 93%;
+    --calendar-bill: 0 72% 55%;
+    --calendar-bill-muted: 0 72% 93%;
+    --calendar-workout: 270 60% 55%;
+    --calendar-workout-muted: 270 60% 93%;
+
     /* === Empty state === */
     --empty-state-celebration-bg: 45 90% 97%;
 
@@ -324,6 +336,18 @@
     --stat-icon-orange-bg: 25 40% 20%;
     --stat-icon-purple: 270 50% 65%;
     --stat-icon-purple-bg: 270 30% 20%;
+
+    /* === Calendar domain colors === */
+    --calendar-event: 160 45% 55%;
+    --calendar-event-muted: 160 30% 18%;
+    --calendar-task: 215 60% 60%;
+    --calendar-task-muted: 215 35% 18%;
+    --calendar-habit: 40 70% 60%;
+    --calendar-habit-muted: 40 40% 18%;
+    --calendar-bill: 0 60% 55%;
+    --calendar-bill-muted: 0 35% 18%;
+    --calendar-workout: 270 50% 60%;
+    --calendar-workout-muted: 270 30% 18%;
 
     /* === Empty state === */
     --empty-state-celebration-bg: 45 30% 14%;
