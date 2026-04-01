@@ -126,12 +126,11 @@ export async function PATCH(
 
     return NextResponse.json({ event });
   } catch (error: unknown) {
-    log.error('PATCH /api/calendar-events/[id] error', error);
-
     if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'PGRST116') {
       return NextResponse.json({ error: 'Calendar event not found' }, { status: 404 });
     }
 
+    log.error('PATCH /api/calendar-events/[id] error', error);
     return NextResponse.json({ error: 'Failed to update calendar event' }, { status: 500 });
   }
 }

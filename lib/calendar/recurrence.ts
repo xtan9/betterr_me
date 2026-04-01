@@ -125,7 +125,7 @@ export function expandEventsForRange(
         parent.start_date,
         parent.start_date,
         endDate,
-      );
+      ).slice(0, MAX_OCCURRENCES_PER_EVENT);
       // Take only the first end_count occurrences
       const limited = allOccurrences.slice(0, parent.end_count);
       // Filter to only those in the requested range
