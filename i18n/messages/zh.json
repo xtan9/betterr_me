@@ -11,6 +11,7 @@
       "journal": "日记",
       "workouts": "训练",
       "money": "财务",
+      "calendar": "日历",
       "learnMore": "了解更多",
       "profile": "个人资料"
     },
@@ -1737,5 +1738,33 @@
       "sharedTransaction": "已分享",
       "hiddenTransaction": "已隐藏"
     }
+  },
+  "calendar": {
+    "title": "日历",
+    "views": {
+      "day": "日",
+      "week": "周",
+      "month": "月"
+    },
+    "navigation": {
+      "today": "今天",
+      "previous": "上一个",
+      "next": "下一个"
+    },
+    "layers": {
+      "events": "事件",
+      "tasks": "任务",
+      "habits": "习惯",
+      "bills": "账单",
+      "workouts": "锻炼"
+    },
+    "overflow": {
+      "more": "+{count} 更多"
+    },
+    "sidebar": {
+      "newEvent": "+ 新事件"
+    },
+    "comingSoon": "即将推出",
+    "noEvents": "暂无事件"
   }
 }
