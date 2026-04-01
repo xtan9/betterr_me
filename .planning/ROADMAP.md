@@ -108,7 +108,7 @@
 4. Left sidebar shows mini month picker for quick date navigation
 5. Calendar uses BetterR.Me design tokens (teal primary, rounded-xl, dark mode)
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 - [x] 31-01-PLAN.md — Calendar route foundation (layout, page, sidebar nav, design tokens, i18n)
 - [x] 31-02-PLAN.md — Month view UI (header, grid, sidebar, event chips, date utils, tests)
 
@@ -205,7 +205,7 @@
 | 28. Thumbnails in Existing UI | v5.1 | 1/2 | Executing | — |
 | 29. Database Schema & Infrastructure | v6.0 | 3/4 | Complete    | 2026-03-31 |
 | 30. Calendar Event CRUD API | v6.0 | 3/3 | Complete    | 2026-03-31 |
-| 31. Calendar UI — Month View | v6.0 | 2/2 | Complete | 2026-04-02 |
+| 31. Calendar UI — Month View | v6.0 | 2/2 | Complete    | 2026-04-01 |
 | 32. Calendar UI — Week & Day Views | v6.0 | 0/? | Not started | — |
 | 33. Cross-Domain Feed Aggregation | v6.0 | 0/? | Not started | — |
 | 34. Push Notification Infrastructure | v6.0 | 0/? | Not started | — |

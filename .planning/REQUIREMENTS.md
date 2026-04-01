@@ -6,16 +6,16 @@
 
 ## Calendar Views
 
-- [ ] **VIEW-01**: User can see a monthly calendar grid with day cells showing compact event chips and "+N more" overflow
+- [x] **VIEW-01**: User can see a monthly calendar grid with day cells showing compact event chips and "+N more" overflow
 - [ ] **VIEW-02**: User can see a weekly time grid with 7 day columns, hourly rows, and events rendered as colored blocks
 - [ ] **VIEW-03**: User can see a daily time grid with single-column full-width events
-- [ ] **VIEW-04**: User can switch between Day, Week, and Month views via header toggle
-- [ ] **VIEW-05**: User can navigate to previous/next period (day, week, or month) with arrow buttons
-- [ ] **VIEW-06**: User can jump to today with a "Today" button
+- [x] **VIEW-04**: User can switch between Day, Week, and Month views via header toggle
+- [x] **VIEW-05**: User can navigate to previous/next period (day, week, or month) with arrow buttons
+- [x] **VIEW-06**: User can jump to today with a "Today" button
 - [ ] **VIEW-07**: User can see a current time indicator (teal line) on Week and Day views
 - [ ] **VIEW-08**: User can see all-day events in a dedicated all-day row above the time grid
-- [ ] **VIEW-09**: Calendar page has a left sidebar with mini month picker for quick date navigation
-- [ ] **VIEW-10**: Calendar uses BetterR.Me design tokens (teal primary, rounded-xl, sidebar tokens, dark mode)
+- [x] **VIEW-09**: Calendar page has a left sidebar with mini month picker for quick date navigation
+- [x] **VIEW-10**: Calendar uses BetterR.Me design tokens (teal primary, rounded-xl, sidebar tokens, dark mode)
 - [ ] **VIEW-11**: Calendar defaults to Week view on desktop and Day view on mobile (sm breakpoint)
 - [ ] **VIEW-12**: User can use keyboard shortcuts: D (day), W (week), M (month), T (today), ← → (navigate), C (quick-create), N (new event dialog), / (search), Esc (close)
 
