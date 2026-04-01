@@ -62,15 +62,16 @@ export function CalendarPageContent() {
     { keepPreviousData: true },
   );
 
-  const events = eventsData?.events ?? [];
-
   // Compute grid dates and grouped events
   const gridDates = useMemo(
     () => getMonthGridDates(year, month, weekStartDay),
     [year, month, weekStartDay],
   );
 
-  const eventsByDate = useMemo(() => groupEventsByDate(events), [events]);
+  const eventsByDate = useMemo(
+    () => groupEventsByDate(eventsData?.events ?? []),
+    [eventsData?.events],
+  );
 
   const today = getLocalDateString();
 

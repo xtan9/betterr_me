@@ -29,7 +29,7 @@ export function getMonthGridDates(
   const dayOfWeek = firstOfMonth.getDay();
 
   // Calculate how many days to go back to reach the weekStartDay
-  let daysBack = (dayOfWeek - weekStartDay + 7) % 7;
+  const daysBack = (dayOfWeek - weekStartDay + 7) % 7;
 
   const startDate = new Date(year, month, 1 - daysBack);
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MonthGrid } from "@/components/calendar/month-grid";
-import { getMonthGridDates, getDateString } from "@/lib/calendar/date-utils";
+import { getMonthGridDates } from "@/lib/calendar/date-utils";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
 
