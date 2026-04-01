@@ -1762,7 +1762,9 @@
       "more": "+{count} 更多"
     },
     "sidebar": {
-      "newEvent": "+ 新事件"
+      "newEvent": "+ 新事件",
+      "layers": "圖層",
+      "comingSoonPhase": "將在未來階段推出"
     },
     "comingSoon": "即將推出",
     "noEvents": "暫無事件"

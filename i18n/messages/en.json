@@ -1762,7 +1762,9 @@
       "more": "+{count} more"
     },
     "sidebar": {
-      "newEvent": "+ New Event"
+      "newEvent": "+ New Event",
+      "layers": "Layers",
+      "comingSoonPhase": "Coming in a future phase"
     },
     "comingSoon": "Coming soon",
     "noEvents": "No events"
