@@ -34,7 +34,13 @@ export const calendarEventCreateSchema = z
       .regex(dateRegex, "Must be YYYY-MM-DD")
       .optional()
       .nullable(),
-    end_count: z.number().int().min(1).optional().nullable(),
+    end_count: z.number().int().min(1).max(500).optional().nullable(),
+    recurring_event_id: z.string().uuid().optional().nullable(),
+    original_date: z
+      .string()
+      .regex(dateRegex, "Must be YYYY-MM-DD")
+      .optional()
+      .nullable(),
   })
   .refine(
     (data) => {
@@ -53,6 +59,13 @@ export const calendarEventCreateSchema = z
   .refine(
     (data) => data.end_date >= data.start_date,
     { message: "end_date must be on or after start_date" },
+  )
+  .refine(
+    (data) => {
+      if (data.recurring_event_id && !data.original_date) return false;
+      return true;
+    },
+    { message: "original_date is required when creating a recurring event exception" },
   );
 
 export type CalendarEventCreateValues = z.infer<
@@ -98,7 +111,7 @@ export const calendarEventUpdateSchema = z
       .regex(dateRegex, "Must be YYYY-MM-DD")
       .optional()
       .nullable(),
-    end_count: z.number().int().min(1).optional().nullable(),
+    end_count: z.number().int().min(1).max(500).optional().nullable(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",

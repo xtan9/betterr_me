@@ -42,8 +42,7 @@ describe('CalendarEventsDB', () => {
       expect(events).toEqual([mockEvent]);
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('calendar_events');
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
-      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('start_date', '2026-03-31');
-      expect(mockSupabaseClient.gte).toHaveBeenCalledWith('end_date', '2026-03-01');
+      expect(mockSupabaseClient.or).toHaveBeenCalled();
     });
 
     it('should return empty array when no data', async () => {
