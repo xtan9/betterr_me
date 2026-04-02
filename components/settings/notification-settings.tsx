@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { toast } from "sonner";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+import { fetcher } from "@/lib/fetcher";
 
 export function NotificationSettings() {
   const t = useTranslations("settings.notifications");
