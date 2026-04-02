@@ -11,6 +11,7 @@
       "journal": "Journal",
       "workouts": "Workouts",
       "money": "Money",
+      "calendar": "Calendar",
       "learnMore": "Learn More",
       "profile": "Profile"
     },
@@ -1737,5 +1738,36 @@
       "sharedTransaction": "Shared",
       "hiddenTransaction": "Hidden"
     }
+  },
+  "calendar": {
+    "title": "Calendar",
+    "views": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month"
+    },
+    "navigation": {
+      "today": "Today",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "layers": {
+      "events": "Events",
+      "tasks": "Tasks",
+      "habits": "Habits",
+      "bills": "Bills",
+      "workouts": "Workouts"
+    },
+    "overflow": {
+      "more": "+{count} more"
+    },
+    "sidebar": {
+      "newEvent": "+ New Event",
+      "layers": "Layers",
+      "comingSoonPhase": "Coming in a future phase"
+    },
+    "comingSoon": "Coming soon",
+    "noEvents": "No events",
+    "error": "Failed to load calendar. Please try refreshing."
   }
 }

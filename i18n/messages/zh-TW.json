@@ -11,6 +11,7 @@
       "journal": "日記",
       "workouts": "訓練",
       "money": "財務",
+      "calendar": "日曆",
       "learnMore": "了解更多",
       "profile": "個人資料"
     },
@@ -1737,5 +1738,36 @@
       "sharedTransaction": "已分享",
       "hiddenTransaction": "已隱藏"
     }
+  },
+  "calendar": {
+    "title": "日曆",
+    "views": {
+      "day": "日",
+      "week": "週",
+      "month": "月"
+    },
+    "navigation": {
+      "today": "今天",
+      "previous": "上一個",
+      "next": "下一個"
+    },
+    "layers": {
+      "events": "事件",
+      "tasks": "任務",
+      "habits": "習慣",
+      "bills": "帳單",
+      "workouts": "鍛鍊"
+    },
+    "overflow": {
+      "more": "+{count} 更多"
+    },
+    "sidebar": {
+      "newEvent": "+ 新事件",
+      "layers": "圖層",
+      "comingSoonPhase": "將在未來階段推出"
+    },
+    "comingSoon": "即將推出",
+    "noEvents": "暫無事件",
+    "error": "日曆載入失敗，請嘗試重新整理頁面。"
   }
 }

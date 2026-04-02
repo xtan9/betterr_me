@@ -104,7 +104,7 @@ describe("AppSidebar", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(7); // 1 logo + 6 nav
+    expect(links).toHaveLength(8); // 1 logo + 7 nav
   });
 
   it("renders correct hrefs for logo and all nav items", () => {
@@ -118,6 +118,7 @@ describe("AppSidebar", () => {
     expect(links[4]).toHaveAttribute("href", "/journal");
     expect(links[5]).toHaveAttribute("href", "/workouts");
     expect(links[6]).toHaveAttribute("href", "/money");
+    expect(links[7]).toHaveAttribute("href", "/calendar");
   });
 
   it("renders i18n translation keys as labels", () => {
