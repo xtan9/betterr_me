@@ -16,6 +16,7 @@ interface CalendarSidebarProps {
   currentDate: Date;
   onDateSelect: (date: Date | undefined) => void;
   weekStartDay: number;
+  onNewEvent?: () => void;
 }
 
 const LAYERS = [
@@ -30,6 +31,7 @@ export function CalendarSidebar({
   currentDate,
   onDateSelect,
   weekStartDay,
+  onNewEvent,
 }: CalendarSidebarProps) {
   const t = useTranslations("calendar");
   const [enabledLayers, setEnabledLayers] = useState<Set<string>>(
@@ -116,7 +118,7 @@ export function CalendarSidebar({
       </div>
 
       {/* +New Event button */}
-      <Button variant="outline" className="w-full" disabled>
+      <Button variant="outline" className="w-full" onClick={onNewEvent}>
         {t("sidebar.newEvent")}
       </Button>
     </div>
