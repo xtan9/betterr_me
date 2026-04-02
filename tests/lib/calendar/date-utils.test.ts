@@ -3,6 +3,9 @@ import {
   getMonthGridDates,
   getMonthDateRange,
   groupEventsByDate,
+  getWeekDates,
+  getWeekDateRange,
+  getDayDateRange,
 } from "@/lib/calendar/date-utils";
 import { getLocalDateString as getDateString } from "@/lib/utils";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
@@ -230,5 +233,84 @@ describe("groupEventsByDate", () => {
   it("returns empty map for empty input", () => {
     const map = groupEventsByDate([]);
     expect(map.size).toBe(0);
+  });
+});
+
+// =============================================================================
+// getWeekDates
+// =============================================================================
+
+describe("getWeekDates", () => {
+  it("returns 7 dates starting from Sunday for weekStartDay=0", () => {
+    // April 1, 2026 is a Wednesday
+    const result = getWeekDates(new Date(2026, 3, 1), 0);
+    expect(result).toHaveLength(7);
+    // Week should start on Sunday March 29
+    expect(result[0].getDate()).toBe(29);
+    expect(result[0].getMonth()).toBe(2); // March
+    expect(result[6].getDate()).toBe(4);
+    expect(result[6].getMonth()).toBe(3); // April
+  });
+
+  it("returns 7 dates starting from Monday for weekStartDay=1", () => {
+    const result = getWeekDates(new Date(2026, 3, 1), 1);
+    expect(result).toHaveLength(7);
+    // Week should start on Monday March 30
+    expect(result[0].getDate()).toBe(30);
+    expect(result[0].getMonth()).toBe(2); // March
+    expect(result[6].getDate()).toBe(5);
+    expect(result[6].getMonth()).toBe(3); // April
+  });
+
+  it("handles date on the week start day itself", () => {
+    // April 5, 2026 is a Sunday
+    const result = getWeekDates(new Date(2026, 3, 5), 0);
+    expect(result[0].getDate()).toBe(5);
+    expect(result[0].getMonth()).toBe(3); // April
+  });
+
+  it("handles year boundary (January 1 with weekStartDay=1)", () => {
+    // Jan 1, 2026 is a Thursday
+    const result = getWeekDates(new Date(2026, 0, 1), 1);
+    expect(result).toHaveLength(7);
+    expect(result[0].getFullYear()).toBe(2025); // Dec 29 2025
+    expect(result[0].getMonth()).toBe(11);
+    expect(result[0].getDate()).toBe(29);
+  });
+});
+
+// =============================================================================
+// getWeekDateRange
+// =============================================================================
+
+describe("getWeekDateRange", () => {
+  it("returns start and end date strings for the week", () => {
+    const result = getWeekDateRange(new Date(2026, 3, 1), 0);
+    expect(result.startDate).toBe("2026-03-29");
+    expect(result.endDate).toBe("2026-04-04");
+  });
+
+  it("returns correct range for Monday-start week", () => {
+    const result = getWeekDateRange(new Date(2026, 3, 1), 1);
+    expect(result.startDate).toBe("2026-03-30");
+    expect(result.endDate).toBe("2026-04-05");
+  });
+});
+
+// =============================================================================
+// getDayDateRange
+// =============================================================================
+
+describe("getDayDateRange", () => {
+  it("returns same date for start and end", () => {
+    const result = getDayDateRange(new Date(2026, 3, 1));
+    expect(result.startDate).toBe("2026-04-01");
+    expect(result.endDate).toBe("2026-04-01");
+  });
+
+  it("handles single-digit month and day", () => {
+    const result = getDayDateRange(new Date(2026, 0, 5));
+    expect(result.startDate).toBe("2026-01-05");
+    expect(result.endDate).toBe("2026-01-05");
   });
 });
