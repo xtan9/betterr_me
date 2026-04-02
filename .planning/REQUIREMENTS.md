@@ -56,7 +56,7 @@
 
 ## Email Notifications
 
-- [ ] **MAIL-01**: User can enable email notifications from settings
+- [x] **MAIL-01**: User can enable email notifications from settings
 - [x] **MAIL-02**: Email reminders sent via Resend with React Email templates per source type
 - [x] **MAIL-03**: Every reminder email includes an unsubscribe link
 - [x] **MAIL-04**: Email templates exist for: event reminder, task due, habit nudge, bill due

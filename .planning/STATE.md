@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v6.0
 milestone_name: Calendar & Reminder Notifications
-status: Ready to execute
-stopped_at: Completed 35-01-PLAN.md
-last_updated: "2026-04-02T22:03:57.155Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 35-02-PLAN.md
+last_updated: "2026-04-02T22:15:08.756Z"
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 27
-  completed_plans: 26
+  completed_plans: 27
 ---
 
 # Project State
@@ -70,6 +70,8 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 - [Phase 35]: console.warn for missing RESEND_API_KEY (no dev crash)
 - [Phase 35]: HMAC-SHA256 with timing-safe comparison for stateless unsubscribe tokens
 - [Phase 35]: email_notifications_enabled defaults to false (opt-in)
+- [Phase 35]: Used MailX icon instead of MailOff (not in installed lucide-react)
+- [Phase 35]: Email toggle renders even when push is unsupported
 
 ### Pending Todos
 
@@ -87,6 +89,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-02T22:03:57.153Z
-Stopped at: Completed 35-01-PLAN.md
+Last session: 2026-04-02T22:15:08.754Z
+Stopped at: Completed 35-02-PLAN.md
 Resume: Begin Phase 34 (Push Notification Infrastructure)
