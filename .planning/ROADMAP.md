@@ -82,7 +82,7 @@
 
 **Goal:** Build a working chat interface that lets authenticated users have streaming conversations with Claude via the llm.betterr.me proxy, with conversation persistence across page refreshes.
 
-- [ ] **Phase 34: Database, Types & Streaming API** - Supabase tables, TypeScript types, Zod schemas, AI SDK provider, and streaming API route with auth and error handling
+- [x] **Phase 34: Database, Types & Streaming API** - Supabase tables, TypeScript types, Zod schemas, AI SDK provider, and streaming API route with auth and error handling (completed 2026-04-02)
 - [ ] **Phase 35: Chat UI & Message Rendering** - Chat page with message bubbles, markdown rendering, stop button, keyboard shortcuts, and dark mode support
 - [ ] **Phase 36: Conversation Persistence & Management** - Save/load messages to DB, conversation list sidebar, create/switch conversations, auto-generated titles
 - [ ] **Phase 37: Navigation & i18n** - Sidebar navigation link, all chat UI strings translated in en, zh, zh-TW
@@ -99,11 +99,11 @@
   3. API route rejects unauthenticated requests with 401
   4. User sees a descriptive error message when the LLM proxy is unreachable or returns an error, with a retry mechanism
   5. DB classes (ConversationsDB, ChatMessagesDB) and Zod validation schemas pass unit tests
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 34-01-PLAN.md — Database migration, TypeScript types, DB classes (ConversationsDB, ChatMessagesDB)
 - [x] 34-02-PLAN.md — Package installation, AI provider config, Zod validation schemas
-- [ ] 34-03-PLAN.md — Streaming POST /api/chat endpoint with auth and error handling
+- [x] 34-03-PLAN.md — Streaming POST /api/chat endpoint with auth and error handling
 
 ### Phase 35: Chat UI & Message Rendering
 **Goal**: Users interact with a polished chat interface that streams responses with formatted markdown, supports stop/retry, and works in both light and dark mode
@@ -175,7 +175,7 @@ Phases execute in numeric order: 34 → 35 → 36 → 37
 | 31. Calendar UI — Month View | v6.0 | 2/2 | Complete | 2026-04-01 |
 | 32. Calendar UI — Week & Day Views | v6.0 | 4/4 | Complete | 2026-04-02 |
 | 33. Cross-Domain Feed Aggregation | v6.0 | 1/1 | Complete | 2026-04-02 |
-| 34. Database, Types & Streaming API | v7.0 | 2/3 | In Progress|  |
+| 34. Database, Types & Streaming API | v7.0 | 3/3 | Complete   | 2026-04-02 |
 | 35. Chat UI & Message Rendering | v7.0 | 0/? | Not started | - |
 | 36. Conversation Persistence & Management | v7.0 | 0/? | Not started | - |
 | 37. Navigation & i18n | v7.0 | 0/? | Not started | - |
