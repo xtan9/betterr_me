@@ -18,7 +18,7 @@ export function EventChip({ event }: EventChipProps) {
   const bgStyle = hasCustomColor
     ? { backgroundColor: `${event.color}20` }
     : {};
-  const borderStyle = hasCustomColor
+  const borderStyle = hasCustomColor && event.color
     ? { borderLeftColor: event.color }
     : {};
 
