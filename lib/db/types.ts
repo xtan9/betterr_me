@@ -1290,3 +1290,42 @@ export interface PushSubscription {
 export type PushSubscriptionInsert = Omit<PushSubscription, 'id' | 'created_at'> & {
   id?: string;
 };
+
+// =============================================================================
+// CONVERSATIONS
+// =============================================================================
+
+export interface Conversation {
+  id: string;
+  user_id: string;
+  title: string | null;
+  model: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ConversationInsert = {
+  user_id: string;
+  title?: string | null;
+  model?: string;
+};
+
+export type ConversationUpdate = Partial<Pick<Conversation, 'title' | 'model'>>;
+
+// =============================================================================
+// CHAT MESSAGES
+// =============================================================================
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  created_at: string;
+}
+
+export type ChatMessageInsert = {
+  conversation_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+};
