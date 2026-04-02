@@ -108,9 +108,9 @@
 4. Left sidebar shows mini month picker for quick date navigation
 5. Calendar uses BetterR.Me design tokens (teal primary, rounded-xl, dark mode)
 
-**Plans:** 2 plans
-- [ ] 31-01-PLAN.md — Calendar route foundation (layout, page, sidebar nav, design tokens, i18n)
-- [ ] 31-02-PLAN.md — Month view UI (header, grid, sidebar, event chips, date utils, tests)
+**Plans:** 2/2 plans complete
+- [x] 31-01-PLAN.md — Calendar route foundation (layout, page, sidebar nav, design tokens, i18n)
+- [x] 31-02-PLAN.md — Month view UI (header, grid, sidebar, event chips, date utils, tests)
 
 ### Phase 32: Calendar UI — Week & Day Views
 
@@ -124,6 +124,12 @@
 3. All-day events render in a dedicated row above the time grid
 4. User can quick-create events by clicking a time slot or click-and-dragging a range
 5. Keyboard shortcuts work: D/W/M (views), T (today), arrows (navigate), C (quick-create), N (new event), / (search), Esc (close)
+
+**Plans:** 1/4 plans complete
+- [x] 32-01-PLAN.md — Foundation: date utilities, keyboard shortcuts hook, i18n strings
+- [ ] 32-02-PLAN.md — (pending)
+- [ ] 32-03-PLAN.md — (pending)
+- [ ] 32-04-PLAN.md — (pending)
 
 ### Phase 33: Cross-Domain Feed Aggregation
 
@@ -205,8 +211,8 @@
 | 28. Thumbnails in Existing UI | v5.1 | 1/2 | Executing | — |
 | 29. Database Schema & Infrastructure | v6.0 | 3/4 | Complete    | 2026-03-31 |
 | 30. Calendar Event CRUD API | v6.0 | 3/3 | Complete    | 2026-03-31 |
-| 31. Calendar UI — Month View | v6.0 | 0/2 | Planned | — |
-| 32. Calendar UI — Week & Day Views | v6.0 | 0/? | Not started | — |
+| 31. Calendar UI — Month View | v6.0 | 2/2 | Complete    | 2026-04-01 |
+| 32. Calendar UI — Week & Day Views | v6.0 | 1/4 | Executing | — |
 | 33. Cross-Domain Feed Aggregation | v6.0 | 0/? | Not started | — |
 | 34. Push Notification Infrastructure | v6.0 | 0/? | Not started | — |
 | 35. Email Notification Infrastructure | v6.0 | 0/? | Not started | — |
