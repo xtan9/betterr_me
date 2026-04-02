@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v6.0
 milestone_name: Calendar & Reminder Notifications
-status: Executing
-stopped_at: Plan 34-05 complete (Utility Tests — VAPID, Notification URLs, Push Schemas)
-last_updated: "2026-04-02T20:39:25Z"
+status: Ready to plan
+stopped_at: Phase 34 context gathered
+last_updated: "2026-04-02T21:14:14.794Z"
 progress:
   total_phases: 8
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 25
-  completed_plans: 23
+  completed_plans: 25
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Phase 34 — Push Notification Infrastructure (Plan 5 of 6 complete)
+**Current focus:** Phase 34 — push-notification-infrastructure
 
 ## Current Position
 
-Phase: 34
-Plan: 5 of 6
+Phase: 35
+Plan: Not started
 
 ## Performance Metrics
 
@@ -67,7 +67,6 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 
 - [Phase 27]: Admin sync uses x-admin-secret header + user auth for double protection
 - [Phase 28-01]: Used native img tag instead of next/image for small GIF thumbnails (animation preservation)
-- [Phase 34]: Used getSubscriptions (actual DB method name) instead of getUserSubscriptions (plan reference) — PushSubscriptionsDB class defines getSubscriptions, not getUserSubscriptions
 
 ### Pending Todos
 
@@ -85,6 +84,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-02T20:39:25Z
-Stopped at: Plan 34-05 complete (Utility Tests — VAPID, Notification URLs, Push Schemas)
-Resume: Continue Phase 34 — Plan 06 next
+Last session: 2026-04-02T19:49:23.615Z
+Stopped at: Phase 34 context gathered
+Resume: Begin Phase 34 (Push Notification Infrastructure)
