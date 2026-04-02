@@ -1768,6 +1768,59 @@
     },
     "comingSoon": "Coming soon",
     "noEvents": "No events",
-    "error": "Failed to load calendar. Please try refreshing."
+    "error": "Failed to load calendar. Please try refreshing.",
+    "timeGrid": {
+      "allDay": "All day",
+      "allDayMore": "+{count} more",
+      "collapseAllDay": "Show less"
+    },
+    "quickCreate": {
+      "titlePlaceholder": "Add title",
+      "moreOptions": "More options",
+      "saving": "Saving..."
+    },
+    "eventDialog": {
+      "newEvent": "New Event",
+      "editEvent": "Edit Event",
+      "title": "Title",
+      "titlePlaceholder": "Add title",
+      "date": "Date",
+      "startTime": "Start time",
+      "endTime": "End time",
+      "allDay": "All day",
+      "location": "Location",
+      "locationPlaceholder": "Add location",
+      "description": "Description",
+      "descriptionPlaceholder": "Add description",
+      "category": "Category",
+      "color": "Color",
+      "recurrence": "Repeat",
+      "reminders": "Reminders",
+      "save": "Save",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "deleteConfirm": "Are you sure you want to delete this event?"
+    },
+    "shortcuts": {
+      "dayView": "Day view (D)",
+      "weekView": "Week view (W)",
+      "monthView": "Month view (M)",
+      "today": "Today (T)",
+      "navigate": "Navigate (← →)",
+      "quickCreate": "Quick create (C)",
+      "newEvent": "New event (N)",
+      "search": "Search (/)",
+      "close": "Close (Esc)"
+    },
+    "timeLabels": {
+      "am": "AM",
+      "pm": "PM"
+    },
+    "weekHeader": {
+      "rangeTitle": "{start} – {end}, {year}"
+    },
+    "dayHeader": {
+      "dateTitle": "{weekday}, {date}"
+    }
   }
 }
