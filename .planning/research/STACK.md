@@ -1,430 +1,305 @@
-# Technology Stack: Calendar & Reminder Notifications
+# Technology Stack: AI Chat Foundation
 
-**Project:** BetterR.Me v6.0 Calendar & Reminder Notifications
-**Researched:** 2026-03-30
-**Scope:** Stack ADDITIONS only for calendar/scheduling and notification features. Existing stack (Next.js 16, React 19, Supabase auth+DB, SWR, shadcn/ui, Tailwind CSS 3, react-hook-form, zod v3, next-intl, date-fns ^4.1.0, Vercel Cron, etc.) is validated and unchanged.
-
----
-
-## 1. Calendar Grid Library
-
-### Decision: Build custom time grid (DO NOT use react-big-calendar)
-
-| Option | Version | Verdict | Rationale |
-|--------|---------|---------|-----------|
-| **Custom time grid** | N/A | **CHOSEN** | Full control over design tokens, dark mode, i18n, and BetterR.Me's specific needs (aggregated multi-domain items, inline checkboxes, color-coded layers) |
-| react-big-calendar | 1.19.4 | Rejected | Heavy opinionated CSS that fights Tailwind/shadcn design tokens. Requires moment.js or date-fns localizer wrapper. Custom styling is done via inline `style` objects (not CSS classes), making dark mode and design token integration painful. The library is designed for full calendar apps, not aggregated multi-domain views. |
-| @schedule-x/react | 4.1.0 | Rejected | Better architecture than react-big-calendar but still brings its own CSS framework. Drag-and-drop is a paid plugin ($). The design spec explicitly puts drag-and-drop rescheduling as "Out of Scope" -- paying for a feature we will not use is wasteful. |
-
-**Why custom is the right call for BetterR.Me:**
-
-1. **Design token control:** BetterR.Me has 56+ CSS custom properties for colors, spacing, radii. Calendar libraries bring their own CSS that must be overridden line by line. A custom grid uses design tokens natively from the start.
-
-2. **Dark mode:** Existing dark mode is class-based via `next-themes`. Calendar libraries use hardcoded colors or their own theming systems that do not integrate with CSS variable-based dark mode without significant overrides.
-
-3. **Multi-domain aggregation:** The calendar shows items from 5 sources (events, tasks, habits, bills, workouts) with inline actions (checkbox toggles, mark-paid). No calendar library supports this -- custom rendering is required regardless. Using a library for the grid and then replacing all its rendering components negates the library's value.
-
-4. **i18n:** next-intl provides translations. Calendar libraries have their own i18n systems (moment locales, date-fns locales) that conflict with or duplicate the existing approach.
-
-5. **Complexity is manageable:** The time grid is a CSS Grid with hourly rows and day columns. The hard parts (recurrence expansion, event positioning/overlap) are algorithmic problems solved in utility functions, not UI library problems. BetterR.Me already has recurrence expansion logic from recurring tasks.
-
-6. **No drag-and-drop rescheduling:** The design spec explicitly lists "Drag-and-drop rescheduling of events on the grid" as out of scope. The only drag interaction is click-and-drag to CREATE events (select a time range), which is a mousedown/mousemove/mouseup handler -- far simpler than full drag-and-drop reordering.
-
-**Implementation approach:**
-- `components/calendar/time-grid.tsx` — CSS Grid with `grid-template-rows` for hours, `grid-template-columns` for days
-- Event positioning: absolute positioning within grid cells, calculated from `start_time` / `end_time`
-- Overlap handling: column-packing algorithm (same approach as Google Calendar) -- pure function, well-documented algorithm
-- Click-and-drag selection: mousedown sets start, mousemove updates preview, mouseup fires `onSelectSlot({ start, end })`
-- Current time indicator: `useEffect` with 60-second interval updating a CSS `top` position
-
-**What date-fns functions will be needed (already installed at ^4.1.0):**
-- `startOfWeek`, `endOfWeek`, `eachDayOfInterval` -- week view column generation
-- `startOfMonth`, `endOfMonth`, `eachWeekOfInterval` -- month view grid
-- `addDays`, `addWeeks`, `addMonths`, `subDays`, `subWeeks`, `subMonths` -- navigation
-- `isSameDay`, `isToday`, `isSameMonth` -- highlighting
-- `format`, `parse` -- display formatting
-- `getHours`, `getMinutes`, `differenceInMinutes` -- time grid positioning
-- `setHours`, `setMinutes` -- creating events from time slot clicks
-
-All of these are already available in `date-fns@4.1.0`. **No new date library needed.**
+**Project:** BetterR.Me v7.0 — AI Chat Foundation
+**Researched:** 2026-04-02
+**Scope:** Stack ADDITIONS only for chat UI and streaming LLM responses. Existing stack (Next.js 16, React 19, Supabase auth+DB, SWR, shadcn/ui, Tailwind CSS 3, react-hook-form, zod v3, next-intl, etc.) is validated and unchanged.
 
 ---
 
-## 2. Web Push Notifications
+## 1. Vercel AI SDK — Streaming LLM Responses
 
-### Recommended: `web-push` (server-side)
+### Decision: Use `ai` + `@ai-sdk/react` + `@ai-sdk/openai`
 
 | Technology | Version | Purpose | Why | Confidence |
 |------------|---------|---------|-----|------------|
-| `web-push` | ^3.6.7 | Server-side push notification delivery | Official Web Push Protocol implementation for Node.js. Handles VAPID authentication, payload encryption (aes128gcm), and HTTP/2 delivery to push services (FCM, Mozilla, Apple). Zero browser dependencies -- server-only. 3.5M+ weekly downloads. | HIGH |
+| `ai` | ^6.0.144 | `streamText`, `convertToModelMessages`, `UIMessage` types, `DefaultChatTransport` | Industry-standard streaming abstraction for Next.js. Handles SSE wire protocol, backpressure, error recovery. Eliminates 200+ lines of hand-rolled streaming code. | HIGH |
+| `@ai-sdk/react` | ^3.0.146 | `useChat` hook for chat UI state management | Provides message list, streaming status (`submitted`/`streaming`/`ready`/`error`), send/stop/regenerate, error handling. Same "use an established library" philosophy as the project's use of SWR and react-hook-form. | HIGH |
+| `@ai-sdk/openai` | ^3.0.50 | `createOpenAI` with custom `baseURL` for llm.betterr.me proxy | Supports custom `baseURL` natively -- set to `https://llm.betterr.me/v1` and it works. The proxy is OpenAI-compatible, so no custom provider package needed. | HIGH |
 
-**Integration with existing stack:**
+**Why AI SDK over raw `fetch` + `ReadableStream`:**
+
+1. **Wire protocol handling:** AI SDK manages the SSE data stream protocol (chunked transfer encoding, event parsing, reconnection). Hand-rolling this means implementing `eventsource-parser`, handling partial chunks, managing abort signals, and dealing with error frames.
+
+2. **React state management:** `useChat` provides `messages`, `status`, `sendMessage`, `stop`, `setMessages`, `error` -- a complete chat state machine. Building this with `useState` + `useEffect` + `AbortController` is 150+ lines of brittle code.
+
+3. **Type safety:** `UIMessage` with `parts` array (text parts, tool calls, etc.) is properly typed. The `convertToModelMessages` function handles the UIMessage-to-model-message conversion.
+
+4. **Consistency with project philosophy:** BetterR.Me uses SWR for data fetching (not raw fetch), react-hook-form for forms (not raw onChange), and shadcn/ui for components (not raw Radix). Using AI SDK for streaming follows the same pattern.
+
+**Why `@ai-sdk/openai` over `@ai-sdk/openai-compatible`:**
+
+`@ai-sdk/openai-compatible` is designed for building reusable provider packages to publish to npm. `@ai-sdk/openai` already supports custom `baseURL` via `createOpenAI({ baseURL: '...' })`, which is exactly what we need for llm.betterr.me. Using the compatible package adds unnecessary abstraction.
+
+---
+
+## 2. Markdown Rendering for LLM Responses
+
+### Decision: Use `react-markdown` + `remark-gfm`
+
+| Technology | Version | Purpose | Why | Confidence |
+|------------|---------|---------|-----|------------|
+| `react-markdown` | ^10.1.0 | Render LLM markdown responses (headings, lists, code blocks, links, emphasis) | LLM responses contain markdown. Displaying raw text is unacceptable UX. react-markdown is the standard React markdown renderer (5,000+ npm dependents, 13K+ GitHub stars). Peer dep: React >=18 (satisfied). | HIGH |
+| `remark-gfm` | ^4.0.1 | GitHub Flavored Markdown (tables, strikethrough, task lists) | LLMs frequently produce tables and task lists. Without this plugin, GFM features render as raw text. Lightweight plugin (~5KB). | HIGH |
+
+**Why react-markdown over alternatives:**
+
+| Option | Verdict | Reason |
+|--------|---------|--------|
+| `react-markdown` | **CHOSEN** | React component tree integration. Custom renderers map to shadcn/Tailwind classes. Sanitizes by default (no XSS). |
+| Raw HTML rendering with `marked` | Rejected | XSS risk without additional sanitization library. No React component integration. Cannot customize code blocks, links, etc. with shadcn components. |
+| Tiptap (already installed) | Rejected | Tiptap is an editor, not a renderer. Using it to display read-only markdown is overkill and wrong abstraction. It's used in the journal for editing, not for displaying AI output. |
+
+**Rendering customization with Tailwind:**
 
 ```typescript
-// lib/push/send.ts
-import webpush from "web-push";
+// components/chat/markdown-renderer.tsx
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-webpush.setVapidDetails(
-  "mailto:reminders@betterr.me",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
-
-export async function sendPushNotification(
-  subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
-  payload: { title: string; body: string; url: string }
-) {
-  return webpush.sendNotification(
-    subscription,
-    JSON.stringify(payload),
-    { TTL: 3600, urgency: "normal" }
+export function MarkdownRenderer({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        // Map markdown elements to Tailwind-styled elements
+        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+        code: ({ children, className }) =>
+          className ? (
+            <pre className="rounded-md bg-muted p-3 overflow-x-auto">
+              <code className={className}>{children}</code>
+            </pre>
+          ) : (
+            <code className="rounded bg-muted px-1.5 py-0.5 text-sm">{children}</code>
+          ),
+        ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
+        a: ({ href, children }) => (
+          <a href={href} target="_blank" rel="noopener noreferrer"
+            className="text-primary underline hover:no-underline">{children}</a>
+        ),
+      }}
+    />
   );
 }
 ```
 
-**VAPID key generation** (one-time setup):
-```bash
-npx web-push generate-vapid-keys
-```
-Output goes to `.env.local` as `NEXT_PUBLIC_VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`. The CLI command is included with the `web-push` package -- no separate utility needed.
+### Syntax Highlighting: DEFER to Phase 2+
 
-**Error handling for stale subscriptions:**
-- `410 Gone` or `404 Not Found` → delete subscription from `push_subscriptions` table
-- `429 Too Many Requests` → retry with backoff
-- Network errors → mark reminder as `failed` for retry
-
-**Works with Vercel Cron:** The cron endpoint (`api/cron/send-reminders/route.ts`) calls `sendPushNotification()` for each due reminder. Same pattern as existing `api/cron/sync-transactions/route.ts` -- protected by `CRON_SECRET` bearer token.
+| Technology | Version | Purpose | When to Add |
+|------------|---------|---------|-------------|
+| `rehype-highlight` | ^7.0.2 | Code block syntax highlighting | Only if users request code assistance features. Adds ~50KB gzipped. Not needed for general chat MVP. |
 
 ---
 
-## 3. Service Worker for Push Notifications
+## 3. Peer Dependency Adjustments Required
 
-### Decision: Hand-written `public/sw.js` (DO NOT use Serwist/@serwist/next)
+### React Version Bump (Required)
 
-| Option | Version | Verdict | Rationale |
-|--------|---------|---------|-----------|
-| **Hand-written `public/sw.js`** | N/A | **CHOSEN** | Service worker only needs to handle `push` and `notificationclick` events. 20-30 lines of code. No caching strategy needed (Next.js handles its own caching). |
-| @serwist/next | 9.5.7 | Rejected | Full PWA framework with precaching, runtime caching strategies, workbox integration. Massive overkill for "listen for push events and show a notification." Adds build-time complexity (webpack/Turbopack plugin), runtime overhead, and config surface area for zero benefit. |
-| next-pwa | Unmaintained | Rejected | Abandoned. Serwist is its successor, but same overkill argument applies. |
+| Package | Current | Required | Why |
+|---------|---------|----------|-----|
+| `react` | 19.1.0 | >=19.1.2 | `@ai-sdk/react@^3.0.146` peer dep: `^18 \|\| ~19.0.1 \|\| ~19.1.2 \|\| ^19.2.1`. React 19.1.0 does NOT satisfy `~19.1.2` (which means >=19.1.2 <19.2.0). |
+| `react-dom` | 19.1.0 | >=19.1.2 | Must match react version. |
 
-**The service worker is trivial:**
+**Action:** Update package.json `react` and `react-dom` from `^19.0.0` to `^19.1.2`, then `pnpm install`. This resolves to React 19.1.5 (latest stable 19.1.x). This is a patch bump with bug fixes, no breaking changes.
 
-```javascript
-// public/sw.js
-self.addEventListener("push", (event) => {
-  const data = event.data?.json() ?? {};
-  event.waitUntil(
-    self.registration.showNotification(data.title ?? "BetterR.Me", {
-      body: data.body,
-      icon: "/icon-192.png",
-      badge: "/badge-72.png",
-      data: { url: data.url ?? "/dashboard" },
-    })
-  );
-});
+**Alternative (not recommended):** Add `@ai-sdk/react>react` to pnpm `peerDependencyRules.allowedVersions` (project already does this for dnd-kit). But updating React is cleaner -- 19.1.5 has actual bug fixes.
 
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  event.waitUntil(
-    clients.matchAll({ type: "window" }).then((windowClients) => {
-      const existing = windowClients.find((c) => c.url === event.notification.data.url);
-      if (existing) return existing.focus();
-      return clients.openWindow(event.notification.data.url);
-    })
-  );
-});
+### Zod Version (Lockfile refresh only)
+
+| Current spec | Resolved in lockfile | Required by `ai` |
+|-------------|---------------------|-------------------|
+| ^3.25.46 | 3.25.46 | ^3.25.76 |
+
+**Action:** Run `pnpm update zod`. The spec `^3.25.46` already covers 3.25.76 (latest 3.25.x). Just needs a lockfile update. No code changes -- zod 3.25.x is fully backward compatible within minor.
+
+---
+
+## 4. Environment Variables
+
+| Variable | Example Value | Where | Purpose |
+|----------|-------------|-------|---------|
+| `LLM_API_KEY` | (secret) | `.env.local` + Vercel (server-only) | Bearer token for llm.betterr.me proxy. Already noted in STATE.md. |
+| `LLM_BASE_URL` | `https://llm.betterr.me/v1` | `.env.local` + Vercel (server-only) | Base URL for OpenAI-compatible proxy. Env var allows switching without redeploy. |
+| `LLM_MODEL` | `claude-sonnet-4-20250514` | `.env.local` + Vercel (server-only) | Model identifier passed to the proxy. Env var allows model switching without code change. |
+
+**IMPORTANT:** All `LLM_*` env vars are server-only (no `NEXT_PUBLIC_` prefix). The API key must never reach the client. The Next.js API route acts as a secure proxy between the browser and llm.betterr.me.
+
+---
+
+## 5. Integration Architecture
+
+```
+Browser (useChat)  --POST /api/chat-->  Next.js Route Handler  --POST /v1/chat/completions-->  llm.betterr.me
+       ^                                      |                                                      |
+       |                                 streamText() +                                              |
+       |                            createOpenAI({baseURL})                                          |
+       +------SSE stream (toUIMessageStreamResponse)--+<-----SSE stream (OpenAI format)--------------+
 ```
 
-**Next.js configuration for service worker headers:**
+### Server-side Route Handler Pattern
 
 ```typescript
-// next.config.ts — add to existing headers()
-{
-  source: "/sw.js",
-  headers: [
-    { key: "Service-Worker-Allowed", value: "/" },
-    { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
-  ],
-},
-```
+// app/api/chat/route.ts
+import { streamText, UIMessage, convertToModelMessages } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
+import { createClient } from '@/lib/supabase/server';
 
-**Client-side registration** (in a `useEffect` or layout component):
+const llm = createOpenAI({
+  baseURL: process.env.LLM_BASE_URL || 'https://llm.betterr.me/v1',
+  apiKey: process.env.LLM_API_KEY || '',
+});
 
-```typescript
-// lib/push/register.ts
-export async function registerServiceWorker() {
-  if ("serviceWorker" in navigator) {
-    return navigator.serviceWorker.register("/sw.js");
+export async function POST(req: Request) {
+  // Auth check — reuse existing Supabase server client pattern
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return new Response('Unauthorized', { status: 401 });
   }
-  return null;
-}
 
-export async function subscribeToPush(registration: ServiceWorkerRegistration) {
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(
-      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
-    ),
+  const { messages }: { messages: UIMessage[] } = await req.json();
+
+  const result = streamText({
+    model: llm(process.env.LLM_MODEL || 'claude-sonnet-4-20250514'),
+    system: 'You are a helpful assistant for BetterR.Me.',
+    messages: await convertToModelMessages(messages),
   });
-  // POST subscription to /api/push/subscribe
-  await fetch("/api/push/subscribe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(subscription),
-  });
-  return subscription;
+
+  return result.toUIMessageStreamResponse();
 }
 ```
 
----
-
-## 4. Email Delivery
-
-### Recommended: `resend` + `@react-email/components`
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| `resend` | ^6.10.0 | Transactional email API client | Developer-focused email API. Simple SDK (`resend.emails.send()`). React Email integration for type-safe templates. Free tier: 3,000 emails/month (ample for personal productivity app). No SMTP config. Vercel partnership for easy deployment. | HIGH |
-| `@react-email/components` | ^1.0.10 | Email template components | Write email templates as React components with TypeScript. Components render to cross-client HTML. Reuses React mental model -- no separate templating language. | HIGH |
-| `@react-email/render` | ^2.0.4 | Server-side email rendering | Renders React Email components to HTML string for Resend's `html` parameter. Required peer dependency. | HIGH |
-
-**Why Resend over SendGrid:**
-
-| Criteria | Resend | SendGrid |
-|----------|--------|----------|
-| DX | `resend.emails.send({ react: <Template /> })` — one function call with JSX | Template IDs, dynamic template data, separate template management |
-| Free tier | 3,000 emails/month | 100 emails/day (3,000/month effective, but daily cap is annoying) |
-| React Email | Native integration — pass JSX directly | Must render to HTML first, then pass as string |
-| SDK size | Minimal, focused on email sending | Large SDK covering marketing, contacts, webhooks, stats |
-| Setup | API key + verified domain | API key + verified domain + sender identity verification |
-| Next.js | First-class support, Vercel partnership | Works but not purpose-built for Next.js |
-
-**Integration pattern:**
+### Client-side Hook Pattern
 
 ```typescript
-// lib/email/send-reminder.ts
-import { Resend } from "resend";
-import { render } from "@react-email/render";
-import { ReminderEmail } from "@/components/email/reminder-email";
+'use client';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-export async function sendReminderEmail(
-  to: string,
-  reminder: { title: string; body: string; url: string; sourceType: string }
-) {
-  const html = await render(<ReminderEmail {...reminder} />);
-  
-  const { data, error } = await resend.emails.send({
-    from: "BetterR.Me <reminders@betterr.me>",
-    to: [to],
-    subject: reminder.title,
-    html,
-  });
-
-  if (error) throw new Error(`Email send failed: ${error.message}`);
-  return data;
-}
+const { messages, sendMessage, status, stop, error } = useChat({
+  transport: new DefaultChatTransport({ api: '/api/chat' }),
+});
+// status: 'submitted' | 'streaming' | 'ready' | 'error'
+// messages[].parts[].type === 'text' for rendering
 ```
 
-**Email templates needed (React components):**
-
-| Template | Source Type | Subject Pattern |
-|----------|-----------|-----------------|
-| `event-reminder.tsx` | calendar_event | "Reminder: {event title} in {time}" |
-| `task-due.tsx` | task | "Task due: {task title}" |
-| `habit-nudge.tsx` | habit | "Time for: {habit title}" |
-| `bill-due.tsx` | bill | "Bill due in {days}: {bill name} — ${amount}" |
-
-**Unsubscribe handling:** Every email includes an unsubscribe link pointing to `/settings/notifications` where users can toggle email notifications per source type. Resend supports `List-Unsubscribe` headers for one-click unsubscribe in email clients.
-
 ---
 
-## 5. No New Date/Time Libraries Needed
-
-`date-fns@4.1.0` is already installed and used across 18+ source files. It covers every date manipulation need for the calendar:
-
-| Need | date-fns Function | Already Used? |
-|------|-------------------|---------------|
-| Week boundaries | `startOfWeek`, `endOfWeek` | New usage |
-| Month boundaries | `startOfMonth`, `endOfMonth` | Yes (money/bill-calendar) |
-| Day iteration | `eachDayOfInterval` | New usage |
-| Navigation | `addDays`, `addWeeks`, `addMonths`, `subDays` | Yes (money features) |
-| Comparisons | `isSameDay`, `isToday`, `isSameMonth` | Yes (heatmap, bill-calendar) |
-| Formatting | `format` | Yes (18+ files) |
-| Time math | `differenceInMinutes`, `getHours`, `getMinutes` | New usage |
-| Parsing | `parseISO`, `parse` | Yes (money features) |
-
-**DO NOT add:** `dayjs`, `luxon`, `moment`, `temporal-polyfill`. date-fns is tree-shakeable, already optimized in `next.config.ts` (`optimizePackageImports`), and sufficient for all calendar operations.
-
----
-
-## 6. Vercel Cron for Reminder Delivery
-
-**Already available** -- the existing `api/cron/sync-transactions/route.ts` proves the pattern works. The reminder cron needs to run more frequently.
-
-**Configuration change in `vercel.json`:**
-
-```json
-{
-  "crons": [
-    {
-      "path": "/api/cron/sync-transactions",
-      "schedule": "0 */6 * * *"
-    },
-    {
-      "path": "/api/cron/send-reminders",
-      "schedule": "* * * * *"
-    }
-  ]
-}
-```
-
-**Note on Vercel Cron frequency:**
-- Hobby plan: minimum 1-minute interval (sufficient for reminders)
-- Pro plan: same minimum, but with guaranteed execution
-- The cron endpoint processes all reminders with `fire_at <= NOW() AND status = 'pending'` in a single batch
-- Execution limit: 10s on Hobby, 60s on Pro. Batch processing must be fast -- query pending reminders, fan out push/email sends in parallel, update statuses
-
-**No new library needed** for the cron infrastructure itself.
-
----
-
-## Recommended Stack Additions — Summary
-
-| Technology | Version | Purpose | Bundle Impact |
-|------------|---------|---------|--------------|
-| `web-push` | ^3.6.7 | Server-side push notification delivery | **Server-only** — zero client bundle impact |
-| `resend` | ^6.10.0 | Transactional email API | **Server-only** — zero client bundle impact |
-| `@react-email/components` | ^1.0.10 | Email template components | **Server-only** — zero client bundle impact |
-| `@react-email/render` | ^2.0.4 | Render React Email to HTML | **Server-only** — zero client bundle impact |
-
-**Total new runtime dependencies: 4** (all server-only)
-**Total new dev dependencies: 0**
-**Client bundle increase: 0 bytes**
-
-The calendar UI, service worker, and VAPID key generation require no new packages.
-
----
-
-## Installation
-
-```bash
-# Push notifications (server-side only)
-pnpm add web-push
-
-# Email delivery
-pnpm add resend @react-email/components @react-email/render
-
-# VAPID key generation (one-time, using web-push CLI)
-npx web-push generate-vapid-keys
-# Copy output to .env.local:
-#   NEXT_PUBLIC_VAPID_PUBLIC_KEY=...
-#   VAPID_PRIVATE_KEY=...
-
-# Add to .env.local:
-#   RESEND_API_KEY=re_...
-```
-
-No `pnpm add` needed for:
-- Calendar grid (custom-built)
-- Service worker (hand-written `public/sw.js`)
-- Date manipulation (`date-fns` already installed)
-- Cron jobs (Vercel Cron already configured)
-- VAPID keys (CLI included with `web-push`)
-
----
-
-## What NOT to Add
+## 6. What NOT to Add
 
 | Do NOT Add | Why | What to Use Instead |
 |------------|-----|---------------------|
-| react-big-calendar | Opinionated CSS fights design tokens. Inline style overrides for dark mode. Does not support multi-domain aggregation with inline actions. | Custom CSS Grid time grid with BetterR.Me design tokens |
-| @schedule-x/react | Drag-and-drop is paid. Calendar drag rescheduling is out of scope. Own CSS system conflicts with Tailwind. | Custom CSS Grid time grid |
-| @serwist/next (or next-pwa) | Full PWA framework with precaching/caching strategies. We only need push event handling (20 lines of JS). Massive overkill. | Hand-written `public/sw.js` |
-| SendGrid (@sendgrid/mail) | Larger SDK, daily sending caps on free tier, no React Email native integration, worse DX for simple transactional email. | Resend |
-| dayjs / luxon / moment | date-fns ^4.1.0 already installed, tree-shakeable, covers all needs. Adding a second date library is waste. | date-fns (existing) |
-| FullCalendar | Commercial license required for premium features. Even the open-source version has its own DOM rendering and CSS. | Custom CSS Grid time grid |
-| node-cron / bull / bullmq | Server-side job scheduling libraries for long-running Node processes. Vercel is serverless -- these do not work. | Vercel Cron (existing pattern) |
-| firebase-admin (FCM) | Web Push API + VAPID is the standard. FCM is Google-specific and requires Firebase project setup. web-push sends to ALL push services (FCM, Mozilla, Apple) via the standard protocol. | web-push |
-| OneSignal / Pusher | Third-party notification services. Unnecessary abstraction when Web Push API + web-push library gives full control. Adds vendor dependency and costs. | web-push + custom service worker |
-| temporal-polyfill | TC39 Temporal API is not yet stable in all runtimes. date-fns is the existing, working solution. | date-fns (existing) |
-| react-email (CLI/dev server) | The CLI and dev server are development tools for previewing email templates. Not needed in production. Templates can be previewed with Storybook or a dedicated dev route. | `@react-email/components` + `@react-email/render` (the actual libraries) |
+| `openai` (npm package) | Raw OpenAI Node SDK. AI SDK wraps it with better streaming, React hooks, and type safety. Using both is redundant. | `@ai-sdk/openai` via AI SDK |
+| `@ai-sdk/openai-compatible` | For building reusable provider packages to publish. `@ai-sdk/openai` with `createOpenAI({ baseURL })` handles custom endpoints directly. | `@ai-sdk/openai` |
+| `eventsource-parser` | Manual SSE parsing. AI SDK handles this internally via `streamText`. | AI SDK `streamText` |
+| `langchain` / `@langchain/core` | Massive orchestration framework for chains, agents, RAG. We need simple chat streaming. LangChain adds 500KB+ for capabilities we don't use. | AI SDK `streamText` |
+| `marked` / `markdown-it` | Non-React markdown parsers. Output raw HTML strings. No component customization, require separate sanitization. | `react-markdown` (React component tree, safe by default) |
+| `socket.io` / WebSocket libs | SSE (Server-Sent Events) is sufficient for LLM streaming. WebSockets add bidirectional complexity for a unidirectional stream. AI SDK uses SSE by default. | AI SDK SSE transport |
+| SWR for chat | Already in the project, but NOT for chat. `useChat` manages its own streaming state. Wrapping chat in SWR would conflict -- it's a streaming interaction, not a fetch-cache pattern. | `useChat` hook |
+| Database table for chat history | Out of scope for v7.0. PROJECT.md says "Conversation persists within the session." React state is sufficient. Add Supabase table in a future milestone if persistence needed. | `useChat` in-memory message state |
+| `@ai-sdk/anthropic` | Direct Anthropic provider. Not needed because llm.betterr.me exposes an OpenAI-compatible API. Using `@ai-sdk/openai` with custom `baseURL` routes through the proxy correctly. | `@ai-sdk/openai` with custom baseURL |
+| `highlight.js` / `prism.js` | Code syntax highlighting. Deferring to Phase 2+ since MVP is general chat, not code assistance. | Defer; add `rehype-highlight` later if needed |
 
 ---
 
-## Version Compatibility Matrix
+## 7. Recommended Stack Additions -- Summary
 
-| New Package | React 19 | Next.js 16 | Node.js 24 | TypeScript 5 | Notes |
-|-------------|----------|------------|------------|--------------|-------|
-| web-push ^3.6.7 | N/A (server) | Yes | Yes (>=16) | `@types/web-push` included | Server-only, no React dependency |
-| resend ^6.10.0 | N/A (server) | Yes | Yes (>=20) | Types included | Server-only, optional `@react-email/render` peer dep |
-| @react-email/components ^1.0.10 | Yes | Yes | Yes | Types included | React components for email templates |
-| @react-email/render ^2.0.4 | Yes | Yes | Yes | Types included | Renders React to HTML string |
+| Technology | Version | Purpose | Bundle Impact |
+|------------|---------|---------|--------------|
+| `ai` | ^6.0.144 | Streaming core (`streamText`, `UIMessage`, transport) | ~15KB gzipped (server + shared types) |
+| `@ai-sdk/react` | ^3.0.146 | `useChat` hook | ~8KB gzipped (client) |
+| `@ai-sdk/openai` | ^3.0.50 | OpenAI-compatible provider with custom baseURL | ~5KB gzipped (server) |
+| `react-markdown` | ^10.1.0 | Markdown rendering for LLM responses | ~15KB gzipped (client) |
+| `remark-gfm` | ^4.0.1 | GFM tables, strikethrough, task lists | ~5KB gzipped (client) |
 
-All packages are compatible with: Next.js 16.1.6, React 19, TypeScript 5, Node.js 24, pnpm 10.11.
+**Total new runtime dependencies: 5**
+**Total new dev dependencies: 0**
+**Estimated client bundle increase: ~28KB gzipped** (react-markdown + remark-gfm + @ai-sdk/react)
+**Estimated server bundle increase: ~20KB** (ai + @ai-sdk/openai -- not in client bundle)
+
+### Peer dependency updates (no new packages):
+
+| Package | From | To | Impact |
+|---------|------|----|--------|
+| `react` | 19.1.0 | 19.1.5 | Patch bump, bug fixes |
+| `react-dom` | 19.1.0 | 19.1.5 | Patch bump, bug fixes |
+| `zod` | 3.25.46 | 3.25.76 | Lockfile update only |
 
 ---
 
-## Environment Variables to Add
+## 8. Installation
 
-| Variable | Where | Purpose |
-|----------|-------|---------|
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | `.env.local` + Vercel | Public VAPID key for browser push subscription (client-exposed) |
-| `VAPID_PRIVATE_KEY` | `.env.local` + Vercel | Private VAPID key for signing push messages (server-only) |
-| `RESEND_API_KEY` | `.env.local` + Vercel | Resend API key for sending emails (server-only) |
+```bash
+# New dependencies for AI chat
+pnpm add ai @ai-sdk/react @ai-sdk/openai react-markdown remark-gfm
 
-`CRON_SECRET` already exists (used by `sync-transactions` cron).
+# Peer dependency updates
+pnpm update react react-dom zod
+```
+
+**Environment variables to add to `.env.local`:**
+```bash
+LLM_API_KEY=<your-api-key>
+LLM_BASE_URL=https://llm.betterr.me/v1
+LLM_MODEL=claude-sonnet-4-20250514
+```
 
 ---
 
-## Existing Stack Serving Calendar & Notification Features
+## 9. Version Compatibility Matrix
+
+| New Package | React 19.1.2+ | Next.js 16 | TypeScript 5 | Notes |
+|-------------|---------------|------------|--------------|-------|
+| ai ^6.0.144 | Yes | Yes (App Router) | Types included | Peer dep: zod ^3.25.76 |
+| @ai-sdk/react ^3.0.146 | Yes (~19.1.2) | Yes | Types included | Peer dep: react ~19.1.2 |
+| @ai-sdk/openai ^3.0.50 | N/A (server) | Yes | Types included | Peer dep: zod ^3.25.76 |
+| react-markdown ^10.1.0 | Yes (>=18) | Yes | @types included | No additional peer deps |
+| remark-gfm ^4.0.1 | N/A (plugin) | Yes | Types included | Peer dep: react-markdown |
+
+All packages are compatible with: Next.js 16.1.6, React 19.1.2+, TypeScript 5, pnpm 10.11.
+
+---
+
+## 10. Existing Stack Serving AI Chat Features
 
 These technologies are already installed and require NO additions:
 
-| Existing Technology | How It Serves Calendar/Notification Features |
-|---------------------|----------------------------------------------|
-| **date-fns ^4.1.0** | All date math: week/month boundaries, navigation, formatting, time grid positioning. Already used in 18+ files. Already in `optimizePackageImports`. |
-| **react-day-picker 8.10.1** | Mini month picker in calendar sidebar (same component used in journal). Already installed and working. |
-| **Supabase (auth + DB)** | `calendar_events`, `reminders`, `push_subscriptions`, `reminder_defaults` tables with RLS policies. Same DB class pattern as all other domains. |
-| **SWR** | Calendar feed fetching with `keepPreviousData: true` for smooth navigation. Optimistic updates for inline task/habit toggling. Date-range-keyed SWR keys. |
-| **react-hook-form + zod** | Event creation/edit forms. Reminder preferences form. Reuses existing form patterns and Zod validation at API boundaries. |
-| **shadcn/ui + Radix UI** | Dialog (event creation), Popover (quick-create), Select (view switcher), Button, Badge, Checkbox (inline actions), Sheet (mobile sidebar), Tooltip. |
-| **next-intl** | Calendar/reminder UI strings in en, zh, zh-TW. Date formatting localization. |
-| **next-themes** | Dark mode for all calendar views via existing CSS variable system. |
-| **lucide-react** | Calendar, Clock, Bell, BellRing, ChevronLeft, ChevronRight, Plus, Filter, Eye/EyeOff icons. |
-| **sonner** | Toast notifications for event CRUD confirmations, reminder creation feedback. |
-| **Vercel Cron** | `api/cron/send-reminders` endpoint. Same `CRON_SECRET` auth pattern as existing `sync-transactions` cron. |
-| **Tailwind CSS 3** | Calendar grid layout, responsive breakpoints, dark mode classes, design token usage. |
-| **Vitest + Playwright** | Unit tests for recurrence expansion, fire_at computation, event overlap algorithm. E2E tests for event creation flow, view navigation. |
+| Existing Technology | How It Serves AI Chat |
+|---------------------|----------------------|
+| **Supabase auth** | Auth-gating the `/api/chat` route. Same `createClient()` + `getUser()` pattern used by all API routes. |
+| **shadcn/ui + Radix UI** | Chat UI components: Button (send), Input/Textarea (message input), ScrollArea (message list), Card (message bubbles), Avatar (user/assistant). |
+| **Tailwind CSS 3** | Chat layout, message bubble styling, responsive design, dark mode via existing CSS variables. |
+| **next-intl** | Chat UI strings (placeholder text, error messages, status indicators) in en/zh/zh-TW. |
+| **next-themes** | Dark mode for chat interface via existing class-based system. |
+| **lucide-react** | Send, Square (stop), RefreshCw (regenerate), User, Bot, Copy, AlertCircle icons. |
+| **sonner** | Toast notifications for chat errors, copy-to-clipboard confirmation. |
+| **zod** | Input validation for chat API route (message array schema). |
 
 ---
 
 ## Sources
 
-### Package Versions (verified via npm registry, 2026-03-30)
-- [web-push npm v3.6.7](https://www.npmjs.com/package/web-push) — Node.js >=16, includes VAPID key generator CLI
-- [resend npm v6.10.0](https://www.npmjs.com/package/resend) — Node.js >=20, optional `@react-email/render` peer dep
-- [@react-email/components npm v1.0.10](https://www.npmjs.com/package/@react-email/components) — React 18-19 compatible
-- [@react-email/render npm v2.0.4](https://www.npmjs.com/package/@react-email/render) — Server-side HTML rendering
-- [react-big-calendar npm v1.19.4](https://www.npmjs.com/package/react-big-calendar) — React 16-19 (evaluated, rejected)
-- [@schedule-x/react npm v4.1.0](https://www.npmjs.com/package/@schedule-x/react) — React 16-19 (evaluated, rejected)
-- [@serwist/next npm v9.5.7](https://www.npmjs.com/package/@serwist/next) — Next.js >=14 (evaluated, rejected)
+### Package Versions (verified via npm registry, 2026-04-02)
+- [ai npm v6.0.144](https://www.npmjs.com/package/ai) — Latest AI SDK core
+- [@ai-sdk/react npm v3.0.146](https://www.npmjs.com/package/@ai-sdk/react) — React hooks for AI SDK
+- [@ai-sdk/openai npm v3.0.50](https://www.npmjs.com/package/@ai-sdk/openai) — OpenAI provider with custom baseURL
+- [react-markdown npm v10.1.0](https://www.npmjs.com/package/react-markdown) — React markdown renderer
+- [remark-gfm npm v4.0.1](https://www.npmjs.com/package/remark-gfm) — GFM plugin for react-markdown
+- [react npm v19.1.5](https://www.npmjs.com/package/react) — Latest stable React 19.1.x
+- [zod npm v3.25.76](https://www.npmjs.com/package/zod) — Latest zod 3.x
 
-### Integration Patterns (Context7 + official docs)
-- [web-push library docs](https://github.com/web-push-libs/web-push) — VAPID setup, sendNotification API, error handling
-- [Resend Next.js integration](https://resend.com/docs/send-with-nextjs) — SDK usage in API routes
-- [React Email docs](https://react.email) — Component-based email templates
-- [Web Push API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Push_API) — Browser push subscription, service worker events
-- [Service Worker API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API) — Registration, push event handling
+### Official Documentation (verified 2026-04-02)
+- [AI SDK Introduction](https://ai-sdk.dev/docs/introduction) — v6 architecture overview
+- [AI SDK useChat](https://ai-sdk.dev/docs/ai-sdk-ui/chatbot) — Chat hook API, UIMessage, parts rendering
+- [AI SDK streamText](https://ai-sdk.dev/docs/ai-sdk-core/generating-text) — Server-side streaming, toUIMessageStreamResponse
+- [AI SDK OpenAI Provider](https://ai-sdk.dev/providers/ai-sdk-providers/openai) — createOpenAI with custom baseURL
+- [AI SDK Custom Providers](https://ai-sdk.dev/providers/openai-compatible-providers/custom-providers) — @ai-sdk/openai-compatible (evaluated, not needed)
 
-### Architecture Decisions (project-specific reasoning)
-- Design spec: `docs/superpowers/specs/2026-03-30-calendar-reminders-design.md`
-- Existing cron pattern: `app/api/cron/sync-transactions/route.ts`
-- Existing recurrence logic: `lib/db/types.ts` (RecurrenceRule discriminated union)
-- Existing design tokens: `tailwind.config.ts` (56+ CSS custom properties)
+### Project Context
+- `.planning/STATE.md` — LLM proxy details (llm.betterr.me, CLIProxyAPI, LLM_API_KEY)
+- `.planning/PROJECT.md` — v7.0 scope: session-scoped chat, auth-gated, streaming
 
 ---
-*Stack research for: BetterR.Me v6.0 Calendar & Reminder Notifications*
-*Researched: 2026-03-30*
+*Stack research for: BetterR.Me v7.0 AI Chat Foundation*
+*Researched: 2026-04-02*
 *Scope: Additions only -- existing stack unchanged*
