@@ -1763,8 +1763,16 @@
     },
     "sidebar": {
       "newEvent": "+ New Event",
-      "layers": "Layers",
-      "comingSoonPhase": "Coming in a future phase"
+      "layers": "Layers"
+    },
+    "feed": {
+      "taskComplete": "Mark complete",
+      "taskUncomplete": "Mark incomplete",
+      "habitLog": "Log habit",
+      "habitUnlog": "Unlog habit",
+      "billPaid": "Mark paid",
+      "billDismiss": "Dismiss",
+      "viewWorkout": "View workout"
     },
     "comingSoon": "Coming soon",
     "noEvents": "No events",

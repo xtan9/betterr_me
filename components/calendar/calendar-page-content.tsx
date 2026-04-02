@@ -15,13 +15,14 @@ import {
 } from "@/lib/calendar/date-utils";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { CalendarHeader } from "./calendar-header";
-import { CalendarSidebar } from "./calendar-sidebar";
+import { CalendarSidebar, LAYERS } from "./calendar-sidebar";
 import { MonthGrid } from "./month-grid";
 import { WeekView } from "./week-view";
 import { DayView } from "./day-view";
 import { EventQuickCreate } from "./event-quick-create";
 import { EventDialog } from "./event-dialog";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { CalendarFeedItem } from "@/lib/calendar/feed-types";
 
 interface ProfileResponse {
   profile: {
@@ -33,6 +34,49 @@ interface ProfileResponse {
 
 interface EventsResponse {
   events: ExpandedCalendarEvent[];
+}
+
+interface FeedResponse {
+  items: CalendarFeedItem[];
+}
+
+/**
+ * Convert feed items into the same shape as ExpandedCalendarEvent so they
+ * can be rendered by the existing calendar views. Feed items that are
+ * calendar events are skipped (they come from the events API already).
+ */
+function feedItemsToExpandedEvents(
+  items: CalendarFeedItem[],
+): ExpandedCalendarEvent[] {
+  return items
+    .filter((item) => item.source !== "event")
+    .map((item) => ({
+      id: item.id,
+      user_id: "",
+      title: item.title,
+      description: item.meta.description ?? null,
+      start_date: item.start_date,
+      start_time: item.start_time ? `${item.start_time}:00` : null,
+      end_date: item.end_date,
+      end_time: item.end_time ? `${item.end_time}:00` : null,
+      location: item.meta.location ?? null,
+      color: item.color,
+      category_id: null,
+      is_recurring: false,
+      recurrence_rule: null,
+      end_type: null,
+      end_date_recurrence: null,
+      end_count: null,
+      recurring_event_id: null,
+      original_date: null,
+      is_exception: false,
+      created_at: "",
+      updated_at: "",
+      is_virtual: true,
+      // Carry feed metadata for inline actions
+      _feed_source: item.source,
+      _feed_meta: item.meta,
+    })) as unknown as ExpandedCalendarEvent[];
 }
 
 export function CalendarPageContent() {
@@ -105,13 +149,65 @@ export function CalendarPageContent() {
     return getMonthDateRange(year, month, weekStartDay);
   }, [view, currentDate, year, month, weekStartDay]);
 
+  // --- Layer toggle state ---
+  const [enabledLayers, setEnabledLayers] = useState<Set<string>>(
+    () => new Set(LAYERS.map((l) => l.key)),
+  );
+
+  const toggleLayer = useCallback((key: string) => {
+    setEnabledLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
+  // Build layers query param from enabled non-event layers
+  const layersParam = useMemo(() => {
+    // Map sidebar layer keys to feed source names
+    const layerToSource: Record<string, string> = {
+      events: "event",
+      tasks: "task",
+      habits: "habit",
+      bills: "bill",
+      workouts: "workout",
+    };
+    const activeSources = LAYERS.map((l) => l.key)
+      .filter((k) => enabledLayers.has(k))
+      .map((k) => layerToSource[k])
+      .filter(Boolean);
+    return activeSources.join(",");
+  }, [enabledLayers]);
+
   // Fetch events for the visible date range
   const {
     data: eventsData,
     error: eventsError,
     isLoading: eventsLoading,
   } = useSWR<EventsResponse>(
-    `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
+    enabledLayers.has("events")
+      ? `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`
+      : null,
+    fetcher,
+    { keepPreviousData: true },
+  );
+
+  // Fetch cross-domain feed items
+  const hasFeedLayers = ["tasks", "habits", "bills", "workouts"].some((k) =>
+    enabledLayers.has(k),
+  );
+  const {
+    data: feedData,
+    error: feedError,
+    isLoading: feedLoading,
+  } = useSWR<FeedResponse>(
+    hasFeedLayers
+      ? `/api/calendar/feed?start_date=${startDate}&end_date=${endDate}&layers=${layersParam}`
+      : null,
     fetcher,
     { keepPreviousData: true },
   );
@@ -119,8 +215,9 @@ export function CalendarPageContent() {
   // Log SWR fetch errors for debugging
   useEffect(() => {
     if (eventsError) console.error("Failed to fetch calendar events:", eventsError);
+    if (feedError) console.error("Failed to fetch calendar feed:", feedError);
     if (profileError) console.error("Failed to fetch user profile:", profileError);
-  }, [eventsError, profileError]);
+  }, [eventsError, feedError, profileError]);
 
   // Compute grid dates and grouped events
   const gridDates = useMemo(
@@ -128,14 +225,23 @@ export function CalendarPageContent() {
     [year, month, weekStartDay],
   );
 
+  // Merge calendar events with feed items
+  const allEvents = useMemo(() => {
+    const calendarEvents = eventsData?.events ?? [];
+    const feedEvents = feedData?.items
+      ? feedItemsToExpandedEvents(feedData.items)
+      : [];
+    return [...calendarEvents, ...feedEvents];
+  }, [eventsData?.events, feedData?.items]);
+
   const eventsByDate = useMemo(
-    () => groupEventsByDate(eventsData?.events ?? []),
-    [eventsData?.events],
+    () => groupEventsByDate(allEvents),
+    [allEvents],
   );
 
   const today = useMemo(() => getLocalDateString(), []);
 
-  const isLoading = profileLoading || eventsLoading;
+  const isLoading = profileLoading || eventsLoading || feedLoading;
 
   // --- Navigation functions ---
 
@@ -313,7 +419,12 @@ export function CalendarPageContent() {
     globalMutate(
       `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
     );
-  }, [startDate, endDate, globalMutate]);
+    if (hasFeedLayers) {
+      globalMutate(
+        `/api/calendar/feed?start_date=${startDate}&end_date=${endDate}&layers=${layersParam}`,
+      );
+    }
+  }, [startDate, endDate, globalMutate, hasFeedLayers, layersParam]);
 
   // --- Keyboard shortcuts ---
 
@@ -351,6 +462,8 @@ export function CalendarPageContent() {
             onDateSelect={navigateToDate}
             weekStartDay={weekStartDay}
             onNewEvent={handleNewEvent}
+            enabledLayers={enabledLayers}
+            onToggleLayer={toggleLayer}
           />
         </aside>
 
@@ -367,7 +480,7 @@ export function CalendarPageContent() {
           />
 
           <div className="flex-1 overflow-auto p-4">
-            {eventsError || profileError ? (
+            {eventsError || feedError || profileError ? (
               <div className="flex flex-col items-center justify-center h-64 gap-2 text-destructive">
                 <span>{t("error")}</span>
               </div>

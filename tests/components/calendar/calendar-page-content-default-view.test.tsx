@@ -41,6 +41,13 @@ vi.mock("@/components/calendar/calendar-header", () => ({
 }));
 vi.mock("@/components/calendar/calendar-sidebar", () => ({
   CalendarSidebar: () => <div data-testid="calendar-sidebar" />,
+  LAYERS: [
+    { key: "events", cssVar: "--calendar-event" },
+    { key: "tasks", cssVar: "--calendar-task" },
+    { key: "habits", cssVar: "--calendar-habit" },
+    { key: "bills", cssVar: "--calendar-bill" },
+    { key: "workouts", cssVar: "--calendar-workout" },
+  ],
 }));
 vi.mock("@/components/calendar/month-grid", () => ({
   MonthGrid: () => <div data-testid="month-grid" />,

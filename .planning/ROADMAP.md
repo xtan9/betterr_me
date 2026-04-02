@@ -137,6 +137,9 @@
 3. User can complete/uncomplete tasks and toggle habit completion directly from the calendar
 4. User can mark bills as paid/dismissed and clicking a workout navigates to its detail page
 
+**Plans:**
+- [x] 33-01-PLAN.md — Feed API, aggregation logic, UI integration with layer toggles, i18n (26 tests)
+
 ### Phase 34: Push Notification Infrastructure
 
 **Goal:** Web Push API integration with service worker, VAPID keys, subscription management, and browser permission flow.
@@ -207,7 +210,7 @@
 | 30. Calendar Event CRUD API | v6.0 | 3/3 | Complete    | 2026-03-31 |
 | 31. Calendar UI — Month View | v6.0 | 2/2 | Complete    | 2026-04-01 |
 | 32. Calendar UI — Week & Day Views | v6.0 | 4/4 | Complete    | 2026-04-02 |
-| 33. Cross-Domain Feed Aggregation | v6.0 | 0/? | Not started | — |
+| 33. Cross-Domain Feed Aggregation | v6.0 | 1/? | Executing | — |
 | 34. Push Notification Infrastructure | v6.0 | 0/? | Not started | — |
 | 35. Email Notification Infrastructure | v6.0 | 0/? | Not started | — |
 | 36. Reminder Cron & Preferences | v6.0 | 0/? | Not started | — |
