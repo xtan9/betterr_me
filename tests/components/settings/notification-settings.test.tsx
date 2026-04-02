@@ -20,14 +20,27 @@ vi.mock("sonner", () => ({
   },
 }));
 
-// Mock SWR
+// Mock SWR — handle both /api/push/subscriptions and /api/profile
 const mockMutateSubs = vi.fn();
+const mockMutateProfile = vi.fn();
 vi.mock("swr", () => ({
-  default: (key: string | null) => ({
-    data: key ? { count: 2 } : undefined,
-    mutate: mockMutateSubs,
-  }),
+  default: (key: string | null) => {
+    if (key === "/api/profile") {
+      return {
+        data: { profile: { email_notifications_enabled: false } },
+        mutate: mockMutateProfile,
+      };
+    }
+    return {
+      data: key ? { count: 2 } : undefined,
+      mutate: mockMutateSubs,
+    };
+  },
 }));
+
+// Mock fetch for PATCH calls
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
 
 // Mock the hook
 const mockSubscribe = vi.fn();
@@ -60,6 +73,7 @@ describe("NotificationSettings", () => {
       unsubscribe: mockUnsubscribe,
       sendTest: mockSendTest,
     };
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
   });
 
   it("renders title and description", () => {
@@ -80,10 +94,10 @@ describe("NotificationSettings", () => {
     expect(screen.getByText("denied")).toBeInTheDocument();
   });
 
-  it("disables switch when permission is denied", () => {
+  it("disables push switch when permission is denied", () => {
     mockHookReturn = { ...mockHookReturn, permission: "denied" };
     render(<NotificationSettings />);
-    const toggle = screen.getByRole("switch");
+    const toggle = document.getElementById("push-notifications-toggle") as HTMLButtonElement;
     expect(toggle).toBeDisabled();
   });
 
@@ -116,7 +130,7 @@ describe("NotificationSettings", () => {
   it("calls subscribe when toggle is turned on", async () => {
     mockSubscribe.mockResolvedValue(undefined);
     render(<NotificationSettings />);
-    const toggle = screen.getByRole("switch");
+    const toggle = document.getElementById("push-notifications-toggle") as HTMLButtonElement;
     fireEvent.click(toggle);
     await waitFor(() => {
       expect(mockSubscribe).toHaveBeenCalled();
@@ -131,7 +145,7 @@ describe("NotificationSettings", () => {
     };
     mockUnsubscribe.mockResolvedValue(undefined);
     render(<NotificationSettings />);
-    const toggle = screen.getByRole("switch");
+    const toggle = document.getElementById("push-notifications-toggle") as HTMLButtonElement;
     fireEvent.click(toggle);
     await waitFor(() => {
       expect(mockUnsubscribe).toHaveBeenCalled();
@@ -141,7 +155,7 @@ describe("NotificationSettings", () => {
   it("shows error toast when subscribe fails", async () => {
     mockSubscribe.mockRejectedValue(new Error("fail"));
     render(<NotificationSettings />);
-    const toggle = screen.getByRole("switch");
+    const toggle = document.getElementById("push-notifications-toggle") as HTMLButtonElement;
     fireEvent.click(toggle);
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith("subscribeError");
@@ -167,10 +181,92 @@ describe("NotificationSettings", () => {
   it("mutates SWR after successful subscribe", async () => {
     mockSubscribe.mockResolvedValue(undefined);
     render(<NotificationSettings />);
-    const toggle = screen.getByRole("switch");
+    const toggle = document.getElementById("push-notifications-toggle") as HTMLButtonElement;
     fireEvent.click(toggle);
     await waitFor(() => {
       expect(mockMutateSubs).toHaveBeenCalled();
+    });
+  });
+
+  // --- Email notification tests ---
+
+  it("renders email notification section with emailTitle", () => {
+    render(<NotificationSettings />);
+    expect(screen.getByText("emailTitle")).toBeInTheDocument();
+    expect(screen.getByText("emailDescription")).toBeInTheDocument();
+    expect(screen.getByText("emailExplainer")).toBeInTheDocument();
+  });
+
+  it("renders email toggle with correct id", () => {
+    render(<NotificationSettings />);
+    const emailToggle = document.getElementById("email-notifications-toggle");
+    expect(emailToggle).toBeInTheDocument();
+  });
+
+  it("renders email section even when push is not supported", () => {
+    mockHookReturn = { ...mockHookReturn, isSupported: false };
+    render(<NotificationSettings />);
+    expect(screen.getByText("emailTitle")).toBeInTheDocument();
+    expect(
+      document.getElementById("email-notifications-toggle")
+    ).toBeInTheDocument();
+  });
+
+  it("calls PATCH /api/profile with email_notifications_enabled when email toggle is clicked", async () => {
+    render(<NotificationSettings />);
+    const emailToggle = document.getElementById(
+      "email-notifications-toggle"
+    ) as HTMLButtonElement;
+    expect(emailToggle).toBeInTheDocument();
+
+    fireEvent.click(emailToggle);
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_notifications_enabled: true }),
+      });
+    });
+  });
+
+  it("shows success toast after email toggle", async () => {
+    render(<NotificationSettings />);
+    const emailToggle = document.getElementById(
+      "email-notifications-toggle"
+    ) as HTMLButtonElement;
+
+    fireEvent.click(emailToggle);
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith("emailEnabled");
+    });
+  });
+
+  it("shows error toast when email toggle fails", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("Network error"));
+    render(<NotificationSettings />);
+    const emailToggle = document.getElementById(
+      "email-notifications-toggle"
+    ) as HTMLButtonElement;
+
+    fireEvent.click(emailToggle);
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("emailToggleError");
+    });
+  });
+
+  it("mutates profile data after email toggle", async () => {
+    render(<NotificationSettings />);
+    const emailToggle = document.getElementById(
+      "email-notifications-toggle"
+    ) as HTMLButtonElement;
+
+    fireEvent.click(emailToggle);
+
+    await waitFor(() => {
+      expect(mockMutateProfile).toHaveBeenCalled();
     });
   });
 });
