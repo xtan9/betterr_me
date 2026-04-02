@@ -803,7 +803,13 @@
       "testError": "发送测试通知失败",
       "subscribeError": "启用通知失败",
       "unsubscribeError": "禁用通知失败",
-      "explainer": "您将收到即将到来的事件、任务截止日期、习惯提醒和账单到期日的推送通知。您可以随时禁用通知。"
+      "explainer": "您将收到即将到来的事件、任务截止日期、习惯提醒和账单到期日的推送通知。您可以随时禁用通知。",
+      "emailTitle": "邮件通知",
+      "emailDescription": "接收活动、任务、习惯和账单的邮件提醒",
+      "emailExplainer": "邮件提醒将发送到您的账户邮箱地址。您也可以通过邮件底部的链接取消订阅。",
+      "emailEnabled": "邮件通知已启用",
+      "emailDisabled": "邮件通知已禁用",
+      "emailToggleError": "更新邮件偏好失败"
     }
   },
   "projects": {

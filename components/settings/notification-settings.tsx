@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import useSWR from "swr";
-import { Bell, BellOff, Send, AlertTriangle } from "lucide-react";
+import { Bell, BellOff, Mail, MailX, Send, AlertTriangle } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -39,6 +39,14 @@ export function NotificationSettings() {
   );
   const deviceCount: number = subsData?.count ?? 0;
 
+  // Fetch profile for email notification preference
+  const { data: profileData, mutate: mutateProfile } = useSWR(
+    "/api/profile",
+    fetcher
+  );
+  const emailEnabled = profileData?.profile?.email_notifications_enabled ?? false;
+  const [isEmailToggling, setIsEmailToggling] = useState(false);
+
   const handleToggle = async (checked: boolean) => {
     try {
       if (checked) {
@@ -65,81 +73,168 @@ export function NotificationSettings() {
     }
   };
 
-  // Browser doesn't support push notifications
+  const handleEmailToggle = async (checked: boolean) => {
+    setIsEmailToggling(true);
+    try {
+      await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email_notifications_enabled: checked }),
+      });
+      mutateProfile();
+      toast.success(checked ? t("emailEnabled") : t("emailDisabled"));
+    } catch {
+      toast.error(t("emailToggleError"));
+    } finally {
+      setIsEmailToggling(false);
+    }
+  };
+
+  // Browser doesn't support push notifications — still show email section
   if (!isSupported) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BellOff className="h-5 w-5" />
-            {t("title")}
-          </CardTitle>
-          <CardDescription>{t("notSupported")}</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BellOff className="h-5 w-5" />
+              {t("title")}
+            </CardTitle>
+            <CardDescription>{t("notSupported")}</CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {emailEnabled ? (
+                <Mail className="h-5 w-5" />
+              ) : (
+                <MailX className="h-5 w-5" />
+              )}
+              {t("emailTitle")}
+            </CardTitle>
+            <CardDescription>{t("emailDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t("emailExplainer")}
+            </p>
+            <div className="flex items-center justify-between">
+              <Label
+                htmlFor="email-notifications-toggle"
+                className="text-sm font-medium"
+              >
+                {emailEnabled ? t("emailEnabled") : t("emailDisabled")}
+              </Label>
+              <Switch
+                id="email-notifications-toggle"
+                checked={emailEnabled}
+                onCheckedChange={handleEmailToggle}
+                disabled={isEmailToggling}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   const isDenied = permission === "denied";
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bell className="h-5 w-5" />
-          {t("title")}
-        </CardTitle>
-        <CardDescription>{t("description")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Explainer text */}
-        <p className="text-sm text-muted-foreground">{t("explainer")}</p>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            {t("title")}
+          </CardTitle>
+          <CardDescription>{t("description")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Explainer text */}
+          <p className="text-sm text-muted-foreground">{t("explainer")}</p>
 
-        {/* Permission denied warning */}
-        {isDenied && (
-          <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>{t("denied")}</span>
+          {/* Permission denied warning */}
+          {isDenied && (
+            <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{t("denied")}</span>
+            </div>
+          )}
+
+          {/* Toggle */}
+          <div className="flex items-center justify-between">
+            <Label
+              htmlFor="push-notifications-toggle"
+              className="text-sm font-medium"
+            >
+              {isSubscribed ? t("enabled") : t("disabled")}
+            </Label>
+            <Switch
+              id="push-notifications-toggle"
+              checked={isSubscribed}
+              onCheckedChange={handleToggle}
+              disabled={isLoading || isDenied}
+            />
           </div>
-        )}
 
-        {/* Toggle */}
-        <div className="flex items-center justify-between">
-          <Label
-            htmlFor="push-notifications-toggle"
-            className="text-sm font-medium"
-          >
-            {isSubscribed ? t("enabled") : t("disabled")}
-          </Label>
-          <Switch
-            id="push-notifications-toggle"
-            checked={isSubscribed}
-            onCheckedChange={handleToggle}
-            disabled={isLoading || isDenied}
-          />
-        </div>
+          {/* Device count -- only shown when subscribed (D-15) */}
+          {isSubscribed && deviceCount > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t("subscribedDevices", { count: deviceCount })}
+            </p>
+          )}
 
-        {/* Device count -- only shown when subscribed (D-15) */}
-        {isSubscribed && deviceCount > 0 && (
+          {/* Test notification button -- only shown when subscribed */}
+          {isSubscribed && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestNotification}
+              disabled={isTestSending}
+              className="gap-2"
+            >
+              <Send className="h-4 w-4" />
+              {t("testButton")}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {emailEnabled ? (
+              <Mail className="h-5 w-5" />
+            ) : (
+              <MailX className="h-5 w-5" />
+            )}
+            {t("emailTitle")}
+          </CardTitle>
+          <CardDescription>{t("emailDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            {t("subscribedDevices", { count: deviceCount })}
+            {t("emailExplainer")}
           </p>
-        )}
-
-        {/* Test notification button -- only shown when subscribed */}
-        {isSubscribed && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleTestNotification}
-            disabled={isTestSending}
-            className="gap-2"
-          >
-            <Send className="h-4 w-4" />
-            {t("testButton")}
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+          <div className="flex items-center justify-between">
+            <Label
+              htmlFor="email-notifications-toggle"
+              className="text-sm font-medium"
+            >
+              {emailEnabled ? t("emailEnabled") : t("emailDisabled")}
+            </Label>
+            <Switch
+              id="email-notifications-toggle"
+              checked={emailEnabled}
+              onCheckedChange={handleEmailToggle}
+              disabled={isEmailToggling}
+            />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
