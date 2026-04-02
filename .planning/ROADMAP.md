@@ -8,6 +8,8 @@
 - ✅ **v2.1 UI Polish & Refinement** — Phases 10-12 (shipped 2026-02-18)
 - ✅ **v3.0 Projects & Kanban** — Phases 13-17 (shipped 2026-02-21)
 - ✅ **v4.0 Money Tracking** — Phases 18-26 (shipped 2026-02-28)
+- ✅ **v6.0 Calendar & Feed Aggregation** — Phases 29-33 (shipped 2026-04-02)
+- 🚧 **v7.0 AI Chat Foundation** — Phases 34-37 (in progress)
 
 ## Phases
 
@@ -63,121 +65,81 @@
 
 </details>
 
-## v6.0 Calendar & Reminder Notifications (Phases 29-36)
+<details>
+<summary>✅ v6.0 Calendar & Feed Aggregation (Phases 29-33) — SHIPPED 2026-04-02</summary>
 
-**Goal:** Full calendar/scheduling domain with unified Day/Week/Month views, standalone event management, cross-domain aggregation, and push + email reminder notifications with smart defaults.
+5 phases, 13 plans. See `.planning/milestones/v6.0-ROADMAP.md` for details.
 
-**Design spec:** `docs/superpowers/specs/2026-03-30-calendar-reminders-design.md`
+- [x] Phase 29: Database Schema & Infrastructure Foundation (3/3 plans) — completed 2026-03-31
+- [x] Phase 30: Calendar Event CRUD API (3/3 plans) — completed 2026-03-31
+- [x] Phase 31: Calendar UI — Month View & Navigation (2/2 plans) — completed 2026-04-01
+- [x] Phase 32: Calendar UI — Week & Day Views (4/4 plans) — completed 2026-04-02
+- [x] Phase 33: Cross-Domain Feed Aggregation (1/1 plans) — completed 2026-04-02
 
-### Phase 29: Database Schema & Infrastructure Foundation
+</details>
 
-**Goal:** Create all database tables, DB classes, Zod schemas, and timezone infrastructure needed by every subsequent phase.
+## v7.0 AI Chat Foundation (Phases 34-37)
 
-**Requirements:** INFR-01, INFR-02, INFR-03, INFR-04, INFR-05, INFR-06, INFR-07, INFR-08
+**Goal:** Build a working chat interface that lets authenticated users have streaming conversations with Claude via the llm.betterr.me proxy, with conversation persistence across page refreshes.
 
-**Success criteria:**
-1. User's IANA timezone is stored in profiles and auto-detected on first visit
-2. All 4 new tables (calendar_events, reminders, reminder_defaults, push_subscriptions) exist with RLS policies
-3. CalendarEventsDB, RemindersDB, PushSubscriptionsDB, ReminderDefaultsDB classes pass unit tests
-4. Zod validation schemas reject invalid event and reminder payloads
-5. Service worker file exists at public/sw.js and registers without errors
+- [ ] **Phase 34: Database, Types & Streaming API** - Supabase tables, TypeScript types, Zod schemas, AI SDK provider, and streaming API route with auth and error handling
+- [ ] **Phase 35: Chat UI & Message Rendering** - Chat page with message bubbles, markdown rendering, stop button, keyboard shortcuts, and dark mode support
+- [ ] **Phase 36: Conversation Persistence & Management** - Save/load messages to DB, conversation list sidebar, create/switch conversations, auto-generated titles
+- [ ] **Phase 37: Navigation & i18n** - Sidebar navigation link, all chat UI strings translated in en, zh, zh-TW
 
-### Phase 30: Calendar Event CRUD API
+## Phase Details
 
-**Goal:** Full event create/read/update/delete API with recurrence support, testable independently before any UI.
+### Phase 34: Database, Types & Streaming API
+**Goal**: Authenticated users can send a message and receive a streaming Claude response via the API, with database tables ready for conversation persistence
+**Depends on**: Nothing (first phase of v7.0)
+**Requirements**: CHAT-01, CHAT-04
+**Success Criteria** (what must be TRUE):
+  1. Supabase tables (conversations, chat_messages) exist with RLS policies isolating data per user
+  2. User can POST to /api/chat with a message and receive a streaming text response from Claude via llm.betterr.me proxy
+  3. API route rejects unauthenticated requests with 401
+  4. User sees a descriptive error message when the LLM proxy is unreachable or returns an error, with a retry mechanism
+  5. DB classes (ConversationsDB, ChatMessagesDB) and Zod validation schemas pass unit tests
+**Plans**: TBD
 
-**Requirements:** EVNT-01, EVNT-02, EVNT-03, EVNT-04, EVNT-05, EVNT-06
+### Phase 35: Chat UI & Message Rendering
+**Goal**: Users interact with a polished chat interface that streams responses with formatted markdown, supports stop/retry, and works in both light and dark mode
+**Depends on**: Phase 34
+**Requirements**: CHAT-02, CHAT-03, INTG-03, INTG-04
+**Success Criteria** (what must be TRUE):
+  1. User sees their messages and Claude's responses in distinct message bubbles with clear visual differentiation
+  2. Claude's responses render formatted markdown including bold text, bullet/numbered lists, and fenced code blocks
+  3. User can click a stop button (or press Escape) to halt Claude's response mid-generation
+  4. User can send a message with Enter, insert a newline with Shift+Enter, and stop generation with Escape
+  5. Chat UI uses existing BetterR.Me design tokens and renders correctly in both light and dark mode
+**Plans**: TBD
+**UI hint**: yes
 
-**Success criteria:**
-1. User can create an event with title, dates, times, location, description, category, and color via API
-2. User can create all-day events (no start/end time) via API
-3. User can edit and delete events via API
-4. Recurring events expand correctly for a date range query (daily, weekly, monthly, yearly with interval)
-5. Single-occurrence edits create exception records without affecting other occurrences
+### Phase 36: Conversation Persistence & Management
+**Goal**: Users can maintain multiple conversations that persist across page refreshes, with automatic title generation
+**Depends on**: Phase 35
+**Requirements**: CONV-01, CONV-02, CONV-03, CONV-04
+**Success Criteria** (what must be TRUE):
+  1. User can create a new conversation (starting fresh, clearing the current chat)
+  2. User can see a list of their conversations and switch between them
+  3. Messages and responses persist in the database and survive page refresh without data loss
+  4. After the first user-assistant exchange, the conversation receives an auto-generated title summarizing the topic
+**Plans**: TBD
+**UI hint**: yes
 
-### Phase 31: Calendar UI — Month View & Navigation
-
-**Goal:** First visible calendar page with month grid, sidebar with mini-cal and layer toggles, and core navigation.
-
-**Requirements:** VIEW-01, VIEW-04, VIEW-05, VIEW-06, VIEW-09, VIEW-10
-
-**Success criteria:**
-1. User can see a monthly calendar grid with day cells showing event chips and "+N more" overflow
-2. User can switch between Day/Week/Month views via header toggle
-3. User can navigate previous/next month and jump to today
-4. Left sidebar shows mini month picker for quick date navigation
-5. Calendar uses BetterR.Me design tokens (teal primary, rounded-xl, dark mode)
-
-**Plans:** 2/2 plans complete
-- [x] 31-01-PLAN.md — Calendar route foundation (layout, page, sidebar nav, design tokens, i18n)
-- [x] 31-02-PLAN.md — Month view UI (header, grid, sidebar, event chips, date utils, tests)
-
-### Phase 32: Calendar UI — Week & Day Views
-
-**Goal:** Time grid views with hourly rows, quick-create interactions, current time indicator, and keyboard shortcuts.
-
-**Requirements:** VIEW-02, VIEW-03, VIEW-07, VIEW-08, VIEW-12, EVNT-07, EVNT-08, EVNT-09, EVNT-10
-
-**Success criteria:**
-1. User can see a weekly time grid with 7 day columns and hourly rows with events as colored blocks
-2. User can see a daily time grid with full-width events and a current time indicator (teal line)
-3. All-day events render in a dedicated row above the time grid
-4. User can quick-create events by clicking a time slot or click-and-dragging a range
-5. Keyboard shortcuts work: D/W/M (views), T (today), arrows (navigate), C (quick-create), N (new event), / (search), Esc (close)
-
-### Phase 33: Cross-Domain Feed Aggregation
-
-**Goal:** Unified feed API returning tasks, habits, bills, and workouts on the calendar with inline actions.
-
-**Requirements:** AGGR-01, AGGR-02, AGGR-03, AGGR-04, AGGR-05, AGGR-06, AGGR-07, AGGR-08, AGGR-09, AGGR-10, AGGR-11
-
-**Success criteria:**
-1. `/api/calendar/feed` returns all domain items (events, tasks, habits, bills, workouts) for a date range
-2. Each domain renders with its distinct color (teal/blue/amber/red/purple) and user can toggle visibility per domain
-3. User can complete/uncomplete tasks and toggle habit completion directly from the calendar
-4. User can mark bills as paid/dismissed and clicking a workout navigates to its detail page
-
-**Plans:** 5/4 plans complete
-- [x] 33-04-PLAN.md — Feed types, normalizers, API route, inline actions hook, UI wiring, tests
-
-### Phase 34: Push Notification Infrastructure
-
-**Goal:** Web Push API integration with service worker, VAPID keys, subscription management, and browser permission flow.
-
-**Requirements:** PUSH-01, PUSH-02, PUSH-03, PUSH-04, PUSH-05
-
-**Success criteria:**
-1. User can enable push notifications from settings and sees a browser permission prompt with in-app explainer
-2. Service worker receives push events and displays native browser notifications
-3. Clicking a notification navigates to the relevant item (event, task, habit, or bill)
-4. Push subscriptions are stored per-device and VAPID keys are configured via environment variables
-
-### Phase 35: Email Notification Infrastructure
-
-**Goal:** Resend integration with React Email templates for all reminder types, with unsubscribe support.
-
-**Requirements:** MAIL-01, MAIL-02, MAIL-03, MAIL-04
-
-**Success criteria:**
-1. User can enable email notifications from settings
-2. Email reminders are sent via Resend with distinct React Email templates per source type
-3. Every reminder email includes a working unsubscribe link
-4. Templates exist for event reminder, task due, habit nudge, and bill due
-
-### Phase 36: Reminder Cron, Preferences & Polish
-
-**Goal:** Cron-based reminder dispatch, smart defaults, quiet hours, user preferences, responsive mobile layout, and i18n.
-
-**Requirements:** REMN-01, REMN-02, REMN-03, REMN-04, REMN-05, REMN-06, REMN-07, REMN-08, REMN-09, REMN-10, I18N-01, RESP-01, RESP-02, RESP-03
-
-**Success criteria:**
-1. User can add multiple reminders per event with relative (5m/15m/30m/1h/1d) or absolute timing, targeting push, email, or both
-2. Smart defaults auto-apply per source type and user can customize defaults in settings
-3. Quiet hours prevent push notifications during configured sleep window
-4. Vercel Cron dispatches pending reminders every minute with fire_at recomputation on reschedule
-5. All calendar/reminder strings are translated in en, zh, zh-TW; mobile layout has collapsed sidebar, day-view default with swipe, and floating action button
+### Phase 37: Navigation & i18n
+**Goal**: Chat is discoverable from the app sidebar and all UI strings are available in all three supported locales
+**Depends on**: Phase 36
+**Requirements**: INTG-01, INTG-02
+**Success Criteria** (what must be TRUE):
+  1. User can access the chat page via a navigation link in the app sidebar
+  2. All chat UI strings (button labels, placeholders, empty states, error messages) are translated in en, zh, and zh-TW
+  3. Switching locale updates all chat interface text without breaking functionality
+**Plans**: TBD
 
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 34 → 35 → 36 → 37
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -204,13 +166,12 @@
 | 24. Dashboard & AI Insights | v4.0 | 5/5 | Complete | 2026-02-24 |
 | 25. Data Management | v4.0 | 2/2 | Complete | 2026-02-24 |
 | 26. CSV Import & Polish | v4.0 | 3/3 | Complete | 2026-02-28 |
-| 27. Data Layer & Sync | v5.1 | 1/3 | Complete    | 2026-03-30 |
-| 28. Thumbnails in Existing UI | v5.1 | 1/2 | Executing | — |
-| 29. Database Schema & Infrastructure | v6.0 | 3/4 | Complete    | 2026-03-31 |
-| 30. Calendar Event CRUD API | v6.0 | 3/3 | Complete    | 2026-03-31 |
-| 31. Calendar UI — Month View | v6.0 | 2/2 | Complete    | 2026-04-01 |
-| 32. Calendar UI — Week & Day Views | v6.0 | 4/4 | Complete    | 2026-04-02 |
-| 33. Cross-Domain Feed Aggregation | v6.0 | 1/1 | Complete    | 2026-04-02 |
-| 34. Push Notification Infrastructure | v6.0 | 5/6 | Complete    | 2026-04-02 |
-| 35. Email Notification Infrastructure | v6.0 | 0/? | Not started | — |
-| 36. Reminder Cron & Preferences | v6.0 | 0/? | Not started | — |
+| 29. Database Schema & Infrastructure | v6.0 | 3/3 | Complete | 2026-03-31 |
+| 30. Calendar Event CRUD API | v6.0 | 3/3 | Complete | 2026-03-31 |
+| 31. Calendar UI — Month View | v6.0 | 2/2 | Complete | 2026-04-01 |
+| 32. Calendar UI — Week & Day Views | v6.0 | 4/4 | Complete | 2026-04-02 |
+| 33. Cross-Domain Feed Aggregation | v6.0 | 1/1 | Complete | 2026-04-02 |
+| 34. Database, Types & Streaming API | v7.0 | 0/? | Not started | - |
+| 35. Chat UI & Message Rendering | v7.0 | 0/? | Not started | - |
+| 36. Conversation Persistence & Management | v7.0 | 0/? | Not started | - |
+| 37. Navigation & i18n | v7.0 | 0/? | Not started | - |

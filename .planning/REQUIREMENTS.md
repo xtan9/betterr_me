@@ -64,24 +64,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CHAT-01 | — | Pending |
-| CHAT-02 | — | Pending |
-| CHAT-03 | — | Pending |
-| CHAT-04 | — | Pending |
-| CONV-01 | — | Pending |
-| CONV-02 | — | Pending |
-| CONV-03 | — | Pending |
-| CONV-04 | — | Pending |
-| INTG-01 | — | Pending |
-| INTG-02 | — | Pending |
-| INTG-03 | — | Pending |
-| INTG-04 | — | Pending |
+| CHAT-01 | Phase 34 | Pending |
+| CHAT-02 | Phase 35 | Pending |
+| CHAT-03 | Phase 35 | Pending |
+| CHAT-04 | Phase 34 | Pending |
+| CONV-01 | Phase 36 | Pending |
+| CONV-02 | Phase 36 | Pending |
+| CONV-03 | Phase 36 | Pending |
+| CONV-04 | Phase 36 | Pending |
+| INTG-01 | Phase 37 | Pending |
+| INTG-02 | Phase 37 | Pending |
+| INTG-03 | Phase 35 | Pending |
+| INTG-04 | Phase 35 | Pending |
 
 **Coverage:**
 - v7.0 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-02*
-*Last updated: 2026-04-02 after initial definition*
+*Last updated: 2026-04-02 after roadmap creation*
