@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v6.0
 milestone_name: Calendar & Reminder Notifications
-status: Executing
-stopped_at: Plan 34-01 complete (VAPID config, Zod push schemas, notification URL map)
-last_updated: "2026-04-02T14:59:27.969Z"
+status: Ready to execute
+stopped_at: Completed 34-02-PLAN.md
+last_updated: "2026-04-02T20:24:47.173Z"
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 19
-  completed_plans: 20
+  total_plans: 25
+  completed_plans: 21
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-30)
 ## Current Position
 
 Phase: 34
-Plan: 1 of 6 complete
+Plan: 2 of 6 complete
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 
 - [Phase 27]: Admin sync uses x-admin-secret header + user auth for double protection
 - [Phase 28-01]: Used native img tag instead of next/image for small GIF thumbnails (animation preservation)
+- [Phase 34]: Used getSubscriptions (actual DB method name) instead of getUserSubscriptions (plan reference) — PushSubscriptionsDB class defines getSubscriptions, not getUserSubscriptions
 
 ### Pending Todos
 
@@ -84,6 +85,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-01T08:00:00.000Z
-Stopped at: Plan 34-01 complete (VAPID config, Zod push schemas, notification URL map)
+Last session: 2026-04-02T20:24:47.170Z
+Stopped at: Completed 34-02-PLAN.md
 Resume: Continue Phase 34 Plan 02 (Push subscribe/unsubscribe API routes)

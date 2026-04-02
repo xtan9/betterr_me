@@ -51,7 +51,7 @@
 - [ ] **PUSH-01**: User can enable push notifications from settings with browser permission flow
 - [ ] **PUSH-02**: Service worker handles push events and displays native browser notifications
 - [ ] **PUSH-03**: Clicking a push notification navigates to the relevant item (event, task, habit, or bill)
-- [ ] **PUSH-04**: Push subscriptions stored per-device in push_subscriptions table
+- [x] **PUSH-04**: Push subscriptions stored per-device in push_subscriptions table
 - [ ] **PUSH-05**: VAPID keys stored as environment variables, generated once during setup
 
 ## Email Notifications
