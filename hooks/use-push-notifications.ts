@@ -82,20 +82,24 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       const p256dhKey = pushSubscription.getKey("p256dh");
       const authKey = pushSubscription.getKey("auth");
 
-      await fetch("/api/push/subscribe", {
+      if (!p256dhKey || !authKey) {
+        throw new Error("Push subscription is missing encryption keys");
+      }
+
+      const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           endpoint: pushSubscription.endpoint,
-          p256dh: p256dhKey
-            ? btoa(String.fromCharCode(...new Uint8Array(p256dhKey)))
-            : "",
-          auth: authKey
-            ? btoa(String.fromCharCode(...new Uint8Array(authKey)))
-            : "",
+          p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dhKey))),
+          auth: btoa(String.fromCharCode(...new Uint8Array(authKey))),
           user_agent: navigator.userAgent,
         }),
       });
+
+      if (!res.ok) {
+        throw new Error(`Subscribe failed: ${res.status}`);
+      }
 
       setIsSubscribed(true);
     } catch (error) {
@@ -128,11 +132,15 @@ export function usePushNotifications(): UsePushNotificationsReturn {
         await pushSubscription.unsubscribe();
 
         // Remove from server
-        await fetch("/api/push/unsubscribe", {
+        const res = await fetch("/api/push/unsubscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ endpoint }),
         });
+
+        if (!res.ok) {
+          throw new Error(`Unsubscribe failed: ${res.status}`);
+        }
       }
 
       setIsSubscribed(false);
@@ -147,7 +155,9 @@ export function usePushNotifications(): UsePushNotificationsReturn {
   const sendTest = useCallback(async () => {
     const registration =
       await navigator.serviceWorker.getRegistration("/sw.js");
-    if (!registration) return;
+    if (!registration) {
+      throw new Error("Service worker not registered");
+    }
 
     await registration.showNotification("BetterR.Me", {
       body: "Push notifications are working!",
@@ -173,7 +183,8 @@ async function checkExistingSubscription(): Promise<PushSubscription | null> {
       await navigator.serviceWorker.getRegistration("/sw.js");
     if (!registration) return null;
     return registration.pushManager.getSubscription();
-  } catch {
+  } catch (error) {
+    console.error("Failed to check existing push subscription:", error);
     return null;
   }
 }
