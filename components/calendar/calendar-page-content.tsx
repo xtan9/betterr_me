@@ -14,6 +14,7 @@ import {
   groupEventsByDate,
 } from "@/lib/calendar/date-utils";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useCalendarActions } from "@/hooks/use-calendar-actions";
 import { CalendarHeader } from "./calendar-header";
 import { CalendarSidebar } from "./calendar-sidebar";
 import { MonthGrid } from "./month-grid";
@@ -22,6 +23,9 @@ import { DayView } from "./day-view";
 import { EventQuickCreate } from "./event-quick-create";
 import { EventDialog } from "./event-dialog";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { CalendarFeedItem } from "@/lib/calendar/feed-types";
+import { feedItemsToExpandedEvents } from "@/lib/calendar/feed-aggregation";
+import type { DomainCalendarEvent } from "@/lib/calendar/feed-types";
 
 interface ProfileResponse {
   profile: {
@@ -33,6 +37,10 @@ interface ProfileResponse {
 
 interface EventsResponse {
   events: ExpandedCalendarEvent[];
+}
+
+interface FeedResponse {
+  items: CalendarFeedItem[];
 }
 
 export function CalendarPageContent() {
@@ -71,6 +79,23 @@ export function CalendarPageContent() {
   } = useSWR<ProfileResponse>("/api/profile", fetcher);
   const weekStartDay = profileData?.profile?.preferences?.week_start_day ?? 0;
 
+  // --- Layer state (lifted from sidebar) ---
+  const [enabledLayers, setEnabledLayers] = useState<Set<string>>(
+    new Set(["events"]),
+  );
+
+  const toggleLayer = useCallback((key: string) => {
+    setEnabledLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
   // URL update helper
   const updateParams = useCallback(
     (updates: Record<string, string>, options?: { replace?: boolean }) => {
@@ -105,7 +130,9 @@ export function CalendarPageContent() {
     return getMonthDateRange(year, month, weekStartDay);
   }, [view, currentDate, year, month, weekStartDay]);
 
-  // Fetch events for the visible date range
+  // --- Data fetching ---
+
+  // Always fetch calendar events (primary data source)
   const {
     data: eventsData,
     error: eventsError,
@@ -116,21 +143,85 @@ export function CalendarPageContent() {
     { keepPreviousData: true },
   );
 
+  // Compute which non-event layers are enabled
+  const nonEventLayers = useMemo(() => {
+    const layers = Array.from(enabledLayers).filter((l) => l !== "events");
+    return layers.sort().join(",");
+  }, [enabledLayers]);
+
+  // Fetch feed items for enabled non-event layers
+  const feedKey = nonEventLayers
+    ? `/api/calendar/feed?start_date=${startDate}&end_date=${endDate}&layers=${nonEventLayers}`
+    : null;
+
+  const {
+    data: feedData,
+    error: feedError,
+    isLoading: feedLoading,
+  } = useSWR<FeedResponse>(feedKey, fetcher, { keepPreviousData: true });
+
   // Log SWR fetch errors for debugging
   useEffect(() => {
     if (eventsError) console.error("Failed to fetch calendar events:", eventsError);
     if (profileError) console.error("Failed to fetch user profile:", profileError);
-  }, [eventsError, profileError]);
+    if (feedError) console.error("Failed to fetch calendar feed:", feedError);
+  }, [eventsError, profileError, feedError]);
 
-  // Compute grid dates and grouped events
+  // --- Inline actions ---
+
+  const handleFeedMutated = useCallback(() => {
+    // Re-fetch both events and feed
+    globalMutate(
+      `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
+    );
+    if (feedKey) globalMutate(feedKey);
+  }, [startDate, endDate, feedKey, globalMutate]);
+
+  const { dispatch } = useCalendarActions(handleFeedMutated);
+
+  const handleItemAction = useCallback(
+    async (event: ExpandedCalendarEvent | DomainCalendarEvent) => {
+      const domainEvent = event as DomainCalendarEvent;
+      if (!domainEvent._actions?.length || !domainEvent._sourceId) return;
+
+      const action = domainEvent._actions[0];
+      // For habits, extract date from the ID (format: habits:habitId:date)
+      const date = domainEvent._domain === "habits"
+        ? domainEvent.id.split(":")[2]
+        : domainEvent.start_date;
+
+      await dispatch(action, domainEvent._sourceId, date);
+    },
+    [dispatch],
+  );
+
+  // --- Merge calendar events + feed items ---
+
+  const eventsByDate = useMemo(() => {
+    const calendarEvents = eventsData?.events ?? [];
+
+    // Convert feed items to pseudo-events for rendering
+    const feedEvents: DomainCalendarEvent[] = feedData?.items
+      ? feedItemsToExpandedEvents(feedData.items)
+      : [];
+
+    // Only include calendar events if the events layer is on
+    const visibleCalendarEvents = enabledLayers.has("events")
+      ? calendarEvents
+      : [];
+
+    const allEvents = [
+      ...visibleCalendarEvents,
+      ...feedEvents,
+    ] as ExpandedCalendarEvent[];
+
+    return groupEventsByDate(allEvents);
+  }, [eventsData?.events, feedData?.items, enabledLayers]);
+
+  // Compute grid dates
   const gridDates = useMemo(
     () => getMonthGridDates(year, month, weekStartDay),
     [year, month, weekStartDay],
-  );
-
-  const eventsByDate = useMemo(
-    () => groupEventsByDate(eventsData?.events ?? []),
-    [eventsData?.events],
   );
 
   const today = useMemo(() => getLocalDateString(), []);
@@ -278,9 +369,18 @@ export function CalendarPageContent() {
     [],
   );
 
-  const handleEventClick = useCallback((event: ExpandedCalendarEvent) => {
-    setEventDialog({ isOpen: true, event });
-  }, []);
+  const handleEventClick = useCallback(
+    (event: ExpandedCalendarEvent) => {
+      // If it's a domain item with actions, execute the action instead of opening dialog
+      const domainEvent = event as DomainCalendarEvent;
+      if (domainEvent._domain && domainEvent._domain !== "events") {
+        handleItemAction(event);
+        return;
+      }
+      setEventDialog({ isOpen: true, event });
+    },
+    [handleItemAction],
+  );
 
   const handleNewEvent = useCallback(() => {
     setEventDialog({
@@ -351,6 +451,8 @@ export function CalendarPageContent() {
             onDateSelect={navigateToDate}
             weekStartDay={weekStartDay}
             onNewEvent={handleNewEvent}
+            enabledLayers={enabledLayers}
+            onToggleLayer={toggleLayer}
           />
         </aside>
 
