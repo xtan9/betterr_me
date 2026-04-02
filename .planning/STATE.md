@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v6.0
 milestone_name: Calendar & Reminder Notifications
 status: Executing
-stopped_at: Plan 34-04 complete (Notification Settings UI & i18n)
-last_updated: "2026-04-02T20:35:02Z"
+stopped_at: Plan 34-05 complete (Utility Tests — VAPID, Notification URLs, Push Schemas)
+last_updated: "2026-04-02T20:39:25Z"
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 25
-  completed_plans: 22
+  completed_plans: 23
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Phase 34 — Push Notification Infrastructure (Plan 4 of 6 complete)
+**Current focus:** Phase 34 — Push Notification Infrastructure (Plan 5 of 6 complete)
 
 ## Current Position
 
 Phase: 34
-Plan: 4 of 6
+Plan: 5 of 6
 
 ## Performance Metrics
 
@@ -85,6 +85,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-02T20:35:02Z
-Stopped at: Plan 34-04 complete (Notification Settings UI & i18n)
-Resume: Continue Phase 34 — Plan 05 next (Push Send Service)
+Last session: 2026-04-02T20:39:25Z
+Stopped at: Plan 34-05 complete (Utility Tests — VAPID, Notification URLs, Push Schemas)
+Resume: Continue Phase 34 — Plan 06 next
