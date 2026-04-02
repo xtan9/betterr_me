@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useLocale } from "next-intl";
-import { getDateString } from "@/lib/calendar/date-utils";
+import { getLocalDateString } from "@/lib/utils";
 import { MonthDayCell } from "./month-day-cell";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 
@@ -54,7 +54,7 @@ export function MonthGrid({
       {/* Day cells grid */}
       <div className="grid grid-cols-7 flex-1 border-l border-t border-border">
         {dates.map((date) => {
-          const dateStr = getDateString(date);
+          const dateStr = getLocalDateString(date);
           const dayEvents = events.get(dateStr) || [];
           const isToday = dateStr === today;
           const isOutsideMonth = date.getMonth() !== currentMonth;

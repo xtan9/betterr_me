@@ -1,15 +1,5 @@
 import type { ExpandedCalendarEvent } from "./recurrence";
-
-/**
- * Returns YYYY-MM-DD string for a Date object using local timezone.
- * Never uses toISOString() which converts to UTC.
- */
-export function getDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+import { getLocalDateString } from "@/lib/utils";
 
 /**
  * Returns array of Date objects representing the full month grid.
@@ -61,8 +51,8 @@ export function getMonthDateRange(
 ): { startDate: string; endDate: string } {
   const dates = getMonthGridDates(year, month, weekStartDay);
   return {
-    startDate: getDateString(dates[0]),
-    endDate: getDateString(dates[dates.length - 1]),
+    startDate: getLocalDateString(dates[0]),
+    endDate: getLocalDateString(dates[dates.length - 1]),
   };
 }
 
@@ -95,7 +85,7 @@ export function groupEventsByDate(
 
       for (let i = 0; i < dayCount; i++) {
         const d = new Date(startParts[0], startParts[1] - 1, startParts[2] + i);
-        const dateStr = getDateString(d);
+        const dateStr = getLocalDateString(d);
         const existing = map.get(dateStr) || [];
         existing.push(event);
         map.set(dateStr, existing);

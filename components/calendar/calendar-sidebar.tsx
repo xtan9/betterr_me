@@ -55,7 +55,7 @@ export function CalendarSidebar({
         mode="single"
         selected={currentDate}
         onSelect={onDateSelect}
-        weekStartsOn={weekStartDay as 0 | 1 | 2 | 3 | 4 | 5 | 6}
+        weekStartsOn={Math.max(0, Math.min(6, weekStartDay)) as 0 | 1 | 2 | 3 | 4 | 5 | 6}
         showOutsideDays
         className="p-0"
       />

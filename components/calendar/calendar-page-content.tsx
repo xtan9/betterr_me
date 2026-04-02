@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { getLocalDateString } from "@/lib/utils";
-import { getMonthDateRange, getMonthGridDates, groupEventsByDate, getDateString } from "@/lib/calendar/date-utils";
+import { getMonthDateRange, getMonthGridDates, groupEventsByDate } from "@/lib/calendar/date-utils";
 import { CalendarHeader } from "./calendar-header";
 import { CalendarSidebar } from "./calendar-sidebar";
 import { MonthGrid } from "./month-grid";
@@ -31,8 +31,13 @@ export function CalendarPageContent() {
   const pathname = usePathname();
 
   // Read URL state
-  const view = searchParams.get("view") || "month";
-  const dateParam = searchParams.get("date") || getLocalDateString();
+  const validViews = ["month", "week", "day"];
+  const rawView = searchParams.get("view") || "month";
+  const view = validViews.includes(rawView) ? rawView : "month";
+
+  const rawDate = searchParams.get("date") || "";
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  const dateParam = dateRegex.test(rawDate) ? rawDate : getLocalDateString();
 
   // Parse the date param into year/month
   const [year, month] = useMemo(() => {
@@ -46,7 +51,7 @@ export function CalendarPageContent() {
   }, [dateParam]);
 
   // Fetch user profile for week_start_day
-  const { data: profileData } = useSWR<ProfileResponse>("/api/profile", fetcher);
+  const { data: profileData, isLoading: profileLoading } = useSWR<ProfileResponse>("/api/profile", fetcher);
   const weekStartDay = profileData?.profile?.preferences?.week_start_day ?? 0;
 
   // Compute date range for the month grid
@@ -56,7 +61,7 @@ export function CalendarPageContent() {
   );
 
   // Fetch events for the visible date range
-  const { data: eventsData } = useSWR<EventsResponse>(
+  const { data: eventsData, error: eventsError, isLoading: eventsLoading } = useSWR<EventsResponse>(
     `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
     fetcher,
     { keepPreviousData: true },
@@ -73,7 +78,9 @@ export function CalendarPageContent() {
     [eventsData?.events],
   );
 
-  const today = getLocalDateString();
+  const today = useMemo(() => getLocalDateString(), []);
+
+  const isLoading = profileLoading || eventsLoading;
 
   // URL update helper
   const updateParams = useCallback(
@@ -95,14 +102,14 @@ export function CalendarPageContent() {
   const goToPrevMonth = useCallback(() => {
     const prevMonth = month === 0 ? 11 : month - 1;
     const prevYear = month === 0 ? year - 1 : year;
-    const newDate = getDateString(new Date(prevYear, prevMonth, 1));
+    const newDate = getLocalDateString(new Date(prevYear, prevMonth, 1));
     updateParams({ date: newDate });
   }, [month, year, updateParams]);
 
   const goToNextMonth = useCallback(() => {
     const nextMonth = month === 11 ? 0 : month + 1;
     const nextYear = month === 11 ? year + 1 : year;
-    const newDate = getDateString(new Date(nextYear, nextMonth, 1));
+    const newDate = getLocalDateString(new Date(nextYear, nextMonth, 1));
     updateParams({ date: newDate });
   }, [month, year, updateParams]);
 
@@ -118,7 +125,7 @@ export function CalendarPageContent() {
   const navigateToDate = useCallback(
     (date: Date | undefined) => {
       if (date) {
-        updateParams({ date: getDateString(date) });
+        updateParams({ date: getLocalDateString(date) });
       }
     },
     [updateParams],
@@ -126,7 +133,7 @@ export function CalendarPageContent() {
 
   const handleDayClick = useCallback(
     (date: Date) => {
-      updateParams({ view: "day", date: getDateString(date) });
+      updateParams({ view: "day", date: getLocalDateString(date) });
     },
     [updateParams],
   );
@@ -154,7 +161,15 @@ export function CalendarPageContent() {
         />
 
         <div className="flex-1 overflow-auto p-4">
-          {view === "month" ? (
+          {eventsError ? (
+            <div className="flex items-center justify-center h-64 text-destructive">
+              {t("noEvents")}
+            </div>
+          ) : isLoading && !eventsData ? (
+            <div className="flex items-center justify-center h-64 text-muted-foreground">
+              <div className="animate-pulse">{t("title")}...</div>
+            </div>
+          ) : view === "month" ? (
             <MonthGrid
               dates={gridDates}
               events={eventsByDate}

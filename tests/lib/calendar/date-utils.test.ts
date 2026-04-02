@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  getDateString,
   getMonthGridDates,
   getMonthDateRange,
   groupEventsByDate,
 } from "@/lib/calendar/date-utils";
+import { getLocalDateString as getDateString } from "@/lib/utils";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
 
