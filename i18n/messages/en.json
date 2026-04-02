@@ -1767,6 +1767,7 @@
       "comingSoonPhase": "Coming in a future phase"
     },
     "comingSoon": "Coming soon",
-    "noEvents": "No events"
+    "noEvents": "No events",
+    "error": "Failed to load calendar. Please try refreshing."
   }
 }

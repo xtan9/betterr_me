@@ -1767,6 +1767,7 @@
       "comingSoonPhase": "將在未來階段推出"
     },
     "comingSoon": "即將推出",
-    "noEvents": "暫無事件"
+    "noEvents": "暫無事件",
+    "error": "日曆載入失敗，請嘗試重新整理頁面。"
   }
 }

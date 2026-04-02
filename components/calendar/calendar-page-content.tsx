@@ -51,7 +51,7 @@ export function CalendarPageContent() {
   }, [dateParam]);
 
   // Fetch user profile for week_start_day
-  const { data: profileData, isLoading: profileLoading } = useSWR<ProfileResponse>("/api/profile", fetcher);
+  const { data: profileData, isLoading: profileLoading, error: profileError } = useSWR<ProfileResponse>("/api/profile", fetcher);
   const weekStartDay = profileData?.profile?.preferences?.week_start_day ?? 0;
 
   // Compute date range for the month grid
@@ -161,9 +161,9 @@ export function CalendarPageContent() {
         />
 
         <div className="flex-1 overflow-auto p-4">
-          {eventsError ? (
-            <div className="flex items-center justify-center h-64 text-destructive">
-              {t("noEvents")}
+          {eventsError || profileError ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-2 text-destructive">
+              <span>{eventsError ? t("error") : t("error")}</span>
             </div>
           ) : isLoading && !eventsData ? (
             <div className="flex items-center justify-center h-64 text-muted-foreground">

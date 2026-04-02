@@ -1767,6 +1767,7 @@
       "comingSoonPhase": "将在未来阶段推出"
     },
     "comingSoon": "即将推出",
-    "noEvents": "暂无事件"
+    "noEvents": "暂无事件",
+    "error": "日历加载失败，请尝试刷新页面。"
   }
 }
