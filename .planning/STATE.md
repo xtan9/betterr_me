@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v6.0
 milestone_name: Calendar & Reminder Notifications
-status: Ready to plan
-stopped_at: Phase 35 context gathered
-last_updated: "2026-04-02T21:40:24.978Z"
+status: Ready to execute
+stopped_at: Completed 35-01-PLAN.md
+last_updated: "2026-04-02T22:03:57.155Z"
 progress:
   total_phases: 8
   completed_phases: 7
-  total_plans: 25
-  completed_plans: 25
+  total_plans: 27
+  completed_plans: 26
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Phase 34 — push-notification-infrastructure
+**Current focus:** Phase 35 — email-notification-infrastructure
 
 ## Current Position
 
-Phase: 35
-Plan: Not started
+Phase: 35 (email-notification-infrastructure) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -67,6 +67,9 @@ See PROJECT.md Key Decisions table for full log with outcomes.
 
 - [Phase 27]: Admin sync uses x-admin-secret header + user auth for double protection
 - [Phase 28-01]: Used native img tag instead of next/image for small GIF thumbnails (animation preservation)
+- [Phase 35]: console.warn for missing RESEND_API_KEY (no dev crash)
+- [Phase 35]: HMAC-SHA256 with timing-safe comparison for stateless unsubscribe tokens
+- [Phase 35]: email_notifications_enabled defaults to false (opt-in)
 
 ### Pending Todos
 
@@ -84,6 +87,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-02T21:40:24.976Z
-Stopped at: Phase 35 context gathered
+Last session: 2026-04-02T22:03:57.153Z
+Stopped at: Completed 35-01-PLAN.md
 Resume: Begin Phase 34 (Push Notification Infrastructure)
