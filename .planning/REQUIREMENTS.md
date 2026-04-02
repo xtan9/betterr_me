@@ -12,7 +12,7 @@ Requirements for AI Chat Foundation. Each maps to roadmap phases.
 - [x] **CHAT-01**: User can send a message and receive a streaming response from Claude
 - [ ] **CHAT-02**: User can see Claude's response rendered as formatted markdown (bold, lists, code blocks)
 - [ ] **CHAT-03**: User can stop Claude's response mid-generation
-- [ ] **CHAT-04**: User sees an error message with retry button when the LLM proxy fails
+- [x] **CHAT-04**: User sees an error message with retry button when the LLM proxy fails
 
 ### Conversation Management
 
@@ -67,7 +67,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CHAT-01 | Phase 34 | Complete |
 | CHAT-02 | Phase 35 | Pending |
 | CHAT-03 | Phase 35 | Pending |
-| CHAT-04 | Phase 34 | Pending |
+| CHAT-04 | Phase 34 | Complete |
 | CONV-01 | Phase 36 | Pending |
 | CONV-02 | Phase 36 | Pending |
 | CONV-03 | Phase 36 | Pending |

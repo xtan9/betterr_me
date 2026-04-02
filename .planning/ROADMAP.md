@@ -99,10 +99,10 @@
   3. API route rejects unauthenticated requests with 401
   4. User sees a descriptive error message when the LLM proxy is unreachable or returns an error, with a retry mechanism
   5. DB classes (ConversationsDB, ChatMessagesDB) and Zod validation schemas pass unit tests
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 Plans:
 - [x] 34-01-PLAN.md — Database migration, TypeScript types, DB classes (ConversationsDB, ChatMessagesDB)
-- [ ] 34-02-PLAN.md — Package installation, AI provider config, Zod validation schemas
+- [x] 34-02-PLAN.md — Package installation, AI provider config, Zod validation schemas
 - [ ] 34-03-PLAN.md — Streaming POST /api/chat endpoint with auth and error handling
 
 ### Phase 35: Chat UI & Message Rendering
@@ -175,7 +175,7 @@ Phases execute in numeric order: 34 → 35 → 36 → 37
 | 31. Calendar UI — Month View | v6.0 | 2/2 | Complete | 2026-04-01 |
 | 32. Calendar UI — Week & Day Views | v6.0 | 4/4 | Complete | 2026-04-02 |
 | 33. Cross-Domain Feed Aggregation | v6.0 | 1/1 | Complete | 2026-04-02 |
-| 34. Database, Types & Streaming API | v7.0 | 1/3 | In Progress|  |
+| 34. Database, Types & Streaming API | v7.0 | 2/3 | In Progress|  |
 | 35. Chat UI & Message Rendering | v7.0 | 0/? | Not started | - |
 | 36. Conversation Persistence & Management | v7.0 | 0/? | Not started | - |
 | 37. Navigation & i18n | v7.0 | 0/? | Not started | - |
