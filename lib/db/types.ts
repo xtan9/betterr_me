@@ -11,6 +11,7 @@ export interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   timezone: string | null;
+  email_notifications_enabled: boolean;
   preferences: ProfilePreferences;
   created_at: string;
   updated_at: string;
