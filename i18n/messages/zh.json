@@ -787,6 +787,23 @@
     },
     "toast": {
       "saveError": "保存设置失败"
+    },
+    "notifications": {
+      "title": "推送通知",
+      "description": "在此设备上接收事件、任务、习惯和账单的提醒",
+      "enable": "启用通知",
+      "disable": "禁用通知",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "denied": "通知已被浏览器屏蔽。请在浏览器设置中启用。",
+      "notSupported": "此浏览器不支持推送通知。",
+      "subscribedDevices": "已在 {count} 台设备上订阅",
+      "testButton": "发送测试通知",
+      "testSent": "测试通知已发送！",
+      "testError": "发送测试通知失败",
+      "subscribeError": "启用通知失败",
+      "unsubscribeError": "禁用通知失败",
+      "explainer": "您将收到即将到来的事件、任务截止日期、习惯提醒和账单到期日的推送通知。您可以随时禁用通知。"
     }
   },
   "projects": {
