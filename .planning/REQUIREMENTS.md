@@ -34,17 +34,17 @@
 
 ## Cross-Domain Aggregation
 
-- [ ] **AGGR-01**: Calendar shows tasks with due_date at their due_time (or in the all-day row if no time)
-- [ ] **AGGR-02**: Calendar shows active habits scheduled for each day in the all-day row
-- [ ] **AGGR-03**: Calendar shows bills with next_due_date in the all-day row
-- [ ] **AGGR-04**: Calendar shows logged workouts at their start time
-- [ ] **AGGR-05**: Each domain has a distinct color: events (teal/primary), tasks (blue), habits (amber), bills (red), workouts (purple)
-- [ ] **AGGR-06**: User can toggle visibility of each domain via sidebar layer checkboxes
-- [ ] **AGGR-07**: User can complete/uncomplete tasks directly from the calendar (circle checkbox)
-- [ ] **AGGR-08**: User can toggle habit completion directly from the calendar (square checkbox)
-- [ ] **AGGR-09**: User can mark bills as paid/dismissed directly from the calendar
-- [ ] **AGGR-10**: Clicking a workout on the calendar navigates to the workout detail page
-- [ ] **AGGR-11**: Unified feed API (`/api/calendar/feed`) returns all domain items for a date range in a single request
+- [x] **AGGR-01**: Calendar shows tasks with due_date at their due_time (or in the all-day row if no time)
+- [x] **AGGR-02**: Calendar shows active habits scheduled for each day in the all-day row
+- [x] **AGGR-03**: Calendar shows bills with next_due_date in the all-day row
+- [x] **AGGR-04**: Calendar shows logged workouts at their start time
+- [x] **AGGR-05**: Each domain has a distinct color: events (teal/primary), tasks (blue), habits (amber), bills (red), workouts (purple)
+- [x] **AGGR-06**: User can toggle visibility of each domain via sidebar layer checkboxes
+- [x] **AGGR-07**: User can complete/uncomplete tasks directly from the calendar (circle checkbox)
+- [x] **AGGR-08**: User can toggle habit completion directly from the calendar (square checkbox)
+- [x] **AGGR-09**: User can mark bills as paid/dismissed directly from the calendar
+- [x] **AGGR-10**: Clicking a workout on the calendar navigates to the workout detail page
+- [x] **AGGR-11**: Unified feed API (`/api/calendar/feed`) returns all domain items for a date range in a single request
 
 ## Push Notifications
 
