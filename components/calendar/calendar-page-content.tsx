@@ -116,6 +116,12 @@ export function CalendarPageContent() {
     { keepPreviousData: true },
   );
 
+  // Log SWR fetch errors for debugging
+  useEffect(() => {
+    if (eventsError) console.error("Failed to fetch calendar events:", eventsError);
+    if (profileError) console.error("Failed to fetch user profile:", profileError);
+  }, [eventsError, profileError]);
+
   // Compute grid dates and grouped events
   const gridDates = useMemo(
     () => getMonthGridDates(year, month, weekStartDay),

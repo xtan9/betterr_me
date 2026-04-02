@@ -94,7 +94,10 @@ export function EventQuickCreate({
 
   const handleSubmit = useCallback(async () => {
     const trimmedTitle = title.trim();
-    if (!trimmedTitle) return;
+    if (!trimmedTitle) {
+      setError(t("quickCreate.titleRequired"));
+      return;
+    }
 
     setSaving(true);
     setError("");

@@ -17,15 +17,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { getLocalDateString } from "@/lib/utils";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 
-const COLOR_PRESETS = [
-  { value: "", label: "Default" },
-  { value: "teal", label: "Teal" },
-  { value: "blue", label: "Blue" },
-  { value: "red", label: "Red" },
-  { value: "green", label: "Green" },
-  { value: "purple", label: "Purple" },
-  { value: "orange", label: "Orange" },
-];
+// "teal" maps to --calendar-event (the default event color); others map to --calendar-{value}
+const COLOR_PRESET_KEYS = ["", "teal", "blue", "red", "green", "purple", "orange"] as const;
 
 interface EventDialogProps {
   /** Whether the dialog is open */
@@ -289,22 +282,22 @@ export function EventDialog({
           <div className="space-y-1">
             <Label>{t("eventDialog.color")}</Label>
             <div className="flex gap-2">
-              {COLOR_PRESETS.map((preset) => (
+              {COLOR_PRESET_KEYS.map((colorKey) => (
                 <button
-                  key={preset.value}
+                  key={colorKey}
                   type="button"
                   className={`w-6 h-6 rounded-full border-2 transition-all ${
-                    form.watch("color") === preset.value
+                    form.watch("color") === colorKey
                       ? "border-primary scale-110"
                       : "border-border"
                   }`}
                   style={{
-                    backgroundColor: preset.value
-                      ? `hsl(var(--calendar-${preset.value === "teal" ? "event" : preset.value}))`
+                    backgroundColor: colorKey
+                      ? `hsl(var(--calendar-${colorKey === "teal" ? "event" : colorKey}))`
                       : "hsl(var(--calendar-event))",
                   }}
-                  onClick={() => form.setValue("color", preset.value)}
-                  title={preset.label}
+                  onClick={() => form.setValue("color", colorKey)}
+                  title={t(`eventDialog.colors.${colorKey || "default"}`)}
                 />
               ))}
             </div>

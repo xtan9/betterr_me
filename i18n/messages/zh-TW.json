@@ -1778,7 +1778,8 @@
       "titlePlaceholder": "新增標題",
       "moreOptions": "更多選項",
       "saving": "儲存中...",
-      "saveFailed": "建立事件失敗"
+      "saveFailed": "建立事件失敗",
+      "titleRequired": "標題不能為空"
     },
     "eventDialog": {
       "newEvent": "新事件",
@@ -1802,7 +1803,16 @@
       "delete": "刪除",
       "deleteConfirm": "確定要刪除這個事件嗎？",
       "saveFailed": "儲存事件失敗",
-      "deleteFailed": "刪除事件失敗"
+      "deleteFailed": "刪除事件失敗",
+      "colors": {
+        "default": "預設",
+        "teal": "青色",
+        "blue": "藍色",
+        "red": "紅色",
+        "green": "綠色",
+        "purple": "紫色",
+        "orange": "橘色"
+      }
     },
     "shortcuts": {
       "dayView": "日檢視 (D)",

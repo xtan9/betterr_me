@@ -1778,7 +1778,8 @@
       "titlePlaceholder": "添加标题",
       "moreOptions": "更多选项",
       "saving": "保存中...",
-      "saveFailed": "创建事件失败"
+      "saveFailed": "创建事件失败",
+      "titleRequired": "标题不能为空"
     },
     "eventDialog": {
       "newEvent": "新事件",
@@ -1802,7 +1803,16 @@
       "delete": "删除",
       "deleteConfirm": "确定要删除这个事件吗？",
       "saveFailed": "保存事件失败",
-      "deleteFailed": "删除事件失败"
+      "deleteFailed": "删除事件失败",
+      "colors": {
+        "default": "默认",
+        "teal": "青色",
+        "blue": "蓝色",
+        "red": "红色",
+        "green": "绿色",
+        "purple": "紫色",
+        "orange": "橙色"
+      }
     },
     "shortcuts": {
       "dayView": "日视图 (D)",
