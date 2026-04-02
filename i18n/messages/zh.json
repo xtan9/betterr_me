@@ -1763,16 +1763,9 @@
     },
     "sidebar": {
       "newEvent": "+ 新事件",
-      "layers": "图层"
-    },
-    "feed": {
-      "taskComplete": "标记完成",
-      "taskUncomplete": "标记未完成",
-      "habitLog": "记录习惯",
-      "habitUnlog": "取消记录",
-      "billPaid": "标记已付",
-      "billDismiss": "忽略",
-      "viewWorkout": "查看训练"
+      "layers": "图层",
+      "comingSoonPhase": "将在未来阶段推出",
+      "actionFailed": "操作失败，请重试。"
     },
     "comingSoon": "即将推出",
     "noEvents": "暂无事件",

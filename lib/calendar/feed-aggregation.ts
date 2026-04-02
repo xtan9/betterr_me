@@ -1,253 +1,270 @@
 /**
- * Pure aggregation functions that convert domain data into CalendarFeedItem arrays.
+ * Cross-domain feed aggregation.
  *
- * No DB imports — all inputs are typed args. This follows the same pattern
- * as lib/money/projections and lib/money/insights.
+ * Normalizes tasks, habits, bills, and workouts into CalendarFeedItem[]
+ * so the calendar can render all domains uniformly.
  */
 
-import type { CalendarFeedItem } from "./feed-types";
-import { DOMAIN_COLORS } from "./feed-types";
-import type { Task, Habit, Workout, RecurringBill, HabitLog } from "@/lib/db/types";
+import type { Task, Habit, HabitLog, RecurringBill, Workout } from "@/lib/db/types";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { CalendarFeedItem, DomainCalendarEvent, FeedDomain } from "./feed-types";
 import { shouldTrackOnDate } from "@/lib/habits/format";
 
-/**
- * Convert expanded calendar events into feed items.
- */
-export function aggregateEventsForFeed(
+// ---------------------------------------------------------------------------
+// Normalizers — one per domain
+// ---------------------------------------------------------------------------
+
+/** Normalize calendar events into feed items. */
+export function normalizeEvents(
   events: ExpandedCalendarEvent[],
 ): CalendarFeedItem[] {
-  return events.map((event) => ({
-    id: `event_${event.id}`,
-    source: "event" as const,
-    title: event.title,
-    start_date: event.start_date,
-    start_time: event.start_time ? event.start_time.slice(0, 5) : null,
-    end_date: event.end_date,
-    end_time: event.end_time ? event.end_time.slice(0, 5) : null,
-    color: event.color || DOMAIN_COLORS.event,
-    is_all_day: !event.start_time,
-    meta: {
-      event_id: event.id,
-      location: event.location ?? undefined,
-      description: event.description ?? undefined,
-      is_recurring: event.is_recurring,
-      is_virtual: event.is_virtual,
-    },
+  return events.map((e) => ({
+    id: `events:${e.id}`,
+    domain: "events" as FeedDomain,
+    sourceId: e.id,
+    title: e.title,
+    date: e.start_date,
+    startTime: e.start_time,
+    endTime: e.end_time,
+    allDay: e.start_time === null,
+    completed: false,
+    actions: [],
   }));
 }
 
 /**
- * Convert tasks with due_date into feed items for a date range.
+ * Normalize tasks with due dates into feed items.
  * Only includes tasks that have a due_date within the range.
  */
-export function aggregateTasksForFeed(
+export function normalizeTasks(
   tasks: Task[],
-  startDate: string,
-  endDate: string,
 ): CalendarFeedItem[] {
   return tasks
-    .filter(
-      (task) =>
-        task.due_date &&
-        task.due_date >= startDate &&
-        task.due_date <= endDate,
-    )
-    .map((task) => ({
-      id: `task_${task.id}`,
-      source: "task" as const,
-      title: task.title,
-      start_date: task.due_date!,
-      start_time: task.due_time ? task.due_time.slice(0, 5) : null,
-      end_date: task.due_date!,
-      end_time: task.due_time
-        ? (() => {
-            // Add 30 min to due_time for display
-            const [h, m] = task.due_time.split(":").map(Number);
-            const endMinutes = h * 60 + m + 30;
-            const endH = Math.floor(endMinutes / 60) % 24;
-            const endM = endMinutes % 60;
-            return `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
-          })()
-        : null,
-      color: DOMAIN_COLORS.task,
-      is_all_day: !task.due_time,
-      meta: {
-        task_id: task.id,
-        is_completed: task.is_completed,
-        priority: task.priority,
-      },
+    .filter((t) => t.due_date !== null)
+    .map((t) => ({
+      id: `tasks:${t.id}`,
+      domain: "tasks" as FeedDomain,
+      sourceId: t.id,
+      title: t.title,
+      date: t.due_date!,
+      startTime: t.due_time,
+      endTime: null,
+      allDay: t.due_time === null,
+      completed: t.is_completed,
+      actions: ["toggle_task" as const],
+      meta: { priority: t.priority, status: t.status },
     }));
 }
 
 /**
- * Convert active habits into feed items for each day in a date range
- * where shouldTrackOnDate returns true.
+ * Normalize habits into feed items for each date in the range they should track.
  *
- * @param habits - Active habits for the user
- * @param logs - Completed habit logs in the date range (habit_id, logged_date, completed)
- * @param startDate - YYYY-MM-DD
- * @param endDate - YYYY-MM-DD
+ * @param habits Active habits for the user
+ * @param logs Completed habit logs in the date range (used to set completed=true)
+ * @param startDate Range start (YYYY-MM-DD)
+ * @param endDate Range end (YYYY-MM-DD)
  */
-export function aggregateHabitsForFeed(
+export function normalizeHabits(
   habits: Habit[],
-  logs: Pick<HabitLog, "habit_id" | "logged_date" | "completed">[],
+  logs: HabitLog[],
   startDate: string,
   endDate: string,
 ): CalendarFeedItem[] {
-  const items: CalendarFeedItem[] = [];
-
-  // Build a set of completed (habit_id, date) pairs
+  // Build a lookup: habitId:date -> true
   const completedSet = new Set<string>();
   for (const log of logs) {
     if (log.completed) {
-      completedSet.add(`${log.habit_id}_${log.logged_date}`);
+      completedSet.add(`${log.habit_id}:${log.logged_date}`);
     }
   }
 
-  // Iterate over each date in the range
+  const items: CalendarFeedItem[] = [];
+
+  // Parse dates
   const [sy, sm, sd] = startDate.split("-").map(Number);
   const [ey, em, ed] = endDate.split("-").map(Number);
   const start = new Date(sy, sm - 1, sd);
   const end = new Date(ey, em - 1, ed);
 
-  const cursor = new Date(start);
-  while (cursor <= end) {
-    const dateStr = [
-      cursor.getFullYear(),
-      String(cursor.getMonth() + 1).padStart(2, "0"),
-      String(cursor.getDate()).padStart(2, "0"),
-    ].join("-");
-
-    for (const habit of habits) {
-      if (habit.status !== "active") continue;
+  for (const habit of habits) {
+    const cursor = new Date(start);
+    while (cursor <= end) {
       if (shouldTrackOnDate(habit.frequency, cursor)) {
-        const isLogged = completedSet.has(`${habit.id}_${dateStr}`);
+        const dateStr = [
+          cursor.getFullYear(),
+          String(cursor.getMonth() + 1).padStart(2, "0"),
+          String(cursor.getDate()).padStart(2, "0"),
+        ].join("-");
+
         items.push({
-          id: `habit_${habit.id}_${dateStr}`,
-          source: "habit" as const,
+          id: `habits:${habit.id}:${dateStr}`,
+          domain: "habits",
+          sourceId: habit.id,
           title: habit.name,
-          start_date: dateStr,
-          start_time: null,
-          end_date: dateStr,
-          end_time: null,
-          color: DOMAIN_COLORS.habit,
-          is_all_day: true,
-          meta: {
-            habit_id: habit.id,
-            is_logged: isLogged,
-          },
+          date: dateStr,
+          startTime: null,
+          endTime: null,
+          allDay: true,
+          completed: completedSet.has(`${habit.id}:${dateStr}`),
+          actions: ["toggle_habit"],
+          meta: { streak: habit.current_streak },
         });
       }
+      cursor.setDate(cursor.getDate() + 1);
     }
-
-    cursor.setDate(cursor.getDate() + 1);
   }
 
   return items;
 }
 
 /**
- * Convert recurring bills into feed items based on next_due_date.
- * Only includes active bills with next_due_date in range.
+ * Normalize recurring bills into feed items.
+ * Only includes active, non-dismissed bills with a next_due_date in range.
  */
-export function aggregateBillsForFeed(
+export function normalizeBills(
   bills: RecurringBill[],
   startDate: string,
   endDate: string,
 ): CalendarFeedItem[] {
   return bills
     .filter(
-      (bill) =>
-        bill.next_due_date &&
-        bill.next_due_date >= startDate &&
-        bill.next_due_date <= endDate &&
-        bill.is_active &&
-        bill.user_status !== "dismissed",
+      (b) =>
+        b.is_active &&
+        b.user_status !== "dismissed" &&
+        b.next_due_date !== null &&
+        b.next_due_date >= startDate &&
+        b.next_due_date <= endDate,
     )
-    .map((bill) => ({
-      id: `bill_${bill.id}`,
-      source: "bill" as const,
-      title: bill.name,
-      start_date: bill.next_due_date!,
-      start_time: null,
-      end_date: bill.next_due_date!,
-      end_time: null,
-      color: DOMAIN_COLORS.bill,
-      is_all_day: true,
-      meta: {
-        bill_id: bill.id,
-        is_paid: bill.user_status === "confirmed",
-        amount_cents: bill.amount_cents,
-      },
+    .map((b) => ({
+      id: `bills:${b.id}`,
+      domain: "bills" as FeedDomain,
+      sourceId: b.id,
+      title: b.name,
+      date: b.next_due_date!,
+      startTime: null,
+      endTime: null,
+      allDay: true,
+      completed: false,
+      actions: ["dismiss_bill" as const],
+      meta: { amountCents: b.amount_cents, frequency: b.frequency },
     }));
 }
 
 /**
- * Convert completed workouts into feed items based on started_at date.
+ * Normalize completed workouts into feed items.
+ * Uses the started_at date as the calendar date.
  */
-export function aggregateWorkoutsForFeed(
+export function normalizeWorkouts(
   workouts: Workout[],
-  startDate: string,
-  endDate: string,
 ): CalendarFeedItem[] {
-  return workouts
-    .filter((workout) => {
-      if (!workout.started_at) return false;
-      // Extract date from started_at (ISO string)
-      const dateStr = workout.started_at.split("T")[0];
-      return dateStr >= startDate && dateStr <= endDate;
-    })
-    .map((workout) => {
-      const dateStr = workout.started_at.split("T")[0];
-      // Extract time from started_at
-      const timePart = workout.started_at.split("T")[1];
-      const startTime = timePart ? timePart.slice(0, 5) : null;
-      // Compute end time from duration
-      let endTime: string | null = null;
-      if (startTime && workout.duration_seconds) {
-        const [h, m] = startTime.split(":").map(Number);
-        const endMinutes = h * 60 + m + Math.ceil(workout.duration_seconds / 60);
-        const endH = Math.floor(endMinutes / 60) % 24;
-        const endM = endMinutes % 60;
-        endTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
-      }
+  return workouts.map((w) => {
+    // Extract date from ISO started_at timestamp
+    const date = w.started_at.split("T")[0];
+    return {
+      id: `workouts:${w.id}`,
+      domain: "workouts" as FeedDomain,
+      sourceId: w.id,
+      title: w.title,
+      date,
+      startTime: null,
+      endTime: null,
+      allDay: true,
+      completed: w.status === "completed",
+      actions: ["navigate_workout" as const],
+      meta: { durationSeconds: w.duration_seconds, status: w.status },
+    };
+  });
+}
 
-      return {
-        id: `workout_${workout.id}`,
-        source: "workout" as const,
-        title: workout.title,
-        start_date: dateStr,
-        start_time: startTime,
-        end_date: dateStr,
-        end_time: endTime,
-        color: DOMAIN_COLORS.workout,
-        is_all_day: false,
-        meta: {
-          workout_id: workout.id,
-          duration_seconds: workout.duration_seconds,
-        },
+// ---------------------------------------------------------------------------
+// Aggregation
+// ---------------------------------------------------------------------------
+
+/**
+ * Aggregate feed items from all domains into a single sorted array.
+ * Filters by enabled layers (domains the user has toggled on).
+ *
+ * @param items All normalized feed items
+ * @param enabledLayers Set of domain keys the user wants visible
+ */
+export function aggregateFeedItems(
+  items: CalendarFeedItem[],
+  enabledLayers: Set<string>,
+): CalendarFeedItem[] {
+  return items
+    .filter((item) => enabledLayers.has(item.domain))
+    .sort((a, b) => {
+      // Sort by date first
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      // All-day items first
+      if (a.allDay && !b.allDay) return -1;
+      if (!a.allDay && b.allDay) return 1;
+      // Then by start time
+      if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+      // Then by domain order: events, tasks, habits, bills, workouts
+      const domainOrder: Record<string, number> = {
+        events: 0,
+        tasks: 1,
+        habits: 2,
+        bills: 3,
+        workouts: 4,
       };
+      return (domainOrder[a.domain] ?? 5) - (domainOrder[b.domain] ?? 5);
     });
 }
 
 /**
- * Merge and sort feed items by start_date, then start_time (all-day first).
+ * Group feed items by date, producing a Map<dateString, CalendarFeedItem[]>.
  */
-export function mergeFeedItems(
-  ...itemArrays: CalendarFeedItem[][]
-): CalendarFeedItem[] {
-  const all = itemArrays.flat();
-  return all.sort((a, b) => {
-    const dateCompare = a.start_date.localeCompare(b.start_date);
-    if (dateCompare !== 0) return dateCompare;
-    // All-day items sort before timed items
-    if (a.is_all_day && !b.is_all_day) return -1;
-    if (!a.is_all_day && b.is_all_day) return 1;
-    // Both timed: compare start_time
-    if (a.start_time && b.start_time) {
-      return a.start_time.localeCompare(b.start_time);
-    }
-    return 0;
-  });
+export function groupFeedItemsByDate(
+  items: CalendarFeedItem[],
+): Map<string, CalendarFeedItem[]> {
+  const map = new Map<string, CalendarFeedItem[]>();
+  for (const item of items) {
+    const existing = map.get(item.date) || [];
+    existing.push(item);
+    map.set(item.date, existing);
+  }
+  return map;
+}
+
+/**
+ * Convert CalendarFeedItem[] into DomainCalendarEvent[] for compatibility
+ * with existing calendar view components (MonthGrid, WeekView, DayView).
+ *
+ * Feed items are mapped to pseudo-events with domain metadata
+ * so the UI can apply domain-specific colors and actions.
+ */
+export function feedItemsToExpandedEvents(
+  items: CalendarFeedItem[],
+): DomainCalendarEvent[] {
+  return items.map((item) => ({
+    id: item.id,
+    user_id: "",
+    title: item.title,
+    description: null,
+    start_date: item.date,
+    start_time: item.startTime,
+    end_date: item.date,
+    end_time: item.endTime,
+    location: null,
+    color: null,
+    category_id: null,
+    is_recurring: false,
+    recurrence_rule: null,
+    end_type: null,
+    end_date_recurrence: null,
+    end_count: null,
+    recurring_event_id: null,
+    original_date: null,
+    is_exception: false,
+    created_at: "",
+    updated_at: "",
+    is_virtual: true,
+    _domain: item.domain,
+    _completed: item.completed,
+    _actions: item.actions,
+    _sourceId: item.sourceId,
+    _meta: item.meta,
+  }));
 }

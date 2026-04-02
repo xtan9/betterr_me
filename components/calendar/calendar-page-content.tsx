@@ -14,8 +14,9 @@ import {
   groupEventsByDate,
 } from "@/lib/calendar/date-utils";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useCalendarActions } from "@/hooks/use-calendar-actions";
 import { CalendarHeader } from "./calendar-header";
-import { CalendarSidebar, LAYERS } from "./calendar-sidebar";
+import { CalendarSidebar } from "./calendar-sidebar";
 import { MonthGrid } from "./month-grid";
 import { WeekView } from "./week-view";
 import { DayView } from "./day-view";
@@ -23,6 +24,8 @@ import { EventQuickCreate } from "./event-quick-create";
 import { EventDialog } from "./event-dialog";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarFeedItem } from "@/lib/calendar/feed-types";
+import { feedItemsToExpandedEvents } from "@/lib/calendar/feed-aggregation";
+import type { DomainCalendarEvent } from "@/lib/calendar/feed-types";
 
 interface ProfileResponse {
   profile: {
@@ -38,45 +41,6 @@ interface EventsResponse {
 
 interface FeedResponse {
   items: CalendarFeedItem[];
-}
-
-/**
- * Convert feed items into the same shape as ExpandedCalendarEvent so they
- * can be rendered by the existing calendar views. Feed items that are
- * calendar events are skipped (they come from the events API already).
- */
-function feedItemsToExpandedEvents(
-  items: CalendarFeedItem[],
-): ExpandedCalendarEvent[] {
-  return items
-    .filter((item) => item.source !== "event")
-    .map((item) => ({
-      id: item.id,
-      user_id: "",
-      title: item.title,
-      description: item.meta.description ?? null,
-      start_date: item.start_date,
-      start_time: item.start_time ? `${item.start_time}:00` : null,
-      end_date: item.end_date,
-      end_time: item.end_time ? `${item.end_time}:00` : null,
-      location: item.meta.location ?? null,
-      color: item.color,
-      category_id: null,
-      is_recurring: false,
-      recurrence_rule: null,
-      end_type: null,
-      end_date_recurrence: null,
-      end_count: null,
-      recurring_event_id: null,
-      original_date: null,
-      is_exception: false,
-      created_at: "",
-      updated_at: "",
-      is_virtual: true,
-      // Carry feed metadata for inline actions
-      _feed_source: item.source,
-      _feed_meta: item.meta,
-    })) as unknown as ExpandedCalendarEvent[];
 }
 
 export function CalendarPageContent() {
@@ -115,6 +79,23 @@ export function CalendarPageContent() {
   } = useSWR<ProfileResponse>("/api/profile", fetcher);
   const weekStartDay = profileData?.profile?.preferences?.week_start_day ?? 0;
 
+  // --- Layer state (lifted from sidebar) ---
+  const [enabledLayers, setEnabledLayers] = useState<Set<string>>(
+    new Set(["events"]),
+  );
+
+  const toggleLayer = useCallback((key: string) => {
+    setEnabledLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
   // URL update helper
   const updateParams = useCallback(
     (updates: Record<string, string>, options?: { replace?: boolean }) => {
@@ -149,99 +130,102 @@ export function CalendarPageContent() {
     return getMonthDateRange(year, month, weekStartDay);
   }, [view, currentDate, year, month, weekStartDay]);
 
-  // --- Layer toggle state ---
-  const [enabledLayers, setEnabledLayers] = useState<Set<string>>(
-    () => new Set(LAYERS.map((l) => l.key)),
-  );
+  // --- Data fetching ---
 
-  const toggleLayer = useCallback((key: string) => {
-    setEnabledLayers((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  }, []);
-
-  // Build layers query param from enabled non-event layers
-  const layersParam = useMemo(() => {
-    // Map sidebar layer keys to feed source names
-    const layerToSource: Record<string, string> = {
-      events: "event",
-      tasks: "task",
-      habits: "habit",
-      bills: "bill",
-      workouts: "workout",
-    };
-    const activeSources = LAYERS.map((l) => l.key)
-      .filter((k) => enabledLayers.has(k))
-      .map((k) => layerToSource[k])
-      .filter(Boolean);
-    return activeSources.join(",");
-  }, [enabledLayers]);
-
-  // Fetch events for the visible date range
+  // Always fetch calendar events (primary data source)
   const {
     data: eventsData,
     error: eventsError,
     isLoading: eventsLoading,
   } = useSWR<EventsResponse>(
-    enabledLayers.has("events")
-      ? `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`
-      : null,
+    `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
     fetcher,
     { keepPreviousData: true },
   );
 
-  // Fetch cross-domain feed items
-  const hasFeedLayers = ["tasks", "habits", "bills", "workouts"].some((k) =>
-    enabledLayers.has(k),
-  );
+  // Compute which non-event layers are enabled
+  const nonEventLayers = useMemo(() => {
+    const layers = Array.from(enabledLayers).filter((l) => l !== "events");
+    return layers.sort().join(",");
+  }, [enabledLayers]);
+
+  // Fetch feed items for enabled non-event layers
+  const feedKey = nonEventLayers
+    ? `/api/calendar/feed?start_date=${startDate}&end_date=${endDate}&layers=${nonEventLayers}`
+    : null;
+
   const {
     data: feedData,
     error: feedError,
-    isLoading: feedLoading,
-  } = useSWR<FeedResponse>(
-    hasFeedLayers
-      ? `/api/calendar/feed?start_date=${startDate}&end_date=${endDate}&layers=${layersParam}`
-      : null,
-    fetcher,
-    { keepPreviousData: true },
-  );
+  } = useSWR<FeedResponse>(feedKey, fetcher, { keepPreviousData: true });
 
   // Log SWR fetch errors for debugging
   useEffect(() => {
     if (eventsError) console.error("Failed to fetch calendar events:", eventsError);
-    if (feedError) console.error("Failed to fetch calendar feed:", feedError);
     if (profileError) console.error("Failed to fetch user profile:", profileError);
-  }, [eventsError, feedError, profileError]);
+    if (feedError) console.error("Failed to fetch calendar feed:", feedError);
+  }, [eventsError, profileError, feedError]);
 
-  // Compute grid dates and grouped events
+  // --- Inline actions ---
+
+  const handleFeedMutated = useCallback(() => {
+    // Re-fetch both events and feed
+    globalMutate(
+      `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
+    );
+    if (feedKey) globalMutate(feedKey);
+  }, [startDate, endDate, feedKey, globalMutate]);
+
+  const { dispatch } = useCalendarActions(handleFeedMutated);
+
+  const handleItemAction = useCallback(
+    async (event: ExpandedCalendarEvent | DomainCalendarEvent) => {
+      const domainEvent = event as DomainCalendarEvent;
+      if (!domainEvent._actions?.length || !domainEvent._sourceId) return;
+
+      const action = domainEvent._actions[0];
+      // For habits, extract date from the ID (format: habits:habitId:date)
+      const date = domainEvent._domain === "habits"
+        ? domainEvent.id.split(":")[2]
+        : domainEvent.start_date;
+
+      await dispatch(action, domainEvent._sourceId, date);
+    },
+    [dispatch],
+  );
+
+  // --- Merge calendar events + feed items ---
+
+  const eventsByDate = useMemo(() => {
+    const calendarEvents = eventsData?.events ?? [];
+
+    // Convert feed items to pseudo-events for rendering
+    const feedEvents: DomainCalendarEvent[] = feedData?.items
+      ? feedItemsToExpandedEvents(feedData.items)
+      : [];
+
+    // Only include calendar events if the events layer is on
+    const visibleCalendarEvents = enabledLayers.has("events")
+      ? calendarEvents
+      : [];
+
+    const allEvents = [
+      ...visibleCalendarEvents,
+      ...feedEvents,
+    ] as ExpandedCalendarEvent[];
+
+    return groupEventsByDate(allEvents);
+  }, [eventsData?.events, feedData?.items, enabledLayers]);
+
+  // Compute grid dates
   const gridDates = useMemo(
     () => getMonthGridDates(year, month, weekStartDay),
     [year, month, weekStartDay],
   );
 
-  // Merge calendar events with feed items
-  const allEvents = useMemo(() => {
-    const calendarEvents = eventsData?.events ?? [];
-    const feedEvents = feedData?.items
-      ? feedItemsToExpandedEvents(feedData.items)
-      : [];
-    return [...calendarEvents, ...feedEvents];
-  }, [eventsData?.events, feedData?.items]);
-
-  const eventsByDate = useMemo(
-    () => groupEventsByDate(allEvents),
-    [allEvents],
-  );
-
   const today = useMemo(() => getLocalDateString(), []);
 
-  const isLoading = profileLoading || eventsLoading || feedLoading;
+  const isLoading = profileLoading || eventsLoading;
 
   // --- Navigation functions ---
 
@@ -384,9 +368,18 @@ export function CalendarPageContent() {
     [],
   );
 
-  const handleEventClick = useCallback((event: ExpandedCalendarEvent) => {
-    setEventDialog({ isOpen: true, event });
-  }, []);
+  const handleEventClick = useCallback(
+    (event: ExpandedCalendarEvent) => {
+      // If it's a domain item with actions, execute the action instead of opening dialog
+      const domainEvent = event as DomainCalendarEvent;
+      if (domainEvent._domain && domainEvent._domain !== "events") {
+        handleItemAction(event);
+        return;
+      }
+      setEventDialog({ isOpen: true, event });
+    },
+    [handleItemAction],
+  );
 
   const handleNewEvent = useCallback(() => {
     setEventDialog({
@@ -419,12 +412,7 @@ export function CalendarPageContent() {
     globalMutate(
       `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
     );
-    if (hasFeedLayers) {
-      globalMutate(
-        `/api/calendar/feed?start_date=${startDate}&end_date=${endDate}&layers=${layersParam}`,
-      );
-    }
-  }, [startDate, endDate, globalMutate, hasFeedLayers, layersParam]);
+  }, [startDate, endDate, globalMutate]);
 
   // --- Keyboard shortcuts ---
 
@@ -480,7 +468,7 @@ export function CalendarPageContent() {
           />
 
           <div className="flex-1 overflow-auto p-4">
-            {eventsError || feedError || profileError ? (
+            {eventsError || profileError ? (
               <div className="flex flex-col items-center justify-center h-64 gap-2 text-destructive">
                 <span>{t("error")}</span>
               </div>

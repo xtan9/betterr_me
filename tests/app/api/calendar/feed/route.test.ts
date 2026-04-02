@@ -2,233 +2,179 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET } from "@/app/api/calendar/feed/route";
 import { NextRequest } from "next/server";
 
-// --- Hoisted mocks ---
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
 
-const {
-  mockGetUserEvents,
-  mockGetUserTasks,
-  mockGetActiveHabits,
-  mockGetAllUserLogs,
-  mockGetByHousehold,
-  mockGetWorkouts,
-  mockResolveHousehold,
-} = vi.hoisted(() => ({
-  mockGetUserEvents: vi.fn(),
-  mockGetUserTasks: vi.fn(),
-  mockGetActiveHabits: vi.fn(),
-  mockGetAllUserLogs: vi.fn(),
-  mockGetByHousehold: vi.fn(),
-  mockGetWorkouts: vi.fn(),
-  mockResolveHousehold: vi.fn(),
-}));
-
-const { mockExpandEventsForRange } = vi.hoisted(() => ({
-  mockExpandEventsForRange: vi.fn(),
-}));
+const mockGetUserEvents = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn(() => ({
-        data: { user: { id: "user-123", email: "test@example.com" } },
-      })),
-    },
-  })),
+  createClient: vi.fn(() => mockSupabase),
 }));
 
 vi.mock("@/lib/db", () => ({
   CalendarEventsDB: class {
     getUserEvents = mockGetUserEvents;
   },
-  TasksDB: class {
-    getUserTasks = mockGetUserTasks;
-  },
-  HabitsDB: class {
-    getActiveHabits = mockGetActiveHabits;
-  },
-  HabitLogsDB: class {
-    getAllUserLogs = mockGetAllUserLogs;
-  },
-  RecurringBillsDB: class {
-    getByHousehold = mockGetByHousehold;
-  },
-  WorkoutsDB: class {
-    getWorkouts = mockGetWorkouts;
-  },
-}));
-
-vi.mock("@/lib/db/households", () => ({
-  HouseholdsDB: class {
-    resolveHousehold = mockResolveHousehold;
-  },
 }));
 
 vi.mock("@/lib/calendar/recurrence", () => ({
-  expandEventsForRange: mockExpandEventsForRange,
+  expandEventsForRange: vi.fn((events: unknown[]) => events),
 }));
 
+// Mock Supabase client with chainable query builder
+function createMockQuery(data: unknown[] = []) {
+  const query: Record<string, unknown> = {};
+  const methods = ["select", "eq", "neq", "gte", "lte", "not", "single"];
+  for (const method of methods) {
+    query[method] = vi.fn(() => query);
+  }
+  // Terminal: `single()` returns data/error, other terminal is the chain itself
+  // For array queries, the chain resolves by reading .data
+  (query as Record<string, unknown>).data = data;
+  (query as Record<string, unknown>).error = null;
+
+  // Override `single` to return a single record
+  query.single = vi.fn(() => ({
+    data: data[0] ?? null,
+    error: data.length === 0 ? { code: "PGRST116" } : null,
+  }));
+
+  // Make the chain thenable for select queries that return arrays
+  // Actually, Supabase returns { data, error } at the end of the chain
+  // We need to intercept the chain to return properly
+  return query;
+}
+
+let mockFromHandlers: Record<string, ReturnType<typeof createMockQuery>> = {};
+
+const mockSupabase = {
+  auth: {
+    getUser: vi.fn(() => ({
+      data: { user: { id: "user-123", email: "test@example.com" } },
+    })),
+  },
+  from: vi.fn((table: string) => {
+    if (mockFromHandlers[table]) return mockFromHandlers[table];
+    return createMockQuery();
+  }),
+};
+
 import { createClient } from "@/lib/supabase/server";
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 describe("GET /api/calendar/feed", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn(() => ({
-          data: { user: { id: "user-123", email: "test@example.com" } },
-        })),
-      },
-    } as never);
-
-    // Default responses
+    mockFromHandlers = {};
     mockGetUserEvents.mockResolvedValue([]);
-    mockExpandEventsForRange.mockReturnValue([]);
-    mockGetUserTasks.mockResolvedValue([]);
-    mockGetActiveHabits.mockResolvedValue([]);
-    mockGetAllUserLogs.mockResolvedValue([]);
-    mockResolveHousehold.mockResolvedValue("hh-1");
-    mockGetByHousehold.mockResolvedValue([]);
-    mockGetWorkouts.mockResolvedValue([]);
+    vi.mocked(createClient).mockReturnValue(mockSupabase as never);
+    mockSupabase.auth.getUser.mockReturnValue({
+      data: { user: { id: "user-123", email: "test@example.com" } },
+    } as never);
   });
 
-  it("returns 401 for unauthenticated requests", async () => {
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
+  it("returns 401 when unauthenticated", async () => {
+    mockSupabase.auth.getUser.mockReturnValue({
+      data: { user: null },
     } as never);
 
     const req = new NextRequest(
-      "http://localhost/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-30",
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=events",
     );
     const res = await GET(req);
     expect(res.status).toBe(401);
   });
 
-  it("returns 400 when start_date or end_date is missing", async () => {
-    const req = new NextRequest("http://localhost/api/calendar/feed");
+  it("returns 400 when start_date is missing", async () => {
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?end_date=2026-04-07&layers=events",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("start_date");
+  });
+
+  it("returns 400 when end_date is missing", async () => {
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&layers=events",
+    );
     const res = await GET(req);
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for invalid date format", async () => {
     const req = new NextRequest(
-      "http://localhost/api/calendar/feed?start_date=2026-4-1&end_date=2026-04-30",
+      "http://localhost:3000/api/calendar/feed?start_date=2026/04/01&end_date=2026-04-07&layers=events",
     );
     const res = await GET(req);
     expect(res.status).toBe(400);
-  });
-
-  it("returns items from all domains", async () => {
-    const mockEvent = {
-      id: "evt-1",
-      user_id: "user-123",
-      title: "Meeting",
-      start_date: "2026-04-01",
-      start_time: "10:00:00",
-      end_date: "2026-04-01",
-      end_time: "11:00:00",
-      is_virtual: false,
-      is_recurring: false,
-      color: null,
-      location: null,
-      description: null,
-    };
-
-    mockGetUserEvents.mockResolvedValue([]);
-    mockExpandEventsForRange.mockReturnValue([mockEvent]);
-    mockGetUserTasks.mockResolvedValue([
-      {
-        id: "task-1",
-        title: "Buy groceries",
-        due_date: "2026-04-01",
-        due_time: null,
-        is_completed: false,
-        priority: 0,
-      },
-    ]);
-    mockGetActiveHabits.mockResolvedValue([
-      {
-        id: "habit-1",
-        name: "Run",
-        frequency: { type: "daily" },
-        status: "active",
-      },
-    ]);
-    mockGetAllUserLogs.mockResolvedValue([]);
-    mockGetByHousehold.mockResolvedValue([
-      {
-        id: "bill-1",
-        name: "Netflix",
-        next_due_date: "2026-04-05",
-        amount_cents: 1599,
-        is_active: true,
-        user_status: "auto",
-      },
-    ]);
-    mockGetWorkouts.mockResolvedValue([
-      {
-        id: "workout-1",
-        title: "Push Day",
-        started_at: "2026-04-01T08:00:00Z",
-        duration_seconds: 3600,
-      },
-    ]);
-
-    const req = new NextRequest(
-      "http://localhost/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-30",
-    );
-    const res = await GET(req);
-    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.items).toBeDefined();
-    expect(body.items.length).toBeGreaterThan(0);
-
-    // Check we have items from multiple sources
-    const sources = new Set(body.items.map((i: { source: string }) => i.source));
-    expect(sources.has("event")).toBe(true);
-    expect(sources.has("task")).toBe(true);
-    expect(sources.has("workout")).toBe(true);
+    expect(body.error).toContain("YYYY-MM-DD");
   });
 
-  it("filters by layers parameter", async () => {
-    mockGetUserEvents.mockResolvedValue([]);
-    mockExpandEventsForRange.mockReturnValue([
+  it("returns events when events layer is enabled", async () => {
+    mockGetUserEvents.mockResolvedValue([
       {
         id: "evt-1",
+        user_id: "user-123",
         title: "Meeting",
         start_date: "2026-04-01",
-        start_time: "10:00:00",
+        start_time: "09:00:00",
         end_date: "2026-04-01",
-        end_time: "11:00:00",
-        is_virtual: false,
-        is_recurring: false,
-        color: null,
-        location: null,
+        end_time: "10:00:00",
         description: null,
+        location: null,
+        color: null,
+        category_id: null,
+        is_recurring: false,
+        recurrence_rule: null,
+        end_type: null,
+        end_date_recurrence: null,
+        end_count: null,
+        recurring_event_id: null,
+        original_date: null,
+        is_exception: false,
+        created_at: "2026-04-01T00:00:00Z",
+        updated_at: "2026-04-01T00:00:00Z",
+        is_virtual: false,
       },
     ]);
 
     const req = new NextRequest(
-      "http://localhost/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-30&layers=event",
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=events",
     );
     const res = await GET(req);
     expect(res.status).toBe(200);
     const body = await res.json();
-
-    // Only event domain should be queried
-    expect(mockGetUserEvents).toHaveBeenCalled();
-    expect(mockGetUserTasks).not.toHaveBeenCalled();
-    expect(mockGetActiveHabits).not.toHaveBeenCalled();
-    expect(mockGetWorkouts).not.toHaveBeenCalled();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].domain).toBe("events");
+    expect(body.items[0].title).toBe("Meeting");
   });
 
-  it("handles bill fetch failure gracefully", async () => {
-    mockResolveHousehold.mockRejectedValue(new Error("No household"));
-
+  it("returns empty items for no enabled layers", async () => {
     const req = new NextRequest(
-      "http://localhost/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-30",
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=",
     );
     const res = await GET(req);
-    // Should still succeed — bills are optional
     expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toHaveLength(0);
+  });
+
+  it("defaults layers to events when not specified", async () => {
+    mockGetUserEvents.mockResolvedValue([]);
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    // Should have called getUserEvents since 'events' is default
+    expect(mockGetUserEvents).toHaveBeenCalled();
   });
 });

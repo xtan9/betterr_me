@@ -14,7 +14,7 @@ interface CalendarSidebarProps {
   onToggleLayer: (key: string) => void;
 }
 
-export const LAYERS = [
+const LAYERS = [
   { key: "events", cssVar: "--calendar-event" },
   { key: "tasks", cssVar: "--calendar-task" },
   { key: "habits", cssVar: "--calendar-habit" },
@@ -52,6 +52,7 @@ export function CalendarSidebar({
         <div className="space-y-2">
           {LAYERS.map((layer) => {
             const isChecked = enabledLayers.has(layer.key);
+
             return (
               <label
                 key={layer.key}
