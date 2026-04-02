@@ -13,28 +13,6 @@ function formatTime(time: string): string {
   return time.slice(0, 5);
 }
 
-/**
- * Get domain-specific CSS classes for background and border.
- * Returns empty strings for native calendar events (uses default teal).
- */
-function getDomainClasses(event: ExpandedCalendarEvent): {
-  bgClass: string;
-  borderClass: string;
-} {
-  const domainEvent = event as DomainCalendarEvent;
-  const domain = domainEvent._domain as FeedDomain | undefined;
-
-  if (!domain || domain === "events") {
-    return { bgClass: "", borderClass: "" };
-  }
-
-  const colors = DOMAIN_COLORS[domain];
-  if (!colors) return { bgClass: "", borderClass: "" };
-
-  // Return empty — we'll use inline styles instead for CSS variable access
-  return { bgClass: "", borderClass: "" };
-}
-
 export function EventChip({ event }: EventChipProps) {
   const domainEvent = event as DomainCalendarEvent;
   const domain = domainEvent._domain as FeedDomain | undefined;

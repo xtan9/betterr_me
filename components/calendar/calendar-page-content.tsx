@@ -157,7 +157,6 @@ export function CalendarPageContent() {
   const {
     data: feedData,
     error: feedError,
-    isLoading: feedLoading,
   } = useSWR<FeedResponse>(feedKey, fetcher, { keepPreviousData: true });
 
   // Log SWR fetch errors for debugging
