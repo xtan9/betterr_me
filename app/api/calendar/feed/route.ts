@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("start_date");
     const endDate = searchParams.get("end_date");
     const layersParam = searchParams.get("layers") || "events";
+    const timezone = searchParams.get("timezone") || undefined;
 
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!startDate || !endDate) {
@@ -56,10 +57,22 @@ export async function GET(request: NextRequest) {
 
     const enabledLayers = new Set(layersParam.split(",").filter(Boolean));
 
+    // Validate layers parameter
+    const validLayers = new Set(["events", "tasks", "habits", "bills", "workouts"]);
+    const invalidLayers = [...enabledLayers].filter((l) => !validLayers.has(l));
+    if (invalidLayers.length > 0) {
+      return NextResponse.json(
+        { error: `Invalid layers: ${invalidLayers.join(", ")}` },
+        { status: 400 },
+      );
+    }
+
     // Fetch all enabled domains in parallel
     const promises: Promise<CalendarFeedItem[]>[] = [];
+    const requestedLayers: string[] = [];
 
     if (enabledLayers.has("events")) {
+      requestedLayers.push("events");
       promises.push(
         (async () => {
           const db = new CalendarEventsDB(supabase);
@@ -71,6 +84,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (enabledLayers.has("tasks")) {
+      requestedLayers.push("tasks");
       promises.push(
         (async () => {
           const { data, error } = await supabase
@@ -87,6 +101,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (enabledLayers.has("habits")) {
+      requestedLayers.push("habits");
       promises.push(
         (async () => {
           // Fetch active habits
@@ -118,6 +133,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (enabledLayers.has("bills")) {
+      requestedLayers.push("bills");
       promises.push(
         (async () => {
           // Bills require household — attempt to resolve, return empty if none
@@ -147,6 +163,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (enabledLayers.has("workouts")) {
+      requestedLayers.push("workouts");
       promises.push(
         (async () => {
           // Workouts use started_at (timestamp) — filter by date portion
@@ -158,15 +175,29 @@ export async function GET(request: NextRequest) {
             .gte("started_at", `${startDate}T00:00:00`)
             .lte("started_at", `${endDate}T23:59:59`);
           if (error) throw error;
-          return normalizeWorkouts((data as Workout[]) || []);
+          return normalizeWorkouts((data as Workout[]) || [], timezone);
         })(),
       );
     }
 
-    const results = await Promise.all(promises);
-    const items = results.flat();
+    const settled = await Promise.allSettled(promises);
+    const items: CalendarFeedItem[] = [];
+    const partialFailures: string[] = [];
 
-    return NextResponse.json({ items });
+    settled.forEach((result, i) => {
+      if (result.status === "fulfilled") {
+        items.push(...result.value);
+      } else {
+        const domain = requestedLayers[i] || `domain-${i}`;
+        log.error(`Feed domain query failed: ${domain}`, result.reason);
+        partialFailures.push(domain);
+      }
+    });
+
+    return NextResponse.json({
+      items,
+      ...(partialFailures.length > 0 && { partialFailures }),
+    });
   } catch (error) {
     log.error("GET /api/calendar/feed error", error);
     return NextResponse.json(

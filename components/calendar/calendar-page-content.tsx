@@ -149,9 +149,15 @@ export function CalendarPageContent() {
     return layers.sort().join(",");
   }, [enabledLayers]);
 
+  // Detect user timezone for workout time conversion
+  const userTimezone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    [],
+  );
+
   // Fetch feed items for enabled non-event layers
   const feedKey = nonEventLayers
-    ? `/api/calendar/feed?start_date=${startDate}&end_date=${endDate}&layers=${nonEventLayers}`
+    ? `/api/calendar/feed?start_date=${startDate}&end_date=${endDate}&layers=${nonEventLayers}&timezone=${encodeURIComponent(userTimezone)}`
     : null;
 
   const {
@@ -189,7 +195,10 @@ export function CalendarPageContent() {
         ? domainEvent.id.split(":")[2]
         : domainEvent.start_date;
 
-      await dispatch(action, domainEvent._sourceId, date);
+      const result = await dispatch(action, domainEvent._sourceId, date);
+      if (!result.success) {
+        console.error("Calendar inline action failed:", result.error);
+      }
     },
     [dispatch],
   );
@@ -468,7 +477,7 @@ export function CalendarPageContent() {
           />
 
           <div className="flex-1 overflow-auto p-4">
-            {eventsError || profileError ? (
+            {eventsError || profileError || feedError ? (
               <div className="flex flex-col items-center justify-center h-64 gap-2 text-destructive">
                 <span>{t("error")}</span>
               </div>

@@ -156,11 +156,20 @@ export function normalizeBills(
  */
 export function normalizeWorkouts(
   workouts: Workout[],
+  timezone?: string,
 ): CalendarFeedItem[] {
   return workouts.map((w) => {
-    // Extract date and time from ISO started_at timestamp
-    const date = w.started_at.split("T")[0];
-    const timePart = w.started_at.split("T")[1]?.slice(0, 5) || null;
+    // Extract date and time, converting to user's timezone if provided
+    let date: string;
+    let timePart: string | null;
+    if (timezone) {
+      const dt = new Date(w.started_at);
+      date = dt.toLocaleDateString("sv-SE", { timeZone: timezone }); // YYYY-MM-DD
+      timePart = dt.toLocaleTimeString("en-GB", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false });
+    } else {
+      date = w.started_at.split("T")[0];
+      timePart = w.started_at.split("T")[1]?.slice(0, 5) || null;
+    }
     return {
       id: `workouts:${w.id}`,
       domain: "workouts" as FeedDomain,

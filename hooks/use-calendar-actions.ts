@@ -38,7 +38,8 @@ export function useCalendarActions(onMutated?: () => void) {
         }
         onMutated?.();
         return { success: true };
-      } catch {
+      } catch (err) {
+        console.error("Failed to toggle task:", err);
         return { success: false, error: "Network error" };
       }
     },
@@ -59,7 +60,8 @@ export function useCalendarActions(onMutated?: () => void) {
         }
         onMutated?.();
         return { success: true };
-      } catch {
+      } catch (err) {
+        console.error("Failed to toggle habit:", err);
         return { success: false, error: "Network error" };
       }
     },
@@ -80,7 +82,8 @@ export function useCalendarActions(onMutated?: () => void) {
         }
         onMutated?.();
         return { success: true };
-      } catch {
+      } catch (err) {
+        console.error("Failed to dismiss bill:", err);
         return { success: false, error: "Network error" };
       }
     },
@@ -107,7 +110,8 @@ export function useCalendarActions(onMutated?: () => void) {
         case "toggle_task":
           return toggleTask(sourceId);
         case "toggle_habit":
-          return toggleHabit(sourceId, date || "");
+          if (!date) return { success: false, error: "Date is required to toggle a habit" };
+          return toggleHabit(sourceId, date);
         case "dismiss_bill":
           return dismissBill(sourceId);
         case "navigate_workout":
