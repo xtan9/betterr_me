@@ -1764,7 +1764,8 @@
     "sidebar": {
       "newEvent": "+ 新事件",
       "layers": "图层",
-      "comingSoonPhase": "将在未来阶段推出"
+      "comingSoonPhase": "将在未来阶段推出",
+      "actionFailed": "操作失败，请重试。"
     },
     "comingSoon": "即将推出",
     "noEvents": "暂无事件",

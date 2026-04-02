@@ -1,5 +1,7 @@
 import { memo } from "react";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
+import type { DomainCalendarEvent, FeedDomain } from "@/lib/calendar/feed-types";
+import { DOMAIN_COLORS } from "@/lib/calendar/feed-types";
 
 interface EventBlockProps {
   event: ExpandedCalendarEvent;
@@ -31,12 +33,24 @@ export const EventBlock = memo(function EventBlock({
   width,
   onClick,
 }: EventBlockProps) {
-  const hasCustomColor = !!event.color;
-  const isShort = height < 30; // Less than ~37 minutes — compact layout
+  const domainEvent = event as DomainCalendarEvent;
+  const domain = domainEvent._domain as FeedDomain | undefined;
+  const isCompleted = domainEvent._completed;
 
-  const bgStyle = hasCustomColor ? { backgroundColor: `${event.color}20` } : {};
-  const borderStyle =
-    hasCustomColor && event.color ? { borderLeftColor: event.color } : {};
+  const hasCustomColor = !!event.color;
+  const hasDomainColor = domain && domain !== "events" && DOMAIN_COLORS[domain];
+  const isShort = height < 30;
+
+  const bgStyle = hasCustomColor
+    ? { backgroundColor: `${event.color}20` }
+    : hasDomainColor
+      ? { backgroundColor: `hsl(var(${DOMAIN_COLORS[domain!].muted}))` }
+      : {};
+  const borderStyle = hasCustomColor && event.color
+    ? { borderLeftColor: event.color }
+    : hasDomainColor
+      ? { borderLeftColor: `hsl(var(${DOMAIN_COLORS[domain!].main}))` }
+      : {};
 
   return (
     <button
@@ -46,7 +60,8 @@ export const EventBlock = memo(function EventBlock({
         border-l-2 overflow-hidden
         text-xs text-left cursor-pointer
         hover:opacity-80 transition-opacity
-        ${hasCustomColor ? "" : "bg-[hsl(var(--calendar-event-muted))] border-l-[hsl(var(--calendar-event))]"}
+        ${hasCustomColor || hasDomainColor ? "" : "bg-[hsl(var(--calendar-event-muted))] border-l-[hsl(var(--calendar-event))]"}
+        ${isCompleted ? "line-through opacity-60" : ""}
       `}
       style={{
         top: `${top}px`,
