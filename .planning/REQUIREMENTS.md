@@ -7,17 +7,17 @@
 ## Calendar Views
 
 - [x] **VIEW-01**: User can see a monthly calendar grid with day cells showing compact event chips and "+N more" overflow
-- [ ] **VIEW-02**: User can see a weekly time grid with 7 day columns, hourly rows, and events rendered as colored blocks
-- [ ] **VIEW-03**: User can see a daily time grid with single-column full-width events
+- [x] **VIEW-02**: User can see a weekly time grid with 7 day columns, hourly rows, and events rendered as colored blocks
+- [x] **VIEW-03**: User can see a daily time grid with single-column full-width events
 - [x] **VIEW-04**: User can switch between Day, Week, and Month views via header toggle
 - [x] **VIEW-05**: User can navigate to previous/next period (day, week, or month) with arrow buttons
 - [x] **VIEW-06**: User can jump to today with a "Today" button
-- [ ] **VIEW-07**: User can see a current time indicator (teal line) on Week and Day views
-- [ ] **VIEW-08**: User can see all-day events in a dedicated all-day row above the time grid
+- [x] **VIEW-07**: User can see a current time indicator (teal line) on Week and Day views
+- [x] **VIEW-08**: User can see all-day events in a dedicated all-day row above the time grid
 - [x] **VIEW-09**: Calendar page has a left sidebar with mini month picker for quick date navigation
 - [x] **VIEW-10**: Calendar uses BetterR.Me design tokens (teal primary, rounded-xl, sidebar tokens, dark mode)
 - [ ] **VIEW-11**: Calendar defaults to Week view on desktop and Day view on mobile (sm breakpoint)
-- [ ] **VIEW-12**: User can use keyboard shortcuts: D (day), W (week), M (month), T (today), ← → (navigate), C (quick-create), N (new event dialog), / (search), Esc (close)
+- [x] **VIEW-12**: User can use keyboard shortcuts: D (day), W (week), M (month), T (today), ← → (navigate), C (quick-create), N (new event dialog), / (search), Esc (close)
 
 ## Event Management
 
@@ -27,10 +27,10 @@
 - [x] **EVNT-04**: User can create recurring events using the existing RecurrenceRule system (daily, weekly, monthly, yearly with interval)
 - [x] **EVNT-05**: User can edit a single occurrence of a recurring event ("edit this event only") creating an exception record
 - [x] **EVNT-06**: User can edit all occurrences of a recurring event ("edit all events")
-- [ ] **EVNT-07**: User can quick-create an event by clicking a time slot (popover with title, pre-filled time, Enter to save)
-- [ ] **EVNT-08**: User can create an event by click-and-dragging on the time grid (duration pre-filled from drag range)
-- [ ] **EVNT-09**: User can open a full event creation dialog via "+ New Event" button or N key
-- [ ] **EVNT-10**: Full event dialog has a "More options" expansion from quick-create for location, description, recurrence, reminders
+- [x] **EVNT-07**: User can quick-create an event by clicking a time slot (popover with title, pre-filled time, Enter to save)
+- [x] **EVNT-08**: User can create an event by click-and-dragging on the time grid (duration pre-filled from drag range)
+- [x] **EVNT-09**: User can open a full event creation dialog via "+ New Event" button or N key
+- [x] **EVNT-10**: Full event dialog has a "More options" expansion from quick-create for location, description, recurrence, reminders
 
 ## Cross-Domain Aggregation
 

@@ -84,7 +84,7 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 (Defined in REQUIREMENTS.md for v6.0 Calendar & Reminder Notifications)
 
-### Recently Validated (v6.0 Phase 29)
+### Recently Validated (v6.0 Phases 29-32)
 
 - ✓ Database schema for calendar_events, reminders, reminder_defaults, push_subscriptions tables with RLS — v6.0 Phase 29
 - ✓ TypeScript types for all calendar/reminder domain entities — v6.0 Phase 29
@@ -92,6 +92,12 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ Zod validation schemas for calendar events and reminders with cross-field refinements — v6.0 Phase 29
 - ✓ Service worker for push notifications (no fetch interception) — v6.0 Phase 29
 - ✓ Timezone infrastructure (profiles.timezone column, detection hook, profile validation) — v6.0 Phase 29
+- ✓ Calendar event CRUD API with recurrence expansion and exception handling — v6.0 Phase 30
+- ✓ Calendar UI month view with grid, event chips, sidebar, navigation — v6.0 Phase 31
+- ✓ Calendar UI week & day time grid views with hourly rows, event blocks, overlap detection — v6.0 Phase 32
+- ✓ Quick-create (click + drag) and full event dialog with form validation — v6.0 Phase 32
+- ✓ Keyboard shortcuts (D/W/M/T/arrows/C/N/slash/Esc) with input suppression — v6.0 Phase 32
+- ✓ Default view routing (desktop=week, mobile=day) — v6.0 Phase 32
 
 ## Current Milestone: v6.0 Calendar & Reminder Notifications
 
