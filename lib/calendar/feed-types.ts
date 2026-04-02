@@ -59,3 +59,45 @@ export interface CalendarFeedItem {
   /** Optional metadata for rendering (e.g., bill amount, workout duration). */
   meta?: Record<string, unknown>;
 }
+
+/**
+ * Extended calendar event type that carries domain information.
+ * Used when feed items are converted to ExpandedCalendarEvent-compatible
+ * objects for rendering in existing calendar view components.
+ */
+export interface DomainCalendarEvent {
+  // Standard ExpandedCalendarEvent fields
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  start_date: string;
+  start_time: string | null;
+  end_date: string;
+  end_time: string | null;
+  location: string | null;
+  color: string | null;
+  category_id: string | null;
+  is_recurring: boolean;
+  recurrence_rule: null;
+  end_type: null;
+  end_date_recurrence: string | null;
+  end_count: number | null;
+  recurring_event_id: string | null;
+  original_date: string | null;
+  is_exception: boolean;
+  created_at: string;
+  updated_at: string;
+  is_virtual: boolean;
+  // Domain-specific extensions
+  /** Which domain this event comes from (undefined for native calendar events). */
+  _domain?: FeedDomain;
+  /** Whether this item is completed (tasks/habits). */
+  _completed?: boolean;
+  /** Available inline actions. */
+  _actions?: FeedAction[];
+  /** Source ID in the original domain table. */
+  _sourceId?: string;
+  /** Extra metadata for display. */
+  _meta?: Record<string, unknown>;
+}
