@@ -787,6 +787,23 @@
     },
     "toast": {
       "saveError": "Failed to save settings"
+    },
+    "notifications": {
+      "title": "Push Notifications",
+      "description": "Receive reminders for events, tasks, habits, and bills on this device",
+      "enable": "Enable Notifications",
+      "disable": "Disable Notifications",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "denied": "Notifications are blocked by your browser. Please enable them in your browser settings.",
+      "notSupported": "Push notifications are not supported in this browser.",
+      "subscribedDevices": "{count, plural, one {Subscribed on # device} other {Subscribed on # devices}}",
+      "testButton": "Send Test Notification",
+      "testSent": "Test notification sent!",
+      "testError": "Failed to send test notification",
+      "subscribeError": "Failed to enable notifications",
+      "unsubscribeError": "Failed to disable notifications",
+      "explainer": "You'll receive push notifications for upcoming events, task deadlines, habit reminders, and bill due dates. You can disable notifications at any time."
     }
   },
   "projects": {

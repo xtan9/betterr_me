@@ -787,6 +787,23 @@
     },
     "toast": {
       "saveError": "儲存設定失敗"
+    },
+    "notifications": {
+      "title": "推播通知",
+      "description": "在此裝置上接收事件、任務、習慣和帳單的提醒",
+      "enable": "啟用通知",
+      "disable": "停用通知",
+      "enabled": "已啟用",
+      "disabled": "已停用",
+      "denied": "通知已被瀏覽器封鎖。請在瀏覽器設定中啟用。",
+      "notSupported": "此瀏覽器不支援推播通知。",
+      "subscribedDevices": "已在 {count} 台裝置上訂閱",
+      "testButton": "傳送測試通知",
+      "testSent": "測試通知已傳送！",
+      "testError": "傳送測試通知失敗",
+      "subscribeError": "啟用通知失敗",
+      "unsubscribeError": "停用通知失敗",
+      "explainer": "您將收到即將到來的事件、任務截止日期、習慣提醒和帳單到期日的推播通知。您可以隨時停用通知。"
     }
   },
   "projects": {
