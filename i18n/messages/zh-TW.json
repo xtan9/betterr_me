@@ -1768,6 +1768,72 @@
     },
     "comingSoon": "即將推出",
     "noEvents": "暫無事件",
-    "error": "日曆載入失敗，請嘗試重新整理頁面。"
+    "error": "日曆載入失敗，請嘗試重新整理頁面。",
+    "timeGrid": {
+      "allDay": "全天",
+      "allDayMore": "+{count} 更多",
+      "collapseAllDay": "收起"
+    },
+    "quickCreate": {
+      "titlePlaceholder": "新增標題",
+      "moreOptions": "更多選項",
+      "saving": "儲存中...",
+      "saveFailed": "建立事件失敗",
+      "titleRequired": "標題不能為空"
+    },
+    "eventDialog": {
+      "newEvent": "新事件",
+      "editEvent": "編輯事件",
+      "title": "標題",
+      "titlePlaceholder": "新增標題",
+      "date": "日期",
+      "startTime": "開始時間",
+      "endTime": "結束時間",
+      "allDay": "全天",
+      "location": "地點",
+      "locationPlaceholder": "新增地點",
+      "description": "描述",
+      "descriptionPlaceholder": "新增描述",
+      "category": "分類",
+      "color": "顏色",
+      "recurrence": "重複",
+      "reminders": "提醒",
+      "save": "儲存",
+      "cancel": "取消",
+      "delete": "刪除",
+      "deleteConfirm": "確定要刪除這個事件嗎？",
+      "saveFailed": "儲存事件失敗",
+      "deleteFailed": "刪除事件失敗",
+      "colors": {
+        "default": "預設",
+        "teal": "青色",
+        "blue": "藍色",
+        "red": "紅色",
+        "green": "綠色",
+        "purple": "紫色",
+        "orange": "橘色"
+      }
+    },
+    "shortcuts": {
+      "dayView": "日檢視 (D)",
+      "weekView": "週檢視 (W)",
+      "monthView": "月檢視 (M)",
+      "today": "今天 (T)",
+      "navigate": "導航 (← →)",
+      "quickCreate": "快速建立 (C)",
+      "newEvent": "新事件 (N)",
+      "search": "搜尋 (/)",
+      "close": "關閉 (Esc)"
+    },
+    "timeLabels": {
+      "am": "上午",
+      "pm": "下午"
+    },
+    "weekHeader": {
+      "rangeTitle": "{start} – {end}, {year}"
+    },
+    "dayHeader": {
+      "dateTitle": "{weekday}, {date}"
+    }
   }
 }

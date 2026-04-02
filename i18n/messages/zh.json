@@ -1768,6 +1768,72 @@
     },
     "comingSoon": "即将推出",
     "noEvents": "暂无事件",
-    "error": "日历加载失败，请尝试刷新页面。"
+    "error": "日历加载失败，请尝试刷新页面。",
+    "timeGrid": {
+      "allDay": "全天",
+      "allDayMore": "+{count} 更多",
+      "collapseAllDay": "收起"
+    },
+    "quickCreate": {
+      "titlePlaceholder": "添加标题",
+      "moreOptions": "更多选项",
+      "saving": "保存中...",
+      "saveFailed": "创建事件失败",
+      "titleRequired": "标题不能为空"
+    },
+    "eventDialog": {
+      "newEvent": "新事件",
+      "editEvent": "编辑事件",
+      "title": "标题",
+      "titlePlaceholder": "添加标题",
+      "date": "日期",
+      "startTime": "开始时间",
+      "endTime": "结束时间",
+      "allDay": "全天",
+      "location": "地点",
+      "locationPlaceholder": "添加地点",
+      "description": "描述",
+      "descriptionPlaceholder": "添加描述",
+      "category": "分类",
+      "color": "颜色",
+      "recurrence": "重复",
+      "reminders": "提醒",
+      "save": "保存",
+      "cancel": "取消",
+      "delete": "删除",
+      "deleteConfirm": "确定要删除这个事件吗？",
+      "saveFailed": "保存事件失败",
+      "deleteFailed": "删除事件失败",
+      "colors": {
+        "default": "默认",
+        "teal": "青色",
+        "blue": "蓝色",
+        "red": "红色",
+        "green": "绿色",
+        "purple": "紫色",
+        "orange": "橙色"
+      }
+    },
+    "shortcuts": {
+      "dayView": "日视图 (D)",
+      "weekView": "周视图 (W)",
+      "monthView": "月视图 (M)",
+      "today": "今天 (T)",
+      "navigate": "导航 (← →)",
+      "quickCreate": "快速创建 (C)",
+      "newEvent": "新事件 (N)",
+      "search": "搜索 (/)",
+      "close": "关闭 (Esc)"
+    },
+    "timeLabels": {
+      "am": "上午",
+      "pm": "下午"
+    },
+    "weekHeader": {
+      "rangeTitle": "{start} – {end}, {year}"
+    },
+    "dayHeader": {
+      "dateTitle": "{weekday}, {date}"
+    }
   }
 }
