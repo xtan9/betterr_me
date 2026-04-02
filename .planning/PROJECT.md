@@ -84,7 +84,7 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 (Defined in REQUIREMENTS.md for v6.0 Calendar & Reminder Notifications)
 
-### Recently Validated (v6.0 Phases 29-32)
+### Recently Validated (v6.0 Phases 29-35)
 
 - ✓ Database schema for calendar_events, reminders, reminder_defaults, push_subscriptions tables with RLS — v6.0 Phase 29
 - ✓ TypeScript types for all calendar/reminder domain entities — v6.0 Phase 29
@@ -98,6 +98,9 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ Quick-create (click + drag) and full event dialog with form validation — v6.0 Phase 32
 - ✓ Keyboard shortcuts (D/W/M/T/arrows/C/N/slash/Esc) with input suppression — v6.0 Phase 32
 - ✓ Default view routing (desktop=week, mobile=day) — v6.0 Phase 32
+- ✓ Cross-domain feed aggregation (tasks, habits, bills, workouts on calendar) with inline actions — v6.0 Phase 33
+- ✓ Push notification infrastructure (VAPID, service worker registration, subscription API, settings toggle) — v6.0 Phase 34
+- ✓ Email notification infrastructure (Resend + React Email templates, HMAC unsubscribe, settings toggle) — v6.0 Phase 35
 
 ## Current Milestone: v6.0 Calendar & Reminder Notifications
 
