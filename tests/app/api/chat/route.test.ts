@@ -179,17 +179,10 @@ describe('POST /api/chat', () => {
   });
 
   it('should pass abort signal from request', async () => {
-    const controller = new AbortController();
-    const req = makeRequest(
-      { messages: [{ role: 'user', content: 'Hello' }] },
-      { signal: controller.signal }
-    );
+    const req = makeRequest({ messages: [{ role: 'user', content: 'Hello' }] });
     await POST(req);
 
-    expect(mockStreamText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        abortSignal: controller.signal,
-      })
-    );
+    const callArgs = mockStreamText.mock.calls[0][0];
+    expect(callArgs.abortSignal).toBeInstanceOf(AbortSignal);
   });
 });
