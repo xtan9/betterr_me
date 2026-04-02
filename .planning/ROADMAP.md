@@ -164,6 +164,10 @@
 3. Every reminder email includes a working unsubscribe link
 4. Templates exist for event reminder, task due, habit nudge, and bill due
 
+**Plans:** 2 plans
+- [ ] 35-01-PLAN.md — Email infrastructure: packages, migration, types, Resend client, templates, unsubscribe tokens
+- [ ] 35-02-PLAN.md — Integration: send utility, unsubscribe API, settings UI, i18n, tests
+
 ### Phase 36: Reminder Cron, Preferences & Polish
 
 **Goal:** Cron-based reminder dispatch, smart defaults, quiet hours, user preferences, responsive mobile layout, and i18n.
@@ -212,5 +216,5 @@
 | 32. Calendar UI — Week & Day Views | v6.0 | 4/4 | Complete    | 2026-04-02 |
 | 33. Cross-Domain Feed Aggregation | v6.0 | 1/1 | Complete    | 2026-04-02 |
 | 34. Push Notification Infrastructure | v6.0 | 5/6 | Complete    | 2026-04-02 |
-| 35. Email Notification Infrastructure | v6.0 | 0/? | Not started | — |
+| 35. Email Notification Infrastructure | v6.0 | 0/2 | Not started | — |
 | 36. Reminder Cron & Preferences | v6.0 | 0/? | Not started | — |
