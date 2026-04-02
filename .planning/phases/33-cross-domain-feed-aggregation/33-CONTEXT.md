@@ -33,7 +33,7 @@ Unified feed API (`/api/calendar/feed`) that aggregates tasks, habits, bills, an
 
 ### Inline Actions
 - **D-12:** Tasks show a circle checkbox. Clicking toggles `is_completed` via `PATCH /api/tasks/:id`. Optimistic SWR update on the feed cache. (AGGR-07)
-- **D-13:** Habits show a square checkbox. Clicking toggles the habit log via existing habit log API. Optimistic SWR update. (AGGR-08)
+- **D-13:** Habits show a square checkbox. Clicking toggles the habit log via `POST /api/habits/{id}/toggle` (existing toggle endpoint that handles both logging and unlogging). Optimistic SWR update. (AGGR-08)
 - **D-14:** Bills show a click action to mark paid/dismissed via existing bills API. Optimistic SWR update. (AGGR-09)
 - **D-15:** Workouts: clicking navigates to the workout detail page via `router.push`. (AGGR-10)
 
@@ -96,7 +96,8 @@ Unified feed API (`/api/calendar/feed`) that aggregates tasks, habits, bills, an
 
 ### Domain APIs (for inline actions)
 - `app/api/tasks/[id]/route.ts` — PATCH for task completion toggle
-- `app/api/habits/[id]/logs/route.ts` — POST/DELETE for habit log toggle
+- `app/api/habits/[id]/logs/route.ts` — GET for habit log queries (no POST/DELETE)
+- `app/api/habits/[id]/toggle/route.ts` — POST to toggle habit log (creates or removes via HabitLogsDB.toggleLog)
 - `app/api/money/bills/[id]/route.ts` — PATCH for bill paid/dismissed
 
 ### i18n
