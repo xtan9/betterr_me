@@ -308,7 +308,8 @@ describe("normalizeWorkouts", () => {
       domain: "workouts",
       title: "Morning Gym",
       date: "2026-04-01",
-      allDay: true,
+      startTime: "07:00",
+      allDay: false,
       completed: true,
       actions: ["navigate_workout"],
     });

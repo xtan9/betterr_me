@@ -158,17 +158,18 @@ export function normalizeWorkouts(
   workouts: Workout[],
 ): CalendarFeedItem[] {
   return workouts.map((w) => {
-    // Extract date from ISO started_at timestamp
+    // Extract date and time from ISO started_at timestamp
     const date = w.started_at.split("T")[0];
+    const timePart = w.started_at.split("T")[1]?.slice(0, 5) || null;
     return {
       id: `workouts:${w.id}`,
       domain: "workouts" as FeedDomain,
       sourceId: w.id,
       title: w.title,
       date,
-      startTime: null,
+      startTime: timePart,
       endTime: null,
-      allDay: true,
+      allDay: !timePart,
       completed: w.status === "completed",
       actions: ["navigate_workout" as const],
       meta: { durationSeconds: w.duration_seconds, status: w.status },
