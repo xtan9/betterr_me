@@ -80,7 +80,7 @@ describe("WeekView", () => {
   });
 
   it("renders TimeGrid component", () => {
-    const { container } = render(
+    render(
       <WeekView
         currentDate={currentDate}
         weekStartDay={0}
