@@ -1777,7 +1777,8 @@
     "quickCreate": {
       "titlePlaceholder": "Add title",
       "moreOptions": "More options",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "saveFailed": "Failed to create event"
     },
     "eventDialog": {
       "newEvent": "New Event",
@@ -1799,7 +1800,9 @@
       "save": "Save",
       "cancel": "Cancel",
       "delete": "Delete",
-      "deleteConfirm": "Are you sure you want to delete this event?"
+      "deleteConfirm": "Are you sure you want to delete this event?",
+      "saveFailed": "Failed to save event",
+      "deleteFailed": "Failed to delete event"
     },
     "shortcuts": {
       "dayView": "Day view (D)",

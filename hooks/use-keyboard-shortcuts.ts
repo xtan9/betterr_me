@@ -84,7 +84,6 @@ export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers) {
           handlers.onNewEvent();
           break;
         case "/":
-          e.preventDefault();
           handlers.onSearch();
           break;
         case "Escape":
@@ -95,5 +94,20 @@ export function useKeyboardShortcuts(handlers: KeyboardShortcutHandlers) {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handlers]);
+    // Individual handler properties listed to avoid re-registering on every render
+    // when the parent passes a new object reference
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    handlers.onDayView,
+    handlers.onWeekView,
+    handlers.onMonthView,
+    handlers.onToday,
+    handlers.onPrev,
+    handlers.onNext,
+    handlers.onQuickCreate,
+    handlers.onNewEvent,
+    handlers.onSearch,
+    handlers.onEscape,
+    handlers.isOverlayOpen,
+  ]);
 }

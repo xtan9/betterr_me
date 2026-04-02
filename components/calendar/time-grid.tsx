@@ -7,7 +7,7 @@ import { AllDayRow } from "./all-day-row";
 import { CurrentTimeIndicator } from "./current-time-indicator";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 
-const HOUR_HEIGHT = 48; // pixels per hour
+export const HOUR_HEIGHT = 48; // pixels per hour
 const TOTAL_HOURS = 24;
 const GRID_HEIGHT = HOUR_HEIGHT * TOTAL_HOURS; // 1152px
 const SCROLL_TO_HOUR = 8; // Scroll to 8 AM on mount
@@ -44,12 +44,12 @@ export function timeToMinutes(time: string): number {
   return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
 }
 
-/** Returns event duration in minutes (default 60 if no end_time) */
+/** Returns event duration in minutes (default 60 if no end_time, minimum 0) */
 function getDurationMinutes(event: ExpandedCalendarEvent): number {
   if (!event.start_time) return 60;
   const startMin = timeToMinutes(event.start_time);
   const endMin = event.end_time ? timeToMinutes(event.end_time) : startMin + 60;
-  return endMin - startMin;
+  return Math.max(endMin - startMin, 0);
 }
 
 /** Returns formatted hour label like "12 AM", "1 PM" */
@@ -183,6 +183,8 @@ export function TimeGrid({
     (e: React.MouseEvent<HTMLDivElement>) => {
       // Only handle left clicks on the grid area (not on events)
       if (e.button !== 0) return;
+      // Don't start drag when clicking on event blocks or buttons
+      if ((e.target as HTMLElement).closest("button")) return;
 
       const gridEl = e.currentTarget;
       const rect = gridEl.getBoundingClientRect();
@@ -297,7 +299,7 @@ export function TimeGrid({
 
           {/* Day columns */}
           {columnsData.map(
-            ({ date, dateStr, timedEvents, overlapInfo }, colIdx) => {
+            ({ dateStr, timedEvents, overlapInfo }, colIdx) => {
               const isToday = dateStr === today;
 
               return (
@@ -333,8 +335,10 @@ export function TimeGrid({
                       ? timeToMinutes(event.end_time)
                       : startMin + 60;
                     const top = (startMin / 60) * HOUR_HEIGHT;
-                    const height =
-                      ((endMin - startMin) / 60) * HOUR_HEIGHT;
+                    const height = Math.max(
+                      ((endMin - startMin) / 60) * HOUR_HEIGHT,
+                      4,
+                    );
                     const colWidth = 100 / info.totalColumns;
                     const left = `${info.column * colWidth}%`;
                     const width = `${colWidth}%`;

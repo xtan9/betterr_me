@@ -121,21 +121,23 @@ export function EventDialog({
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
+          console.error("Calendar event save failed:", data);
           form.setError("root", {
-            message: data.error || "Failed to save event",
+            message: data.error || t("eventDialog.saveFailed"),
           });
           return;
         }
 
         onSaved();
         onClose();
-      } catch {
-        form.setError("root", { message: "Failed to save event" });
+      } catch (err) {
+        console.error("Failed to save calendar event:", err);
+        form.setError("root", { message: t("eventDialog.saveFailed") });
       } finally {
         setSaving(false);
       }
     },
-    [isEditing, event, onSaved, onClose, form],
+    [isEditing, event, onSaved, onClose, form, t],
   );
 
   const handleDelete = useCallback(async () => {
@@ -150,16 +152,18 @@ export function EventDialog({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        console.error("Calendar event delete failed:", data);
         form.setError("root", {
-          message: data.error || "Failed to delete event",
+          message: data.error || t("eventDialog.deleteFailed"),
         });
         return;
       }
 
       onSaved();
       onClose();
-    } catch {
-      form.setError("root", { message: "Failed to delete event" });
+    } catch (err) {
+      console.error("Failed to delete calendar event:", err);
+      form.setError("root", { message: t("eventDialog.deleteFailed") });
     } finally {
       setDeleting(false);
     }

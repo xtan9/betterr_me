@@ -69,7 +69,7 @@ describe("DayView", () => {
   });
 
   it("renders TimeGrid component", () => {
-    const { container } = render(
+    render(
       <DayView currentDate={currentDate} events={emptyEvents} today={today} />,
     );
     // TimeGrid renders hour labels

@@ -114,18 +114,20 @@ export function EventQuickCreate({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "Failed to create event");
+        console.error("Calendar quick-create failed:", data);
+        setError(data.error || t("quickCreate.saveFailed"));
         return;
       }
 
       onSaved();
       onClose();
-    } catch {
-      setError("Failed to create event");
+    } catch (err) {
+      console.error("Failed to quick-create calendar event:", err);
+      setError(t("quickCreate.saveFailed"));
     } finally {
       setSaving(false);
     }
-  }, [title, date, startTime, endTime, onSaved, onClose]);
+  }, [title, date, startTime, endTime, onSaved, onClose, t]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

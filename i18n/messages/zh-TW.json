@@ -1777,7 +1777,8 @@
     "quickCreate": {
       "titlePlaceholder": "新增標題",
       "moreOptions": "更多選項",
-      "saving": "儲存中..."
+      "saving": "儲存中...",
+      "saveFailed": "建立事件失敗"
     },
     "eventDialog": {
       "newEvent": "新事件",
@@ -1799,7 +1800,9 @@
       "save": "儲存",
       "cancel": "取消",
       "delete": "刪除",
-      "deleteConfirm": "確定要刪除這個事件嗎？"
+      "deleteConfirm": "確定要刪除這個事件嗎？",
+      "saveFailed": "儲存事件失敗",
+      "deleteFailed": "刪除事件失敗"
     },
     "shortcuts": {
       "dayView": "日檢視 (D)",

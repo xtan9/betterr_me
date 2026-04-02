@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-
-const HOUR_HEIGHT = 48; // pixels per hour, matching TimeGrid
+import { HOUR_HEIGHT } from "./time-grid";
 
 /**
  * Teal horizontal line with circle dot indicating current time.
