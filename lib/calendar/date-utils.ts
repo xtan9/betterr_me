@@ -105,3 +105,57 @@ export function groupEventsByDate(
 
   return map;
 }
+
+/**
+ * Returns an array of 7 Date objects for the week containing `date`,
+ * starting from `weekStartDay`.
+ *
+ * @param date - Any date within the desired week
+ * @param weekStartDay - 0=Sunday, 1=Monday, ..., 6=Saturday
+ */
+export function getWeekDates(date: Date, weekStartDay: number): Date[] {
+  const day = date.getDay();
+  const daysBack = (day - weekStartDay + 7) % 7;
+  const weekStart = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate() - daysBack,
+  );
+
+  const dates: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    dates.push(
+      new Date(
+        weekStart.getFullYear(),
+        weekStart.getMonth(),
+        weekStart.getDate() + i,
+      ),
+    );
+  }
+
+  return dates;
+}
+
+/**
+ * Returns the padded date range (first and last dates) for the week containing `date`.
+ * Useful for constructing API query parameters for week view.
+ */
+export function getWeekDateRange(
+  date: Date,
+  weekStartDay: number,
+): { startDate: string; endDate: string } {
+  const dates = getWeekDates(date, weekStartDay);
+  return {
+    startDate: getLocalDateString(dates[0]),
+    endDate: getLocalDateString(dates[6]),
+  };
+}
+
+/**
+ * Returns the date range for a single day.
+ * Both startDate and endDate are the same date string.
+ */
+export function getDayDateRange(date: Date): { startDate: string; endDate: string } {
+  const dateStr = getLocalDateString(date);
+  return { startDate: dateStr, endDate: dateStr };
+}
