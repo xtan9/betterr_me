@@ -803,7 +803,13 @@
       "testError": "Failed to send test notification",
       "subscribeError": "Failed to enable notifications",
       "unsubscribeError": "Failed to disable notifications",
-      "explainer": "You'll receive push notifications for upcoming events, task deadlines, habit reminders, and bill due dates. You can disable notifications at any time."
+      "explainer": "You'll receive push notifications for upcoming events, task deadlines, habit reminders, and bill due dates. You can disable notifications at any time.",
+      "emailTitle": "Email Notifications",
+      "emailDescription": "Receive reminder emails for events, tasks, habits, and bills",
+      "emailExplainer": "Email reminders are sent to your account email address. You can also unsubscribe from any email using the link in the footer.",
+      "emailEnabled": "Email notifications enabled",
+      "emailDisabled": "Email notifications disabled",
+      "emailToggleError": "Failed to update email preference"
     }
   },
   "projects": {
