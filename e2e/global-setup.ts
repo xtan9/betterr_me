@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
+const TEST_DATA_PREFIX = 'E2E Test -';
+
 const SEED_HABITS = [
   { name: 'E2E Test - Seed Habit 1' },
   { name: 'E2E Test - Seed Habit 2' },
@@ -17,10 +19,10 @@ const SEED_TASKS = [
 
 /**
  * Global setup for E2E tests.
- * Seeds the test account with a few habits so that tests expecting
- * checkboxes on the dashboard (complete-habit, accessibility, cross-browser)
- * always have something to interact with — even when running in parallel
- * before create-habit tests have finished.
+ *
+ * 1. Cleans up leftover test data from cancelled runs (teardown may not have run).
+ * 2. Seeds the test account with habits and tasks so that tests expecting
+ *    data on the dashboard always have something to interact with.
  */
 async function globalSetup() {
   try {
@@ -48,6 +50,46 @@ async function globalSetup() {
     const userId = authData.user.id;
 
     try {
+      // --- Clean up leftover test data from previous cancelled runs ---
+      // When CI runs are cancelled (e.g. cancel-in-progress), teardown doesn't
+      // execute and "E2E Test -" data accumulates. Leftover habits can push the
+      // test user past MAX_HABITS_PER_USER, causing create-habit tests to fail.
+      // Tasks are cleaned for a fresh slate.
+      const { data: leftoverHabits } = await supabase
+        .from('habits')
+        .select('id, name')
+        .eq('user_id', userId)
+        .ilike('name', `${TEST_DATA_PREFIX}%`);
+
+      if (leftoverHabits && leftoverHabits.length > 0) {
+        const habitIds = leftoverHabits.map((h) => h.id);
+        console.log(`[setup] Cleaning up ${leftoverHabits.length} leftover test habit(s) from previous run...`);
+
+        await supabase.from('habit_logs').delete().in('habit_id', habitIds);
+        const { error: deleteError } = await supabase.from('habits').delete().in('id', habitIds);
+        if (deleteError) {
+          console.error('[setup] Failed to clean up leftover habits:', deleteError.message);
+        } else {
+          console.log(`[setup] Cleaned up ${leftoverHabits.length} leftover test habit(s)`);
+        }
+      }
+
+      const { data: leftoverTasks } = await supabase
+        .from('tasks')
+        .select('id, title')
+        .eq('user_id', userId)
+        .ilike('title', `${TEST_DATA_PREFIX}%`);
+
+      if (leftoverTasks && leftoverTasks.length > 0) {
+        const taskIds = leftoverTasks.map((t) => t.id);
+        console.log(`[setup] Cleaning up ${leftoverTasks.length} leftover test task(s)...`);
+        const { error: deleteError } = await supabase.from('tasks').delete().in('id', taskIds);
+        if (deleteError) {
+          console.error('[setup] Failed to clean up leftover tasks:', deleteError.message);
+        }
+      }
+
+      // --- Seed test data ---
       // Check which seed habits already exist
       const { data: existing } = await supabase
         .from('habits')
