@@ -36,3 +36,7 @@ export { CalendarEventsDB, calendarEventsDB } from "./calendar-events";
 export { RemindersDB, remindersDB } from "./reminders";
 export { PushSubscriptionsDB, pushSubscriptionsDB } from "./push-subscriptions";
 export { ReminderDefaultsDB, reminderDefaultsDB } from "./reminder-defaults";
+
+// Chat DB classes
+export { ConversationsDB } from "./conversations";
+export { ChatMessagesDB } from "./chat-messages";

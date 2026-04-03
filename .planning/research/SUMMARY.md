@@ -1,179 +1,98 @@
-# Project Research Summary
+# Research Summary: AI Chat Foundation
 
-**Project:** BetterR.Me
-**Domain:** Calendar scheduling + push/email notifications for personal productivity
-**Researched:** 2026-03-30
-**Confidence:** HIGH
+**Domain:** AI chat interface with streaming LLM responses
+**Researched:** 2026-04-02
+**Overall confidence:** HIGH
 
 ## Executive Summary
 
-Adding a calendar domain and notification system to BetterR.Me is architecturally well-suited to the existing codebase. The project already has recurring event logic (`RecurrenceRule`), three calendar UIs (habit heatmap, journal, bill), a cron infrastructure (Vercel Cron), and date handling utilities. The new work splits cleanly into two layers: a calendar UI/data layer (familiar patterns) and a notification delivery layer (entirely new infrastructure).
+Adding an AI chat interface to BetterR.Me is a well-scoped, low-to-medium complexity addition. The existing codebase provides all foundational infrastructure (auth, Supabase DB, design tokens, i18n, sidebar navigation, responsive layout), and the Vercel AI SDK v6 provides a battle-tested abstraction for streaming chat with an OpenAI-compatible proxy. Only 5 new npm packages are needed, with an estimated client bundle increase of ~28KB gzipped.
 
-The recommended approach is Calendar-First: build the calendar domain with event CRUD and cross-domain aggregation first, then layer push + email notification delivery on top. This matches the design spec and delivers visible value early. Only 4 new npm packages are needed (all server-only, zero client bundle impact), and the calendar grid should be built custom rather than using a library — the design spec's multi-domain aggregation with inline actions doesn't fit any existing calendar library's model.
+The recommended approach uses the Vercel AI SDK (`ai` + `@ai-sdk/react` + `@ai-sdk/openai`) for the streaming pipeline. The `@ai-sdk/openai` package supports custom `baseURL` natively via `createOpenAI({ baseURL: 'https://llm.betterr.me/v1' })`, making it the simplest integration path. On the client, the `useChat` hook from `@ai-sdk/react` manages message state, streaming status, send/stop/regenerate -- eliminating 200+ lines of custom streaming code. For rendering LLM markdown responses, `react-markdown` + `remark-gfm` is the standard choice.
 
-Key risks center on three areas: (1) service worker + Next.js App Router interaction (keep SW minimal — push events only, no fetch interception), (2) timezone handling for reminder `fire_at` computation (store user IANA timezone, compute in UTC), and (3) Vercel Cron reliability at 1-minute intervals (implement processing locks and retry logic).
+The main risks are: (1) streaming response buffering in Vercel production (compression/caching layers silently killing SSE), (2) Vercel function timeout for long Claude responses (60s on Hobby plan), and (3) the LLM proxy's compatibility with the AI SDK's streaming protocol (must verify with actual proxy before building UI). All three are addressable with known mitigation strategies documented in PITFALLS.md.
+
+A peer dependency update is required: React must be bumped from 19.1.0 to 19.1.2+ (latest 19.1.5) to satisfy `@ai-sdk/react`'s peer dep, and zod's lockfile entry needs refreshing to 3.25.76 for the `ai` package. Both are patch-level changes with no breaking impact.
 
 ## Key Findings
 
-### Recommended Stack
+**Stack:** 5 new packages (`ai`, `@ai-sdk/react`, `@ai-sdk/openai`, `react-markdown`, `remark-gfm`) + React/zod version bumps. See [STACK.md](STACK.md).
 
-Only 4 new packages needed — all server-only. See [STACK.md](STACK.md) for details.
+**Architecture:** Server-side API route proxies to llm.betterr.me via AI SDK `streamText()`. Client uses `useChat()` hook. Auth-gated with existing Supabase pattern. Chat is entirely additive -- no existing files need significant modification. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**New dependencies:**
-- `web-push` ^3.6.7 — server-side Web Push protocol (VAPID auth, payload encryption)
-- `resend` ^6.10.0 — transactional email delivery (3,000/month free tier, better DX than SendGrid)
-- `@react-email/components` + `@react-email/render` — type-safe email templates as React components
-
-**Build custom (not a library):**
-- Calendar grid — custom CSS Grid; react-big-calendar and @schedule-x/react fight Tailwind/design tokens and can't support multi-domain inline actions
-- Service worker — hand-written `public/sw.js` (~20 lines); @serwist/next is overkill for push-only use
-
-**Already in stack (no additions):**
-- `date-fns@4.1.0` — all calendar date math
-- `react-day-picker@8.10.1` — mini month picker
-- Vercel Cron — reminder delivery scheduling
-- `RecurrenceRule` type system — event recurrence
-
-### Expected Features
-
-See [FEATURES.md](FEATURES.md) for full analysis.
-
-**Must have (table stakes — 15 features):**
-- Month/Week/Day views with navigation
-- Standalone event CRUD with recurrence
-- Cross-domain aggregation feed (tasks, habits, bills, workouts)
-- Color-coded domain layers with toggles
-- All-day events and quick-create from time slots
-- Push notifications with browser permission flow
-- Reminder creation (relative + absolute) with cron delivery
-- Smart reminder defaults per domain type
-- Responsive layout (mobile day view default)
-
-**Should have (differentiators — 9 features):**
-- Unified life-on-a-timeline (5 domains on one calendar — unique to BetterR.Me)
-- Inline cross-domain actions (toggle tasks/habits/bills from calendar)
-- Email notification channel alongside push
-- Quiet hours for notifications
-- Click-and-drag event creation
-- Keyboard shortcuts (D/W/M/T/C/N)
-- Snooze and notification click-through
-
-**Defer (out of scope):**
-- Google Calendar/iCal sync, drag-and-drop rescheduling, collaborative calendars, natural language creation, time analytics, SMS notifications
-
-### Architecture Approach
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for full system design.
-
-**Major components:**
-1. **Calendar data layer** — `CalendarEventsDB`, `RemindersDB`, `PushSubscriptionsDB`, `ReminderDefaultsDB` (follows existing DB class pattern)
-2. **Feed aggregation API** — `/api/calendar/feed` querying 5 domain DB classes in parallel, returning unified `CalendarItem[]`
-3. **Calendar UI** — Custom CSS Grid views (Month/Week/Day) with sidebar, all using BetterR.Me design tokens
-4. **Notification delivery** — Service worker for push, Resend for email, Vercel Cron for scheduling
-5. **Shared recurrence engine** — Extract from `lib/recurring-tasks/` to `lib/recurrence/` for reuse by calendar events
-
-### Critical Pitfalls
-
-See [PITFALLS.md](PITFALLS.md) for all 12 pitfalls.
-
-1. **Service worker + Next.js conflicts** — SW fetch listeners intercept RSC payloads. Prevention: SW handles only `push`/`notificationclick` events, no fetch handler.
-2. **Push permission UX** — requesting on page load gets permanently blocked. Prevention: two-step in-app explainer before browser prompt, triggered only from settings page.
-3. **Timezone mismatch for `fire_at`** — events store local DATE/TIME but cron runs UTC. Prevention: store user IANA timezone in profiles, compute `fire_at` as UTC TIMESTAMPTZ.
-4. **Vercel Cron reliability** — no built-in retry or dedup. Prevention: `status='processing'` lock, LIMIT batching, retry_count column.
-5. **Calendar rendering performance** — 5 domains can produce 300+ items/month. Prevention: server-side expansion, `sources` query param for filtering, 500-item cap.
+**Critical pitfall:** Streaming responses buffered by Vercel compression/caching layers -- must test on Vercel preview deploys, not just local dev. Set `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no` headers. See [PITFALLS.md](PITFALLS.md).
 
 ## Implications for Roadmap
 
-Based on research, suggested 8-phase structure (continuing from Phase 29):
+Based on research, suggested phase structure:
 
-### Phase 29: Database Schema & Types
-**Rationale:** Foundation layer with zero dependencies — everything else needs this
-**Delivers:** 4 new Supabase tables, TypeScript types, DB classes, Zod validations
-**Avoids:** Pitfall #3 (timezone) — add IANA timezone to profiles table here
+1. **Database + Types + AI Provider** - Foundation layer
+   - Addresses: Supabase tables (conversations, chat_messages), DB classes, Zod schemas, AI SDK provider config
+   - Avoids: Pitfall #1 (API key leak) by establishing server-only proxy pattern from the start
+   - Avoids: Pitfall #5 (auth inside stream) by establishing auth-then-stream pattern
 
-### Phase 30: Calendar Event CRUD API
-**Rationale:** API layer before UI, testable independently
-**Delivers:** Event create/read/update/delete API routes, recurring event expansion
-**Uses:** RecurrenceRule reuse from existing recurring tasks
+2. **Streaming API Route** - Backend that can be tested with curl
+   - Addresses: POST /api/chat with auth, streamText, response headers
+   - Avoids: Pitfall #2 (buffering) by setting correct SSE headers immediately
+   - Avoids: Pitfall #3 (timeout) by setting maxDuration and max_tokens
+   - Avoids: Pitfall #4 (abort handling) by passing request.signal to upstream
 
-### Phase 31: Calendar UI — Month View
-**Rationale:** First visible value; month view is simplest, validates the CSS Grid approach
-**Delivers:** Calendar page, month grid, sidebar with mini-cal + layer toggles, event rendering
+3. **Chat UI Components** - The visible interface
+   - Addresses: Message bubbles, input, markdown rendering, loading/error states
+   - Avoids: Pitfall #6 (SSE parsing) by using AI SDK's built-in protocol handling
+   - Avoids: Pitfall #7 (unbounded context) by implementing message windowing
 
-### Phase 32: Calendar UI — Week & Day Views
-**Rationale:** Week view is the core experience; Day view is mobile default
-**Delivers:** Time grid with hourly rows, click-to-create, current time indicator, keyboard shortcuts
+4. **Conversation Persistence** - Durability and multi-conversation
+   - Addresses: Save/load messages to DB, conversation list, auto-titles
+   - Depends on: Phase 1 (DB tables) and Phase 3 (working UI)
 
-### Phase 33: Cross-Domain Feed Aggregation
-**Rationale:** Core differentiator — needs all views working first
-**Delivers:** `/api/calendar/feed` endpoint, inline task/habit/bill actions, SWR integration
-**Avoids:** Pitfall #6 (performance), #8 (SWR coherence)
+5. **Navigation + i18n + Polish** - Integration with existing app
+   - Addresses: Sidebar nav item, all 3 locale translations, empty states, keyboard shortcuts
+   - Depends on: Phase 3-4 (feature-complete chat)
 
-### Phase 34: Push Notification Infrastructure
-**Rationale:** New infra — needs careful isolation from existing app
-**Delivers:** Service worker, VAPID keys, push subscription flow, browser permission UX
-**Avoids:** Pitfall #1 (SW conflicts), #2 (permission UX)
+**Phase ordering rationale:**
+- DB schema first (Phase 1) because API routes need tables to persist messages
+- API before UI (Phase 2 before 3) because `useChat` needs a working endpoint
+- Core chat before persistence (Phase 3 before 4) because single-session chat validates the proxy integration
+- Polish last (Phase 5) because navigation and i18n only matter when the feature works
 
-### Phase 35: Email Notification Infrastructure
-**Rationale:** Depends on push infra for shared reminder model
-**Delivers:** Resend integration, email templates, domain verification
-**Uses:** resend, @react-email/components
-
-### Phase 36: Reminder Cron & Preferences
-**Rationale:** Ties everything together — needs both push + email working
-**Delivers:** Cron job, reminder preferences UI, quiet hours, smart defaults
-**Avoids:** Pitfall #4 (cron reliability), #11 (fire_at recomputation)
-
-### Phase Ordering Rationale
-
-- Schema first (29) because every other phase needs the tables
-- API before UI (30 before 31-32) because components need data to render
-- Month view before Week/Day (31 before 32) because it's simpler and validates CSS Grid
-- Aggregation after all views (33) because inline actions need the calendar working
-- Push before Email (34 before 35) because push is primary channel and email shares the reminder model
-- Cron last (36) because it integrates push + email delivery
-
-### Research Flags
-
-Phases needing deeper research during planning:
-- **Phase 34:** Service worker + Next.js 16 interaction needs careful testing
-- **Phase 35:** Resend domain verification and DNS setup is environment-specific
-
-Phases with standard patterns (skip research-phase):
-- **Phase 29:** Standard Supabase migration + DB class pattern
-- **Phase 30:** Standard API route pattern with Zod validation
-- **Phase 31-32:** Custom CSS Grid, well-understood approach
+**Research flags for phases:**
+- Phase 2: MUST test streaming on Vercel preview deploy (not just localhost). Compression buffering only manifests in production.
+- Phase 1-2: MUST verify llm.betterr.me proxy compatibility with AI SDK streaming protocol early. If incompatible, fallback to manual SSE handling.
+- Phase 3: Standard UI work, no research needed
+- Phase 4: Standard Supabase CRUD, no research needed
+- Phase 5: Standard i18n/polish, no research needed
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Only 4 packages, all well-established, versions verified |
-| Features | HIGH | Based on competitor analysis + existing design spec |
-| Architecture | HIGH | Follows established codebase patterns, clear integration points |
-| Pitfalls | HIGH | Domain-specific risks well-documented, prevention strategies concrete |
+| Stack | HIGH | All packages verified via npm registry (versions, peer deps). AI SDK v6 docs confirm `createOpenAI({ baseURL })` pattern. |
+| Features | HIGH | Feature scope clearly defined in PROJECT.md. Table stakes / differentiators well-understood from ChatGPT/Claude.ai patterns. |
+| Architecture | HIGH | Follows existing BetterR.Me patterns (DB classes, API routes, Supabase auth, SWR). Only new pattern is streaming response, which AI SDK handles. |
+| Pitfalls | HIGH | Streaming/buffering pitfalls well-documented in Next.js community. Vercel function timeout is a known constraint. Proxy compatibility is the one uncertainty. |
 
-**Overall confidence:** HIGH
+## Gaps to Address
 
-### Gaps to Address
-
-- **Vercel Pro plan requirement:** 1-minute cron intervals may require Vercel Pro. Verify pricing before Phase 36 planning.
-- **iOS Safari Web Push:** Requires iOS 16.4+ and user must add to Home Screen. Document this limitation in notification preferences UI.
-- **Resend free tier limits:** 3,000 emails/month. Monitor usage and plan upgrade path if needed.
-- **User timezone storage:** The profiles table currently has no timezone field. Must add in Phase 29 migration.
+- **LLM proxy compatibility:** Must verify llm.betterr.me response format matches AI SDK expectations. Test with curl in Phase 1 before building UI.
+- **Proxy rate limits:** Unknown whether the CLIProxyAPI enforces per-minute rate limits. Test in Phase 2 with rapid message sends.
+- **Vercel plan constraints:** Hobby plan has 60s function timeout. If Claude responses regularly exceed this, Vercel Pro (300s) or self-hosting the chat route may be needed. Monitor in Phase 2.
+- **Code syntax highlighting:** Deferred to after MVP. Add `rehype-highlight` if users request code assistance features.
+- **Token counting:** No token counting in v7.0 MVP. Add approximate counting in a future phase if conversation length becomes an issue.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- web-push npm — VAPID auth, push protocol implementation
-- Resend docs — email delivery API, React Email integration
-- Existing codebase — RecurrenceRule, Vercel Cron, DB class patterns
-- Design spec — `docs/superpowers/specs/2026-03-30-calendar-reminders-design.md`
+- [AI SDK Official Docs](https://ai-sdk.dev/docs/introduction) -- v6 architecture, useChat, streamText, provider config
+- [AI SDK OpenAI Provider](https://ai-sdk.dev/providers/ai-sdk-providers/openai) -- createOpenAI with custom baseURL
+- npm registry -- ai@6.0.144, @ai-sdk/react@3.0.146, @ai-sdk/openai@3.0.50, react-markdown@10.1.0
+- Existing BetterR.Me codebase -- DB class patterns, API routes, Supabase auth, SWR hooks
 
 ### Secondary (MEDIUM confidence)
-- Calendar app UX research (Google Calendar, Fantastical, Notion Calendar, Amie)
-- Web Push API browser compatibility (caniuse.com)
+- [Next.js SSE Discussion #48427](https://github.com/vercel/next.js/discussions/48427) -- streaming buffering issues
+- [Vercel Function Limits](https://vercel.com/docs/functions/limitations) -- timeout constraints
+- Competitive analysis (ChatGPT, Claude.ai, Notion AI) -- feature expectations
 
 ---
-*Research completed: 2026-03-30*
+*Research completed: 2026-04-02*
 *Ready for roadmap: yes*

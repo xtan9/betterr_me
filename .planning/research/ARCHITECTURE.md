@@ -1,538 +1,512 @@
-# Architecture Research: Calendar & Reminder Notifications (v6.0)
+# Architecture Research
 
-**Date:** 2026-03-30
-**Status:** Research complete
-**Design Spec:** `docs/superpowers/specs/2026-03-30-calendar-reminders-design.md`
+**Domain:** AI Chat Integration into Existing Next.js + Supabase App
+**Researched:** 2026-04-02
+**Confidence:** HIGH
 
----
-
-## 1. Integration Points with Existing Code
-
-### 1.1 Database Layer (lib/db/)
-
-**Existing pattern to follow:**
-- DB classes take `SupabaseClient` in constructor, instantiated fresh per request
-- Types defined in `lib/db/types.ts` with `Interface`, `Insert`, `Update` variants
-- Exported from `lib/db/index.ts`
-- RLS on all tables; Admin client (`lib/supabase/admin.ts`) bypasses RLS for cron jobs
-
-**New DB classes (4):**
-| Class | File | Table |
-|---|---|---|
-| `CalendarEventsDB` | `lib/db/calendar-events.ts` | `calendar_events` |
-| `RemindersDB` | `lib/db/reminders.ts` | `reminders` |
-| `PushSubscriptionsDB` | `lib/db/push-subscriptions.ts` | `push_subscriptions` |
-| `ReminderDefaultsDB` | `lib/db/reminder-defaults.ts` | `reminder_defaults` |
-
-**Existing DB classes queried by feed aggregation:**
-| Class | File | What we read |
-|---|---|---|
-| `TasksDB` | `lib/db/tasks.ts` | Tasks with `due_date` in range |
-| `HabitsDB` + `HabitLogsDB` | `lib/db/habits.ts`, `lib/db/habit-logs.ts` | Active habits + logs for date range |
-| `RecurringBillsDB` | `lib/db/recurring-bills.ts` | Bills with `next_due_date` in range |
-| `WorkoutsDB` | `lib/db/workouts.ts` | Completed workouts by `started_at` date |
-
-**Key reuse:** `RecurrenceRule` discriminated union (lines 169-174 of `lib/db/types.ts`) -- `DailyRule | WeeklyRule | MonthlyByDateRule | MonthlyByWeekdayRule | YearlyRule` -- used identically for calendar event recurrence. The recurrence expansion functions in `lib/recurring-tasks/recurrence.ts` (`getNextOccurrence`, `parseDateParts`, `toDateString`, `addDays`, `compareDates`) can be generalized or reused directly.
-
-### 1.2 API Routes (app/api/)
-
-**Existing pattern to follow:**
-- `authenticateRequest()` from `lib/auth/api-key.ts` for auth + client creation
-- Zod validation via `validateRequestBody()` from `lib/validations/api.ts`
-- `try/catch` -> `log()` -> `NextResponse.json({ error }, { status })`
-- Date param from client for timezone correctness (`getLocalDateString()`)
-
-**New API routes (8):**
-| Route | Purpose |
-|---|---|
-| `app/api/calendar/events/route.ts` | GET (list) + POST (create) calendar events |
-| `app/api/calendar/events/[id]/route.ts` | GET/PATCH/DELETE single event |
-| `app/api/calendar/feed/route.ts` | GET unified aggregation feed (core integration point) |
-| `app/api/reminders/route.ts` | GET/POST/DELETE reminders |
-| `app/api/reminders/defaults/route.ts` | GET/PUT reminder defaults per source type |
-| `app/api/push/subscribe/route.ts` | POST push subscription registration |
-| `app/api/push/unsubscribe/route.ts` | POST push subscription removal |
-| `app/api/cron/send-reminders/route.ts` | GET cron job for reminder delivery |
-
-**Feed aggregation route (`/api/calendar/feed`)** is the main integration point -- it queries 5 DB classes in parallel:
-1. `CalendarEventsDB.getEventsInRange(userId, start, end)` -- standalone events
-2. `TasksDB` -- tasks with `due_date` between start/end
-3. Habits: `HabitsDB.getUserHabits()` + `shouldTrackOnDate()` from `lib/habits/format.ts` to expand which habits are scheduled for each day in range
-4. `RecurringBillsDB.getHouseholdBills()` -- bills with `next_due_date` in range (requires `resolveHousehold()` from `lib/db/households.ts`)
-5. `WorkoutsDB` -- completed workouts with `started_at` in range
-
-### 1.3 Cron Infrastructure
-
-**Existing pattern:** `app/api/cron/sync-transactions/route.ts`
-- Verifies `CRON_SECRET` bearer token
-- Uses `createAdminClient()` (bypasses RLS)
-- Iterates through records, processes each, handles errors individually
-- Returns summary JSON `{ synced, errors }`
-
-**New cron:** `app/api/cron/send-reminders/route.ts`
-- Same auth pattern (CRON_SECRET)
-- Query: `SELECT * FROM reminders WHERE fire_at <= NOW() AND status = 'pending'`
-- Process each: send push/email, update status
-- Must run **every 1 minute** (vs current 6h for transactions) -- add to `vercel.json` crons config
-
-**Note:** `vercel.json` is currently `{}` (empty). The transaction sync cron may be configured via Vercel dashboard. New reminder cron needs to be added explicitly.
-
-### 1.4 SWR Data Fetching (Client Side)
-
-**Existing pattern to follow:**
-- SWR keys include date for midnight refresh: `['/api/endpoint', date]`
-- `keepPreviousData: true` when key contains a date
-- 34 existing hooks in `lib/hooks/`
-
-**New hooks (3-4):**
-| Hook | SWR Key | Notes |
-|---|---|---|
-| `useCalendarFeed` | `['/api/calendar/feed', startDate, endDate]` | Date-range keyed, `keepPreviousData: true` |
-| `useCalendarEvents` | `['/api/calendar/events']` | For event CRUD mutations |
-| `useReminderDefaults` | `['/api/reminders/defaults']` | Static key (no date dependency) |
-| `usePushSubscription` | `['/api/push/status']` | Check if user has active push subscription |
-
-**Inline mutations from calendar:** Toggling task completion, habit logging, and bill payment from the calendar view will call existing domain APIs (`/api/tasks/[id]`, `/api/habits/logs`, `/api/money/bills/[id]`) and then `mutate()` the calendar feed SWR key for optimistic update.
-
-### 1.5 Recurrence Expansion
-
-**Existing code to reuse/generalize:**
-- `lib/recurring-tasks/recurrence.ts` -- `getNextOccurrence()`, date math utilities
-- `lib/recurring-tasks/instance-generator.ts` -- `ensureRecurringInstances()` pattern
-
-**Difference for calendar events:** Recurring tasks create concrete task instances in DB. Calendar events should **expand occurrences on the fly** in the feed API (no instance table), using `recurring_event_id` + `is_exception` for edited individual occurrences. This is a read-time expansion vs write-time materialization.
-
-**Recommended:** Extract shared recurrence math into `lib/recurrence/` (new directory) used by both recurring tasks and calendar events. Keep instance generation separate since the strategies differ.
-
-### 1.6 Navigation & Layout
-
-**File to modify:** `components/layouts/app-sidebar.tsx`
-- Add calendar nav item to `mainNavItems` array (between Dashboard and Habits)
-- Icon: `Calendar` from `lucide-react`
-- `labelKey: "calendar"`, `match: (p) => p.startsWith("/calendar")`
-
-**File to modify:** `lib/supabase/proxy.ts`
-- `/calendar` is a protected route -- already handled by the generic "unauthenticated protected routes -> `/auth/login`" redirect (no explicit allowlist to update)
-
-### 1.7 i18n
-
-**Files to modify:** `i18n/messages/en.json`, `i18n/messages/zh.json`, `i18n/messages/zh-TW.json`
-- Add `calendar` namespace for all calendar UI strings
-- Add `reminders` namespace for notification/reminder strings
-- Add `common.nav.calendar` for sidebar label
-
-### 1.8 Validation Schemas
-
-**Existing pattern:** `lib/validations/` with Zod schemas per domain
-- `taskFormSchema` in `lib/validations/task.ts`
-- `recurringTaskSchema` in `lib/validations/recurring-task.ts`
-
-**New validation files:**
-| File | Schemas |
-|---|---|
-| `lib/validations/calendar-events.ts` | `calendarEventCreateSchema`, `calendarEventUpdateSchema` |
-| `lib/validations/reminders.ts` | `reminderCreateSchema`, `reminderDefaultsSchema` |
-
-**Reuse:** The recurrence rule validation from `lib/validations/recurring-task.ts` can be shared.
-
-### 1.9 Design Tokens & Theming
-
-**No new tokens needed.** The design spec maps to existing tokens:
-- Primary (teal) for events -- existing `--primary`
-- Section-work (blue) for tasks -- existing
-- Category-productivity (amber) for habits -- existing
-- Priority-high (red) for bills -- existing
-- Only **purple for workouts** may need a new CSS variable if not already defined
-
-**Dark mode:** Fully handled by existing CSS variable system in `globals.css`.
-
-### 1.10 Service Worker & Web Push
-
-**Entirely new infrastructure.** No existing service worker or PWA support. No `public/` directory exists yet.
-
-**New files:**
-- `public/sw.js` -- service worker (plain JS, not bundled by Next.js)
-- Service worker registration utility in `lib/push/register.ts`
-- Web Push sending utility in `lib/push/send.ts` (server-side, uses `web-push` npm package)
-
-**Config changes:**
-- `next.config.ts` -- add header for service worker scope (`Service-Worker-Allowed: /`)
-- New env vars: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
-
-### 1.11 Email Delivery
-
-**Entirely new infrastructure.**
-
-**New files:**
-- `lib/email/send.ts` -- email sending utility (Resend SDK)
-- `lib/email/templates/` -- email templates per source type (event, task, habit, bill)
-
-**New env vars:** `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
-
-**No existing email infrastructure** -- this is the first email feature in the app.
-
----
-
-## 2. New vs Modified Components
-
-### 2.1 New Files (~35-40 files)
-
-**Database & Types (6 files):**
-- `lib/db/calendar-events.ts` -- CalendarEventsDB class
-- `lib/db/reminders.ts` -- RemindersDB class
-- `lib/db/push-subscriptions.ts` -- PushSubscriptionsDB class
-- `lib/db/reminder-defaults.ts` -- ReminderDefaultsDB class
-- Types added to `lib/db/types.ts` (modification, not new file)
-- `supabase/migrations/YYYYMMDD_calendar_reminders.sql` -- new migration
-
-**API Routes (8 files):**
-- `app/api/calendar/events/route.ts`
-- `app/api/calendar/events/[id]/route.ts`
-- `app/api/calendar/feed/route.ts`
-- `app/api/reminders/route.ts`
-- `app/api/reminders/defaults/route.ts`
-- `app/api/push/subscribe/route.ts`
-- `app/api/push/unsubscribe/route.ts`
-- `app/api/cron/send-reminders/route.ts`
-
-**Page Route (2 files):**
-- `app/calendar/page.tsx` -- server component shell
-- `app/calendar/loading.tsx` -- skeleton
-
-**Components (11 files):**
-- `components/calendar/calendar-page-content.tsx` -- main orchestrator
-- `components/calendar/week-view.tsx`
-- `components/calendar/day-view.tsx`
-- `components/calendar/month-view.tsx`
-- `components/calendar/calendar-sidebar.tsx` -- mini-cal + layer toggles
-- `components/calendar/event-popover.tsx` -- quick-create
-- `components/calendar/event-dialog.tsx` -- full create/edit dialog
-- `components/calendar/calendar-item.tsx` -- rendered event block
-- `components/calendar/view-switcher.tsx` -- Day/Week/Month toggle
-- `components/calendar/time-grid.tsx` -- shared hourly grid
-- `components/settings/reminder-preferences.tsx` -- settings panel
-
-**Hooks (3-4 files):**
-- `lib/hooks/use-calendar-feed.ts`
-- `lib/hooks/use-calendar-events.ts`
-- `lib/hooks/use-reminder-defaults.ts`
-- `lib/hooks/use-push-subscription.ts`
-
-**Validation (2 files):**
-- `lib/validations/calendar-events.ts`
-- `lib/validations/reminders.ts`
-
-**Notification Infrastructure (4-5 files):**
-- `public/sw.js` -- service worker
-- `lib/push/register.ts` -- client-side registration
-- `lib/push/send.ts` -- server-side Web Push
-- `lib/email/send.ts` -- Resend integration
-- `lib/email/templates/reminder.tsx` -- email template
-
-**Shared Recurrence (1-2 files):**
-- `lib/recurrence/expand.ts` -- shared occurrence expansion for calendar feed
-- Possibly `lib/recurrence/index.ts` re-exporting from existing `lib/recurring-tasks/recurrence.ts`
-
-### 2.2 Modified Files (~8-10 files)
-
-| File | Change |
-|---|---|
-| `lib/db/types.ts` | Add `CalendarEvent`, `Reminder`, `PushSubscription`, `ReminderDefault` types |
-| `lib/db/index.ts` | Export new DB classes |
-| `components/layouts/app-sidebar.tsx` | Add Calendar nav item to `mainNavItems` array |
-| `next.config.ts` | Add service worker headers, possibly `public/sw.js` serving config |
-| `i18n/messages/en.json` | Add `calendar` and `reminders` namespaces |
-| `i18n/messages/zh.json` | Add `calendar` and `reminders` namespaces |
-| `i18n/messages/zh-TW.json` | Add `calendar` and `reminders` namespaces |
-| `components/settings/settings-content.tsx` | Add reminder preferences section |
-| `vercel.json` | Add cron schedule for `send-reminders` (every 1 min) |
-| `package.json` | Add `web-push` and `resend` dependencies |
-
----
-
-## 3. Data Flow for Notifications
-
-### 3.1 Reminder Creation Flow
+## System Overview
 
 ```
-User creates/edits event (or task with due date, etc.)
-  |
-  v
-API route (e.g., POST /api/calendar/events)
-  |
-  v
-CalendarEventsDB.create() -- saves event
-  |
-  v
-RemindersDB.createForSource() -- creates reminder row(s)
-  - Reads user's reminder_defaults for source_type
-  - Computes fire_at = event_start - relative_minutes
-  - Sets status = 'pending'
-  - Sets channels from defaults or explicit user choice
-  |
-  v
-Row in `reminders` table with pre-computed `fire_at`
+┌─────────────────────────────────────────────────────────────────┐
+│                     Client (Browser)                             │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌───────────────┐  ┌───────────────────┐    │
+│  │  ChatPage     │  │  ChatInput    │  │  MessageList      │    │
+│  │  (app/chat)   │  │  (textarea +  │  │  (scrollable,     │    │
+│  │              │  │   send btn)   │  │   streaming text) │    │
+│  └──────┬───────┘  └───────┬───────┘  └─────────┬─────────┘    │
+│         │                  │                    │               │
+│  ┌──────┴──────────────────┴────────────────────┴──────────┐    │
+│  │            useChat() from @ai-sdk/react                  │    │
+│  │  (manages messages[], streaming state, send/stop)        │    │
+│  └──────────────────────────┬───────────────────────────────┘    │
+├─────────────────────────────┼───────────────────────────────────┤
+│                     API Layer                                    │
+│  ┌──────────────────────────┴───────────────────────────────┐    │
+│  │           POST /api/chat (Route Handler)                  │    │
+│  │  1. Auth check (supabase.auth.getUser())                  │    │
+│  │  2. Validate request body (Zod)                           │    │
+│  │  3. Load/save conversation (ConversationsDB, MessagesDB)  │    │
+│  │  4. streamText() via AI SDK -> LLM proxy                  │    │
+│  │  5. Return streaming response                             │    │
+│  └──────────────────────────┬───────────────────────────────┘    │
+├─────────────────────────────┼───────────────────────────────────┤
+│                     External Services                            │
+│  ┌────────────────┐  ┌──────┴──────────┐                        │
+│  │   Supabase     │  │  llm.betterr.me │                        │
+│  │  (auth + DB)   │  │  (LLM proxy)    │                        │
+│  │  conversations │  │  OpenAI-compat   │                        │
+│  │  chat_messages │  │  /v1/chat/comp.  │                        │
+│  └────────────────┘  └─────────────────┘                        │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Reminder Delivery Flow (Cron)
+## Component Responsibilities
+
+| Component | Responsibility | Integration with Existing |
+|-----------|----------------|--------------------------|
+| `app/chat/page.tsx` | Server component, auth gate, load conversation list | Same pattern as `app/dashboard/page.tsx` -- server-side auth + data fetch |
+| `app/chat/[id]/page.tsx` | Server component, load specific conversation | Same pattern as other detail pages |
+| `components/chat/chat-panel.tsx` | Client component, `useChat()` hook, message rendering, input | New component, no existing equivalent |
+| `app/api/chat/route.ts` | POST handler, auth + stream proxy to LLM | Same pattern as all API routes (createClient, getUser, DB class) |
+| `lib/db/conversations.ts` | ConversationsDB class -- CRUD for conversations | Same DB class pattern as every other domain |
+| `lib/db/chat-messages.ts` | ChatMessagesDB class -- CRUD for messages | Same DB class pattern |
+| `lib/ai/provider.ts` | AI SDK provider config for llm.betterr.me | New module, thin config wrapper |
+| `lib/validations/chat.ts` | Zod schemas for chat API requests | Same pattern as all other validations |
+
+## New Files vs Modified Files
+
+### New Files
+
+| Path | Purpose |
+|------|---------|
+| `app/chat/page.tsx` | Chat page (conversation list + new chat) |
+| `app/chat/[id]/page.tsx` | Single conversation page |
+| `app/chat/layout.tsx` | Wraps `<SidebarShell>` (same as dashboard) |
+| `app/api/chat/route.ts` | Streaming chat API route |
+| `app/api/chat/conversations/route.ts` | CRUD for conversations list |
+| `app/api/chat/conversations/[id]/route.ts` | Single conversation CRUD |
+| `components/chat/chat-panel.tsx` | Main chat UI (useChat + messages + input) |
+| `components/chat/message-bubble.tsx` | Single message rendering (user vs assistant) |
+| `components/chat/message-list.tsx` | Scrollable message container with auto-scroll |
+| `components/chat/chat-input.tsx` | Textarea + send button + keyboard handling |
+| `components/chat/conversation-list.tsx` | Sidebar/panel listing past conversations |
+| `components/chat/markdown-renderer.tsx` | Render assistant markdown responses |
+| `lib/ai/provider.ts` | createOpenAICompatible config for llm.betterr.me |
+| `lib/db/conversations.ts` | ConversationsDB class |
+| `lib/db/chat-messages.ts` | ChatMessagesDB class |
+| `lib/validations/chat.ts` | Zod schemas (sendMessage, createConversation) |
+| `supabase/migrations/YYYYMMDD_create_chat_tables.sql` | conversations + chat_messages tables |
+
+### Modified Files
+
+| Path | Change | Scope |
+|------|--------|-------|
+| `components/layouts/app-sidebar.tsx` | Add chat nav item (`MessageSquare` icon, `/chat` route) to `mainNavItems` array | 5 lines added |
+| `lib/db/index.ts` | Export ConversationsDB, ChatMessagesDB | 2 lines added |
+| `lib/db/types.ts` | Add Conversation, ChatMessage, ConversationInsert, ChatMessageInsert interfaces | ~30 lines added |
+| `i18n/messages/en.json` | Add `chat` namespace | ~15 keys |
+| `i18n/messages/zh.json` | Add `chat` namespace | ~15 keys |
+| `i18n/messages/zh-TW.json` | Add `chat` namespace | ~15 keys |
+
+**No existing API routes, components, or database tables are modified.** The chat feature is entirely additive.
+
+## Recommended Project Structure
 
 ```
-Vercel Cron (every 1 min) -> GET /api/cron/send-reminders
-  |
-  v
-Verify CRON_SECRET bearer token
-  |
-  v
-Admin client: SELECT * FROM reminders
-  WHERE fire_at <= NOW() AND status = 'pending'
-  |
-  v
-For each reminder:
-  |
-  +-- Check quiet hours (user preferences) -- skip if in quiet hours, leave pending
-  |
-  +-- If 'push' in channels:
-  |     Query push_subscriptions for user_id
-  |     For each subscription: web-push send (title, body, click URL)
-  |     Handle 410 Gone -> delete stale subscription
-  |
-  +-- If 'email' in channels:
-  |     Query profiles for user email
-  |     Resend API: send templated email (source_type determines template)
-  |
-  +-- On success: UPDATE status = 'sent', sent_at = NOW()
-  +-- On failure: UPDATE status = 'failed', log error
-  |
-  v
-Return { processed, sent, failed, skipped_quiet_hours }
+app/
+├── chat/
+│   ├── layout.tsx              # SidebarShell wrapper
+│   ├── page.tsx                # Conversation list / new chat start
+│   └── [id]/
+│       └── page.tsx            # Single conversation view
+├── api/
+│   └── chat/
+│       ├── route.ts            # POST: stream chat completion
+│       └── conversations/
+│           ├── route.ts        # GET: list, POST: create
+│           └── [id]/
+│               └── route.ts    # GET: single, PATCH: rename, DELETE
+components/
+├── chat/
+│   ├── chat-panel.tsx          # useChat hook + orchestration
+│   ├── message-list.tsx        # Scrollable message container
+│   ├── message-bubble.tsx      # Single message (user/assistant)
+│   ├── chat-input.tsx          # Textarea + send
+│   ├── conversation-list.tsx   # Past conversations sidebar
+│   └── markdown-renderer.tsx   # Assistant response rendering
+lib/
+├── ai/
+│   └── provider.ts             # AI SDK provider config
+├── db/
+│   ├── conversations.ts        # ConversationsDB
+│   └── chat-messages.ts        # ChatMessagesDB
+├── validations/
+│   └── chat.ts                 # Zod schemas
 ```
 
-### 3.3 Push Subscription Flow
+### Structure Rationale
 
-```
-User clicks "Enable push notifications" in settings
-  |
-  v
-Browser: Notification.requestPermission()
-  |
-  +-- 'denied' -> show message, stop
-  +-- 'granted':
-        |
-        v
-      navigator.serviceWorker.register('/sw.js')
-        |
-        v
-      registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      })
-        |
-        v
-      POST /api/push/subscribe { endpoint, p256dh, auth, user_agent }
-        |
-        v
-      PushSubscriptionsDB.create() -> stored in DB
-```
+- **`app/chat/`**: Follows existing domain routing pattern (`app/habits/`, `app/tasks/`, `app/money/`). Each domain gets its own route group.
+- **`app/api/chat/`**: Follows existing API route pattern. The main `route.ts` handles streaming; sub-routes handle conversation CRUD.
+- **`components/chat/`**: Follows existing pattern (`components/habits/`, `components/money/`). Each domain's components are co-located.
+- **`lib/ai/`**: New folder for AI-specific config. Kept separate from `lib/db/` because it configures an external service, not database access.
 
-### 3.4 Event Reschedule -> Reminder Recomputation
+## Architectural Patterns
 
-```
-User edits event start_time via PATCH /api/calendar/events/[id]
-  |
-  v
-CalendarEventsDB.update() -- saves new start_time
-  |
-  v
-RemindersDB.recomputeFireAt(source_type='calendar_event', source_id=eventId)
-  - SELECT all reminders WHERE source_id = eventId AND status = 'pending'
-  - For each: fire_at = new_start_time - relative_minutes
-  - Bulk UPDATE
-```
+### Pattern 1: AI SDK useChat with API Route (Not Server Actions)
 
-### 3.5 Calendar Feed Aggregation Flow
+**What:** The Vercel AI SDK `useChat()` hook on the client connects to `POST /api/chat` on the server. The API route uses `streamText()` to proxy to the LLM and returns a streaming response via `toUIMessageStreamResponse()`.
 
-```
-Client: useCalendarFeed(startDate, endDate)
-  -> SWR key: ['/api/calendar/feed', startDate, endDate]
-  |
-  v
-GET /api/calendar/feed?start=2026-03-01&end=2026-03-31
-  |
-  v
-authenticateRequest() -> userId, supabase
-  |
-  v
-Parallel queries (Promise.all):
-  1. CalendarEventsDB.getEventsInRange(userId, start, end)
-     - Includes expanding recurring events on the fly
-     - Excludes dates with is_exception entries
-  2. TasksDB: tasks WHERE due_date BETWEEN start AND end
-  3. Habits: getUserHabits() -> for each day in range, shouldTrackOnDate()
-     + HabitLogsDB: logs in range for is_logged status
-  4. RecurringBillsDB: bills WHERE next_due_date BETWEEN start AND end
-     (requires resolveHousehold() for household_id)
-  5. WorkoutsDB: completed workouts WHERE started_at::date BETWEEN start AND end
-  |
-  v
-Map each to CalendarItem { id, source, title, start_date, ... , meta }
-  |
-  v
-Return unified array sorted by start_date, start_time
+**When to use:** This is the standard pattern for AI chat in Next.js. Use API routes (not Server Actions) because chat needs streaming HTTP responses, request/response control for auth, and is conceptually a proxy to an external service.
+
+**Trade-offs:** Slightly more boilerplate than Server Actions (AI SDK 6 supports both), but gives full control over auth checking, rate limiting, and response headers. Server Actions are harder to add middleware to and less battle-tested for long streaming responses.
+
+**Example:**
+
+```typescript
+// lib/ai/provider.ts
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+
+export const llmProvider = createOpenAICompatible({
+  name: 'betterr-llm',
+  baseURL: process.env.LLM_PROXY_URL!, // https://llm.betterr.me/v1
+  apiKey: process.env.LLM_API_KEY!,
+});
+
+// app/api/chat/route.ts
+import { streamText, UIMessage, convertToModelMessages } from 'ai';
+import { llmProvider } from '@/lib/ai/provider';
+import { createClient } from '@/lib/supabase/server';
+import { ChatMessagesDB, ConversationsDB } from '@/lib/db';
+
+export async function POST(req: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { messages, conversationId } = await req.json();
+  // Validate with Zod, save user message to DB, then stream
+
+  const result = streamText({
+    model: llmProvider('claude-sonnet-4-20250514'),
+    messages: convertToModelMessages(messages),
+  });
+
+  return result.toUIMessageStreamResponse();
+}
 ```
 
----
+### Pattern 2: Conversation Persistence via onFinish Callback
 
-## 4. Suggested Build Order
+**What:** Save messages to Supabase after the stream completes, not during. The `streamText()` `onFinish` callback fires after the full response is generated. Save the user message before streaming starts (optimistic), save the assistant message in `onFinish`.
 
-The build order follows the design spec's recommendation (calendar-first, then notifications) with phases sized for one-PR-each.
+**When to use:** Always for persistent chat history.
 
-### Phase 1: Database Schema & Types
+**Trade-offs:** If the user navigates away mid-stream, the partial response is lost from DB (but `useChat()` still has it in memory). Acceptable for v1 -- partial message recovery adds significant complexity.
+
+**Example:**
+
+```typescript
+// Save user message BEFORE streaming
+const messagesDB = new ChatMessagesDB(supabase);
+await messagesDB.createMessage({
+  conversation_id: conversationId,
+  role: 'user',
+  content: userMessageText,
+});
+
+const result = streamText({
+  model: llmProvider('claude-sonnet-4-20250514'),
+  messages: convertToModelMessages(messages),
+  onFinish: async ({ text }) => {
+    // Save assistant message AFTER stream completes
+    await messagesDB.createMessage({
+      conversation_id: conversationId,
+      role: 'assistant',
+      content: text,
+    });
+    // Update conversation title if first exchange
+    // (use first user message or ask LLM to summarize)
+  },
+});
+
+return result.toUIMessageStreamResponse();
+```
+
+### Pattern 3: OpenAI-Compatible Provider with Custom BaseURL
+
+**What:** Use `@ai-sdk/openai-compatible` to create a provider that points to `llm.betterr.me/v1`. The AI SDK handles SSE parsing, streaming protocol, error mapping, and token counting.
+
+**When to use:** When proxying to any OpenAI-compatible API that is not one of the built-in providers (OpenAI, Anthropic, etc.).
+
+**Trade-offs:** The `@ai-sdk/openai-compatible` package is a thin wrapper. If the proxy has quirks (non-standard error formats, custom headers), you may need the `transformRequestBody` option.
+
+**Important:** BaseURL must end in `/v1`, not `/v1/chat/completions`. The SDK appends the path automatically.
+
+### Pattern 4: Fresh Supabase Client Per Request (Existing -- No Change)
+
+**What:** Every API route creates a fresh `createClient()` and instantiates DB classes with it. No singletons, no shared state. This is an existing hard rule in the codebase.
+
+**Example (matches existing codebase exactly):**
+
+```typescript
+export async function POST(req: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const conversationsDB = new ConversationsDB(supabase);
+  const messagesDB = new ChatMessagesDB(supabase);
+  // ... use them
+}
+```
+
+## Data Flow
+
+### Chat Message Flow (Streaming)
+
+```
+[User types message, presses Enter]
+    |
+[useChat().sendMessage({ text })]
+    |
+[POST /api/chat]  -- auth check (supabase.auth.getUser()) --> 401 if no session
+    |
+[Validate request body with Zod]
+    |
+[Save user message to Supabase (chat_messages table)]
+    |
+[streamText() -> llm.betterr.me/v1/chat/completions]
+    |                                           |
+[Stream chunks via toUIMessageStreamResponse()]
+    |                                           |
+[useChat() updates messages[] in real-time]     |
+    |                                     [onFinish callback]
+[UI re-renders with each chunk]                 |
+                                    [Save assistant message to Supabase]
+```
+
+### Conversation List Flow
+
+```
+[User navigates to /chat]
+    |
+[Server component: createClient -> getUser -> ConversationsDB.list()]
+    |
+[Pass conversations as props to client component]
+    |
+[User clicks conversation -> navigate to /chat/[id]]
+    |
+[Server component: ChatMessagesDB.getByConversation()]
+    |
+[Pass messages as initialMessages to useChat()]
+```
+
+### New Conversation Flow
+
+```
+[User sends first message on /chat page (no conversationId yet)]
+    |
+[POST /api/chat { messages, conversationId: null }]
+    |
+[API creates conversation row -> gets conversationId]
+[API saves user message with conversationId]
+[API streams response, saves assistant in onFinish]
+    |
+[Response headers include X-Conversation-Id (or in stream metadata)]
+    |
+[Client reads conversationId -> router.replace('/chat/[id]')]
+```
+
+### Key Data Flows Summary
+
+1. **New conversation:** User sends first message -> API creates conversation + user message -> streams response -> saves assistant message -> returns conversationId -> URL updates to `/chat/[id]`
+2. **Continue conversation:** User visits `/chat/[id]` -> server loads messages -> `useChat` initializes with history -> subsequent messages append to existing conversation
+3. **Conversation list:** SWR on `/api/chat/conversations` (no date in key -- conversations are not date-scoped)
+
+## Database Schema
+
+```sql
+-- conversations table
+CREATE TABLE conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT 'New Chat',
+  model TEXT NOT NULL DEFAULT 'claude-sonnet-4-20250514',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- chat_messages table
+CREATE TABLE chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- RLS policies (matching existing IN-subquery pattern from money tables)
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users see own conversations"
+  ON conversations FOR ALL
+  USING (user_id = auth.uid());
+
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users see messages in own conversations"
+  ON chat_messages FOR ALL
+  USING (conversation_id IN (
+    SELECT id FROM conversations WHERE user_id = auth.uid()
+  ));
+
+-- Indexes
+CREATE INDEX idx_conversations_user_id ON conversations(user_id);
+CREATE INDEX idx_conversations_updated_at ON conversations(user_id, updated_at DESC);
+CREATE INDEX idx_chat_messages_conversation_id ON chat_messages(conversation_id);
+CREATE INDEX idx_chat_messages_created_at ON chat_messages(conversation_id, created_at);
+```
+
+### Schema Rationale
+
+- **`conversations`** separates metadata from messages, enabling fast conversation list queries without loading all messages.
+- **`chat_messages`** uses the IN-subquery RLS pattern matching the existing money tables (99.78% faster than JOIN-based RLS per project docs).
+- **ON DELETE CASCADE** on conversation_id means deleting a conversation cleans up all its messages automatically.
+- **`model` column** on conversations allows future multi-model support without migration.
+- **No `tokens_used` column in v1** -- the LLM proxy tracks usage. Add later if billing needs it.
+- **`updated_at` index** -- conversations list sorted by most recently active, needs efficient ordering.
+
+## Integration Points
+
+### External Services
+
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| llm.betterr.me | `@ai-sdk/openai-compatible` with `createOpenAICompatible({ baseURL, apiKey })` | OpenAI-compatible API. `LLM_API_KEY` in `.env.local`. BaseURL ends in `/v1`. |
+| Supabase Auth | `createClient()` + `getUser()` on every request | No changes to auth flow. Chat routes protected identically to all other routes. |
+| Supabase DB | ConversationsDB + ChatMessagesDB classes with RLS | New tables, same access pattern as all other DB classes. |
+
+### Internal Boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| Chat UI <-> API | `useChat()` hook auto-manages fetch to `/api/chat` | AI SDK handles streaming protocol, retry, abort |
+| API route <-> LLM proxy | `streamText()` via AI SDK provider | SDK handles SSE parsing, error mapping |
+| API route <-> Supabase | DB classes (same as all other routes) | Fresh client per request, no singletons |
+| Sidebar <-> Chat page | Navigation link in `app-sidebar.tsx` | Add entry to `mainNavItems` array |
+
+### Environment Variables Required
+
+| Variable | Where | Purpose |
+|----------|-------|---------|
+| `LLM_PROXY_URL` | Server only | `https://llm.betterr.me/v1` (base URL for AI SDK provider) |
+| `LLM_API_KEY` | Server only | API key for llm.betterr.me proxy (already exists in `.env.local`) |
+
+No new public environment variables needed. No VAPID keys, no email keys -- chat is server-proxied only.
+
+## Scaling Considerations
+
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 1-10 users (current) | Single API route, no rate limiting, store all messages. Sufficient. |
+| 10-100 users | Add per-user rate limiting (e.g., 20 messages/minute) in API route. Conversation message limit (100 messages -> suggest new conversation). |
+| 100+ users | Token usage tracking per user. Message pagination for long conversations. Consider streaming response timeout (Vercel function timeout = 60s on Pro). |
+
+### Scaling Priorities
+
+1. **First bottleneck:** LLM proxy capacity / API key rate limits. Mitigate with per-user rate limiting in the chat API route.
+2. **Second bottleneck:** Long conversations consuming excessive context tokens. Mitigate with message windowing (send last N messages to LLM, even if full history is in DB).
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Saving Messages During Stream
+
+**What people do:** Write each streaming chunk to the database as it arrives.
+**Why it's wrong:** Creates hundreds of DB writes per response. Supabase connections exhaust. Partial saves create inconsistent state.
+**Do this instead:** Save user message before streaming, save complete assistant message in `onFinish` callback.
+
+### Anti-Pattern 2: Exposing LLM API Key to Client
+
+**What people do:** Call the LLM proxy directly from the browser to skip the API route.
+**Why it's wrong:** API key is exposed in browser network tab. Anyone can use your key.
+**Do this instead:** Always proxy through the server-side API route. `LLM_API_KEY` stays in `.env.local`.
+
+### Anti-Pattern 3: Using Server Actions for Streaming Chat
+
+**What people do:** AI SDK 6 supports Server Actions with `useChat`, so devs skip API routes entirely.
+**Why it's wrong:** Server Actions make it harder to add auth middleware, rate limiting, and request logging. Chat is fundamentally an API call to an external service, not a form mutation.
+**Do this instead:** Use a standard API route handler (`app/api/chat/route.ts`).
+
+### Anti-Pattern 4: Loading Full History from DB on Every Send
+
+**What people do:** Fetch all messages from DB on every chat request to build context.
+**Why it's wrong:** The client already has messages in `useChat()` state. Double-fetching wastes queries.
+**Do this instead:** Client sends messages array with request (AI SDK does this automatically). Server reads from DB only for initial page load.
+
+### Anti-Pattern 5: Storing Raw Streaming Chunks
+
+**What people do:** Store SSE chunks or intermediate streaming state in the database.
+**Why it's wrong:** Chunks are transport-layer artifacts, not semantic content. They fragment the message.
+**Do this instead:** Store only the final, complete message text.
+
+## Build Order (Dependency-Aware)
+
+The following order respects component dependencies and enables incremental testing:
+
+### Phase 1: Database + Types + DB Classes
 **Dependencies:** None
 **Deliverables:**
-- Supabase migration: `calendar_events`, `reminders`, `reminder_defaults`, `push_subscriptions` tables with RLS policies
+- Supabase migration: `conversations`, `chat_messages` tables with RLS
 - TypeScript types in `lib/db/types.ts`
-- 4 new DB classes (`CalendarEventsDB`, `RemindersDB`, `PushSubscriptionsDB`, `ReminderDefaultsDB`)
-- Export from `lib/db/index.ts`
-- Zod validation schemas in `lib/validations/calendar-events.ts` and `lib/validations/reminders.ts`
-- Unit tests for all DB classes
+- `ConversationsDB` class (`lib/db/conversations.ts`)
+- `ChatMessagesDB` class (`lib/db/chat-messages.ts`)
+- Exports in `lib/db/index.ts`
+- Zod validation schemas (`lib/validations/chat.ts`)
+- Unit tests for both DB classes
 
 **Why first:** Everything else depends on the data layer.
 
-### Phase 2: Calendar Event CRUD API
+### Phase 2: AI Provider + Streaming API Route
 **Dependencies:** Phase 1
 **Deliverables:**
-- `app/api/calendar/events/route.ts` (GET list, POST create)
-- `app/api/calendar/events/[id]/route.ts` (GET, PATCH, DELETE)
-- Recurrence support -- extract shared expansion logic into `lib/recurrence/`
-- Recurring event exception handling (edit this occurrence / edit all)
-- Reminder auto-creation on event create (using `ReminderDefaultsDB`)
-- Reminder `fire_at` recomputation on event reschedule
-- API route tests
+- `lib/ai/provider.ts` (createOpenAICompatible config)
+- `app/api/chat/route.ts` (POST: auth, validate, stream, persist)
+- Can test with curl before any UI exists
 
-**Why second:** CRUD is needed before the UI can display anything.
+**Why second:** API must exist before UI can connect to it.
 
-### Phase 3: Calendar UI -- Month View & Navigation
+### Phase 3: Chat UI Components
 **Dependencies:** Phase 2
 **Deliverables:**
-- `app/calendar/page.tsx` + `loading.tsx`
-- `components/calendar/calendar-page-content.tsx` (orchestrator)
-- `components/calendar/month-view.tsx` (simplest view to start)
-- `components/calendar/view-switcher.tsx`
-- `components/calendar/calendar-sidebar.tsx` (mini-cal, domain layer toggles)
-- `lib/hooks/use-calendar-events.ts` (SWR hook for event CRUD)
-- Sidebar nav item added to `app-sidebar.tsx` (Calendar icon)
-- i18n strings for all three locales
+- `components/chat/message-bubble.tsx`
+- `components/chat/message-list.tsx`
+- `components/chat/chat-input.tsx`
+- `components/chat/markdown-renderer.tsx`
+- `components/chat/chat-panel.tsx` (orchestrates useChat + sub-components)
+- `app/chat/layout.tsx` (SidebarShell wrapper)
+- `app/chat/page.tsx` (new chat entry point)
 - Component tests
 
-**Why third:** Month view is the simplest to implement and validates the full vertical slice (DB -> API -> UI). Sidebar nav makes the feature discoverable.
+**Why third:** Build UI components bottom-up (bubble -> list -> input -> panel).
 
-### Phase 4: Calendar UI -- Week & Day Views
+### Phase 4: Conversation Persistence + Multi-Conversation
 **Dependencies:** Phase 3
 **Deliverables:**
-- `components/calendar/week-view.tsx` with time grid
-- `components/calendar/day-view.tsx` with time grid
-- `components/calendar/time-grid.tsx` (shared hourly grid)
-- `components/calendar/calendar-item.tsx` (event block rendering)
-- Current time indicator (teal line)
-- Quick-create popover (`event-popover.tsx`) on time slot click
-- Full event dialog (`event-dialog.tsx`) with all fields
-- Keyboard shortcuts (D/W/M/T/arrows/N/C/Esc)
-- Responsive behavior (sidebar collapse on tablet, day-view default on mobile)
-- Component tests
+- `app/api/chat/conversations/route.ts` (GET list, POST create)
+- `app/api/chat/conversations/[id]/route.ts` (GET, PATCH rename, DELETE)
+- `components/chat/conversation-list.tsx`
+- `app/chat/[id]/page.tsx` (load existing conversation)
+- Auto-title generation for conversations
+- API + component tests
 
-**Why fourth:** Builds on month view foundation with more complex time-based rendering.
+**Why fourth:** Single-conversation chat must work before adding multi-conversation support.
 
-### Phase 5: Cross-Domain Feed Aggregation
-**Dependencies:** Phase 4 (for UI), Phase 1 (for DB)
+### Phase 5: Navigation + i18n + Polish
+**Dependencies:** Phase 4
 **Deliverables:**
-- `app/api/calendar/feed/route.ts` -- unified aggregation endpoint
-- `lib/hooks/use-calendar-feed.ts` -- SWR hook with date-range key
-- Integration with `shouldTrackOnDate()` for habits
-- Integration with `RecurringBillsDB` for bills (via `resolveHousehold()`)
-- Integration with `WorkoutsDB` for workouts
-- Integration with `TasksDB` for tasks with due dates
-- Domain color coding in calendar views
-- Layer toggle filtering (hide/show per domain)
-- Inline actions: task checkbox toggle, habit log toggle, bill mark-paid
-- API tests + component tests for aggregated view
+- Sidebar nav item in `app-sidebar.tsx` (MessageSquare icon)
+- i18n strings in all three locale files (`chat` namespace)
+- Loading states, error states, empty states
+- Keyboard shortcuts (Enter to send, Shift+Enter for newline)
+- Stop generation button
+- Final integration testing
 
-**Why fifth:** This is the core value proposition -- seeing everything in one place. Requires all calendar UI to be in place.
+**Why last:** Navigation and polish only make sense when the feature is complete.
 
-### Phase 6: Push Notification Infrastructure
-**Dependencies:** Phase 1 (for push_subscriptions table), Phase 2 (for reminders table)
-**Deliverables:**
-- `public/sw.js` -- service worker
-- `lib/push/register.ts` -- client-side registration utility
-- `lib/push/send.ts` -- server-side Web Push sending (add `web-push` npm dep)
-- `app/api/push/subscribe/route.ts`
-- `app/api/push/unsubscribe/route.ts`
-- `next.config.ts` updates for service worker headers
-- New env vars: `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
-- Integration tests (mock push API)
+## Sources
 
-**Why sixth:** Notification delivery is independent from calendar UI. Can be built and tested in isolation.
-
-### Phase 7: Email Notification Infrastructure
-**Dependencies:** Phase 6 (shares delivery pipeline)
-**Deliverables:**
-- `lib/email/send.ts` -- Resend SDK integration (add `resend` npm dep)
-- `lib/email/templates/reminder.tsx` -- templated emails per source type
-- New env vars: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
-- Integration tests (mock Resend API)
-
-**Why seventh:** Email is a second delivery channel -- simpler to add after push is working.
-
-### Phase 8: Reminder Delivery Cron & Preferences UI
-**Dependencies:** Phase 6, Phase 7
-**Deliverables:**
-- `app/api/cron/send-reminders/route.ts` -- cron job (follows existing sync-transactions pattern)
-- `vercel.json` cron config (every 1 minute)
-- `components/settings/reminder-preferences.tsx` -- push toggle, email toggle, defaults per source type, quiet hours
-- Modify `components/settings/settings-content.tsx` to include reminder section
-- `lib/hooks/use-reminder-defaults.ts`
-- `lib/hooks/use-push-subscription.ts`
-- End-to-end tests for reminder delivery pipeline
-
-**Why last:** Ties everything together -- needs both push and email working, plus the settings UI.
+- [AI SDK Official Docs](https://ai-sdk.dev/docs/introduction) -- HIGH confidence
+- [AI SDK Next.js App Router Getting Started](https://ai-sdk.dev/docs/getting-started/nextjs-app-router) -- HIGH confidence
+- [AI SDK OpenAI-Compatible Providers](https://ai-sdk.dev/providers/openai-compatible-providers) -- HIGH confidence
+- [AI SDK Custom Provider Docs](https://ai-sdk.dev/providers/openai-compatible-providers/custom-providers) -- HIGH confidence
+- [@ai-sdk/openai-compatible npm](https://www.npmjs.com/package/@ai-sdk/openai-compatible) -- HIGH confidence
+- [AI SDK Stream Protocols](https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol) -- HIGH confidence
+- Existing BetterR.Me codebase patterns (DB classes, API routes, SWR, Zod, sidebar) -- HIGH confidence (direct code inspection)
 
 ---
-
-## 5. Risk Areas & Mitigations
-
-| Risk | Impact | Mitigation |
-|---|---|---|
-| Vercel Cron minimum interval is 1 min on Pro plan (not available on Hobby) | Reminders delayed up to 1 min on Pro, unavailable on Hobby | Document plan requirement; consider Supabase `pg_cron` as alternative |
-| Recurring event expansion on read can be slow for large date ranges | Slow feed API for month+ views | Cap expansion to 90-day window; paginate by visible range |
-| Service worker + Next.js App Router interaction | SW may interfere with client-side navigation | Scope SW to push events only; do not cache routes |
-| `shouldTrackOnDate()` called per-habit-per-day in range | N habits x 31 days = 31N calls for month view | Pure function, fast; profile if > 100 habits |
-| Bills require household resolution | Extra DB query per feed request | Cache household_id in SWR; single resolveHousehold() call per request |
-| Push subscription cleanup for uninstalled browsers | Stale subscriptions accumulate | Handle 410 Gone from web-push; periodic cleanup |
-| Email deliverability (new domain) | Emails land in spam | Configure SPF/DKIM/DMARC for betterr.me; warm up sender reputation |
-| No `public/` directory exists yet | Service worker file needs this directory | Create `public/` directory in Phase 6 |
-
----
-
-## 6. New Dependencies
-
-| Package | Purpose | Size Impact |
-|---|---|---|
-| `web-push` | Server-side Web Push API (VAPID, encryption) | ~50KB (server only) |
-| `resend` | Email delivery SDK | ~15KB (server only) |
-
-Both are server-only -- zero client bundle impact.
-
----
-
-## 7. Environment Variables Required
-
-| Variable | Where | Purpose |
-|---|---|---|
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Client + Server | Web Push VAPID public key |
-| `VAPID_PRIVATE_KEY` | Server only | Web Push VAPID private key |
-| `VAPID_SUBJECT` | Server only | VAPID subject (mailto: or URL) |
-| `RESEND_API_KEY` | Server only | Resend email API key |
-| `RESEND_FROM_EMAIL` | Server only | Sender email address |
-
----
-
-_Last updated: 2026-03-30_
+*Architecture research for: AI Chat Foundation integration into BetterR.Me (v7.0)*
+*Researched: 2026-04-02*
