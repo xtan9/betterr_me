@@ -52,6 +52,27 @@ export class RemindersDB {
     return data;
   }
 
+  async updateReminder(userId: string, reminderId: string, update: ReminderUpdate): Promise<Reminder> {
+    const { data, error } = await this.supabase
+      .from('reminders')
+      .update(update)
+      .eq('id', reminderId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async deleteReminder(userId: string, reminderId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('reminders')
+      .delete()
+      .eq('id', reminderId)
+      .eq('user_id', userId);
+    if (error) throw error;
+  }
+
   async deleteRemindersBySource(userId: string, sourceType: ReminderSourceType, sourceId: string): Promise<void> {
     const { error } = await this.supabase
       .from('reminders')
