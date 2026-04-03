@@ -13,13 +13,25 @@ describe("isInQuietHours", () => {
   });
 
   function mockCurrentTime(time: string) {
-    // Mock Intl.DateTimeFormat to return a controlled time
-    const MockDateTimeFormat = vi.fn().mockImplementation(() => ({
-      format: () => time,
-    }));
-    // Keep the original static methods
-    Object.setPrototypeOf(MockDateTimeFormat, Intl.DateTimeFormat);
+    // Use a proper constructor function that works with `new`
+    function MockDateTimeFormat() {
+      return { format: () => time };
+    }
+    MockDateTimeFormat.prototype = originalDateTimeFormat.prototype;
+    MockDateTimeFormat.supportedLocalesOf = originalDateTimeFormat.supportedLocalesOf;
     Intl.DateTimeFormat = MockDateTimeFormat as unknown as typeof Intl.DateTimeFormat;
+  }
+
+  function mockCurrentTimeWithSpy(time: string) {
+    const calls: Array<[string, Intl.DateTimeFormatOptions]> = [];
+    function MockDateTimeFormat(locale: string, options: Intl.DateTimeFormatOptions) {
+      calls.push([locale, options]);
+      return { format: () => time };
+    }
+    MockDateTimeFormat.prototype = originalDateTimeFormat.prototype;
+    MockDateTimeFormat.supportedLocalesOf = originalDateTimeFormat.supportedLocalesOf;
+    Intl.DateTimeFormat = MockDateTimeFormat as unknown as typeof Intl.DateTimeFormat;
+    return calls;
   }
 
   it("returns false when quiet hours are not configured (null)", () => {
@@ -90,27 +102,21 @@ describe("isInQuietHours", () => {
   });
 
   it("passes timezone to Intl.DateTimeFormat", () => {
-    const spy = vi.fn().mockImplementation(() => ({
-      format: () => "12:00",
-    }));
-    Object.setPrototypeOf(spy, Intl.DateTimeFormat);
-    Intl.DateTimeFormat = spy as unknown as typeof Intl.DateTimeFormat;
-
+    const calls = mockCurrentTimeWithSpy("12:00");
     isInQuietHours("22:00", "07:00", "Asia/Tokyo");
-    expect(spy).toHaveBeenCalledWith("en-US", expect.objectContaining({
+    expect(calls.length).toBe(1);
+    expect(calls[0][0]).toBe("en-US");
+    expect(calls[0][1]).toEqual(expect.objectContaining({
       timeZone: "Asia/Tokyo",
     }));
   });
 
   it("uses UTC when timezone is null", () => {
-    const spy = vi.fn().mockImplementation(() => ({
-      format: () => "12:00",
-    }));
-    Object.setPrototypeOf(spy, Intl.DateTimeFormat);
-    Intl.DateTimeFormat = spy as unknown as typeof Intl.DateTimeFormat;
-
+    const calls = mockCurrentTimeWithSpy("12:00");
     isInQuietHours("22:00", "07:00", null);
-    expect(spy).toHaveBeenCalledWith("en-US", expect.objectContaining({
+    expect(calls.length).toBe(1);
+    expect(calls[0][0]).toBe("en-US");
+    expect(calls[0][1]).toEqual(expect.objectContaining({
       timeZone: "UTC",
     }));
   });
