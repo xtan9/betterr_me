@@ -99,21 +99,15 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ Keyboard shortcuts (D/W/M/T/arrows/C/N/slash/Esc) with input suppression — v6.0 Phase 32
 - ✓ Default view routing (desktop=week, mobile=day) — v6.0 Phase 32
 
-## Current Milestone: v6.0 Calendar & Reminder Notifications
+## Current Milestone: v7.0 AI Chat Foundation
 
-**Goal:** Add a full calendar/scheduling domain with unified Day/Week/Month views, standalone event management, cross-domain aggregation (tasks, habits, bills, workouts), and push + email reminder notifications with smart defaults.
+**Goal:** Build a working chat interface that lets authenticated users have conversations with Claude via the llm.betterr.me proxy.
 
 **Target features:**
-- Calendar UI with Day/Week/Month views using BetterR.Me design tokens
-- Standalone event CRUD with recurrence (reusing existing RecurrenceRule)
-- Aggregated views from tasks, habits, bills, workouts with inline interaction
-- Push notifications via Web Push API + service worker
-- Email notifications via Resend/SendGrid
-- Smart reminder defaults per domain with user overrides
-- Reminder preferences with quiet hours
-- Keyboard shortcuts and responsive mobile layout
-
-**Design spec:** `docs/superpowers/specs/2026-03-30-calendar-reminders-design.md`
+- Chat UI with message history (user + assistant messages)
+- Server-side API route proxying to llm.betterr.me (streaming)
+- Auth-gated — only logged-in users can chat
+- Conversation persists within the session
 
 ### Out of Scope
 

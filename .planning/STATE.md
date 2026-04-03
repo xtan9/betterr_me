@@ -1,63 +1,36 @@
 ---
 gsd_state_version: 1.0
-milestone: v6.0
-milestone_name: Calendar & Reminder Notifications
-status: Ready to plan
-stopped_at: Phase 34 context gathered
-last_updated: "2026-04-02T21:14:14.794Z"
+milestone: v7.0
+milestone_name: AI Chat Foundation
+status: verifying
+stopped_at: Completed 34-03-PLAN.md
+last_updated: "2026-04-02T22:05:07.201Z"
+last_activity: 2026-04-02
 progress:
-  total_phases: 8
-  completed_phases: 7
-  total_plans: 25
-  completed_plans: 25
+  total_phases: 4
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-30)
+See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Phase 34 — push-notification-infrastructure
+**Current focus:** Phase 34 — database-types-streaming-api
 
 ## Current Position
 
 Phase: 35
 Plan: Not started
+Status: Phase complete — ready for verification
+Last activity: 2026-04-02
 
-## Performance Metrics
-
-**v1.0 Velocity:**
-
-- Total plans completed: 11
-- Average duration: 5min
-- Total execution time: 0.83 hours
-
-**v1.1 Velocity:**
-
-- Total plans completed: 1
-- Execution time: ~10min
-
-**v2.1 Velocity:**
-
-- Total plans completed: 6
-- Execution time: ~63min
-
-**v3.0 Velocity:**
-
-- Total plans completed: 12
-- Total tasks: 25
-- Total execution time: ~49min
-- Files changed: 97 (+12,769/-156 lines)
-
-**v4.0 Velocity:**
-
-- Total plans completed: 38
-- Total tasks: 74
-- Files changed: 323 (+53,446/-197 lines)
-- Timeline: 8 days (2026-02-21 → 2026-02-28)
-- Requirements: 66/66 satisfied
+Progress: [░░░░░░░░░░] 0% (v7.0)
 
 ## Accumulated Context
 
@@ -65,8 +38,21 @@ Plan: Not started
 
 See PROJECT.md Key Decisions table for full log with outcomes.
 
-- [Phase 27]: Admin sync uses x-admin-secret header + user auth for double protection
-- [Phase 28-01]: Used native img tag instead of next/image for small GIF thumbnails (animation preservation)
+Recent decisions affecting current work:
+
+- [v7.0 Roadmap]: Use Vercel AI SDK (ai, @ai-sdk/react, @ai-sdk/openai) for streaming
+- [v7.0 Roadmap]: LLM proxy at llm.betterr.me/v1 via createOpenAI({ baseURL })
+- [v7.0 Roadmap]: react-markdown + remark-gfm for response rendering
+- [Phase 34]: No client-side singleton for chat DB classes -- only used server-side via API routes
+- [Phase 34]: React bumped to 19.2.4 for @ai-sdk/react peer dep compatibility
+- [Phase 34]: Use raw Response for streaming instead of NextResponse for AI SDK toDataStreamResponse compatibility
+
+### Research Notes
+
+- MUST test streaming on Vercel preview deploy (compression buffering only in production)
+- MUST verify llm.betterr.me proxy compatibility with AI SDK streaming protocol early
+- React needs bump from 19.1.0 to 19.1.2+ for @ai-sdk/react peer dep
+- Set Cache-Control: no-cache, no-transform and X-Accel-Buffering: no on streaming route
 
 ### Pending Todos
 
@@ -74,16 +60,12 @@ None.
 
 ### Blockers/Concerns
 
-- Vitest picks up .worktrees/ test files causing spurious failures (pre-existing, not blocking)
-- @dnd-kit/core v6 + React 19 peer dep mismatch requires pnpm config (cosmetic, works correctly)
-- Plaid API costs ~$1-2/connected account/month — monitor unit economics
-- 7 household human verification items pending live two-user testing
-- ExerciseDB API free tier limited to 100 req/month -- bulk fetch + local cache strategy mitigates
-- ExerciseDB CDN domain may change (v1 to v2 history) -- store exercisedb_id for re-sync capability
-- Node 19.2.0 + Vite 7.3.1 incompatibility prevents vitest from running (Vite 7 requires Node >=20.19)
+- LLM proxy compatibility with AI SDK streaming protocol — verify in Phase 34 before building UI
+- Vercel Hobby plan 60s function timeout — monitor if Claude responses exceed this
+- This worktree is parallel to v6.0 calendar work in main repo
 
 ## Session Continuity
 
-Last session: 2026-04-02T19:49:23.615Z
-Stopped at: Phase 34 context gathered
-Resume: Begin Phase 34 (Push Notification Infrastructure)
+Last session: 2026-04-02T22:01:31.765Z
+Stopped at: Completed 34-03-PLAN.md
+Resume: `/gsd:plan-phase 34`

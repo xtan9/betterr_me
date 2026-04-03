@@ -1,385 +1,348 @@
 # Pitfalls Research
 
-**Domain:** Adding calendar views + push/email reminder notifications to an existing Next.js 16 + Supabase personal productivity app (BetterR.Me v6.0)
-**Researched:** 2026-03-30
-**Confidence:** HIGH (verified against existing codebase patterns, Next.js 16 service worker behavior, Vercel Cron docs, Web Push API specs, and existing SWR/timezone/recurrence architecture)
+**Domain:** AI Chat Foundation in existing Next.js 16 + Supabase app (BetterR.Me v7.0)
+**Researched:** 2026-04-02
+**Confidence:** HIGH
 
-**Scope note:** This document focuses on **integration-specific pitfalls** -- mistakes that arise from adding calendar and notifications to the *existing* BetterR.Me codebase. General calendar-app pitfalls (date math, rendering libraries, etc.) are only covered where they intersect with BetterR.Me-specific concerns.
+**Scope note:** This document focuses on **integration-specific pitfalls** -- mistakes that arise from adding AI chat with streaming to the *existing* BetterR.Me codebase. General chatbot pitfalls are only covered where they intersect with BetterR.Me-specific concerns (Next.js 16 App Router, Vercel deployment, Supabase auth, existing SWR patterns, the llm.betterr.me proxy).
 
 ## Critical Pitfalls
 
-### Pitfall 1: Service Worker Conflicts with Next.js App Router Routing and Caching
+### Pitfall 1: LLM Proxy API Key Leaking to the Client
 
 **What goes wrong:**
-The design spec places a service worker at `public/sw.js` for push notification handling. Next.js App Router has its own fetch interception, route prefetching, and client-side navigation system. A service worker with a broad `fetch` event listener will intercept Next.js route navigations, RSC (React Server Component) payloads, and API route calls. This breaks client-side navigation, causes stale RSC payloads to be served from the SW cache, and makes API mutations silently return cached responses instead of hitting the server.
-
-The second failure mode: Vercel's CDN edge caching and the service worker's Cache API operate on the same URLs but with different invalidation strategies. A service worker that caches `/api/calendar/feed` responses will serve stale calendar data even after Vercel's edge cache has been purged.
+The API key for llm.betterr.me ends up in client-side JavaScript bundles or is visible in browser network requests. Even though this is a personal app, a leaked key means anyone who finds it can run up usage on the Claude subscription backing the proxy. API keys leaked in client code get scraped by automated bots scanning GitHub and browser source maps.
 
 **Why it happens:**
-Service workers operate at the network layer -- they see every HTTP request from the origin. Next.js App Router relies on fetch requests for RSC payloads (`?_rsc=...` params), route prefetch, and `router.push()` navigation. Developers building the SW for push notifications will add a fetch listener "just to handle offline fallback" or copy a PWA template that includes aggressive caching, not realizing it intercepts Next.js internals.
+Next.js environment variables prefixed with `NEXT_PUBLIC_` are bundled into client code. Developers accidentally use `NEXT_PUBLIC_LLM_API_KEY` or hard-code the key in a client component. Another vector: the browser makes requests directly to llm.betterr.me instead of routing through the Next.js API route, exposing the key in request headers visible in DevTools.
 
 **How to avoid:**
-1. **The service worker MUST only handle `push` and `notificationclick` events.** Do NOT add a `fetch` event listener. The SW exists solely for push notification display and click-to-navigate -- not for caching, offline support, or request interception.
-2. **Set the SW scope narrowly** if possible, though `public/sw.js` will default to `/` scope. The key is simply not registering a fetch handler.
-3. **Register the SW only after push permission is granted**, not on page load. This avoids the SW being active for users who never enable notifications.
-4. **Add `Service-Worker-Allowed` header** in `next.config.ts` headers if scope needs adjustment.
-5. **Test navigation after SW registration:** verify that `router.push()`, back/forward, and RSC streaming still work correctly with the SW active.
-6. **Do NOT use `next-pwa` or `@ducanh2912/next-pwa`.** These packages add aggressive caching strategies that conflict with App Router. The push notification SW is simple enough to write manually (< 30 lines).
+- Store the LLM proxy key in a server-only env var (no `NEXT_PUBLIC_` prefix), e.g., `LLM_PROXY_API_KEY`
+- All LLM calls go through a Next.js API route (`/api/chat`) that adds the key server-side
+- The browser only ever talks to `/api/chat`, never directly to llm.betterr.me
+- Add the key to `.env.local` and verify it is in `.gitignore`
+- Never import the env var in any file that could be a client component
 
 **Warning signs:**
-- A `fetch` event listener in `sw.js`
-- `next-pwa` or similar package in `package.json`
-- Client-side navigation breaking after enabling notifications
-- API responses returning stale data after mutations
-- RSC payload errors in browser console after SW registration
+- Any `fetch("https://llm.betterr.me")` call in a file under `app/` or `components/` (client territory)
+- Env var name starts with `NEXT_PUBLIC_LLM` or `NEXT_PUBLIC_AI`
+- Browser DevTools Network tab shows requests to llm.betterr.me instead of `/api/chat`
 
 **Phase to address:**
-Phase 5 (Notification Infrastructure) -- when implementing the service worker. Must be validated before merging.
+Phase 1 (API route setup) -- establish the server-side proxy pattern from the very start.
 
 ---
 
-### Pitfall 2: Push Notification Permission UX -- Asking Too Early Kills Adoption
+### Pitfall 2: Streaming Response Buffered by Compression or Caching
 
 **What goes wrong:**
-The app requests `Notification.requestPermission()` on first visit or dashboard load, before the user understands what notifications are for. The browser shows the permission prompt, the user reflexively clicks "Block" (the default behavior for unexpected permission requests), and the permission is permanently denied. There is no API to re-request permission once blocked -- the user must manually go into browser settings to reverse it. On mobile browsers (especially iOS Safari), the permission flow has additional restrictions (must be triggered by user gesture, not programmatic).
+The AI response streams token-by-token from the LLM proxy, but the user sees nothing for 5-30 seconds, then the entire response appears at once. The streaming is technically happening server-side but something between the API route and the browser is buffering the output.
 
 **Why it happens:**
-Developers add the permission request in a `useEffect` or on page load to "get it out of the way." This is the #1 mistake in push notification implementation. Browser vendors have actively made permission prompts more hostile to drive-by requests -- Chrome shows a quieter prompt by default for sites with low grant rates, and Safari requires a user gesture to trigger the prompt at all.
+Three independent buffering layers can each silently kill streaming:
+1. **Next.js gzip compression** -- middleware applies `Content-Encoding: gzip` which buffers data to compress efficiently before sending
+2. **Vercel response caching** -- without `export const dynamic = "force-dynamic"`, Vercel may cache or buffer the route response
+3. **Reverse proxy buffering** -- Nginx or CDN layers (including Vercel's edge network) buffer SSE unless explicitly told not to
+
+This is the most commonly reported streaming issue in Next.js (see [Discussion #48427](https://github.com/vercel/next.js/discussions/48427)).
 
 **How to avoid:**
-1. **Never request permission automatically.** Only call `Notification.requestPermission()` in response to a deliberate user action: clicking "Enable push notifications" in settings, or clicking a "Notify me" button on a specific event/reminder.
-2. **Use a two-step flow:** First show an in-app explanation UI ("Get reminders for your tasks and events") with an "Enable" button. Only after the user clicks "Enable" does the actual browser prompt fire. This gives the user context and increases grant rates.
-3. **Check `Notification.permission` state before showing the enable button.** If already `'denied'`, show a message explaining how to re-enable in browser settings instead of a broken "Enable" button.
-4. **Handle iOS Safari specifically:** `PushManager` is only available in Safari 16.4+ and only when the PWA is added to the home screen. Detect this and show appropriate messaging.
-5. **Store the permission state in React state** to conditionally render notification UI, not just check once on mount.
-6. **The reminder preferences page (settings) is the right place for the primary enable flow**, not the calendar page or dashboard.
+- Set these headers on every streaming response:
+  ```
+  Content-Type: text/event-stream
+  Cache-Control: no-cache, no-transform
+  X-Accel-Buffering: no
+  Connection: keep-alive
+  ```
+- Add `export const dynamic = "force-dynamic"` to the route handler file
+- Use `Content-Encoding: none` to explicitly disable compression on the streaming route
+- **Test streaming on Vercel preview deploys, not just `pnpm dev`** -- local dev does not reproduce proxy buffering. This is the #1 "works locally but not in production" issue.
 
 **Warning signs:**
-- `Notification.requestPermission()` called in a top-level `useEffect`
-- No in-app explanation before the browser prompt
-- "Enable notifications" button shown when permission is already `'denied'`
-- No iOS Safari detection or fallback messaging
-- Permission request triggered on page load instead of user gesture
+- Works locally but "batches" in production
+- First token latency > 3 seconds in production when the LLM itself responds faster
+- Response arrives all at once after the full generation completes
+- Headers in response include `Content-Encoding: gzip` (should be `none` or absent)
 
 **Phase to address:**
-Phase 5 (Notification Infrastructure) -- the permission flow must be designed as a conscious UX decision, not an afterthought.
+Phase 1 (API route setup) -- these headers must be present from the first streaming implementation. Must be verified on a Vercel preview deploy, not just local.
 
 ---
 
-### Pitfall 3: Timezone Mismatch Between Calendar Events and Reminder `fire_at` Computation
+### Pitfall 3: Vercel Function Timeout Kills Long Responses
 
 **What goes wrong:**
-The design spec stores `start_date` as DATE and `start_time` as TIME (no timezone). The `fire_at` column on reminders is TIMESTAMPTZ. The cron job runs on Vercel (UTC). The user is in `America/New_York` (UTC-5). They create an event at "3:00 PM" with a 15-minute reminder. The naive computation `fire_at = start_date + start_time - 15min` produces `2026-04-01 14:45:00` -- but in what timezone? If stored as UTC, the reminder fires at 9:45 AM Eastern. If stored as the user's timezone but the cron compares with `NOW()` (which is UTC), the reminder fires 5 hours late.
-
-This is the exact same category of bug that the existing codebase already solved for tasks (`getLocalDateString()`, client-sent date params), but the reminder system introduces a NEW dimension: server-side time comparison. The existing timezone pattern (dates are browser-local, never UTC) works for display but breaks for server-side scheduling.
+Claude generates a detailed, multi-paragraph response that takes 45-90 seconds. The Vercel serverless function times out and the stream is cut off mid-sentence. The user sees a truncated response with no error message -- the text just stops.
 
 **Why it happens:**
-The existing BetterR.Me timezone convention is "dates are always browser-local, never UTC." This works perfectly for habit tracking, task due dates, and bill calendars because the server never needs to compare times -- it just stores and returns dates that the client interprets. Reminders fundamentally change this: the SERVER must decide "is it time to send this notification?" by comparing `fire_at` with the server's current time (UTC on Vercel). This requires an absolute timestamp, not a local date/time pair.
+Vercel Hobby plan: 60s max for serverless functions. Even with streaming (the function stays alive while piping tokens to the client), the function must remain running for the entire generation. Long or complex Claude responses, especially with reasoning/thinking, can exceed 60 seconds. The timeout kills the function silently -- no error event is sent to the client, the stream just closes.
 
 **How to avoid:**
-1. **Store the user's IANA timezone in `profiles`** (e.g., `America/New_York`). Add a `timezone` column to the profiles table. Populate from `Intl.DateTimeFormat().resolvedOptions().timeZone` on the client.
-2. **Compute `fire_at` as UTC TIMESTAMPTZ on the server** when creating/updating a reminder. The computation is: take the event's `start_date` + `start_time`, interpret it in the user's timezone, convert to UTC, then subtract `relative_minutes`. This produces a UTC timestamp that the cron job can compare directly with `NOW()`.
-3. **Recompute `fire_at` when the user changes their timezone** (rare but possible for travelers). The `PATCH /api/profile` endpoint should trigger recomputation of all pending `fire_at` values.
-4. **The cron job query is simple:** `WHERE fire_at <= NOW() AND status = 'pending'` -- both sides are UTC, no timezone conversion needed at query time.
-5. **For all-day events** (no `start_time`), use the user's timezone default morning time (e.g., 8:00 AM in their timezone, converted to UTC) as the base for relative reminders.
-6. **Test with multiple timezones** including UTC+13 (Samoa), UTC-12 (Baker Island), and timezones with DST transitions. DST is the sneakiest source of bugs: a reminder set for "3:00 PM EDT" may need to fire at a different UTC offset after a DST change.
+- Set `export const maxDuration = 60` explicitly in the route handler (documents the constraint even if it matches the default)
+- Set `max_tokens` on the LLM API request to cap response length (e.g., 2048-4096 tokens keeps most responses under 30s)
+- Implement client-side timeout detection: if the stream stops for > 10 seconds without a `[DONE]` event, show a "Response may have been cut off" indicator
+- If responses are regularly getting cut off, consider upgrading to Vercel Pro (300s with Fluid Compute) or self-hosting on Hetzner alongside the LLM proxy
+- Avoid system prompts that encourage extremely long responses
 
 **Warning signs:**
-- No `timezone` column on profiles table
-- `fire_at` computed with `new Date()` instead of timezone-aware library
-- Reminder tests only using UTC or a single timezone
-- All-day event reminders firing at midnight UTC instead of morning local time
-- Reminders off by exactly 1 hour during DST transition weeks
+- Responses end mid-sentence with no error
+- Longer prompts (which tend to generate longer responses) fail more often than short ones
+- Works in development (no timeout) but fails in production
+- Vercel function logs show `FUNCTION_INVOCATION_TIMEOUT`
 
 **Phase to address:**
-Phase 1 (Database Schema) -- the `timezone` column on profiles must be in the first migration. Phase 5 (Notification Infrastructure) -- `fire_at` computation logic must handle timezone conversion correctly.
+Phase 1 (API route) for the `maxDuration` and `max_tokens` guard. Phase 2 (chat UI) for client-side truncation detection UI.
 
 ---
 
-### Pitfall 4: Vercel Cron Job Reliability -- Cold Starts, 1-Minute Floor, and Missed Windows
+### Pitfall 4: No Abort/Cancel Handling Causes Resource Leaks and Wasted Tokens
 
 **What goes wrong:**
-The design spec calls for a cron job running every minute to check for due reminders. Vercel Cron has a minimum interval of 1 minute (Hobby plan: 1/day, Pro plan: 1/minute). The cron endpoint is a serverless function with cold start latency (200-800ms for Node.js). If the function takes longer than 1 minute to process all due reminders (many users, many reminders), the next invocation overlaps or is skipped. Additionally, Vercel Cron is "at most once" -- if the function fails, there is no automatic retry.
-
-The existing `sync-transactions` cron runs every 6 hours as a "safety net" -- it tolerates missed runs because Plaid webhooks are the primary sync mechanism. Reminders have no such fallback: if the cron misses a run, the notification is simply late.
+User navigates away from the chat page or clicks "Stop generating" but the server-side function keeps streaming from the LLM proxy, consuming tokens and occupying the Vercel function slot until the full response completes. On rapid navigation, multiple orphaned streams pile up.
 
 **Why it happens:**
-Developers assume cron = reliable scheduler. Vercel Cron is a convenience trigger for serverless functions, not a job queue. It does not guarantee delivery, does not retry on failure, and does not prevent overlapping executions. A 1-minute cron that takes 90 seconds to complete will have overlapping runs, potentially sending duplicate notifications.
+The API route creates a `ReadableStream` piping data from the LLM proxy to the client but never listens for the client's `AbortSignal`. When the browser aborts the fetch (page navigation, component unmount, explicit cancel), the upstream fetch to llm.betterr.me continues because nothing propagated the cancellation signal.
 
 **How to avoid:**
-1. **Use `status` as a processing lock.** Before sending, UPDATE the reminder status from `'pending'` to `'processing'` with a `WHERE status = 'pending'` condition. This prevents duplicate sends from overlapping cron runs. If the function crashes, a separate cleanup query resets `'processing'` reminders older than 5 minutes back to `'pending'`.
-2. **Batch processing with LIMIT.** Query `SELECT ... WHERE fire_at <= NOW() AND status = 'pending' ORDER BY fire_at LIMIT 100` to keep execution time bounded. If there are more, the next cron invocation picks them up.
-3. **Add a `retry_count` column** to reminders. On failure, increment retry_count and set status back to `'pending'`. After 3 retries, mark as `'failed'` permanently.
-4. **Log every cron execution** with timing metrics. The existing `log.info("Cron sync completed", { synced, errors })` pattern from `sync-transactions` is the right model.
-5. **Accept up to 2-minute latency** for reminders. A "15 minutes before" reminder arriving at 14 or 13 minutes before is acceptable for a personal productivity app. Do not over-engineer for sub-second precision.
-6. **Consider Vercel plan limits.** Hobby plan only allows 1 cron job per day. If deploying to Hobby, the reminder cron needs a different approach (e.g., check on API request, or use Supabase `pg_cron` extension instead).
-7. **The existing `CRON_SECRET` bearer token pattern** from `sync-transactions/route.ts` must be reused for the reminder cron. Do not create a second auth pattern.
+- Pass `request.signal` (the `AbortSignal` from the incoming Next.js request) to the upstream `fetch()` call to llm.betterr.me:
+  ```typescript
+  const upstream = await fetch(llmUrl, { ...options, signal: request.signal });
+  ```
+- In the `ReadableStream` controller's `cancel()` callback, abort the upstream reader
+- On the client side, use `AbortController` and call `.abort()` on component unmount and on stop button click
+- Handle the `AbortError` gracefully on both server and client -- do not log it as an error
 
 **Warning signs:**
-- No deduplication logic (dual-send when cron overlaps)
-- No LIMIT on the reminder query (unbounded execution time)
-- No retry mechanism for failed sends
-- Testing only with 1-2 reminders, not with 100+ due simultaneously
-- Deploying to Hobby plan without realizing the 1/day cron limit
+- Vercel function duration logs show functions running 30-60s even for short interactions where the user navigated away
+- Token usage is higher than expected (orphaned streams complete server-side)
+- `ResponseAborted` unhandled rejection errors in Vercel logs (see [Discussion #61972](https://github.com/vercel/next.js/discussions/61972))
+- `TypeError: ReadableStream is already closed` errors
 
 **Phase to address:**
-Phase 5 (Notification Infrastructure) -- the cron job implementation. The `processing` lock pattern must be part of the initial implementation, not added after duplicate sends are discovered in production.
+Phase 1 (API route) -- abort propagation must be built in from the start, not retrofitted.
 
 ---
 
-### Pitfall 5: Email Deliverability -- SPF/DKIM Misconfiguration Sends All Emails to Spam
+### Pitfall 5: Supabase Auth Check Inside the Streaming Callback
 
 **What goes wrong:**
-The design spec sends from `reminders@betterr.me`. Without proper DNS configuration (SPF, DKIM, DMARC), emails from this address will be flagged as spam by Gmail, Outlook, and Yahoo. Gmail in particular started enforcing DKIM and SPF for bulk senders in February 2024. Even with correct DNS, transactional emails that look like marketing (generic subject lines, no prior engagement) get filtered.
+Developer places the `supabase.auth.getUser()` call inside the `ReadableStream` controller's `start()` callback instead of before creating the stream. The `cookies()` function from `next/headers` is not available inside a `ReadableStream` controller callback, causing the auth check to fail with a cryptic error or silently return null.
 
 **Why it happens:**
-Developers sign up for Resend/SendGrid, get an API key, and start sending emails. The emails work in development (Resend's sandbox delivers to verified addresses) but fail silently in production because DNS records are not configured. SPF tells receiving servers "Resend is authorized to send on behalf of betterr.me." Without it, the email fails authentication and goes to spam or is rejected.
+The natural thought is "validate auth, then start streaming, all in one flow." But Next.js route handlers have a specific execution context -- `cookies()` and `headers()` must be called synchronously in the top-level handler function, not inside async callbacks or stream controllers. The existing BetterR.Me pattern (create client, getUser, check null, proceed) works fine for request/response routes but the streaming pattern is subtly different.
 
 **How to avoid:**
-1. **Configure DNS records BEFORE writing any email code:**
-   - SPF: `v=spf1 include:resend.com ~all` (or SendGrid equivalent)
-   - DKIM: Add the TXT record provided by Resend/SendGrid
-   - DMARC: `v=DMARC1; p=none; rua=mailto:dmarc@betterr.me` (start with `p=none` to monitor)
-2. **Verify the sending domain** in Resend/SendGrid dashboard. Do not send from an unverified domain.
-3. **Use descriptive, personalized subject lines:** "Reminder: Team meeting in 15 minutes" not "BetterR.Me Notification."
-4. **Include an unsubscribe link** in every email (required by CAN-SPAM and Gmail's February 2024 requirements). Use the `List-Unsubscribe` header for one-click unsubscribe.
-5. **Send a test email to Gmail, Outlook, and Yahoo** before going live. Check that the email lands in Inbox, not Spam. Use `mail-tester.com` to score the email.
-6. **Start with low volume.** New sending domains have no reputation. Sending 1000 emails on day one will trigger spam filters. Ramp up gradually.
-7. **Consider push-only for MVP** and add email as a Phase 6+ enhancement. Push notifications have no deliverability issues and cover the primary use case (timely reminders).
+- **Auth check FIRST, stream SECOND.** The correct pattern:
+  ```typescript
+  export async function POST(request: NextRequest) {
+    // 1. Auth check (cookies() available here)
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // 2. Validate request body
+    const body = await request.json();
+
+    // 3. NOW create and return the stream
+    const stream = new ReadableStream({ ... });
+    return new Response(stream, { headers: { ... } });
+  }
+  ```
+- Follow the exact same auth pattern as existing routes (`/api/habits`, `/api/tasks`) -- the only difference is the response type (stream instead of JSON)
 
 **Warning signs:**
-- No SPF/DKIM/DMARC DNS records for betterr.me
-- Emails landing in spam during manual testing
-- No `List-Unsubscribe` header in outgoing emails
-- Email templates with no personalization (generic "You have a reminder")
-- No monitoring for bounce/complaint rates
+- `cookies()` or `createClient()` called inside `new ReadableStream({ start: async (controller) => { ... } })`
+- Auth errors that only happen on the streaming route but not on regular API routes
+- 500 errors on the chat endpoint with no clear cause
 
 **Phase to address:**
-Phase 5 (Notification Infrastructure) for email implementation. DNS configuration must happen before the first production email is sent. Consider making email delivery a separate sub-phase after push is working.
+Phase 1 (API route) -- the route handler structure must follow auth-then-stream ordering.
 
 ---
 
-## High-Risk Integration Pitfalls
-
-### Pitfall 6: Calendar Rendering Performance with Aggregated Multi-Domain Data
+### Pitfall 6: SSE Parsing Errors from OpenAI-Compatible Stream Format
 
 **What goes wrong:**
-The unified feed API (`/api/calendar/feed`) queries 5 domain DB classes in parallel (events, tasks, habits, bills, workouts) and merges results. For a Month view, this means querying ~30 days of data across 5 tables. A user with 10 daily habits, 20 tasks with due dates, 5 recurring bills, and 10 calendar events generates 300+ habit items + 20 tasks + 5 bills + 10 events = 335+ items for one month. Each domain also needs to expand recurring items (habits via `shouldTrackOnDate()`, recurring tasks via `getOccurrencesInRange()`, recurring events via the same).
-
-The rendering side is equally dangerous: 335+ items rendered on a Month view grid means potentially 50+ React components per day cell, with 30-42 visible day cells. If each item is a full React component with hover states, click handlers, and tooltips, that is 1500+ mounted components.
+The chat UI shows raw JSON chunks, displays `[DONE]` as visible text in the chat, or crashes when it receives an unexpected event format. Partial JSON objects cause parse errors that break the entire stream reader.
 
 **Why it happens:**
-Each domain works fine in isolation. The habits page renders 10 habits. The tasks page renders 20 tasks. But the calendar aggregates ALL domains onto one view. Developers test with small data sets (3 habits, 2 tasks) and do not see the performance cliff that occurs with realistic data volumes.
+OpenAI-compatible streaming uses SSE with `data: {json}\n\n` format. Common parsing mistakes:
+1. Splitting on `\n\n` without handling partial chunks (a single network packet may contain half a JSON object)
+2. Not handling the `data: [DONE]` sentinel (it is NOT valid JSON -- parsing it throws `SyntaxError`)
+3. Not stripping the `data: ` prefix correctly (some chunks may have `data:` without a space)
+4. Assuming each chunk from `reader.read()` contains exactly one complete SSE event (it may contain multiple or partial events)
 
 **How to avoid:**
-1. **Virtualize the time grid.** Only render items for visible day cells. For Month view, only render the "+N more" overflow chip when a day has > 3 items, not all 15 items hidden behind it.
-2. **The feed API should accept a `sources` query param** to filter by domain. When a user toggles off "Habits" in the sidebar, the API should not query the habits table at all -- not query it and filter client-side.
-3. **Expand recurring items on the server, not the client.** The `getOccurrencesInRange()` function should run in the API route, returning pre-expanded dates. Do not send recurrence rules to the client and expand there.
-4. **For habits, use a batch query** instead of calling `shouldTrackOnDate()` per habit per day. Query all active habits once, then expand their schedules for the date range using existing frequency logic.
-5. **SWR key should include the visible date range** (as the design spec already specifies). When switching from Month to Week view, the SWR key changes and a smaller dataset is fetched. Use `keepPreviousData: true` for smooth transitions (matching existing SWR pattern).
-6. **Cap the API response** at a reasonable limit (e.g., 500 items per request). If exceeded, return a `truncated: true` flag and let the UI show a warning.
-7. **Memoize calendar item components** with `React.memo` keyed on `id + source + is_completed/is_logged`. Prevent re-renders when navigating between views.
+- Use the `eventsource-parser` npm package instead of manual string splitting -- it handles all edge cases
+- Handle `[DONE]` explicitly before attempting `JSON.parse()`
+- Buffer incoming data and split on `\n\n` boundaries, not on individual `read()` calls
+- Extract the content delta from `choices[0].delta.content` -- it may be `null` or `undefined` on some chunks (role-only chunks, finish_reason chunks)
+- Test with the actual llm.betterr.me proxy early -- do not develop against a mock and swap later, as the proxy may have subtle format differences
 
 **Warning signs:**
-- Feed API response > 500 items for a single month
-- Visible jank when switching between Month/Week/Day views
-- Feed API latency > 500ms for a single month query
-- All 5 domain queries running even when a domain layer is toggled off
-- Recurring expansion happening on the client
+- `SyntaxError: Unexpected token` in browser console during streaming
+- `[DONE]` appearing as text in the chat
+- Chinese/CJK characters garbled or split across chunks
+- Occasional "missing" words in streamed output (lost partial chunks)
+- `choices[0].delta.content` is undefined errors
 
 **Phase to address:**
-Phase 2 (Calendar UI) for rendering performance. Phase 4 (Aggregation) for API query optimization. Performance testing should be part of each phase's verification with realistic data volumes.
+Phase 2 (chat UI) -- the client-side stream consumer must handle the SSE format correctly from the first implementation.
 
 ---
 
-### Pitfall 7: Recurring Event Expansion -- Infinite Series and Exception Handling
+### Pitfall 7: Unbounded Conversation Context Blows Token Limits or Gets Expensive
 
 **What goes wrong:**
-The design spec reuses the existing `RecurrenceRule` type and `getOccurrencesInRange()` function from recurring tasks. This function is designed for bounded date ranges and works correctly. However, calendar events introduce two new complexities that recurring tasks do not have:
-
-1. **Exception handling (`is_exception` + `recurring_event_id` + `original_date`):** When a user edits "this occurrence only," an exception record is created. The expansion logic must exclude the original occurrence date from the parent's expansion AND include the exception record. The existing `getOccurrencesInRange()` has no concept of exceptions -- it simply expands the rule. Adding exception filtering requires post-processing the expansion results.
-
-2. **"Edit all future events" creates a chain split:** User changes recurrence from weekly to daily starting from April 15. The parent rule must have its `end_date_recurrence` set to April 14, and a new event with a daily rule starting April 15 must be created. If this split is not handled atomically, the user sees duplicate events or a gap.
+After 10-15 messages, the conversation context sent with every request exceeds practical limits. Either the LLM proxy returns a 400 error (context too long), response quality degrades (model struggles with very long context), or costs become disproportionate (sending 20K+ tokens of history with every short question).
 
 **Why it happens:**
-Recurring tasks in BetterR.Me do not have "edit this occurrence" or "edit all future" -- they are simpler. The RecurrenceRule expansion works for the simpler case. Calendar events import the Google Calendar / Outlook model of occurrence editing, which is significantly more complex. Developers will reuse `getOccurrencesInRange()` without adding exception filtering and get duplicate events (both the parent's expanded occurrence AND the exception record for the same date).
+Naive implementations send the entire conversation history with every request. Each user+assistant message pair is 200-2000 tokens. After 15 exchanges, the context payload is 10K+ tokens per request. With Claude's large context window the technical limit is high, but costs scale linearly with input tokens and response latency increases with context size.
 
 **How to avoid:**
-1. **Create a wrapper function** `expandCalendarEventsInRange(parentEvents, exceptions, rangeStart, rangeEnd)` that:
-   - Expands each parent event using `getOccurrencesInRange()`
-   - Removes dates that have a matching exception record (by `recurring_event_id` + `original_date`)
-   - Adds the exception records at their actual dates
-   - Returns the merged, deduplicated list
-2. **"Edit all future events" must be a database transaction:** UPDATE parent's `end_date_recurrence`, INSERT new event with new rule, all in one request. The API route should use Supabase's `.rpc()` for a server-side function or at minimum ensure both operations succeed/fail together.
-3. **"Delete this occurrence" should create a tombstone exception** (an exception record with no title/times, marked as deleted) rather than trying to add the date to an exclusion list on the parent. This is the pattern Google Calendar uses and it scales better.
-4. **Test the expansion with edge cases:**
-   - Exception on the first occurrence of a series
-   - Exception on the last occurrence before `end_date_recurrence`
-   - Multiple exceptions in the same week
-   - "Edit all future" in the middle of a long series
-   - Deleting a single occurrence, then editing "all events" (do deleted exceptions get resurrected?)
-5. **The existing recurrence.ts tests should be extended,** not replaced. Add a new test file for the calendar-specific expansion wrapper.
+- Implement a message window: send only the last N messages (e.g., last 20 messages) with each request
+- For v7.0 (personal app, session-only persistence): keep full conversation in React state for display, but only send the windowed subset to the LLM API
+- Count tokens approximately before sending (1 token ~ 4 chars for English, ~1.5 chars for Chinese/CJK) and warn/truncate before hitting proxy limits
+- Include the system prompt in the token budget calculation
+- For future: store full history in Supabase but always send a windowed subset to the LLM
 
 **Warning signs:**
-- Direct calls to `getOccurrencesInRange()` without exception filtering in calendar code
-- "Edit this occurrence" creating an exception but the parent still generating that date
-- No transaction/atomicity for "edit all future events" split
-- Recurring event tests that do not include any exception scenarios
-- Duplicate events appearing on the calendar for edited occurrences
+- Response latency increases linearly with conversation length
+- LLM API returns 400/413 errors after long conversations
+- Token usage in proxy logs grows quadratically over a conversation's lifetime
 
 **Phase to address:**
-Phase 3 (Event CRUD) -- recurring event management must handle exceptions from the start. Do not defer exception handling to a later phase; it is core to the recurring event feature.
+Phase 2 (chat UI/state management) -- implement the message window when building the conversation state hook.
 
 ---
 
-### Pitfall 8: SWR Cache Coherence When Multiple Domains Feed the Calendar
+## Technical Debt Patterns
 
-**What goes wrong:**
-The calendar feed aggregates data from tasks, habits, bills, workouts, and events. Each domain also has its own SWR cache (e.g., `useWorkouts()`, `useBills()`, the task kanban board). When a user completes a task on the Tasks page, the tasks SWR cache is updated, but the calendar feed SWR cache still shows the task as incomplete. The user navigates to the calendar and sees stale data until the feed cache revalidates.
+Shortcuts that seem reasonable but create long-term problems.
 
-Worse: inline mutations on the calendar (e.g., toggling a habit checkbox) must update BOTH the calendar feed cache AND the habits domain cache. If only one is updated, the user sees inconsistent state depending on which page they visit next.
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Store messages in React state only (no DB) | No schema, fast to implement | Conversations lost on refresh, no history | v7.0 MVP only -- plan DB schema for next milestone |
+| Skip token counting | No complexity | Silent failures on long conversations, no cost awareness | v7.0 MVP -- add approximate counting in Phase 2 |
+| Hardcode system prompt in API route | Simple, one location | Cannot customize per context (habits vs money vs general chat) | v7.0 only -- future milestones need context-aware prompts |
+| No rate limiting on `/api/chat` | One user, minimal abuse risk | If auth is compromised, unlimited LLM calls | Acceptable for personal app; add if ever multi-user |
+| Inline streaming logic in route handler | Quick to implement | Hard to test, hard to swap providers or add features | Never -- extract to a service module (`lib/llm/stream.ts`) from day one |
+| No message persistence | No DB migration needed | Cannot resume conversations, no search, no analytics | v7.0 MVP -- acceptable since scope says session-only |
 
-**Why it happens:**
-SWR caches are keyed by URL. `/api/calendar/feed?start=...&end=...` and `/api/habits` are different cache entries with independent lifecycle. The existing BetterR.Me codebase uses SWR `mutate()` to update domain-specific caches after mutations, but there is no mechanism to also invalidate the calendar feed cache. The calendar feed is a new cross-cutting concern that did not exist before.
+## Integration Gotchas
 
-**How to avoid:**
-1. **After any domain mutation, also call `mutate()` on the calendar feed key.** Create a `useCalendarMutate()` hook that exposes `invalidateCalendarFeed()`. Domain mutation hooks (task complete, habit toggle, bill paid) must call this after their primary mutation.
-2. **Use SWR's `mutate(key => ...)` pattern** (global mutate with key filter) to invalidate all calendar feed keys regardless of the date range. This handles the case where the calendar is viewing a different date range than what was mutated.
-3. **For inline calendar mutations** (toggle habit, complete task), optimistically update the calendar feed cache locally, then call the domain API, then revalidate both caches. The pattern:
-   ```
-   mutate(calendarFeedKey, optimisticData, false)  // optimistic update
-   await fetch('/api/habits/[id]/toggle', ...)      // actual mutation
-   mutate(calendarFeedKey)                           // revalidate feed
-   mutate(habitsKey)                                 // revalidate domain
-   ```
-4. **Consider a lightweight event bus** (a simple React context with a `Set<() => void>` of revalidation callbacks) that domain hooks register with. When ANY domain mutates, the event bus fires and all registered caches revalidate. This is simpler than manually wiring every mutation to every cache.
-5. **Test cross-page cache coherence:** Complete a task on the Tasks page, navigate to Calendar, verify it shows as complete WITHOUT a manual refresh.
+Common mistakes when connecting to the LLM proxy and existing BetterR.Me systems.
 
-**Warning signs:**
-- Calendar showing stale data after mutations on other pages
-- Inline calendar mutations not updating the source domain's cache
-- Only the calendar feed being mutated, not the domain cache (or vice versa)
-- `useSWR` calls for calendar feed without `revalidateOnFocus: true` (default is true, but if set to false for performance, stale data persists longer)
-- No global mutate usage -- only key-specific mutate
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| llm.betterr.me proxy | Assuming response format is identical to OpenAI API -- the CLIProxyAPI may have differences in error responses, rate limit headers, or streaming chunk boundaries | Test with the actual proxy in Phase 1 before building the UI. Verify error response format, streaming chunk format, and `[DONE]` handling against real responses. |
+| Supabase auth in streaming route | Using `supabase.auth.getSession()` instead of `supabase.auth.getUser()` -- `getSession()` reads cookies without server validation | Always use `getUser()` which validates the JWT with Supabase. The existing codebase already does this correctly in every route (e.g., `/api/habits`). Copy the pattern exactly. |
+| Supabase auth + ReadableStream | Creating the Supabase client inside the stream controller -- `cookies()` unavailable in that context | Create Supabase client and validate auth BEFORE constructing the ReadableStream. Auth check first, stream second. See Critical Pitfall #5. |
+| Next.js runtime selection | Using `export const runtime = 'edge'` for the chat route because "streaming is faster on edge" | Use Node.js runtime (the default). The Supabase SSR client uses `cookies()` from `next/headers` which works in Node.js runtime. Edge has API limitations that break Supabase SSR. The existing codebase uses Node.js runtime for all routes. |
+| SWR for chat data | Trying to use SWR for the streaming endpoint because "we use SWR for everything" | SWR is for request/response patterns, not streaming. Use raw `fetch()` with `response.body.getReader()` for the streaming endpoint. SWR can be used later for loading persisted conversation history, but not for the live stream. |
+| Existing middleware/proxy.ts | Forgetting to handle `/api/chat` in the auth middleware or adding it to a redirect list | Verify that `/api/chat` POST is not intercepted by the existing proxy middleware. It should pass through to the route handler like all other `/api/` routes. |
 
-**Phase to address:**
-Phase 4 (Aggregation) -- when building inline interactions. The cache coherence strategy must be designed before implementing inline toggles. Phase 2 (Calendar UI) should establish the SWR key pattern and the `useCalendarMutate()` hook.
+## Performance Traps
 
----
+Patterns that work at small scale but degrade as usage grows.
 
-## Moderate-Risk Pitfalls
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Re-rendering entire message list on each streamed token | UI freezes during streaming, dropped frames, high CPU | Memoize individual `<Message>` components with `React.memo`. Only the currently-streaming message should re-render. The message list itself should not re-render. | Noticeable at > 10 messages in conversation |
+| String concatenation for accumulating streamed tokens | Quadratic memory growth, GC pressure spikes | Accumulate chunks in an array, `.join('')` only for display. Or use a ref and flush to state on a debounced interval (every 50-100ms). | Noticeable at > 2000 tokens in a single response |
+| Not cleaning up fetch/reader on unmount | Memory leaks, orphaned network connections, zombie streams | `AbortController` in `useEffect` cleanup. Abort on unmount AND on new message send (cancel previous stream before starting new one). | After 3-5 navigations away from and back to the chat page |
+| Sending rendered markdown/HTML back as LLM context | Inflated token count, wasted proxy costs | Store raw text content in the messages array sent to the LLM. Render markdown only for display. The LLM should never see HTML tags or markdown syntax from previous responses. | Noticeable when assistant responses contain code blocks or formatted lists |
 
-### Pitfall 9: Permissions-Policy Header Blocks Notification API
+## Security Mistakes
 
-**What goes wrong:**
-The existing `next.config.ts` sets `Permissions-Policy: camera=(), microphone=(), geolocation=()`. This is a security hardening header that disables unused browser APIs. If `notifications=()` is added to this policy (by a developer following the pattern of "disable everything unused"), the Notification API and Push API will be blocked by the browser. The permission prompt will never appear, and `Notification.requestPermission()` will silently return `'denied'`.
+Domain-specific security issues for AI chat in a personal productivity app.
 
-**Why it happens:**
-The existing pattern in `next.config.ts` is to disable unused browser APIs for security. A developer adding `notifications=()` or `push=()` to the list would be following the existing convention but breaking the notification feature. This is particularly insidious because `Permissions-Policy` violations are silent -- no console error, no exception, just a permanently denied permission.
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| API key in `NEXT_PUBLIC_` env var or client code | Anyone viewing source can use your Claude subscription | Server-only env var (`LLM_PROXY_API_KEY`), all calls through `/api/chat` route |
+| No auth check on `/api/chat` | Unauthenticated requests trigger LLM calls | `supabase.auth.getUser()` at the top of the route handler, return 401 if no user. Follow existing `/api/habits` pattern exactly. |
+| User input interpolated into system prompt | Prompt injection -- user crafts input that overrides system instructions | System prompt is a constant string defined server-side. User input goes ONLY in `messages[].content` with role `user`. Never use template literals to embed user content in the system prompt. |
+| No input length validation | Enormous input causes expensive/slow LLM calls | Validate with Zod at the API boundary: max 10,000 characters per message, max 50 messages per request. Follow existing Zod validation pattern from `lib/validations/`. |
+| Logging full conversation content to Vercel | PII in server logs, subject to Vercel log retention | Log metadata only: message count, approximate token count, response time, error codes. Never log message content in production. Use existing `log` module. |
 
-**How to avoid:**
-1. **Do NOT add `notifications` or `push` to the Permissions-Policy header.** The current header already does not block them (they are not listed), so no change is needed.
-2. **Add a comment in `next.config.ts`** above the Permissions-Policy header: `// NOTE: Do not add 'notifications' or 'push' -- required for reminder notifications (v6.0)`
-3. **Add a startup check** (in the settings/notification preferences component) that verifies `'Notification' in window` before showing the enable button.
+## UX Pitfalls
 
-**Warning signs:**
-- `Notification.requestPermission()` returning `'denied'` immediately without showing a prompt
-- Permissions-Policy header containing `notifications=()` or `push=()`
-- Push subscription failing silently
+Common user experience mistakes in AI chat interfaces.
 
-**Phase to address:**
-Phase 5 (Notification Infrastructure) -- verify during implementation that the existing headers do not conflict.
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| No loading indicator before first token arrives | User thinks nothing happened, clicks send again (duplicate requests) | Show a pulsing "thinking" indicator immediately on send. Disable the send button and input during generation. |
+| No way to stop generation | Stuck watching a wrong/irrelevant response stream for 30+ seconds | Add a "Stop generating" button that aborts the fetch via AbortController and keeps the partial response visible. |
+| Raw API errors shown to user | "500 Internal Server Error" or `{"error":"rate_limited"}` confuses users | Catch all errors, show friendly messages: "Could not reach the AI. Please try again." with a retry button. Map common error codes to human messages. |
+| Empty state is a blank white/dark box | New users don't know what the chat can do or how to start | Show 2-3 clickable example prompts and a brief welcome message explaining capabilities. Match the existing BetterR.Me design language. |
+| Markdown responses rendered as raw text | Code blocks, lists, bold text, and formatting appear as plain text with `**` and `` ``` `` | Use `react-markdown` (or similar) to render assistant messages. Sanitize HTML output. Style code blocks for dark mode. |
+| Enter key handling wrong on mobile | Mobile users cannot send messages, or Enter always sends instead of creating newlines | Desktop: Enter sends, Shift+Enter for newline. Mobile: Enter creates newline, explicit send button is primary. Detect with touch/pointer queries. |
+| No conversation limits communicated | User writes 50 messages, then gets a cryptic error from token limit | Show subtle message count or "long conversation" indicator. Offer "Start new conversation" when approaching the window limit. |
+| Chat input hidden by mobile keyboard | On mobile, the virtual keyboard covers the input field | Use `visualViewport` API or CSS `dvh` units to keep input visible above keyboard. Test on actual mobile devices. |
 
----
+## "Looks Done But Isn't" Checklist
 
-### Pitfall 10: Existing `getLocalDateString()` Convention vs Calendar Time-Slot Precision
+Things that appear complete but are missing critical pieces.
 
-**What goes wrong:**
-The entire BetterR.Me codebase uses `getLocalDateString()` (returns `YYYY-MM-DD`) for all date handling. The calendar introduces TIME-based operations: clicking a 2:30 PM time slot, dragging from 2:00 to 3:30 PM, displaying events at specific hours. The existing date utility has no time handling. Developers will either (a) use `new Date()` methods (reintroducing the timezone bugs that `getLocalDateString()` was created to avoid) or (b) try to extend `getLocalDateString()` in ways that break existing callers.
+- [ ] **Streaming works:** Often missing abort handling -- verify navigating away stops the upstream LLM call (check Vercel function duration logs, should terminate shortly after client disconnects)
+- [ ] **Auth is checked:** Often missing the `getSession()` vs `getUser()` distinction -- verify auth uses `getUser()` which validates the JWT server-side, not just reads cookies
+- [ ] **Error handling:** Often missing timeout and network errors -- verify behavior when llm.betterr.me is unreachable (test with wrong URL in env var)
+- [ ] **Mobile layout:** Often missing keyboard handling -- verify the input field stays visible above the mobile virtual keyboard and chat scrolls correctly
+- [ ] **i18n:** Often missing translations for chat UI -- verify all three locales (en, zh, zh-TW) have chat-related strings for buttons, placeholders, error messages, and empty state
+- [ ] **Dark mode:** Often missing contrast on chat bubbles -- verify both user and assistant message bubbles are readable in dark mode (4.5:1 contrast ratio minimum)
+- [ ] **Empty state:** Often missing entirely -- verify what new users see before sending their first message
+- [ ] **Long messages:** Often missing overflow handling -- verify a very long single response (2000+ words) does not break the chat layout or cause horizontal scroll
+- [ ] **Concurrent sends:** Often missing -- verify rapid-fire sends do not create duplicate or interleaved streams (previous stream should be aborted when a new message is sent)
+- [ ] **Production streaming:** Often missing -- verify on a Vercel preview deploy that tokens arrive incrementally, not all at once (catches compression buffering)
 
-**Why it happens:**
-The codebase has a strong convention: all dates flow through `getLocalDateString()`. Calendar time slots require both date AND time in the user's local timezone. There is no existing utility for "get the user's current local time as HH:MM" or "combine a date string with a time string into a display timestamp." Developers will reach for `date-fns` or raw `Date` methods without considering the timezone implications.
+## Recovery Strategies
 
-**How to avoid:**
-1. **Add new time utilities alongside `getLocalDateString()`, do not modify it.** Create `getLocalTimeString()` returning `HH:MM` and `combineDateAndTime(date: string, time: string)` returning a display-ready string.
-2. **All new time utilities must use the same local-timezone principle:** `Intl.DateTimeFormat` with the user's locale and timezone, or manual `getHours()`/`getMinutes()` (which are already local).
-3. **For the time grid, use CSS `grid-template-rows` with fixed heights** rather than computing pixel positions from timestamps. This avoids Date math for layout entirely.
-4. **Date-fns is already in the codebase** (optimized imports in next.config.ts). Use it for time formatting (`format(date, 'HH:mm')`) but always pass Date objects constructed from local components, not from ISO strings.
-5. **Never use `new Date('2026-04-01T14:30:00')` without a timezone suffix.** In some browsers, this is parsed as UTC; in others, as local time. Always use `new Date(2026, 3, 1, 14, 30)` (component constructor is always local) or `date-fns/parse`.
+When pitfalls occur despite prevention, how to recover.
 
-**Warning signs:**
-- `new Date(isoString)` without explicit timezone handling in calendar code
-- `getLocalDateString()` being modified to also return time
-- Time display showing wrong hour (off by timezone offset)
-- Time grid slots not aligning with event blocks
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| API key leaked in client code | LOW | Rotate the key on llm.betterr.me immediately. Move to server-only env var. No user data at risk (personal app). Verify no commits with the key in git history. |
+| Streaming buffered in production | LOW | Add missing headers (`no-cache`, `no-transform`, `X-Accel-Buffering: no`, `Content-Encoding: none`). Redeploy. No data loss. |
+| Function timeout truncating responses | LOW | Add `max_tokens` limit to LLM request. Set `maxDuration` in route handler. Reduce system prompt length. |
+| Conversation context too large | LOW | Implement message windowing (last N messages). No migration since v7.0 stores in React state. |
+| SSE parsing errors | MEDIUM | Adopt `eventsource-parser` library. Requires refactoring the client-side stream consumer but localized to one hook/utility. |
+| Auth inside stream controller | LOW | Move auth check above the stream constructor. Single file change, no behavior difference. |
+| Scroll jank during streaming | MEDIUM | Refactor to debounced state updates, memoized message components, and conditional auto-scroll. Requires reworking the message list component. |
+| No abort handling (resource leaks) | MEDIUM | Add `signal` propagation to upstream fetch and `AbortController` on client. Touches both API route and chat hook but isolated changes. |
+| Prompt injection via system prompt | LOW | Move user content out of system prompt into messages array. Single file change in the API route. |
 
-**Phase to address:**
-Phase 2 (Calendar UI) -- time utilities must be established before building the time grid.
+## Pitfall-to-Phase Mapping
 
----
+How roadmap phases should address these pitfalls.
 
-### Pitfall 11: `fire_at` Not Recomputed When Events Are Rescheduled
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| API key leak (#1) | Phase 1 (API route) | `grep -r "NEXT_PUBLIC_LLM\|NEXT_PUBLIC_AI" app/ components/ lib/` returns zero results. Browser DevTools shows no requests to llm.betterr.me. |
+| Streaming buffered (#2) | Phase 1 (API route) | Deploy to Vercel preview. First token appears within 2s of send. Tokens arrive incrementally. Response headers do NOT contain `Content-Encoding: gzip`. |
+| Function timeout (#3) | Phase 1 (API route) | `maxDuration` exported from route file. `max_tokens` set in LLM request body. Test with a prompt requesting a long story -- should complete or show truncation warning. |
+| No abort handling (#4) | Phase 1 (API route) | Navigate away during streaming. Vercel function logs show function terminated shortly after, not running to completion of the LLM response. |
+| Auth inside stream (#5) | Phase 1 (API route) | `createClient()` and `getUser()` are called BEFORE `new ReadableStream()` in the route handler code. Automated test: POST without auth returns 401. |
+| SSE parsing (#6) | Phase 2 (chat UI) | Stream a response containing CJK characters, code blocks, and markdown. No parse errors in console. All content displays correctly. `[DONE]` never appears as text. |
+| Unbounded context (#7) | Phase 2 (chat UI) | Send 25+ messages in a row. No API errors. Response quality stays consistent. Messages array sent to API is capped at window size. |
+| i18n missing | Phase 2 (chat UI) | Switch locale to zh-TW. All chat UI strings (placeholder, buttons, errors, empty state) display in Chinese. No English fallbacks visible. |
+| Dark mode contrast | Phase 2 (chat UI) | Toggle dark mode. Message bubbles pass WCAG AA contrast check (4.5:1). |
+| Mobile keyboard | Phase 2 (chat UI) | Open in responsive mode (375px width). Input visible above keyboard simulation. Send button works. |
+| Production streaming | Phase 1+2 verification | Deploy to Vercel preview before merging. Tokens stream incrementally on the deployed version, not just localhost. |
 
-**What goes wrong:**
-The design spec mentions: "When an event's start time changes, all associated pending reminders must have their fire_at recalculated." In practice, this recomputation is forgotten in at least one of these code paths:
-- Drag-and-drop rescheduling (future feature, but the API should already handle it)
-- "Edit all future events" (changes start_time on the parent, all future reminders need recomputation)
-- Recurring event exception editing (the exception has different times, its reminders need independent fire_at)
-- Timezone change in user profile (all pending reminders shift)
+## Sources
 
-**Why it happens:**
-The `CalendarEventsDB.update()` method is the obvious place for recomputation, but not all reschedule paths go through it. Batch operations, recurring event splits, and profile updates are separate code paths that also affect reminder timing.
-
-**How to avoid:**
-1. **Create a `recomputeFireAt(sourceId: string, sourceType: string)` function** in the reminders DB class. This queries all `pending` reminders for the source, recomputes `fire_at` based on the current event/task time, and updates in batch.
-2. **Call `recomputeFireAt()` in EVERY code path that changes an event's time:** single event update, recurring event exception, "edit all future," and profile timezone change.
-3. **Write a test that creates an event with a reminder, updates the event time, and verifies `fire_at` changed.** This test catches regressions when new reschedule paths are added.
-4. **For "edit all future events," recompute fire_at for all reminders on the new child event** (which inherits the parent's reminders for future occurrences).
-
-**Warning signs:**
-- Reminders firing at the old time after an event is rescheduled
-- `recomputeFireAt()` only called in one code path
-- No test for fire_at recomputation after event update
-- Timezone change not triggering reminder recomputation
-
-**Phase to address:**
-Phase 3 (Event CRUD) for event-level recomputation. Phase 5 (Notification Infrastructure) for the general `recomputeFireAt()` utility. Phase 6 (Reminder Preferences) for timezone-change recomputation.
-
----
-
-### Pitfall 12: Keyboard Shortcuts Conflicting with Existing App and Form Inputs
-
-**What goes wrong:**
-The design spec defines keyboard shortcuts (D, W, M, T, N, C, /, arrows). These are single-key shortcuts without modifiers. When the user is typing in a form field (event title, search box, description textarea), pressing "D" should type the letter "d," not switch to Day view. If shortcuts are registered globally without checking `document.activeElement`, they will hijack text input.
-
-Additionally, the existing BetterR.Me app may already have keyboard listeners (the kanban board, task quick-add, etc.) that could conflict.
-
-**Why it happens:**
-Keyboard shortcuts are typically registered as `document.addEventListener('keydown', ...)`. Without filtering by active element, every keypress triggers the handler regardless of context. This is the most common keyboard shortcut bug in web apps.
-
-**How to avoid:**
-1. **Check `activeElement` before processing shortcuts.** If the active element is an `<input>`, `<textarea>`, or element with `contentEditable`, ignore the shortcut.
-2. **Scope shortcuts to the calendar page only.** Use a `useEffect` that adds/removes the listener when the calendar component mounts/unmounts. Do not register global shortcuts.
-3. **Use a hook like `useCalendarShortcuts()` with a `disabled` flag** that is set when any dialog/popover is open.
-4. **Test: open the event creation dialog, type "D" in the title field, verify it types "D" and does not switch to Day view.**
-
-**Warning signs:**
-- Typing in a form field triggers view switches
-- Shortcuts firing when a dialog is open
-- Shortcuts working on non-calendar pages
-
-**Phase to address:**
-Phase 2 (Calendar UI) -- keyboard shortcuts should be implemented with input filtering from the start.
+- [Next.js SSE Discussion #48427](https://github.com/vercel/next.js/discussions/48427) -- streaming buffering issues, compression gotchas, and header solutions
+- [Vercel AI SDK: Stopping Streams](https://ai-sdk.dev/docs/advanced/stopping-streams) -- abort handling and `consumeStream` patterns
+- [Vercel Function Limits](https://vercel.com/docs/functions/limitations) -- timeout limits, maxDuration, Hobby vs Pro plan differences
+- [Next.js ResponseAborted Discussion #61972](https://github.com/vercel/next.js/discussions/61972) -- unhandled rejection when client disconnects during streaming
+- [Next.js ReadableStream Closed Discussion #55027](https://github.com/vercel/next.js/discussions/55027) -- TypeError when writing to a closed/aborted stream
+- [Vercel Edge Runtime Duration Limits](https://vercel.com/changelog/new-execution-duration-limit-for-edge-functions) -- 300s edge limit, 25s first-byte requirement, why Node.js runtime is safer
+- [Smashing Magazine: Protect API Key in Next.js](https://www.smashingmagazine.com/2021/12/protect-api-key-production-nextjs-api-route/) -- server-side proxy pattern
+- [Upstash: SSE Streaming LLM in Next.js](https://upstash.com/blog/sse-streaming-llm-responses) -- SSE implementation patterns and header requirements
+- [Netguru: Chatbot UX Tips 2025](https://www.netguru.com/blog/chatbot-ux-tips) -- UX best practices for chat interfaces
+- [MindTheProduct: UX for AI Chatbots](https://www.mindtheproduct.com/deep-dive-ux-best-practices-for-ai-chatbots/) -- error handling, user control, capability communication
+- [Lobe Chat maxDuration Discussion](https://github.com/lobehub/lobe-chat/discussions/9155) -- real-world Vercel timeout issues with AI chat
 
 ---
-
-## Summary: Phase-by-Phase Pitfall Map
-
-| Phase | Pitfalls to Address |
-|---|---|
-| Phase 1 (DB Schema) | #3 (timezone column on profiles), #7 (exception schema design) |
-| Phase 2 (Calendar UI) | #6 (rendering performance), #8 (SWR key pattern), #10 (time utilities), #12 (keyboard shortcuts) |
-| Phase 3 (Event CRUD) | #7 (recurring expansion + exceptions), #11 (fire_at recomputation) |
-| Phase 4 (Aggregation) | #6 (API query optimization), #8 (cross-domain cache coherence) |
-| Phase 5 (Notification Infrastructure) | #1 (service worker), #2 (permission UX), #3 (fire_at timezone computation), #4 (cron reliability), #5 (email deliverability), #9 (Permissions-Policy header) |
-| Phase 6 (Reminder Preferences) | #11 (timezone-change recomputation) |
+*Pitfalls research for: AI Chat Foundation (v7.0) in BetterR.Me*
+*Researched: 2026-04-02*

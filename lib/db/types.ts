@@ -11,6 +11,7 @@ export interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   timezone: string | null;
+  email_notifications_enabled: boolean;
   preferences: ProfilePreferences;
   created_at: string;
   updated_at: string;
@@ -1290,3 +1291,45 @@ export interface PushSubscription {
 export type PushSubscriptionInsert = Omit<PushSubscription, 'id' | 'created_at'> & {
   id?: string;
 };
+
+// =============================================================================
+// CHAT — SHARED
+// =============================================================================
+
+export const CHAT_ROLES = ['user', 'assistant', 'system'] as const;
+export type ChatRole = (typeof CHAT_ROLES)[number];
+
+// =============================================================================
+// CONVERSATIONS
+// =============================================================================
+
+export interface Conversation {
+  id: string;
+  user_id: string;
+  title: string | null;
+  model: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ConversationInsert = {
+  user_id: string;
+  title?: string | null;
+  model?: string;
+};
+
+export type ConversationUpdate = Partial<Pick<Conversation, 'title' | 'model'>>;
+
+// =============================================================================
+// CHAT MESSAGES
+// =============================================================================
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  role: ChatRole;
+  content: string;
+  created_at: string;
+}
+
+export type ChatMessageInsert = Omit<ChatMessage, 'id' | 'created_at'>;
