@@ -47,7 +47,7 @@ Carried forward from v6.0 Calendar & Reminder Notifications. Push (Phase 34) and
 
 ### Internationalization
 
-- [ ] **I18N-01**: All calendar and reminder UI strings translated in en, zh, and zh-TW
+- [x] **I18N-01**: All calendar and reminder UI strings translated in en, zh, and zh-TW
 
 ### Responsive & Accessibility
 
@@ -114,7 +114,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REMN-08 | Phase 35.1 | Pending |
 | REMN-09 | Phase 35.1 | Complete |
 | REMN-10 | Phase 35.1 | Pending |
-| I18N-01 | Phase 35.1 | Pending |
+| I18N-01 | Phase 35.1 | Complete |
 | RESP-01 | Phase 35.1 | Pending |
 | RESP-02 | Phase 35.1 | Pending |
 | RESP-03 | Phase 35.1 | Pending |
