@@ -115,8 +115,10 @@ Plans:
   3. User can click a stop button (or press Escape) to halt Claude's response mid-generation
   4. User can send a message with Enter, insert a newline with Shift+Enter, and stop generation with Escape
   5. Chat UI uses existing BetterR.Me design tokens and renders correctly in both light and dark mode
-**Plans**: TBD
-**UI hint**: yes
+**Plans:** 2 plans
+Plans:
+- [ ] 35-01-PLAN.md — Leaf components: MarkdownRenderer, MessageBubble, ChatInput, ChatEmptyState, MessageList + tests
+- [ ] 35-02-PLAN.md — ChatContent orchestrator (useChat), ChatPage, Layout + integration tests
 
 ### Phase 36: Conversation Persistence & Management
 **Goal**: Users can maintain multiple conversations that persist across page refreshes, with automatic title generation
@@ -176,6 +178,6 @@ Phases execute in numeric order: 34 → 35 → 36 → 37
 | 32. Calendar UI — Week & Day Views | v6.0 | 4/4 | Complete | 2026-04-02 |
 | 33. Cross-Domain Feed Aggregation | v6.0 | 1/1 | Complete | 2026-04-02 |
 | 34. Database, Types & Streaming API | v7.0 | 3/3 | Complete    | 2026-04-02 |
-| 35. Chat UI & Message Rendering | v7.0 | 0/? | Not started | - |
+| 35. Chat UI & Message Rendering | v7.0 | 0/2 | Planned | - |
 | 36. Conversation Persistence & Management | v7.0 | 0/? | Not started | - |
 | 37. Navigation & i18n | v7.0 | 0/? | Not started | - |
