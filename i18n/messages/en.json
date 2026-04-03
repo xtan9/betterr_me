@@ -1786,6 +1786,8 @@
     },
     "sidebar": {
       "newEvent": "+ New Event",
+      "toggle": "Toggle sidebar",
+      "title": "Calendar Sidebar",
       "layers": "Layers",
       "comingSoonPhase": "Coming in a future phase",
       "actionFailed": "Action failed. Please try again."

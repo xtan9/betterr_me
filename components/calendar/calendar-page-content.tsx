@@ -474,6 +474,16 @@ export function CalendarPageContent() {
             onNext={goToNext}
             onToday={goToToday}
             onViewChange={setView}
+            mobileSidebar={
+              <CalendarSidebar
+                currentDate={currentDate}
+                onDateSelect={navigateToDate}
+                weekStartDay={weekStartDay}
+                onNewEvent={handleNewEvent}
+                enabledLayers={enabledLayers}
+                onToggleLayer={toggleLayer}
+              />
+            }
           />
 
           <div className="flex-1 overflow-auto p-4">
