@@ -1,11 +1,19 @@
 ---
 gsd_state_version: 1.0
+<<<<<<< HEAD
 milestone: v7.0
 milestone_name: AI Chat Foundation
 status: verifying
 stopped_at: Completed 34-03-PLAN.md
 last_updated: "2026-04-02T22:05:07.201Z"
 last_activity: 2026-04-02
+=======
+milestone: v6.0
+milestone_name: Calendar & Reminder Notifications
+status: Ready to plan
+stopped_at: Phase 34 context gathered
+last_updated: "2026-04-02T19:49:23.618Z"
+>>>>>>> f1956e9 (docs(state): record phase 34 context session)
 progress:
   total_phases: 4
   completed_phases: 1
@@ -33,6 +41,10 @@ Last activity: 2026-04-02
 Progress: [░░░░░░░░░░] 0% (v7.0)
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 35.1 inserted after Phase 35: Reminder Cron, Preferences & Polish (URGENT) — completes v6.0 Calendar & Reminder Notifications milestone (REMN-01 through REMN-10, I18N-01, RESP-01 through RESP-03)
 
 ### Decisions
 
@@ -66,6 +78,12 @@ None.
 
 ## Session Continuity
 
+<<<<<<< HEAD
 Last session: 2026-04-02T22:01:31.765Z
 Stopped at: Completed 34-03-PLAN.md
 Resume: `/gsd:plan-phase 34`
+=======
+Last session: 2026-04-02T19:49:23.615Z
+Stopped at: Phase 34 context gathered
+Resume: Begin Phase 34 (Push Notification Infrastructure)
+>>>>>>> f1956e9 (docs(state): record phase 34 context session)

@@ -118,6 +118,25 @@ Plans:
 **Plans**: TBD
 **UI hint**: yes
 
+### Phase 35.1: Reminder Cron, Preferences & Polish (INSERTED)
+
+**Goal:** Cron-based reminder dispatch, smart defaults, quiet hours, user preferences, responsive mobile layout, and i18n.
+**Requirements**: REMN-01, REMN-02, REMN-03, REMN-04, REMN-05, REMN-06, REMN-07, REMN-08, REMN-09, REMN-10, I18N-01, RESP-01, RESP-02, RESP-03
+**Depends on:** Phase 35 (Chat UI), Phase 34 (Push Notifications - v6.0), Phase 35 (Email Notifications - v6.0)
+**Plans:** 0 plans
+
+**Success criteria:**
+1. User can add multiple reminders per event with relative (5m/15m/30m/1h/1d) or absolute timing, targeting push, email, or both
+2. Smart defaults auto-apply per source type and user can customize defaults in settings
+3. Quiet hours prevent push notifications between configurable start/end times
+4. Vercel Cron job runs every minute to dispatch pending reminders via push and/or email
+5. Failed deliveries are logged with status='failed' for retry
+6. All calendar and reminder UI strings translated in en, zh, zh-TW
+7. Mobile-responsive calendar (sidebar collapses, day view default, swipe navigation, FAB for new event)
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 35.1 to break down)
+
 ### Phase 36: Conversation Persistence & Management
 **Goal**: Users can maintain multiple conversations that persist across page refreshes, with automatic title generation
 **Depends on**: Phase 35
