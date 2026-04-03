@@ -123,7 +123,7 @@ Plans:
 **Goal:** Cron-based reminder dispatch, smart defaults, quiet hours, user preferences, responsive mobile layout, and i18n.
 **Requirements**: REMN-01, REMN-02, REMN-03, REMN-04, REMN-05, REMN-06, REMN-07, REMN-08, REMN-09, REMN-10, I18N-01, RESP-01, RESP-02, RESP-03
 **Depends on:** Phase 35 (Chat UI), Phase 34 (Push Notifications - v6.0), Phase 35 (Email Notifications - v6.0)
-**Plans:** 1/5 plans executed
+**Plans:** 4/5 plans executed
 
 **Success criteria:**
 1. User can add multiple reminders per event with relative (5m/15m/30m/1h/1d) or absolute timing, targeting push, email, or both
@@ -135,10 +135,10 @@ Plans:
 7. Mobile-responsive calendar (sidebar collapses, day view default, swipe navigation, FAB for new event)
 
 Plans:
-- [ ] 35.1-01-PLAN.md — Push send utility, quiet hours logic, cron dispatch route
+- [x] 35.1-01-PLAN.md — Push send utility, quiet hours logic, cron dispatch route
 - [x] 35.1-02-PLAN.md — Reminder CRUD API routes, defaults API, fire_at computation
-- [ ] 35.1-03-PLAN.md — Event dialog reminder rows, settings UI (quiet hours + defaults)
-- [ ] 35.1-04-PLAN.md — Mobile responsive calendar (sidebar collapse, swipe, FAB)
+- [x] 35.1-03-PLAN.md — Event dialog reminder rows, settings UI (quiet hours + defaults)
+- [x] 35.1-04-PLAN.md — Mobile responsive calendar (sidebar collapse, swipe, FAB)
 - [ ] 35.1-05-PLAN.md — i18n translations for all new UI strings (en, zh, zh-TW)
 
 ### Phase 36: Conversation Persistence & Management
@@ -200,6 +200,6 @@ Phases execute in numeric order: 34 → 35 → 36 → 37
 | 33. Cross-Domain Feed Aggregation | v6.0 | 1/1 | Complete | 2026-04-02 |
 | 34. Database, Types & Streaming API | v7.0 | 3/3 | Complete    | 2026-04-02 |
 | 35. Chat UI & Message Rendering | v7.0 | 0/? | Not started | - |
-| 35.1 Reminder Cron & Polish | v6.0 | 1/5 | In Progress|  |
+| 35.1 Reminder Cron & Polish | v6.0 | 4/5 | In Progress|  |
 | 36. Conversation Persistence & Management | v7.0 | 0/? | Not started | - |
 | 37. Navigation & i18n | v7.0 | 0/? | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v7.0
 milestone_name: AI Chat Foundation
 status: executing
-stopped_at: Completed 35.1-02-PLAN.md
-last_updated: "2026-04-03T18:01:56.668Z"
+stopped_at: Completed 35.1-03-PLAN.md
+last_updated: "2026-04-03T18:10:58.654Z"
 last_activity: 2026-04-03
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 14
-  completed_plans: 10
+  completed_plans: 13
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 ## Current Position
 
 Phase: 35.1 (reminder-cron-preferences-polish) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-04-03
 
@@ -52,6 +52,8 @@ Recent decisions affecting current work:
 - [Phase 34]: Use raw Response for streaming instead of NextResponse for AI SDK toDataStreamResponse compatibility
 - [Phase 35.1]: Extended reminderCreateSchema with .and() for event_start_time rather than modifying shared schema
 - [Phase 35.1]: Reminder fire_at recomputation on reschedule catches errors silently to not fail event update
+- [Phase 35.1]: SMART_DEFAULTS exported from reminder-rows for reuse across event types
+- [Phase 35.1]: Dirty-tracking in ReminderDefaultsSettings to only PUT changed source types
 
 ### Research Notes
 
@@ -73,8 +75,8 @@ None.
 ## Session Continuity
 
 <<<<<<< HEAD
-Last session: 2026-04-03T18:01:56.666Z
-Stopped at: Completed 35.1-02-PLAN.md
+Last session: 2026-04-03T18:10:58.652Z
+Stopped at: Completed 35.1-03-PLAN.md
 Resume: `/gsd:plan-phase 34`
 =======
 Last session: 2026-04-02T19:49:23.615Z
