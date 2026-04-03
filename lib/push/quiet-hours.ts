@@ -21,13 +21,19 @@ export function isInQuietHours(
   const tz = userTimezone || "UTC";
 
   // Get current time in user's timezone as HH:MM
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  const currentTime = formatter.format(new Date());
+  let currentTime: string;
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    currentTime = formatter.format(new Date());
+  } catch {
+    // Invalid timezone — fall back to not in quiet hours so reminders still dispatch
+    return false;
+  }
 
   // Handle overnight wrap: e.g. 22:00-07:00
   if (quietStart > quietEnd) {

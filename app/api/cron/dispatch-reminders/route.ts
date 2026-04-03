@@ -84,6 +84,9 @@ export async function GET(request: NextRequest) {
             date: reminder.fire_at.split("T")[0],
           });
           emailSuccess = result.success && !result.skipped;
+          if (!result.success && result.error) {
+            log.error("Email dispatch failed", { reminderId: reminder.id, error: result.error });
+          }
         }
 
         // Update reminder status based on dispatch results

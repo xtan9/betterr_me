@@ -103,8 +103,8 @@ export function ReminderDefaultsSettings() {
       const dirtyTypes = SOURCE_TYPES.filter((st) => configs[st].dirty);
 
       await Promise.all(
-        dirtyTypes.map((sourceType) =>
-          fetch("/api/reminder-defaults", {
+        dirtyTypes.map(async (sourceType) => {
+          const res = await fetch("/api/reminder-defaults", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -112,8 +112,9 @@ export function ReminderDefaultsSettings() {
               relative_minutes: configs[sourceType].relativeMinutes,
               channels: configs[sourceType].channels,
             }),
-          })
-        )
+          });
+          if (!res.ok) throw new Error(`Failed to save defaults for ${sourceType}`);
+        })
       );
 
       mutate();

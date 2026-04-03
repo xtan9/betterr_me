@@ -63,6 +63,7 @@ export function EventDialog({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [reminderRows, setReminderRows] = useState<ReminderRowData[]>([]);
+  const [reminderLoadFailed, setReminderLoadFailed] = useState(false);
   const loadedReminderIds = useRef<Set<string>>(new Set());
 
   const isEditing = !!event;
@@ -77,11 +78,15 @@ export function EventDialog({
     if (isOpen) {
       form.reset(getDefaults(event, prefill, todayStr));
       loadedReminderIds.current = new Set();
+      setReminderLoadFailed(false);
 
       if (event) {
         // Edit mode: fetch existing reminders
         fetch(`/api/reminders?source_type=calendar_event&source_id=${event.id}`)
-          .then((res) => (res.ok ? res.json() : { reminders: [] }))
+          .then((res) => {
+            if (!res.ok) throw new Error(`Failed to fetch reminders: ${res.status}`);
+            return res.json();
+          })
           .then((data) => {
             const reminders: Reminder[] = data.reminders || [];
             const rows: ReminderRowData[] = reminders.map((r) => ({
@@ -95,7 +100,11 @@ export function EventDialog({
             setReminderRows(rows);
             loadedReminderIds.current = new Set(reminders.map((r) => r.id));
           })
-          .catch(() => setReminderRows([]));
+          .catch((err) => {
+            console.error("Failed to load reminders:", err);
+            setReminderLoadFailed(true);
+            setReminderRows([]);
+          });
       } else {
         // New event: smart defaults
         const defaultReminder: ReminderRowData = {
@@ -160,12 +169,14 @@ export function EventDialog({
         const eventId = savedEvent?.event?.id || event?.id;
 
         // Save reminders if we have an event ID
-        if (eventId) {
+        // Skip reminder persistence if the initial load failed — avoids deleting
+        // reminders we couldn't fetch (silent data destruction).
+        if (eventId && !reminderLoadFailed) {
           const startDateTime = values.is_all_day
-            ? `${values.start_date}T00:00:00`
+            ? `${values.start_date}T00:00:00Z`
             : values.start_time
-              ? `${values.start_date}T${values.start_time}:00`
-              : `${values.start_date}T00:00:00`;
+              ? `${values.start_date}T${values.start_time}:00Z`
+              : `${values.start_date}T00:00:00Z`;
 
           // Determine which reminders to create, update, delete
           const currentIds = new Set(
@@ -176,14 +187,19 @@ export function EventDialog({
           );
 
           // Delete removed reminders
-          await Promise.all(
+          const deleteResults = await Promise.allSettled(
             deletedIds.map((id) =>
-              fetch(`/api/reminders/${id}`, { method: "DELETE" }).catch(() => {})
+              fetch(`/api/reminders/${id}`, { method: "DELETE" })
             )
           );
+          for (const result of deleteResults) {
+            if (result.status === "rejected") {
+              console.error("Failed to delete reminder:", result.reason);
+            }
+          }
 
           // Create new reminders (no id) and update existing
-          await Promise.all(
+          const saveResults = await Promise.allSettled(
             reminderRows.map((row) => {
               if (!row.id) {
                 // New reminder
@@ -199,7 +215,7 @@ export function EventDialog({
                     channels: row.channels,
                     event_start_time: startDateTime,
                   }),
-                }).catch(() => {});
+                });
               } else {
                 // Existing reminder - update channels
                 return fetch(`/api/reminders/${row.id}`, {
@@ -208,10 +224,15 @@ export function EventDialog({
                   body: JSON.stringify({
                     channels: row.channels,
                   }),
-                }).catch(() => {});
+                });
               }
             })
           );
+          for (const result of saveResults) {
+            if (result.status === "rejected") {
+              console.error("Failed to save reminder:", result.reason);
+            }
+          }
         }
 
         onSaved();
