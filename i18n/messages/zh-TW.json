@@ -803,7 +803,13 @@
       "testError": "傳送測試通知失敗",
       "subscribeError": "啟用通知失敗",
       "unsubscribeError": "停用通知失敗",
-      "explainer": "您將收到即將到來的事件、任務截止日期、習慣提醒和帳單到期日的推播通知。您可以隨時停用通知。"
+      "explainer": "您將收到即將到來的事件、任務截止日期、習慣提醒和帳單到期日的推播通知。您可以隨時停用通知。",
+      "emailTitle": "郵件通知",
+      "emailDescription": "接收活動、任務、習慣和帳單的郵件提醒",
+      "emailExplainer": "郵件提醒將發送到您的帳戶郵箱地址。您也可以透過郵件底部的連結取消訂閱。",
+      "emailEnabled": "郵件通知已啟用",
+      "emailDisabled": "郵件通知已停用",
+      "emailToggleError": "更新郵件偏好失敗"
     }
   },
   "projects": {

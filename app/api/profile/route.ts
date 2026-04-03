@@ -74,6 +74,10 @@ export async function PATCH(request: NextRequest) {
       updates.preferences = validation.data.preferences as unknown as ProfileUpdate["preferences"];
     }
 
+    if (validation.data.email_notifications_enabled !== undefined) {
+      updates.email_notifications_enabled = validation.data.email_notifications_enabled;
+    }
+
     const profilesDB = new ProfilesDB(supabase);
     const profile = await profilesDB.updateProfile(user.id, updates);
     return NextResponse.json({ profile });
