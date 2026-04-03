@@ -1786,6 +1786,8 @@
     },
     "sidebar": {
       "newEvent": "+ 新事件",
+      "toggle": "切换侧边栏",
+      "title": "日历侧边栏",
       "layers": "图层",
       "comingSoonPhase": "将在未来阶段推出",
       "actionFailed": "操作失败，请重试。"

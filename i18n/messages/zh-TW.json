@@ -1786,6 +1786,8 @@
     },
     "sidebar": {
       "newEvent": "+ 新事件",
+      "toggle": "切換側邊欄",
+      "title": "日曆側邊欄",
       "layers": "圖層",
       "comingSoonPhase": "將在未來階段推出",
       "actionFailed": "操作失敗，請重試。"
