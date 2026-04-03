@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { CHAT_ROLES } from "@/lib/db/types";
 
 export const chatMessageSchema = z.object({
-  role: z.enum(["user", "assistant", "system"]),
+  role: z.enum(CHAT_ROLES),
   content: z
     .string()
     .min(1, "Message cannot be empty")
@@ -13,7 +14,6 @@ export const sendChatSchema = z.object({
     .array(chatMessageSchema)
     .min(1, "At least one message required")
     .max(100, "Too many messages"),
-  conversationId: z.string().uuid("Invalid conversation ID").optional(),
 });
 
 export type SendChatInput = z.infer<typeof sendChatSchema>;

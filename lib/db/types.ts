@@ -1292,6 +1292,13 @@ export type PushSubscriptionInsert = Omit<PushSubscription, 'id' | 'created_at'>
 };
 
 // =============================================================================
+// CHAT — SHARED
+// =============================================================================
+
+export const CHAT_ROLES = ['user', 'assistant', 'system'] as const;
+export type ChatRole = (typeof CHAT_ROLES)[number];
+
+// =============================================================================
 // CONVERSATIONS
 // =============================================================================
 
@@ -1319,13 +1326,9 @@ export type ConversationUpdate = Partial<Pick<Conversation, 'title' | 'model'>>;
 export interface ChatMessage {
   id: string;
   conversation_id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: ChatRole;
   content: string;
   created_at: string;
 }
 
-export type ChatMessageInsert = {
-  conversation_id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-};
+export type ChatMessageInsert = Omit<ChatMessage, 'id' | 'created_at'>;

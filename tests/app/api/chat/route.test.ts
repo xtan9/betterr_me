@@ -1,17 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // vi.hoisted mocks
-const { mockStreamText, mockToDataStreamResponse } = vi.hoisted(() => {
-  const mockToDataStreamResponse = vi.fn();
+const { mockStreamText, mockToTextStreamResponse } = vi.hoisted(() => {
+  const mockToTextStreamResponse = vi.fn();
   const mockStreamText = vi.fn(() => ({
-    toDataStreamResponse: mockToDataStreamResponse,
+    toTextStreamResponse: mockToTextStreamResponse,
   }));
-  return { mockStreamText, mockToDataStreamResponse };
+  return { mockStreamText, mockToTextStreamResponse };
 });
 
 const { mockCreateClient, mockGetUser } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockGetUser: vi.fn(),
+}));
+
+const { mockLogError, mockLogWarn } = vi.hoisted(() => ({
+  mockLogError: vi.fn(),
+  mockLogWarn: vi.fn(),
 }));
 
 // Mock modules
@@ -27,6 +32,10 @@ vi.mock('@/lib/ai/provider', () => ({
   llmProvider: vi.fn((model: string) => `mock-model:${model}`),
 }));
 
+vi.mock('@/lib/logger', () => ({
+  log: { error: mockLogError, warn: mockLogWarn },
+}));
+
 import { POST, maxDuration } from '@/app/api/chat/route';
 
 function makeRequest(body: unknown, options?: { signal?: AbortSignal }) {
@@ -39,8 +48,11 @@ function makeRequest(body: unknown, options?: { signal?: AbortSignal }) {
 }
 
 describe('POST /api/chat', () => {
+  const originalEnv = { ...process.env };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.LLM_API_KEY = 'test-key';
 
     // Default: authenticated user
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123', email: 'test@example.com' } } });
@@ -50,7 +62,11 @@ describe('POST /api/chat', () => {
 
     // Default: streaming response mock
     const mockResponse = new Response('streamed data', { status: 200 });
-    mockToDataStreamResponse.mockReturnValue(mockResponse);
+    mockToTextStreamResponse.mockReturnValue(mockResponse);
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
   });
 
   it('should return 401 for unauthenticated requests', async () => {
@@ -62,6 +78,18 @@ describe('POST /api/chat', () => {
 
     expect(response.status).toBe(401);
     expect(data.error).toBe('Unauthorized');
+  });
+
+  it('should return 503 when LLM_API_KEY is not set', async () => {
+    delete process.env.LLM_API_KEY;
+
+    const req = makeRequest({ messages: [{ role: 'user', content: 'Hello' }] });
+    const response = await POST(req);
+    const data = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(data.error).toBe('AI service is not configured.');
+    expect(mockLogError).toHaveBeenCalledWith('POST /api/chat failed: LLM_API_KEY not configured');
   });
 
   it('should return 400 for invalid body (empty messages array)', async () => {
@@ -82,7 +110,7 @@ describe('POST /api/chat', () => {
     expect(data.error).toBeDefined();
   });
 
-  it('should return 400 for invalid JSON', async () => {
+  it('should return 400 for invalid JSON and log warning', async () => {
     const req = new Request('http://localhost:3000/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -92,10 +120,11 @@ describe('POST /api/chat', () => {
     const data = await response.json();
 
     expect(response.status).toBe(400);
-    expect(data.error).toBe('Invalid JSON');
+    expect(data.error).toBe('Invalid JSON in request body');
+    expect(mockLogWarn).toHaveBeenCalled();
   });
 
-  it('should call streamText with correct parameters', async () => {
+  it('should call streamText with correct parameters including onError', async () => {
     const messages = [{ role: 'user' as const, content: 'Hello' }];
     const req = makeRequest({ messages });
     await POST(req);
@@ -104,31 +133,27 @@ describe('POST /api/chat', () => {
       expect.objectContaining({
         model: expect.anything(),
         messages,
-        maxTokens: expect.any(Number),
+        maxOutputTokens: expect.any(Number),
         abortSignal: req.signal,
+        onError: expect.any(Function),
       })
     );
   });
 
   it('should use LLM_MODEL env var with fallback', async () => {
-    const originalModel = process.env.LLM_MODEL;
     delete process.env.LLM_MODEL;
 
     const req = makeRequest({ messages: [{ role: 'user', content: 'Hello' }] });
     await POST(req);
 
-    // The llmProvider mock returns `mock-model:${model}`
     expect(mockStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'mock-model:claude-sonnet-4-20250514',
       })
     );
-
-    process.env.LLM_MODEL = originalModel;
   });
 
   it('should use LLM_MAX_TOKENS env var with fallback to 4096', async () => {
-    const originalTokens = process.env.LLM_MAX_TOKENS;
     delete process.env.LLM_MAX_TOKENS;
 
     const req = makeRequest({ messages: [{ role: 'user', content: 'Hello' }] });
@@ -136,22 +161,33 @@ describe('POST /api/chat', () => {
 
     expect(mockStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        maxTokens: 4096,
+        maxOutputTokens: 4096,
       })
     );
-
-    process.env.LLM_MAX_TOKENS = originalTokens;
   });
 
-  it('should return streaming response from toDataStreamResponse', async () => {
+  it('should use custom LLM_MAX_TOKENS when set', async () => {
+    process.env.LLM_MAX_TOKENS = '2048';
+
+    const req = makeRequest({ messages: [{ role: 'user', content: 'Hello' }] });
+    await POST(req);
+
+    expect(mockStreamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maxOutputTokens: 2048,
+      })
+    );
+  });
+
+  it('should return streaming response with correct headers', async () => {
     const mockResponse = new Response('streamed', { status: 200 });
-    mockToDataStreamResponse.mockReturnValue(mockResponse);
+    mockToTextStreamResponse.mockReturnValue(mockResponse);
 
     const req = makeRequest({ messages: [{ role: 'user', content: 'Hello' }] });
     const response = await POST(req);
 
     expect(response).toBe(mockResponse);
-    expect(mockToDataStreamResponse).toHaveBeenCalledWith(
+    expect(mockToTextStreamResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         headers: expect.objectContaining({
           'Cache-Control': 'no-cache, no-transform',
@@ -159,6 +195,17 @@ describe('POST /api/chat', () => {
         }),
       })
     );
+  });
+
+  it('should log stream errors via onError callback', async () => {
+    const req = makeRequest({ messages: [{ role: 'user', content: 'Hello' }] });
+    await POST(req);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const callArgs = (mockStreamText.mock.calls as any[][])[0][0];
+    const testError = new Error('stream failure');
+    callArgs.onError({ error: testError });
+    expect(mockLogError).toHaveBeenCalledWith('LLM stream error', testError);
   });
 
   it('should return 502 when streamText throws (proxy unreachable)', async () => {
@@ -172,6 +219,20 @@ describe('POST /api/chat', () => {
 
     expect(response.status).toBe(502);
     expect(data.error).toBe('Failed to reach AI service. Please try again.');
+    expect(mockLogError).toHaveBeenCalled();
+  });
+
+  it('should return 499 for aborted requests', async () => {
+    const abortError = new Error('AbortError');
+    abortError.name = 'AbortError';
+    mockStreamText.mockImplementation(() => {
+      throw abortError;
+    });
+
+    const req = makeRequest({ messages: [{ role: 'user', content: 'Hello' }] });
+    const response = await POST(req);
+
+    expect(response.status).toBe(499);
   });
 
   it('should export maxDuration as 60', () => {
@@ -182,7 +243,8 @@ describe('POST /api/chat', () => {
     const req = makeRequest({ messages: [{ role: 'user', content: 'Hello' }] });
     await POST(req);
 
-    const callArgs = mockStreamText.mock.calls[0][0];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const callArgs = (mockStreamText.mock.calls as any[][])[0][0];
     expect(callArgs.abortSignal).toBeInstanceOf(AbortSignal);
   });
 });
