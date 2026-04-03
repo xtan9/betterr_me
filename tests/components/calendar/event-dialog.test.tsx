@@ -53,6 +53,17 @@ describe("EventDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFetch.mockReset();
+    // Default: reminder fetch returns empty array (used by edit mode)
+    mockFetch.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/api/reminders")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ reminders: [] }),
+        });
+      }
+      // Default for other fetches — resolved by individual tests via mockResolvedValueOnce
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
   });
 
   it("renders New Event title when no event prop (create mode)", () => {
@@ -112,7 +123,12 @@ describe("EventDialog", () => {
   });
 
   it("calls fetch POST on save in create mode", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true });
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders") && (!opts || opts.method === undefined || opts.method === "GET")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ reminders: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
 
     render(<EventDialog {...defaultProps} prefill={{ title: "New Event" }} />);
 
@@ -128,8 +144,6 @@ describe("EventDialog", () => {
   });
 
   it("calls fetch PATCH on save in edit mode", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true });
-
     render(<EventDialog {...defaultProps} event={makeEvent()} />);
 
     const saveButton = screen.getByText("eventDialog.save");
@@ -144,8 +158,6 @@ describe("EventDialog", () => {
   });
 
   it("calls onSaved and onClose after successful save", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true });
-
     render(
       <EventDialog {...defaultProps} prefill={{ title: "Test" }} />,
     );
@@ -159,7 +171,6 @@ describe("EventDialog", () => {
   });
 
   it("calls fetch DELETE when delete is confirmed", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true });
     window.confirm = vi.fn().mockReturnValue(true);
 
     render(<EventDialog {...defaultProps} event={makeEvent()} />);
