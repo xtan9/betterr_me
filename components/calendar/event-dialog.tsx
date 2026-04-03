@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
+import { ReminderRows, ReminderRowData, SMART_DEFAULTS } from "./reminder-rows";
+import type { Reminder } from "@/lib/db/types";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +62,8 @@ export function EventDialog({
   const t = useTranslations("calendar");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [reminderRows, setReminderRows] = useState<ReminderRowData[]>([]);
+  const loadedReminderIds = useRef<Set<string>>(new Set());
 
   const isEditing = !!event;
   const todayStr = getLocalDateString();
@@ -68,10 +72,41 @@ export function EventDialog({
     defaultValues: getDefaults(event, prefill, todayStr),
   });
 
-  // Reset form when event/prefill changes
+  // Reset form and reminders when event/prefill changes
   useEffect(() => {
     if (isOpen) {
       form.reset(getDefaults(event, prefill, todayStr));
+      loadedReminderIds.current = new Set();
+
+      if (event) {
+        // Edit mode: fetch existing reminders
+        fetch(`/api/reminders?source_type=calendar_event&source_id=${event.id}`)
+          .then((res) => (res.ok ? res.json() : { reminders: [] }))
+          .then((data) => {
+            const reminders: Reminder[] = data.reminders || [];
+            const rows: ReminderRowData[] = reminders.map((r) => ({
+              id: r.id,
+              tempId: r.id,
+              reminderType: r.reminder_type as "relative" | "absolute",
+              relativeMinutes: r.relative_minutes,
+              absoluteTime: r.absolute_time,
+              channels: [...r.channels] as ("push" | "email")[],
+            }));
+            setReminderRows(rows);
+            loadedReminderIds.current = new Set(reminders.map((r) => r.id));
+          })
+          .catch(() => setReminderRows([]));
+      } else {
+        // New event: smart defaults
+        const defaultReminder: ReminderRowData = {
+          tempId: crypto.randomUUID(),
+          reminderType: "relative",
+          relativeMinutes: SMART_DEFAULTS.calendar_event.relativeMinutes,
+          absoluteTime: null,
+          channels: [...SMART_DEFAULTS.calendar_event.channels],
+        };
+        setReminderRows([defaultReminder]);
+      }
     }
   }, [isOpen, event, prefill, todayStr, form]);
 
@@ -119,6 +154,64 @@ export function EventDialog({
             message: data.error || t("eventDialog.saveFailed"),
           });
           return;
+        }
+
+        const savedEvent = await res.json().catch(() => ({}));
+        const eventId = savedEvent?.event?.id || event?.id;
+
+        // Save reminders if we have an event ID
+        if (eventId) {
+          const startDateTime = values.is_all_day
+            ? `${values.start_date}T00:00:00`
+            : values.start_time
+              ? `${values.start_date}T${values.start_time}:00`
+              : `${values.start_date}T00:00:00`;
+
+          // Determine which reminders to create, update, delete
+          const currentIds = new Set(
+            reminderRows.filter((r) => r.id).map((r) => r.id!)
+          );
+          const deletedIds = [...loadedReminderIds.current].filter(
+            (id) => !currentIds.has(id)
+          );
+
+          // Delete removed reminders
+          await Promise.all(
+            deletedIds.map((id) =>
+              fetch(`/api/reminders/${id}`, { method: "DELETE" }).catch(() => {})
+            )
+          );
+
+          // Create new reminders (no id) and update existing
+          await Promise.all(
+            reminderRows.map((row) => {
+              if (!row.id) {
+                // New reminder
+                return fetch("/api/reminders", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    source_type: "calendar_event",
+                    source_id: eventId,
+                    reminder_type: row.reminderType,
+                    relative_minutes: row.relativeMinutes,
+                    absolute_time: row.absoluteTime,
+                    channels: row.channels,
+                    event_start_time: startDateTime,
+                  }),
+                }).catch(() => {});
+              } else {
+                // Existing reminder - update channels
+                return fetch(`/api/reminders/${row.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    channels: row.channels,
+                  }),
+                }).catch(() => {});
+              }
+            })
+          );
         }
 
         onSaved();
@@ -301,6 +394,15 @@ export function EventDialog({
                 />
               ))}
             </div>
+          </div>
+
+          {/* Reminders */}
+          <div className="border-t pt-4 mt-4">
+            <ReminderRows
+              rows={reminderRows}
+              onChange={setReminderRows}
+              disabled={saving}
+            />
           </div>
 
           {/* Recurrence placeholder */}
