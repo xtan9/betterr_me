@@ -1,22 +1,38 @@
 import crypto from 'crypto';
+import { log } from '@/lib/logger';
 
-const SECRET = process.env.EMAIL_UNSUBSCRIBE_SECRET || '';
+const TOKEN_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function getSecret(): string {
+  const secret = process.env.EMAIL_UNSUBSCRIBE_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error('EMAIL_UNSUBSCRIBE_SECRET must be set and at least 32 characters');
+  }
+  return secret;
+}
 
 export function generateUnsubscribeToken(userId: string): string {
-  const hmac = crypto.createHmac('sha256', SECRET).update(userId).digest('hex');
-  const payload = Buffer.from(JSON.stringify({ uid: userId, sig: hmac })).toString('base64url');
+  const exp = Date.now() + TOKEN_MAX_AGE_MS;
+  const data = `${userId}:${exp}`;
+  const hmac = crypto.createHmac('sha256', getSecret()).update(data).digest('hex');
+  const payload = Buffer.from(JSON.stringify({ uid: userId, exp, sig: hmac })).toString('base64url');
   return payload;
 }
 
 export function verifyUnsubscribeToken(token: string): string | null {
   try {
     const decoded = Buffer.from(token, 'base64url').toString();
-    const { uid, sig } = JSON.parse(decoded);
+    const { uid, exp, sig } = JSON.parse(decoded);
     if (!uid || !sig) return null;
-    const expected = crypto.createHmac('sha256', SECRET).update(uid).digest('hex');
+    if (typeof exp === 'number' && Date.now() > exp) return null;
+    const data = `${uid}:${exp}`;
+    const expected = crypto.createHmac('sha256', getSecret()).update(data).digest('hex');
     if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
     return uid;
-  } catch {
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) {
+      log.error('Unexpected error verifying unsubscribe token', error);
+    }
     return null;
   }
 }
