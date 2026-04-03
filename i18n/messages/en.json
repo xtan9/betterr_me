@@ -809,7 +809,39 @@
       "emailExplainer": "Email reminders are sent to your account email address. You can also unsubscribe from any email using the link in the footer.",
       "emailEnabled": "Email notifications enabled",
       "emailDisabled": "Email notifications disabled",
-      "emailToggleError": "Failed to update email preference"
+      "emailToggleError": "Failed to update email preference",
+      "quietHours": {
+        "title": "Quiet Hours",
+        "description": "Pause push notifications during these hours",
+        "enabled": "Quiet hours enabled",
+        "disabled": "Quiet hours disabled",
+        "startTime": "Start time",
+        "endTime": "End time",
+        "emailNote": "Email notifications are not affected by quiet hours",
+        "saved": "Quiet hours saved",
+        "saveError": "Failed to save quiet hours",
+        "save": "Save"
+      },
+      "reminderDefaults": {
+        "title": "Default Reminders",
+        "description": "Auto-apply these reminders when creating new items",
+        "sourceType": {
+          "calendar_event": "Calendar Events",
+          "task": "Tasks",
+          "habit": "Habits",
+          "bill": "Bills"
+        },
+        "5min": "5 minutes before",
+        "15min": "15 minutes before",
+        "30min": "30 minutes before",
+        "1hour": "1 hour before",
+        "1day": "1 day before",
+        "push": "Push",
+        "email": "Email",
+        "saved": "Default reminders saved",
+        "saveError": "Failed to save default reminders",
+        "saveAll": "Save defaults"
+      }
     }
   },
   "projects": {
@@ -1860,6 +1892,23 @@
     },
     "dayHeader": {
       "dateTitle": "{weekday}, {date}"
+    },
+    "reminders": {
+      "title": "Reminders",
+      "typeLabel": "Reminder timing",
+      "add": "Add reminder",
+      "5min": "5 minutes before",
+      "15min": "15 minutes before",
+      "30min": "30 minutes before",
+      "1hour": "1 hour before",
+      "1day": "1 day before",
+      "custom": "Custom",
+      "customMinutes": "Minutes before",
+      "absolute": "Specific time",
+      "absoluteTime": "Reminder time",
+      "push": "Push",
+      "email": "Email",
+      "remove": "Remove reminder"
     }
   }
 }
