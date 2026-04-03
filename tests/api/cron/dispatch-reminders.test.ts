@@ -261,18 +261,17 @@ describe("GET /api/cron/dispatch-reminders", () => {
     const profile = mockProfile();
 
     mockGetPendingReminders.mockResolvedValue([reminder1, reminder2]);
-    mockGetProfile.mockResolvedValue(profile);
-    mockSendPushNotification
-      .mockRejectedValueOnce(new Error("network error")) // first reminder throws
-      .mockResolvedValueOnce({ sent: 1, failed: 0 }); // second succeeds
-    mockSendReminderEmail
-      .mockRejectedValueOnce(new Error("email error"))
-      .mockResolvedValueOnce({ success: true });
+    // First getProfile call throws (simulating DB error), second succeeds
+    mockGetProfile
+      .mockRejectedValueOnce(new Error("DB connection error"))
+      .mockResolvedValueOnce(profile);
+    mockSendPushNotification.mockResolvedValue({ sent: 1, failed: 0 });
+    mockSendReminderEmail.mockResolvedValue({ success: true });
 
     const res = await GET(createRequest());
     const body = await res.json();
 
-    // First fails (catch), second dispatched
+    // First fails (catch at getProfile), second dispatched
     expect(body.dispatched).toBe(1);
     expect(body.failed).toBe(1);
   });
