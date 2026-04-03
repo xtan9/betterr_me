@@ -1859,5 +1859,17 @@
     "dayHeader": {
       "dateTitle": "{weekday}, {date}"
     }
+  },
+  "chat": {
+    "emptyState": {
+      "greeting": "How can I help?"
+    },
+    "input": {
+      "placeholder": "Message..."
+    },
+    "error": {
+      "generic": "Something went wrong. Please try again.",
+      "retry": "Retry"
+    }
   }
 }

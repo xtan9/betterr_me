@@ -1859,5 +1859,17 @@
     "dayHeader": {
       "dateTitle": "{weekday}, {date}"
     }
+  },
+  "chat": {
+    "emptyState": {
+      "greeting": "有什麼我可以幫忙的？"
+    },
+    "input": {
+      "placeholder": "輸入訊息..."
+    },
+    "error": {
+      "generic": "出了點問題，請重試。",
+      "retry": "重試"
+    }
   }
 }
