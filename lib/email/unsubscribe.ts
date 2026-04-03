@@ -20,13 +20,14 @@ export function generateUnsubscribeToken(userId: string): string {
 }
 
 export function verifyUnsubscribeToken(token: string): string | null {
+  const secret = getSecret(); // Let config errors propagate as 500, not "invalid token"
   try {
     const decoded = Buffer.from(token, 'base64url').toString();
     const { uid, exp, sig } = JSON.parse(decoded);
     if (!uid || !sig) return null;
     if (typeof exp === 'number' && Date.now() > exp) return null;
     const data = `${uid}:${exp}`;
-    const expected = crypto.createHmac('sha256', getSecret()).update(data).digest('hex');
+    const expected = crypto.createHmac('sha256', secret).update(data).digest('hex');
     if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
     return uid;
   } catch (error) {
