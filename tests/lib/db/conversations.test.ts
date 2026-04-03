@@ -95,41 +95,43 @@ describe('ConversationsDB', () => {
   });
 
   describe('updateConversation', () => {
-    it('should update and return the conversation', async () => {
+    it('should update and return the conversation with user_id filter', async () => {
       const updated = { ...mockConversation, title: 'Updated Title' };
       mockSupabaseClient.setMockResponse(updated);
 
-      const result = await db.updateConversation('conv-123', { title: 'Updated Title' });
+      const result = await db.updateConversation('conv-123', mockUserId, { title: 'Updated Title' });
 
       expect(result).toEqual(updated);
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('conversations');
       expect(mockSupabaseClient.update).toHaveBeenCalledWith({ title: 'Updated Title' });
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'conv-123');
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
       expect(mockSupabaseClient.single).toHaveBeenCalled();
     });
 
     it('should throw on database error', async () => {
       mockSupabaseClient.setMockResponse(null, { message: 'Update error' });
 
-      await expect(db.updateConversation('conv-123', { title: 'x' })).rejects.toEqual({ message: 'Update error' });
+      await expect(db.updateConversation('conv-123', mockUserId, { title: 'x' })).rejects.toEqual({ message: 'Update error' });
     });
   });
 
   describe('deleteConversation', () => {
-    it('should delete a conversation by id', async () => {
+    it('should delete a conversation by id with user_id filter', async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      await db.deleteConversation('conv-123');
+      await db.deleteConversation('conv-123', mockUserId);
 
       expect(mockSupabaseClient.from).toHaveBeenCalledWith('conversations');
       expect(mockSupabaseClient.delete).toHaveBeenCalled();
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'conv-123');
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
     });
 
     it('should throw on database error', async () => {
       mockSupabaseClient.setMockResponse(null, { message: 'Delete error' });
 
-      await expect(db.deleteConversation('conv-123')).rejects.toEqual({ message: 'Delete error' });
+      await expect(db.deleteConversation('conv-123', mockUserId)).rejects.toEqual({ message: 'Delete error' });
     });
   });
 });

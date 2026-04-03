@@ -37,22 +37,24 @@ export class ConversationsDB {
     return data;
   }
 
-  async updateConversation(id: string, updates: ConversationUpdate): Promise<Conversation> {
+  async updateConversation(id: string, userId: string, updates: ConversationUpdate): Promise<Conversation> {
     const { data, error } = await this.supabase
       .from('conversations')
       .update(updates)
       .eq('id', id)
+      .eq('user_id', userId)
       .select()
       .single();
     if (error) throw error;
     return data;
   }
 
-  async deleteConversation(id: string): Promise<void> {
+  async deleteConversation(id: string, userId: string): Promise<void> {
     const { error } = await this.supabase
       .from('conversations')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', userId);
     if (error) throw error;
   }
 }

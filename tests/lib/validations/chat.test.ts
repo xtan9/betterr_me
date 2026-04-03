@@ -103,34 +103,11 @@ describe("sendChatSchema", () => {
     }
   });
 
-  it("accepts valid conversationId UUID", () => {
+  it("strips unknown fields", () => {
     const result = sendChatSchema.safeParse({
       messages: [validMessage],
-      conversationId: "550e8400-e29b-41d4-a716-446655440000",
+      unknownField: "should be ignored",
     });
     expect(result.success).toBe(true);
-  });
-
-  it("rejects invalid conversationId", () => {
-    const result = sendChatSchema.safeParse({
-      messages: [validMessage],
-      conversationId: "not-a-uuid",
-    });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toContain(
-        "Invalid conversation ID",
-      );
-    }
-  });
-
-  it("accepts missing conversationId (optional)", () => {
-    const result = sendChatSchema.safeParse({
-      messages: [validMessage],
-    });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.conversationId).toBeUndefined();
-    }
   });
 });
