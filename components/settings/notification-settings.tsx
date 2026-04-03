@@ -76,11 +76,14 @@ export function NotificationSettings() {
   const handleEmailToggle = async (checked: boolean) => {
     setIsEmailToggling(true);
     try {
-      await fetch("/api/profile", {
+      const response = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email_notifications_enabled: checked }),
       });
+      if (!response.ok) {
+        throw new Error("Failed to update email preference");
+      }
       mutateProfile();
       toast.success(checked ? t("emailEnabled") : t("emailDisabled"));
     } catch {

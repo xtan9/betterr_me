@@ -243,7 +243,22 @@ describe("NotificationSettings", () => {
     });
   });
 
-  it("shows error toast when email toggle fails", async () => {
+  it("shows error toast when email toggle returns HTTP error", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500, json: () => Promise.resolve({ error: "Server error" }) });
+    render(<NotificationSettings />);
+    const emailToggle = document.getElementById(
+      "email-notifications-toggle"
+    ) as HTMLButtonElement;
+
+    fireEvent.click(emailToggle);
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("emailToggleError");
+    });
+    expect(mockMutateProfile).not.toHaveBeenCalled();
+  });
+
+  it("shows error toast when email toggle fails with network error", async () => {
     mockFetch.mockRejectedValueOnce(new Error("Network error"));
     render(<NotificationSettings />);
     const emailToggle = document.getElementById(
