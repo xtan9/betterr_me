@@ -48,8 +48,9 @@ export function ChatInput({
       if (
         e.key === "Enter" &&
         !e.shiftKey &&
+        // Guard against submitting during CJK IME composition (nativeEvent check for cross-browser compat)
         !e.nativeEvent.isComposing &&
-        !e.isComposing
+        !(e as unknown as { isComposing?: boolean }).isComposing
       ) {
         e.preventDefault();
         handleSend();
@@ -79,7 +80,7 @@ export function ChatInput({
           variant="ghost"
           size="icon"
           onClick={onStop}
-          aria-label="Stop"
+          aria-label={t("input.stop")}
         >
           <Square className="h-4 w-4" />
         </Button>
@@ -89,7 +90,7 @@ export function ChatInput({
           size="icon"
           onClick={handleSend}
           disabled={!input.trim() || disabled}
-          aria-label="Send"
+          aria-label={t("input.send")}
         >
           <Send className="h-4 w-4" />
         </Button>

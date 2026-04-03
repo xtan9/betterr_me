@@ -121,4 +121,43 @@ describe("ChatInput", () => {
     const textarea = screen.getByRole("textbox");
     expect(textarea).toHaveAttribute("placeholder", "input.placeholder");
   });
+
+  it("textarea clears after sending a message", () => {
+    const onSend = vi.fn();
+    render(<ChatInput {...defaultProps} onSend={onSend} />);
+    const textarea = screen.getByRole("textbox");
+
+    fireEvent.change(textarea, { target: { value: "Hello" } });
+    expect(textarea).toHaveValue("Hello");
+
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+    expect(textarea).toHaveValue("");
+  });
+
+  it("textarea and button are disabled when disabled prop is true", () => {
+    render(<ChatInput {...defaultProps} disabled={true} />);
+    const textarea = screen.getByRole("textbox");
+    const button = screen.getByRole("button");
+    expect(textarea).toBeDisabled();
+    expect(button).toBeDisabled();
+  });
+
+  it("pressing Enter while isStreaming does not call onSend", () => {
+    const onSend = vi.fn();
+    render(<ChatInput {...defaultProps} onSend={onSend} isStreaming={true} />);
+    const textarea = screen.getByRole("textbox");
+
+    fireEvent.change(textarea, { target: { value: "Hello" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("aria-labels use translated strings", () => {
+    const { rerender } = render(<ChatInput {...defaultProps} />);
+    expect(screen.getByRole("button")).toHaveAttribute("aria-label", "input.send");
+
+    rerender(<ChatInput {...defaultProps} isStreaming={true} />);
+    expect(screen.getByRole("button")).toHaveAttribute("aria-label", "input.stop");
+  });
 });

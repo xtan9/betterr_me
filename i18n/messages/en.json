@@ -1865,10 +1865,14 @@
       "greeting": "How can I help?"
     },
     "input": {
-      "placeholder": "Message..."
+      "placeholder": "Message...",
+      "send": "Send",
+      "stop": "Stop"
     },
     "error": {
       "generic": "Something went wrong. Please try again.",
+      "unauthorized": "Your session has expired. Please log in again.",
+      "unavailable": "AI service is temporarily unavailable.",
       "retry": "Retry"
     }
   }

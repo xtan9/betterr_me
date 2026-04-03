@@ -196,7 +196,7 @@ describe("ChatContent", () => {
     expect(mockStop).toHaveBeenCalled();
   });
 
-  it("renders translated error message and retry button when error is set", () => {
+  it("renders error message and retry button for retryable errors", () => {
     mockUseChat.mockReturnValue({
       messages: [makeMessage("1", "user", "hi")],
       sendMessage: mockSendMessage,
@@ -207,14 +207,63 @@ describe("ChatContent", () => {
       id: "test-chat",
     });
     render(<ChatContent />);
-    // With mocked useTranslations, keys are returned as-is
     expect(screen.getByText("error.generic")).toBeInTheDocument();
     expect(screen.getByText("error.retry")).toBeInTheDocument();
   });
 
-  it("clicking retry button after error calls sendMessage to retry", () => {
+  it("does not show retry button for 401 Unauthorized errors", () => {
     mockUseChat.mockReturnValue({
       messages: [makeMessage("1", "user", "hi")],
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: new Error("Unauthorized"),
+      setMessages: vi.fn(),
+      id: "test-chat",
+    });
+    render(<ChatContent />);
+    expect(screen.getByText("error.unauthorized")).toBeInTheDocument();
+    expect(screen.queryByText("error.retry")).not.toBeInTheDocument();
+  });
+
+  it("does not show retry button for 503 not configured errors", () => {
+    mockUseChat.mockReturnValue({
+      messages: [makeMessage("1", "user", "hi")],
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: new Error("AI service is not configured"),
+      setMessages: vi.fn(),
+      id: "test-chat",
+    });
+    render(<ChatContent />);
+    expect(screen.getByText("error.unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("error.retry")).not.toBeInTheDocument();
+  });
+
+  it("clicking retry removes failed assistant message and resends", () => {
+    const mockSetMessages = vi.fn();
+    mockUseChat.mockReturnValue({
+      messages: [
+        makeMessage("1", "user", "hi"),
+        makeMessage("2", "assistant", "partial..."),
+      ],
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: new Error("LLM proxy unreachable"),
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+    render(<ChatContent />);
+    fireEvent.click(screen.getByText("error.retry"));
+    expect(mockSetMessages).toHaveBeenCalled();
+    expect(mockSendMessage).toHaveBeenCalledWith({ text: "hi" });
+  });
+
+  it("does not show retry button when no user message exists", () => {
+    mockUseChat.mockReturnValue({
+      messages: [makeMessage("1", "assistant", "hello")],
       sendMessage: mockSendMessage,
       stop: mockStop,
       status: "ready" as const,
@@ -223,7 +272,8 @@ describe("ChatContent", () => {
       id: "test-chat",
     });
     render(<ChatContent />);
-    fireEvent.click(screen.getByText("error.retry"));
-    expect(mockSendMessage).toHaveBeenCalledWith({ text: "hi" });
+    expect(screen.getByText("error.generic")).toBeInTheDocument();
+    // No retry button because lastUserMessage is empty
+    expect(screen.queryByText("error.retry")).not.toBeInTheDocument();
   });
 });

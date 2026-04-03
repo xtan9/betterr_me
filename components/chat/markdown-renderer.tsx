@@ -43,23 +43,29 @@ const components: Components = {
       </code>
     );
   },
+  // Strip default <pre> wrapper — fenced code blocks are already wrapped by the code component above
   pre: ({ children }) => <>{children}</>,
   blockquote: ({ children }) => (
     <blockquote className="border-l-2 border-muted-foreground/30 pl-3 my-2 italic">
       {children}
     </blockquote>
   ),
-  a: ({ children, href, ...props }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-primary underline hover:no-underline"
-      {...props}
-    >
-      {children}
-    </a>
-  ),
+  a: ({ children, href, ...props }) => {
+    // Only allow safe URL schemes — blocks javascript: and data: URIs from LLM output
+    const safeHref =
+      href && /^(https?:\/\/|mailto:)/i.test(href) ? href : undefined;
+    return (
+      <a
+        href={safeHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline hover:no-underline"
+        {...props}
+      >
+        {children}
+      </a>
+    );
+  },
   table: ({ children }) => (
     <div className="overflow-x-auto my-2">
       <table className="min-w-full border-collapse text-sm">{children}</table>

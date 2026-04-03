@@ -59,4 +59,27 @@ describe("MarkdownRenderer", () => {
     render(<MarkdownRenderer content={table} />);
     expect(screen.getByRole("table")).toBeInTheDocument();
   });
+
+  it("sanitizes javascript: URLs in links", () => {
+    const { container } = render(
+      <MarkdownRenderer content='[Click](javascript:alert("xss"))' />
+    );
+    const links = container.querySelectorAll("a");
+    for (const link of links) {
+      const href = link.getAttribute("href");
+      // href should be null/undefined (sanitized) — never contain javascript:
+      expect(href === null || href === undefined || !href.includes("javascript:")).toBe(true);
+    }
+  });
+
+  it("allows https: URLs in links", () => {
+    render(<MarkdownRenderer content="[Safe](https://example.com)" />);
+    const link = screen.getByRole("link", { name: "Safe" });
+    expect(link).toHaveAttribute("href", "https://example.com");
+  });
+
+  it("renders empty string without crashing", () => {
+    const { container } = render(<MarkdownRenderer content="" />);
+    expect(container).toBeInTheDocument();
+  });
 });
