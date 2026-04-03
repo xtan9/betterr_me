@@ -34,15 +34,15 @@ Carried forward from v6.0 Calendar & Reminder Notifications. Push (Phase 34) and
 
 ### Reminders
 
-- [ ] **REMN-01**: User can add multiple reminders per calendar event (relative or absolute)
-- [ ] **REMN-02**: Relative reminders support: 5 min, 15 min, 30 min, 1 hour, 1 day before, and custom minutes
-- [ ] **REMN-03**: Absolute reminders support a specific date + time
-- [ ] **REMN-04**: Each reminder can target push, email, or both channels
-- [ ] **REMN-05**: Smart defaults auto-apply reminders based on source type (event: 15min/push, task: 1hr/push, habit: 8am/push, bill: 3days/push+email)
-- [ ] **REMN-06**: User can customize default reminders per source type in settings
+- [x] **REMN-01**: User can add multiple reminders per calendar event (relative or absolute)
+- [x] **REMN-02**: Relative reminders support: 5 min, 15 min, 30 min, 1 hour, 1 day before, and custom minutes
+- [x] **REMN-03**: Absolute reminders support a specific date + time
+- [x] **REMN-04**: Each reminder can target push, email, or both channels
+- [x] **REMN-05**: Smart defaults auto-apply reminders based on source type (event: 15min/push, task: 1hr/push, habit: 8am/push, bill: 3days/push+email)
+- [x] **REMN-06**: User can customize default reminders per source type in settings
 - [ ] **REMN-07**: User can set quiet hours (no push between configurable start/end times)
 - [ ] **REMN-08**: Vercel Cron job runs every minute to dispatch pending reminders
-- [ ] **REMN-09**: Reminders have fire_at pre-computed and recomputed on event reschedule
+- [x] **REMN-09**: Reminders have fire_at pre-computed and recomputed on event reschedule
 - [ ] **REMN-10**: Failed reminder deliveries are logged with status='failed' for retry
 
 ### Internationalization
@@ -104,15 +104,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTG-03 | Phase 35 | Pending |
 | INTG-04 | Phase 35 | Pending |
 
-| REMN-01 | Phase 35.1 | Pending |
-| REMN-02 | Phase 35.1 | Pending |
-| REMN-03 | Phase 35.1 | Pending |
-| REMN-04 | Phase 35.1 | Pending |
-| REMN-05 | Phase 35.1 | Pending |
-| REMN-06 | Phase 35.1 | Pending |
+| REMN-01 | Phase 35.1 | Complete |
+| REMN-02 | Phase 35.1 | Complete |
+| REMN-03 | Phase 35.1 | Complete |
+| REMN-04 | Phase 35.1 | Complete |
+| REMN-05 | Phase 35.1 | Complete |
+| REMN-06 | Phase 35.1 | Complete |
 | REMN-07 | Phase 35.1 | Pending |
 | REMN-08 | Phase 35.1 | Pending |
-| REMN-09 | Phase 35.1 | Pending |
+| REMN-09 | Phase 35.1 | Complete |
 | REMN-10 | Phase 35.1 | Pending |
 | I18N-01 | Phase 35.1 | Pending |
 | RESP-01 | Phase 35.1 | Pending |

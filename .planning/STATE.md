@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v7.0
 milestone_name: AI Chat Foundation
-status: verifying
-stopped_at: Phase 35.1 context gathered
-last_updated: "2026-04-03T17:19:26.337Z"
-last_activity: 2026-04-02
+status: executing
+stopped_at: Completed 35.1-02-PLAN.md
+last_updated: "2026-04-03T18:01:56.668Z"
+last_activity: 2026-04-03
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 14
+  completed_plans: 10
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Phase 34 — database-types-streaming-api
+**Current focus:** Phase 35.1 — reminder-cron-preferences-polish
 
 ## Current Position
 
-Phase: 35
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-04-02
+Phase: 35.1 (reminder-cron-preferences-polish) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-04-03
 
 Progress: [░░░░░░░░░░] 0% (v7.0)
 
@@ -50,6 +50,8 @@ Recent decisions affecting current work:
 - [Phase 34]: No client-side singleton for chat DB classes -- only used server-side via API routes
 - [Phase 34]: React bumped to 19.2.4 for @ai-sdk/react peer dep compatibility
 - [Phase 34]: Use raw Response for streaming instead of NextResponse for AI SDK toDataStreamResponse compatibility
+- [Phase 35.1]: Extended reminderCreateSchema with .and() for event_start_time rather than modifying shared schema
+- [Phase 35.1]: Reminder fire_at recomputation on reschedule catches errors silently to not fail event update
 
 ### Research Notes
 
@@ -71,8 +73,8 @@ None.
 ## Session Continuity
 
 <<<<<<< HEAD
-Last session: 2026-04-03T17:19:26.335Z
-Stopped at: Phase 35.1 context gathered
+Last session: 2026-04-03T18:01:56.666Z
+Stopped at: Completed 35.1-02-PLAN.md
 Resume: `/gsd:plan-phase 34`
 =======
 Last session: 2026-04-02T19:49:23.615Z
