@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v7.0
 milestone_name: AI Chat Foundation
-status: executing
-stopped_at: Completed 36-01-PLAN.md
-last_updated: "2026-04-04T01:12:29.337Z"
+status: verifying
+stopped_at: Completed 36-02-PLAN.md
+last_updated: "2026-04-04T01:23:49.454Z"
 last_activity: 2026-04-04
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 Phase: 36 (conversation-persistence-management) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-04
 
 Progress: [░░░░░░░░░░] 0% (v7.0)
@@ -49,6 +49,7 @@ Recent decisions affecting current work:
 - [Phase 35]: Check both e.nativeEvent.isComposing and e.isComposing for IME guard compatibility
 - [Phase 35]: Always show translated error.generic instead of raw error.message for consistent UX
 - [Phase 36]: Direct supabase.from().update() for bumping conversation updated_at since ConversationUpdate type only includes title and model
+- [Phase 36]: Use prevStatusRef for stream completion detection and async IIFE in useEffect for message loading
 
 ### Research Notes
 
@@ -69,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-04T01:12:29.334Z
-Stopped at: Completed 36-01-PLAN.md
+Last session: 2026-04-04T01:23:49.452Z
+Stopped at: Completed 36-02-PLAN.md
 Resume: `/gsd:plan-phase 34`

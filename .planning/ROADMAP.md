@@ -84,7 +84,7 @@
 
 - [x] **Phase 34: Database, Types & Streaming API** - Supabase tables, TypeScript types, Zod schemas, AI SDK provider, and streaming API route with auth and error handling (completed 2026-04-02)
 - [x] **Phase 35: Chat UI & Message Rendering** - Chat page with message bubbles, markdown rendering, stop button, keyboard shortcuts, and dark mode support (completed 2026-04-03)
-- [ ] **Phase 36: Conversation Persistence & Management** - Save/load messages to DB, conversation list sidebar, create/switch conversations, auto-generated titles
+- [x] **Phase 36: Conversation Persistence & Management** - Save/load messages to DB, conversation list sidebar, create/switch conversations, auto-generated titles (completed 2026-04-04)
 - [ ] **Phase 37: Navigation & i18n** - Sidebar navigation link, all chat UI strings translated in en, zh, zh-TW
 
 ## Phase Details
@@ -129,10 +129,10 @@ Plans:
   2. User can see a list of their conversations and switch between them
   3. Messages and responses persist in the database and survive page refresh without data loss
   4. After the first user-assistant exchange, the conversation receives an auto-generated title summarizing the topic
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 36-01-PLAN.md — Conversation API routes (CRUD, messages, title generation) + message converter utility
-- [ ] 36-02-PLAN.md — Conversation sidebar UI, ChatContent persistence refactor, i18n strings
+- [x] 36-02-PLAN.md — Conversation sidebar UI, ChatContent persistence refactor, i18n strings
 **UI hint**: yes
 
 ### Phase 37: Navigation & i18n
@@ -182,5 +182,5 @@ Phases execute in numeric order: 34 → 35 → 36 → 37
 | 33. Cross-Domain Feed Aggregation | v6.0 | 1/1 | Complete | 2026-04-02 |
 | 34. Database, Types & Streaming API | v7.0 | 3/3 | Complete    | 2026-04-02 |
 | 35. Chat UI & Message Rendering | v7.0 | 2/2 | Complete    | 2026-04-03 |
-| 36. Conversation Persistence & Management | v7.0 | 1/2 | In Progress|  |
+| 36. Conversation Persistence & Management | v7.0 | 2/2 | Complete   | 2026-04-04 |
 | 37. Navigation & i18n | v7.0 | 0/? | Not started | - |
