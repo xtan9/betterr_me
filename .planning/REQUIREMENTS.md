@@ -10,8 +10,8 @@ Requirements for AI Chat Foundation. Each maps to roadmap phases.
 ### Core Chat
 
 - [x] **CHAT-01**: User can send a message and receive a streaming response from Claude
-- [ ] **CHAT-02**: User can see Claude's response rendered as formatted markdown (bold, lists, code blocks)
-- [ ] **CHAT-03**: User can stop Claude's response mid-generation
+- [x] **CHAT-02**: User can see Claude's response rendered as formatted markdown (bold, lists, code blocks)
+- [x] **CHAT-03**: User can stop Claude's response mid-generation
 - [x] **CHAT-04**: User sees an error message with retry button when the LLM proxy fails
 
 ### Conversation Management
@@ -25,8 +25,8 @@ Requirements for AI Chat Foundation. Each maps to roadmap phases.
 
 - [ ] **INTG-01**: Chat is accessible via the app sidebar navigation
 - [ ] **INTG-02**: All chat UI strings are translated in en, zh, and zh-TW
-- [ ] **INTG-03**: Chat UI respects dark mode using existing design tokens
-- [ ] **INTG-04**: User can send with Enter, newline with Shift+Enter, stop with Escape
+- [x] **INTG-03**: Chat UI respects dark mode using existing design tokens
+- [x] **INTG-04**: User can send with Enter, newline with Shift+Enter, stop with Escape
 
 ## v6.0 Remainder — Reminders, i18n & Responsive (Phase 35.1)
 
@@ -92,8 +92,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CHAT-01 | Phase 34 | Complete |
-| CHAT-02 | Phase 35 | Pending |
-| CHAT-03 | Phase 35 | Pending |
+| CHAT-02 | Phase 35 | Complete |
+| CHAT-03 | Phase 35 | Complete |
 | CHAT-04 | Phase 34 | Complete |
 | CONV-01 | Phase 36 | Pending |
 | CONV-02 | Phase 36 | Pending |
@@ -101,8 +101,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONV-04 | Phase 36 | Pending |
 | INTG-01 | Phase 37 | Pending |
 | INTG-02 | Phase 37 | Pending |
-| INTG-03 | Phase 35 | Pending |
-| INTG-04 | Phase 35 | Pending |
+| INTG-03 | Phase 35 | Complete |
+| INTG-04 | Phase 35 | Complete |
 
 | REMN-01 | Phase 35.1 | Complete |
 | REMN-02 | Phase 35.1 | Complete |

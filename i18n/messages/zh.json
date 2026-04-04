@@ -1910,5 +1910,21 @@
       "email": "邮件",
       "remove": "移除提醒"
     }
+  },
+  "chat": {
+    "emptyState": {
+      "greeting": "有什么我可以帮忙的？"
+    },
+    "input": {
+      "placeholder": "输入消息...",
+      "send": "发送",
+      "stop": "停止"
+    },
+    "error": {
+      "generic": "出了点问题，请重试。",
+      "unauthorized": "会话已过期，请重新登录。",
+      "unavailable": "AI 服务暂时不可用。",
+      "retry": "重试"
+    }
   }
 }

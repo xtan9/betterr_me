@@ -75,12 +75,6 @@ None.
 
 ## Session Continuity
 
-<<<<<<< HEAD
 Last session: 2026-04-03T18:15:12.093Z
-Stopped at: Completed 35.1-05-PLAN.md
-Resume: `/gsd:plan-phase 34`
-=======
-Last session: 2026-04-02T19:49:23.615Z
-Stopped at: Phase 34 context gathered
-Resume: Begin Phase 34 (Push Notification Infrastructure)
->>>>>>> f1956e9 (docs(state): record phase 34 context session)
+Stopped at: Phase 35.1 complete
+Resume: `/gsd:discuss-phase 36`
