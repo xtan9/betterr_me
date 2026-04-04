@@ -101,7 +101,7 @@ describe('POST /api/conversations/[id]/title', () => {
     expect(data.title).toBe('Test Title');
     expect(mockGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        maxTokens: 30,
+        maxOutputTokens: 30,
       }),
     );
     expect(mockUpdateConversation).toHaveBeenCalledWith('conv-1', 'user-123', { title: 'Test Title' });

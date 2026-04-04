@@ -62,7 +62,7 @@ export async function POST(
         process.env.LLM_MODEL || "claude-sonnet-4-20250514",
       ),
       prompt: `Summarize this conversation in 5-8 words as a title. Return ONLY the title, no quotes or punctuation.\n\nUser: ${parsed.data.userMessage}\nAssistant: ${parsed.data.assistantMessage}`,
-      maxTokens: 30,
+      maxOutputTokens: 30,
     });
 
     const title = text.trim();
