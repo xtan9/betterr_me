@@ -368,6 +368,16 @@
   }
 }
 
+@layer components {
+  @keyframes blink-cursor {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .animate-blink-cursor {
+    animation: blink-cursor 1s step-end infinite;
+  }
+}
+
 /* Sidebar hover-overlay mode: when unpinned, hovering icon rail expands sidebar as overlay */
 /* Keep the gap div at icon width so content doesn't shift */
 [data-sidebar-hover="true"] .peer[data-state="expanded"] > div:first-child {

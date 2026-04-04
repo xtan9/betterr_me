@@ -1859,5 +1859,21 @@
     "dayHeader": {
       "dateTitle": "{weekday}, {date}"
     }
+  },
+  "chat": {
+    "emptyState": {
+      "greeting": "有什麼我可以幫忙的？"
+    },
+    "input": {
+      "placeholder": "輸入訊息...",
+      "send": "傳送",
+      "stop": "停止"
+    },
+    "error": {
+      "generic": "出了點問題，請重試。",
+      "unauthorized": "工作階段已過期，請重新登入。",
+      "unavailable": "AI 服務暫時無法使用。",
+      "retry": "重試"
+    }
   }
 }

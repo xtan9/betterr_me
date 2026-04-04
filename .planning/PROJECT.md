@@ -82,9 +82,15 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ### Active
 
-(Defined in REQUIREMENTS.md for v6.0 Calendar & Reminder Notifications)
+(Defined in REQUIREMENTS.md for v7.0 AI Chat Foundation)
 
-### Recently Validated (v6.0 Phases 29-32)
+### Recently Validated (v7.0 Phases 34-35)
+
+- ✓ Streaming chat API with auth, error handling, and abort support — v7.0 Phase 34
+- ✓ Chat UI with markdown rendering, message bubbles, stop/retry, keyboard shortcuts, dark mode — v7.0 Phase 35
+- ✓ All chat UI strings translated in en, zh, zh-TW — v7.0 Phase 35
+
+### Previously Validated (v6.0 Phases 29-32)
 
 - ✓ Database schema for calendar_events, reminders, reminder_defaults, push_subscriptions tables with RLS — v6.0 Phase 29
 - ✓ TypeScript types for all calendar/reminder domain entities — v6.0 Phase 29
