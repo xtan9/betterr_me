@@ -129,7 +129,10 @@ Plans:
   2. User can see a list of their conversations and switch between them
   3. Messages and responses persist in the database and survive page refresh without data loss
   4. After the first user-assistant exchange, the conversation receives an auto-generated title summarizing the topic
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 36-01-PLAN.md — Conversation API routes (CRUD, messages, title generation) + message converter utility
+- [ ] 36-02-PLAN.md — Conversation sidebar UI, ChatContent persistence refactor, i18n strings
 **UI hint**: yes
 
 ### Phase 37: Navigation & i18n
@@ -179,5 +182,5 @@ Phases execute in numeric order: 34 → 35 → 36 → 37
 | 33. Cross-Domain Feed Aggregation | v6.0 | 1/1 | Complete | 2026-04-02 |
 | 34. Database, Types & Streaming API | v7.0 | 3/3 | Complete    | 2026-04-02 |
 | 35. Chat UI & Message Rendering | v7.0 | 2/2 | Complete    | 2026-04-03 |
-| 36. Conversation Persistence & Management | v7.0 | 0/? | Not started | - |
+| 36. Conversation Persistence & Management | v7.0 | 0/2 | Not started | - |
 | 37. Navigation & i18n | v7.0 | 0/? | Not started | - |
