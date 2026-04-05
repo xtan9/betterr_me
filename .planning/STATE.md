@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v7.0
 milestone_name: AI Chat Foundation
 status: verifying
-stopped_at: Completed 37-01-PLAN.md
-last_updated: "2026-04-05T16:19:29.810Z"
+stopped_at: Completed 37.1-01-PLAN.md
+last_updated: "2026-04-05T21:59:55.624Z"
 last_activity: 2026-04-05
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 14
-  completed_plans: 14
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 19
+  completed_plans: 19
   percent: 0
 ---
 
@@ -60,6 +60,7 @@ Recent decisions affecting current work:
 - [Phase 36]: Direct supabase.from().update() for bumping conversation updated_at since ConversationUpdate type only includes title and model
 - [Phase 36]: Use prevStatusRef for stream completion detection and async IIFE in useEffect for message loading
 - [Phase 37]: Chat nav placed after Calendar as last main nav item in sidebar
+- [Phase 37.1]: Workout time extraction and layer defaults already fixed -- added test coverage only
 
 ### Research Notes
 
@@ -80,6 +81,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-05T16:15:23.593Z
-Stopped at: Completed 37-01-PLAN.md
+Last session: 2026-04-05T21:59:55.622Z
+Stopped at: Completed 37.1-01-PLAN.md
 Resume: `/gsd:plan-phase 34`
