@@ -22,7 +22,6 @@ const makeMessage = (
   id,
   role,
   parts: [{ type: "text" as const, text }],
-  createdAt: new Date(),
 });
 
 describe("MessageList", () => {

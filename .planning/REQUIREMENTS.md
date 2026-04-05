@@ -16,10 +16,10 @@ Requirements for AI Chat Foundation. Each maps to roadmap phases.
 
 ### Conversation Management
 
-- [ ] **CONV-01**: User can create a new conversation
-- [ ] **CONV-02**: User can switch between multiple conversations via a conversation list
-- [ ] **CONV-03**: User's messages and Claude's responses persist in the database across page refreshes
-- [ ] **CONV-04**: Conversation gets an auto-generated title after the first exchange
+- [x] **CONV-01**: User can create a new conversation
+- [x] **CONV-02**: User can switch between multiple conversations via a conversation list
+- [x] **CONV-03**: User's messages and Claude's responses persist in the database across page refreshes
+- [x] **CONV-04**: Conversation gets an auto-generated title after the first exchange
 
 ### Integration & Polish
 
@@ -68,10 +68,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CHAT-02 | Phase 35 | Complete |
 | CHAT-03 | Phase 35 | Complete |
 | CHAT-04 | Phase 34 | Complete |
-| CONV-01 | Phase 36 | Pending |
-| CONV-02 | Phase 36 | Pending |
-| CONV-03 | Phase 36 | Pending |
-| CONV-04 | Phase 36 | Pending |
+| CONV-01 | Phase 36 | Complete |
+| CONV-02 | Phase 36 | Complete |
+| CONV-03 | Phase 36 | Complete |
+| CONV-04 | Phase 36 | Complete |
 | INTG-01 | Phase 37 | Pending |
 | INTG-02 | Phase 37 | Pending |
 | INTG-03 | Phase 35 | Complete |
