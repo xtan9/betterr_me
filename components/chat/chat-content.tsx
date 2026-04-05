@@ -16,6 +16,7 @@ import { ChatInput } from "@/components/chat/chat-input";
 import { ChatEmptyState } from "@/components/chat/chat-empty-state";
 import { ConversationSidebar } from "@/components/chat/conversation-sidebar";
 import { dbMessageToUIMessage } from "@/lib/chat/message-utils";
+import { log } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, PanelLeftOpen } from "lucide-react";
 import type { Conversation } from "@/lib/db/types";
@@ -82,7 +83,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           setMessages(uiMessages);
         }
       } catch (err) {
-        console.error("[chat] Failed to load messages:", err);
+        log.error("[chat] Failed to load messages", err);
       } finally {
         if (!cancelled) {
           setIsLoadingMessages(false);
@@ -115,7 +116,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: "assistant", content }),
         }).catch((err) =>
-          console.error("[chat] Failed to save assistant message:", err)
+          log.error("[chat] Failed to save assistant message", err)
         );
 
         // D-07/D-08: Auto-generate title after first exchange (2 messages)
@@ -133,7 +134,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           })
             .then(() => mutateConversations())
             .catch((err) =>
-              console.error("[chat] Failed to generate title:", err)
+              log.error("[chat] Failed to generate title", err)
             );
         }
 
@@ -145,7 +146,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
 
   useEffect(() => {
     if (error) {
-      console.error("[chat] Error:", error.message || error);
+      log.error("[chat] Streaming error", error);
     }
   }, [error]);
 
@@ -162,7 +163,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           window.history.replaceState(null, "", `/chat?id=${convId}`);
           mutateConversations();
         } catch (err) {
-          console.error("[chat] Failed to create conversation:", err);
+          log.error("[chat] Failed to create conversation", err);
           return;
         }
       }
@@ -175,7 +176,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           body: JSON.stringify({ role: "user", content: text }),
         });
       } catch (err) {
-        console.error("[chat] Failed to save user message:", err);
+        log.error("[chat] Failed to save user message", err);
       }
 
       // Send to LLM
@@ -263,7 +264,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           window.history.replaceState(null, "", "/chat");
         }
       } catch (err) {
-        console.error("[chat] Failed to delete conversation:", err);
+        log.error("[chat] Failed to delete conversation", err);
       }
     },
     [activeConversationId, mutateConversations, setMessages]
