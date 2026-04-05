@@ -319,6 +319,35 @@ describe("normalizeWorkouts", () => {
     const items = normalizeWorkouts([makeWorkout({ status: "discarded" })]);
     expect(items[0].completed).toBe(false);
   });
+
+  it("extracts time from ISO timestamp and sets allDay=false (AGGR-04)", () => {
+    const items = normalizeWorkouts([
+      makeWorkout({ started_at: "2025-04-05T14:30:00Z" }),
+    ]);
+    expect(items[0].startTime).toBe("14:30");
+    expect(items[0].allDay).toBe(false);
+    expect(items[0].date).toBe("2025-04-05");
+  });
+
+  it("converts to local time when timezone is provided (AGGR-04)", () => {
+    const items = normalizeWorkouts(
+      [makeWorkout({ started_at: "2025-04-05T14:30:00Z" })],
+      "America/New_York",
+    );
+    // 14:30 UTC = 10:30 EDT (April is DST)
+    expect(items[0].startTime).toBe("10:30");
+    expect(items[0].allDay).toBe(false);
+    expect(items[0].date).toBe("2025-04-05");
+  });
+
+  it("sets allDay=true when started_at has no time component (AGGR-04)", () => {
+    const items = normalizeWorkouts([
+      makeWorkout({ started_at: "2025-04-05" }),
+    ]);
+    expect(items[0].startTime).toBeNull();
+    expect(items[0].allDay).toBe(true);
+    expect(items[0].date).toBe("2025-04-05");
+  });
 });
 
 // ---------------------------------------------------------------------------
