@@ -104,7 +104,7 @@ describe("AppSidebar", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(8); // 1 logo + 7 nav
+    expect(links).toHaveLength(9); // 1 logo + 8 nav
   });
 
   it("renders correct hrefs for logo and all nav items", () => {
@@ -119,6 +119,7 @@ describe("AppSidebar", () => {
     expect(links[5]).toHaveAttribute("href", "/workouts");
     expect(links[6]).toHaveAttribute("href", "/money");
     expect(links[7]).toHaveAttribute("href", "/calendar");
+    expect(links[8]).toHaveAttribute("href", "/chat");
   });
 
   it("renders i18n translation keys as labels", () => {
@@ -268,6 +269,41 @@ describe("AppSidebar", () => {
 
       const tooltipContent = screen.getByTestId("tooltip-content");
       expect(tooltipContent).toHaveTextContent("pin");
+    });
+  });
+
+  describe("chat nav item", () => {
+    it("renders Chat nav item with correct href", () => {
+      render(<AppSidebar {...defaultProps} />);
+
+      const chatLink = screen.getByRole("link", { name: /chat/i });
+      expect(chatLink).toBeInTheDocument();
+      expect(chatLink).toHaveAttribute("href", "/chat");
+    });
+
+    it("highlights chat link when pathname is /chat", () => {
+      mockPathname.mockReturnValue("/chat");
+      render(<AppSidebar {...defaultProps} />);
+
+      const activeLink = screen.getByRole("link", { current: "page" });
+      expect(activeLink).toHaveAttribute("href", "/chat");
+    });
+
+    it("highlights chat link for nested chat routes like /chat/[id]", () => {
+      mockPathname.mockReturnValue("/chat/some-conversation-id");
+      render(<AppSidebar {...defaultProps} />);
+
+      const activeLink = screen.getByRole("link", { current: "page" });
+      expect(activeLink).toHaveAttribute("href", "/chat");
+    });
+
+    it("renders Chat nav item after Calendar in the nav order", () => {
+      render(<AppSidebar {...defaultProps} />);
+
+      const links = screen.getAllByRole("link");
+      // logo=0, dashboard=1, habits=2, tasks=3, journal=4, workouts=5, money=6, calendar=7, chat=8
+      expect(links[7]).toHaveAttribute("href", "/calendar");
+      expect(links[8]).toHaveAttribute("href", "/chat");
     });
   });
 
