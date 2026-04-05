@@ -108,4 +108,51 @@ describe('PATCH /api/profile', () => {
     const response = await PATCH(request);
     expect(response.status).toBe(400);
   });
+
+  it('should persist timezone string to profile', async () => {
+    const updatedProfile = { id: 'user-123', timezone: 'America/New_York' };
+    vi.mocked(mockProfilesDB.updateProfile).mockResolvedValue(updatedProfile as any);
+
+    const request = new NextRequest('http://localhost:3000/api/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ timezone: 'America/New_York' }),
+    });
+
+    const response = await PATCH(request);
+    expect(response.status).toBe(200);
+    expect(mockProfilesDB.updateProfile).toHaveBeenCalledWith('user-123', {
+      timezone: 'America/New_York',
+    });
+  });
+
+  it('should persist timezone null to profile', async () => {
+    const updatedProfile = { id: 'user-123', timezone: null };
+    vi.mocked(mockProfilesDB.updateProfile).mockResolvedValue(updatedProfile as any);
+
+    const request = new NextRequest('http://localhost:3000/api/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ timezone: null }),
+    });
+
+    const response = await PATCH(request);
+    expect(response.status).toBe(200);
+    expect(mockProfilesDB.updateProfile).toHaveBeenCalledWith('user-123', {
+      timezone: null,
+    });
+  });
+
+  it('should not include timezone in updates when not provided', async () => {
+    const updatedProfile = { id: 'user-123', full_name: 'Test' };
+    vi.mocked(mockProfilesDB.updateProfile).mockResolvedValue(updatedProfile as any);
+
+    const request = new NextRequest('http://localhost:3000/api/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ full_name: 'Test' }),
+    });
+
+    const response = await PATCH(request);
+    expect(response.status).toBe(200);
+    const updateArg = mockProfilesDB.updateProfile.mock.calls[0][1];
+    expect(updateArg).not.toHaveProperty('timezone');
+  });
 });
