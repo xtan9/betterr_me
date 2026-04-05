@@ -85,7 +85,7 @@
 - [x] **Phase 34: Database, Types & Streaming API** - Supabase tables, TypeScript types, Zod schemas, AI SDK provider, and streaming API route with auth and error handling (completed 2026-04-02)
 - [x] **Phase 35: Chat UI & Message Rendering** - Chat page with message bubbles, markdown rendering, stop button, keyboard shortcuts, and dark mode support (completed 2026-04-03)
 - [x] **Phase 36: Conversation Persistence & Management** - Save/load messages to DB, conversation list sidebar, create/switch conversations, auto-generated titles (completed 2026-04-04)
-- [ ] **Phase 37: Navigation & i18n** - Sidebar navigation link, all chat UI strings translated in en, zh, zh-TW
+- [x] **Phase 37: Navigation & i18n** - Sidebar navigation link, all chat UI strings translated in en, zh, zh-TW (completed 2026-04-05)
 
 ## Phase Details
 
@@ -166,7 +166,9 @@ Plans:
   1. User can access the chat page via a navigation link in the app sidebar
   2. All chat UI strings (button labels, placeholders, empty states, error messages) are translated in en, zh, and zh-TW
   3. Switching locale updates all chat interface text without breaking functionality
-**Plans**: TBD
+**Plans:** 1/1 plans complete
+Plans:
+- [x] 37-01-PLAN.md — Add Chat sidebar nav item and complete i18n coverage
 
 ### Phase 37.1: v6.0 Gap Closure — Calendar & Reminder Fixes (INSERTED)
 
@@ -225,4 +227,4 @@ Phases execute in numeric order: 34 → 35 → 36 → 37
 | 35.1 Reminder Cron & Polish | v6.0 | 5/5 | Complete    | 2026-04-03 |
 | 36. Conversation Persistence & Management | v7.0 | 2/2 | Complete    | 2026-04-04 |
 | 37. Navigation & i18n | v7.0 | 0/? | Not started | - |
-| 37.1 v6.0 Gap Closure | v6.0 | 0/2 | Not started | - |
+| 37.1 v6.0 Gap Closure | v6.0 | 1/2 | In progress | - |

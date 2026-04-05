@@ -170,6 +170,116 @@ describe("EventDialog", () => {
     });
   });
 
+  it("submits current reminderRows state, not stale initial state (REMN-01 stale closure fix)", async () => {
+    // Mock: event save returns an event id, reminder POST succeeds
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders") && (!opts || !opts.method || opts.method === "GET")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ reminders: [] }) });
+      }
+      if (typeof url === "string" && url === "/api/calendar-events") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ event: { id: "new-evt-1" } }),
+        });
+      }
+      // Reminder POST
+      if (typeof url === "string" && url === "/api/reminders" && opts?.method === "POST") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(
+      <EventDialog
+        {...defaultProps}
+        prefill={{ title: "Test Stale Closure" }}
+      />,
+    );
+
+    // In create mode, the dialog starts with one smart-default reminder.
+    // The handleSubmit should use the CURRENT reminderRows (the smart default),
+    // not an empty array from a stale closure.
+    fireEvent.click(screen.getByText("eventDialog.save"));
+
+    await waitFor(() => {
+      // The event POST should have been called
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/calendar-events",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+
+    // After event is created, reminder POST should be called with the smart default reminder
+    await waitFor(() => {
+      const reminderPostCalls = mockFetch.mock.calls.filter(
+        ([url, opts]: [string, RequestInit | undefined]) =>
+          url === "/api/reminders" && opts?.method === "POST",
+      );
+      expect(reminderPostCalls.length).toBeGreaterThanOrEqual(1);
+
+      // Verify the reminder data includes the smart default values
+      const body = JSON.parse(reminderPostCalls[0][1]?.body as string);
+      expect(body.source_type).toBe("calendar_event");
+      expect(body.source_id).toBe("new-evt-1");
+      expect(body.reminder_type).toBe("relative");
+    });
+  });
+
+  it("skips reminder persistence when reminderLoadFailed is true (REMN-04)", async () => {
+    // Mock: editing an event where reminder fetch fails
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders?")) {
+        // Simulate reminder load failure
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ error: "Internal server error" }),
+        });
+      }
+      if (typeof url === "string" && url.includes("/api/calendar-events/e1")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ event: { id: "e1" } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+
+    // Wait for the reminder load to fail
+    await waitFor(() => {
+      // The reminder fetch should have been attempted
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/reminders?"),
+      );
+    });
+
+    // Submit the form
+    fireEvent.click(screen.getByText("eventDialog.save"));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/calendar-events/e1",
+        expect.objectContaining({ method: "PATCH" }),
+      );
+    });
+
+    // Wait a bit for any potential reminder calls
+    await waitFor(() => {
+      expect(defaultProps.onSaved).toHaveBeenCalledOnce();
+    });
+
+    // Verify no reminder POST/PATCH/DELETE calls were made (only the initial GET)
+    const reminderCalls = mockFetch.mock.calls.filter(
+      ([url, opts]: [string, RequestInit | undefined]) =>
+        typeof url === "string" &&
+        url.includes("/api/reminders") &&
+        opts?.method && opts.method !== "GET",
+    );
+    expect(reminderCalls).toHaveLength(0);
+  });
+
   it("calls fetch DELETE when delete is confirmed", async () => {
     window.confirm = vi.fn().mockReturnValue(true);
 
