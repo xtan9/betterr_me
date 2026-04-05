@@ -1862,6 +1862,7 @@
       "deleteConfirm": "Are you sure you want to delete this event?",
       "saveFailed": "Failed to save event",
       "deleteFailed": "Failed to delete event",
+      "reminderSaveWarning": "Event saved, but some reminders could not be saved",
       "colors": {
         "default": "Default",
         "teal": "Teal",

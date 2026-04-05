@@ -3,6 +3,8 @@
  * Prevents push notifications from being sent during user-configured quiet hours.
  */
 
+import { log } from "@/lib/logger";
+
 /**
  * Check if the current time (in the user's timezone) falls within quiet hours.
  *
@@ -30,8 +32,12 @@ export function isInQuietHours(
       hour12: false,
     });
     currentTime = formatter.format(new Date());
-  } catch {
+  } catch (error) {
     // Invalid timezone — fall back to not in quiet hours so reminders still dispatch
+    log.warn("Invalid timezone for quiet hours check, dispatching anyway", {
+      timezone: tz,
+      error: String(error),
+    });
     return false;
   }
 

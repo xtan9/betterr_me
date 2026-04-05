@@ -10,6 +10,7 @@ const {
   mockSendReminderEmail,
   mockIsInQuietHours,
   mockCreateAdminClient,
+  mockGetVapidDetails,
 } = vi.hoisted(() => ({
   mockGetPendingReminders: vi.fn(),
   mockUpdateReminderStatus: vi.fn(),
@@ -18,6 +19,7 @@ const {
   mockSendReminderEmail: vi.fn(),
   mockIsInQuietHours: vi.fn(),
   mockCreateAdminClient: vi.fn(),
+  mockGetVapidDetails: vi.fn(),
 }));
 
 vi.mock("@/lib/db/reminders", () => ({
@@ -47,6 +49,10 @@ vi.mock("@/lib/push/quiet-hours", () => ({
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: mockCreateAdminClient,
+}));
+
+vi.mock("@/lib/push/vapid", () => ({
+  getVapidDetails: mockGetVapidDetails,
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -110,6 +116,11 @@ describe("GET /api/cron/dispatch-reminders", () => {
     mockCreateAdminClient.mockReturnValue({});
     mockIsInQuietHours.mockReturnValue(false);
     mockUpdateReminderStatus.mockResolvedValue({});
+    mockGetVapidDetails.mockReturnValue({
+      subject: "mailto:test@test.com",
+      publicKey: "test-public-key",
+      privateKey: "test-private-key",
+    });
   });
 
   it("returns 401 without CRON_SECRET", async () => {
@@ -154,7 +165,8 @@ describe("GET /api/cron/dispatch-reminders", () => {
         title: "Reminder",
         sourceType: "task",
         sourceId: "task-1",
-      })
+      }),
+      expect.anything()
     );
     expect(mockSendReminderEmail).toHaveBeenCalledWith(
       "user-1",
@@ -170,8 +182,10 @@ describe("GET /api/cron/dispatch-reminders", () => {
     );
   });
 
-  it("push-only reminder during quiet hours stays pending", async () => {
-    const reminder = mockReminder({ channels: ["push"] });
+  it("push-only reminder during quiet hours stays pending (not stale)", async () => {
+    // Use a recent fire_at so it doesn't hit the staleness threshold
+    const recentFireAt = new Date(Date.now() - 30 * 60 * 1000).toISOString(); // 30min ago
+    const reminder = mockReminder({ channels: ["push"], fire_at: recentFireAt });
     const profile = mockProfile({
       preferences: {
         date_format: "YYYY-MM-DD",
@@ -193,6 +207,23 @@ describe("GET /api/cron/dispatch-reminders", () => {
     expect(body.dispatched).toBe(0);
     expect(mockSendPushNotification).not.toHaveBeenCalled();
     expect(mockUpdateReminderStatus).not.toHaveBeenCalled();
+  });
+
+  it("stale push-only reminder during quiet hours is marked failed", async () => {
+    // fire_at is old enough to exceed staleness threshold
+    const staleFireAt = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(); // 5 hours ago
+    const reminder = mockReminder({ channels: ["push"], fire_at: staleFireAt });
+    const profile = mockProfile();
+    mockGetPendingReminders.mockResolvedValue([reminder]);
+    mockGetProfile.mockResolvedValue(profile);
+    mockIsInQuietHours.mockReturnValue(true);
+
+    const res = await GET(createRequest());
+    const body = await res.json();
+
+    expect(body.failed).toBe(1);
+    expect(body.skipped_quiet_hours).toBe(0);
+    expect(mockUpdateReminderStatus).toHaveBeenCalledWith("user-1", "rem-1", "failed");
   });
 
   it("email-only reminder during quiet hours still dispatches", async () => {

@@ -148,7 +148,10 @@ export async function PATCH(
         }
       } catch (reminderError) {
         // Log but don't fail the event update if reminder recomputation fails
-        log.error('Failed to recompute reminder fire_at after event reschedule', reminderError);
+        log.error('Failed to recompute reminder fire_at after event reschedule', reminderError, {
+          eventId: id,
+          userId: user.id,
+        });
       }
     }
 

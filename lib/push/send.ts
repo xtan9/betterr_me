@@ -10,6 +10,7 @@ import { getNotificationUrl } from "@/lib/push/notification-urls";
 import { PushSubscriptionsDB } from "@/lib/db/push-subscriptions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { log } from "@/lib/logger";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ReminderSourceType } from "@/lib/db/types";
 
 export interface PushPayload {
@@ -25,16 +26,18 @@ export interface PushPayload {
  *
  * @param userId - The user whose subscriptions to send to
  * @param payload - Notification content (title, body, source info)
+ * @param supabaseClient - Optional Supabase admin client (avoids creating a new one per call in batch dispatch)
  * @returns Counts of sent and failed notifications
  */
 export async function sendPushNotification(
   userId: string,
-  payload: PushPayload
+  payload: PushPayload,
+  supabaseClient?: SupabaseClient
 ): Promise<{ sent: number; failed: number }> {
   const vapid = getVapidDetails();
   webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
 
-  const supabase = createAdminClient();
+  const supabase = supabaseClient ?? createAdminClient();
   const pushSubsDB = new PushSubscriptionsDB(supabase);
   const subscriptions = await pushSubsDB.getSubscriptions(userId);
 

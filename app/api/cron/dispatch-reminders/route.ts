@@ -1,3 +1,11 @@
+import { createHmac, timingSafeEqual } from "crypto";
+
+function secureCompare(a: string, b: string): boolean {
+  const key = "cron-auth-compare";
+  const hmacA = createHmac("sha256", key).update(a).digest();
+  const hmacB = createHmac("sha256", key).update(b).digest();
+  return timingSafeEqual(hmacA, hmacB);
+}
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RemindersDB } from "@/lib/db/reminders";
@@ -5,7 +13,11 @@ import { ProfilesDB } from "@/lib/db/profiles";
 import { sendPushNotification } from "@/lib/push/send";
 import { sendReminderEmail } from "@/lib/email/send";
 import { isInQuietHours } from "@/lib/push/quiet-hours";
+import { getVapidDetails } from "@/lib/push/vapid";
 import { log } from "@/lib/logger";
+
+/** Max age (ms) before a pending reminder is considered stale and marked failed */
+const MAX_STALE_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 /**
  * GET /api/cron/dispatch-reminders
@@ -19,11 +31,16 @@ import { log } from "@/lib/logger";
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify CRON_SECRET
-    const authHeader = request.headers.get("Authorization");
+    // Verify CRON_SECRET (HMAC-based timing-safe comparison)
+    if (!process.env.CRON_SECRET) {
+      log.error("CRON_SECRET environment variable is not set");
+      return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
+    }
+
+    const authHeader = request.headers.get("Authorization") ?? "";
     const expectedToken = `Bearer ${process.env.CRON_SECRET}`;
 
-    if (!authHeader || authHeader !== expectedToken) {
+    if (!secureCompare(authHeader, expectedToken)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -34,12 +51,24 @@ export async function GET(request: NextRequest) {
     const now = new Date().toISOString();
     const pending = await remindersDB.getPendingReminders(now);
 
+    // Check VAPID keys once before the loop to avoid N identical errors
+    let vapidAvailable = false;
+    try {
+      getVapidDetails();
+      vapidAvailable = true;
+    } catch {
+      log.warn("VAPID keys not configured — push notifications will be skipped");
+    }
+
     let dispatched = 0;
     let failed = 0;
     let skippedQuietHours = 0;
 
     for (const reminder of pending) {
       try {
+        // Check staleness: skip reminders whose fire_at is too old
+        const fireAtAge = Date.now() - new Date(reminder.fire_at).getTime();
+
         // Fetch user profile for quiet hours and timezone
         const profile = await profilesDB.getProfile(reminder.user_id);
         const inQuietHours = isInQuietHours(
@@ -50,12 +79,23 @@ export async function GET(request: NextRequest) {
 
         // Determine which channels to dispatch
         const channelsToSend = reminder.channels.filter(
-          (ch) => ch === "email" || (ch === "push" && !inQuietHours)
+          (ch) => ch === "email" || (ch === "push" && !inQuietHours && vapidAvailable)
         );
 
         // If no channels can be dispatched (push-only during quiet hours), skip
         if (channelsToSend.length === 0) {
-          skippedQuietHours++;
+          // If stale beyond threshold, mark as failed instead of retrying forever
+          if (fireAtAge > MAX_STALE_MS) {
+            await remindersDB.updateReminderStatus(reminder.user_id, reminder.id, "failed");
+            failed++;
+            log.warn("Stale reminder expired during quiet hours", {
+              reminderId: reminder.id,
+              userId: reminder.user_id,
+              ageHours: Math.round(fireAtAge / 3600000),
+            });
+          } else {
+            skippedQuietHours++;
+          }
           continue;
         }
 
@@ -71,7 +111,7 @@ export async function GET(request: NextRequest) {
             sourceType: reminder.source_type,
             sourceId: reminder.source_id,
             date: reminder.fire_at.split("T")[0],
-          });
+          }, adminClient);
           pushSuccess = result.sent > 0;
         }
 
@@ -85,18 +125,26 @@ export async function GET(request: NextRequest) {
           });
           emailSuccess = result.success && !result.skipped;
           if (!result.success && result.error) {
-            log.error("Email dispatch failed", { reminderId: reminder.id, error: result.error });
+            log.error("Email dispatch failed", result.error, { reminderId: reminder.id });
           }
         }
 
         // Update reminder status based on dispatch results
         if (pushSuccess || emailSuccess) {
-          await remindersDB.updateReminderStatus(
-            reminder.user_id,
-            reminder.id,
-            "sent",
-            new Date().toISOString()
-          );
+          try {
+            await remindersDB.updateReminderStatus(
+              reminder.user_id,
+              reminder.id,
+              "sent",
+              new Date().toISOString()
+            );
+          } catch (statusError) {
+            // Notification already sent — log but don't re-dispatch on next run risk
+            log.error("Failed to mark reminder as sent (may cause duplicate)", statusError, {
+              reminderId: reminder.id,
+              userId: reminder.user_id,
+            });
+          }
           dispatched++;
         } else {
           await remindersDB.updateReminderStatus(

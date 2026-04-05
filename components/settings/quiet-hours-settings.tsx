@@ -63,7 +63,8 @@ export function QuietHoursSettings() {
 
       mutate();
       toast.success(t("quietHours.saved"));
-    } catch {
+    } catch (error) {
+      console.error("Failed to save quiet hours:", error);
       toast.error(t("quietHours.saveError"));
     } finally {
       setSaving(false);

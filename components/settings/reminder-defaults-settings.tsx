@@ -102,7 +102,7 @@ export function ReminderDefaultsSettings() {
     try {
       const dirtyTypes = SOURCE_TYPES.filter((st) => configs[st].dirty);
 
-      await Promise.all(
+      const results = await Promise.allSettled(
         dirtyTypes.map(async (sourceType) => {
           const res = await fetch("/api/reminder-defaults", {
             method: "PUT",
@@ -114,20 +114,40 @@ export function ReminderDefaultsSettings() {
             }),
           });
           if (!res.ok) throw new Error(`Failed to save defaults for ${sourceType}`);
+          return sourceType;
         })
       );
 
-      mutate();
-      // Mark all as clean
-      setConfigs((prev) => {
-        const next = { ...prev };
-        for (const st of SOURCE_TYPES) {
-          next[st] = { ...next[st], dirty: false };
+      const failedTypes: string[] = [];
+      const succeededTypes: ReminderSourceType[] = [];
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          succeededTypes.push(result.value);
+        } else {
+          failedTypes.push(String(result.reason));
+          console.error("Failed to save reminder defaults:", result.reason);
         }
-        return next;
-      });
-      toast.success(t("reminderDefaults.saved"));
-    } catch {
+      }
+
+      mutate();
+      // Mark succeeded types as clean
+      if (succeededTypes.length > 0) {
+        setConfigs((prev) => {
+          const next = { ...prev };
+          for (const st of succeededTypes) {
+            next[st] = { ...next[st], dirty: false };
+          }
+          return next;
+        });
+      }
+
+      if (failedTypes.length > 0) {
+        toast.error(t("reminderDefaults.saveError"));
+      } else {
+        toast.success(t("reminderDefaults.saved"));
+      }
+    } catch (error) {
+      console.error("Failed to save reminder defaults:", error);
       toast.error(t("reminderDefaults.saveError"));
     } finally {
       setSaving(false);

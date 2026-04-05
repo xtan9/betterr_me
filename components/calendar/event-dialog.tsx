@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getLocalDateString } from "@/lib/utils";
+import { toast } from "sonner";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 
 // "teal" maps to --calendar-event (the default event color); others map to --calendar-{value}
@@ -165,8 +166,17 @@ export function EventDialog({
           return;
         }
 
-        const savedEvent = await res.json().catch(() => ({}));
+        let savedEvent;
+        try {
+          savedEvent = await res.json();
+        } catch (parseError) {
+          console.error("Failed to parse event save response", parseError);
+        }
         const eventId = savedEvent?.event?.id || event?.id;
+
+        if (!eventId && reminderRows.length > 0) {
+          toast.warning(t("eventDialog.reminderSaveWarning"));
+        }
 
         // Save reminders if we have an event ID
         // Skip reminder persistence if the initial load failed — avoids deleting
@@ -186,6 +196,8 @@ export function EventDialog({
             (id) => !currentIds.has(id)
           );
 
+          let reminderErrors = 0;
+
           // Delete removed reminders
           const deleteResults = await Promise.allSettled(
             deletedIds.map((id) =>
@@ -194,6 +206,7 @@ export function EventDialog({
           );
           for (const result of deleteResults) {
             if (result.status === "rejected") {
+              reminderErrors++;
               console.error("Failed to delete reminder:", result.reason);
             }
           }
@@ -230,8 +243,13 @@ export function EventDialog({
           );
           for (const result of saveResults) {
             if (result.status === "rejected") {
+              reminderErrors++;
               console.error("Failed to save reminder:", result.reason);
             }
+          }
+
+          if (reminderErrors > 0) {
+            toast.warning(t("eventDialog.reminderSaveWarning"));
           }
         }
 

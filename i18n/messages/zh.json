@@ -1862,6 +1862,7 @@
       "deleteConfirm": "确定要删除这个事件吗？",
       "saveFailed": "保存事件失败",
       "deleteFailed": "删除事件失败",
+      "reminderSaveWarning": "事件已保存，但部分提醒保存失败",
       "colors": {
         "default": "默认",
         "teal": "青色",

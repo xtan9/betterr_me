@@ -120,4 +120,11 @@ describe("isInQuietHours", () => {
       timeZone: "UTC",
     }));
   });
+
+  it("returns false for invalid timezone (falls back to dispatching)", () => {
+    // Restore real DateTimeFormat so the invalid timezone actually throws
+    Intl.DateTimeFormat = originalDateTimeFormat;
+    const result = isInQuietHours("22:00", "07:00", "Invalid/Timezone");
+    expect(result).toBe(false);
+  });
 });

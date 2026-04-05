@@ -223,6 +223,35 @@ describe("POST /api/reminders", () => {
 
     expect(response.status).toBe(401);
   });
+
+  it("returns 400 when relative reminder is missing relative_minutes", async () => {
+    const { POST } = await import("@/app/api/reminders/route");
+
+    const request = new NextRequest("http://localhost:3000/api/reminders", {
+      method: "POST",
+      body: JSON.stringify({
+        source_type: "calendar_event",
+        source_id: "11111111-1111-1111-1111-111111111111",
+        reminder_type: "relative",
+        channels: ["push"],
+        event_start_time: "2026-04-10T14:00:00Z",
+      }),
+    });
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 for invalid source_type in GET", async () => {
+    const { GET } = await import("@/app/api/reminders/route");
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/reminders?source_type=invalid&source_id=event-1"
+    );
+    const response = await GET(request);
+
+    expect(response.status).toBe(400);
+  });
 });
 
 describe("PATCH /api/reminders/[id]", () => {
@@ -277,6 +306,41 @@ describe("PATCH /api/reminders/[id]", () => {
 
     expect(response.status).toBe(401);
   });
+
+  it("returns 400 for empty body (no fields)", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/reminders/r1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({}),
+      }
+    );
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "r1" }),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 500 when DB throws", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.updateReminder.mockRejectedValue(new Error("DB error"));
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/reminders/r1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ status: "snoozed" }),
+      }
+    );
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "r1" }),
+    });
+
+    expect(response.status).toBe(500);
+  });
 });
 
 describe("DELETE /api/reminders/[id]", () => {
@@ -322,5 +386,22 @@ describe("DELETE /api/reminders/[id]", () => {
     });
 
     expect(response.status).toBe(401);
+  });
+
+  it("returns 500 when DB throws", async () => {
+    const { DELETE } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.deleteReminder.mockRejectedValue(new Error("DB error"));
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/reminders/r1",
+      {
+        method: "DELETE",
+      }
+    );
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "r1" }),
+    });
+
+    expect(response.status).toBe(500);
   });
 });

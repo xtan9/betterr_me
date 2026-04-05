@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
     const source_type = searchParams.get("source_type");
     const source_id = searchParams.get("source_id");
 
+    const validSourceTypes = ["calendar_event", "task", "habit", "bill"] as const;
+
     if (!source_type || !source_id) {
       return NextResponse.json(
         { error: "source_type and source_id are required" },
@@ -42,10 +44,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (!validSourceTypes.includes(source_type as typeof validSourceTypes[number])) {
+      return NextResponse.json(
+        { error: "Invalid source_type" },
+        { status: 400 }
+      );
+    }
+
     const remindersDB = new RemindersDB(supabase);
     const reminders = await remindersDB.getRemindersBySource(
       user.id,
-      source_type as Parameters<RemindersDB["getRemindersBySource"]>[1],
+      source_type as typeof validSourceTypes[number],
       source_id
     );
 
@@ -92,7 +101,6 @@ export async function POST(request: NextRequest) {
     const remindersDB = new RemindersDB(supabase);
     const reminder = await remindersDB.createReminder(user.id, {
       ...reminderData,
-      user_id: user.id,
       fire_at: fireAt,
     });
 
