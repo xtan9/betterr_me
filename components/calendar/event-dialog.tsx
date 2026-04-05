@@ -262,7 +262,7 @@ export function EventDialog({
         setSaving(false);
       }
     },
-    [isEditing, event, onSaved, onClose, form, t],
+    [isEditing, event, onSaved, onClose, form, t, reminderRows, reminderLoadFailed],
   );
 
   const handleDelete = useCallback(async () => {

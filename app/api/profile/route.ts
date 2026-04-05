@@ -78,6 +78,10 @@ export async function PATCH(request: NextRequest) {
       updates.email_notifications_enabled = validation.data.email_notifications_enabled;
     }
 
+    if (validation.data.timezone !== undefined) {
+      updates.timezone = validation.data.timezone?.trim() || null;
+    }
+
     const profilesDB = new ProfilesDB(supabase);
     const profile = await profilesDB.updateProfile(user.id, updates);
     return NextResponse.json({ profile });

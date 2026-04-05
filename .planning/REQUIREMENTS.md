@@ -34,16 +34,16 @@ Carried forward from v6.0 Calendar & Reminder Notifications. Push (Phase 34) and
 
 ### Reminders
 
-- [x] **REMN-01**: User can add multiple reminders per calendar event (relative or absolute)
+- [ ] **REMN-01**: User can add multiple reminders per calendar event (relative or absolute)
 - [x] **REMN-02**: Relative reminders support: 5 min, 15 min, 30 min, 1 hour, 1 day before, and custom minutes
 - [x] **REMN-03**: Absolute reminders support a specific date + time
-- [x] **REMN-04**: Each reminder can target push, email, or both channels
+- [ ] **REMN-04**: Each reminder can target push, email, or both channels
 - [x] **REMN-05**: Smart defaults auto-apply reminders based on source type (event: 15min/push, task: 1hr/push, habit: 8am/push, bill: 3days/push+email)
 - [x] **REMN-06**: User can customize default reminders per source type in settings
-- [ ] **REMN-07**: User can set quiet hours (no push between configurable start/end times)
-- [ ] **REMN-08**: Vercel Cron job runs every minute to dispatch pending reminders
+- [x] **REMN-07**: User can set quiet hours (no push between configurable start/end times)
+- [x] **REMN-08**: Cron job runs every minute to dispatch pending reminders
 - [x] **REMN-09**: Reminders have fire_at pre-computed and recomputed on event reschedule
-- [ ] **REMN-10**: Failed reminder deliveries are logged with status='failed' for retry
+- [x] **REMN-10**: Failed reminder deliveries are logged with status='failed' for retry
 
 ### Internationalization
 
@@ -51,9 +51,9 @@ Carried forward from v6.0 Calendar & Reminder Notifications. Push (Phase 34) and
 
 ### Responsive & Accessibility
 
-- [ ] **RESP-01**: On mobile (sm), sidebar collapses; layer toggles move to header filter dropdown
-- [ ] **RESP-02**: On mobile, default view is Day with swipe left/right to navigate
-- [ ] **RESP-03**: "+ New Event" becomes a floating action button on mobile
+- [x] **RESP-01**: On mobile, sidebar collapses; accessible via header drawer
+- [x] **RESP-02**: On mobile, default view is Day with swipe left/right to navigate
+- [x] **RESP-03**: "+ New Event" becomes a floating action button on mobile
 
 ## Future Requirements
 
@@ -104,20 +104,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTG-03 | Phase 35 | Complete |
 | INTG-04 | Phase 35 | Complete |
 
-| REMN-01 | Phase 35.1 | Complete |
+| REMN-01 | Phase 37.1 | Pending |
 | REMN-02 | Phase 35.1 | Complete |
 | REMN-03 | Phase 35.1 | Complete |
-| REMN-04 | Phase 35.1 | Complete |
+| REMN-04 | Phase 37.1 | Pending |
 | REMN-05 | Phase 35.1 | Complete |
 | REMN-06 | Phase 35.1 | Complete |
-| REMN-07 | Phase 35.1 | Pending |
-| REMN-08 | Phase 35.1 | Pending |
+| REMN-07 | Phase 35.1 | Complete |
+| REMN-08 | Phase 35.1 | Complete |
 | REMN-09 | Phase 35.1 | Complete |
-| REMN-10 | Phase 35.1 | Pending |
+| REMN-10 | Phase 35.1 | Complete |
 | I18N-01 | Phase 35.1 | Complete |
-| RESP-01 | Phase 35.1 | Pending |
-| RESP-02 | Phase 35.1 | Pending |
-| RESP-03 | Phase 35.1 | Pending |
+| RESP-01 | Phase 35.1 | Complete |
+| RESP-02 | Phase 35.1 | Complete |
+| RESP-03 | Phase 35.1 | Complete |
+| INFR-07 | Phase 37.1 | Pending |
+| AGGR-04 | Phase 37.1 | Pending |
+| AGGR-06 | Phase 37.1 | Pending |
 
 **Coverage:**
 - v7.0 requirements: 12 total, mapped: 12

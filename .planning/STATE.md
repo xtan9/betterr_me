@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v7.0
 milestone_name: AI Chat Foundation
-status: verifying
-stopped_at: Completed 37-01-PLAN.md
-last_updated: "2026-04-05T16:19:29.810Z"
-last_activity: 2026-04-05
+status: completed
+stopped_at: Completed 37.1-02-PLAN.md
+last_updated: "2026-04-05T22:00:49.532Z"
+last_activity: 2026-04-05 -- Completed 37.1-02 timezone persistence
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 14
-  completed_plans: 14
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 19
+  completed_plans: 19
   percent: 0
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 ## Current Position
 
-Phase: 37
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-04-05
+Phase: 37.1 (v6-gap-closure-calendar-reminder-fixes)
+Plan: 2 of 2
+Status: Plan 37.1-02 complete
+Last activity: 2026-04-05 -- Completed 37.1-02 timezone persistence
 
 Progress: [░░░░░░░░░░] 0% (v7.0)
 
@@ -60,6 +60,7 @@ Recent decisions affecting current work:
 - [Phase 36]: Direct supabase.from().update() for bumping conversation updated_at since ConversationUpdate type only includes title and model
 - [Phase 36]: Use prevStatusRef for stream completion detection and async IIFE in useEffect for message loading
 - [Phase 37]: Chat nav placed after Calendar as last main nav item in sidebar
+- [Phase 37.1]: TimezoneDetector as invisible SWR component deduplicates profile fetch with existing consumers
 
 ### Research Notes
 
@@ -80,6 +81,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-05T16:15:23.593Z
-Stopped at: Completed 37-01-PLAN.md
+Last session: 2026-04-05T22:00:49.530Z
+Stopped at: Completed 37.1-02-PLAN.md
 Resume: `/gsd:plan-phase 34`

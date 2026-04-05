@@ -170,6 +170,23 @@ Plans:
 Plans:
 - [x] 37-01-PLAN.md — Add Chat sidebar nav item and complete i18n coverage
 
+### Phase 37.1: v6.0 Gap Closure — Calendar & Reminder Fixes (INSERTED)
+
+**Goal:** Fix 4 bugs found by v6.0 milestone audit: stale closure in reminder save, workouts not at start time, layer defaults, timezone persistence.
+**Depends on:** Phase 35.1
+**Requirements:** INFR-07, AGGR-04, AGGR-06, REMN-01, REMN-04
+**Gap Closure:** Closes gaps from v6.0-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. Editing reminders in event dialog persists the user's actual edits (not stale snapshot)
+  2. Workouts appear at their started_at time on the calendar (not all-day)
+  3. All 5 domain layers (events, tasks, habits, bills, workouts) enabled by default on first load
+  4. User's IANA timezone auto-detected and persisted to profile on first visit
+**Plans:** 2 plans
+
+Plans:
+- [ ] 37.1-01-PLAN.md — Stale closure fix, workout time extraction, layer defaults + tests
+- [ ] 37.1-02-PLAN.md — Timezone persistence (API fix + hook wiring) + tests
+
 ## Progress
 
 **Execution Order:**
@@ -209,4 +226,5 @@ Phases execute in numeric order: 34 → 35 → 36 → 37
 | 35. Chat UI & Message Rendering | v7.0 | 2/2 | Complete    | 2026-04-03 |
 | 35.1 Reminder Cron & Polish | v6.0 | 5/5 | Complete    | 2026-04-03 |
 | 36. Conversation Persistence & Management | v7.0 | 2/2 | Complete    | 2026-04-04 |
-| 37. Navigation & i18n | v7.0 | 1/1 | Complete    | 2026-04-05 |
+| 37. Navigation & i18n | v7.0 | 0/? | Not started | - |
+| 37.1 v6.0 Gap Closure | v6.0 | 1/2 | In progress | - |
