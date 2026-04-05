@@ -5,7 +5,7 @@ import type { UIMessage } from 'ai';
 
 describe('message-utils', () => {
   describe('dbMessageToUIMessage', () => {
-    it('converts a user message with text part and createdAt', () => {
+    it('converts a user message with text part', () => {
       const dbMsg: ChatMessage = {
         id: 'm1',
         conversation_id: 'c1',
@@ -20,7 +20,6 @@ describe('message-utils', () => {
         id: 'm1',
         role: 'user',
         parts: [{ type: 'text', text: 'hello' }],
-        createdAt: new Date('2026-01-01T00:00:00Z'),
       });
     });
 
@@ -39,7 +38,7 @@ describe('message-utils', () => {
       expect(result.parts).toEqual([{ type: 'text', text: 'Hi there!' }]);
     });
 
-    it('creates a valid Date from created_at', () => {
+    it('preserves message id from database', () => {
       const dbMsg: ChatMessage = {
         id: 'm3',
         conversation_id: 'c1',
@@ -49,8 +48,7 @@ describe('message-utils', () => {
       };
 
       const result = dbMessageToUIMessage(dbMsg);
-      expect(result.createdAt).toBeInstanceOf(Date);
-      expect(result.createdAt!.toISOString()).toBe('2026-06-15T12:30:00.000Z');
+      expect(result.id).toBe('m3');
     });
   });
 
@@ -60,7 +58,6 @@ describe('message-utils', () => {
         id: 'm1',
         role: 'user',
         parts: [{ type: 'text', text: 'hello' }],
-        createdAt: new Date(),
       };
 
       const result = uiMessageToDbInsert(uiMsg, 'conv1');
@@ -77,7 +74,6 @@ describe('message-utils', () => {
         id: 'm2',
         role: 'assistant',
         parts: [],
-        createdAt: new Date(),
       };
 
       const result = uiMessageToDbInsert(uiMsg, 'conv1');
@@ -93,7 +89,6 @@ describe('message-utils', () => {
           { type: 'text', text: 'first' },
           { type: 'text', text: 'second' },
         ],
-        createdAt: new Date(),
       };
 
       const result = uiMessageToDbInsert(uiMsg, 'conv2');

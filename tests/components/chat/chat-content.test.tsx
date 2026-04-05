@@ -46,7 +46,6 @@ vi.mock("@/lib/chat/message-utils", () => ({
     id: msg.id,
     role: msg.role,
     parts: [{ type: "text" as const, text: msg.content }],
-    createdAt: new Date(msg.created_at),
   })),
   uiMessageToDbInsert: vi.fn(),
 }));
@@ -136,7 +135,6 @@ const makeMessage = (
   id,
   role,
   parts: [{ type: "text" as const, text }],
-  createdAt: new Date(),
 });
 
 describe("ChatContent", () => {

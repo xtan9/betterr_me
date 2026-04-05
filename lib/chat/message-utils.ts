@@ -11,7 +11,6 @@ export function dbMessageToUIMessage(msg: ChatMessage): UIMessage {
     id: msg.id,
     role: msg.role as "user" | "assistant",
     parts: [{ type: "text" as const, text: msg.content }],
-    createdAt: new Date(msg.created_at),
   };
 }
 
