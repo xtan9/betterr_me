@@ -23,8 +23,8 @@ Requirements for AI Chat Foundation. Each maps to roadmap phases.
 
 ### Integration & Polish
 
-- [ ] **INTG-01**: Chat is accessible via the app sidebar navigation
-- [ ] **INTG-02**: All chat UI strings are translated in en, zh, and zh-TW
+- [x] **INTG-01**: Chat is accessible via the app sidebar navigation
+- [x] **INTG-02**: All chat UI strings are translated in en, zh, and zh-TW
 - [x] **INTG-03**: Chat UI respects dark mode using existing design tokens
 - [x] **INTG-04**: User can send with Enter, newline with Shift+Enter, stop with Escape
 
@@ -99,8 +99,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONV-02 | Phase 36 | Complete |
 | CONV-03 | Phase 36 | Complete |
 | CONV-04 | Phase 36 | Complete |
-| INTG-01 | Phase 37 | Pending |
-| INTG-02 | Phase 37 | Pending |
+| INTG-01 | Phase 37 | Complete |
+| INTG-02 | Phase 37 | Complete |
 | INTG-03 | Phase 35 | Complete |
 | INTG-04 | Phase 35 | Complete |
 
