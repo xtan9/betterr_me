@@ -1,4 +1,4 @@
-import { resend } from './resend';
+import { getResendClient } from './resend';
 import { EMAIL_TEMPLATES, getSubject } from './templates';
 import { getUnsubscribeUrl } from './unsubscribe';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -105,7 +105,7 @@ export async function sendReminderEmail(
     }
 
     // Send via Resend (use function call not JSX for templates)
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: 'BetterR.Me <reminders@betterr.me>',
       to: [profile.email],
       subject,

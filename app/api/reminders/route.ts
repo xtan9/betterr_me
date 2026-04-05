@@ -101,6 +101,8 @@ export async function POST(request: NextRequest) {
     const remindersDB = new RemindersDB(supabase);
     const reminder = await remindersDB.createReminder(user.id, {
       ...reminderData,
+      relative_minutes: reminderData.relative_minutes ?? null,
+      absolute_time: reminderData.absolute_time ?? null,
       fire_at: fireAt,
     });
 
