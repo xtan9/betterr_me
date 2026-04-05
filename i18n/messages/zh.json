@@ -809,7 +809,39 @@
       "emailExplainer": "邮件提醒将发送到您的账户邮箱地址。您也可以通过邮件底部的链接取消订阅。",
       "emailEnabled": "邮件通知已启用",
       "emailDisabled": "邮件通知已禁用",
-      "emailToggleError": "更新邮件偏好失败"
+      "emailToggleError": "更新邮件偏好失败",
+      "quietHours": {
+        "title": "免打扰时段",
+        "description": "在此时段暂停推送通知",
+        "enabled": "免打扰已启用",
+        "disabled": "免打扰已禁用",
+        "startTime": "开始时间",
+        "endTime": "结束时间",
+        "emailNote": "邮件通知不受免打扰时段影响",
+        "saved": "免打扰设置已保存",
+        "saveError": "保存免打扰设置失败",
+        "save": "保存"
+      },
+      "reminderDefaults": {
+        "title": "默认提醒",
+        "description": "创建新项目时自动添加这些提醒",
+        "sourceType": {
+          "calendar_event": "日历事件",
+          "task": "任务",
+          "habit": "习惯",
+          "bill": "账单"
+        },
+        "5min": "5 分钟前",
+        "15min": "15 分钟前",
+        "30min": "30 分钟前",
+        "1hour": "1 小时前",
+        "1day": "1 天前",
+        "push": "推送",
+        "email": "邮件",
+        "saved": "默认提醒已保存",
+        "saveError": "保存默认提醒失败",
+        "saveAll": "保存默认设置"
+      }
     }
   },
   "projects": {
@@ -1786,6 +1818,8 @@
     },
     "sidebar": {
       "newEvent": "+ 新事件",
+      "toggle": "切换侧边栏",
+      "title": "日历侧边栏",
       "layers": "图层",
       "comingSoonPhase": "将在未来阶段推出",
       "actionFailed": "操作失败，请重试。"
@@ -1828,6 +1862,7 @@
       "deleteConfirm": "确定要删除这个事件吗？",
       "saveFailed": "保存事件失败",
       "deleteFailed": "删除事件失败",
+      "reminderSaveWarning": "事件已保存，但部分提醒保存失败",
       "colors": {
         "default": "默认",
         "teal": "青色",
@@ -1858,6 +1893,23 @@
     },
     "dayHeader": {
       "dateTitle": "{weekday}, {date}"
+    },
+    "reminders": {
+      "title": "提醒",
+      "typeLabel": "提醒时间",
+      "add": "添加提醒",
+      "5min": "5 分钟前",
+      "15min": "15 分钟前",
+      "30min": "30 分钟前",
+      "1hour": "1 小时前",
+      "1day": "1 天前",
+      "custom": "自定义",
+      "customMinutes": "提前分钟数",
+      "absolute": "指定时间",
+      "absoluteTime": "提醒时间",
+      "push": "推送",
+      "email": "邮件",
+      "remove": "移除提醒"
     }
   },
   "chat": {

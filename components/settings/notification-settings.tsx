@@ -18,6 +18,8 @@ import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { toast } from "sonner";
 
 import { fetcher } from "@/lib/fetcher";
+import { QuietHoursSettings } from "./quiet-hours-settings";
+import { ReminderDefaultsSettings } from "./reminder-defaults-settings";
 
 export function NotificationSettings() {
   const t = useTranslations("settings.notifications");
@@ -139,6 +141,9 @@ export function NotificationSettings() {
             </div>
           </CardContent>
         </Card>
+
+        <QuietHoursSettings />
+        <ReminderDefaultsSettings />
       </div>
     );
   }
@@ -238,6 +243,9 @@ export function NotificationSettings() {
           </div>
         </CardContent>
       </Card>
+
+      <QuietHoursSettings />
+      <ReminderDefaultsSettings />
     </div>
   );
 }

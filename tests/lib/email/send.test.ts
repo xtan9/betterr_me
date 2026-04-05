@@ -9,7 +9,7 @@ const { mockSend, mockGetProfile, mockComponent } = vi.hoisted(() => ({
 
 // Mock resend
 vi.mock('@/lib/email/resend', () => ({
-  resend: { emails: { send: mockSend } },
+  getResendClient: () => ({ emails: { send: mockSend } }),
 }));
 
 // Mock admin client

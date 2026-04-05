@@ -34,6 +34,10 @@ Progress: [░░░░░░░░░░] 0% (v7.0)
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 35.1 inserted after Phase 35: Reminder Cron, Preferences & Polish (URGENT) — completes v6.0 Calendar & Reminder Notifications milestone (REMN-01 through REMN-10, I18N-01, RESP-01 through RESP-03)
+
 ### Decisions
 
 See PROJECT.md Key Decisions table for full log with outcomes.
@@ -48,6 +52,11 @@ Recent decisions affecting current work:
 - [Phase 34]: Use raw Response for streaming instead of NextResponse for AI SDK toDataStreamResponse compatibility
 - [Phase 35]: Check both e.nativeEvent.isComposing and e.isComposing for IME guard compatibility
 - [Phase 35]: Always show translated error.generic instead of raw error.message for consistent UX
+- [Phase 35.1]: Extended reminderCreateSchema with .and() for event_start_time rather than modifying shared schema
+- [Phase 35.1]: Reminder fire_at recomputation on reschedule catches errors silently to not fail event update
+- [Phase 35.1]: SMART_DEFAULTS exported from reminder-rows for reuse across event types
+- [Phase 35.1]: Dirty-tracking in ReminderDefaultsSettings to only PUT changed source types
+- [Phase 35.1]: Used actual component t() keys instead of plan-suggested keys for i18n translations
 - [Phase 36]: Direct supabase.from().update() for bumping conversation updated_at since ConversationUpdate type only includes title and model
 - [Phase 36]: Use prevStatusRef for stream completion detection and async IIFE in useEffect for message loading
 

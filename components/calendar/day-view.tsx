@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useLocale } from "next-intl";
 import { TimeGrid } from "./time-grid";
 import { getLocalDateString } from "@/lib/utils";
+import { useSwipe } from "@/hooks/use-swipe";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 
 interface DayViewProps {
@@ -22,6 +23,8 @@ interface DayViewProps {
     position: { x: number; y: number },
   ) => void;
   onEventClick?: (event: ExpandedCalendarEvent) => void;
+  onNavigateNext?: () => void;
+  onNavigatePrev?: () => void;
 }
 
 export function DayView({
@@ -31,9 +34,16 @@ export function DayView({
   onTimeSlotClick,
   onDragSelect,
   onEventClick,
+  onNavigateNext,
+  onNavigatePrev,
 }: DayViewProps) {
   const locale = useLocale();
   const dates = useMemo(() => [currentDate], [currentDate]);
+
+  const swipeHandlers = useSwipe(
+    () => onNavigateNext?.(),
+    () => onNavigatePrev?.(),
+  );
 
   const dateStr = getLocalDateString(currentDate);
   const isToday = dateStr === today;
@@ -44,7 +54,7 @@ export function DayView({
   );
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" {...swipeHandlers}>
       {/* Day header */}
       <div
         className="grid border-b border-border"

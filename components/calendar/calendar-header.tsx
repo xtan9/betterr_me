@@ -1,11 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useLocale } from "next-intl";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { getWeekDates } from "@/lib/calendar/date-utils";
 
 interface CalendarHeaderProps {
@@ -16,6 +22,7 @@ interface CalendarHeaderProps {
   onNext: () => void;
   onToday: () => void;
   onViewChange: (view: string) => void;
+  mobileSidebar?: ReactNode;
 }
 
 export function CalendarHeader({
@@ -26,6 +33,7 @@ export function CalendarHeader({
   onNext,
   onToday,
   onViewChange,
+  mobileSidebar,
 }: CalendarHeaderProps) {
   const t = useTranslations("calendar");
   const locale = useLocale();
@@ -62,8 +70,22 @@ export function CalendarHeader({
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-      {/* Left: Today button */}
+      {/* Left: Mobile sidebar toggle + Today button */}
       <div className="flex items-center gap-2">
+        {mobileSidebar && (
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">{t("sidebar.toggle")}</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 p-4">
+              <SheetTitle className="sr-only">{t("sidebar.title")}</SheetTitle>
+              {mobileSidebar}
+            </SheetContent>
+          </Sheet>
+        )}
         <Button variant="outline" size="sm" onClick={onToday}>
           {t("navigation.today")}
         </Button>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Plus } from "lucide-react";
 import useSWR, { useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { getLocalDateString } from "@/lib/utils";
@@ -474,6 +475,16 @@ export function CalendarPageContent() {
             onNext={goToNext}
             onToday={goToToday}
             onViewChange={setView}
+            mobileSidebar={
+              <CalendarSidebar
+                currentDate={currentDate}
+                onDateSelect={navigateToDate}
+                weekStartDay={weekStartDay}
+                onNewEvent={handleNewEvent}
+                enabledLayers={enabledLayers}
+                onToggleLayer={toggleLayer}
+              />
+            }
           />
 
           <div className="flex-1 overflow-auto p-4">
@@ -512,11 +523,22 @@ export function CalendarPageContent() {
                 onTimeSlotClick={handleTimeSlotClick}
                 onDragSelect={handleDragSelect}
                 onEventClick={handleEventClick}
+                onNavigateNext={goToNext}
+                onNavigatePrev={goToPrev}
               />
             )}
           </div>
         </div>
       </div>
+
+      {/* Floating action button — mobile only */}
+      <button
+        className="fixed bottom-6 right-6 z-50 md:hidden h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-transform"
+        onClick={handleNewEvent}
+        aria-label={t("sidebar.newEvent")}
+      >
+        <Plus className="h-6 w-6" />
+      </button>
 
       {/* Quick-create popover */}
       {quickCreate?.isOpen && (
