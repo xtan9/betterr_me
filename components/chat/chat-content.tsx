@@ -24,7 +24,17 @@ interface ChatContentProps {
   conversationId?: string;
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+async function fetchJSON(url: string, init?: RequestInit) {
+  const res = await fetch(url, init);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Request failed: ${res.status}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+const fetcher = (url: string) => fetchJSON(url);
 
 export function ChatContent({ conversationId }: ChatContentProps) {
   const t = useTranslations("chat");
@@ -64,10 +74,9 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     const loadMessages = async () => {
       setIsLoadingMessages(true);
       try {
-        const res = await fetch(
+        const data = await fetchJSON(
           `/api/conversations/${activeConversationId}/messages`
         );
-        const data = await res.json();
         if (!cancelled) {
           const uiMessages = (data.messages || []).map(dbMessageToUIMessage);
           setMessages(uiMessages);
@@ -101,7 +110,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         const content = textPart?.type === "text" ? textPart.text : "";
 
         // D-05: Save assistant message after stream completes
-        fetch(`/api/conversations/${activeConversationId}/messages`, {
+        fetchJSON(`/api/conversations/${activeConversationId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: "assistant", content }),
@@ -113,7 +122,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         if (messages.length === 2) {
           const userMsg = messages[0];
           const userText = userMsg.parts.find((p) => p.type === "text");
-          fetch(`/api/conversations/${activeConversationId}/title`, {
+          fetchJSON(`/api/conversations/${activeConversationId}/title`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -147,8 +156,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       // D-11: Auto-create conversation on first message if none selected
       if (!convId) {
         try {
-          const res = await fetch("/api/conversations", { method: "POST" });
-          const data = await res.json();
+          const data = await fetchJSON("/api/conversations", { method: "POST" });
           convId = data.conversation.id;
           setActiveConversationId(convId);
           window.history.replaceState(null, "", `/chat?id=${convId}`);
@@ -161,7 +169,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
 
       // D-04: Save user message to DB BEFORE sending to LLM
       try {
-        await fetch(`/api/conversations/${convId}/messages`, {
+        await fetchJSON(`/api/conversations/${convId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: "user", content: text }),
@@ -247,7 +255,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   const handleDeleteConversation = useCallback(
     async (id: string) => {
       try {
-        await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+        await fetchJSON(`/api/conversations/${id}`, { method: "DELETE" });
         mutateConversations();
         if (id === activeConversationId) {
           setActiveConversationId(null);

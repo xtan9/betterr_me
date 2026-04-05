@@ -159,6 +159,15 @@ describe('POST /api/conversations/[id]/messages', () => {
     expect(data.message).toEqual(savedMessage);
   });
 
+  it('bumps conversation updated_at after saving a message', async () => {
+    const savedMessage = { id: 'm1', conversation_id: 'conv-1', role: 'user', content: 'hi', created_at: '2026-01-01' };
+    mockCreateMessage.mockResolvedValue(savedMessage);
+
+    await POST(makePostRequest({ role: 'user', content: 'hi' }), { params });
+
+    expect(mockFrom).toHaveBeenCalledWith('conversations');
+  });
+
   it('returns 404 if conversation not owned by user', async () => {
     mockGetConversation.mockResolvedValue({ ...mockConversation, user_id: 'other-user' });
 

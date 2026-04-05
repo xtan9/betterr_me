@@ -53,8 +53,6 @@ vi.mock("@/lib/chat/message-utils", () => ({
 
 // --- Mock leaf components ---
 
-let capturedChatInputProps: Record<string, unknown> = {};
-
 vi.mock("@/components/chat/message-list", () => ({
   MessageList: ({ messages }: { messages: UIMessage[] }) => (
     <div data-testid="message-list" data-count={messages.length}>
@@ -66,9 +64,7 @@ vi.mock("@/components/chat/message-list", () => ({
 }));
 
 vi.mock("@/components/chat/chat-input", () => ({
-  ChatInput: (props: Record<string, unknown>) => {
-    capturedChatInputProps = props;
-    return (
+  ChatInput: (props: Record<string, unknown>) => (
       <div data-testid="chat-input" data-streaming={String(props.isStreaming)}>
         <button
           data-testid="mock-send"
@@ -83,8 +79,7 @@ vi.mock("@/components/chat/chat-input", () => ({
           Stop
         </button>
       </div>
-    );
-  },
+    ),
 }));
 
 vi.mock("@/components/chat/chat-empty-state", () => ({
@@ -147,7 +142,6 @@ const makeMessage = (
 describe("ChatContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    capturedChatInputProps = {};
     // Reset to default return value
     mockUseChat.mockReturnValue({
       messages: [],
@@ -408,9 +402,19 @@ describe("ChatContent", () => {
   });
 
   it("fetches messages when conversationId is provided", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      json: () => Promise.resolve({ messages: [] }),
-      ok: true,
+    const mockFetch = vi.fn((url: string) => {
+      if (typeof url === "string" && url.includes("/messages")) {
+        return Promise.resolve({
+          json: () => Promise.resolve({ messages: [] }),
+          ok: true,
+          status: 200,
+        });
+      }
+      return Promise.resolve({
+        json: () => Promise.resolve({ conversations: [] }),
+        ok: true,
+        status: 200,
+      });
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -418,8 +422,146 @@ describe("ChatContent", () => {
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/conversations/conv-xyz/messages"
+        "/api/conversations/conv-xyz/messages",
+        undefined,
       );
     });
+  });
+
+  it("saves assistant message when status transitions from streaming to ready", async () => {
+    const msgs = [
+      makeMessage("1", "user", "hi"),
+      makeMessage("2", "assistant", "hello there"),
+    ];
+
+    // First render with streaming status
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "streaming" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({}),
+      ok: true,
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { rerender } = render(<ChatContent conversationId="conv-save" />);
+
+    // Transition to ready
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    rerender(<ChatContent conversationId="conv-save" />);
+
+    await waitFor(() => {
+      const saveCall = mockFetch.mock.calls.find(
+        (call: unknown[]) =>
+          typeof call[0] === "string" &&
+          call[0].includes("/messages") &&
+          typeof call[1] === "object" &&
+          (call[1] as RequestInit).method === "POST"
+      );
+      expect(saveCall).toBeTruthy();
+    });
+  });
+
+  it("triggers title generation after first exchange (exactly 2 messages)", async () => {
+    const msgs = [
+      makeMessage("1", "user", "hi"),
+      makeMessage("2", "assistant", "hello"),
+    ];
+
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "streaming" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({}),
+      ok: true,
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { rerender } = render(<ChatContent conversationId="conv-title" />);
+
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    rerender(<ChatContent conversationId="conv-title" />);
+
+    await waitFor(() => {
+      const titleCall = mockFetch.mock.calls.find(
+        (call: unknown[]) =>
+          typeof call[0] === "string" &&
+          call[0].includes("/title")
+      );
+      expect(titleCall).toBeTruthy();
+    });
+  });
+
+  it("clears state when deleting the active conversation", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({}),
+      ok: true,
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    // Render with sidebar delete button targeting conv-123
+    // The mock sidebar's delete button calls onDeleteConversation("conv-123")
+    render(<ChatContent conversationId="conv-123" />);
+
+    fireEvent.click(screen.getByTestId("sidebar-delete"));
+
+    await waitFor(() => {
+      // Verify DELETE was called
+      const deleteCall = mockFetch.mock.calls.find(
+        (call: unknown[]) =>
+          typeof call[1] === "object" &&
+          (call[1] as RequestInit).method === "DELETE"
+      );
+      expect(deleteCall).toBeTruthy();
+    });
+
+    // Verify conversation list was refreshed
+    expect(mockMutateFn).toHaveBeenCalled();
+    // Verify messages were cleared (active conversation was deleted)
+    expect(mockSetMessages).toHaveBeenCalledWith([]);
+  });
+
+  it("resets state when clicking new chat", () => {
+    render(<ChatContent conversationId="conv-abc" />);
+
+    fireEvent.click(screen.getByTestId("sidebar-new-chat"));
+
+    // Verify messages were cleared
+    expect(mockSetMessages).toHaveBeenCalledWith([]);
+    // Verify sidebar shows no active conversation after new chat
+    const sidebar = screen.getByTestId("conversation-sidebar");
+    expect(sidebar).toHaveAttribute("data-active-id", "");
   });
 });

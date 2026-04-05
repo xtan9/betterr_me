@@ -93,11 +93,18 @@ export async function POST(
     });
 
     // Bump conversation updated_at
-    await supabase
+    const { error: updateError } = await supabase
       .from("conversations")
       .update({ updated_at: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", user.id);
+
+    if (updateError) {
+      log.warn("Failed to bump conversation updated_at", {
+        conversationId: id,
+        error: updateError.message,
+      });
+    }
 
     return NextResponse.json({ message }, { status: 201 });
   } catch (error) {
