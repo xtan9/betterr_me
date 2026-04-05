@@ -8,6 +8,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layouts/app-sidebar";
+import { TimezoneDetector } from "@/components/timezone-detector";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
@@ -53,6 +54,8 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
   }, []);
 
   return (
+    <>
+    <TimezoneDetector />
     <SidebarProvider
       open={open}
       onOpenChange={handleOpenChange}
@@ -79,5 +82,6 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
         </div>
       </SidebarInset>
     </SidebarProvider>
+    </>
   );
 }
