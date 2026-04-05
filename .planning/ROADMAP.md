@@ -179,7 +179,11 @@ Plans:
   2. Workouts appear at their started_at time on the calendar (not all-day)
   3. All 5 domain layers (events, tasks, habits, bills, workouts) enabled by default on first load
   4. User's IANA timezone auto-detected and persisted to profile on first visit
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 37.1-01-PLAN.md — Stale closure fix, workout time extraction, layer defaults + tests
+- [ ] 37.1-02-PLAN.md — Timezone persistence (API fix + hook wiring) + tests
 
 ## Progress
 
@@ -221,4 +225,4 @@ Phases execute in numeric order: 34 → 35 → 36 → 37
 | 35.1 Reminder Cron & Polish | v6.0 | 5/5 | Complete    | 2026-04-03 |
 | 36. Conversation Persistence & Management | v7.0 | 2/2 | Complete    | 2026-04-04 |
 | 37. Navigation & i18n | v7.0 | 0/? | Not started | - |
-| 37.1 v6.0 Gap Closure | v6.0 | 0/? | Not started | - |
+| 37.1 v6.0 Gap Closure | v6.0 | 0/2 | Not started | - |
