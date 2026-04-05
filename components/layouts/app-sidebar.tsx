@@ -11,6 +11,7 @@ import {
   Dumbbell,
   Wallet,
   CalendarDays,
+  MessageSquare,
   PanelLeftClose,
   PanelLeft,
 } from "lucide-react";
@@ -79,6 +80,12 @@ const mainNavItems = [
     icon: CalendarDays,
     labelKey: "calendar",
     match: (p: string) => p.startsWith("/calendar"),
+  },
+  {
+    href: "/chat",
+    icon: MessageSquare,
+    labelKey: "chat",
+    match: (p: string) => p.startsWith("/chat"),
   },
 ];
 
