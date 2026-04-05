@@ -18,12 +18,12 @@ describe("chatMessageSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("accepts valid system message", () => {
+  it("rejects system role", () => {
     const result = chatMessageSchema.safeParse({
       role: "system",
       content: "You are a helpful assistant.",
     });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 
   it("rejects invalid role", () => {
@@ -70,7 +70,6 @@ describe("sendChatSchema", () => {
   it("accepts valid multi-message conversation", () => {
     const result = sendChatSchema.safeParse({
       messages: [
-        { role: "system", content: "You are helpful." },
         { role: "user", content: "Hello" },
         { role: "assistant", content: "Hi!" },
         { role: "user", content: "How are you?" },

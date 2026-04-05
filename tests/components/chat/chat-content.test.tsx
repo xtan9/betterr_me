@@ -47,7 +47,10 @@ vi.mock("@/lib/chat/message-utils", () => ({
     role: msg.role,
     parts: [{ type: "text" as const, text: msg.content }],
   })),
-  uiMessageToDbInsert: vi.fn(),
+}));
+
+vi.mock("@/lib/logger", () => ({
+  log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
 // --- Mock leaf components ---
