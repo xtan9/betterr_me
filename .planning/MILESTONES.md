@@ -1,11 +1,41 @@
 # Milestones
 
+## v7.0 AI Chat Foundation (Shipped: 2026-04-05)
+
+**Phases completed:** 7 phases, 21 plans, 41 tasks
+
+**Key accomplishments:**
+
+- Supabase migration for conversations/chat_messages with RLS, TypeScript types, and DB classes with 22 unit tests
+- Installed AI SDK + markdown packages, configured OpenAI-compatible LLM provider for llm.betterr.me/v1, and created Zod chat validation schemas with 13 tests
+- POST /api/chat endpoint streaming Claude responses via AI SDK with auth, Zod validation, abort signal, and anti-buffering headers
+- VAPID config utility, Zod push schemas, and notification URL map with web-push dependency and 29 test stubs
+- Three push notification API routes (subscribe, unsubscribe, subscriptions count) with Zod validation and auth guards
+- Client-side React hook managing full push lifecycle: permission, SW registration, subscription, and API sync with SSR-safe guards
+- NotificationSettings component with toggle switch, browser permission handling, device count display, test button, and full i18n in en/zh/zh-TW
+- 21 unit tests replacing Wave 0 stubs for VAPID config, notification URL routing, and push Zod schemas
+- 28 integration tests covering push subscribe/unsubscribe/subscriptions API routes and NotificationSettings component with full auth, validation, DB, and UI state coverage
+- 5 chat UI components (MarkdownRenderer, MessageBubble, ChatEmptyState, ChatInput, MessageList) with 27 tests, i18n in 3 locales, and blink-cursor animation
+- Push notification dispatch utility with quiet hours enforcement and Vercel Cron job for automated reminder delivery
+- Reminder CRUD API routes with fire_at pre-computation, defaults management, and automatic fire_at recomputation on calendar event reschedule
+- ReminderRows component with type/channel controls in event dialog, plus QuietHoursSettings and ReminderDefaultsSettings in notification preferences
+- Responsive calendar with collapsible sidebar Sheet drawer, useSwipe hook for day navigation, and floating action button on mobile
+- Complete en/zh/zh-TW translations for reminder rows, quiet hours, reminder defaults, and mobile calendar UI strings
+- 5 conversation management API handlers with message format converters, Zod validation, and LLM title generation
+- Conversation sidebar with SWR-fetched list, message persistence before/after LLM, auto-title on first exchange, and query-param URL strategy
+- Chat nav item added to sidebar after Calendar with MessageSquare icon, complete i18n coverage verified across all 3 locales
+- Fixed stale closure in event dialog reminder save and added test coverage for workout time extraction and layer defaults
+- Fixed timezone auto-detection by wiring useTimezoneDetection hook into authenticated layout and adding timezone field mapping to PATCH /api/profile handler
+
+---
+
 ## v4.0 Money Tracking (Shipped: 2026-02-28)
 
 **Phases completed:** 9 phases, 38 plans, 74 tasks
 **Stats:** 323 files changed, +53,446/-197 lines, 147 commits, 8 days (2026-02-21 → 2026-02-28)
 
 **Key accomplishments:**
+
 - Built household-scoped database foundation with 6 tables, BIGINT cents arithmetic, IN-subquery RLS, and lazy household creation
 - Plaid bank connection pipeline: OAuth linking, Vault-encrypted tokens, JWT/ES256 webhook verification, cursor-based transaction sync
 - Transaction management with search, filters, auto-categorization (16 PFCv2 categories), merchant rules, category overrides, splitting, and CSV import
@@ -26,6 +56,7 @@
 **Phases completed:** 5 phases, 11 plans, 0 tasks
 
 **Key accomplishments:**
+
 - Fixed frequency correctness: times_per_week 3/3 = 100% (was ~43%), weekly any-day-counts (was Monday-only)
 - Wired Zod validation into all 6 API routes, added ensureProfile helper, 20-habit limit, auth redirect allowlist
 - Created logger module, removed dead cache (669 lines), hardened all 4 DB constructors, added _warnings to dashboard
@@ -36,12 +67,12 @@
 
 ---
 
-
 ## v1.1 Dashboard Task Fixes (Shipped: 2026-02-17)
 
 **Phases completed:** 1 phase, 1 plan, 2 tasks
 
 **Key accomplishments:**
+
 - Fixed `getTodayTasks` to accept client-sent date parameter instead of server-local time
 - Removed `is_completed` filter — completed tasks now appear in dashboard "X of Y" counts
 - Eliminated timezone-based task duplication between "Today" and "Tomorrow" sections
@@ -56,6 +87,7 @@
 **Phases completed:** 9 phases
 
 **Key accomplishments:**
+
 - Extracted design tokens and established CSS foundation for consistent styling
 - Replaced top-nav with collapsible sidebar navigation shell
 - Implemented sidebar collapse state persistence
@@ -68,13 +100,13 @@
 
 ---
 
-
 ## v2.1 UI Polish & Refinement (Shipped: 2026-02-18)
 
 **Phases completed:** 3 phases, 6 plans
 **Stats:** 59 files changed, +3220/-276 lines, 55 commits, 2 days
 
 **Key accomplishments:**
+
 - Defined 56 semantic CSS design tokens for categories, priorities, and status indicators with full light/dark mode support
 - Eliminated all hardcoded Tailwind color classes across habit, dashboard, task, auth, hero, and settings components
 - Standardized card grid spacing with `gap-card-gap` semantic token across all list views
@@ -85,13 +117,13 @@
 
 ---
 
-
 ## v3.0 Projects & Kanban (Shipped: 2026-02-21)
 
 **Phases completed:** 5 phases, 12 plans, 25 tasks
 **Stats:** 97 files changed, +12,769/-156 lines, 24 code commits, 3 days (~49 min execution)
 
 **Key accomplishments:**
+
 - Added task `status` field (backlog/todo/in_progress/done) with bidirectional `is_completed` sync, section field, sort_order, and migration SQL seeding existing tasks
 - Full project CRUD: create with name/section/color, edit, archive/restore, delete (orphans tasks as standalone)
 - Redesigned tasks page with Work/Personal section-based layout, project cards with X/Y progress bars, and standalone tasks area
@@ -105,13 +137,13 @@
 
 ---
 
-
 ## v4.0 Journal (Shipped: 2026-02-24)
 
 **Phases completed:** 7 phases, 13 plans, 33 implementation commits
 **Stats:** 126 files changed, +17,573/-74 lines, 1541 tests passing, 2 days (2026-02-22 → 2026-02-24)
 
 **Key accomplishments:**
+
 - Full reflective journaling layer with Tiptap 3 rich-text editor, mood tracking (5-point emoji scale), and debounced autosave with beforeunload fallback
 - Writing prompts library (15 prompts in 3 categories: gratitude, reflection, goals) with prompt browser sheet reducing blank-page anxiety
 - Calendar view with mood-colored day indicators and timeline feed with cursor-based pagination
@@ -126,13 +158,13 @@
 
 ---
 
-
 ## v5.0 Fitness Tracking (Shipped: 2026-02-27)
 
 **Phases completed:** 6 phases, 20 plans
 **Stats:** 72 commits (37 feature), 5 days (2026-02-23 → 2026-02-27), ~57,500 LOC TypeScript total
 
 **Key accomplishments:**
+
 - Exercise library with 92 preset exercises — browse, search, filter by muscle group/equipment; create/edit/delete custom exercises with RLS isolation
 - Real-time workout logging — start sessions, add exercises, log sets (weight+reps, bodyweight, duration), rest timer with audio beep, dual-write persistence across browser refresh
 - Routine templates with copy-on-start — create reusable workout templates, start workouts from routines with pre-filled targets, save completed workouts as new routines
@@ -145,4 +177,3 @@
 **Tech debt (3 minor items):** 5 human browser verification items (Phase 19), save-as-routine heuristic may not match all exercise types (Phase 20), useExerciseRecords per-SetRow SWR calls deduplicated but not optimized (Phase 21)
 
 ---
-

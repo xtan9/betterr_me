@@ -82,7 +82,7 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ### Active
 
-(Defined in REQUIREMENTS.md for v7.0 AI Chat Foundation)
+(None — next milestone not yet defined)
 
 ### Recently Validated (v7.0 Phases 34-37)
 
@@ -107,15 +107,15 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - ✓ Keyboard shortcuts (D/W/M/T/arrows/C/N/slash/Esc) with input suppression — v6.0 Phase 32
 - ✓ Default view routing (desktop=week, mobile=day) — v6.0 Phase 32
 
-## Current Milestone: v7.0 AI Chat Foundation
+## Current Milestone: None (v7.0 complete)
 
-**Goal:** Build a working chat interface that lets authenticated users have conversations with Claude via the llm.betterr.me proxy.
+**Shipped:** v7.0 AI Chat Foundation (2026-04-05)
+- Streaming chat with Claude via llm.betterr.me proxy
+- Conversation persistence (create, switch, delete, auto-title)
+- Full i18n (en, zh, zh-TW), dark mode, keyboard shortcuts
+- Accessible via sidebar navigation
 
-**Target features:**
-- Chat UI with message history (user + assistant messages)
-- Server-side API route proxying to llm.betterr.me (streaming)
-- Auth-gated — only logged-in users can chat
-- Conversation persists within the session
+**Next:** Define next milestone with `/gsd:new-milestone`
 
 ### Out of Scope
 
@@ -153,6 +153,7 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 - **Shipped:** v2.1 UI Polish & Refinement (2026-02-18) — 3 phases, 6 plans, 8 requirements
 - **Shipped:** v3.0 Projects & Kanban (2026-02-21) — 5 phases, 12 plans, 17 requirements
 - **Shipped:** v4.0 Money Tracking (2026-02-28) — 9 phases, 38 plans, 66 requirements
+- **Shipped:** v7.0 AI Chat Foundation (2026-04-05) — 4 phases, 8 plans, 12 requirements
 - **Money feature origin:** Brainstormed as separate "moneyy.me" project, incorporated into BetterR.Me
 - **Codebase map:** `.planning/codebase/` (7 documents from 2026-02-15 audit — may need refresh after v4.0)
 - **Known:** Vitest picks up .worktrees/ test files (spurious, not blocking)
@@ -213,4 +214,4 @@ Users see accurate stats, the API rejects bad input, and the codebase is maintai
 
 ---
 
-\_Last updated: 2026-04-04
+\_Last updated: 2026-04-05 after v7.0 milestone
