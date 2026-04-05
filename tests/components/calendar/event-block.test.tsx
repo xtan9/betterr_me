@@ -97,4 +97,32 @@ describe("EventBlock", () => {
     expect(onClick).toHaveBeenCalledWith(defaultProps.event);
     expect(stopSpy).toHaveBeenCalled();
   });
+
+  it("uses domain color styles when _domain is set", () => {
+    const event = {
+      ...makeEvent(),
+      _domain: "tasks",
+      _completed: false,
+    } as unknown as ExpandedCalendarEvent;
+
+    render(<EventBlock {...defaultProps} event={event} />);
+    const button = screen.getByRole("button");
+    // Domain color uses inline styles instead of the default CSS class
+    expect(button.className).not.toContain("bg-[hsl(var(--calendar-event-muted))]");
+    expect(button.style.backgroundColor).toContain("hsl(var(--calendar-task-muted))");
+    expect(button.style.borderLeftColor).toContain("hsl(var(--calendar-task))");
+  });
+
+  it("shows line-through when _completed is true", () => {
+    const event = {
+      ...makeEvent(),
+      _domain: "habits",
+      _completed: true,
+    } as unknown as ExpandedCalendarEvent;
+
+    render(<EventBlock {...defaultProps} event={event} />);
+    const button = screen.getByRole("button");
+    expect(button.className).toContain("line-through");
+    expect(button.className).toContain("opacity-60");
+  });
 });
