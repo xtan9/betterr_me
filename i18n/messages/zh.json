@@ -1911,6 +1911,27 @@
       "push": "推送",
       "email": "邮件",
       "remove": "移除提醒"
+    },
+    "feed": {
+      "error": "加载日历项目失败",
+      "loading": "加载中..."
+    },
+    "actions": {
+      "markComplete": "标记完成",
+      "markIncomplete": "标记未完成",
+      "toggleHabit": "切换习惯",
+      "markHabitComplete": "标记习惯完成",
+      "markHabitIncomplete": "标记习惯未完成",
+      "markPaid": "标记已付",
+      "viewWorkout": "查看锻炼",
+      "billAmount": "金额：{amount}"
+    },
+    "domains": {
+      "event": "事件",
+      "task": "任务",
+      "habit": "习惯",
+      "bill": "账单",
+      "workout": "锻炼"
     }
   },
   "chat": {

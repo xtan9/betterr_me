@@ -1911,6 +1911,27 @@
       "push": "推播",
       "email": "電子郵件",
       "remove": "移除提醒"
+    },
+    "feed": {
+      "error": "載入日曆項目失敗",
+      "loading": "載入中..."
+    },
+    "actions": {
+      "markComplete": "標記完成",
+      "markIncomplete": "標記未完成",
+      "toggleHabit": "切換習慣",
+      "markHabitComplete": "標記習慣完成",
+      "markHabitIncomplete": "標記習慣未完成",
+      "markPaid": "標記已付",
+      "viewWorkout": "查看鍛鍊",
+      "billAmount": "金額：{amount}"
+    },
+    "domains": {
+      "event": "事件",
+      "task": "任務",
+      "habit": "習慣",
+      "bill": "帳單",
+      "workout": "鍛鍊"
     }
   },
   "chat": {
