@@ -166,7 +166,9 @@ Plans:
   1. User can access the chat page via a navigation link in the app sidebar
   2. All chat UI strings (button labels, placeholders, empty states, error messages) are translated in en, zh, and zh-TW
   3. Switching locale updates all chat interface text without breaking functionality
-**Plans**: TBD
+**Plans:** 1/1 plans
+Plans:
+- [ ] 37-01-PLAN.md — Add Chat sidebar nav item and complete i18n coverage
 
 ## Progress
 
