@@ -1911,6 +1911,27 @@
       "push": "Push",
       "email": "Email",
       "remove": "Remove reminder"
+    },
+    "feed": {
+      "error": "Failed to load calendar items",
+      "loading": "Loading..."
+    },
+    "actions": {
+      "markComplete": "Mark complete",
+      "markIncomplete": "Mark incomplete",
+      "toggleHabit": "Toggle habit",
+      "markHabitComplete": "Mark habit complete",
+      "markHabitIncomplete": "Mark habit incomplete",
+      "markPaid": "Mark as paid",
+      "viewWorkout": "View workout",
+      "billAmount": "Amount: {amount}"
+    },
+    "domains": {
+      "event": "Event",
+      "task": "Task",
+      "habit": "Habit",
+      "bill": "Bill",
+      "workout": "Workout"
     }
   },
   "chat": {

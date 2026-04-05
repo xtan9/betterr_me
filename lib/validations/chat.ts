@@ -1,8 +1,7 @@
 import { z } from "zod";
-import { CHAT_ROLES } from "@/lib/db/types";
 
 export const chatMessageSchema = z.object({
-  role: z.enum(CHAT_ROLES),
+  role: z.enum(["user", "assistant"]),
   content: z
     .string()
     .min(1, "Message cannot be empty")

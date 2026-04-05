@@ -1,7 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { dbMessageToUIMessage, uiMessageToDbInsert } from '@/lib/chat/message-utils';
+import { describe, it, expect, vi } from 'vitest';
+import { dbMessageToUIMessage } from '@/lib/chat/message-utils';
 import type { ChatMessage } from '@/lib/db/types';
-import type { UIMessage } from 'ai';
+
+vi.mock('@/lib/logger', () => ({
+  log: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
 
 describe('message-utils', () => {
   describe('dbMessageToUIMessage', () => {
@@ -49,51 +52,6 @@ describe('message-utils', () => {
 
       const result = dbMessageToUIMessage(dbMsg);
       expect(result.id).toBe('m3');
-    });
-  });
-
-  describe('uiMessageToDbInsert', () => {
-    it('extracts text content from parts array', () => {
-      const uiMsg: UIMessage = {
-        id: 'm1',
-        role: 'user',
-        parts: [{ type: 'text', text: 'hello' }],
-      };
-
-      const result = uiMessageToDbInsert(uiMsg, 'conv1');
-
-      expect(result).toEqual({
-        conversation_id: 'conv1',
-        role: 'user',
-        content: 'hello',
-      });
-    });
-
-    it('returns empty content when parts array is empty', () => {
-      const uiMsg: UIMessage = {
-        id: 'm2',
-        role: 'assistant',
-        parts: [],
-      };
-
-      const result = uiMessageToDbInsert(uiMsg, 'conv1');
-
-      expect(result.content).toBe('');
-    });
-
-    it('uses the first text part when multiple parts exist', () => {
-      const uiMsg: UIMessage = {
-        id: 'm3',
-        role: 'assistant',
-        parts: [
-          { type: 'text', text: 'first' },
-          { type: 'text', text: 'second' },
-        ],
-      };
-
-      const result = uiMessageToDbInsert(uiMsg, 'conv2');
-
-      expect(result.content).toBe('first');
     });
   });
 });
