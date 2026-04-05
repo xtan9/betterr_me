@@ -66,15 +66,17 @@
 </details>
 
 <details>
-<summary>✅ v6.0 Calendar & Feed Aggregation (Phases 29-33) — SHIPPED 2026-04-02</summary>
+<summary>✅ v6.0 Calendar & Feed Aggregation (Phases 29-33, 35.1, 37.1) — SHIPPED 2026-04-05</summary>
 
-5 phases, 13 plans. See `.planning/milestones/v6.0-ROADMAP.md` for details.
+7 phases, 20 plans. See `.planning/milestones/v6.0-ROADMAP.md` for details.
 
 - [x] Phase 29: Database Schema & Infrastructure Foundation (3/3 plans) — completed 2026-03-31
 - [x] Phase 30: Calendar Event CRUD API (3/3 plans) — completed 2026-03-31
 - [x] Phase 31: Calendar UI — Month View & Navigation (2/2 plans) — completed 2026-04-01
 - [x] Phase 32: Calendar UI — Week & Day Views (4/4 plans) — completed 2026-04-02
 - [x] Phase 33: Cross-Domain Feed Aggregation (1/1 plans) — completed 2026-04-02
+- [x] Phase 35.1: Reminder Cron & Polish (5/5 plans) — completed 2026-04-03
+- [x] Phase 37.1: v6.0 Gap Closure (2/2 plans) — completed 2026-04-05
 
 </details>
 
@@ -120,28 +122,6 @@ Plans:
 - [x] 35-01-PLAN.md — Leaf components: MarkdownRenderer, MessageBubble, ChatInput, ChatEmptyState, MessageList + tests
 - [x] 35-02-PLAN.md — ChatContent orchestrator (useChat), ChatPage, Layout + integration tests
 
-### Phase 35.1: Reminder Cron, Preferences & Polish (INSERTED)
-
-**Goal:** Cron-based reminder dispatch, smart defaults, quiet hours, user preferences, responsive mobile layout, and i18n.
-**Requirements**: REMN-01, REMN-02, REMN-03, REMN-04, REMN-05, REMN-06, REMN-07, REMN-08, REMN-09, REMN-10, I18N-01, RESP-01, RESP-02, RESP-03
-**Depends on:** Phase 35 (Chat UI), Phase 34 (Push Notifications - v6.0), Phase 35 (Email Notifications - v6.0)
-**Plans:** 5/5 plans complete
-
-**Success criteria:**
-1. User can add multiple reminders per event with relative (5m/15m/30m/1h/1d) or absolute timing, targeting push, email, or both
-2. Smart defaults auto-apply per source type and user can customize defaults in settings
-3. Quiet hours prevent push notifications between configurable start/end times
-4. Vercel Cron job runs every minute to dispatch pending reminders via push and/or email
-5. Failed deliveries are logged with status='failed' for retry
-6. All calendar and reminder UI strings translated in en, zh, zh-TW
-7. Mobile-responsive calendar (sidebar collapses, day view default, swipe navigation, FAB for new event)
-
-Plans:
-- [x] 35.1-01-PLAN.md — Push send utility, quiet hours logic, cron dispatch route
-- [x] 35.1-02-PLAN.md — Reminder CRUD API routes, defaults API, fire_at computation
-- [x] 35.1-03-PLAN.md — Event dialog reminder rows, settings UI (quiet hours + defaults)
-- [x] 35.1-04-PLAN.md — Mobile responsive calendar (sidebar collapse, swipe, FAB)
-- [x] 35.1-05-PLAN.md — i18n translations for all new UI strings (en, zh, zh-TW)
 
 ### Phase 36: Conversation Persistence & Management
 **Goal**: Users can maintain multiple conversations that persist across page refreshes, with automatic title generation
@@ -170,22 +150,6 @@ Plans:
 Plans:
 - [x] 37-01-PLAN.md — Add Chat sidebar nav item and complete i18n coverage
 
-### Phase 37.1: v6.0 Gap Closure — Calendar & Reminder Fixes (INSERTED)
-
-**Goal:** Fix 4 bugs found by v6.0 milestone audit: stale closure in reminder save, workouts not at start time, layer defaults, timezone persistence.
-**Depends on:** Phase 35.1
-**Requirements:** INFR-07, AGGR-04, AGGR-06, REMN-01, REMN-04
-**Gap Closure:** Closes gaps from v6.0-MILESTONE-AUDIT.md
-**Success Criteria** (what must be TRUE):
-  1. Editing reminders in event dialog persists the user's actual edits (not stale snapshot)
-  2. Workouts appear at their started_at time on the calendar (not all-day)
-  3. All 5 domain layers (events, tasks, habits, bills, workouts) enabled by default on first load
-  4. User's IANA timezone auto-detected and persisted to profile on first visit
-**Plans:** 2 plans
-
-Plans:
-- [ ] 37.1-01-PLAN.md — Stale closure fix, workout time extraction, layer defaults + tests
-- [ ] 37.1-02-PLAN.md — Timezone persistence (API fix + hook wiring) + tests
 
 ## Progress
 
@@ -227,4 +191,4 @@ Phases execute in numeric order: 34 → 35 → 36 → 37
 | 35.1 Reminder Cron & Polish | v6.0 | 5/5 | Complete    | 2026-04-03 |
 | 36. Conversation Persistence & Management | v7.0 | 2/2 | Complete    | 2026-04-04 |
 | 37. Navigation & i18n | v7.0 | 0/? | Not started | - |
-| 37.1 v6.0 Gap Closure | v6.0 | 1/2 | In progress | - |
+| 37.1 v6.0 Gap Closure | v6.0 | 2/2 | Complete    | 2026-04-05 |
