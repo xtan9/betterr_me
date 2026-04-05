@@ -1,11 +1,4 @@
 import { createHmac, timingSafeEqual } from "crypto";
-
-function secureCompare(a: string, b: string): boolean {
-  const key = "cron-auth-compare";
-  const hmacA = createHmac("sha256", key).update(a).digest();
-  const hmacB = createHmac("sha256", key).update(b).digest();
-  return timingSafeEqual(hmacA, hmacB);
-}
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RemindersDB } from "@/lib/db/reminders";
@@ -18,6 +11,13 @@ import { log } from "@/lib/logger";
 
 /** Max age (ms) before a pending reminder is considered stale and marked failed */
 const MAX_STALE_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+function secureCompare(a: string, b: string): boolean {
+  const key = "cron-auth-compare";
+  const hmacA = createHmac("sha256", key).update(a).digest();
+  const hmacB = createHmac("sha256", key).update(b).digest();
+  return timingSafeEqual(hmacA, hmacB);
+}
 
 /**
  * GET /api/cron/dispatch-reminders
