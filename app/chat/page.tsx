@@ -2,7 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ChatContent } from "@/components/chat/chat-content";
 
-export default async function ChatPage() {
+export default async function ChatPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -12,5 +16,7 @@ export default async function ChatPage() {
     redirect("/auth/login");
   }
 
-  return <ChatContent />;
+  const { id } = await searchParams;
+
+  return <ChatContent conversationId={id} />;
 }

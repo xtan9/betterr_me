@@ -1926,6 +1926,13 @@
       "unauthorized": "Your session has expired. Please log in again.",
       "unavailable": "AI service is temporarily unavailable.",
       "retry": "Retry"
-    }
+    },
+    "sidebar": {
+      "title": "Conversations",
+      "newChat": "New chat",
+      "untitled": "New conversation",
+      "deleteConfirm": "Delete conversation?"
+    },
+    "loading": "Loading..."
   }
 }

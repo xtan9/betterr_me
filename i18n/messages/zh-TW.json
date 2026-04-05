@@ -1926,6 +1926,13 @@
       "unauthorized": "工作階段已過期，請重新登入。",
       "unavailable": "AI 服務暫時無法使用。",
       "retry": "重試"
-    }
+    },
+    "sidebar": {
+      "title": "對話列表",
+      "newChat": "新對話",
+      "untitled": "新對話",
+      "deleteConfirm": "刪除對話？"
+    },
+    "loading": "載入中..."
   }
 }

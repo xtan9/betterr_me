@@ -1926,6 +1926,13 @@
       "unauthorized": "会话已过期，请重新登录。",
       "unavailable": "AI 服务暂时不可用。",
       "retry": "重试"
-    }
+    },
+    "sidebar": {
+      "title": "对话列表",
+      "newChat": "新对话",
+      "untitled": "新对话",
+      "deleteConfirm": "删除对话？"
+    },
+    "loading": "加载中..."
   }
 }

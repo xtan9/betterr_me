@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v7.0
 milestone_name: AI Chat Foundation
-status: executing
-stopped_at: Completed 35.1-05-PLAN.md
-last_updated: "2026-04-03T18:22:44.762Z"
-last_activity: 2026-04-03
+status: verifying
+stopped_at: Completed 36-02-PLAN.md
+last_updated: "2026-04-04T01:29:26.436Z"
+last_activity: 2026-04-04
 progress:
-  total_phases: 5
-  completed_phases: 3
-  total_plans: 14
-  completed_plans: 14
+  total_phases: 4
+  completed_phases: 4
+  total_plans: 13
+  completed_plans: 13
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Phase 35.1 — reminder-cron-preferences-polish
+**Current focus:** Phase 36 — conversation-persistence-management
 
 ## Current Position
 
-Phase: 36
+Phase: 37
 Plan: Not started
-Status: Ready to execute
-Last activity: 2026-04-03
+Status: Phase complete — ready for verification
+Last activity: 2026-04-04
 
 Progress: [░░░░░░░░░░] 0% (v7.0)
 
@@ -50,11 +50,15 @@ Recent decisions affecting current work:
 - [Phase 34]: No client-side singleton for chat DB classes -- only used server-side via API routes
 - [Phase 34]: React bumped to 19.2.4 for @ai-sdk/react peer dep compatibility
 - [Phase 34]: Use raw Response for streaming instead of NextResponse for AI SDK toDataStreamResponse compatibility
+- [Phase 35]: Check both e.nativeEvent.isComposing and e.isComposing for IME guard compatibility
+- [Phase 35]: Always show translated error.generic instead of raw error.message for consistent UX
 - [Phase 35.1]: Extended reminderCreateSchema with .and() for event_start_time rather than modifying shared schema
 - [Phase 35.1]: Reminder fire_at recomputation on reschedule catches errors silently to not fail event update
 - [Phase 35.1]: SMART_DEFAULTS exported from reminder-rows for reuse across event types
 - [Phase 35.1]: Dirty-tracking in ReminderDefaultsSettings to only PUT changed source types
 - [Phase 35.1]: Used actual component t() keys instead of plan-suggested keys for i18n translations
+- [Phase 36]: Direct supabase.from().update() for bumping conversation updated_at since ConversationUpdate type only includes title and model
+- [Phase 36]: Use prevStatusRef for stream completion detection and async IIFE in useEffect for message loading
 
 ### Research Notes
 
@@ -75,6 +79,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-03T18:15:12.093Z
-Stopped at: Phase 35.1 complete
-Resume: `/gsd:discuss-phase 36`
+Last session: 2026-04-04T01:23:49.452Z
+Stopped at: Completed 36-02-PLAN.md
+Resume: `/gsd:plan-phase 34`

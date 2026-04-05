@@ -18,7 +18,6 @@ function makeMessage(
     id: "msg-1",
     role,
     parts: [{ type: "text" as const, text, state }],
-    createdAt: new Date(),
   };
 }
 
