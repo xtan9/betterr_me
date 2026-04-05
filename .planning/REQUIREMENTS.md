@@ -34,10 +34,10 @@ Carried forward from v6.0 Calendar & Reminder Notifications. Push (Phase 34) and
 
 ### Reminders
 
-- [ ] **REMN-01**: User can add multiple reminders per calendar event (relative or absolute)
+- [x] **REMN-01**: User can add multiple reminders per calendar event (relative or absolute)
 - [x] **REMN-02**: Relative reminders support: 5 min, 15 min, 30 min, 1 hour, 1 day before, and custom minutes
 - [x] **REMN-03**: Absolute reminders support a specific date + time
-- [ ] **REMN-04**: Each reminder can target push, email, or both channels
+- [x] **REMN-04**: Each reminder can target push, email, or both channels
 - [x] **REMN-05**: Smart defaults auto-apply reminders based on source type (event: 15min/push, task: 1hr/push, habit: 8am/push, bill: 3days/push+email)
 - [x] **REMN-06**: User can customize default reminders per source type in settings
 - [x] **REMN-07**: User can set quiet hours (no push between configurable start/end times)
@@ -104,10 +104,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTG-03 | Phase 35 | Complete |
 | INTG-04 | Phase 35 | Complete |
 
-| REMN-01 | Phase 37.1 | Pending |
+| REMN-01 | Phase 37.1 | Complete |
 | REMN-02 | Phase 35.1 | Complete |
 | REMN-03 | Phase 35.1 | Complete |
-| REMN-04 | Phase 37.1 | Pending |
+| REMN-04 | Phase 37.1 | Complete |
 | REMN-05 | Phase 35.1 | Complete |
 | REMN-06 | Phase 35.1 | Complete |
 | REMN-07 | Phase 35.1 | Complete |
@@ -118,9 +118,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RESP-01 | Phase 35.1 | Complete |
 | RESP-02 | Phase 35.1 | Complete |
 | RESP-03 | Phase 35.1 | Complete |
-| INFR-07 | Phase 37.1 | Pending |
-| AGGR-04 | Phase 37.1 | Pending |
-| AGGR-06 | Phase 37.1 | Pending |
+| INFR-07 | Phase 37.1 | Complete |
+| AGGR-04 | Phase 37.1 | Complete |
+| AGGR-06 | Phase 37.1 | Complete |
 
 **Coverage:**
 - v7.0 requirements: 12 total, mapped: 12
