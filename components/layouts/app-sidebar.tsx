@@ -14,6 +14,7 @@ import {
   MessageSquare,
   PanelLeftClose,
   PanelLeft,
+  Shield,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -37,6 +38,8 @@ import {
 import { SidebarUserFooter } from "@/components/layouts/sidebar-user-footer";
 import { useSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { SIDEBAR_TRANSITION, SIDEBAR_HOVER } from "@/lib/sidebar-styles";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
 
 const mainNavItems = [
   {
@@ -126,6 +129,8 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
   const { habitsIncomplete, tasksDue, error } = useSidebarCounts();
+  const { data: profileData } = useSWR("/api/profile", fetcher);
+  const isAdmin = profileData?.profile?.role === "admin";
 
   const badgeCounts: Record<string, number> = error
     ? {}
@@ -202,6 +207,28 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith("/dashboard/admin")}
+                    tooltip={t("admin")}
+                    className={navButtonClassName}
+                    style={navButtonStyle}
+                  >
+                    <Link href="/dashboard/admin">
+                      <NavIconContainer icon={Shield} />
+                      <span>{t("admin")}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <SidebarUserFooter onDropdownOpenChange={onDropdownOpenChange} />
