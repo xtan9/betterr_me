@@ -306,7 +306,6 @@ describe("habitFormSchema", () => {
     });
 
     it("rejects missing frequency", () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { frequency: _freq, ...noFrequency } = validHabit();
       const result = habitFormSchema.safeParse(noFrequency);
       expect(result.success).toBe(false);

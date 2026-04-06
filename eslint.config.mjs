@@ -8,12 +8,20 @@ const eslintConfig = [
   {
     ignores: [".worktrees/**", "components/ui/**"],
   },
+  // Global: unused vars are errors, not warnings
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["error", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+      }],
+    },
+  },
   // Test files — relax strict rules
   {
     files: ["tests/**", "e2e/**"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": "warn",
     },
   },
   // Config files using require()

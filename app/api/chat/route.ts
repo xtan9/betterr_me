@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { streamText, convertToModelMessages } from "ai";
-import type { UIMessage } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { llmProvider } from "@/lib/ai/provider";
 import { log } from "@/lib/logger";

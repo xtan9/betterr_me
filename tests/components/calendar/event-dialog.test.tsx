@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { EventDialog } from "@/components/calendar/event-dialog";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
@@ -227,7 +227,7 @@ describe("EventDialog", () => {
 
   it("skips reminder persistence when reminderLoadFailed is true (REMN-04)", async () => {
     // Mock: editing an event where reminder fetch fails
-    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+    mockFetch.mockImplementation((url: string, _opts?: RequestInit) => {
       if (typeof url === "string" && url.includes("/api/reminders?")) {
         // Simulate reminder load failure
         return Promise.resolve({

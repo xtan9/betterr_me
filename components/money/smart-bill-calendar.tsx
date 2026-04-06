@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useTranslations } from "next-intl";
 import {
   format,
   startOfMonth,
@@ -113,7 +112,6 @@ export function SmartBillCalendar({
   dailyBalances,
   dailySpendingRateCents,
 }: SmartBillCalendarProps) {
-  const t = useTranslations("money.bills");
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
