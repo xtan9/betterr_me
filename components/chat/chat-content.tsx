@@ -113,8 +113,11 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     if (wasStreaming && status === "ready" && messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       if (lastMsg.role === "assistant" && activeConversationId) {
-        const textPart = lastMsg.parts.find((p) => p.type === "text");
-        const content = textPart?.type === "text" ? textPart.text : "";
+        // Collect all text from text parts (parts may have multiple text segments)
+        const content = lastMsg.parts
+          .filter((p): p is { type: "text"; text: string } => p.type === "text")
+          .map((p) => p.text)
+          .join("");
 
         // Skip save if content is empty (can happen if effect fires before parts are finalized)
         if (!content.trim()) return;

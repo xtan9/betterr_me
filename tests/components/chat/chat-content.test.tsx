@@ -554,6 +554,115 @@ describe("ChatContent", () => {
     expect(mockSetMessages).toHaveBeenCalledWith([]);
   });
 
+  it("does not save assistant message when content is empty", async () => {
+    // Assistant message with empty text part
+    const msgs = [
+      makeMessage("1", "user", "hi"),
+      { id: "2", role: "assistant" as const, parts: [{ type: "text" as const, text: "" }] },
+    ];
+
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "streaming" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({}),
+      ok: true,
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { rerender } = render(<ChatContent conversationId="conv-empty" />);
+
+    // Transition to ready with empty assistant content
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    rerender(<ChatContent conversationId="conv-empty" />);
+
+    // Wait a tick to ensure effect has run
+    await waitFor(() => {
+      // Should NOT have made a POST to /messages (content is empty)
+      const saveCall = mockFetch.mock.calls.find(
+        (call: unknown[]) =>
+          typeof call[0] === "string" &&
+          call[0].includes("/messages") &&
+          typeof call[1] === "object" &&
+          (call[1] as RequestInit).method === "POST"
+      );
+      expect(saveCall).toBeUndefined();
+    });
+  });
+
+  it("saves assistant message with concatenated text from multiple parts", async () => {
+    const msgs = [
+      makeMessage("1", "user", "hi"),
+      {
+        id: "2",
+        role: "assistant" as const,
+        parts: [
+          { type: "text" as const, text: "Hello " },
+          { type: "text" as const, text: "there!" },
+        ],
+      },
+    ];
+
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "streaming" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({}),
+      ok: true,
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { rerender } = render(<ChatContent conversationId="conv-multi" />);
+
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    rerender(<ChatContent conversationId="conv-multi" />);
+
+    await waitFor(() => {
+      const saveCall = mockFetch.mock.calls.find(
+        (call: unknown[]) =>
+          typeof call[0] === "string" &&
+          call[0].includes("/messages") &&
+          typeof call[1] === "object" &&
+          (call[1] as RequestInit).method === "POST"
+      );
+      expect(saveCall).toBeTruthy();
+      const body = JSON.parse((saveCall![1] as RequestInit).body as string);
+      expect(body.content).toBe("Hello there!");
+    });
+  });
+
   it("resets state when clicking new chat", () => {
     render(<ChatContent conversationId="conv-abc" />);
 
