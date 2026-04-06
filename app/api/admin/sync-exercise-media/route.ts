@@ -29,11 +29,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 2. Admin secret check
+    // 2. Admin role or secret check
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    const isAdmin = profile?.role === "admin";
+
     const adminSecret = process.env.ADMIN_SYNC_SECRET;
     const headerSecret = request.headers.get("x-admin-secret");
+    const hasSecret = !!adminSecret && headerSecret === adminSecret;
 
-    if (!adminSecret || headerSecret !== adminSecret) {
+    if (!isAdmin && !hasSecret) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
