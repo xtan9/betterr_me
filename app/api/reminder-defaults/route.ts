@@ -15,7 +15,7 @@ const reminderDefaultUpsertSchema = z.object({
  * GET /api/reminder-defaults
  * Get all reminder defaults for the authenticated user.
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const supabase = await createClient();
     const {

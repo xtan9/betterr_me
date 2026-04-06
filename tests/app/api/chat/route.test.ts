@@ -166,6 +166,7 @@ describe('POST /api/chat', () => {
     expect(mockStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
         model: expect.anything(),
+        system: expect.stringContaining("BetterR.Me"),
         messages: expect.any(Array),
         maxOutputTokens: expect.any(Number),
         abortSignal: req.signal,

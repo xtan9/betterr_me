@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { ChatInput } from "@/components/chat/chat-input";
 
 vi.mock("next-intl", () => ({
@@ -89,7 +88,7 @@ describe("ChatInput", () => {
   });
 
   it("stop button (Square icon) is visible when isStreaming=true instead of send button", () => {
-    const { container } = render(
+    render(
       <ChatInput {...defaultProps} isStreaming={true} />
     );
     // Stop button should have the Square icon (data-testid set by lucide)

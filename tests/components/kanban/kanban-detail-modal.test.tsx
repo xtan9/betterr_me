@@ -152,7 +152,7 @@ describe("KanbanDetailModal", () => {
       renderModal();
 
       await user.click(screen.getByText("Test Task"));
-      const input = screen.getByDisplayValue("Test Task");
+      const _input = screen.getByDisplayValue("Test Task");
       await user.tab(); // blur without changing
 
       expect(global.fetch).not.toHaveBeenCalled();

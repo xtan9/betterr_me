@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useTranslations } from "next-intl";
 import {
   format,
   startOfMonth,
@@ -18,7 +17,7 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BillCalendarDay } from "@/components/money/bill-calendar-day";
-import type { RecurringBill, BillFrequency } from "@/lib/db/types";
+import type { RecurringBill } from "@/lib/db/types";
 
 interface BillCalendarProps {
   bills: RecurringBill[];
@@ -103,7 +102,6 @@ function getBillDatesInMonth(
 }
 
 export function BillCalendar({ bills }: BillCalendarProps) {
-  const t = useTranslations("money.bills");
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
 

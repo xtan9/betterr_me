@@ -45,6 +45,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   >(conversationId ?? null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const justCreatedRef = useRef(false);
+  const pendingConvIdRef = useRef<string | null>(null);
 
   // SWR for conversation list
   const { data: convData, mutate: mutateConversations } = useSWR<{
@@ -69,6 +71,12 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   useEffect(() => {
     if (!activeConversationId) {
       setMessages([]);
+      return;
+    }
+    // Skip loading for a conversation we just created — it has no messages yet
+    // and loading would clear the in-flight sendMessage
+    if (justCreatedRef.current) {
+      justCreatedRef.current = false;
       return;
     }
     let cancelled = false;
@@ -104,14 +112,23 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       prevStatusRef.current === "submitted";
     prevStatusRef.current = status;
 
+    // Stream failed on first message — promote pending ID so the conversation
+    // is navigable and retryable, rather than leaving state inconsistent
+    if (wasStreaming && status === "error" && pendingConvIdRef.current) {
+      setActiveConversationId(pendingConvIdRef.current);
+      pendingConvIdRef.current = null;
+    }
+
     if (wasStreaming && status === "ready" && messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
-      if (lastMsg.role === "assistant" && activeConversationId) {
+      // Use pendingConvIdRef for first message (activeConversationId is still null)
+      const convId = activeConversationId ?? pendingConvIdRef.current;
+      if (lastMsg.role === "assistant" && convId) {
         const textPart = lastMsg.parts.find((p) => p.type === "text");
         const content = textPart?.type === "text" ? textPart.text : "";
 
         // D-05: Save assistant message after stream completes
-        fetchJSON(`/api/conversations/${activeConversationId}/messages`, {
+        fetchJSON(`/api/conversations/${convId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: "assistant", content }),
@@ -123,7 +140,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         if (messages.length === 2) {
           const userMsg = messages[0];
           const userText = userMsg.parts.find((p) => p.type === "text");
-          fetchJSON(`/api/conversations/${activeConversationId}/title`, {
+          fetchJSON(`/api/conversations/${convId}/title`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -136,6 +153,12 @@ export function ChatContent({ conversationId }: ChatContentProps) {
             .catch((err) =>
               log.error("[chat] Failed to generate title", err)
             );
+        }
+
+        // Now safe to set activeConversationId if it was deferred
+        if (pendingConvIdRef.current && !activeConversationId) {
+          setActiveConversationId(pendingConvIdRef.current);
+          pendingConvIdRef.current = null;
         }
 
         // Refresh conversation list to update updated_at ordering
@@ -159,7 +182,12 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         try {
           const data = await fetchJSON("/api/conversations", { method: "POST" });
           convId = data.conversation.id;
-          setActiveConversationId(convId);
+          // Defer setting activeConversationId — changing it now would reset
+          // useChat's internal state (id changes from "new" to convId) and
+          // trigger the message-loading effect, both of which kill the in-flight send.
+          // We update the URL immediately and set the ID after the stream completes.
+          justCreatedRef.current = true;
+          pendingConvIdRef.current = convId;
           window.history.replaceState(null, "", `/chat?id=${convId}`);
           mutateConversations();
         } catch (err) {
@@ -247,6 +275,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   // New chat
   const handleNewChat = useCallback(() => {
     setActiveConversationId(null);
+    pendingConvIdRef.current = null;
+    justCreatedRef.current = false;
     setMessages([]);
     window.history.replaceState(null, "", "/chat");
     setSidebarOpen(false);
