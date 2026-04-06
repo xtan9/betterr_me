@@ -144,18 +144,16 @@ export function ChatContent({ conversationId }: ChatContentProps) {
             );
         }
 
-        // Sync chatId with activeConversationId after messages are persisted.
-        // This is safe because the DB now has the messages — when useChat resets
-        // for the new id, the message-loading effect will reload them.
-        if (chatId === "new") {
-          setChatId(activeConversationId);
-        }
+        // Don't sync chatId here — useChat's messages are already in its buffer
+        // under the current chatId. Syncing would reset the buffer and cause a
+        // visible loading flash. chatId syncs naturally when the user switches
+        // conversations or starts a new chat.
 
         // Refresh conversation list to update updated_at ordering
         mutateConversations();
       }
     }
-  }, [status, messages, activeConversationId, chatId, mutateConversations]);
+  }, [status, messages, activeConversationId, mutateConversations]);
 
   useEffect(() => {
     if (error) {
@@ -278,6 +276,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         mutateConversations();
         if (id === activeConversationId) {
           setActiveConversationId(null);
+          setChatId("new");
           setMessages([]);
           window.history.replaceState(null, "", "/chat");
         }
