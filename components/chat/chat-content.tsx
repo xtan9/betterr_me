@@ -116,6 +116,9 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         const textPart = lastMsg.parts.find((p) => p.type === "text");
         const content = textPart?.type === "text" ? textPart.text : "";
 
+        // Skip save if content is empty (can happen if effect fires before parts are finalized)
+        if (!content.trim()) return;
+
         // D-05: Save assistant message after stream completes
         fetchJSON(`/api/conversations/${activeConversationId}/messages`, {
           method: "POST",
