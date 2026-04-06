@@ -111,6 +111,29 @@ describe('POST /api/chat', () => {
     expect(data.error).toBeDefined();
   });
 
+  it('should return 400 for too many messages (over 100)', async () => {
+    const messages = Array.from({ length: 101 }, (_, i) => ({
+      id: `m${i}`, role: i % 2 === 0 ? 'user' : 'assistant', parts: [{ type: 'text', text: `msg ${i}` }],
+    }));
+    const req = makeRequest({ messages });
+    const response = await POST(req);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain('Too many messages');
+  });
+
+  it('should return 400 when convertToModelMessages throws', async () => {
+    mockConvertToModelMessages.mockRejectedValueOnce(new Error('Invalid message structure'));
+
+    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
+    const response = await POST(req);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBe('Invalid message format');
+  });
+
   it('should return 400 for missing messages field', async () => {
     const req = makeRequest({});
     const response = await POST(req);
@@ -216,7 +239,7 @@ describe('POST /api/chat', () => {
     const callArgs = (mockStreamText.mock.calls as any[][])[0][0];
     const testError = new Error('stream failure');
     callArgs.onError({ error: testError });
-    expect(mockLogError).toHaveBeenCalledWith('LLM stream error', testError);
+    expect(mockLogError).toHaveBeenCalledWith('LLM stream error', testError, { userId: 'user-123' });
   });
 
   it('should return 502 when streamText throws (proxy unreachable)', async () => {
