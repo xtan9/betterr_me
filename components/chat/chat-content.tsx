@@ -7,6 +7,7 @@ import {
   useState,
   useRef,
 } from "react";
+
 import { useChat } from "@ai-sdk/react";
 import { TextStreamChatTransport } from "ai";
 import { useTranslations } from "next-intl";
@@ -43,10 +44,12 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(conversationId ?? null);
+  // Separate chatId for useChat — only changes on explicit user actions
+  // (switching conversations, new chat), never during stream completion.
+  // This prevents useChat from resetting its internal message buffer.
+  const [chatId, setChatId] = useState(conversationId ?? "new");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const justCreatedRef = useRef(false);
-  const pendingConvIdRef = useRef<string | null>(null);
 
   // SWR for conversation list
   const { data: convData, mutate: mutateConversations } = useSWR<{
@@ -61,22 +64,17 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   );
 
   const { messages, sendMessage, setMessages, stop, status, error } = useChat({
-    id: activeConversationId ?? "new",
+    id: chatId,
     transport,
   });
 
   const isStreaming = status === "submitted" || status === "streaming";
 
-  // Load messages when conversationId changes
+  // Load messages when chatId changes (user switches conversations or chatId
+  // is synced after first-message stream completes)
   useEffect(() => {
-    if (!activeConversationId) {
+    if (chatId === "new") {
       setMessages([]);
-      return;
-    }
-    // Skip loading for a conversation we just created — it has no messages yet
-    // and loading would clear the in-flight sendMessage
-    if (justCreatedRef.current) {
-      justCreatedRef.current = false;
       return;
     }
     let cancelled = false;
@@ -84,7 +82,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       setIsLoadingMessages(true);
       try {
         const data = await fetchJSON(
-          `/api/conversations/${activeConversationId}/messages`
+          `/api/conversations/${chatId}/messages`
         );
         if (!cancelled) {
           const uiMessages = (data.messages || []).map(dbMessageToUIMessage);
@@ -102,7 +100,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     return () => {
       cancelled = true;
     };
-  }, [activeConversationId, setMessages]);
+  }, [chatId, setMessages]);
 
   // Save assistant message after stream completes + auto-generate title
   const prevStatusRef = useRef(status);
@@ -112,23 +110,14 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       prevStatusRef.current === "submitted";
     prevStatusRef.current = status;
 
-    // Stream failed on first message — promote pending ID so the conversation
-    // is navigable and retryable, rather than leaving state inconsistent
-    if (wasStreaming && status === "error" && pendingConvIdRef.current) {
-      setActiveConversationId(pendingConvIdRef.current);
-      pendingConvIdRef.current = null;
-    }
-
     if (wasStreaming && status === "ready" && messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
-      // Use pendingConvIdRef for first message (activeConversationId is still null)
-      const convId = activeConversationId ?? pendingConvIdRef.current;
-      if (lastMsg.role === "assistant" && convId) {
+      if (lastMsg.role === "assistant" && activeConversationId) {
         const textPart = lastMsg.parts.find((p) => p.type === "text");
         const content = textPart?.type === "text" ? textPart.text : "";
 
         // D-05: Save assistant message after stream completes
-        fetchJSON(`/api/conversations/${convId}/messages`, {
+        fetchJSON(`/api/conversations/${activeConversationId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: "assistant", content }),
@@ -140,7 +129,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         if (messages.length === 2) {
           const userMsg = messages[0];
           const userText = userMsg.parts.find((p) => p.type === "text");
-          fetchJSON(`/api/conversations/${convId}/title`, {
+          fetchJSON(`/api/conversations/${activeConversationId}/title`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -155,17 +144,18 @@ export function ChatContent({ conversationId }: ChatContentProps) {
             );
         }
 
-        // Now safe to set activeConversationId if it was deferred
-        if (pendingConvIdRef.current && !activeConversationId) {
-          setActiveConversationId(pendingConvIdRef.current);
-          pendingConvIdRef.current = null;
+        // Sync chatId with activeConversationId after messages are persisted.
+        // This is safe because the DB now has the messages — when useChat resets
+        // for the new id, the message-loading effect will reload them.
+        if (chatId === "new") {
+          setChatId(activeConversationId);
         }
 
         // Refresh conversation list to update updated_at ordering
         mutateConversations();
       }
     }
-  }, [status, messages, activeConversationId, mutateConversations]);
+  }, [status, messages, activeConversationId, chatId, mutateConversations]);
 
   useEffect(() => {
     if (error) {
@@ -182,12 +172,10 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         try {
           const data = await fetchJSON("/api/conversations", { method: "POST" });
           convId = data.conversation.id;
-          // Defer setting activeConversationId — changing it now would reset
-          // useChat's internal state (id changes from "new" to convId) and
-          // trigger the message-loading effect, both of which kill the in-flight send.
-          // We update the URL immediately and set the ID after the stream completes.
-          justCreatedRef.current = true;
-          pendingConvIdRef.current = convId;
+          // Set activeConversationId for sidebar highlighting and persistence.
+          // chatId stays as "new" — it only syncs after the stream completes
+          // and messages are saved to DB, preventing useChat from resetting mid-stream.
+          setActiveConversationId(convId);
           window.history.replaceState(null, "", `/chat?id=${convId}`);
           mutateConversations();
         } catch (err) {
@@ -268,6 +256,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   // Conversation switching
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConversationId(id);
+    setChatId(id);
     window.history.replaceState(null, "", `/chat?id=${id}`);
     setSidebarOpen(false);
   }, []);
@@ -275,8 +264,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   // New chat
   const handleNewChat = useCallback(() => {
     setActiveConversationId(null);
-    pendingConvIdRef.current = null;
-    justCreatedRef.current = false;
+    setChatId("new");
     setMessages([]);
     window.history.replaceState(null, "", "/chat");
     setSidebarOpen(false);
