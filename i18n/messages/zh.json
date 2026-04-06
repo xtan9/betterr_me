@@ -1947,6 +1947,7 @@
       "generic": "出了点问题，请重试。",
       "unauthorized": "会话已过期，请重新登录。",
       "unavailable": "AI 服务暂时不可用。",
+      "authExpired": "AI 服务认证已过期，请稍后重试。",
       "retry": "重试"
     },
     "sidebar": {

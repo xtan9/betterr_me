@@ -242,6 +242,9 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     if (msg.includes("Unauthorized") || msg.includes("401")) {
       return t("error.unauthorized");
     }
+    if (msg.includes("authentication expired")) {
+      return t("error.authExpired");
+    }
     if (msg.includes("not configured") || msg.includes("503")) {
       return t("error.unavailable");
     }
@@ -255,7 +258,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       !msg.includes("Unauthorized") &&
       !msg.includes("401") &&
       !msg.includes("not configured") &&
-      !msg.includes("503")
+      !msg.includes("503") &&
+      !msg.includes("authentication expired")
     );
   }, [error]);
 

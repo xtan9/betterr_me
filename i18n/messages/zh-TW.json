@@ -1947,6 +1947,7 @@
       "generic": "出了點問題，請重試。",
       "unauthorized": "工作階段已過期，請重新登入。",
       "unavailable": "AI 服務暫時無法使用。",
+      "authExpired": "AI 服務認證已過期，請稍後重試。",
       "retry": "重試"
     },
     "sidebar": {
