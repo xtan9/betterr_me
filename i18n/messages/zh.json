@@ -14,7 +14,8 @@
       "calendar": "日历",
       "chat": "聊天",
       "learnMore": "了解更多",
-      "profile": "个人资料"
+      "profile": "个人资料",
+      "admin": "管理"
     },
     "sidebar": {
       "pin": "固定",
@@ -1957,5 +1958,23 @@
       "deleteConfirm": "删除对话？"
     },
     "loading": "加载中..."
+  },
+  "admin": {
+    "title": "管理后台",
+    "nav": "管理",
+    "sync": {
+      "title": "运动媒体同步",
+      "description": "从 ExerciseDB 同步运动图片和 GIF",
+      "currentStats": "{total} 个运动中有 {count} 个已有媒体",
+      "lastSync": "上次同步：{date}",
+      "neverSynced": "从未同步",
+      "dryRun": "仅预览（不写入数据）",
+      "syncButton": "立即同步",
+      "syncing": "同步中...",
+      "resultMatched": "{count} 个匹配",
+      "resultUnmatched": "{count} 个未匹配",
+      "success": "同步成功",
+      "error": "同步失败"
+    }
   }
 }
