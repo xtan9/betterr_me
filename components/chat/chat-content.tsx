@@ -134,13 +134,15 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         // D-07/D-08: Auto-generate title after first exchange (2 messages)
         if (messages.length === 2) {
           const userMsg = messages[0];
-          const userText = userMsg.parts.find((p) => p.type === "text");
+          const userContent = userMsg.parts
+            .filter((p): p is { type: "text"; text: string } => p.type === "text")
+            .map((p) => p.text)
+            .join("");
           fetchJSON(`/api/conversations/${activeConversationId}/title`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              userMessage:
-                userText?.type === "text" ? userText.text : "",
+              userMessage: userContent,
               assistantMessage: content,
             }),
           })
