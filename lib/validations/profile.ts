@@ -12,15 +12,14 @@ export const profileFormSchema = z.object({
 
 export type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
+// NOTE: `role` is intentionally excluded — role changes must go through admin tooling only.
 export const profileUpdateSchema = profileFormSchema
   .partial()
   .extend({
     preferences: z.record(z.unknown()).optional(),
     timezone: z.string().min(1).max(100).optional().nullable(),
     email_notifications_enabled: z.boolean().optional(),
-    role: z.string().optional(), // Accept but strip below
   })
-  .omit({ role: true }) // Defense-in-depth: prevent role escalation via API
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
   });

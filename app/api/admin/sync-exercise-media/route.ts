@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ExerciseDBClient } from "@/lib/exercisedb/client";
 import { matchExercises } from "@/lib/exercisedb/matcher";
 import { syncExerciseMediaSchema } from "@/lib/validations/exercise-media";
+import { requireAdminApi, AdminForbiddenError, AdminUnauthorizedError } from "@/lib/auth/admin";
 import { log } from "@/lib/logger";
 
 /**
@@ -11,39 +11,32 @@ import { log } from "@/lib/logger";
  * Admin-only route: fetches ExerciseDB data, fuzzy-matches to preset exercises,
  * and upserts into exercise_media + exercise_name_mappings.
  *
- * Requires:
- * - Authenticated user (via Supabase auth)
- * - x-admin-secret header matching ADMIN_SYNC_SECRET env var
+ * Auth: admin role (via requireAdminApi) OR x-admin-secret header (for CLI/cron)
  *
  * Optional body: { threshold?: number (0-1), dryRun?: boolean }
  */
 export async function POST(request: NextRequest) {
   try {
-    // 1. Auth check
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    // 1. Auth check: admin role OR secret header
+    let isAuthed = false;
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    try {
+      await requireAdminApi();
+      isAuthed = true;
+    } catch (error) {
+      if (error instanceof AdminUnauthorizedError) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (!(error instanceof AdminForbiddenError)) throw error;
+      // Not admin — fall through to secret check
     }
 
-    // 2. Admin role or secret check
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    const isAdmin = profile?.role === "admin";
-
-    const adminSecret = process.env.ADMIN_SYNC_SECRET;
-    const headerSecret = request.headers.get("x-admin-secret");
-    const hasSecret = !!adminSecret && headerSecret === adminSecret;
-
-    if (!isAdmin && !hasSecret) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!isAuthed) {
+      const adminSecret = process.env.ADMIN_SYNC_SECRET;
+      const headerSecret = request.headers.get("x-admin-secret");
+      if (!adminSecret || headerSecret !== adminSecret) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     // 3. Parse body (optional -- defaults are fine)

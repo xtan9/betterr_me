@@ -24,6 +24,7 @@ import {
   requireAdmin,
   requireAdminApi,
   AdminForbiddenError,
+  AdminUnauthorizedError,
 } from "@/lib/auth/admin";
 
 // --- Helpers ---
@@ -98,10 +99,10 @@ describe("requireAdminApi", () => {
     vi.clearAllMocks();
   });
 
-  it("throws AdminForbiddenError when no user is authenticated", async () => {
+  it("throws AdminUnauthorizedError when no user is authenticated", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
-    await expect(requireAdminApi()).rejects.toThrow(AdminForbiddenError);
+    await expect(requireAdminApi()).rejects.toThrow(AdminUnauthorizedError);
   });
 
   it("throws AdminForbiddenError when user role is 'user'", async () => {

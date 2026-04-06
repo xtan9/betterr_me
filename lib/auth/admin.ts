@@ -6,6 +6,13 @@ import type { User } from "@supabase/supabase-js";
 /**
  * Error thrown when a non-admin user attempts to access an admin API endpoint.
  */
+export class AdminUnauthorizedError extends Error {
+  constructor(message = "Unauthorized: authentication required") {
+    super(message);
+    this.name = "AdminUnauthorizedError";
+  }
+}
+
 export class AdminForbiddenError extends Error {
   constructor(message = "Forbidden: admin role required") {
     super(message);
@@ -69,7 +76,11 @@ export async function requireAdmin(): Promise<AdminContext> {
 export async function requireAdminApi(): Promise<AdminContext> {
   const { user, profile } = await getAdminContext();
 
-  if (!user || profile?.role !== "admin") {
+  if (!user) {
+    throw new AdminUnauthorizedError();
+  }
+
+  if (profile?.role !== "admin") {
     throw new AdminForbiddenError();
   }
 

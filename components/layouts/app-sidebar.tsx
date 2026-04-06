@@ -129,7 +129,7 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
   const { habitsIncomplete, tasksDue, error } = useSidebarCounts();
-  const { data: profileData } = useSWR("/api/profile", fetcher);
+  const { data: profileData } = useSWR("/api/profile", fetcher, { keepPreviousData: true });
   const isAdmin = profileData?.profile?.role === "admin";
 
   const badgeCounts: Record<string, number> = error
