@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Send, Square } from "lucide-react";
+import { Send, CircleStop } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 interface ChatInputProps {
@@ -77,12 +77,12 @@ export function ChatInput({
       />
       {isStreaming ? (
         <Button
-          variant="ghost"
+          variant="default"
           size="icon"
           onClick={onStop}
           aria-label={t("input.stop")}
         >
-          <Square className="h-4 w-4" />
+          <CircleStop className="h-4 w-4" />
         </Button>
       ) : (
         <Button
