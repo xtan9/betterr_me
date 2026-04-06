@@ -112,6 +112,13 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       prevStatusRef.current === "submitted";
     prevStatusRef.current = status;
 
+    // Stream failed on first message — promote pending ID so the conversation
+    // is navigable and retryable, rather than leaving state inconsistent
+    if (wasStreaming && status === "error" && pendingConvIdRef.current) {
+      setActiveConversationId(pendingConvIdRef.current);
+      pendingConvIdRef.current = null;
+    }
+
     if (wasStreaming && status === "ready" && messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       // Use pendingConvIdRef for first message (activeConversationId is still null)
@@ -268,6 +275,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   // New chat
   const handleNewChat = useCallback(() => {
     setActiveConversationId(null);
+    pendingConvIdRef.current = null;
+    justCreatedRef.current = false;
     setMessages([]);
     window.history.replaceState(null, "", "/chat");
     setSidebarOpen(false);
