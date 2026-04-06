@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     // Stream response from LLM proxy
     const result = streamText({
       model: llmProvider(
-        process.env.LLM_MODEL || "claude-sonnet-4-20250514",
+        process.env.LLM_MODEL || "claude-sonnet-4-6",
       ),
       system: "You are a helpful AI assistant in BetterR.Me, a personal productivity and finance app. You are powered by Claude (Sonnet) from Anthropic. Be concise, friendly, and helpful. The user may ask about habits, tasks, workouts, finances, or general topics.",
       messages: modelMessages,
