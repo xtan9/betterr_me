@@ -87,11 +87,11 @@ describe("ChatInput", () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("stop button (Square icon) is visible when isStreaming=true instead of send button", () => {
+  it("stop button (CircleStop icon) is visible when isStreaming=true instead of send button", () => {
     render(
       <ChatInput {...defaultProps} isStreaming={true} />
     );
-    // Stop button should have the Square icon (data-testid set by lucide)
+    // Stop button should have the CircleStop icon
     const button = screen.getByRole("button");
     expect(button).toBeInTheDocument();
     // The button should be the stop button (not disabled, since stop is actionable)
