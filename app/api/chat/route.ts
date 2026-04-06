@@ -91,6 +91,20 @@ export async function POST(req: Request) {
     if (error instanceof Error && error.name === "AbortError") {
       return new Response(null, { status: 499 });
     }
+
+    // Detect LLM proxy auth failure (expired OAuth token)
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (
+      errMsg.includes("authentication_error") ||
+      errMsg.includes("OAuth token has expired")
+    ) {
+      log.error("POST /api/chat: LLM proxy auth expired", error);
+      return NextResponse.json(
+        { error: "AI service authentication expired. Please try again later." },
+        { status: 503 },
+      );
+    }
+
     log.error("POST /api/chat error", error);
     return NextResponse.json(
       { error: "Failed to reach AI service. Please try again." },
