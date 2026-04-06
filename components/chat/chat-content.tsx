@@ -113,8 +113,14 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     if (wasStreaming && status === "ready" && messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       if (lastMsg.role === "assistant" && activeConversationId) {
-        const textPart = lastMsg.parts.find((p) => p.type === "text");
-        const content = textPart?.type === "text" ? textPart.text : "";
+        // Collect all text from text parts (parts may have multiple text segments)
+        const content = lastMsg.parts
+          .filter((p): p is { type: "text"; text: string } => p.type === "text")
+          .map((p) => p.text)
+          .join("");
+
+        // Skip save if content is empty (can happen if effect fires before parts are finalized)
+        if (!content.trim()) return;
 
         // D-05: Save assistant message after stream completes
         fetchJSON(`/api/conversations/${activeConversationId}/messages`, {
@@ -128,13 +134,15 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         // D-07/D-08: Auto-generate title after first exchange (2 messages)
         if (messages.length === 2) {
           const userMsg = messages[0];
-          const userText = userMsg.parts.find((p) => p.type === "text");
+          const userContent = userMsg.parts
+            .filter((p): p is { type: "text"; text: string } => p.type === "text")
+            .map((p) => p.text)
+            .join("");
           fetchJSON(`/api/conversations/${activeConversationId}/title`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              userMessage:
-                userText?.type === "text" ? userText.text : "",
+              userMessage: userContent,
               assistantMessage: content,
             }),
           })
