@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { chatMessageSchema, sendChatSchema } from "@/lib/validations/chat";
+import { saveMessageSchema, titleRequestSchema } from "@/lib/validations/chat";
 
-describe("chatMessageSchema", () => {
+describe("saveMessageSchema", () => {
   it("accepts valid user message", () => {
-    const result = chatMessageSchema.safeParse({
+    const result = saveMessageSchema.safeParse({
       role: "user",
       content: "Hello",
     });
@@ -11,7 +11,7 @@ describe("chatMessageSchema", () => {
   });
 
   it("accepts valid assistant message", () => {
-    const result = chatMessageSchema.safeParse({
+    const result = saveMessageSchema.safeParse({
       role: "assistant",
       content: "Hi there!",
     });
@@ -19,7 +19,7 @@ describe("chatMessageSchema", () => {
   });
 
   it("rejects system role", () => {
-    const result = chatMessageSchema.safeParse({
+    const result = saveMessageSchema.safeParse({
       role: "system",
       content: "You are a helpful assistant.",
     });
@@ -27,7 +27,7 @@ describe("chatMessageSchema", () => {
   });
 
   it("rejects invalid role", () => {
-    const result = chatMessageSchema.safeParse({
+    const result = saveMessageSchema.safeParse({
       role: "admin",
       content: "Hello",
     });
@@ -35,7 +35,7 @@ describe("chatMessageSchema", () => {
   });
 
   it("rejects empty content", () => {
-    const result = chatMessageSchema.safeParse({
+    const result = saveMessageSchema.safeParse({
       role: "user",
       content: "",
     });
@@ -46,7 +46,7 @@ describe("chatMessageSchema", () => {
   });
 
   it("rejects content over 32000 characters", () => {
-    const result = chatMessageSchema.safeParse({
+    const result = saveMessageSchema.safeParse({
       role: "user",
       content: "a".repeat(32001),
     });
@@ -57,56 +57,28 @@ describe("chatMessageSchema", () => {
   });
 });
 
-describe("sendChatSchema", () => {
-  const validMessage = { role: "user" as const, content: "Hello" };
-
-  it("accepts valid single user message", () => {
-    const result = sendChatSchema.safeParse({
-      messages: [validMessage],
+describe("titleRequestSchema", () => {
+  it("accepts valid title request", () => {
+    const result = titleRequestSchema.safeParse({
+      userMessage: "Hello",
+      assistantMessage: "Hi there!",
     });
     expect(result.success).toBe(true);
   });
 
-  it("accepts valid multi-message conversation", () => {
-    const result = sendChatSchema.safeParse({
-      messages: [
-        { role: "user", content: "Hello" },
-        { role: "assistant", content: "Hi!" },
-        { role: "user", content: "How are you?" },
-      ],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects empty messages array", () => {
-    const result = sendChatSchema.safeParse({
-      messages: [],
+  it("rejects empty userMessage", () => {
+    const result = titleRequestSchema.safeParse({
+      userMessage: "",
+      assistantMessage: "Hi",
     });
     expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toContain(
-        "At least one message required",
-      );
-    }
   });
 
-  it("rejects over 100 messages", () => {
-    const messages = Array.from({ length: 101 }, (_, i) => ({
-      role: i % 2 === 0 ? ("user" as const) : ("assistant" as const),
-      content: `Message ${i}`,
-    }));
-    const result = sendChatSchema.safeParse({ messages });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].message).toContain("Too many messages");
-    }
-  });
-
-  it("strips unknown fields", () => {
-    const result = sendChatSchema.safeParse({
-      messages: [validMessage],
-      unknownField: "should be ignored",
+  it("rejects empty assistantMessage", () => {
+    const result = titleRequestSchema.safeParse({
+      userMessage: "Hello",
+      assistantMessage: "",
     });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 });

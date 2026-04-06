@@ -45,6 +45,9 @@ vi.mock("@/components/ui/sheet", () => ({
   SheetTitle: ({ children }: React.PropsWithChildren) => (
     <span>{children}</span>
   ),
+  SheetDescription: ({ children }: React.PropsWithChildren) => (
+    <span>{children}</span>
+  ),
 }));
 
 vi.mock("lucide-react", () => ({

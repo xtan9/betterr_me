@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { streamText } from "ai";
+import { streamText, convertToModelMessages } from "ai";
+import type { UIMessage } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { llmProvider } from "@/lib/ai/provider";
-import { sendChatSchema } from "@/lib/validations/chat";
 import { log } from "@/lib/logger";
 
 export const maxDuration = 60;
@@ -28,8 +28,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // Parse and validate request body
-    let body: unknown;
+    // Parse request body — AI SDK sends { messages: UIMessage[], id, trigger, messageId }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let body: any;
     try {
       body = await req.json();
     } catch (error) {
@@ -40,26 +41,43 @@ export async function POST(req: Request) {
       );
     }
 
-    const parsed = sendChatSchema.safeParse(body);
-    if (!parsed.success) {
+    const messages = body.messages;
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
-        { error: parsed.error.errors[0]?.message || "Invalid request" },
+        { error: "At least one message required" },
         { status: 400 },
       );
     }
 
-    const { messages } = parsed.data;
+    if (messages.length > 100) {
+      return NextResponse.json(
+        { error: "Too many messages (max 100)" },
+        { status: 400 },
+      );
+    }
+
+    // Convert UIMessages (with parts) to model messages (with content) for streamText
+    let modelMessages;
+    try {
+      modelMessages = await convertToModelMessages(messages);
+    } catch (err) {
+      log.warn("POST /api/chat: invalid message format", { error: String(err) });
+      return NextResponse.json(
+        { error: "Invalid message format" },
+        { status: 400 },
+      );
+    }
 
     // Stream response from LLM proxy
     const result = streamText({
       model: llmProvider(
         process.env.LLM_MODEL || "claude-sonnet-4-20250514",
       ),
-      messages,
+      messages: modelMessages,
       maxOutputTokens: parseInt(process.env.LLM_MAX_TOKENS || "4096", 10),
       abortSignal: req.signal,
       onError({ error }) {
-        log.error("LLM stream error", error);
+        log.error("LLM stream error", error, { userId: user.id });
       },
     });
 
