@@ -1973,8 +1973,17 @@
       "syncing": "Syncing...",
       "resultMatched": "{count} matched",
       "resultUnmatched": "{count} unmatched",
+      "resultTotal": "{count} exercises in catalog",
+      "resultCreated": "{count} new exercises created",
+      "resultUpdated": "{count} existing exercises updated",
+      "resultGifsDownloaded": "{count} GIFs downloaded",
+      "resultGifsFailed": "{count} GIF downloads failed",
       "success": "Sync completed successfully",
-      "error": "Sync failed"
+      "error": "Sync failed",
+      "skipGifs": "Skip GIF downloads (exercises only)",
+      "exerciseCount": "{count} exercises in library",
+      "gifCount": "{count} exercises with GIFs",
+      "syncingLong": "Syncing exercises and downloading GIFs. This may take a few minutes..."
     }
   }
 }
