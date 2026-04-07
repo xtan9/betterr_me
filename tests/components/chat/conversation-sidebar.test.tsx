@@ -66,7 +66,7 @@ const makeConversation = (
   id,
   user_id: "user-1",
   title,
-  model: "claude-sonnet-4-20250514",
+  model: "claude-sonnet-4-6",
   created_at: "2026-04-01T00:00:00Z",
   updated_at: "2026-04-01T00:00:00Z",
 });
