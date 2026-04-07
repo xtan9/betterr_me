@@ -17,6 +17,7 @@ import { ChatInput } from "@/components/chat/chat-input";
 import { ChatEmptyState } from "@/components/chat/chat-empty-state";
 import { ConversationSidebar } from "@/components/chat/conversation-sidebar";
 import { dbMessageToUIMessage } from "@/lib/chat/message-utils";
+import { DEFAULT_MODEL_ID } from "@/lib/ai/models";
 import { log } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, PanelLeftOpen } from "lucide-react";
@@ -50,17 +51,21 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   const [chatId, setChatId] = useState(conversationId ?? "new");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
 
   // SWR for conversation list
   const { data: convData, mutate: mutateConversations } = useSWR<{
     conversations: Conversation[];
   }>("/api/conversations", fetcher);
-  const conversations = convData?.conversations ?? [];
+  const conversations = useMemo(
+    () => convData?.conversations ?? [],
+    [convData]
+  );
 
-  // Stable transport instance
+  // Transport recreated when model changes so the new model is sent with each request
   const transport = useMemo(
-    () => new TextStreamChatTransport({ api: "/api/chat" }),
-    []
+    () => new TextStreamChatTransport({ api: "/api/chat", body: { model: selectedModel } }),
+    [selectedModel]
   );
 
   const { messages, sendMessage, setMessages, stop, status, error } = useChat({
@@ -211,6 +216,24 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     stop();
   }, [stop]);
 
+  const handleModelChange = useCallback(
+    async (modelId: string) => {
+      setSelectedModel(modelId);
+      if (activeConversationId) {
+        try {
+          await fetchJSON(`/api/conversations/${activeConversationId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: modelId }),
+          });
+        } catch (err) {
+          log.error("[chat] Failed to update model", err);
+        }
+      }
+    },
+    [activeConversationId]
+  );
+
   // Find the last user message text for resend on error
   const lastUserMessage = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -264,18 +287,24 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   }, [error]);
 
   // Conversation switching
-  const handleSelectConversation = useCallback((id: string) => {
-    setActiveConversationId(id);
-    setChatId(id);
-    window.history.replaceState(null, "", `/chat?id=${id}`);
-    setSidebarOpen(false);
-  }, []);
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      setActiveConversationId(id);
+      setChatId(id);
+      window.history.replaceState(null, "", `/chat?id=${id}`);
+      setSidebarOpen(false);
+      const conv = conversations.find((c) => c.id === id);
+      if (conv?.model) setSelectedModel(conv.model);
+    },
+    [conversations]
+  );
 
   // New chat
   const handleNewChat = useCallback(() => {
     setActiveConversationId(null);
     setChatId("new");
     setMessages([]);
+    setSelectedModel(DEFAULT_MODEL_ID);
     window.history.replaceState(null, "", "/chat");
     setSidebarOpen(false);
   }, [setMessages]);
@@ -349,6 +378,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           onSend={handleSend}
           onStop={handleStop}
           isStreaming={isStreaming}
+          modelId={selectedModel}
+          onModelChange={handleModelChange}
         />
       </div>
     </div>

@@ -41,6 +41,12 @@ export async function POST(req: Request) {
     }
 
     const messages = body.messages;
+    const requestedModel = body.model;
+    const modelId =
+      typeof requestedModel === "string" && requestedModel.length > 0
+        ? requestedModel
+        : process.env.LLM_MODEL || "claude-haiku-4-5";
+
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
         { error: "At least one message required" },
@@ -69,9 +75,7 @@ export async function POST(req: Request) {
 
     // Stream response from LLM proxy
     const result = streamText({
-      model: llmProvider(
-        process.env.LLM_MODEL || "claude-sonnet-4-6",
-      ),
+      model: llmProvider(modelId),
       system: "You are a helpful AI assistant in BetterR.Me, a personal productivity and finance app. You are powered by Claude (Sonnet) from Anthropic. Be concise, friendly, and helpful. The user may ask about habits, tasks, workouts, finances, or general topics.",
       messages: modelMessages,
       maxOutputTokens: parseInt(process.env.LLM_MAX_TOKENS || "4096", 10),
