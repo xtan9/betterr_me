@@ -42,11 +42,15 @@ async function getAdminContext(): Promise<{
     return { user: null, profile: null };
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
+
+  if (profileError) {
+    console.error("Failed to fetch profile for admin check", profileError);
+  }
 
   return { user, profile: profile as Profile | null };
 }

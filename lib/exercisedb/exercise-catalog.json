@@ -624,10 +624,8 @@
   },
   {
     "name": "Barbell Shrug",
-    "muscle_group_primary": "shoulders",
-    "muscle_groups_secondary": [
-      "traps"
-    ],
+    "muscle_group_primary": "traps",
+    "muscle_groups_secondary": [],
     "equipment": "barbell",
     "exercise_type": "weight_reps",
     "exercisedb_id": null,
@@ -636,10 +634,8 @@
   },
   {
     "name": "Dumbbell Shrug",
-    "muscle_group_primary": "shoulders",
-    "muscle_groups_secondary": [
-      "traps"
-    ],
+    "muscle_group_primary": "traps",
+    "muscle_groups_secondary": [],
     "equipment": "dumbbell",
     "exercise_type": "weight_reps",
     "exercisedb_id": null,
@@ -1553,26 +1549,6 @@
     "muscle_groups_secondary": [],
     "equipment": "bodyweight",
     "exercise_type": "bodyweight_reps",
-    "exercisedb_id": null,
-    "exercisedb_name": null,
-    "gif_url": null
-  },
-  {
-    "name": "Barbell Shrug",
-    "muscle_group_primary": "traps",
-    "muscle_groups_secondary": [],
-    "equipment": "barbell",
-    "exercise_type": "weight_reps",
-    "exercisedb_id": null,
-    "exercisedb_name": null,
-    "gif_url": null
-  },
-  {
-    "name": "Dumbbell Shrug",
-    "muscle_group_primary": "traps",
-    "muscle_groups_secondary": [],
-    "equipment": "dumbbell",
-    "exercise_type": "weight_reps",
     "exercisedb_id": null,
     "exercisedb_name": null,
     "gif_url": null

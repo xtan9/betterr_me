@@ -105,8 +105,6 @@ const TARGET_EXERCISES: Array<{
   { name: "Machine Shoulder Press", muscle_group_primary: "shoulders", muscle_groups_secondary: ["triceps"], equipment: "machine", exercise_type: "weight_reps" },
   { name: "Pike Push Up", muscle_group_primary: "shoulders", muscle_groups_secondary: ["triceps", "chest"], equipment: "bodyweight", exercise_type: "bodyweight_reps" },
   { name: "Handstand Push Up", muscle_group_primary: "shoulders", muscle_groups_secondary: ["triceps"], equipment: "bodyweight", exercise_type: "bodyweight_reps" },
-  { name: "Barbell Shrug", muscle_group_primary: "shoulders", muscle_groups_secondary: ["traps"], equipment: "barbell", exercise_type: "weight_reps" },
-  { name: "Dumbbell Shrug", muscle_group_primary: "shoulders", muscle_groups_secondary: ["traps"], equipment: "dumbbell", exercise_type: "weight_reps" },
   { name: "Lu Raise", muscle_group_primary: "shoulders", muscle_groups_secondary: [], equipment: "dumbbell", exercise_type: "weight_reps" },
   // === BICEPS (15) ===
   { name: "Barbell Curl", muscle_group_primary: "biceps", muscle_groups_secondary: ["forearms"], equipment: "barbell", exercise_type: "weight_reps" },

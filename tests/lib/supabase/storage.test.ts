@@ -42,6 +42,6 @@ describe("uploadToStorage", () => {
 
     await expect(
       uploadToStorage("exercise-gifs", "123.gif", Buffer.from("fake"), "image/gif")
-    ).rejects.toThrow("Bucket not found");
+    ).rejects.toThrow("Storage upload failed: Bucket not found");
   });
 });

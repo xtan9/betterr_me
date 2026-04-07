@@ -150,16 +150,29 @@ describe("POST /api/admin/sync-exercise-media", () => {
     delete process.env.ADMIN_SYNC_SECRET;
   });
 
-  it("returns 401 when user is not authenticated", async () => {
+  it("returns 403 when user is not authenticated and no valid secret", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const response = await POST(
+      makeRequest({}, { "x-admin-secret": "wrong-secret" })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.error).toBe("Forbidden");
+  });
+
+  it("allows unauthenticated request with valid x-admin-secret", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    process.env.ADMIN_SYNC_SECRET = "test-secret";
+    setupCatalog();
+    setupAdminClient();
 
     const response = await POST(
       makeRequest({}, { "x-admin-secret": "test-secret" })
     );
-    const data = await response.json();
 
-    expect(response.status).toBe(401);
-    expect(data.error).toBe("Unauthorized");
+    expect(response.status).toBe(200);
   });
 
   it("returns 403 when x-admin-secret header does not match env var and user is not admin", async () => {
@@ -321,10 +334,47 @@ describe("POST /api/admin/sync-exercise-media", () => {
       total: 2,
       created: expect.any(Number),
       updated: expect.any(Number),
+      exercisesFailed: expect.any(Number),
       gifsDownloaded: expect.any(Number),
       gifsFailed: expect.any(Number),
+      mediaFailed: expect.any(Number),
       dryRun: false,
       skipGifs: false,
     });
+  });
+
+  it("returns 400 on invalid body input", async () => {
+    setupAuthenticatedAdmin();
+
+    const response = await POST(
+      makeRequest({ dryRun: "not-a-boolean" }, { "x-admin-secret": "test-secret" })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBe("Validation failed");
+    expect(data.details).toBeDefined();
+  });
+
+  it("returns 500 when exercise fetch fails", async () => {
+    setupAuthenticatedAdmin();
+    setupCatalog();
+    const mockSelect = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: { message: "connection refused" } }),
+    });
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "exercises") {
+        return { select: mockSelect };
+      }
+      return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+    });
+
+    const response = await POST(
+      makeRequest({}, { "x-admin-secret": "test-secret" })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to fetch preset exercises");
   });
 });

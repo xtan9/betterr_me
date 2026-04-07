@@ -13,7 +13,7 @@ export async function uploadToStorage(
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(`Storage upload failed: ${error.message}`, { cause: error });
   }
 
   const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);

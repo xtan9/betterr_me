@@ -25,11 +25,13 @@ export async function POST(request: NextRequest) {
       await requireAdminApi();
       isAuthed = true;
     } catch (error) {
-      if (error instanceof AdminUnauthorizedError) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      if (
+        !(error instanceof AdminUnauthorizedError) &&
+        !(error instanceof AdminForbiddenError)
+      ) {
+        throw error;
       }
-      if (!(error instanceof AdminForbiddenError)) throw error;
-      // Not admin — fall through to secret check
+      // Not authenticated or not admin — fall through to secret check
     }
 
     if (!isAuthed) {
@@ -89,8 +91,10 @@ export async function POST(request: NextRequest) {
 
     let created = 0;
     let updated = 0;
+    let exercisesFailed = 0;
     let gifsDownloaded = 0;
     let gifsFailed = 0;
+    let mediaFailed = 0;
     const exerciseIds: Map<string, string> = new Map(); // catalog name → exercise ID
 
     for (const entry of catalog) {
@@ -129,6 +133,7 @@ export async function POST(request: NextRequest) {
 
         if (updateError) {
           log.error("Failed to update exercise", updateError, { name: entry.name });
+          exercisesFailed++;
         } else {
           updated++;
           exerciseIds.set(entry.name, existingExercise.id);
@@ -151,6 +156,7 @@ export async function POST(request: NextRequest) {
 
         if (insertError) {
           log.error("Failed to insert exercise", insertError, { name: entry.name });
+          exercisesFailed++;
         } else {
           created++;
           exerciseIds.set(entry.name, inserted.id);
@@ -193,6 +199,7 @@ export async function POST(request: NextRequest) {
 
         if (mediaError) {
           log.error("Failed to upsert exercise media", mediaError, { name: entry.name });
+          mediaFailed++;
         }
       }
     }
@@ -202,8 +209,10 @@ export async function POST(request: NextRequest) {
       total: catalog.length,
       created,
       updated,
+      exercisesFailed,
       gifsDownloaded,
       gifsFailed,
+      mediaFailed,
       dryRun,
       skipGifs,
     };
