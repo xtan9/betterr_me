@@ -59,7 +59,7 @@ export async function POST(
     // Generate title via LLM
     const { text } = await generateText({
       model: llmProvider(
-        process.env.LLM_MODEL || "claude-sonnet-4-20250514",
+        process.env.LLM_MODEL || "claude-sonnet-4-6",
       ),
       prompt: `Summarize this conversation in 5-8 words as a title. Return ONLY the title, no quotes or punctuation.\n\nUser: ${parsed.data.userMessage}\nAssistant: ${parsed.data.assistantMessage}`,
       maxOutputTokens: 30,
