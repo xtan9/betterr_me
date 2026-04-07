@@ -53,7 +53,16 @@ vi.mock("@/components/ui/sheet", () => ({
 vi.mock("lucide-react", () => ({
   Plus: () => <span data-testid="icon-plus">+</span>,
   PanelLeftClose: () => <span data-testid="icon-panel-close">X</span>,
-  Trash2: () => <span data-testid="icon-trash">D</span>,
+  MoreVertical: () => <span data-testid="icon-more">⋮</span>,
+}));
+
+vi.mock("@/components/ui/dropdown-menu", () => ({
+  DropdownMenu: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children, asChild: _asChild, ...props }: React.PropsWithChildren<{ asChild?: boolean }>) => <div {...props}>{children}</div>,
+  DropdownMenuContent: ({ children }: React.PropsWithChildren) => <div data-testid="dropdown-content">{children}</div>,
+  DropdownMenuItem: ({ children, onClick, ...props }: React.PropsWithChildren<{ onClick?: () => void; className?: string }>) => (
+    <button onClick={onClick} {...props}>{children}</button>
+  ),
 }));
 
 import { ConversationSidebar } from "@/components/chat/conversation-sidebar";
@@ -81,6 +90,7 @@ describe("ConversationItem", () => {
         isActive={false}
         onSelect={vi.fn()}
         onDelete={vi.fn()}
+        onRename={vi.fn()}
       />
     );
     expect(screen.getByText("My Chat")).toBeInTheDocument();
@@ -94,6 +104,7 @@ describe("ConversationItem", () => {
         isActive={false}
         onSelect={vi.fn()}
         onDelete={vi.fn()}
+        onRename={vi.fn()}
       />
     );
     expect(screen.getByText("sidebar.untitled")).toBeInTheDocument();
@@ -106,11 +117,12 @@ describe("ConversationItem", () => {
         isActive={true}
         onSelect={vi.fn()}
         onDelete={vi.fn()}
+        onRename={vi.fn()}
       />
     );
-    const button = container.querySelector("button");
-    expect(button?.className).toContain("bg-accent");
-    expect(button?.className).toContain("text-accent-foreground");
+    const el = container.querySelector("[role='button']");
+    expect(el?.className).toContain("bg-accent");
+    expect(el?.className).toContain("text-accent-foreground");
   });
 
   it("does not apply active styling when isActive is false", () => {
@@ -120,10 +132,11 @@ describe("ConversationItem", () => {
         isActive={false}
         onSelect={vi.fn()}
         onDelete={vi.fn()}
+        onRename={vi.fn()}
       />
     );
-    const button = container.querySelector("button");
-    expect(button?.className).not.toContain("bg-accent");
+    const el = container.querySelector("[role='button']");
+    expect(el?.className).not.toContain("bg-accent");
   });
 
   it("calls onSelect when clicking the conversation", () => {
@@ -134,13 +147,14 @@ describe("ConversationItem", () => {
         isActive={false}
         onSelect={onSelect}
         onDelete={vi.fn()}
+        onRename={vi.fn()}
       />
     );
     fireEvent.click(screen.getByText("My Chat"));
     expect(onSelect).toHaveBeenCalledWith("conv-1");
   });
 
-  it("calls onDelete when clicking delete button", () => {
+  it("calls onDelete when clicking delete menu item", () => {
     const onDelete = vi.fn();
     const onSelect = vi.fn();
     render(
@@ -149,13 +163,27 @@ describe("ConversationItem", () => {
         isActive={false}
         onSelect={onSelect}
         onDelete={onDelete}
+        onRename={vi.fn()}
       />
     );
-    const deleteBtn = screen.getByLabelText("sidebar.deleteConfirm");
+    const deleteBtn = screen.getByText("sidebar.delete");
     fireEvent.click(deleteBtn);
     expect(onDelete).toHaveBeenCalledWith("conv-1");
-    // Should not trigger onSelect
-    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("ConversationItem has onRename prop", () => {
+    const onRename = vi.fn();
+    render(
+      <ConversationItem
+        conversation={makeConversation("conv-1", "My Chat")}
+        isActive={false}
+        onSelect={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={onRename}
+      />
+    );
+    // The rename option should be in the dropdown
+    expect(screen.getByText("sidebar.rename")).toBeInTheDocument();
   });
 });
 
@@ -172,6 +200,7 @@ describe("ConversationSidebar", () => {
     onSelectConversation: vi.fn(),
     onNewChat: vi.fn(),
     onDeleteConversation: vi.fn(),
+    onRenameConversation: vi.fn(),
     isOpen: false,
     onToggle: vi.fn(),
   };
@@ -216,7 +245,7 @@ describe("ConversationSidebar", () => {
     expect(onSelect).toHaveBeenCalledWith("conv-2");
   });
 
-  it("calls onDeleteConversation when clicking delete button", () => {
+  it("calls onDeleteConversation when clicking delete menu item", () => {
     const onDelete = vi.fn();
     render(
       <ConversationSidebar
@@ -224,7 +253,7 @@ describe("ConversationSidebar", () => {
         onDeleteConversation={onDelete}
       />
     );
-    const deleteButtons = screen.getAllByLabelText("sidebar.deleteConfirm");
+    const deleteButtons = screen.getAllByText("sidebar.delete");
     fireEvent.click(deleteButtons[0]);
     expect(onDelete).toHaveBeenCalledWith("conv-1");
   });

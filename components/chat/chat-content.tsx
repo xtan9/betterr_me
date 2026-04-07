@@ -317,6 +317,23 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     setSidebarOpen(false);
   }, [setMessages]);
 
+  // Rename conversation
+  const handleRenameConversation = useCallback(
+    async (id: string, title: string) => {
+      try {
+        await fetchJSON(`/api/conversations/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        mutateConversations();
+      } catch (err) {
+        log.error("[chat] Failed to rename conversation", err);
+      }
+    },
+    [mutateConversations]
+  );
+
   // Delete conversation
   const handleDeleteConversation = useCallback(
     async (id: string) => {
@@ -355,6 +372,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         onSelectConversation={handleSelectConversation}
         onNewChat={handleNewChat}
         onDeleteConversation={handleDeleteConversation}
+        onRenameConversation={handleRenameConversation}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(false)}
       />
