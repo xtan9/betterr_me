@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     // Stream response from LLM proxy
     const result = streamText({
       model: llmProvider(
-        process.env.LLM_MODEL || "claude-sonnet-4-20250514",
+        process.env.LLM_MODEL || "claude-sonnet-4-6",
       ),
       system: "You are a helpful AI assistant in BetterR.Me, a personal productivity and finance app. You are powered by Claude (Sonnet) from Anthropic. Be concise, friendly, and helpful. The user may ask about habits, tasks, workouts, finances, or general topics.",
       messages: modelMessages,
@@ -91,6 +91,20 @@ export async function POST(req: Request) {
     if (error instanceof Error && error.name === "AbortError") {
       return new Response(null, { status: 499 });
     }
+
+    // Detect LLM proxy auth failure (expired OAuth token)
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (
+      errMsg.includes("authentication_error") ||
+      errMsg.includes("OAuth token has expired")
+    ) {
+      log.error("POST /api/chat: LLM proxy auth expired", error);
+      return NextResponse.json(
+        { error: "AI service authentication expired. Please try again later." },
+        { status: 503 },
+      );
+    }
+
     log.error("POST /api/chat error", error);
     return NextResponse.json(
       { error: "Failed to reach AI service. Please try again." },

@@ -5,6 +5,8 @@
 // PROFILES
 // =============================================================================
 
+export type ProfileRole = 'user' | 'admin';
+
 export interface Profile {
   id: string; // UUID
   email: string;
@@ -12,6 +14,7 @@ export interface Profile {
   avatar_url: string | null;
   timezone: string | null;
   email_notifications_enabled: boolean;
+  role: ProfileRole;
   preferences: ProfilePreferences;
   created_at: string;
   updated_at: string;

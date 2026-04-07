@@ -7,16 +7,19 @@ const {
   mockFetchAll,
   mockMatchExercises,
   mockAdminFrom,
+  mockProfileFrom,
 } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockFetchAll: vi.fn(),
   mockMatchExercises: vi.fn(),
   mockAdminFrom: vi.fn(),
+  mockProfileFrom: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({
     auth: { getUser: mockGetUser },
+    from: mockProfileFrom,
   })),
 }));
 
@@ -108,8 +111,22 @@ const mockMatchResults = [
 ];
 
 // --- Test setup ---
+function setupProfileQuery(role: "user" | "admin") {
+  mockProfileFrom.mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: { id: "user-123", role },
+          error: null,
+        }),
+      }),
+    }),
+  });
+}
+
 function setupAuthenticatedAdmin() {
   mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
+  setupProfileQuery("user"); // default to non-admin; tests with secret still work
   process.env.ADMIN_SYNC_SECRET = "test-secret";
   process.env.EXERCISEDB_API_KEY = "test-key";
 }
@@ -151,8 +168,9 @@ describe("POST /api/admin/sync-exercise-media", () => {
     expect(data.error).toBe("Unauthorized");
   });
 
-  it("returns 403 when x-admin-secret header does not match env var", async () => {
+  it("returns 403 when x-admin-secret header does not match env var and user is not admin", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
+    setupProfileQuery("user");
     process.env.ADMIN_SYNC_SECRET = "real-secret";
 
     const response = await POST(
@@ -164,8 +182,9 @@ describe("POST /api/admin/sync-exercise-media", () => {
     expect(data.error).toBe("Forbidden");
   });
 
-  it("returns 403 when ADMIN_SYNC_SECRET env var is not set", async () => {
+  it("returns 403 when ADMIN_SYNC_SECRET env var is not set and user is not admin", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
+    setupProfileQuery("user");
     // ADMIN_SYNC_SECRET not set
 
     const response = await POST(
@@ -175,6 +194,22 @@ describe("POST /api/admin/sync-exercise-media", () => {
 
     expect(response.status).toBe(403);
     expect(data.error).toBe("Forbidden");
+  });
+
+  it("returns 200 for admin user without secret header", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
+    setupProfileQuery("admin");
+    process.env.EXERCISEDB_API_KEY = "test-key";
+    // No ADMIN_SYNC_SECRET set, no x-admin-secret header
+    setupAdminClient();
+    mockFetchAll.mockResolvedValue(mockDbExercises);
+    mockMatchExercises.mockReturnValue(mockMatchResults);
+
+    const response = await POST(makeRequest({}));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.matched).toBe(1);
   });
 
   it("calls ExerciseDBClient.fetchAll to get all ExerciseDB exercises", async () => {

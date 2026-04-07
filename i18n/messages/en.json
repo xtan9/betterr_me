@@ -14,7 +14,8 @@
       "calendar": "Calendar",
       "chat": "Chat",
       "learnMore": "Learn More",
-      "profile": "Profile"
+      "profile": "Profile",
+      "admin": "Admin"
     },
     "sidebar": {
       "pin": "Pin",
@@ -1947,6 +1948,7 @@
       "generic": "Something went wrong. Please try again.",
       "unauthorized": "Your session has expired. Please log in again.",
       "unavailable": "AI service is temporarily unavailable.",
+      "authExpired": "AI service authentication expired. Please try again later.",
       "retry": "Retry"
     },
     "sidebar": {
@@ -1956,5 +1958,23 @@
       "deleteConfirm": "Delete conversation?"
     },
     "loading": "Loading..."
+  },
+  "admin": {
+    "title": "Admin Dashboard",
+    "nav": "Admin",
+    "sync": {
+      "title": "Exercise Media Sync",
+      "description": "Sync exercise images and GIFs from ExerciseDB",
+      "currentStats": "{count} exercises with media out of {total} total",
+      "lastSync": "Last synced: {date}",
+      "neverSynced": "Never synced",
+      "dryRun": "Dry run (preview only)",
+      "syncButton": "Sync Now",
+      "syncing": "Syncing...",
+      "resultMatched": "{count} matched",
+      "resultUnmatched": "{count} unmatched",
+      "success": "Sync completed successfully",
+      "error": "Sync failed"
+    }
   }
 }
