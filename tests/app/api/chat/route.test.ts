@@ -183,7 +183,7 @@ describe('POST /api/chat', () => {
 
     expect(mockStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'mock-model:claude-sonnet-4-6',
+        model: 'mock-model:claude-haiku-4-5',
       })
     );
   });

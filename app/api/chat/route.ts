@@ -76,7 +76,7 @@ export async function POST(req: Request) {
     // Stream response from LLM proxy
     const result = streamText({
       model: llmProvider(modelId),
-      system: "You are a helpful AI assistant in BetterR.Me, a personal productivity and finance app. You are powered by Claude (Sonnet) from Anthropic. Be concise, friendly, and helpful. The user may ask about habits, tasks, workouts, finances, or general topics.",
+      system: "You are a helpful AI assistant in BetterR.Me, a personal productivity and finance app. You are powered by Claude from Anthropic. Be concise, friendly, and helpful. The user may ask about habits, tasks, workouts, finances, or general topics.",
       messages: modelMessages,
       maxOutputTokens: parseInt(process.env.LLM_MAX_TOKENS || "4096", 10),
       abortSignal: req.signal,
