@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { loadCatalog, type CatalogEntry } from "@/lib/exercisedb/catalog";
+import { loadCatalog } from "@/lib/exercisedb/catalog";
 
 describe("loadCatalog", () => {
   it("loads and returns catalog entries", () => {
