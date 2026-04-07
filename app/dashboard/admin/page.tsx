@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth/admin";
 import { createClient } from "@/lib/supabase/server";
+import { log } from "@/lib/logger";
 import { AdminDashboardContent } from "@/components/admin/admin-dashboard-content";
 
 export default async function AdminDashboardPage() {
@@ -24,7 +25,7 @@ export default async function AdminDashboardPage() {
     ]);
 
   if (mediaResult.error || exercisesResult.error || latestMediaResult.error) {
-    console.error("Admin dashboard query errors", {
+    log.error("Admin dashboard query errors", null, {
       mediaError: mediaResult.error,
       exercisesError: exercisesResult.error,
       latestMediaError: latestMediaResult.error,
