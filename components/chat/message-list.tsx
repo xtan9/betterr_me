@@ -28,6 +28,21 @@ export function MessageList({ messages, status }: MessageListProps) {
     setAutoScroll(isNearBottom);
   }, []);
 
+  // Re-engage auto-scroll when user returns to this tab mid-stream
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (
+        document.visibilityState === "visible" &&
+        autoScroll &&
+        scrollRef.current
+      ) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [autoScroll]);
+
   return (
     <div
       ref={scrollRef}

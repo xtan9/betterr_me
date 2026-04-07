@@ -203,30 +203,12 @@ describe("ChatContent", () => {
     expect(list).toHaveAttribute("data-count", "2");
   });
 
-  it("calls sendMessage with { text } when user calls onSend", async () => {
-    // Mock fetch for the conversation creation + message save
-    const defaultResponse = {
-      json: () => Promise.resolve({ conversations: [], messages: [] }),
-      ok: true,
-    };
-    const mockFetch = vi.fn()
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ conversation: { id: "new-conv" } }),
-        ok: true,
-      })
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ message: {} }),
-        ok: true,
-      })
-      .mockResolvedValue(defaultResponse);
-    vi.stubGlobal("fetch", mockFetch);
-
+  it("calls sendMessage with { text } when user calls onSend", () => {
+    // handleSend now just calls sendMessage — no fetch calls happen here.
+    // Persistence is deferred to the stream-complete effect.
     render(<ChatContent />);
     fireEvent.click(screen.getByTestId("mock-send"));
-
-    await waitFor(() => {
-      expect(mockSendMessage).toHaveBeenCalledWith({ text: "hello" });
-    });
+    expect(mockSendMessage).toHaveBeenCalledWith({ text: "hello" });
   });
 
   it("passes isStreaming=true to ChatInput when status is streaming", () => {
@@ -370,35 +352,58 @@ describe("ChatContent", () => {
     expect(sidebar).toHaveAttribute("data-active-id", "conv-abc");
   });
 
-  it("creates conversation on first message when no conversation selected", async () => {
-    const defaultResponse = {
-      json: () => Promise.resolve({ conversations: [], messages: [] }),
+  it("creates conversation in stream-complete effect when no conversation selected", async () => {
+    const msgs = [
+      makeMessage("1", "user", "hello"),
+      makeMessage("2", "assistant", "hi there"),
+    ];
+
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "streaming" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ conversation: { id: "new-conv-id" }, message: {} }),
       ok: true,
-    };
-    const mockFetch = vi.fn()
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ conversation: { id: "new-conv-id" } }),
-        ok: true,
-      })
-      .mockResolvedValueOnce({
-        json: () => Promise.resolve({ message: {} }),
-        ok: true,
-      })
-      .mockResolvedValue(defaultResponse);
+    });
     vi.stubGlobal("fetch", mockFetch);
 
-    render(<ChatContent />);
-    fireEvent.click(screen.getByTestId("mock-send"));
+    const { rerender } = render(<ChatContent />);
+
+    // Transition to ready — stream-complete effect fires
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    rerender(<ChatContent />);
 
     await waitFor(() => {
-      // First call: POST /api/conversations to create
-      expect(mockFetch).toHaveBeenCalledWith("/api/conversations", {
-        method: "POST",
-      });
+      // Should POST /api/conversations with model in body
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/conversations",
+        expect.objectContaining({ method: "POST" })
+      );
     });
 
     await waitFor(() => {
-      expect(mockSendMessage).toHaveBeenCalledWith({ text: "hello" });
+      // Should also save messages
+      const messageCalls = mockFetch.mock.calls.filter(
+        (call: unknown[]) =>
+          typeof call[0] === "string" && call[0].includes("/messages")
+      );
+      expect(messageCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -650,12 +655,22 @@ describe("ChatContent", () => {
     rerender(<ChatContent conversationId="conv-multi" />);
 
     await waitFor(() => {
+      // Find the assistant message save call specifically (role: "assistant")
       const saveCall = mockFetch.mock.calls.find(
-        (call: unknown[]) =>
-          typeof call[0] === "string" &&
-          call[0].includes("/messages") &&
-          typeof call[1] === "object" &&
-          (call[1] as RequestInit).method === "POST"
+        (call: unknown[]) => {
+          if (
+            typeof call[0] !== "string" ||
+            !call[0].includes("/messages") ||
+            typeof call[1] !== "object" ||
+            (call[1] as RequestInit).method !== "POST"
+          ) return false;
+          try {
+            const body = JSON.parse((call[1] as RequestInit).body as string);
+            return body.role === "assistant";
+          } catch {
+            return false;
+          }
+        }
       );
       expect(saveCall).toBeTruthy();
       const body = JSON.parse((saveCall![1] as RequestInit).body as string);
