@@ -13,4 +13,3 @@ export const titleRequestSchema = z.object({
   assistantMessage: z.string().min(1).max(32000),
 });
 
-export const chatRequestModelSchema = z.string().min(1).max(100).optional();

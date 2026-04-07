@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { streamText, convertToModelMessages } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { llmProvider } from "@/lib/ai/provider";
+import { AVAILABLE_MODELS } from "@/lib/ai/models";
 import { log } from "@/lib/logger";
 
 export const maxDuration = 60;
@@ -42,8 +43,9 @@ export async function POST(req: Request) {
 
     const messages = body.messages;
     const requestedModel = body.model;
+    const validModelIds = AVAILABLE_MODELS.map((m) => m.id);
     const modelId =
-      typeof requestedModel === "string" && requestedModel.length > 0
+      typeof requestedModel === "string" && validModelIds.includes(requestedModel)
         ? requestedModel
         : process.env.LLM_MODEL || "claude-haiku-4-5";
 

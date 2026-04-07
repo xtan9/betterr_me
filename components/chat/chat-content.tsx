@@ -158,7 +158,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           }
         }
 
-        // Save user message
+        // Save user message — abort the whole persistence if this fails
         if (userContent) {
           try {
             await fetchJSON(`/api/conversations/${convId}/messages`, {
@@ -168,6 +168,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
             });
           } catch (err) {
             log.error("[chat] Failed to save user message", err);
+            return;
           }
         }
 

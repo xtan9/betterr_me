@@ -32,6 +32,7 @@ export function ConversationItem({
   const [renameValue, setRenameValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const titleRef = useRef<HTMLSpanElement>(null);
+  const isConfirmingRef = useRef(false);
   const [isTruncated, setIsTruncated] = useState(false);
 
   // Check if title is truncated
@@ -55,11 +56,15 @@ export function ConversationItem({
   }, [isRenaming]);
 
   const handleConfirmRename = useCallback(() => {
+    if (isConfirmingRef.current) return;
+    isConfirmingRef.current = true;
     const trimmed = renameValue.trim();
     if (trimmed && trimmed !== conversation.title) {
       onRename(conversation.id, trimmed);
     }
     setIsRenaming(false);
+    // Reset on next tick after blur has fired
+    setTimeout(() => { isConfirmingRef.current = false; }, 0);
   }, [renameValue, conversation.id, conversation.title, onRename]);
 
   const handleRenameKeyDown = useCallback(

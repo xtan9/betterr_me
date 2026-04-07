@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ConversationsDB } from "@/lib/db";
+import { AVAILABLE_MODELS } from "@/lib/ai/models";
 import { log } from "@/lib/logger";
 
 /**
@@ -11,8 +12,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   try {
-    const { id } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -24,8 +25,28 @@ export async function PATCH(
 
     const body = await request.json();
     const updates: { title?: string; model?: string } = {};
-    if (typeof body.title === "string") updates.title = body.title;
-    if (typeof body.model === "string") updates.model = body.model;
+
+    if (typeof body.title === "string") {
+      const trimmed = body.title.trim();
+      if (trimmed.length === 0 || trimmed.length > 200) {
+        return NextResponse.json(
+          { error: "Title must be 1-200 characters" },
+          { status: 400 },
+        );
+      }
+      updates.title = trimmed;
+    }
+
+    if (typeof body.model === "string") {
+      const validModelIds = AVAILABLE_MODELS.map((m) => m.id);
+      if (!validModelIds.includes(body.model)) {
+        return NextResponse.json(
+          { error: "Invalid model" },
+          { status: 400 },
+        );
+      }
+      updates.model = body.model;
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
@@ -38,7 +59,7 @@ export async function PATCH(
     await conversationsDB.updateConversation(id, user.id, updates);
     return NextResponse.json({ success: true });
   } catch (error) {
-    log.error("PATCH /api/conversations/[id] error", error);
+    log.error("[chat] Failed to update conversation", error, { id });
     return NextResponse.json(
       { error: "Failed to update conversation" },
       { status: 500 },
