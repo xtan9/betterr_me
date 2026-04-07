@@ -10,7 +10,7 @@ describe('ConversationsDB', () => {
     id: 'conv-123',
     user_id: mockUserId,
     title: 'Test Conversation',
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     created_at: '2026-04-02T10:00:00Z',
     updated_at: '2026-04-02T10:00:00Z',
   };
