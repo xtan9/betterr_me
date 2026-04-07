@@ -12,6 +12,7 @@ export const profileFormSchema = z.object({
 
 export type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
+// NOTE: `role` is intentionally excluded — role changes must go through admin tooling only.
 export const profileUpdateSchema = profileFormSchema
   .partial()
   .extend({
