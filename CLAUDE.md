@@ -73,6 +73,7 @@ const habitsDB = new HabitsDB(supabase);
 
 ### AI Chat Architecture
 
+- **LLM Proxy**: Self-hosted CLIProxyAPI gateway — infrastructure managed in [`xtan9/llm-gateway`](https://github.com/xtan9/llm-gateway) (Docker + CI/CD).
 - **LLM Provider** (`lib/ai/provider.ts`): OpenAI-compatible client via `@ai-sdk/openai`, configured with `LLM_BASE_URL` (defaults to `https://llm.betterr.me/v1`).
 - **Streaming endpoint** (`app/api/chat/route.ts`): Validates auth, converts `UIMessage[]` to model messages via `convertToModelMessages()`, streams via `streamText()`.
 - **Client** (`components/chat/chat-content.tsx`): Uses `useChat()` hook with `TextStreamChatTransport`. Two decoupled state IDs:

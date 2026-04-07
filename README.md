@@ -25,7 +25,7 @@ A personal productivity and finance web app — track habits, tasks, workouts, f
 | UI | [shadcn/ui](https://ui.shadcn.com) + [Radix UI](https://www.radix-ui.com) + [Tailwind CSS 3](https://tailwindcss.com) |
 | Forms | react-hook-form + zod |
 | Data fetching | SWR (client), fetch (server) |
-| AI | [Vercel AI SDK](https://sdk.vercel.ai) + Claude via OpenAI-compatible proxy |
+| AI | [Vercel AI SDK](https://sdk.vercel.ai) + Claude via [llm-gateway](https://github.com/xtan9/llm-gateway) proxy |
 | i18n | next-intl (en, zh, zh-TW) |
 | Theming | next-themes (class-based dark mode) |
 | Email | Resend |
