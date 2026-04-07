@@ -282,4 +282,34 @@ describe('POST /api/chat', () => {
     const callArgs = (mockStreamText.mock.calls as any[][])[0][0];
     expect(callArgs.abortSignal).toBeInstanceOf(AbortSignal);
   });
+
+  it('should pass requested model to streamText when valid', async () => {
+    const req = makeRequest({
+      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }],
+      model: 'claude-opus-4-6',
+    });
+    await POST(req);
+
+    expect(mockStreamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'mock-model:claude-opus-4-6',
+      })
+    );
+  });
+
+  it('should fall back to default model when invalid model is sent', async () => {
+    delete process.env.LLM_MODEL;
+
+    const req = makeRequest({
+      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }],
+      model: 'gpt-4-invalid',
+    });
+    await POST(req);
+
+    expect(mockStreamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'mock-model:claude-haiku-4-5',
+      })
+    );
+  });
 });
