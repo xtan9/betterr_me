@@ -1955,8 +1955,14 @@
       "title": "对话列表",
       "newChat": "新对话",
       "untitled": "新对话",
-      "deleteConfirm": "删除对话？"
+      "deleteConfirm": "删除对话？",
+      "rename": "重命名",
+      "delete": "删除"
     },
+    "model": {
+      "label": "模型"
+    },
+    "thinking": "思考中...",
     "loading": "加载中..."
   },
   "admin": {
