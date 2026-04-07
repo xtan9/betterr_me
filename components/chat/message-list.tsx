@@ -3,12 +3,14 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import type { UIMessage } from "ai";
 import { MessageBubble } from "./message-bubble";
+import { ThinkingIndicator } from "./thinking-indicator";
 
 interface MessageListProps {
   messages: UIMessage[];
+  status?: "submitted" | "streaming" | "ready" | "error";
 }
 
-export function MessageList({ messages }: MessageListProps) {
+export function MessageList({ messages, status }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -16,7 +18,7 @@ export function MessageList({ messages }: MessageListProps) {
     if (autoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, autoScroll]);
+  }, [messages, autoScroll, status]);
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -35,6 +37,7 @@ export function MessageList({ messages }: MessageListProps) {
       {messages.map((message) => (
         <MessageBubble key={message.id} message={message} />
       ))}
+      {status === "submitted" && <ThinkingIndicator />}
     </div>
   );
 }

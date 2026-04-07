@@ -330,7 +330,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         ) : messages.length === 0 ? (
           <ChatEmptyState />
         ) : (
-          <MessageList messages={messages} />
+          <MessageList messages={messages} status={status} />
         )}
 
         {error && (
