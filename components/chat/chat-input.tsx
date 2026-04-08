@@ -4,12 +4,15 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Send, CircleStop } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { ModelSelector } from "@/components/chat/model-selector";
 
 interface ChatInputProps {
   onSend: (text: string) => void;
   onStop: () => void;
   isStreaming: boolean;
   disabled?: boolean;
+  modelId: string;
+  onModelChange: (modelId: string) => void;
 }
 
 export function ChatInput({
@@ -17,6 +20,8 @@ export function ChatInput({
   onStop,
   isStreaming,
   disabled,
+  modelId,
+  onModelChange,
 }: ChatInputProps) {
   const t = useTranslations("chat");
   const [input, setInput] = useState("");
@@ -64,37 +69,46 @@ export function ChatInput({
   );
 
   return (
-    <div className="flex items-end gap-2 p-4 border-t border-border bg-background">
-      <textarea
-        ref={textareaRef}
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={t("input.placeholder")}
-        disabled={disabled}
-        rows={1}
-        className="flex-1 resize-none min-h-[40px] max-h-[150px] overflow-y-auto rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      />
-      {isStreaming ? (
-        <Button
-          variant="default"
-          size="icon"
-          onClick={onStop}
-          aria-label={t("input.stop")}
-        >
-          <CircleStop className="h-4 w-4" />
-        </Button>
-      ) : (
-        <Button
-          variant="default"
-          size="icon"
-          onClick={handleSend}
-          disabled={!input.trim() || disabled}
-          aria-label={t("input.send")}
-        >
-          <Send className="h-4 w-4" />
-        </Button>
-      )}
+    <div className="border-t border-border bg-background px-4 pb-4 pt-2">
+      <div className="flex items-end gap-2">
+        <textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={t("input.placeholder")}
+          disabled={disabled}
+          rows={1}
+          className="flex-1 resize-none min-h-[40px] max-h-[150px] overflow-y-auto rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
+        {isStreaming ? (
+          <Button
+            variant="default"
+            size="icon"
+            onClick={onStop}
+            aria-label={t("input.stop")}
+          >
+            <CircleStop className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            variant="default"
+            size="icon"
+            onClick={handleSend}
+            disabled={!input.trim() || disabled}
+            aria-label={t("input.send")}
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+      <div className="mt-1">
+        <ModelSelector
+          modelId={modelId}
+          onModelChange={onModelChange}
+          disabled={isStreaming}
+        />
+      </div>
     </div>
   );
 }

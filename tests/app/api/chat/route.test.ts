@@ -183,7 +183,7 @@ describe('POST /api/chat', () => {
 
     expect(mockStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'mock-model:claude-sonnet-4-6',
+        model: 'mock-model:claude-haiku-4-5',
       })
     );
   });
@@ -281,5 +281,47 @@ describe('POST /api/chat', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const callArgs = (mockStreamText.mock.calls as any[][])[0][0];
     expect(callArgs.abortSignal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('should pass requested model to streamText when valid', async () => {
+    const req = makeRequest({
+      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }],
+      model: 'claude-opus-4-6',
+    });
+    await POST(req);
+
+    expect(mockStreamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'mock-model:claude-opus-4-6',
+      })
+    );
+  });
+
+  it('should return 400 when an invalid model string is sent', async () => {
+    const req = makeRequest({
+      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }],
+      model: 'gpt-4-invalid',
+    });
+    const response = await POST(req);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain('Invalid model');
+    expect(mockStreamText).not.toHaveBeenCalled();
+  });
+
+  it('should fall back to default model when model is omitted', async () => {
+    delete process.env.LLM_MODEL;
+
+    const req = makeRequest({
+      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }],
+    });
+    await POST(req);
+
+    expect(mockStreamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'mock-model:claude-haiku-4-5',
+      })
+    );
   });
 });

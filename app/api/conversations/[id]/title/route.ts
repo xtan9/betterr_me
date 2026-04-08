@@ -3,6 +3,7 @@ import { generateText } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { ConversationsDB } from "@/lib/db";
 import { llmProvider } from "@/lib/ai/provider";
+import { DEFAULT_MODEL_ID } from "@/lib/ai/models";
 import { titleRequestSchema } from "@/lib/validations/chat";
 import { log } from "@/lib/logger";
 
@@ -59,7 +60,7 @@ export async function POST(
     // Generate title via LLM
     const { text } = await generateText({
       model: llmProvider(
-        process.env.LLM_MODEL || "claude-sonnet-4-6",
+        process.env.LLM_MODEL || DEFAULT_MODEL_ID,
       ),
       prompt: `Summarize this conversation in 5-8 words as a title. Return ONLY the title, no quotes or punctuation.\n\nUser: ${parsed.data.userMessage}\nAssistant: ${parsed.data.assistantMessage}`,
       maxOutputTokens: 30,

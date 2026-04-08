@@ -6,10 +6,16 @@ vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
 
+vi.mock("@/components/chat/model-selector", () => ({
+  ModelSelector: () => <div data-testid="model-selector" />,
+}));
+
 const defaultProps = {
   onSend: vi.fn(),
   onStop: vi.fn(),
   isStreaming: false,
+  modelId: "claude-haiku-4-5",
+  onModelChange: vi.fn(),
 };
 
 describe("ChatInput", () => {
