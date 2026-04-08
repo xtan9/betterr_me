@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     const modelId =
       typeof requestedModel === "string" && validModelIds.includes(requestedModel)
         ? requestedModel
-        : process.env.LLM_MODEL || "claude-haiku-4-5";
+        : process.env.LLM_MODEL || "claude-haiku-4-5-20251001";
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
