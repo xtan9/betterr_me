@@ -220,7 +220,7 @@
     --input: 240 15% 25%;
 
     /* === Destructive === */
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
 
     /* === Sidebar (darker than content) === */
