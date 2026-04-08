@@ -50,7 +50,7 @@ function SidebarContent({
           <Plus className="h-4 w-4" />
         </Button>
       </div>
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 [&>div>div]:!block">
         <div className="flex flex-col gap-0.5 p-2">
           {conversations.map((conversation) => (
             <ConversationItem
