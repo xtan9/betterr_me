@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** Users see accurate stats, the API rejects bad input, and the codebase is maintainable
-**Current focus:** Phase 36 — conversation-persistence-management
+**Current focus:** Phase 37.1 — v6-gap-closure-calendar-reminder-fixes
 
 ## Current Position
 

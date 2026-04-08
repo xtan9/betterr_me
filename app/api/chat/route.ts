@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { streamText, convertToModelMessages } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { llmProvider } from "@/lib/ai/provider";
+import { AVAILABLE_MODELS } from "@/lib/ai/models";
 import { log } from "@/lib/logger";
 
 export const maxDuration = 60;
@@ -41,6 +42,21 @@ export async function POST(req: Request) {
     }
 
     const messages = body.messages;
+    const requestedModel = body.model;
+    const validModelIds = AVAILABLE_MODELS.map((m) => m.id);
+
+    if (typeof requestedModel === "string" && requestedModel.length > 0 && !validModelIds.includes(requestedModel)) {
+      return NextResponse.json(
+        { error: `Invalid model: ${requestedModel}` },
+        { status: 400 },
+      );
+    }
+
+    const modelId =
+      typeof requestedModel === "string" && validModelIds.includes(requestedModel)
+        ? requestedModel
+        : process.env.LLM_MODEL || "claude-haiku-4-5";
+
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
         { error: "At least one message required" },
@@ -69,10 +85,8 @@ export async function POST(req: Request) {
 
     // Stream response from LLM proxy
     const result = streamText({
-      model: llmProvider(
-        process.env.LLM_MODEL || "claude-sonnet-4-6",
-      ),
-      system: "You are a helpful AI assistant in BetterR.Me, a personal productivity and finance app. You are powered by Claude (Sonnet) from Anthropic. Be concise, friendly, and helpful. The user may ask about habits, tasks, workouts, finances, or general topics.",
+      model: llmProvider(modelId),
+      system: "You are a helpful AI assistant in BetterR.Me, a personal productivity and finance app. You are powered by Claude from Anthropic. Be concise, friendly, and helpful. The user may ask about habits, tasks, workouts, finances, or general topics.",
       messages: modelMessages,
       maxOutputTokens: parseInt(process.env.LLM_MAX_TOKENS || "4096", 10),
       abortSignal: req.signal,

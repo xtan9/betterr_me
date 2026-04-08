@@ -17,6 +17,7 @@ import { ChatInput } from "@/components/chat/chat-input";
 import { ChatEmptyState } from "@/components/chat/chat-empty-state";
 import { ConversationSidebar } from "@/components/chat/conversation-sidebar";
 import { dbMessageToUIMessage } from "@/lib/chat/message-utils";
+import { DEFAULT_MODEL_ID } from "@/lib/ai/models";
 import { log } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, PanelLeftOpen } from "lucide-react";
@@ -50,17 +51,21 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   const [chatId, setChatId] = useState(conversationId ?? "new");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
 
   // SWR for conversation list
   const { data: convData, mutate: mutateConversations } = useSWR<{
     conversations: Conversation[];
   }>("/api/conversations", fetcher);
-  const conversations = convData?.conversations ?? [];
+  const conversations = useMemo(
+    () => convData?.conversations ?? [],
+    [convData]
+  );
 
-  // Stable transport instance
+  // Transport recreated when model changes so the new model is sent with each request
   const transport = useMemo(
-    () => new TextStreamChatTransport({ api: "/api/chat" }),
-    []
+    () => new TextStreamChatTransport({ api: "/api/chat", body: { model: selectedModel } }),
+    [selectedModel]
   );
 
   const { messages, sendMessage, setMessages, stop, status, error } = useChat({
@@ -102,7 +107,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     };
   }, [chatId, setMessages]);
 
-  // Save assistant message after stream completes + auto-generate title
+  // Save both user and assistant messages after stream completes (deferred persistence).
+  // If the user refreshes mid-stream, the incomplete exchange is never persisted.
   const prevStatusRef = useRef(status);
   useEffect(() => {
     const wasStreaming =
@@ -112,56 +118,94 @@ export function ChatContent({ conversationId }: ChatContentProps) {
 
     if (wasStreaming && status === "ready" && messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
-      if (lastMsg.role === "assistant" && activeConversationId) {
-        // Collect all text from text parts (parts may have multiple text segments)
-        const content = lastMsg.parts
-          .filter((p): p is { type: "text"; text: string } => p.type === "text")
-          .map((p) => p.text)
-          .join("");
+      if (lastMsg.role !== "assistant") return;
 
-        // Skip save if content is empty (can happen if effect fires before parts are finalized)
-        if (!content.trim()) return;
+      const assistantContent = lastMsg.parts
+        .filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join("");
 
-        // D-05: Save assistant message after stream completes
-        fetchJSON(`/api/conversations/${activeConversationId}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: "assistant", content }),
-        }).catch((err) =>
-          log.error("[chat] Failed to save assistant message", err)
-        );
+      // Skip save if content is empty (can happen if effect fires before parts are finalized)
+      if (!assistantContent.trim()) return;
 
-        // D-07/D-08: Auto-generate title after first exchange (2 messages)
-        if (messages.length === 2) {
-          const userMsg = messages[0];
-          const userContent = userMsg.parts
-            .filter((p): p is { type: "text"; text: string } => p.type === "text")
-            .map((p) => p.text)
-            .join("");
-          fetchJSON(`/api/conversations/${activeConversationId}/title`, {
+      // Find the user message that triggered this response (second-to-last message)
+      const userMsg = messages.length >= 2 ? messages[messages.length - 2] : null;
+      const userContent =
+        userMsg?.role === "user"
+          ? userMsg.parts
+              .filter((p): p is { type: "text"; text: string } => p.type === "text")
+              .map((p) => p.text)
+              .join("")
+          : null;
+
+      const saveMessages = async () => {
+        let convId = activeConversationId;
+
+        // Create conversation if this is the first message (new chat)
+        if (!convId) {
+          try {
+            const data = await fetchJSON("/api/conversations", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ model: selectedModel }),
+            });
+            convId = data.conversation.id;
+            setActiveConversationId(convId);
+            window.history.replaceState(null, "", `/chat?id=${convId}`);
+          } catch (err) {
+            log.error("[chat] Failed to create conversation", err);
+            return;
+          }
+        }
+
+        // Save user message — abort the whole persistence if this fails
+        if (userContent) {
+          try {
+            await fetchJSON(`/api/conversations/${convId}/messages`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ role: "user", content: userContent }),
+            });
+          } catch (err) {
+            log.error("[chat] Failed to save user message", err);
+            return;
+          }
+        }
+
+        // Save assistant message
+        try {
+          await fetchJSON(`/api/conversations/${convId}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ role: "assistant", content: assistantContent }),
+          });
+        } catch (err) {
+          log.error("[chat] Failed to save assistant message", err);
+        }
+
+        // Auto-generate title after first exchange (exactly 2 messages)
+        if (messages.length === 2 && userContent) {
+          fetchJSON(`/api/conversations/${convId}/title`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               userMessage: userContent,
-              assistantMessage: content,
+              assistantMessage: assistantContent,
             }),
           })
             .then(() => mutateConversations())
-            .catch((err) =>
-              log.error("[chat] Failed to generate title", err)
-            );
+            .catch((err) => log.error("[chat] Failed to generate title", err));
         }
-
-        // Don't sync chatId here — useChat's messages are already in its buffer
-        // under the current chatId. Syncing would reset the buffer and cause a
-        // visible loading flash. chatId syncs naturally when the user switches
-        // conversations or starts a new chat.
 
         // Refresh conversation list to update updated_at ordering
         mutateConversations();
-      }
+      };
+
+      saveMessages().catch((err) =>
+        log.error("[chat] Unexpected error in saveMessages", err)
+      );
     }
-  }, [status, messages, activeConversationId, mutateConversations]);
+  }, [status, messages, activeConversationId, mutateConversations, selectedModel]);
 
   useEffect(() => {
     if (error) {
@@ -170,46 +214,38 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   }, [error]);
 
   const handleSend = useCallback(
-    async (text: string) => {
-      let convId = activeConversationId;
-
-      // D-11: Auto-create conversation on first message if none selected
-      if (!convId) {
-        try {
-          const data = await fetchJSON("/api/conversations", { method: "POST" });
-          convId = data.conversation.id;
-          // Set activeConversationId for sidebar highlighting and persistence.
-          // chatId stays as "new" — it only syncs after the stream completes
-          // and messages are saved to DB, preventing useChat from resetting mid-stream.
-          setActiveConversationId(convId);
-          window.history.replaceState(null, "", `/chat?id=${convId}`);
-          mutateConversations();
-        } catch (err) {
-          log.error("[chat] Failed to create conversation", err);
-          return;
-        }
-      }
-
-      // D-04: Save user message to DB BEFORE sending to LLM
-      try {
-        await fetchJSON(`/api/conversations/${convId}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: "user", content: text }),
-        });
-      } catch (err) {
-        log.error("[chat] Failed to save user message", err);
-      }
-
-      // Send to LLM
+    (text: string) => {
+      // Just send to LLM — user message shown optimistically in useChat buffer.
+      // Persistence (conversation creation + user + assistant messages) is handled
+      // in the stream-complete effect, so a mid-stream refresh leaves no partial data.
       sendMessage({ text });
     },
-    [activeConversationId, sendMessage, mutateConversations]
+    [sendMessage]
   );
 
   const handleStop = useCallback(() => {
     stop();
   }, [stop]);
+
+  const handleModelChange = useCallback(
+    async (modelId: string) => {
+      const previousModel = selectedModel;
+      setSelectedModel(modelId);
+      if (activeConversationId) {
+        try {
+          await fetchJSON(`/api/conversations/${activeConversationId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: modelId }),
+          });
+        } catch (err) {
+          log.error("[chat] Failed to update model", err);
+          setSelectedModel(previousModel);
+        }
+      }
+    },
+    [activeConversationId, selectedModel]
+  );
 
   // Find the last user message text for resend on error
   const lastUserMessage = useMemo(() => {
@@ -264,21 +300,44 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   }, [error]);
 
   // Conversation switching
-  const handleSelectConversation = useCallback((id: string) => {
-    setActiveConversationId(id);
-    setChatId(id);
-    window.history.replaceState(null, "", `/chat?id=${id}`);
-    setSidebarOpen(false);
-  }, []);
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      setActiveConversationId(id);
+      setChatId(id);
+      window.history.replaceState(null, "", `/chat?id=${id}`);
+      setSidebarOpen(false);
+      const conv = conversations.find((c) => c.id === id);
+      setSelectedModel(conv?.model || DEFAULT_MODEL_ID);
+    },
+    [conversations]
+  );
 
   // New chat
   const handleNewChat = useCallback(() => {
     setActiveConversationId(null);
     setChatId("new");
     setMessages([]);
+    setSelectedModel(DEFAULT_MODEL_ID);
     window.history.replaceState(null, "", "/chat");
     setSidebarOpen(false);
   }, [setMessages]);
+
+  // Rename conversation
+  const handleRenameConversation = useCallback(
+    async (id: string, title: string) => {
+      try {
+        await fetchJSON(`/api/conversations/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        mutateConversations();
+      } catch (err) {
+        log.error("[chat] Failed to rename conversation", err);
+      }
+    },
+    [mutateConversations]
+  );
 
   // Delete conversation
   const handleDeleteConversation = useCallback(
@@ -318,6 +377,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         onSelectConversation={handleSelectConversation}
         onNewChat={handleNewChat}
         onDeleteConversation={handleDeleteConversation}
+        onRenameConversation={handleRenameConversation}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(false)}
       />
@@ -330,7 +390,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         ) : messages.length === 0 ? (
           <ChatEmptyState />
         ) : (
-          <MessageList messages={messages} />
+          <MessageList messages={messages} status={status} />
         )}
 
         {error && (
@@ -349,6 +409,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           onSend={handleSend}
           onStop={handleStop}
           isStreaming={isStreaming}
+          modelId={selectedModel}
+          onModelChange={handleModelChange}
         />
       </div>
     </div>

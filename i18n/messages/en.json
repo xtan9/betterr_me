@@ -1955,8 +1955,14 @@
       "title": "Conversations",
       "newChat": "New chat",
       "untitled": "New conversation",
-      "deleteConfirm": "Delete conversation?"
+      "deleteConfirm": "Delete conversation?",
+      "rename": "Rename",
+      "delete": "Delete"
     },
+    "model": {
+      "label": "Model"
+    },
+    "thinking": "Thinking...",
     "loading": "Loading..."
   },
   "admin": {

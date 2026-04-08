@@ -99,6 +99,18 @@ describe('POST /api/conversations', () => {
     expect(mockCreateConversation).toHaveBeenCalledWith({ user_id: 'user-123' });
   });
 
+  it('creates conversation with model when model is provided in body', async () => {
+    const mockConversation = { id: 'c1', user_id: 'user-123', title: null, model: 'claude-opus-4-6', created_at: '2026-01-01', updated_at: '2026-01-01' };
+    mockCreateConversation.mockResolvedValue(mockConversation);
+
+    const response = await POST(makeRequest('POST', { model: 'claude-opus-4-6' }));
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.conversation).toEqual(mockConversation);
+    expect(mockCreateConversation).toHaveBeenCalledWith({ user_id: 'user-123', model: 'claude-opus-4-6' });
+  });
+
   it('returns 500 on database error', async () => {
     mockCreateConversation.mockRejectedValue(new Error('DB error'));
 

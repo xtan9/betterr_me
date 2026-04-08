@@ -20,6 +20,7 @@ interface ConversationSidebarProps {
   onSelectConversation: (id: string) => void;
   onNewChat: () => void;
   onDeleteConversation: (id: string) => void;
+  onRenameConversation: (id: string, title: string) => void;
   isOpen: boolean;
   onToggle: () => void;
 }
@@ -30,6 +31,7 @@ function SidebarContent({
   onSelectConversation,
   onNewChat,
   onDeleteConversation,
+  onRenameConversation,
 }: Omit<ConversationSidebarProps, "isOpen" | "onToggle">) {
   const t = useTranslations("chat");
 
@@ -57,6 +59,7 @@ function SidebarContent({
               isActive={conversation.id === activeConversationId}
               onSelect={onSelectConversation}
               onDelete={onDeleteConversation}
+              onRename={onRenameConversation}
             />
           ))}
         </div>
@@ -71,6 +74,7 @@ export function ConversationSidebar({
   onSelectConversation,
   onNewChat,
   onDeleteConversation,
+  onRenameConversation,
   isOpen,
   onToggle,
 }: ConversationSidebarProps) {
@@ -86,6 +90,7 @@ export function ConversationSidebar({
           onSelectConversation={onSelectConversation}
           onNewChat={onNewChat}
           onDeleteConversation={onDeleteConversation}
+          onRenameConversation={onRenameConversation}
         />
       </aside>
 
@@ -102,6 +107,7 @@ export function ConversationSidebar({
             onSelectConversation={onSelectConversation}
             onNewChat={onNewChat}
             onDeleteConversation={onDeleteConversation}
+            onRenameConversation={onRenameConversation}
           />
         </SheetContent>
       </Sheet>
