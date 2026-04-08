@@ -4,12 +4,13 @@ import type { UIMessage } from "ai";
 
 // --- Mocks via vi.hoisted ---
 
-const { mockSendMessage, mockStop, mockUseChat, mockSetMessages, mockMutateFn } =
+const { mockSendMessage, mockStop, mockUseChat, mockSetMessages, mockMutateFn, mockSwrData } =
   vi.hoisted(() => {
     const mockSendMessage = vi.fn();
     const mockStop = vi.fn();
     const mockSetMessages = vi.fn();
     const mockMutateFn = vi.fn();
+    const mockSwrData = { current: { conversations: [] as Record<string, unknown>[] } };
     const mockUseChat = vi.fn(() => ({
       messages: [] as UIMessage[],
       sendMessage: mockSendMessage,
@@ -19,7 +20,7 @@ const { mockSendMessage, mockStop, mockUseChat, mockSetMessages, mockMutateFn } 
       setMessages: mockSetMessages,
       id: "test-chat",
     }));
-    return { mockSendMessage, mockStop, mockUseChat, mockSetMessages, mockMutateFn };
+    return { mockSendMessage, mockStop, mockUseChat, mockSetMessages, mockMutateFn, mockSwrData };
   });
 
 vi.mock("@ai-sdk/react", () => ({ useChat: mockUseChat }));
@@ -36,7 +37,7 @@ vi.mock("ai", () => ({
 
 vi.mock("swr", () => ({
   default: vi.fn(() => ({
-    data: { conversations: [] },
+    data: mockSwrData.current,
     mutate: mockMutateFn,
   })),
 }));
@@ -67,7 +68,7 @@ vi.mock("@/components/chat/message-list", () => ({
 
 vi.mock("@/components/chat/chat-input", () => ({
   ChatInput: (props: Record<string, unknown>) => (
-      <div data-testid="chat-input" data-streaming={String(props.isStreaming)}>
+      <div data-testid="chat-input" data-streaming={String(props.isStreaming)} data-model-id={String(props.modelId ?? "")}>
         <button
           data-testid="mock-send"
           onClick={() => (props.onSend as (t: string) => void)("hello")}
@@ -143,6 +144,8 @@ const makeMessage = (
 describe("ChatContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset SWR data
+    mockSwrData.current = { conversations: [] };
     // Reset to default return value
     mockUseChat.mockReturnValue({
       messages: [],
@@ -688,5 +691,56 @@ describe("ChatContent", () => {
     // Verify sidebar shows no active conversation after new chat
     const sidebar = screen.getByTestId("conversation-sidebar");
     expect(sidebar).toHaveAttribute("data-active-id", "");
+  });
+
+  // --- Model validation on conversation select ---
+
+  it("uses valid stored model when selecting a conversation", () => {
+    mockSwrData.current = {
+      conversations: [
+        { id: "conv-123", title: "Test", model: "claude-sonnet-4-6", created_at: "", updated_at: "" },
+      ],
+    };
+    render(<ChatContent />);
+
+    fireEvent.click(screen.getByTestId("sidebar-select"));
+
+    expect(screen.getByTestId("chat-input")).toHaveAttribute(
+      "data-model-id",
+      "claude-sonnet-4-6"
+    );
+  });
+
+  it("falls back to default model when stored model is invalid/stale", () => {
+    mockSwrData.current = {
+      conversations: [
+        { id: "conv-123", title: "Test", model: "claude-haiku-4-5", created_at: "", updated_at: "" },
+      ],
+    };
+    render(<ChatContent />);
+
+    fireEvent.click(screen.getByTestId("sidebar-select"));
+
+    // Should fall back to DEFAULT_MODEL_ID, not use the stale "claude-haiku-4-5"
+    expect(screen.getByTestId("chat-input")).toHaveAttribute(
+      "data-model-id",
+      "claude-haiku-4-5-20251001"
+    );
+  });
+
+  it("falls back to default model when conversation has no model stored", () => {
+    mockSwrData.current = {
+      conversations: [
+        { id: "conv-123", title: "Test", created_at: "", updated_at: "" },
+      ],
+    };
+    render(<ChatContent />);
+
+    fireEvent.click(screen.getByTestId("sidebar-select"));
+
+    expect(screen.getByTestId("chat-input")).toHaveAttribute(
+      "data-model-id",
+      "claude-haiku-4-5-20251001"
+    );
   });
 });

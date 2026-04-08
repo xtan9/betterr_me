@@ -17,7 +17,7 @@ import { ChatInput } from "@/components/chat/chat-input";
 import { ChatEmptyState } from "@/components/chat/chat-empty-state";
 import { ConversationSidebar } from "@/components/chat/conversation-sidebar";
 import { dbMessageToUIMessage } from "@/lib/chat/message-utils";
-import { DEFAULT_MODEL_ID } from "@/lib/ai/models";
+import { DEFAULT_MODEL_ID, AVAILABLE_MODELS } from "@/lib/ai/models";
 import { log } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, PanelLeftOpen } from "lucide-react";
@@ -307,7 +307,9 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       window.history.replaceState(null, "", `/chat?id=${id}`);
       setSidebarOpen(false);
       const conv = conversations.find((c) => c.id === id);
-      setSelectedModel(conv?.model || DEFAULT_MODEL_ID);
+      const storedModel = conv?.model;
+      const isValid = storedModel && AVAILABLE_MODELS.some((m) => m.id === storedModel);
+      setSelectedModel(isValid ? storedModel : DEFAULT_MODEL_ID);
     },
     [conversations]
   );

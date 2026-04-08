@@ -14,7 +14,7 @@ const defaultProps = {
   onSend: vi.fn(),
   onStop: vi.fn(),
   isStreaming: false,
-  modelId: "claude-haiku-4-5",
+  modelId: "claude-haiku-4-5-20251001",
   onModelChange: vi.fn(),
 };
 
