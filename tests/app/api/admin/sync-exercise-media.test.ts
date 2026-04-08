@@ -4,14 +4,14 @@ import { NextRequest } from "next/server";
 // --- Hoisted mocks ---
 const {
   mockGetUser,
-  mockFetchAll,
-  mockMatchExercises,
+  mockLoadCatalog,
+  mockDownloadAndStoreGif,
   mockAdminFrom,
   mockProfileFrom,
 } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
-  mockFetchAll: vi.fn(),
-  mockMatchExercises: vi.fn(),
+  mockLoadCatalog: vi.fn(),
+  mockDownloadAndStoreGif: vi.fn(),
   mockAdminFrom: vi.fn(),
   mockProfileFrom: vi.fn(),
 }));
@@ -29,14 +29,12 @@ vi.mock("@/lib/supabase/admin", () => ({
   })),
 }));
 
-vi.mock("@/lib/exercisedb/client", () => ({
-  ExerciseDBClient: class {
-    fetchAll = mockFetchAll;
-  },
+vi.mock("@/lib/exercisedb/catalog", () => ({
+  loadCatalog: mockLoadCatalog,
 }));
 
-vi.mock("@/lib/exercisedb/matcher", () => ({
-  matchExercises: mockMatchExercises,
+vi.mock("@/lib/exercisedb/gif-downloader", () => ({
+  downloadAndStoreGif: mockDownloadAndStoreGif,
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -61,52 +59,36 @@ function makeRequest(body?: Record<string, unknown>, headers?: Record<string, st
 }
 
 // --- Mock data ---
-const mockPresetExercises = [
+const mockCatalogEntries = [
+  {
+    name: "Barbell Bench Press",
+    muscle_group_primary: "chest",
+    muscle_groups_secondary: ["triceps", "shoulders"],
+    equipment: "barbell",
+    exercise_type: "weight_reps",
+    exercisedb_id: "0025",
+    exercisedb_name: "barbell bench press",
+    gif_url: "https://v2.exercisedb.io/image/0025.gif",
+  },
+  {
+    name: "Cable Crossover",
+    muscle_group_primary: "chest",
+    muscle_groups_secondary: [],
+    equipment: "cable",
+    exercise_type: "weight_reps",
+    exercisedb_id: null,
+    exercisedb_name: null,
+    gif_url: null,
+  },
+];
+
+const mockExistingExercises = [
   {
     id: "ex-1",
     name: "Barbell Bench Press",
     muscle_group_primary: "chest",
     equipment: "barbell",
     is_custom: false,
-  },
-  {
-    id: "ex-2",
-    name: "Squat",
-    muscle_group_primary: "quadriceps",
-    equipment: "barbell",
-    is_custom: false,
-  },
-];
-
-const mockDbExercises = [
-  {
-    id: "0025",
-    name: "barbell bench press",
-    bodyPart: "chest",
-    target: "pectorals",
-    equipment: "barbell",
-    gifUrl: "https://v2.exercisedb.io/image/0025.gif",
-    instructions: ["Lie on bench", "Press barbell up"],
-    secondaryMuscles: ["triceps"],
-  },
-];
-
-const mockMatchResults = [
-  {
-    exercise: mockPresetExercises[0],
-    match: mockDbExercises[0],
-    confidence: 0.95,
-    equipmentMatch: true,
-    muscleMatch: true,
-    verified: false,
-  },
-  {
-    exercise: mockPresetExercises[1],
-    match: null,
-    confidence: 0.3,
-    equipmentMatch: false,
-    muscleMatch: false,
-    verified: false,
   },
 ];
 
@@ -128,24 +110,37 @@ function setupAuthenticatedAdmin() {
   mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
   setupProfileQuery("user"); // default to non-admin; tests with secret still work
   process.env.ADMIN_SYNC_SECRET = "test-secret";
-  process.env.EXERCISEDB_API_KEY = "test-key";
 }
 
 function setupAdminClient() {
-  // Mock the admin client from() chain
   const mockSelect = vi.fn().mockReturnValue({
-    eq: vi.fn().mockResolvedValue({ data: mockPresetExercises, error: null }),
+    eq: vi.fn().mockResolvedValue({ data: mockExistingExercises, error: null }),
+  });
+  const mockUpdate = vi.fn().mockReturnValue({
+    eq: vi.fn().mockResolvedValue({ error: null }),
+  });
+  const mockInsert = vi.fn().mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: { id: "ex-new-1" },
+        error: null,
+      }),
+    }),
   });
   const mockUpsert = vi.fn().mockResolvedValue({ error: null });
 
   mockAdminFrom.mockImplementation((table: string) => {
     if (table === "exercises") {
-      return { select: mockSelect };
+      return { select: mockSelect, update: mockUpdate, insert: mockInsert };
     }
     return { upsert: mockUpsert };
   });
 
-  return { mockSelect, mockUpsert };
+  return { mockSelect, mockUpdate, mockInsert, mockUpsert };
+}
+
+function setupCatalog() {
+  mockLoadCatalog.mockReturnValue(mockCatalogEntries);
 }
 
 // --- Tests ---
@@ -153,19 +148,31 @@ describe("POST /api/admin/sync-exercise-media", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.ADMIN_SYNC_SECRET;
-    delete process.env.EXERCISEDB_API_KEY;
   });
 
-  it("returns 401 when user is not authenticated", async () => {
+  it("returns 403 when user is not authenticated and no valid secret", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const response = await POST(
+      makeRequest({}, { "x-admin-secret": "wrong-secret" })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.error).toBe("Forbidden");
+  });
+
+  it("allows unauthenticated request with valid x-admin-secret", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    process.env.ADMIN_SYNC_SECRET = "test-secret";
+    setupCatalog();
+    setupAdminClient();
 
     const response = await POST(
       makeRequest({}, { "x-admin-secret": "test-secret" })
     );
-    const data = await response.json();
 
-    expect(response.status).toBe(401);
-    expect(data.error).toBe("Unauthorized");
+    expect(response.status).toBe(200);
   });
 
   it("returns 403 when x-admin-secret header does not match env var and user is not admin", async () => {
@@ -185,7 +192,6 @@ describe("POST /api/admin/sync-exercise-media", () => {
   it("returns 403 when ADMIN_SYNC_SECRET env var is not set and user is not admin", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
     setupProfileQuery("user");
-    // ADMIN_SYNC_SECRET not set
 
     const response = await POST(
       makeRequest({}, { "x-admin-secret": "any-secret" })
@@ -199,93 +205,21 @@ describe("POST /api/admin/sync-exercise-media", () => {
   it("returns 200 for admin user without secret header", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
     setupProfileQuery("admin");
-    process.env.EXERCISEDB_API_KEY = "test-key";
-    // No ADMIN_SYNC_SECRET set, no x-admin-secret header
+    setupCatalog();
     setupAdminClient();
-    mockFetchAll.mockResolvedValue(mockDbExercises);
-    mockMatchExercises.mockReturnValue(mockMatchResults);
 
     const response = await POST(makeRequest({}));
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.matched).toBe(1);
+    expect(data.total).toBe(2);
   });
 
-  it("calls ExerciseDBClient.fetchAll to get all ExerciseDB exercises", async () => {
+  it("updates existing exercises and inserts new ones from catalog", async () => {
     setupAuthenticatedAdmin();
+    setupCatalog();
     setupAdminClient();
-    mockFetchAll.mockResolvedValue(mockDbExercises);
-    mockMatchExercises.mockReturnValue(mockMatchResults);
-
-    await POST(makeRequest({}, { "x-admin-secret": "test-secret" }));
-
-    expect(mockFetchAll).toHaveBeenCalledOnce();
-  });
-
-  it("calls matchExercises to fuzzy-match preset exercises", async () => {
-    setupAuthenticatedAdmin();
-    setupAdminClient();
-    mockFetchAll.mockResolvedValue(mockDbExercises);
-    mockMatchExercises.mockReturnValue(mockMatchResults);
-
-    await POST(
-      makeRequest({ threshold: 0.6 }, { "x-admin-secret": "test-secret" })
-    );
-
-    expect(mockMatchExercises).toHaveBeenCalledWith(
-      mockPresetExercises,
-      mockDbExercises,
-      0.6
-    );
-  });
-
-  it("upserts matched exercises into exercise_media via admin client", async () => {
-    setupAuthenticatedAdmin();
-    const { mockUpsert } = setupAdminClient();
-    mockFetchAll.mockResolvedValue(mockDbExercises);
-    mockMatchExercises.mockReturnValue(mockMatchResults);
-
-    await POST(makeRequest({}, { "x-admin-secret": "test-secret" }));
-
-    // Should have called upsert for exercise_media
-    expect(mockAdminFrom).toHaveBeenCalledWith("exercise_media");
-    expect(mockUpsert).toHaveBeenCalled();
-    // The upsert call for exercise_media should contain only matched exercises
-    const mediaCall = mockUpsert.mock.calls.find(
-      (call: unknown[]) => Array.isArray(call[0]) && call[0].length > 0 && "gif_url" in call[0][0]
-    );
-    expect(mediaCall).toBeDefined();
-    expect(mediaCall![0]).toHaveLength(1); // only 1 matched
-    expect(mediaCall![0][0]).toMatchObject({
-      exercise_id: "ex-1",
-      exercisedb_id: "0025",
-      gif_url: "https://v2.exercisedb.io/image/0025.gif",
-    });
-  });
-
-  it("upserts match records into exercise_name_mappings via admin client", async () => {
-    setupAuthenticatedAdmin();
-    const { mockUpsert } = setupAdminClient();
-    mockFetchAll.mockResolvedValue(mockDbExercises);
-    mockMatchExercises.mockReturnValue(mockMatchResults);
-
-    await POST(makeRequest({}, { "x-admin-secret": "test-secret" }));
-
-    expect(mockAdminFrom).toHaveBeenCalledWith("exercise_name_mappings");
-    // Should upsert all mapping records (matched and unmatched)
-    const mappingCall = mockUpsert.mock.calls.find(
-      (call: unknown[]) => Array.isArray(call[0]) && call[0].length > 0 && "our_name" in call[0][0]
-    );
-    expect(mappingCall).toBeDefined();
-    expect(mappingCall![0]).toHaveLength(2); // all exercises get a mapping record
-  });
-
-  it("returns mapping report with matched count, unmatched count, and per-exercise details", async () => {
-    setupAuthenticatedAdmin();
-    setupAdminClient();
-    mockFetchAll.mockResolvedValue(mockDbExercises);
-    mockMatchExercises.mockReturnValue(mockMatchResults);
+    mockDownloadAndStoreGif.mockResolvedValue("https://storage.example.com/0025.gif");
 
     const response = await POST(
       makeRequest({}, { "x-admin-secret": "test-secret" })
@@ -293,45 +227,49 @@ describe("POST /api/admin/sync-exercise-media", () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.matched).toBe(1);
-    expect(data.unmatched).toBe(1);
+    // Barbell Bench Press matches existing → updated
+    expect(data.updated).toBe(1);
+    // Cable Crossover is new → created
+    expect(data.created).toBe(1);
     expect(data.total).toBe(2);
-    expect(data.dryRun).toBe(false);
-    expect(data.mappings).toHaveLength(2);
-    expect(data.mappings[0]).toMatchObject({
-      our_name: "Barbell Bench Press",
-      matched_name: "barbell bench press",
-      confidence: 0.95,
-      equipment_match: true,
-      muscle_match: true,
-      exercisedb_id: "0025",
-    });
-    expect(data.mappings[1]).toMatchObject({
-      our_name: "Squat",
-      matched_name: null,
-      confidence: 0.3,
-    });
   });
 
-  it("returns 500 on ExerciseDB API failure", async () => {
+  it("downloads GIFs for matched catalog entries", async () => {
     setupAuthenticatedAdmin();
+    setupCatalog();
     setupAdminClient();
-    mockFetchAll.mockRejectedValue(new Error("ExerciseDB API error: 503"));
+    mockDownloadAndStoreGif.mockResolvedValue("https://storage.example.com/0025.gif");
+
+    await POST(makeRequest({}, { "x-admin-secret": "test-secret" }));
+
+    // Only the first entry has exercisedb_id
+    expect(mockDownloadAndStoreGif).toHaveBeenCalledWith(
+      "0025",
+      "https://v2.exercisedb.io/image/0025.gif"
+    );
+    expect(mockDownloadAndStoreGif).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips GIF downloads when skipGifs is true", async () => {
+    setupAuthenticatedAdmin();
+    setupCatalog();
+    setupAdminClient();
 
     const response = await POST(
-      makeRequest({}, { "x-admin-secret": "test-secret" })
+      makeRequest({ skipGifs: true }, { "x-admin-secret": "test-secret" })
     );
     const data = await response.json();
 
-    expect(response.status).toBe(500);
-    expect(data.error).toBe("Failed to sync exercise media");
+    expect(response.status).toBe(200);
+    expect(mockDownloadAndStoreGif).not.toHaveBeenCalled();
+    expect(data.skipGifs).toBe(true);
+    expect(data.gifsDownloaded).toBe(0);
   });
 
-  it("does not upsert when dryRun is true", async () => {
+  it("does not write when dryRun is true", async () => {
     setupAuthenticatedAdmin();
-    const { mockUpsert } = setupAdminClient();
-    mockFetchAll.mockResolvedValue(mockDbExercises);
-    mockMatchExercises.mockReturnValue(mockMatchResults);
+    setupCatalog();
+    const { mockUpdate, mockInsert, mockUpsert } = setupAdminClient();
 
     const response = await POST(
       makeRequest({ dryRun: true }, { "x-admin-secret": "test-secret" })
@@ -340,6 +278,103 @@ describe("POST /api/admin/sync-exercise-media", () => {
 
     expect(response.status).toBe(200);
     expect(data.dryRun).toBe(true);
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockInsert).not.toHaveBeenCalled();
     expect(mockUpsert).not.toHaveBeenCalled();
+    expect(mockDownloadAndStoreGif).not.toHaveBeenCalled();
+  });
+
+  it("handles GIF download failures gracefully", async () => {
+    setupAuthenticatedAdmin();
+    setupCatalog();
+    setupAdminClient();
+    mockDownloadAndStoreGif.mockResolvedValue(null); // download failed
+
+    const response = await POST(
+      makeRequest({}, { "x-admin-secret": "test-secret" })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.gifsFailed).toBe(1);
+    expect(data.gifsDownloaded).toBe(0);
+  });
+
+  it("upserts exercise_media for matched catalog entries", async () => {
+    setupAuthenticatedAdmin();
+    setupCatalog();
+    const { mockUpsert } = setupAdminClient();
+    mockDownloadAndStoreGif.mockResolvedValue("https://storage.example.com/0025.gif");
+
+    await POST(makeRequest({}, { "x-admin-secret": "test-secret" }));
+
+    expect(mockAdminFrom).toHaveBeenCalledWith("exercise_media");
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exercise_id: "ex-1",
+        exercisedb_id: "0025",
+        gif_url: "https://storage.example.com/0025.gif",
+      }),
+      { onConflict: "exercise_id" }
+    );
+  });
+
+  it("returns report with all counts", async () => {
+    setupAuthenticatedAdmin();
+    setupCatalog();
+    setupAdminClient();
+    mockDownloadAndStoreGif.mockResolvedValue("https://storage.example.com/0025.gif");
+
+    const response = await POST(
+      makeRequest({}, { "x-admin-secret": "test-secret" })
+    );
+    const data = await response.json();
+
+    expect(data).toMatchObject({
+      total: 2,
+      created: expect.any(Number),
+      updated: expect.any(Number),
+      exercisesFailed: expect.any(Number),
+      gifsDownloaded: expect.any(Number),
+      gifsFailed: expect.any(Number),
+      mediaFailed: expect.any(Number),
+      dryRun: false,
+      skipGifs: false,
+    });
+  });
+
+  it("returns 400 on invalid body input", async () => {
+    setupAuthenticatedAdmin();
+
+    const response = await POST(
+      makeRequest({ dryRun: "not-a-boolean" }, { "x-admin-secret": "test-secret" })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBe("Validation failed");
+    expect(data.details).toBeDefined();
+  });
+
+  it("returns 500 when exercise fetch fails", async () => {
+    setupAuthenticatedAdmin();
+    setupCatalog();
+    const mockSelect = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: { message: "connection refused" } }),
+    });
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === "exercises") {
+        return { select: mockSelect };
+      }
+      return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+    });
+
+    const response = await POST(
+      makeRequest({}, { "x-admin-secret": "test-secret" })
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to fetch preset exercises");
   });
 });

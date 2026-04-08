@@ -1973,8 +1973,17 @@
       "syncing": "同步中...",
       "resultMatched": "{count} 個匹配",
       "resultUnmatched": "{count} 個未匹配",
+      "resultTotal": "目錄中共 {count} 個運動",
+      "resultCreated": "新增 {count} 個運動",
+      "resultUpdated": "更新 {count} 個現有運動",
+      "resultGifsDownloaded": "已下載 {count} 個 GIF",
+      "resultGifsFailed": "{count} 個 GIF 下載失敗",
       "success": "同步成功",
-      "error": "同步失敗"
+      "error": "同步失敗",
+      "skipGifs": "跳過 GIF 下載（僅同步運動）",
+      "exerciseCount": "運動庫中共 {count} 個運動",
+      "gifCount": "{count} 個運動有 GIF",
+      "syncingLong": "正在同步運動並下載 GIF，可能需要幾分鐘..."
     }
   }
 }
