@@ -85,7 +85,7 @@ export function ConversationItem({
 
   return (
     <div
-      className={`group flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors cursor-pointer ${
+      className={`group flex w-full min-w-0 items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors cursor-pointer ${
         isActive ? "bg-accent text-accent-foreground" : "hover:bg-muted"
       }`}
       onClick={() => !isRenaming && onSelect(conversation.id)}
@@ -107,7 +107,7 @@ export function ConversationItem({
       ) : (
         <span
           ref={titleRef}
-          className="truncate flex-1 mr-2"
+          className="truncate flex-1 min-w-0 mr-2"
           title={isTruncated ? displayTitle : undefined}
         >
           {displayTitle}
@@ -122,7 +122,7 @@ export function ConversationItem({
             onClick={(e) => e.stopPropagation()}
             aria-label="Menu"
           >
-            <MoreVertical className="h-4 w-4" />
+            <MoreVertical className="h-5 w-5 fill-current" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
