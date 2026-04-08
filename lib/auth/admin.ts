@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { log } from "@/lib/logger";
 import type { Profile } from "@/lib/db/types";
 import type { User } from "@supabase/supabase-js";
 
@@ -42,11 +43,15 @@ async function getAdminContext(): Promise<{
     return { user: null, profile: null };
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
+
+  if (profileError) {
+    log.error("Failed to fetch profile for admin check", profileError, { userId: user.id });
+  }
 
   return { user, profile: profile as Profile | null };
 }

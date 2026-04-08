@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ExerciseDBClient } from "@/lib/exercisedb/client";
-import { matchExercises } from "@/lib/exercisedb/matcher";
+import { loadCatalog } from "@/lib/exercisedb/catalog";
+import { downloadAndStoreGif } from "@/lib/exercisedb/gif-downloader";
 import { syncExerciseMediaSchema } from "@/lib/validations/exercise-media";
 import { requireAdminApi, AdminForbiddenError, AdminUnauthorizedError } from "@/lib/auth/admin";
 import { log } from "@/lib/logger";
+import { findBestMatch } from "string-similarity";
 
 /**
  * POST /api/admin/sync-exercise-media
- * Admin-only route: fetches ExerciseDB data, fuzzy-matches to preset exercises,
- * and upserts into exercise_media + exercise_name_mappings.
+ * Admin-only route: loads exercise catalog, upserts exercises,
+ * downloads GIFs to Supabase Storage, and upserts exercise_media.
  *
  * Auth: admin role (via requireAdminApi) OR x-admin-secret header (for CLI/cron)
  *
- * Optional body: { threshold?: number (0-1), dryRun?: boolean }
+ * Optional body: { dryRun?: boolean, skipGifs?: boolean }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -24,11 +25,13 @@ export async function POST(request: NextRequest) {
       await requireAdminApi();
       isAuthed = true;
     } catch (error) {
-      if (error instanceof AdminUnauthorizedError) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      if (
+        !(error instanceof AdminUnauthorizedError) &&
+        !(error instanceof AdminForbiddenError)
+      ) {
+        throw error;
       }
-      if (!(error instanceof AdminForbiddenError)) throw error;
-      // Not admin — fall through to secret check
+      // Not authenticated or not admin — fall through to secret check
     }
 
     if (!isAuthed) {
@@ -39,7 +42,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Parse body (optional -- defaults are fine)
+    // 2. Parse body
     let body = {};
     try {
       const text = await request.text();
@@ -61,23 +64,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { threshold, dryRun } = parsed.data;
+    const { dryRun, skipGifs } = parsed.data;
 
-    // 4. Fetch all ExerciseDB exercises
-    const apiKey = process.env.EXERCISEDB_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "EXERCISEDB_API_KEY not configured" },
-        { status: 500 }
-      );
-    }
+    // 3. Load catalog
+    const catalog = loadCatalog();
 
-    const exerciseDBClient = new ExerciseDBClient(apiKey);
-    const dbExercises = await exerciseDBClient.fetchAll();
-
-    // 5. Fetch all preset exercises (is_custom = false)
+    // 4. Fetch existing preset exercises
     const adminClient = createAdminClient();
-    const { data: presetExercises, error: fetchError } = await adminClient
+    const { data: existingExercises, error: fetchError } = await adminClient
       .from("exercises")
       .select("*")
       .eq("is_custom", false);
@@ -90,92 +84,137 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. Run fuzzy matching
-    if (!presetExercises || presetExercises.length === 0) {
-      return NextResponse.json(
-        { error: "No preset exercises found" },
-        { status: 404 }
-      );
-    }
-
-    const matchResults = matchExercises(
-      presetExercises,
-      dbExercises,
-      threshold
+    // 5. Match catalog entries to existing exercises by name
+    const existingNames = (existingExercises || []).map((e: { name: string }) =>
+      e.name.toLowerCase().trim()
     );
 
-    // 7. Upsert if not dry run
-    if (!dryRun) {
-      // Build media rows for matched exercises only
-      const mediaRows = matchResults
-        .filter((r) => r.match !== null)
-        .map((r) => ({
-          exercise_id: r.exercise.id,
-          exercisedb_id: r.match!.id,
-          gif_url: r.match!.gifUrl,
-          thumbnail_url: r.match!.gifUrl,
-          instructions: r.match!.instructions,
-          alternative_names: [],
-          media_status: "active",
-          source: "exercisedb",
-        }));
+    let created = 0;
+    let updated = 0;
+    let exercisesFailed = 0;
+    let gifsDownloaded = 0;
+    let gifsFailed = 0;
+    let mediaFailed = 0;
+    const exerciseIds: Map<string, string> = new Map(); // catalog name → exercise ID
 
-      if (mediaRows.length > 0) {
-        const { error: mediaError } = await adminClient
-          .from("exercise_media")
-          .upsert(mediaRows, { onConflict: "exercise_id" });
+    for (const entry of catalog) {
+      const normalizedName = entry.name.toLowerCase().trim();
 
-        if (mediaError) {
-          log.error("Failed to upsert exercise media", mediaError);
-          return NextResponse.json(
-            { error: "Failed to upsert exercise media" },
-            { status: 500 }
-          );
+      // Find existing exercise by fuzzy name match
+      let existingExercise: { id: string; name: string } | null = null;
+      if (existingNames.length > 0) {
+        const match = findBestMatch(normalizedName, existingNames);
+        if (match.bestMatch.rating >= 0.8) {
+          existingExercise = (existingExercises || [])[match.bestMatchIndex];
         }
       }
 
-      // Build mapping rows for all exercises (matched and unmatched)
-      const mappingRows = matchResults.map((r) => ({
-        exercise_id: r.exercise.id,
-        our_name: r.exercise.name,
-        matched_name: r.match?.name ?? null,
-        exercisedb_id: r.match?.id ?? null,
-        match_confidence: r.confidence,
-        equipment_match: r.equipmentMatch,
-        muscle_match: r.muscleMatch,
-        verified: r.verified,
-      }));
+      if (dryRun) {
+        if (existingExercise) {
+          updated++;
+          exerciseIds.set(entry.name, existingExercise.id);
+        } else {
+          created++;
+        }
+        continue;
+      }
 
-      const { error: mappingError } = await adminClient
-        .from("exercise_name_mappings")
-        .upsert(mappingRows, { onConflict: "exercise_id" });
+      if (existingExercise) {
+        // UPDATE existing exercise (preserve UUID)
+        const { error: updateError } = await adminClient
+          .from("exercises")
+          .update({
+            muscle_group_primary: entry.muscle_group_primary,
+            muscle_groups_secondary: entry.muscle_groups_secondary,
+            equipment: entry.equipment,
+            exercise_type: entry.exercise_type,
+          })
+          .eq("id", existingExercise.id);
 
-      if (mappingError) {
-        log.error("Failed to upsert exercise name mappings", mappingError);
-        return NextResponse.json(
-          { error: "Failed to upsert exercise name mappings" },
-          { status: 500 }
-        );
+        if (updateError) {
+          log.error("Failed to update exercise", updateError, { name: entry.name });
+          exercisesFailed++;
+        } else {
+          updated++;
+          exerciseIds.set(entry.name, existingExercise.id);
+        }
+      } else {
+        // INSERT new exercise
+        const { data: inserted, error: insertError } = await adminClient
+          .from("exercises")
+          .insert({
+            name: entry.name,
+            muscle_group_primary: entry.muscle_group_primary,
+            muscle_groups_secondary: entry.muscle_groups_secondary,
+            equipment: entry.equipment,
+            exercise_type: entry.exercise_type,
+            is_custom: false,
+            user_id: null,
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          log.error("Failed to insert exercise", insertError, { name: entry.name });
+          exercisesFailed++;
+        } else {
+          created++;
+          exerciseIds.set(entry.name, inserted.id);
+        }
       }
     }
 
-    // 8. Build and return mapping report
-    const matched = matchResults.filter((r) => r.match !== null).length;
-    const unmatched = matchResults.filter((r) => r.match === null).length;
+    // 6. Download GIFs and upsert exercise_media (unless dryRun or skipGifs)
+    if (!dryRun) {
+      for (const entry of catalog) {
+        const exerciseId = exerciseIds.get(entry.name);
+        if (!exerciseId || !entry.exercisedb_id) continue;
 
+        let storageUrl: string | null = null;
+
+        if (!skipGifs && entry.gif_url) {
+          storageUrl = await downloadAndStoreGif(entry.exercisedb_id, entry.gif_url);
+          if (storageUrl) {
+            gifsDownloaded++;
+          } else {
+            gifsFailed++;
+          }
+        }
+
+        // Upsert exercise_media with storage URL (or original URL if skipGifs)
+        const mediaRow = {
+          exercise_id: exerciseId,
+          exercisedb_id: entry.exercisedb_id,
+          gif_url: storageUrl || entry.gif_url,
+          thumbnail_url: storageUrl || entry.gif_url,
+          instructions: [],
+          alternative_names: [],
+          media_status: "active",
+          source: "exercisedb",
+        };
+
+        const { error: mediaError } = await adminClient
+          .from("exercise_media")
+          .upsert(mediaRow, { onConflict: "exercise_id" });
+
+        if (mediaError) {
+          log.error("Failed to upsert exercise media", mediaError, { name: entry.name });
+          mediaFailed++;
+        }
+      }
+    }
+
+    // 7. Return report
     const report = {
-      matched,
-      unmatched,
-      total: matchResults.length,
+      total: catalog.length,
+      created,
+      updated,
+      exercisesFailed,
+      gifsDownloaded,
+      gifsFailed,
+      mediaFailed,
       dryRun,
-      mappings: matchResults.map((r) => ({
-        our_name: r.exercise.name,
-        matched_name: r.match?.name ?? null,
-        confidence: r.confidence,
-        equipment_match: r.equipmentMatch,
-        muscle_match: r.muscleMatch,
-        exercisedb_id: r.match?.id ?? null,
-      })),
+      skipGifs,
     };
 
     return NextResponse.json(report);

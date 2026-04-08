@@ -21,8 +21,11 @@ interface AdminDashboardContentProps {
 }
 
 interface SyncResult {
-  matched: number;
-  unmatched: number;
+  total: number;
+  created: number;
+  updated: number;
+  gifsDownloaded: number;
+  gifsFailed: number;
 }
 
 export function AdminDashboardContent({
@@ -33,6 +36,7 @@ export function AdminDashboardContent({
   const t = useTranslations("admin");
   const [syncing, setSyncing] = useState(false);
   const [dryRun, setDryRun] = useState(true);
+  const [skipGifs, setSkipGifs] = useState(false);
   const [result, setResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +49,7 @@ export function AdminDashboardContent({
       const res = await fetch("/api/admin/sync-exercise-media", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dryRun }),
+        body: JSON.stringify({ dryRun, skipGifs }),
       });
 
       if (!res.ok) {
@@ -54,8 +58,11 @@ export function AdminDashboardContent({
 
       const data = await res.json();
       setResult({
-        matched: data.matched ?? 0,
-        unmatched: data.unmatched ?? 0,
+        total: data.total ?? 0,
+        created: data.created ?? 0,
+        updated: data.updated ?? 0,
+        gifsDownloaded: data.gifsDownloaded ?? 0,
+        gifsFailed: data.gifsFailed ?? 0,
       });
     } catch {
       setError(t("sync.error"));
@@ -77,38 +84,62 @@ export function AdminDashboardContent({
           <CardDescription>{t("sync.description")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            {t("sync.currentStats", {
-              count: mediaCount,
-              total: totalExercises,
-            })}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {lastSyncDate
-              ? t("sync.lastSync", {
-                  date: new Date(lastSyncDate).toLocaleDateString(),
-                })
-              : t("sync.neverSynced")}
-          </p>
+          <div className="text-sm text-muted-foreground space-y-1">
+            <p>{t("sync.exerciseCount", { count: totalExercises })}</p>
+            <p>{t("sync.gifCount", { count: mediaCount })}</p>
+            <p>
+              {lastSyncDate
+                ? t("sync.lastSync", {
+                    date: new Date(lastSyncDate).toLocaleDateString(),
+                  })
+                : t("sync.neverSynced")}
+            </p>
+          </div>
 
-          <div className="flex items-center gap-2">
-            <Switch
-              id="dry-run"
-              checked={dryRun}
-              onCheckedChange={setDryRun}
-            />
-            <Label htmlFor="dry-run">{t("sync.dryRun")}</Label>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="dry-run"
+                checked={dryRun}
+                onCheckedChange={setDryRun}
+              />
+              <Label htmlFor="dry-run">{t("sync.dryRun")}</Label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Switch
+                id="skip-gifs"
+                checked={skipGifs}
+                onCheckedChange={setSkipGifs}
+              />
+              <Label htmlFor="skip-gifs">{t("sync.skipGifs")}</Label>
+            </div>
           </div>
 
           <Button onClick={handleSync} disabled={syncing}>
             {syncing ? t("sync.syncing") : t("sync.syncButton")}
           </Button>
 
+          {syncing && !skipGifs && !dryRun && (
+            <p className="text-sm text-muted-foreground">
+              {t("sync.syncingLong")}
+            </p>
+          )}
+
           {result && (
             <div className="rounded-md bg-muted p-3 text-sm space-y-1">
               <p className="font-medium">{t("sync.success")}</p>
-              <p>{t("sync.resultMatched", { count: result.matched })}</p>
-              <p>{t("sync.resultUnmatched", { count: result.unmatched })}</p>
+              <p>{t("sync.resultTotal", { count: result.total })}</p>
+              <p>{t("sync.resultCreated", { count: result.created })}</p>
+              <p>{t("sync.resultUpdated", { count: result.updated })}</p>
+              {result.gifsDownloaded > 0 && (
+                <p>{t("sync.resultGifsDownloaded", { count: result.gifsDownloaded })}</p>
+              )}
+              {result.gifsFailed > 0 && (
+                <p className="text-destructive">
+                  {t("sync.resultGifsFailed", { count: result.gifsFailed })}
+                </p>
+              )}
             </div>
           )}
 
