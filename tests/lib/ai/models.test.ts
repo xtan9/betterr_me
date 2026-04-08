@@ -13,8 +13,8 @@ describe("models", () => {
     }
   });
 
-  it("DEFAULT_MODEL_ID is claude-haiku-4-5", () => {
-    expect(DEFAULT_MODEL_ID).toBe("claude-haiku-4-5");
+  it("DEFAULT_MODEL_ID is claude-haiku-4-5-20251001", () => {
+    expect(DEFAULT_MODEL_ID).toBe("claude-haiku-4-5-20251001");
   });
 
   it("default model exists in the available models list", () => {

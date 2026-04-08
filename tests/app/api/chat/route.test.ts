@@ -183,7 +183,7 @@ describe('POST /api/chat', () => {
 
     expect(mockStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'mock-model:claude-haiku-4-5',
+        model: 'mock-model:claude-haiku-4-5-20251001',
       })
     );
   });
@@ -320,7 +320,7 @@ describe('POST /api/chat', () => {
 
     expect(mockStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'mock-model:claude-haiku-4-5',
+        model: 'mock-model:claude-haiku-4-5-20251001',
       })
     );
   });
