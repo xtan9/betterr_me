@@ -1,6 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ThinkingIndicator } from "@/components/chat/thinking-indicator";
+
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) => key,
+}));
 
 describe("ThinkingIndicator", () => {
   it("renders three animated dots", () => {
@@ -12,7 +16,7 @@ describe("ThinkingIndicator", () => {
   it("has an accessible label", () => {
     render(<ThinkingIndicator />);
     expect(screen.getByRole("status")).toBeInTheDocument();
-    expect(screen.getByLabelText("Thinking...")).toBeInTheDocument();
+    expect(screen.getByLabelText("thinking")).toBeInTheDocument();
   });
 
   it("renders in an assistant-styled bubble", () => {

@@ -201,7 +201,9 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         mutateConversations();
       };
 
-      saveMessages();
+      saveMessages().catch((err) =>
+        log.error("[chat] Unexpected error in saveMessages", err)
+      );
     }
   }, [status, messages, activeConversationId, mutateConversations, selectedModel]);
 
@@ -227,6 +229,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
 
   const handleModelChange = useCallback(
     async (modelId: string) => {
+      const previousModel = selectedModel;
       setSelectedModel(modelId);
       if (activeConversationId) {
         try {
@@ -237,10 +240,11 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           });
         } catch (err) {
           log.error("[chat] Failed to update model", err);
+          setSelectedModel(previousModel);
         }
       }
     },
-    [activeConversationId]
+    [activeConversationId, selectedModel]
   );
 
   // Find the last user message text for resend on error
@@ -303,7 +307,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       window.history.replaceState(null, "", `/chat?id=${id}`);
       setSidebarOpen(false);
       const conv = conversations.find((c) => c.id === id);
-      if (conv?.model) setSelectedModel(conv.model);
+      setSelectedModel(conv?.model || DEFAULT_MODEL_ID);
     },
     [conversations]
   );

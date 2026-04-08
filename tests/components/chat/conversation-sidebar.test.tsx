@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { Conversation } from "@/lib/db/types";
 
 // --- Mocks ---
@@ -184,6 +184,67 @@ describe("ConversationItem", () => {
     );
     // The rename option should be in the dropdown
     expect(screen.getByText("sidebar.rename")).toBeInTheDocument();
+  });
+
+  it("clicking rename shows an input pre-filled with current title", async () => {
+    render(
+      <ConversationItem
+        conversation={defaultConversation}
+        isActive={false}
+        onSelect={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByText("sidebar.rename"));
+    await waitFor(() => {
+      const input = screen.getByRole("textbox");
+      expect(input).toBeInTheDocument();
+      expect((input as HTMLInputElement).value).toBe("My Chat");
+    });
+  });
+
+  it("pressing Enter in rename input calls onRename with conversation id and new title", async () => {
+    const onRename = vi.fn();
+    render(
+      <ConversationItem
+        conversation={defaultConversation}
+        isActive={false}
+        onSelect={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={onRename}
+      />
+    );
+    fireEvent.click(screen.getByText("sidebar.rename"));
+    await waitFor(() => expect(screen.getByRole("textbox")).toBeInTheDocument());
+
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "Renamed Chat" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(onRename).toHaveBeenCalledWith("conv-1", "Renamed Chat");
+  });
+
+  it("pressing Escape in rename input cancels without calling onRename", async () => {
+    const onRename = vi.fn();
+    render(
+      <ConversationItem
+        conversation={defaultConversation}
+        isActive={false}
+        onSelect={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={onRename}
+      />
+    );
+    fireEvent.click(screen.getByText("sidebar.rename"));
+    await waitFor(() => expect(screen.getByRole("textbox")).toBeInTheDocument());
+
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "Changed Title" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(onRename).not.toHaveBeenCalled();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 });
 

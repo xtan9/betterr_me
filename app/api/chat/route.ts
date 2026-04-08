@@ -44,6 +44,14 @@ export async function POST(req: Request) {
     const messages = body.messages;
     const requestedModel = body.model;
     const validModelIds = AVAILABLE_MODELS.map((m) => m.id);
+
+    if (typeof requestedModel === "string" && requestedModel.length > 0 && !validModelIds.includes(requestedModel)) {
+      return NextResponse.json(
+        { error: `Invalid model: ${requestedModel}` },
+        { status: 400 },
+      );
+    }
+
     const modelId =
       typeof requestedModel === "string" && validModelIds.includes(requestedModel)
         ? requestedModel

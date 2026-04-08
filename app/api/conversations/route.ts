@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ConversationsDB } from "@/lib/db";
+import { AVAILABLE_MODELS } from "@/lib/ai/models";
 import { log } from "@/lib/logger";
 
 /**
@@ -22,7 +23,7 @@ export async function GET() {
     const conversations = await conversationsDB.getUserConversations(user.id);
     return NextResponse.json({ conversations });
   } catch (error) {
-    log.error("GET /api/conversations error", error);
+    log.error("[chat] Failed to list conversations", error);
     return NextResponse.json(
       { error: "Failed to fetch conversations" },
       { status: 500 },
@@ -49,7 +50,10 @@ export async function POST(request: Request) {
     let model: string | undefined;
     try {
       const body = await request.json();
-      model = typeof body?.model === "string" ? body.model : undefined;
+      if (typeof body?.model === "string") {
+        const validModelIds = AVAILABLE_MODELS.map((m) => m.id);
+        model = validModelIds.includes(body.model) ? body.model : undefined;
+      }
     } catch {
       // Body is optional — ignore parse errors
     }
@@ -61,7 +65,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ conversation }, { status: 201 });
   } catch (error) {
-    log.error("POST /api/conversations error", error);
+    log.error("[chat] Failed to create conversation", error);
     return NextResponse.json(
       { error: "Failed to create conversation" },
       { status: 500 },

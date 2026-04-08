@@ -297,12 +297,24 @@ describe('POST /api/chat', () => {
     );
   });
 
-  it('should fall back to default model when invalid model is sent', async () => {
+  it('should return 400 when an invalid model string is sent', async () => {
+    const req = makeRequest({
+      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }],
+      model: 'gpt-4-invalid',
+    });
+    const response = await POST(req);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain('Invalid model');
+    expect(mockStreamText).not.toHaveBeenCalled();
+  });
+
+  it('should fall back to default model when model is omitted', async () => {
     delete process.env.LLM_MODEL;
 
     const req = makeRequest({
       messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }],
-      model: 'gpt-4-invalid',
     });
     await POST(req);
 
