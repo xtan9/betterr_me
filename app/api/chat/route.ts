@@ -42,8 +42,14 @@ export async function POST(req: Request) {
 
     const messages = body.messages;
     const requestedModel = body.model;
-    const date = typeof body.date === "string" ? body.date : new Date().toISOString().split("T")[0];
-    const timezone = typeof body.timezone === "string" ? body.timezone : "UTC";
+    // Validate date format; fall back to UTC date if missing/invalid.
+    // Client should always send the local date, but we need a safe server-side fallback.
+    const rawDate = typeof body.date === "string" ? body.date : "";
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+      ? rawDate
+      : (() => { const n = new Date(); return `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, "0")}-${String(n.getUTCDate()).padStart(2, "0")}`; })();
+    const rawTimezone = typeof body.timezone === "string" ? body.timezone : "";
+    const timezone = /^[A-Za-z_/]+$/.test(rawTimezone) ? rawTimezone : "UTC";
     const validModelIds = AVAILABLE_MODELS.map((m) => m.id);
 
     if (typeof requestedModel === "string" && requestedModel.length > 0 && !validModelIds.includes(requestedModel)) {

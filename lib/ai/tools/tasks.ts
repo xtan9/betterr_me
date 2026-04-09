@@ -95,6 +95,7 @@ export function taskTools(): ToolDefinition[] {
           title: params.title,
           due_date: params.dueDate,
           priority: params.priority,
+          project_id: params.projectId,
         });
       },
     },
