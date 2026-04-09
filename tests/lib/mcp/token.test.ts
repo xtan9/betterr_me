@@ -39,7 +39,7 @@ describe('signMcpToken', () => {
     parts.forEach((p) => expect(p.length).toBeGreaterThan(0));
   });
 
-  it('payload contains sub, aud:"mcp", iat — no exp', async () => {
+  it('payload contains sub, aud:"mcp", iat, and exp (1 hour)', async () => {
     const token = await signMcpToken('user-abc');
     const payloadB64 = token.split('.')[1];
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
@@ -47,7 +47,8 @@ describe('signMcpToken', () => {
     expect(payload.sub).toBe('user-abc');
     expect(payload.aud).toBe('mcp');
     expect(typeof payload.iat).toBe('number');
-    expect(payload.exp).toBeUndefined();
+    expect(typeof payload.exp).toBe('number');
+    expect(payload.exp - payload.iat).toBe(3600);
   });
 
   it('two calls with same userId produce different tokens (different iat)', async () => {
@@ -82,28 +83,14 @@ describe('verifyMcpToken', () => {
     expect(result).toEqual({ userId: 'user-123' });
   });
 
-  it('token without exp is accepted (non-expiring)', async () => {
-    const token = await signMcpToken('user-123');
-
-    // Move time forward 1 year — should still work since no exp
-    const originalNow = Date.now;
-    Date.now = () => originalNow() + 365 * 24 * 60 * 60 * 1000;
-
-    const result = await verifyMcpToken(token);
-    Date.now = originalNow;
-
-    expect(result).toEqual({ userId: 'user-123' });
-  });
-
-  it('legacy token with expired exp returns null (backwards-compat)', async () => {
-    // Manually craft a token WITH exp in the past
+  it('legacy token without exp is accepted (backwards-compat)', async () => {
     const crypto = await import('node:crypto');
     const secret = process.env.API_KEY_HMAC_SECRET!;
 
     const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
     const now = Math.floor(Date.now() / 1000);
     const payload = Buffer.from(
-      JSON.stringify({ sub: 'user-123', aud: 'mcp', iat: now - 86400, exp: now - 1 }),
+      JSON.stringify({ sub: 'user-123', aud: 'mcp', iat: now }),
     ).toString('base64url');
     const data = `${header}.${payload}`;
     const signature = crypto
@@ -114,6 +101,18 @@ describe('verifyMcpToken', () => {
     const token = `${data}.${signature}`;
 
     const result = await verifyMcpToken(token);
+    expect(result).toEqual({ userId: 'user-123' });
+  });
+
+  it('token with expired exp returns null', async () => {
+    const token = await signMcpToken('user-123');
+
+    const originalNow = Date.now;
+    Date.now = () => originalNow() + 2 * 60 * 60 * 1000;
+
+    const result = await verifyMcpToken(token);
+    Date.now = originalNow;
+
     expect(result).toBeNull();
   });
 

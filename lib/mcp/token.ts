@@ -47,7 +47,7 @@ function getServiceClient() {
  *
  * - `sub`  = userId
  * - `aud`  = "mcp"
- * - no `exp` — tokens do not expire
+ * - `exp`  = iat + 3600 (1 hour)
  *
  * Signed with `API_KEY_HMAC_SECRET` using Node.js native crypto.
  */
@@ -64,6 +64,7 @@ export async function signMcpToken(userId: string): Promise<string> {
       sub: userId,
       aud: "mcp",
       iat: now,
+      exp: now + 3600,
     }),
   );
 

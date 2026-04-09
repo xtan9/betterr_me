@@ -1,0 +1,61 @@
+<h2>Thinking Indicator — Which style?</h2>
+<p class="subtitle">This appears after the user sends a message, before the first token arrives from Claude</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:24px;background:#f8f9fa;display:flex;align-items:center;gap:12px;">
+      <!-- Animated dots bubble -->
+      <div style="background:#e5e7eb;border-radius:18px;padding:12px 20px;display:inline-flex;align-items:center;gap:6px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#9ca3af;animation:bounce 1.4s infinite ease-in-out both;animation-delay:0s;" class="dot1"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:#9ca3af;animation:bounce 1.4s infinite ease-in-out both;animation-delay:0.2s;" class="dot2"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:#9ca3af;animation:bounce 1.4s infinite ease-in-out both;animation-delay:0.4s;" class="dot3"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A: Bouncing Dots Bubble</h3>
+      <p>Classic chat typing indicator — three dots in a message bubble that bounce up and down. Familiar from iMessage, Slack, etc.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:24px;background:#f8f9fa;display:flex;align-items:center;gap:12px;">
+      <!-- Skeleton shimmer -->
+      <div style="background:#e5e7eb;border-radius:18px;padding:16px 20px;width:60%;display:flex;flex-direction:column;gap:8px;">
+        <div style="height:10px;width:80%;border-radius:4px;background:linear-gradient(90deg,#e5e7eb 25%,#d1d5db 50%,#e5e7eb 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;"></div>
+        <div style="height:10px;width:50%;border-radius:4px;background:linear-gradient(90deg,#e5e7eb 25%,#d1d5db 50%,#e5e7eb 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;animation-delay:0.2s;"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B: Skeleton Shimmer</h3>
+      <p>A ghost message bubble with shimmering placeholder lines. Suggests content is loading, similar to content skeleton screens.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:24px;background:#f8f9fa;display:flex;align-items:center;gap:12px;">
+      <!-- Simple text with spinner -->
+      <div style="display:flex;align-items:center;gap:8px;color:#6b7280;font-size:14px;">
+        <div style="width:16px;height:16px;border:2px solid #e5e7eb;border-top-color:#6b7280;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+        <span style="font-style:italic;">Thinking...</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C: Spinner + "Thinking..."</h3>
+      <p>A small spinner with text label, placed where the assistant message will appear. Minimal and informative.</p>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes bounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-8px); }
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+</style>
