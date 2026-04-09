@@ -9,7 +9,6 @@ import {
 } from "react";
 
 import { useChat } from "@ai-sdk/react";
-import { TextStreamChatTransport } from "ai";
 import { useTranslations } from "next-intl";
 import useSWR from "swr";
 import { MessageList } from "@/components/chat/message-list";
@@ -18,6 +17,7 @@ import { ChatEmptyState } from "@/components/chat/chat-empty-state";
 import { ConversationSidebar } from "@/components/chat/conversation-sidebar";
 import { dbMessageToUIMessage } from "@/lib/chat/message-utils";
 import { DEFAULT_MODEL_ID, AVAILABLE_MODELS } from "@/lib/ai/models";
+import { getLocalDateString } from "@/lib/utils";
 import { log } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, PanelLeftOpen } from "lucide-react";
@@ -62,15 +62,13 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     [convData]
   );
 
-  // Transport recreated when model changes so the new model is sent with each request
-  const transport = useMemo(
-    () => new TextStreamChatTransport({ api: "/api/chat", body: { model: selectedModel } }),
-    [selectedModel]
-  );
+  const localDate = getLocalDateString();
+  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const { messages, sendMessage, setMessages, stop, status, error } = useChat({
     id: chatId,
-    transport,
+    api: "/api/chat",
+    body: { model: selectedModel, date: localDate, timezone: userTimezone },
   });
 
   const isStreaming = status === "submitted" || status === "streaming";
