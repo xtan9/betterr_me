@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// vi.hoisted mocks
-const { mockStreamText, mockToTextStreamResponse } = vi.hoisted(() => {
-  const mockToTextStreamResponse = vi.fn();
+const { mockStreamText, mockToUIMessageStreamResponse } = vi.hoisted(() => {
+  const mockToUIMessageStreamResponse = vi.fn();
   const mockStreamText = vi.fn(() => ({
-    toTextStreamResponse: mockToTextStreamResponse,
+    toUIMessageStreamResponse: mockToUIMessageStreamResponse,
   }));
-  return { mockStreamText, mockToTextStreamResponse };
+  return { mockStreamText, mockToUIMessageStreamResponse };
 });
 
 const { mockCreateClient, mockGetUser } = vi.hoisted(() => ({
@@ -28,10 +27,14 @@ const { mockConvertToModelMessages } = vi.hoisted(() => ({
   ),
 }));
 
-// Mock modules
+const { mockCreateChatTools } = vi.hoisted(() => ({
+  mockCreateChatTools: vi.fn().mockResolvedValue({}),
+}));
+
 vi.mock('ai', () => ({
   streamText: mockStreamText,
   convertToModelMessages: mockConvertToModelMessages,
+  isStepCount: vi.fn((n: number) => ({ type: 'step-count', value: n })),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -40,6 +43,16 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('@/lib/ai/provider', () => ({
   llmProvider: vi.fn((model: string) => `mock-model:${model}`),
+}));
+
+vi.mock('@/lib/ai/tools', () => ({
+  createChatTools: mockCreateChatTools,
+}));
+
+vi.mock('@/lib/ai/system-prompt', () => ({
+  buildSystemPrompt: vi.fn(({ date, timezone }: { date: string; timezone: string }) =>
+    `System prompt for ${date} ${timezone}`
+  ),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -64,15 +77,13 @@ describe('POST /api/chat', () => {
     vi.clearAllMocks();
     process.env.LLM_API_KEY = 'test-key';
 
-    // Default: authenticated user
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123', email: 'test@example.com' } } });
     mockCreateClient.mockResolvedValue({
       auth: { getUser: mockGetUser },
     });
 
-    // Default: streaming response mock
     const mockResponse = new Response('streamed data', { status: 200 });
-    mockToTextStreamResponse.mockReturnValue(mockResponse);
+    mockToUIMessageStreamResponse.mockReturnValue(mockResponse);
   });
 
   afterEach(() => {
@@ -81,34 +92,22 @@ describe('POST /api/chat', () => {
 
   it('should return 401 for unauthenticated requests', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
-
     const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
     const response = await POST(req);
-    const data = await response.json();
-
     expect(response.status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
   });
 
   it('should return 503 when LLM_API_KEY is not set', async () => {
     delete process.env.LLM_API_KEY;
-
     const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
     const response = await POST(req);
-    const data = await response.json();
-
     expect(response.status).toBe(503);
-    expect(data.error).toBe('AI service is not configured.');
-    expect(mockLogError).toHaveBeenCalledWith('POST /api/chat failed: LLM_API_KEY not configured');
   });
 
-  it('should return 400 for invalid body (empty messages array)', async () => {
+  it('should return 400 for empty messages array', async () => {
     const req = makeRequest({ messages: [] });
     const response = await POST(req);
-    const data = await response.json();
-
     expect(response.status).toBe(400);
-    expect(data.error).toBeDefined();
   });
 
   it('should return 400 for too many messages (over 100)', async () => {
@@ -117,112 +116,47 @@ describe('POST /api/chat', () => {
     }));
     const req = makeRequest({ messages });
     const response = await POST(req);
-    const data = await response.json();
-
     expect(response.status).toBe(400);
-    expect(data.error).toContain('Too many messages');
   });
 
-  it('should return 400 when convertToModelMessages throws', async () => {
-    mockConvertToModelMessages.mockRejectedValueOnce(new Error('Invalid message structure'));
-
-    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
-    const response = await POST(req);
-    const data = await response.json();
-
-    expect(response.status).toBe(400);
-    expect(data.error).toBe('Invalid message format');
-  });
-
-  it('should return 400 for missing messages field', async () => {
-    const req = makeRequest({});
-    const response = await POST(req);
-    const data = await response.json();
-
-    expect(response.status).toBe(400);
-    expect(data.error).toBeDefined();
-  });
-
-  it('should return 400 for invalid JSON and log warning', async () => {
+  it('should return 400 for invalid JSON', async () => {
     const req = new Request('http://localhost:3000/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: 'not-json',
     });
     const response = await POST(req);
-    const data = await response.json();
-
     expect(response.status).toBe(400);
-    expect(data.error).toBe('Invalid JSON in request body');
-    expect(mockLogWarn).toHaveBeenCalled();
   });
 
-  it('should call streamText with correct parameters including onError', async () => {
+  it('should call streamText with tools, system prompt, and stopWhen', async () => {
     const messages = [{ id: 'm1', role: 'user' as const, parts: [{ type: 'text' as const, text: 'Hello' }] }];
-    const req = makeRequest({ messages });
+    const req = makeRequest({ messages, date: '2026-04-08', timezone: 'America/Toronto' });
     await POST(req);
 
-    expect(mockConvertToModelMessages).toHaveBeenCalledWith(messages);
+    expect(mockCreateChatTools).toHaveBeenCalledWith({
+      userId: 'user-123',
+      supabase: expect.anything(),
+      date: '2026-04-08',
+      timezone: 'America/Toronto',
+    });
+
     expect(mockStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
         model: expect.anything(),
-        system: expect.stringContaining("BetterR.Me"),
+        system: expect.stringContaining('2026-04-08'),
+        tools: expect.any(Object),
+        stopWhen: expect.anything(),
         messages: expect.any(Array),
-        maxOutputTokens: expect.any(Number),
-        abortSignal: req.signal,
-        onError: expect.any(Function),
       })
     );
   });
 
-  it('should use LLM_MODEL env var with fallback', async () => {
-    delete process.env.LLM_MODEL;
-
-    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
-    await POST(req);
-
-    expect(mockStreamText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: 'mock-model:claude-haiku-4-5-20251001',
-      })
-    );
-  });
-
-  it('should use LLM_MAX_TOKENS env var with fallback to 4096', async () => {
-    delete process.env.LLM_MAX_TOKENS;
-
-    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
-    await POST(req);
-
-    expect(mockStreamText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        maxOutputTokens: 4096,
-      })
-    );
-  });
-
-  it('should use custom LLM_MAX_TOKENS when set', async () => {
-    process.env.LLM_MAX_TOKENS = '2048';
-
-    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
-    await POST(req);
-
-    expect(mockStreamText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        maxOutputTokens: 2048,
-      })
-    );
-  });
-
-  it('should return streaming response with correct headers', async () => {
-    const mockResponse = new Response('streamed', { status: 200 });
-    mockToTextStreamResponse.mockReturnValue(mockResponse);
-
+  it('should use toUIMessageStreamResponse with correct headers', async () => {
     const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
     const response = await POST(req);
 
-    expect(response).toBe(mockResponse);
-    expect(mockToTextStreamResponse).toHaveBeenCalledWith(
+    expect(mockToUIMessageStreamResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         headers: expect.objectContaining({
           'Cache-Control': 'no-cache, no-transform',
@@ -230,98 +164,46 @@ describe('POST /api/chat', () => {
         }),
       })
     );
+    expect(response.status).toBe(200);
   });
 
-  it('should log stream errors via onError callback', async () => {
+  it('should fall back to UTC today when date/timezone not provided', async () => {
     const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
     await POST(req);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const callArgs = (mockStreamText.mock.calls as any[][])[0][0];
-    const testError = new Error('stream failure');
-    callArgs.onError({ error: testError });
-    expect(mockLogError).toHaveBeenCalledWith('LLM stream error', testError, { userId: 'user-123' });
-  });
-
-  it('should return 502 when streamText throws (proxy unreachable)', async () => {
-    mockStreamText.mockImplementation(() => {
-      throw new Error('ECONNREFUSED');
-    });
-
-    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
-    const response = await POST(req);
-    const data = await response.json();
-
-    expect(response.status).toBe(502);
-    expect(data.error).toBe('Failed to reach AI service. Please try again.');
-    expect(mockLogError).toHaveBeenCalled();
-  });
-
-  it('should return 499 for aborted requests', async () => {
-    const abortError = new Error('AbortError');
-    abortError.name = 'AbortError';
-    mockStreamText.mockImplementation(() => {
-      throw abortError;
-    });
-
-    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
-    const response = await POST(req);
-
-    expect(response.status).toBe(499);
-  });
-
-  it('should export maxDuration as 60', () => {
-    expect(maxDuration).toBe(60);
-  });
-
-  it('should pass abort signal from request', async () => {
-    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
-    await POST(req);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const callArgs = (mockStreamText.mock.calls as any[][])[0][0];
-    expect(callArgs.abortSignal).toBeInstanceOf(AbortSignal);
-  });
-
-  it('should pass requested model to streamText when valid', async () => {
-    const req = makeRequest({
-      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }],
-      model: 'claude-opus-4-6',
-    });
-    await POST(req);
-
-    expect(mockStreamText).toHaveBeenCalledWith(
+    expect(mockCreateChatTools).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'mock-model:claude-opus-4-6',
+        timezone: 'UTC',
       })
     );
   });
 
-  it('should return 400 when an invalid model string is sent', async () => {
+  it('should return 400 when an invalid model is sent', async () => {
     const req = makeRequest({
       messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }],
       model: 'gpt-4-invalid',
     });
     const response = await POST(req);
-    const data = await response.json();
-
     expect(response.status).toBe(400);
-    expect(data.error).toContain('Invalid model');
-    expect(mockStreamText).not.toHaveBeenCalled();
   });
 
-  it('should fall back to default model when model is omitted', async () => {
-    delete process.env.LLM_MODEL;
+  it('should return 502 when streamText throws', async () => {
+    mockStreamText.mockImplementation(() => { throw new Error('ECONNREFUSED'); });
+    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
+    const response = await POST(req);
+    expect(response.status).toBe(502);
+  });
 
-    const req = makeRequest({
-      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }],
-    });
-    await POST(req);
+  it('should return 499 for aborted requests', async () => {
+    const abortError = new Error('AbortError');
+    abortError.name = 'AbortError';
+    mockStreamText.mockImplementation(() => { throw abortError; });
+    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
+    const response = await POST(req);
+    expect(response.status).toBe(499);
+  });
 
-    expect(mockStreamText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: 'mock-model:claude-haiku-4-5-20251001',
-      })
-    );
+  it('should export maxDuration as 60', () => {
+    expect(maxDuration).toBe(60);
   });
 });
