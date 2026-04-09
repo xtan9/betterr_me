@@ -37,8 +37,11 @@ const mockRtSingle = vi.fn();
 const mockRtEq = vi.fn().mockReturnValue({ single: mockRtSingle });
 const mockRtSelect = vi.fn().mockReturnValue({ eq: mockRtEq });
 
-// Mock for refresh token update: .update().eq()
-const mockRtUpdateEq = vi.fn().mockResolvedValue({ error: null });
+// Mock for refresh token update: supports both single and double .eq() chaining
+// Reuse detection: .update().eq('user_id', ...) → { error: null }  (thenable)
+// Atomic rotation: .update().eq('token_hash', ...).eq('revoked', false) → { error: null }
+const mockRtUpdateEq2 = vi.fn().mockResolvedValue({ error: null });
+const mockRtUpdateEq = vi.fn();
 const mockRtUpdate = vi.fn().mockReturnValue({ eq: mockRtUpdateEq });
 
 const mockServiceFrom = vi.fn().mockImplementation((table: string) => {
@@ -117,7 +120,15 @@ function setupChain() {
   mockRtSelect.mockReturnValue({ eq: mockRtEq });
   mockRtEq.mockReturnValue({ single: mockRtSingle });
   mockRtUpdate.mockReturnValue({ eq: mockRtUpdateEq });
-  mockRtUpdateEq.mockResolvedValue({ error: null });
+  // mockRtUpdateEq returns a thenable+chainable object:
+  // - .then() resolves { error: null } so `await ...eq('user_id', x)` works (reuse path)
+  // - .eq property chains to mockRtUpdateEq2 for atomic rotation (.eq().eq())
+  mockRtUpdateEq.mockImplementation(() => {
+    const obj: { eq: typeof mockRtUpdateEq2; then?: (resolve: (v: unknown) => unknown) => unknown } = { eq: mockRtUpdateEq2 };
+    obj.then = (resolve) => resolve({ error: null });
+    return obj;
+  });
+  mockRtUpdateEq2.mockResolvedValue({ error: null });
 }
 
 // ---------------------------------------------------------------------------
@@ -406,12 +417,7 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
     expect(typeof data.refresh_token).toBe('string');
     expect(data.refresh_token).toHaveLength(96);
 
-    // Old token should be marked replaced + revoked
-    expect(mockRtUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ revoked: true, replaced_by_hash: expect.any(String) }),
-    );
-
-    // New token should be inserted
+    // New token should be inserted FIRST (before old is marked replaced)
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         user_id: 'user-123',
@@ -419,6 +425,13 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
         expires_at: expect.any(String),
       }),
     );
+
+    // Old token should be atomically marked replaced + revoked (two .eq() calls)
+    expect(mockRtUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ revoked: true, replaced_by_hash: expect.any(String) }),
+    );
+    expect(mockRtUpdateEq).toHaveBeenCalledWith('token_hash', expect.any(String));
+    expect(mockRtUpdateEq2).toHaveBeenCalledWith('revoked', false);
 
     // Cleanup should run
     expect(mockDelete).toHaveBeenCalled();

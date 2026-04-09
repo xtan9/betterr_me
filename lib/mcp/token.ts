@@ -139,10 +139,11 @@ export async function verifyMcpToken(
   // 3. Audience check
   if (payload.aud !== "mcp") return null;
 
-  // 4. Expiry check (skipped — tokens do not expire)
+  // 4. Expiry check (optional — legacy tokens without exp are accepted)
+  const CLOCK_SKEW_SECONDS = 30;
   if (payload.exp) {
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp <= now) return null;
+    if (payload.exp + CLOCK_SKEW_SECONDS <= now) return null;
   }
 
   // 5. Subject (userId) must exist
