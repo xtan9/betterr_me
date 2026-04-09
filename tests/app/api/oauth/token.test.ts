@@ -25,8 +25,19 @@ const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect });
 const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 });
 const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 });
 
-const mockServiceFrom = vi.fn().mockReturnValue({
-  update: mockUpdate,
+// Mock for oauth_refresh_tokens insert
+const mockInsert = vi.fn().mockResolvedValue({ error: null });
+
+// Mock for oauth_refresh_tokens delete chain: .delete().or()
+const mockOr = vi.fn().mockResolvedValue({ error: null });
+const mockDelete = vi.fn().mockReturnValue({ or: mockOr });
+
+const mockServiceFrom = vi.fn().mockImplementation((table: string) => {
+  if (table === 'oauth_refresh_tokens') {
+    return { insert: mockInsert, delete: mockDelete };
+  }
+  // oauth_codes
+  return { update: mockUpdate };
 });
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -80,11 +91,13 @@ function makeStoredCode(
 }
 
 function setupChain() {
-  mockServiceFrom.mockReturnValue({ update: mockUpdate });
   mockUpdate.mockReturnValue({ eq: mockEq1 });
   mockEq1.mockReturnValue({ eq: mockEq2 });
   mockEq2.mockReturnValue({ select: mockSelect });
   mockSelect.mockReturnValue({ single: mockSingle });
+  mockInsert.mockResolvedValue({ error: null });
+  mockDelete.mockReturnValue({ or: mockOr });
+  mockOr.mockResolvedValue({ error: null });
 }
 
 // ---------------------------------------------------------------------------
@@ -232,9 +245,25 @@ describe('POST /api/oauth/token', () => {
     expect(response.status).toBe(200);
     expect(data.access_token).toBe('mock-access-token');
     expect(data.token_type).toBe('bearer');
-    expect(data.expires_in).toBe(86400);
+    expect(data.expires_in).toBe(3600);
+    expect(typeof data.refresh_token).toBe('string');
+    expect(data.refresh_token).toHaveLength(96);
 
     // Verify atomic claim was called
     expect(mockUpdate).toHaveBeenCalledWith({ used: true });
+
+    // Verify refresh token was stored
+    expect(mockServiceFrom).toHaveBeenCalledWith('oauth_refresh_tokens');
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: 'user-123',
+        token_hash: expect.any(String),
+        expires_at: expect.any(String),
+      }),
+    );
+
+    // Verify opportunistic cleanup was triggered
+    expect(mockDelete).toHaveBeenCalled();
+    expect(mockOr).toHaveBeenCalled();
   });
 });

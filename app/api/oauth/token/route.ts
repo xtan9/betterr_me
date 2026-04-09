@@ -4,6 +4,11 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
 import { log } from "@/lib/logger";
+import {
+  generateRefreshToken,
+  hashToken,
+  REFRESH_TOKEN_EXPIRY_DAYS,
+} from "@/lib/mcp/refresh-token";
 import { signMcpToken } from "@/lib/mcp/token";
 
 // ---------------------------------------------------------------------------
@@ -126,10 +131,32 @@ export async function POST(request: NextRequest) {
 
     const accessToken = await signMcpToken(storedCode.user_id);
 
+    // --- Issue refresh token ---
+    const rawRefreshToken = generateRefreshToken();
+    const refreshTokenHash = hashToken(rawRefreshToken);
+    const refreshExpiresAt = new Date(
+      Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    await serviceClient.from("oauth_refresh_tokens").insert({
+      token_hash: refreshTokenHash,
+      user_id: storedCode.user_id,
+      expires_at: refreshExpiresAt,
+    });
+
+    // --- Opportunistic cleanup of old tokens ---
+    await serviceClient
+      .from("oauth_refresh_tokens")
+      .delete()
+      .or(
+        `expires_at.lt.${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()},and(revoked.eq.true,created_at.lt.${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()})`,
+      );
+
     return NextResponse.json({
       access_token: accessToken,
       token_type: "bearer",
-      expires_in: 86400,
+      expires_in: 3600,
+      refresh_token: rawRefreshToken,
     });
   } catch (error) {
     log.error("POST /api/oauth/token error", error);
