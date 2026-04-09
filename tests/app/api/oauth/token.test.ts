@@ -32,9 +32,23 @@ const mockInsert = vi.fn().mockResolvedValue({ error: null });
 const mockOr = vi.fn().mockResolvedValue({ error: null });
 const mockDelete = vi.fn().mockReturnValue({ or: mockOr });
 
+// Mock for refresh token lookup: .select('*').eq().single()
+const mockRtSingle = vi.fn();
+const mockRtEq = vi.fn().mockReturnValue({ single: mockRtSingle });
+const mockRtSelect = vi.fn().mockReturnValue({ eq: mockRtEq });
+
+// Mock for refresh token update: .update().eq()
+const mockRtUpdateEq = vi.fn().mockResolvedValue({ error: null });
+const mockRtUpdate = vi.fn().mockReturnValue({ eq: mockRtUpdateEq });
+
 const mockServiceFrom = vi.fn().mockImplementation((table: string) => {
   if (table === 'oauth_refresh_tokens') {
-    return { insert: mockInsert, delete: mockDelete };
+    return {
+      insert: mockInsert,
+      delete: mockDelete,
+      select: mockRtSelect,
+      update: mockRtUpdate,
+    };
   }
   // oauth_codes
   return { update: mockUpdate };
@@ -98,6 +112,12 @@ function setupChain() {
   mockInsert.mockResolvedValue({ error: null });
   mockDelete.mockReturnValue({ or: mockOr });
   mockOr.mockResolvedValue({ error: null });
+
+  // Refresh token table chains
+  mockRtSelect.mockReturnValue({ eq: mockRtEq });
+  mockRtEq.mockReturnValue({ single: mockRtSingle });
+  mockRtUpdate.mockReturnValue({ eq: mockRtUpdateEq });
+  mockRtUpdateEq.mockResolvedValue({ error: null });
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +283,144 @@ describe('POST /api/oauth/token', () => {
     );
 
     // Verify opportunistic cleanup was triggered
+    expect(mockDelete).toHaveBeenCalled();
+    expect(mockOr).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// grant_type=refresh_token tests
+// ---------------------------------------------------------------------------
+
+function makeStoredRefreshToken(overrides: Record<string, unknown> = {}) {
+  return {
+    token_hash: 'some-hash',
+    user_id: 'user-123',
+    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    revoked: false,
+    replaced_by_hash: null,
+    created_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+describe('POST /api/oauth/token — grant_type=refresh_token', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupChain();
+  });
+
+  it('returns invalid_request when refresh_token param is missing', async () => {
+    const request = makeRequest({ grant_type: 'refresh_token' });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toBe('invalid_request');
+    expect(data.error_description).toContain('refresh_token');
+  });
+
+  it('returns invalid_grant for unknown refresh token', async () => {
+    mockRtSingle.mockResolvedValue({ data: null, error: { code: 'PGRST116' } });
+
+    const request = makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'unknown-token',
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(data.error).toBe('invalid_grant');
+  });
+
+  it('returns invalid_grant for expired refresh token', async () => {
+    const stored = makeStoredRefreshToken({
+      expires_at: new Date(Date.now() - 60 * 1000).toISOString(),
+    });
+    mockRtSingle.mockResolvedValue({ data: stored, error: null });
+
+    const request = makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'some-raw-token',
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(data.error).toBe('invalid_grant');
+    expect(data.error_description).toContain('expired');
+  });
+
+  it('returns invalid_grant for revoked refresh token', async () => {
+    const stored = makeStoredRefreshToken({ revoked: true });
+    mockRtSingle.mockResolvedValue({ data: stored, error: null });
+
+    const request = makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'some-raw-token',
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(data.error).toBe('invalid_grant');
+    expect(data.error_description).toContain('revoked');
+  });
+
+  it('returns invalid_grant and revokes all user tokens on reuse detection', async () => {
+    const stored = makeStoredRefreshToken({ replaced_by_hash: 'already-rotated-hash' });
+    mockRtSingle.mockResolvedValue({ data: stored, error: null });
+
+    const request = makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'reused-raw-token',
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(data.error).toBe('invalid_grant');
+    expect(data.error_description).toContain('reuse');
+
+    // Should have called update to revoke ALL tokens for the user
+    expect(mockRtUpdate).toHaveBeenCalledWith({ revoked: true });
+    expect(mockRtUpdateEq).toHaveBeenCalledWith('user_id', 'user-123');
+  });
+
+  it('returns new access_token and rotated refresh_token for a valid token', async () => {
+    const stored = makeStoredRefreshToken();
+    mockRtSingle.mockResolvedValue({ data: stored, error: null });
+
+    const request = makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'valid-raw-token',
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.access_token).toBe('mock-access-token');
+    expect(data.token_type).toBe('bearer');
+    expect(data.expires_in).toBe(3600);
+    expect(typeof data.refresh_token).toBe('string');
+    expect(data.refresh_token).toHaveLength(96);
+
+    // Old token should be marked replaced + revoked
+    expect(mockRtUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ revoked: true, replaced_by_hash: expect.any(String) }),
+    );
+
+    // New token should be inserted
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: 'user-123',
+        token_hash: expect.any(String),
+        expires_at: expect.any(String),
+      }),
+    );
+
+    // Cleanup should run
     expect(mockDelete).toHaveBeenCalled();
     expect(mockOr).toHaveBeenCalled();
   });

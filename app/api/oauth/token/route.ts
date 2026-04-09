@@ -47,6 +47,101 @@ async function parseBody(
 }
 
 // ---------------------------------------------------------------------------
+// Refresh token exchange
+// ---------------------------------------------------------------------------
+
+async function handleRefreshToken(
+  body: Record<string, string>,
+  serviceClient: ReturnType<typeof createClient>,
+) {
+  const { refresh_token } = body;
+
+  if (!refresh_token) {
+    return oauthError("invalid_request", "refresh_token is required");
+  }
+
+  const tokenHash = hashToken(refresh_token);
+
+  // Look up the refresh token
+  const { data: storedToken, error: lookupError } = await serviceClient
+    .from("oauth_refresh_tokens")
+    .select("*")
+    .eq("token_hash", tokenHash)
+    .single();
+
+  if (lookupError || !storedToken) {
+    return oauthError("invalid_grant", "Invalid refresh token", 401);
+  }
+
+  // Check expiry
+  if (new Date(storedToken.expires_at) < new Date()) {
+    return oauthError("invalid_grant", "Refresh token expired", 401);
+  }
+
+  // Check revoked
+  if (storedToken.revoked) {
+    return oauthError("invalid_grant", "Refresh token revoked", 401);
+  }
+
+  // Reuse detection: if already rotated, revoke ALL tokens for this user
+  if (storedToken.replaced_by_hash) {
+    await serviceClient
+      .from("oauth_refresh_tokens")
+      .update({ revoked: true })
+      .eq("user_id", storedToken.user_id);
+
+    log.error("[oauth] Refresh token reuse detected", {
+      userId: storedToken.user_id,
+      tokenHash,
+    });
+
+    return oauthError(
+      "invalid_grant",
+      "Token reuse detected — all sessions revoked",
+      401,
+    );
+  }
+
+  // --- Rotate: issue new refresh token ---
+  const newRawToken = generateRefreshToken();
+  const newTokenHash = hashToken(newRawToken);
+  const newExpiresAt = new Date(
+    Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  // Mark old token as replaced
+  await serviceClient
+    .from("oauth_refresh_tokens")
+    .update({ revoked: true, replaced_by_hash: newTokenHash })
+    .eq("token_hash", tokenHash);
+
+  // Insert new token
+  await serviceClient.from("oauth_refresh_tokens").insert({
+    token_hash: newTokenHash,
+    user_id: storedToken.user_id,
+    expires_at: newExpiresAt,
+  });
+
+  // --- Issue new access token ---
+  const accessToken = await signMcpToken(storedToken.user_id);
+
+  // --- Opportunistic cleanup ---
+  await serviceClient
+    .from("oauth_refresh_tokens")
+    .delete()
+    .or(
+      `expires_at.lt.${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()},and(revoked.eq.true,created_at.lt.${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()})`,
+    );
+
+  return NextResponse.json({
+    access_token: accessToken,
+    token_type: "bearer",
+    expires_in: 3600,
+    refresh_token: newRawToken,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/oauth/token
 // ---------------------------------------------------------------------------
 
@@ -59,14 +154,25 @@ export async function POST(request: NextRequest) {
 
     const { grant_type, code, code_verifier, redirect_uri } = body;
 
-    // --- Validate required params ---
+    // --- Validate grant_type ---
 
-    if (grant_type !== "authorization_code") {
+    if (grant_type !== "authorization_code" && grant_type !== "refresh_token") {
       return oauthError(
         "unsupported_grant_type",
-        "grant_type must be 'authorization_code'",
+        "grant_type must be 'authorization_code' or 'refresh_token'",
       );
     }
+
+    const serviceClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+
+    if (grant_type === "refresh_token") {
+      return handleRefreshToken(body, serviceClient);
+    }
+
+    // --- authorization_code flow ---
 
     if (!code) {
       return oauthError("invalid_request", "code is required");
@@ -86,11 +192,6 @@ export async function POST(request: NextRequest) {
       .createHash("sha256")
       .update(code)
       .digest("hex");
-
-    const serviceClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
 
     // Atomically claim the code (prevents TOCTOU race condition).
     // UPDATE ... WHERE used = false returns the row only if unclaimed.
