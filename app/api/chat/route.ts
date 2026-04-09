@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { streamText, convertToModelMessages } from "ai";
+import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { llmProvider } from "@/lib/ai/provider";
 import { AVAILABLE_MODELS } from "@/lib/ai/models";
+import { createChatTools } from "@/lib/ai/tools";
+import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { log } from "@/lib/logger";
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
-    // Auth FIRST — cookies() available here, NOT inside stream callback
     const supabase = await createClient();
     const {
       data: { user },
@@ -19,7 +20,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Early guard: LLM API key must be configured
     if (!process.env.LLM_API_KEY) {
       log.error("POST /api/chat failed: LLM_API_KEY not configured");
       return NextResponse.json(
@@ -28,7 +28,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Parse request body — AI SDK sends { messages: UIMessage[], id, trigger, messageId }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let body: any;
     try {
@@ -43,6 +42,14 @@ export async function POST(req: Request) {
 
     const messages = body.messages;
     const requestedModel = body.model;
+    // Validate date format; fall back to UTC date if missing/invalid.
+    // Client should always send the local date, but we need a safe server-side fallback.
+    const rawDate = typeof body.date === "string" ? body.date : "";
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+      ? rawDate
+      : (() => { const n = new Date(); return `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, "0")}-${String(n.getUTCDate()).padStart(2, "0")}`; })();
+    const rawTimezone = typeof body.timezone === "string" ? body.timezone : "";
+    const timezone = /^[A-Za-z0-9_/+-]+$/.test(rawTimezone) ? rawTimezone : "UTC";
     const validModelIds = AVAILABLE_MODELS.map((m) => m.id);
 
     if (typeof requestedModel === "string" && requestedModel.length > 0 && !validModelIds.includes(requestedModel)) {
@@ -71,7 +78,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Convert UIMessages (with parts) to model messages (with content) for streamText
     let modelMessages;
     try {
       modelMessages = await convertToModelMessages(messages);
@@ -83,11 +89,20 @@ export async function POST(req: Request) {
       );
     }
 
-    // Stream response from LLM proxy
+    // Build tools (async — resolves householdId for money tools)
+    const tools = await createChatTools({
+      userId: user.id,
+      supabase,
+      date,
+      timezone,
+    });
+
     const result = streamText({
       model: llmProvider(modelId),
-      system: "You are a helpful AI assistant in BetterR.Me, a personal productivity and finance app. You are powered by Claude from Anthropic. Be concise, friendly, and helpful. The user may ask about habits, tasks, workouts, finances, or general topics.",
+      system: buildSystemPrompt({ date, timezone }),
       messages: modelMessages,
+      tools,
+      stopWhen: stepCountIs(5),
       maxOutputTokens: parseInt(process.env.LLM_MAX_TOKENS || "4096", 10),
       abortSignal: req.signal,
       onError({ error }) {
@@ -95,7 +110,7 @@ export async function POST(req: Request) {
       },
     });
 
-    return result.toTextStreamResponse({
+    return result.toUIMessageStreamResponse({
       headers: {
         "Cache-Control": "no-cache, no-transform",
         "X-Accel-Buffering": "no",
@@ -106,7 +121,6 @@ export async function POST(req: Request) {
       return new Response(null, { status: 499 });
     }
 
-    // Detect LLM proxy auth failure (expired OAuth token)
     const errMsg = error instanceof Error ? error.message : String(error);
     if (
       errMsg.includes("authentication_error") ||
