@@ -28,9 +28,10 @@ const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 });
 // Mock for oauth_refresh_tokens insert
 const mockInsert = vi.fn().mockResolvedValue({ error: null });
 
-// Mock for oauth_refresh_tokens delete chain: .delete().or()
+// Mock for oauth_refresh_tokens delete chain: .delete().or() and .delete().eq()
 const mockOr = vi.fn().mockResolvedValue({ error: null });
-const mockDelete = vi.fn().mockReturnValue({ or: mockOr });
+const mockDeleteEq = vi.fn().mockResolvedValue({ error: null });
+const mockDelete = vi.fn().mockReturnValue({ or: mockOr, eq: mockDeleteEq });
 
 // Mock for refresh token lookup: .select('*').eq().single()
 const mockRtSingle = vi.fn();
@@ -39,8 +40,9 @@ const mockRtSelect = vi.fn().mockReturnValue({ eq: mockRtEq });
 
 // Mock for refresh token update: supports both single and double .eq() chaining
 // Reuse detection: .update().eq('user_id', ...) → { error: null }  (thenable)
-// Atomic rotation: .update().eq('token_hash', ...).eq('revoked', false) → { error: null }
-const mockRtUpdateEq2 = vi.fn().mockResolvedValue({ error: null });
+// Atomic rotation: .update().eq('token_hash', ...).eq('revoked', false).select('id') → { data, error }
+const mockRtUpdateSelect = vi.fn().mockResolvedValue({ data: [{ id: 'row-1' }], error: null });
+const mockRtUpdateEq2 = vi.fn().mockReturnValue({ select: mockRtUpdateSelect });
 const mockRtUpdateEq = vi.fn();
 const mockRtUpdate = vi.fn().mockReturnValue({ eq: mockRtUpdateEq });
 
@@ -113,8 +115,9 @@ function setupChain() {
   mockEq2.mockReturnValue({ select: mockSelect });
   mockSelect.mockReturnValue({ single: mockSingle });
   mockInsert.mockResolvedValue({ error: null });
-  mockDelete.mockReturnValue({ or: mockOr });
+  mockDelete.mockReturnValue({ or: mockOr, eq: mockDeleteEq });
   mockOr.mockResolvedValue({ error: null });
+  mockDeleteEq.mockResolvedValue({ error: null });
 
   // Refresh token table chains
   mockRtSelect.mockReturnValue({ eq: mockRtEq });
@@ -128,7 +131,8 @@ function setupChain() {
     obj.then = (resolve) => resolve({ error: null });
     return obj;
   });
-  mockRtUpdateEq2.mockResolvedValue({ error: null });
+  mockRtUpdateEq2.mockReturnValue({ select: mockRtUpdateSelect });
+  mockRtUpdateSelect.mockResolvedValue({ data: [{ id: 'row-1' }], error: null });
 }
 
 // ---------------------------------------------------------------------------
@@ -426,15 +430,42 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
       }),
     );
 
-    // Old token should be atomically marked replaced + revoked (two .eq() calls)
+    // Old token should be atomically marked replaced + revoked (two .eq() calls + .select())
     expect(mockRtUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ revoked: true, replaced_by_hash: expect.any(String) }),
     );
     expect(mockRtUpdateEq).toHaveBeenCalledWith('token_hash', expect.any(String));
     expect(mockRtUpdateEq2).toHaveBeenCalledWith('revoked', false);
+    expect(mockRtUpdateSelect).toHaveBeenCalledWith('id');
 
     // Cleanup should run
     expect(mockDelete).toHaveBeenCalled();
     expect(mockOr).toHaveBeenCalled();
+  });
+
+  it('returns 401 and rolls back new token when atomic revoke claims zero rows (concurrent race)', async () => {
+    const stored = makeStoredRefreshToken();
+    mockRtSingle.mockResolvedValue({ data: stored, error: null });
+
+    // Simulate concurrent request already claimed the token — revoke update returns 0 rows
+    mockRtUpdateSelect.mockResolvedValue({ data: [], error: null });
+
+    const request = makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'valid-raw-token',
+    });
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(data.error).toBe('invalid_grant');
+    expect(data.error_description).toContain('already consumed');
+
+    // Should have inserted the new token first
+    expect(mockInsert).toHaveBeenCalled();
+
+    // Should roll back the newly inserted token via delete().eq('token_hash', newTokenHash)
+    expect(mockDelete).toHaveBeenCalled();
+    expect(mockDeleteEq).toHaveBeenCalledWith('token_hash', expect.any(String));
   });
 });

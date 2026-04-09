@@ -53,7 +53,8 @@ async function parseBody(
   // Default: try JSON
   try {
     return (await request.json()) as Record<string, string>;
-  } catch {
+  } catch (err) {
+    log.warn("[oauth] Could not parse request body as JSON", { error: String(err) });
     return null;
   }
 }
@@ -144,16 +145,24 @@ async function handleRefreshToken(
   }
 
   // Mark old token as replaced (atomic claim — only if still unclaimed)
-  const { error: revokeError } = await serviceClient
+  const { data: revokedRows, error: revokeError } = await serviceClient
     .from("oauth_refresh_tokens")
     .update({ revoked: true, replaced_by_hash: newTokenHash })
     .eq("token_hash", tokenHash)
-    .eq("revoked", false);
+    .eq("revoked", false)
+    .select("id");
 
   if (revokeError) {
     log.error("[oauth] Failed to revoke old refresh token", revokeError, { tokenHash });
-    // New token was inserted but old wasn't revoked — not ideal but not a lockout.
-    // The old token will be caught by reuse detection on next use.
+  }
+
+  if (!revokedRows || revokedRows.length === 0) {
+    // Concurrent request already claimed this token — roll back our insert
+    await serviceClient
+      .from("oauth_refresh_tokens")
+      .delete()
+      .eq("token_hash", newTokenHash);
+    return oauthError("invalid_grant", "Token already consumed", 401);
   }
 
   // --- Issue new access token ---

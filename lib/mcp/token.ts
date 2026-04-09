@@ -101,7 +101,10 @@ export async function verifyMcpToken(
 
   // 1. Split & decode
   const parts = bearerToken.split(".");
-  if (parts.length !== 3) return null;
+  if (parts.length !== 3) {
+    log.warn("[mcp] Token rejected: malformed structure");
+    return null;
+  }
 
   const [headerB64, payloadB64, signatureB64] = parts;
 
@@ -123,6 +126,7 @@ export async function verifyMcpToken(
     sigBuf.length !== expectedBuf.length ||
     !crypto.timingSafeEqual(sigBuf, expectedBuf)
   ) {
+    log.warn("[mcp] Token rejected: invalid signature");
     return null;
   }
 
@@ -133,22 +137,32 @@ export async function verifyMcpToken(
       Buffer.from(payloadB64, "base64url").toString(),
     );
   } catch {
+    log.warn("[mcp] Token rejected: invalid payload");
     return null;
   }
 
   // 3. Audience check
-  if (payload.aud !== "mcp") return null;
+  if (payload.aud !== "mcp") {
+    log.warn("[mcp] Token rejected: wrong audience");
+    return null;
+  }
 
   // 4. Expiry check (optional — legacy tokens without exp are accepted)
   const CLOCK_SKEW_SECONDS = 30;
   if (payload.exp) {
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp + CLOCK_SKEW_SECONDS <= now) return null;
+    if (payload.exp + CLOCK_SKEW_SECONDS <= now) {
+      log.warn("[mcp] Token rejected: expired", { exp: payload.exp });
+      return null;
+    }
   }
 
   // 5. Subject (userId) must exist
   const userId = payload.sub;
-  if (!userId) return null;
+  if (!userId) {
+    log.warn("[mcp] Token rejected: missing subject");
+    return null;
+  }
 
   // 6. Verify user exists in profiles (separate try/catch for Supabase errors)
   try {
