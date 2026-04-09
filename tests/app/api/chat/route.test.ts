@@ -34,7 +34,7 @@ const { mockCreateChatTools } = vi.hoisted(() => ({
 vi.mock('ai', () => ({
   streamText: mockStreamText,
   convertToModelMessages: mockConvertToModelMessages,
-  isStepCount: vi.fn((n: number) => ({ type: 'step-count', value: n })),
+  stepCountIs: vi.fn((n: number) => ({ type: 'step-count', value: n })),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({

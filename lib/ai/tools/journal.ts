@@ -31,16 +31,25 @@ export function journalTools(): ToolDefinition[] {
       description: "Create or update a journal entry for a given date",
       parameters: z.object({
         date: z.string().describe("Date in YYYY-MM-DD format"),
-        content: z.string().describe("Journal entry content (markdown supported)"),
+        content: z.string().describe("Journal entry content as plain text"),
         mood: z.number().optional().describe("Mood rating 1-5"),
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new JournalEntriesDB(ctx.supabase);
+        // Convert plain text to minimal Tiptap JSON structure
+        const tiptapContent = {
+          type: "doc",
+          content: [{ type: "paragraph", content: [{ type: "text", text: params.content }] }],
+        };
         return db.upsertEntry({
           user_id: ctx.userId,
           entry_date: params.date,
-          content: params.content,
+          content: tiptapContent,
           mood: params.mood,
+          title: "",
+          word_count: params.content.split(/\s+/).filter(Boolean).length,
+          tags: [],
+          prompt_key: null,
         });
       },
     },

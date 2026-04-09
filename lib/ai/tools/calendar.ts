@@ -21,23 +21,31 @@ export function calendarTools(): ToolDefinition[] {
       description: "Create a new calendar event",
       parameters: z.object({
         title: z.string().describe("Event title"),
-        startTime: z.string().describe("Start time in ISO 8601 format"),
-        endTime: z
-          .string()
-          .optional()
-          .describe("End time in ISO 8601 format"),
-        allDay: z
-          .boolean()
-          .optional()
-          .describe("Whether this is an all-day event"),
+        startDate: z.string().describe("Start date in YYYY-MM-DD format"),
+        startTime: z.string().optional().describe("Start time in HH:MM format (omit for all-day event)"),
+        endDate: z.string().optional().describe("End date in YYYY-MM-DD format (defaults to start date)"),
+        endTime: z.string().optional().describe("End time in HH:MM format"),
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new CalendarEventsDB(ctx.supabase);
         return db.createEvent(ctx.userId, {
           title: params.title,
-          start_time: params.startTime,
+          description: null,
+          start_date: params.startDate,
+          start_time: params.startTime ?? null,
+          end_date: params.endDate ?? params.startDate,
           end_time: params.endTime ?? null,
-          all_day: params.allDay ?? false,
+          location: null,
+          color: null,
+          category_id: null,
+          is_recurring: false,
+          recurrence_rule: null,
+          end_type: null,
+          end_date_recurrence: null,
+          end_count: null,
+          recurring_event_id: null,
+          original_date: null,
+          is_exception: false,
         });
       },
     },

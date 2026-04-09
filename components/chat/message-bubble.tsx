@@ -37,12 +37,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           }
           return <MarkdownRenderer key={i} content={part.text} />;
         }
-        if (part.type === "tool-invocation") {
+        if (part.type === "dynamic-tool") {
+          const isComplete = part.state === "output-available" || part.state === "output-error" || part.state === "output-denied";
           return (
             <ToolCallIndicator
               key={i}
-              toolName={part.toolInvocation.toolName}
-              state={part.state}
+              toolName={part.toolName}
+              state={isComplete ? "result" : "call"}
             />
           );
         }

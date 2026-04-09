@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import { useTranslations } from "next-intl";
 import useSWR from "swr";
 import { MessageList } from "@/components/chat/message-list";
@@ -65,10 +66,14 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   const localDate = getLocalDateString();
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: "/api/chat", body: { model: selectedModel, date: localDate, timezone: userTimezone } }),
+    [selectedModel, localDate, userTimezone]
+  );
+
   const { messages, sendMessage, setMessages, stop, status, error } = useChat({
     id: chatId,
-    api: "/api/chat",
-    body: { model: selectedModel, date: localDate, timezone: userTimezone },
+    transport,
   });
 
   const isStreaming = status === "submitted" || status === "streaming";

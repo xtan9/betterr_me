@@ -1,18 +1,22 @@
-import { tool } from "ai";
+import { type ToolSet } from "ai";
 import { log } from "@/lib/logger";
 import type { ToolDefinition, ToolContext } from "./types";
 
 export function toChatTools(
   tools: ToolDefinition[],
   ctx: ToolContext,
-): Record<string, ReturnType<typeof tool>> {
-  const result: Record<string, ReturnType<typeof tool>> = {};
+): ToolSet {
+  // Build tools as plain objects matching the AI SDK ToolSet shape.
+  // We avoid the `tool()` helper because its strict overloads conflict
+  // with our generic ToolDefinition<any> parameter types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result: Record<string, any> = {};
 
   for (const t of tools) {
-    result[t.name] = tool({
+    result[t.name] = {
       description: t.description,
       parameters: t.parameters,
-      execute: async (params) => {
+      execute: async (params: unknown) => {
         try {
           return await t.execute(params, ctx);
         } catch (error) {
@@ -20,8 +24,8 @@ export function toChatTools(
           return { error: `Failed to execute ${t.name}: ${error instanceof Error ? error.message : String(error)}` };
         }
       },
-    });
+    };
   }
 
-  return result;
+  return result as ToolSet;
 }

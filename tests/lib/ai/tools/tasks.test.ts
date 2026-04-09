@@ -82,8 +82,12 @@ describe("taskTools", () => {
     expect(mockCreateTask).toHaveBeenCalledWith({
       user_id: "user-123",
       title: "New task",
+      description: null,
       due_date: "2026-04-09",
+      due_time: null,
       priority: 1,
+      project_id: undefined,
+      is_completed: false,
     });
     expect(result).toEqual({ id: "t2", title: "New task" });
   });

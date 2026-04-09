@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { streamText, convertToModelMessages, isStepCount } from "ai";
+import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { llmProvider } from "@/lib/ai/provider";
 import { AVAILABLE_MODELS } from "@/lib/ai/models";
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
       system: buildSystemPrompt({ date, timezone }),
       messages: modelMessages,
       tools,
-      stopWhen: isStepCount(5),
+      stopWhen: stepCountIs(5),
       maxOutputTokens: parseInt(process.env.LLM_MAX_TOKENS || "4096", 10),
       abortSignal: req.signal,
       onError({ error }) {

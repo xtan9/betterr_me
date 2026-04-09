@@ -53,6 +53,7 @@ export function moneyTools(): ToolDefinition[] {
         description: z.string().describe("Transaction description"),
         amountCents: z.number().describe("Amount in cents (positive for income, negative for expense)"),
         categoryId: z.string().optional().describe("Category ID"),
+        accountId: z.string().describe("Account ID for the transaction"),
         date: z.string().optional().describe("Transaction date in YYYY-MM-DD format"),
       }),
       execute: async (params, ctx: ToolContext) => {
@@ -60,11 +61,20 @@ export function moneyTools(): ToolDefinition[] {
         const db = new TransactionsDB(ctx.supabase);
         return db.create({
           household_id: ctx.householdId,
-          user_id: ctx.userId,
+          account_id: params.accountId,
           description: params.description,
           amount_cents: params.amountCents,
-          category_id: params.categoryId,
-          date: params.date ?? ctx.date,
+          category_id: params.categoryId ?? null,
+          category: null,
+          merchant_name: null,
+          notes: null,
+          transaction_date: params.date ?? ctx.date,
+          is_pending: false,
+          is_hidden_from_household: false,
+          is_shared_to_household: false,
+          plaid_transaction_id: null,
+          plaid_category_primary: null,
+          plaid_category_detailed: null,
           source: "manual",
         });
       },

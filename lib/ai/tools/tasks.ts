@@ -64,7 +64,7 @@ export function taskTools(): ToolDefinition[] {
       execute: async (params, ctx: ToolContext) => {
         const db = new TasksDB(ctx.supabase);
         return db.getUserTasks(ctx.userId, {
-          projectId: params.projectId,
+          project_id: params.projectId,
           status: params.status,
           priority: params.priority,
         });
@@ -93,9 +93,12 @@ export function taskTools(): ToolDefinition[] {
         return db.createTask({
           user_id: ctx.userId,
           title: params.title,
-          due_date: params.dueDate,
-          priority: params.priority,
+          description: null,
+          due_date: params.dueDate ?? null,
+          due_time: null,
+          priority: params.priority ?? 0,
           project_id: params.projectId,
+          is_completed: false,
         });
       },
     },

@@ -30,7 +30,7 @@ vi.mock("next-intl", () => ({
 }));
 
 vi.mock("ai", () => ({
-  TextStreamChatTransport: class {
+  DefaultChatTransport: class {
     constructor() {}
   },
 }));
