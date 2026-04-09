@@ -2,6 +2,7 @@
 
 import type { UIMessage } from "ai";
 import { MarkdownRenderer } from "./markdown-renderer";
+import { ToolCallIndicator } from "./tool-call-indicator";
 import { cn } from "@/lib/utils";
 
 interface MessageBubbleProps {
@@ -35,6 +36,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             );
           }
           return <MarkdownRenderer key={i} content={part.text} />;
+        }
+        if (part.type === "tool-invocation") {
+          return (
+            <ToolCallIndicator
+              key={i}
+              toolName={part.toolInvocation.toolName}
+              state={part.state}
+            />
+          );
         }
         return null;
       })}
