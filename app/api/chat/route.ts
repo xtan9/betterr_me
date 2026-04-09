@@ -49,7 +49,7 @@ export async function POST(req: Request) {
       ? rawDate
       : (() => { const n = new Date(); return `${n.getUTCFullYear()}-${String(n.getUTCMonth() + 1).padStart(2, "0")}-${String(n.getUTCDate()).padStart(2, "0")}`; })();
     const rawTimezone = typeof body.timezone === "string" ? body.timezone : "";
-    const timezone = /^[A-Za-z_/]+$/.test(rawTimezone) ? rawTimezone : "UTC";
+    const timezone = /^[A-Za-z0-9_/+-]+$/.test(rawTimezone) ? rawTimezone : "UTC";
     const validModelIds = AVAILABLE_MODELS.map((m) => m.id);
 
     if (typeof requestedModel === "string" && requestedModel.length > 0 && !validModelIds.includes(requestedModel)) {
