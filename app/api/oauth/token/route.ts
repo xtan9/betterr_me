@@ -11,11 +11,16 @@ import {
 } from "@/lib/mcp/refresh-token";
 import { signMcpToken } from "@/lib/mcp/token";
 
+
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function cleanupExpiredTokens(client: ReturnType<typeof createClient>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ServiceClient = any;
+
+async function cleanupExpiredTokens(client: ServiceClient) {
   const { error } = await client
     .from("oauth_refresh_tokens")
     .delete()
@@ -65,7 +70,7 @@ async function parseBody(
 
 async function handleRefreshToken(
   body: Record<string, string>,
-  serviceClient: ReturnType<typeof createClient>,
+  serviceClient: ServiceClient,
 ) {
   const { refresh_token } = body;
 
