@@ -1,4 +1,4 @@
-import { tool, type ToolSet } from "ai";
+import { tool, zodSchema, type ToolSet } from "ai";
 import { log } from "@/lib/logger";
 import type { ToolDefinition, ToolContext } from "./types";
 
@@ -9,12 +9,13 @@ export function toChatTools(
   const result: ToolSet = {};
 
   for (const t of tools) {
-    // Use tool() helper for proper Zod→JSON Schema conversion.
-    // Cast to work around strict generic overloads on tool().
+    // Wrap Zod schema with zodSchema() for proper JSON Schema conversion
+    // (adds type: "object" required by the Claude API).
+    // Cast tool() to work around strict generic overloads.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result[t.name] = (tool as any)({
       description: t.description,
-      parameters: t.parameters,
+      parameters: zodSchema(t.parameters),
       execute: async (params: unknown) => {
         try {
           return await t.execute(params, ctx);
