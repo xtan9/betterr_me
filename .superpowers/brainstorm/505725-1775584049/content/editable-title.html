@@ -1,0 +1,63 @@
+<h2>Editable Conversation Title — Where?</h2>
+<p class="subtitle">How should users rename a conversation?</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:20px;background:#f8f9fa;">
+      <!-- Sidebar inline edit mockup -->
+      <div style="width:240px;background:#fff;border-radius:12px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Conversations</div>
+        <div style="padding:8px 10px;background:#f3f4f6;border-radius:8px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">
+          <input style="border:1px solid #3b82f6;border-radius:4px;padding:2px 6px;font-size:13px;width:140px;outline:none;" value="My project plan" />
+          <div style="display:flex;gap:4px;">
+            <span style="font-size:11px;cursor:pointer;">✓</span>
+            <span style="font-size:11px;cursor:pointer;color:#9ca3af;">✕</span>
+          </div>
+        </div>
+        <div style="padding:8px 10px;font-size:13px;color:#374151;">How to cook pasta</div>
+        <div style="padding:8px 10px;font-size:13px;color:#374151;">Debug React hooks</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A: Inline Edit in Sidebar</h3>
+      <p>Double-click (or click a pencil icon) on a conversation title in the sidebar to edit it in place. Like renaming a file.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:20px;background:#f8f9fa;">
+      <!-- Header area edit mockup -->
+      <div style="width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:8px;">
+          <span style="font-size:15px;font-weight:600;color:#111827;">My project plan</span>
+          <span style="font-size:12px;color:#9ca3af;cursor:pointer;">✏️</span>
+        </div>
+        <div style="padding:16px;font-size:13px;color:#6b7280;text-align:center;">Chat messages here...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B: Chat Header Title</h3>
+      <p>Show the conversation title at the top of the chat area with a pencil icon to edit. Prominent and always visible.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:20px;background:#f8f9fa;">
+      <!-- Context menu mockup -->
+      <div style="width:240px;background:#fff;border-radius:12px;padding:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);position:relative;">
+        <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Conversations</div>
+        <div style="padding:8px 10px;background:#f3f4f6;border-radius:8px;margin-bottom:4px;font-size:13px;color:#374151;">My project plan</div>
+        <!-- Context menu -->
+        <div style="position:absolute;left:160px;top:24px;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:4px;min-width:120px;z-index:10;">
+          <div style="padding:6px 12px;font-size:12px;color:#374151;border-radius:4px;background:#f3f4f6;">✏️ Rename</div>
+          <div style="padding:6px 12px;font-size:12px;color:#374151;border-radius:4px;">🗑️ Delete</div>
+        </div>
+        <div style="padding:8px 10px;font-size:13px;color:#374151;">How to cook pasta</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C: Right-Click Context Menu</h3>
+      <p>Right-click (or long-press on mobile) on a conversation to get a context menu with Rename and Delete. Groups actions together.</p>
+    </div>
+  </div>
+</div>

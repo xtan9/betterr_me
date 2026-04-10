@@ -81,6 +81,7 @@ const habitsDB = new HabitsDB(supabase);
   - `activeConversationId` — drives DB persistence and sidebar highlighting
 - **Persistence**: User messages saved BEFORE LLM call, assistant messages saved AFTER stream completes. Title auto-generated after first exchange.
 - **Conversation API**: `GET/POST /api/conversations`, `GET/POST /api/conversations/[id]/messages`, `POST /api/conversations/[id]/title`, `DELETE /api/conversations/[id]`.
+- **OAuth Token Lifetimes**: Access tokens expire after 1 hour (`exp` claim in JWT). Refresh tokens last 180 days, stored hashed in `oauth_refresh_tokens`, rotated on every use with reuse detection.
 
 ### Admin & Roles
 
