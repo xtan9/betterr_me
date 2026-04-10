@@ -33,6 +33,10 @@ vi.mock("next-intl", () => ({
       "detail.deleteConfirmDescription":
         "This action cannot be undone. This will permanently delete the task.",
       "detail.activityPlaceholder": "Activity log coming soon",
+      "detail.footer.allSaved": "All changes saved",
+      "detail.footer.saving": "Saving...",
+      "detail.footer.saveFailed": "Save failed",
+      "detail.footer.close": "Close",
       "columns.backlog": "Backlog",
       "columns.todo": "To Do",
       "columns.in_progress": "In Progress",
@@ -254,7 +258,7 @@ describe("KanbanDetailModal", () => {
   });
 
   describe("description auto-save indicator", () => {
-    it("shows saved indicator after description save", async () => {
+    it("does not show per-field save indicator next to description", async () => {
       const user = userEvent.setup();
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: true,
@@ -266,9 +270,9 @@ describe("KanbanDetailModal", () => {
       await user.type(textarea, "New description");
       await user.tab(); // blur to trigger save
 
-      await waitFor(() => {
-        expect(screen.getByText("Saved")).toBeInTheDocument();
-      });
+      // Per-field "Saved" indicator should not appear next to description heading
+      // (it was removed; save status is now in the footer only)
+      expect(screen.queryByText("Saved")).not.toBeInTheDocument();
     });
 
     it("does not save description if unchanged", async () => {
@@ -280,6 +284,28 @@ describe("KanbanDetailModal", () => {
       await user.tab(); // blur without changing
 
       expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("footer", () => {
+    it("shows 'All changes saved' in footer when idle", () => {
+      renderModal();
+      expect(screen.getByText("All changes saved")).toBeInTheDocument();
+    });
+
+    it("shows Close button in footer that closes the modal", async () => {
+      const user = userEvent.setup();
+      renderModal();
+
+      // The footer has a "Close" button (text-based); the Dialog also has a sr-only
+      // "Close" on its X icon — use getAllByRole and pick the one with visible text.
+      const closeButtons = screen.getAllByRole("button", { name: "Close" });
+      const footerClose = closeButtons.find(
+        (btn) => btn.textContent?.trim() === "Close"
+      );
+      expect(footerClose).toBeInTheDocument();
+      await user.click(footerClose!);
+      expect(mockOnClose).toHaveBeenCalled();
     });
   });
 
