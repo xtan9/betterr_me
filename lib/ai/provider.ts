@@ -13,3 +13,8 @@ export const llmProvider = anthropic;
 export const webSearchTool = anthropic.tools.webSearch_20250305({
   maxUses: 5,
 });
+
+// Anthropic built-in web fetch tool — retrieves content from specific URLs
+export const webFetchTool = anthropic.tools.webFetch_20250910({
+  maxUses: 3,
+});

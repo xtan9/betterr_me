@@ -44,6 +44,7 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/ai/provider', () => ({
   llmProvider: vi.fn((model: string) => `mock-model:${model}`),
   webSearchTool: { type: 'provider-defined', id: 'web_search' },
+  webFetchTool: { type: 'provider-defined', id: 'web_fetch' },
 }));
 
 vi.mock('@/lib/ai/tools', () => ({
