@@ -50,9 +50,10 @@ vi.mock('@/lib/ai/tools', () => ({
 }));
 
 vi.mock('@/lib/ai/system-prompt', () => ({
-  buildSystemPrompt: vi.fn(({ date, timezone }: { date: string; timezone: string }) =>
-    `System prompt for ${date} ${timezone}`
-  ),
+  buildIdentityMessages: vi.fn(({ date, timezone }: { date: string; timezone: string }) => [
+    { role: 'user', content: [{ type: 'text', text: 'Hi, who are you?' }] },
+    { role: 'assistant', content: [{ type: 'text', text: `I'm BetterR.Me Assistant. Today is ${date} (${timezone}).` }] },
+  ]),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -129,7 +130,7 @@ describe('POST /api/chat', () => {
     expect(response.status).toBe(400);
   });
 
-  it('should call streamText with tools, system prompt, and stopWhen', async () => {
+  it('should call streamText with tools, identity messages, and stopWhen', async () => {
     const messages = [{ id: 'm1', role: 'user' as const, parts: [{ type: 'text' as const, text: 'Hello' }] }];
     const req = makeRequest({ messages, date: '2026-04-08', timezone: 'America/Toronto' });
     await POST(req);
@@ -144,12 +145,25 @@ describe('POST /api/chat', () => {
     expect(mockStreamText).toHaveBeenCalledWith(
       expect.objectContaining({
         model: expect.anything(),
-        system: expect.stringContaining('2026-04-08'),
         tools: expect.any(Object),
         stopWhen: expect.anything(),
         messages: expect.any(Array),
       })
     );
+    // Verify identity messages are prepended before user messages
+    const callArgs = mockStreamText.mock.calls[0][0];
+    expect(callArgs.messages[0]).toEqual(
+      expect.objectContaining({ role: 'user', content: [{ type: 'text', text: 'Hi, who are you?' }] }),
+    );
+    expect(callArgs.messages[1]).toEqual(
+      expect.objectContaining({ role: 'assistant' }),
+    );
+    // User's actual message follows the priming
+    expect(callArgs.messages[2]).toEqual(
+      expect.objectContaining({ role: 'user' }),
+    );
+    // No system prompt — identity is embedded in priming messages
+    expect(callArgs.system).toBeUndefined();
   });
 
   it('should use toUIMessageStreamResponse with correct headers', async () => {

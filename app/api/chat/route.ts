@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { llmProvider } from "@/lib/ai/provider";
 import { AVAILABLE_MODELS } from "@/lib/ai/models";
 import { createChatTools } from "@/lib/ai/tools";
-import { buildSystemPrompt } from "@/lib/ai/system-prompt";
+import { buildIdentityMessages } from "@/lib/ai/system-prompt";
 import { log } from "@/lib/logger";
 
 export const maxDuration = 60;
@@ -99,8 +99,7 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model: llmProvider(modelId),
-      system: buildSystemPrompt({ date, timezone }),
-      messages: modelMessages,
+      messages: [...buildIdentityMessages({ date, timezone }), ...modelMessages],
       tools,
       stopWhen: stepCountIs(5),
       maxOutputTokens: parseInt(process.env.LLM_MAX_TOKENS || "4096", 10),
