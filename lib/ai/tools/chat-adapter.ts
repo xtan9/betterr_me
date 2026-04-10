@@ -1,4 +1,4 @@
-import { tool, zodSchema, type ToolSet } from "ai";
+import { zodSchema, type ToolSet } from "ai";
 import { log } from "@/lib/logger";
 import type { ToolDefinition, ToolContext } from "./types";
 
@@ -6,16 +6,16 @@ export function toChatTools(
   tools: ToolDefinition[],
   ctx: ToolContext,
 ): ToolSet {
-  const result: ToolSet = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result: Record<string, any> = {};
 
   for (const t of tools) {
-    // Wrap Zod schema with zodSchema() for proper JSON Schema conversion
-    // (adds type: "object" required by the Claude API).
-    // Cast tool() to work around strict generic overloads.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    result[t.name] = (tool as any)({
+    // Use inputSchema (not parameters) — streamText accesses tool.inputSchema
+    // internally, and parameters is ignored. zodSchema() converts the Zod schema
+    // to JSON Schema with type: "object" required by the Claude API.
+    result[t.name] = {
       description: t.description,
-      parameters: zodSchema(t.parameters),
+      inputSchema: zodSchema(t.parameters),
       execute: async (params: unknown) => {
         try {
           return await t.execute(params, ctx);
@@ -24,8 +24,8 @@ export function toChatTools(
           return { error: `Failed to execute ${t.name}: ${error instanceof Error ? error.message : String(error)}` };
         }
       },
-    });
+    };
   }
 
-  return result;
+  return result as ToolSet;
 }
