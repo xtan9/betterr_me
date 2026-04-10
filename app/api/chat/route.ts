@@ -100,10 +100,8 @@ export async function POST(req: Request) {
     const result = streamText({
       model: llmProvider(modelId),
       messages: [...buildIdentityMessages({ date, timezone }), ...modelMessages],
-      tools: {
-        ...tools,
-        web_search: webSearchTool,
-      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: { ...tools, web_search: webSearchTool } as any,
       stopWhen: stepCountIs(5),
       maxOutputTokens: parseInt(process.env.LLM_MAX_TOKENS || "4096", 10),
       abortSignal: req.signal,
