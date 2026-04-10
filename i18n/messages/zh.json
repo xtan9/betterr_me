@@ -942,7 +942,13 @@
       "cancel": "取消",
       "deleteError": "删除任务失败",
       "deleteConfirmTitle": "删除此任务？",
-      "deleteConfirmDescription": "此操作无法撤销，将永久删除该任务。"
+      "deleteConfirmDescription": "此操作无法撤销，将永久删除该任务。",
+      "footer": {
+        "allSaved": "所有更改已保存",
+        "saving": "保存中...",
+        "saveFailed": "保存失败",
+        "close": "关闭"
+      }
     },
     "priority": {
       "high": "高",

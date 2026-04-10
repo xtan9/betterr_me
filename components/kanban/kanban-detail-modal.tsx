@@ -2,8 +2,9 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { Calendar, Trash2, Check, Loader2 } from "lucide-react";
+import { Calendar, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { log } from "@/lib/logger";
 import {
   Dialog,
   DialogContent,
@@ -84,18 +85,11 @@ export function KanbanDetailModal({
   const [title, setTitle] = useState(task?.title || "");
   const [originalTitle, setOriginalTitle] = useState(task?.title || "");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [savingFields, setSavingFields] = useState<Set<string>>(new Set());
-  const [savedField, setSavedField] = useState<string | null>(null);
+  const saveCountRef = useRef(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaveError, setLastSaveError] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  // Cleanup saved indicator timer on unmount
-  useEffect(() => {
-    return () => {
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-    };
-  }, []);
 
   // Reset state when task changes
   const currentTaskId = task?.id;
@@ -107,6 +101,9 @@ export function KanbanDetailModal({
     setTitle(task?.title || "");
     setOriginalTitle(task?.title || "");
     setIsEditingTitle(false);
+    setLastSaveError(false);
+    setIsSaving(false);
+    saveCountRef.current = 0;
   }
 
   useEffect(() => {
@@ -116,17 +113,13 @@ export function KanbanDetailModal({
     }
   }, [isEditingTitle]);
 
-  const showSavedIndicator = useCallback((field: string) => {
-    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-    setSavedField(field);
-    savedTimerRef.current = setTimeout(() => setSavedField(null), 1500);
-  }, []);
-
   const updateField = useCallback(
     async <K extends keyof TaskUpdate>(field: K, value: TaskUpdate[K]): Promise<boolean> => {
       if (!task) return false;
       const fieldName = String(field);
-      setSavingFields((prev) => new Set(prev).add(fieldName));
+      saveCountRef.current += 1;
+      setIsSaving(true);
+      setLastSaveError(false);
       try {
         const res = await fetch(`/api/tasks/${task.id}`, {
           method: "PATCH",
@@ -135,26 +128,25 @@ export function KanbanDetailModal({
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          console.error(`Task update failed: field="${fieldName}", status=${res.status}, serverError="${body?.error}"`);
+          log.error("[kanban] Task update failed", null, { field: fieldName, status: res.status, serverError: body?.error });
           toast.error(body?.error || t("detail.updateError"));
+          setLastSaveError(true);
           return false;
         }
         onTaskUpdated();
-        showSavedIndicator(fieldName);
+        setLastSaveError(false);
         return true;
       } catch (error) {
-        console.error(`Task update network error: field="${fieldName}"`, error);
+        log.error("[kanban] Task update network error", error, { field: fieldName });
         toast.error(t("detail.updateError"));
+        setLastSaveError(true);
         return false;
       } finally {
-        setSavingFields((prev) => {
-          const next = new Set(prev);
-          next.delete(fieldName);
-          return next;
-        });
+        saveCountRef.current -= 1;
+        if (saveCountRef.current === 0) setIsSaving(false);
       }
     },
-    [task, onTaskUpdated, t, showSavedIndicator]
+    [task, onTaskUpdated, t]
   );
 
   const handleTitleBlur = useCallback(async () => {
@@ -204,14 +196,14 @@ export function KanbanDetailModal({
       const res = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        console.error(`Task delete failed: taskId="${task.id}", status=${res.status}, serverError="${body?.error}"`);
+        log.error("[kanban] Task delete failed", null, { taskId: task.id, status: res.status, serverError: body?.error });
         toast.error(body?.error || t("detail.deleteError"));
         return;
       }
       onClose();
       onTaskDeleted?.();
     } catch (error) {
-      console.error(`Task delete network error: taskId="${task.id}"`, error);
+      log.error("[kanban] Task delete network error", error, { taskId: task.id });
       toast.error(t("detail.deleteError"));
     } finally {
       setIsDeleting(false);
@@ -247,36 +239,6 @@ export function KanbanDetailModal({
                   {title}
                 </DialogTitle>
               )}
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t("detail.delete")}
-                    className="text-muted-foreground hover:text-destructive shrink-0"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertTitle>{t("detail.deleteConfirmTitle")}</AlertTitle>
-                    <AlertDialogDescription>
-                      {t("detail.deleteConfirmDescription")}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>{t("detail.cancel")}</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDelete}
-                      disabled={isDeleting}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      {isDeleting ? t("detail.deleting") : t("detail.delete")}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
             </div>
             <TabsList>
               <TabsTrigger value="details">
@@ -404,18 +366,6 @@ export function KanbanDetailModal({
                     <h3 className="text-base font-semibold">
                       {t("detail.descriptionHeading")}
                     </h3>
-                    {savingFields.has("description") && (
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Loader2 className="size-3 animate-spin" />
-                        {t("detail.saving")}
-                      </span>
-                    )}
-                    {savedField === "description" && (
-                      <span className="flex items-center gap-1 text-xs text-green-500">
-                        <Check className="size-3" />
-                        {t("detail.saved")}
-                      </span>
-                    )}
                   </div>
                   <div className="p-4">
                     <textarea
@@ -462,6 +412,64 @@ export function KanbanDetailModal({
               </p>
             </div>
           </TabsContent>
+
+          {/* Footer bar */}
+          <div className="flex items-center justify-between border-t bg-muted/30 px-6 py-3 flex-shrink-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {isSaving ? (
+                <>
+                  <Loader2 className="size-3 animate-spin" />
+                  {t("detail.footer.saving")}
+                </>
+              ) : lastSaveError ? (
+                <>
+                  <span className="size-2 rounded-full bg-destructive inline-block" />
+                  {t("detail.footer.saveFailed")}
+                </>
+              ) : (
+                <>
+                  <span className="size-2 rounded-full bg-green-500 inline-block" />
+                  {t("detail.footer.allSaved")}
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive border-destructive/50 hover:bg-destructive/10"
+                    aria-label={t("detail.delete")}
+                  >
+                    <Trash2 className="size-3.5 mr-1.5" />
+                    {t("detail.delete")}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertTitle>{t("detail.deleteConfirmTitle")}</AlertTitle>
+                    <AlertDialogDescription>
+                      {t("detail.deleteConfirmDescription")}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("detail.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {isDeleting ? t("detail.deleting") : t("detail.delete")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Button variant="outline" size="sm" onClick={onClose}>
+                {t("detail.footer.close")}
+              </Button>
+            </div>
+          </div>
         </Tabs>
       </DialogContent>
     </Dialog>
