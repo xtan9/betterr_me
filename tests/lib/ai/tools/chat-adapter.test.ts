@@ -32,7 +32,7 @@ describe("toChatTools", () => {
 
     expect(Object.keys(result)).toEqual(["testTool", "anotherTool"]);
     expect(result.testTool).toHaveProperty("description", "A test tool");
-    expect(result.testTool).toHaveProperty("parameters");
+    expect(result.testTool).toHaveProperty("inputSchema");
     expect(result.testTool).toHaveProperty("execute");
   });
 
