@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { createClient } from "@/lib/supabase/server";
-import { llmProvider, webSearchTool } from "@/lib/ai/provider";
+import { llmProvider, webSearchTool, webFetchTool } from "@/lib/ai/provider";
 import { AVAILABLE_MODELS } from "@/lib/ai/models";
 import { createChatTools } from "@/lib/ai/tools";
 import { buildIdentityMessages } from "@/lib/ai/system-prompt";
@@ -101,7 +101,8 @@ export async function POST(req: Request) {
       model: llmProvider(modelId),
       messages: [...buildIdentityMessages({ date, timezone }), ...modelMessages],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: { ...tools, web_search: webSearchTool } as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: { ...tools, web_search: webSearchTool, web_fetch: webFetchTool } as any,
       stopWhen: stepCountIs(5),
       maxOutputTokens: parseInt(process.env.LLM_MAX_TOKENS || "4096", 10),
       abortSignal: req.signal,
