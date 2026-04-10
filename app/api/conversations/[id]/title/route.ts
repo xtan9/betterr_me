@@ -62,7 +62,7 @@ export async function POST(
       model: llmProvider(
         process.env.LLM_MODEL || DEFAULT_MODEL_ID,
       ),
-      prompt: `Summarize this conversation in 5-8 words as a title. Return ONLY the title, no quotes or punctuation.\n\nUser: ${parsed.data.userMessage}\nAssistant: ${parsed.data.assistantMessage}`,
+      prompt: `Summarize this conversation in 5-8 words as a title. Return ONLY the title, no quotes or punctuation. IMPORTANT: The title MUST be in the same language as the conversation. If the conversation is in Chinese, the title must be in Chinese. If in English, the title must be in English.\n\nUser: ${parsed.data.userMessage}\nAssistant: ${parsed.data.assistantMessage}`,
       maxOutputTokens: 30,
     });
 

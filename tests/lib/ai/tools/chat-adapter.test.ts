@@ -60,4 +60,51 @@ describe("toChatTools", () => {
 
     expect(result).toEqual({ params: { input: "hello" }, userId: "u1" });
   });
+
+  it("re-throws TypeError and ReferenceError instead of catching them", async () => {
+    const ctx: ToolContext = {
+      userId: "u1",
+      supabase: {} as ToolContext["supabase"],
+      date: "2026-04-08",
+      timezone: "America/Toronto",
+    };
+    const toolDefs: ToolDefinition[] = [
+      {
+        name: "buggy",
+        description: "buggy tool",
+        parameters: z.object({}),
+        execute: async () => {
+          throw new TypeError("cannot read property of undefined");
+        },
+      },
+    ];
+
+    const chatTools = toChatTools(toolDefs, ctx);
+    await expect(
+      chatTools.buggy.execute!({}, { toolCallId: "tc1", messages: [] }),
+    ).rejects.toThrow(TypeError);
+  });
+
+  it("returns error object for runtime failures", async () => {
+    const ctx: ToolContext = {
+      userId: "u1",
+      supabase: {} as ToolContext["supabase"],
+      date: "2026-04-08",
+      timezone: "America/Toronto",
+    };
+    const toolDefs: ToolDefinition[] = [
+      {
+        name: "failing",
+        description: "failing tool",
+        parameters: z.object({}),
+        execute: async () => {
+          throw new Error("database timeout");
+        },
+      },
+    ];
+
+    const chatTools = toChatTools(toolDefs, ctx);
+    const result = await chatTools.failing.execute!({}, { toolCallId: "tc1", messages: [] });
+    expect(result).toEqual({ error: "Failed to execute failing: database timeout" });
+  });
 });
