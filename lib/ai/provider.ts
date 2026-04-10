@@ -11,5 +11,5 @@ export const llmProvider = anthropic;
 
 // Anthropic built-in web search tool — gives the model real-time web access
 export const webSearchTool = anthropic.tools.webSearch_20250305({
-  maxUses: 3,
+  maxUses: 5,
 });
