@@ -942,7 +942,13 @@
       "cancel": "Cancel",
       "deleteError": "Failed to delete task",
       "deleteConfirmTitle": "Delete this task?",
-      "deleteConfirmDescription": "This action cannot be undone. This will permanently delete the task."
+      "deleteConfirmDescription": "This action cannot be undone. This will permanently delete the task.",
+      "footer": {
+        "allSaved": "All changes saved",
+        "saving": "Saving...",
+        "saveFailed": "Save failed",
+        "close": "Close"
+      }
     },
     "priority": {
       "high": "High",
