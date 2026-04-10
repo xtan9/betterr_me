@@ -147,14 +147,22 @@ describe('POST /api/chat', () => {
         model: expect.anything(),
         tools: expect.any(Object),
         stopWhen: expect.anything(),
-        messages: expect.arrayContaining([
-          expect.objectContaining({ role: 'user', content: [{ type: 'text', text: 'Hi, who are you?' }] }),
-          expect.objectContaining({ role: 'assistant' }),
-        ]),
+        messages: expect.any(Array),
       })
     );
-    // No system prompt — identity is embedded in priming messages
+    // Verify identity messages are prepended before user messages
     const callArgs = mockStreamText.mock.calls[0][0];
+    expect(callArgs.messages[0]).toEqual(
+      expect.objectContaining({ role: 'user', content: [{ type: 'text', text: 'Hi, who are you?' }] }),
+    );
+    expect(callArgs.messages[1]).toEqual(
+      expect.objectContaining({ role: 'assistant' }),
+    );
+    // User's actual message follows the priming
+    expect(callArgs.messages[2]).toEqual(
+      expect.objectContaining({ role: 'user' }),
+    );
+    // No system prompt — identity is embedded in priming messages
     expect(callArgs.system).toBeUndefined();
   });
 
