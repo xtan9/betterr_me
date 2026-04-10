@@ -8,3 +8,8 @@ const anthropic = createAnthropic({
 // Note: Empty authToken is guarded at the route level (503 if LLM_API_KEY not set).
 
 export const llmProvider = anthropic;
+
+// Anthropic built-in web search tool — gives the model real-time web access
+export const webSearchTool = anthropic.tools.webSearch_20250305({
+  maxUses: 3,
+});
