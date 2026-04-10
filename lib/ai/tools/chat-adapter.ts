@@ -1,4 +1,4 @@
-import { type ToolSet } from "ai";
+import { tool, type ToolSet } from "ai";
 import { log } from "@/lib/logger";
 import type { ToolDefinition, ToolContext } from "./types";
 
@@ -6,14 +6,13 @@ export function toChatTools(
   tools: ToolDefinition[],
   ctx: ToolContext,
 ): ToolSet {
-  // Build tools as plain objects matching the AI SDK ToolSet shape.
-  // We avoid the `tool()` helper because its strict overloads conflict
-  // with our generic ToolDefinition<any> parameter types.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result: Record<string, any> = {};
+  const result: ToolSet = {};
 
   for (const t of tools) {
-    result[t.name] = {
+    // Use tool() helper for proper Zod→JSON Schema conversion.
+    // Cast to work around strict generic overloads on tool().
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    result[t.name] = (tool as any)({
       description: t.description,
       parameters: t.parameters,
       execute: async (params: unknown) => {
@@ -24,8 +23,8 @@ export function toChatTools(
           return { error: `Failed to execute ${t.name}: ${error instanceof Error ? error.message : String(error)}` };
         }
       },
-    };
+    });
   }
 
-  return result as ToolSet;
+  return result;
 }
