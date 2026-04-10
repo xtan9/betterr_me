@@ -46,9 +46,12 @@ export function createMemoryTool(supabase: SupabaseClient, userId: string) {
           case "str_replace": {
             const existing = await db.get(userId, action.path);
             if (!existing) return `File not found: ${action.path}`;
+            const oldStr = action.old_str ?? "";
+            if (!existing.content.includes(oldStr))
+              return `String not found in ${action.path}: ${oldStr}`;
             const updated = existing.content.replace(
-              action.old_str,
-              action.new_str,
+              oldStr,
+              action.new_str ?? "",
             );
             await db.upsert(userId, action.path, updated);
             return `Updated ${action.path}`;
@@ -57,15 +60,19 @@ export function createMemoryTool(supabase: SupabaseClient, userId: string) {
             const file = await db.get(userId, action.path);
             if (!file) return `File not found: ${action.path}`;
             const lines = file.content.split("\n");
-            lines.splice(action.insert_line, 0, action.new_str);
+            lines.splice(action.insert_line ?? 0, 0, action.new_str ?? "");
             await db.upsert(userId, action.path, lines.join("\n"));
-            return `Inserted at line ${action.insert_line} in ${action.path}`;
+            return `Inserted at line ${action.insert_line ?? 0} in ${action.path}`;
           }
           case "delete": {
+            const toDelete = await db.get(userId, action.path);
+            if (!toDelete) return `File not found: ${action.path}`;
             await db.delete(userId, action.path);
             return `Deleted ${action.path}`;
           }
           case "rename": {
+            const toRename = await db.get(userId, action.path);
+            if (!toRename) return `File not found: ${action.path}`;
             await db.rename(userId, action.path, action.new_path);
             return `Renamed ${action.path} to ${action.new_path}`;
           }
