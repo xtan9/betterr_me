@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Calendar, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { log } from "@/lib/logger";
 import {
   Dialog,
   DialogContent,
@@ -101,6 +102,8 @@ export function KanbanDetailModal({
     setOriginalTitle(task?.title || "");
     setIsEditingTitle(false);
     setLastSaveError(false);
+    setIsSaving(false);
+    saveCountRef.current = 0;
   }
 
   useEffect(() => {
@@ -125,15 +128,16 @@ export function KanbanDetailModal({
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          console.error(`Task update failed: field="${fieldName}", status=${res.status}, serverError="${body?.error}"`);
+          log.error("[kanban] Task update failed", null, { field: fieldName, status: res.status, serverError: body?.error });
           toast.error(body?.error || t("detail.updateError"));
           setLastSaveError(true);
           return false;
         }
         onTaskUpdated();
+        setLastSaveError(false);
         return true;
       } catch (error) {
-        console.error(`Task update network error: field="${fieldName}"`, error);
+        log.error("[kanban] Task update network error", error, { field: fieldName });
         toast.error(t("detail.updateError"));
         setLastSaveError(true);
         return false;
@@ -192,14 +196,14 @@ export function KanbanDetailModal({
       const res = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        console.error(`Task delete failed: taskId="${task.id}", status=${res.status}, serverError="${body?.error}"`);
+        log.error("[kanban] Task delete failed", null, { taskId: task.id, status: res.status, serverError: body?.error });
         toast.error(body?.error || t("detail.deleteError"));
         return;
       }
       onClose();
       onTaskDeleted?.();
     } catch (error) {
-      console.error(`Task delete network error: taskId="${task.id}"`, error);
+      log.error("[kanban] Task delete network error", error, { taskId: task.id });
       toast.error(t("detail.deleteError"));
     } finally {
       setIsDeleting(false);
