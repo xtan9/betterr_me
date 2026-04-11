@@ -1948,7 +1948,11 @@
     "input": {
       "placeholder": "輸入訊息...",
       "send": "傳送",
-      "stop": "停止"
+      "stop": "停止",
+      "attach": "附加圖片",
+      "dropZone": "拖放圖片到這裡",
+      "fileTooLarge": "圖片大小不能超過20MB",
+      "invalidType": "僅支援 PNG、JPG、GIF 和 WebP 格式的圖片"
     },
     "error": {
       "generic": "出了點問題，請重試。",
