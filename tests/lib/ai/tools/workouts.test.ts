@@ -101,6 +101,16 @@ describe("workoutTools", () => {
     expect(result).toEqual({ id: "w1", exercises: [] });
   });
 
+  it("getWorkoutDetails returns error when not found", async () => {
+    const ctx = makeCtx();
+    mockGetWorkoutWithExercises.mockResolvedValue(null);
+    const result = await findTool("getWorkoutDetails").execute(
+      { workoutId: "w999" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Workout not found" });
+  });
+
   it("getExercises calls ExercisesDB.getAllExercises", async () => {
     const ctx = makeCtx();
     mockGetAllExercises.mockResolvedValue([

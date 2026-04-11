@@ -225,9 +225,10 @@ export function taskTools(): ToolDefinition[] {
       execute: async (params, ctx: ToolContext) => {
         const db = new RecurringTasksDB(ctx.supabase);
         // Calculate a rolling window end date (30 days from start)
-        const throughDate = new Date(params.startDate);
-        throughDate.setDate(throughDate.getDate() + 30);
-        const throughDateStr = throughDate.toISOString().split("T")[0];
+        // Use string manipulation to avoid UTC date shift from toISOString()
+        const [y, m, d] = params.startDate.split("-").map(Number);
+        const throughDate = new Date(y, m - 1, d + 30);
+        const throughDateStr = `${throughDate.getFullYear()}-${String(throughDate.getMonth() + 1).padStart(2, "0")}-${String(throughDate.getDate()).padStart(2, "0")}`;
 
         return db.createRecurringTask(
           {

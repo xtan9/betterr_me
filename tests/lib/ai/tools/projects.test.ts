@@ -58,6 +58,16 @@ describe("projectTools", () => {
     expect(result).toEqual({ id: "p1", name: "Side hustle" });
   });
 
+  it("getProject returns error when not found", async () => {
+    const ctx = makeCtx();
+    mockGetProject.mockResolvedValue(null);
+    const result = await findTool("getProject").execute(
+      { projectId: "p999" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Project not found" });
+  });
+
   it("createProject calls ProjectsDB.createProject with defaults", async () => {
     const ctx = makeCtx();
     mockCreateProject.mockResolvedValue({ id: "p2", name: "New proj" });

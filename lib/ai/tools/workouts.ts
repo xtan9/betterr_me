@@ -74,7 +74,9 @@ export function workoutTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new WorkoutsDB(ctx.supabase);
-        return db.getWorkoutWithExercises(params.workoutId);
+        const workout = await db.getWorkoutWithExercises(params.workoutId);
+        if (!workout) return { error: "Workout not found" };
+        return workout;
       },
     },
     {
