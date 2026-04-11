@@ -32,6 +32,8 @@ export function ChatInput({
   const [input, setInput] = useState("");
   const [images, setImages] = useState<FileUIPart[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const dragCountRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,9 +50,16 @@ export function ChatInput({
 
   const processFiles = useCallback((fileList: FileList | File[]) => {
     const files = Array.from(fileList);
+    setFileError(null);
     for (const file of files) {
-      if (!ACCEPTED_TYPES.includes(file.type)) continue;
-      if (file.size > MAX_FILE_SIZE) continue;
+      if (!ACCEPTED_TYPES.includes(file.type)) {
+        setFileError(t("input.invalidType"));
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        setFileError(t("input.fileTooLarge"));
+        continue;
+      }
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
@@ -69,7 +78,14 @@ export function ChatInput({
       };
       reader.readAsDataURL(file);
     }
-  }, []);
+  }, [t]);
+
+  // Auto-clear file error after 3 seconds
+  useEffect(() => {
+    if (!fileError) return;
+    const timer = setTimeout(() => setFileError(null), 3000);
+    return () => clearTimeout(timer);
+  }, [fileError]);
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
@@ -121,19 +137,29 @@ export function ChatInput({
     [processFiles]
   );
 
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCountRef.current++;
+    setIsDragging(true);
+  }, []);
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    dragCountRef.current--;
+    if (dragCountRef.current <= 0) {
+      dragCountRef.current = 0;
+      setIsDragging(false);
+    }
   }, []);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
+      dragCountRef.current = 0;
       setIsDragging(false);
       if (e.dataTransfer?.files) processFiles(e.dataTransfer.files);
     },
@@ -158,6 +184,7 @@ export function ChatInput({
   return (
     <div
       className="border-t border-border bg-background px-4 pb-4 pt-2"
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -166,6 +193,10 @@ export function ChatInput({
         <div className="mb-2 flex items-center justify-center rounded-xl border-2 border-dashed border-primary/50 bg-primary/5 py-6 text-sm text-muted-foreground">
           {t("input.dropZone")}
         </div>
+      )}
+
+      {fileError && (
+        <p className="mb-2 text-xs text-destructive">{fileError}</p>
       )}
 
       {images.length > 0 && (

@@ -39,6 +39,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         }
         if (part.type === "file" && part.mediaType?.startsWith("image/")) {
           return (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               key={i}
               src={part.url}
