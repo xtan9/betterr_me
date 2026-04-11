@@ -5,7 +5,7 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 const mockGetUserCategories = vi.fn();
 const mockCreateCategory = vi.fn();
 
-vi.mock("@/lib/db", () => ({
+vi.mock("@/lib/db/categories", () => ({
   CategoriesDB: class {
     getUserCategories = mockGetUserCategories;
     createCategory = mockCreateCategory;

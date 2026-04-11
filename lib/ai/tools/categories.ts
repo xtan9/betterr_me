@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CategoriesDB } from "@/lib/db";
+import { CategoriesDB } from "@/lib/db/categories";
 import type { ToolDefinition, ToolContext } from "./types";
 
 export function categoryTools(): ToolDefinition[] {
