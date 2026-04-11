@@ -18,10 +18,24 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+function mockSupabaseSelect(data: unknown) {
+  return {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({ data, error: null }),
+          }),
+        }),
+      }),
+    }),
+  } as unknown as ToolContext["supabase"];
+}
+
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
   return {
     userId: "user-123",
-    supabase: {} as ToolContext["supabase"],
+    supabase: mockSupabaseSelect(null),
     date: "2026-04-10",
     timezone: "America/Toronto",
     ...overrides,
@@ -92,8 +106,10 @@ describe("reminderTools", () => {
     });
   });
 
-  it("deleteReminder returns success", async () => {
-    const ctx = makeCtx();
+  it("deleteReminder verifies existence then deletes", async () => {
+    const ctx = makeCtx({
+      supabase: mockSupabaseSelect({ id: "r1" }),
+    });
     mockDeleteReminder.mockResolvedValue(undefined);
     const result = await findTool("deleteReminder").execute(
       { reminderId: "r1" },
@@ -101,5 +117,17 @@ describe("reminderTools", () => {
     );
     expect(mockDeleteReminder).toHaveBeenCalledWith("user-123", "r1");
     expect(result).toEqual({ success: true });
+  });
+
+  it("deleteReminder returns error when not found", async () => {
+    const ctx = makeCtx({
+      supabase: mockSupabaseSelect(null),
+    });
+    const result = await findTool("deleteReminder").execute(
+      { reminderId: "r999" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Reminder not found" });
+    expect(mockDeleteReminder).not.toHaveBeenCalled();
   });
 });

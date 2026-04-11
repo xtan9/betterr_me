@@ -81,9 +81,15 @@ export function reminderTools(): ToolDefinition[] {
         reminderId: z.string().describe("The reminder ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
+        // RemindersDB has no getReminder(id) method, so verify via direct query
+        const { data } = await ctx.supabase
+          .from("reminders")
+          .select("id")
+          .eq("id", params.reminderId)
+          .eq("user_id", ctx.userId)
+          .single();
+        if (!data) return { error: "Reminder not found" };
         const db = new RemindersDB(ctx.supabase);
-        // Verify existence — getRemindersBySource is the only scoped read,
-        // so we rely on deleteReminder's own userId filter + return check.
         await db.deleteReminder(ctx.userId, params.reminderId);
         return { success: true };
       },
