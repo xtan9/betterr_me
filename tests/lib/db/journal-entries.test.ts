@@ -187,7 +187,7 @@ describe('JournalEntriesDB', () => {
       expect(mockSupabaseClient.select).toHaveBeenCalledWith('entry_date, mood, title');
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
       expect(mockSupabaseClient.gte).toHaveBeenCalledWith('entry_date', '2026-02-01');
-      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2026-02-31');
+      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2026-02-28');
     });
 
     it('should filter by date range for given month', async () => {
@@ -197,6 +197,26 @@ describe('JournalEntriesDB', () => {
 
       expect(mockSupabaseClient.gte).toHaveBeenCalledWith('entry_date', '2026-12-01');
       expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2026-12-31');
+    });
+
+    it('should use correct last day for months with fewer than 31 days', async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      // April has 30 days
+      await journalDB.getCalendarMonth(mockUserId, 2026, 4);
+      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2026-04-30');
+
+      vi.clearAllMocks();
+
+      // February 2026 has 28 days (not a leap year)
+      await journalDB.getCalendarMonth(mockUserId, 2026, 2);
+      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2026-02-28');
+
+      vi.clearAllMocks();
+
+      // February 2028 has 29 days (leap year)
+      await journalDB.getCalendarMonth(mockUserId, 2028, 2);
+      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2028-02-29');
     });
 
     it('should return empty array when no entries', async () => {

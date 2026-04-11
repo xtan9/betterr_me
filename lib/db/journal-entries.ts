@@ -127,8 +127,9 @@ export class JournalEntriesDB {
     month: number
   ): Promise<JournalCalendarDay[]> {
     const monthStr = String(month).padStart(2, "0");
+    const lastDay = new Date(year, month, 0).getDate();
     const startDate = `${year}-${monthStr}-01`;
-    const endDate = `${year}-${monthStr}-31`;
+    const endDate = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
 
     const { data, error } = await this.supabase
       .from("journal_entries")
