@@ -7,11 +7,14 @@ const mockGetTimeline = vi.fn();
 const mockUpsertEntry = vi.fn();
 const mockDeleteEntry = vi.fn();
 
+const mockGetEntry = vi.fn();
+
 vi.mock("@/lib/db", () => ({
   JournalEntriesDB: class {
     getEntryByDate = mockGetEntryByDate;
     getTimeline = mockGetTimeline;
     upsertEntry = mockUpsertEntry;
+    getEntry = mockGetEntry;
     deleteEntry = mockDeleteEntry;
   },
 }));
@@ -44,14 +47,27 @@ describe("journalTools", () => {
     ]);
   });
 
-  it("deleteJournalEntry calls deleteEntry and returns success", async () => {
+  it("deleteJournalEntry verifies existence then deletes", async () => {
     const ctx = makeCtx();
+    mockGetEntry.mockResolvedValue({ id: "j1" });
     mockDeleteEntry.mockResolvedValue(undefined);
     const result = await findTool("deleteJournalEntry").execute(
       { entryId: "j1" },
       ctx,
     );
+    expect(mockGetEntry).toHaveBeenCalledWith("j1", "user-123");
     expect(mockDeleteEntry).toHaveBeenCalledWith("j1", "user-123");
     expect(result).toEqual({ success: true });
+  });
+
+  it("deleteJournalEntry returns error when not found", async () => {
+    const ctx = makeCtx();
+    mockGetEntry.mockResolvedValue(null);
+    const result = await findTool("deleteJournalEntry").execute(
+      { entryId: "j999" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Journal entry not found" });
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 });

@@ -104,15 +104,29 @@ describe("taskTools", () => {
     expect(result).toEqual({ id: "t2", title: "New task" });
   });
 
-  it("deleteTask calls TasksDB.deleteTask", async () => {
+  it("deleteTask verifies existence then deletes", async () => {
     const ctx = makeCtx();
     const tools = taskTools();
     const deleteTask = tools.find((t) => t.name === "deleteTask")!;
+    mockGetTask.mockResolvedValue({ id: "t1" });
     mockDeleteTask.mockResolvedValue(undefined);
 
     const result = await deleteTask.execute({ taskId: "t1" }, ctx);
 
+    expect(mockGetTask).toHaveBeenCalledWith("t1", "user-123");
     expect(mockDeleteTask).toHaveBeenCalledWith("t1", "user-123");
     expect(result).toEqual({ success: true });
+  });
+
+  it("deleteTask returns error when not found", async () => {
+    const ctx = makeCtx();
+    const tools = taskTools();
+    const deleteTask = tools.find((t) => t.name === "deleteTask")!;
+    mockGetTask.mockResolvedValue(null);
+
+    const result = await deleteTask.execute({ taskId: "t999" }, ctx);
+
+    expect(result).toEqual({ error: "Task not found" });
+    expect(mockDeleteTask).not.toHaveBeenCalled();
   });
 });

@@ -60,6 +60,9 @@ export function workoutTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new WorkoutsDB(ctx.supabase);
+        // Verify ownership — getWorkoutWithExercises is scoped by RLS
+        const workout = await db.getWorkoutWithExercises(params.workoutId);
+        if (!workout) return { error: "Workout not found" };
         return db.updateWorkout(params.workoutId, {
           status: "completed",
           notes: params.notes ?? null,

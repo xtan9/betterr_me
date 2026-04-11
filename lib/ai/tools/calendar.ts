@@ -98,6 +98,8 @@ export function calendarTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new CalendarEventsDB(ctx.supabase);
+        const event = await db.getEvent(params.eventId, ctx.userId);
+        if (!event) return { error: "Event not found" };
         await db.deleteEvent(params.eventId, ctx.userId);
         return { success: true };
       },

@@ -8,6 +8,8 @@ const mockUpdateRecurringTask = vi.fn();
 const mockPauseRecurringTask = vi.fn();
 const mockDeleteRecurringTask = vi.fn();
 
+const mockGetRecurringTask = vi.fn();
+
 vi.mock("@/lib/db", () => ({
   TasksDB: class {
     getTodayTasks = vi.fn();
@@ -22,6 +24,7 @@ vi.mock("@/lib/db", () => ({
   },
   RecurringTasksDB: class {
     getUserRecurringTasks = mockGetUserRecurringTasks;
+    getRecurringTask = mockGetRecurringTask;
     createRecurringTask = mockCreateRecurringTask;
     updateRecurringTask = mockUpdateRecurringTask;
     pauseRecurringTask = mockPauseRecurringTask;
@@ -128,14 +131,27 @@ describe("recurring task tools", () => {
     expect(mockPauseRecurringTask).toHaveBeenCalledWith("rt1", "user-123");
   });
 
-  it("deleteRecurringTask returns success", async () => {
+  it("deleteRecurringTask verifies existence then deletes", async () => {
     const ctx = makeCtx();
+    mockGetRecurringTask.mockResolvedValue({ id: "rt1" });
     mockDeleteRecurringTask.mockResolvedValue(undefined);
     const result = await findTool("deleteRecurringTask").execute(
       { recurringTaskId: "rt1" },
       ctx,
     );
+    expect(mockGetRecurringTask).toHaveBeenCalledWith("rt1", "user-123");
     expect(mockDeleteRecurringTask).toHaveBeenCalledWith("rt1", "user-123");
     expect(result).toEqual({ success: true });
+  });
+
+  it("deleteRecurringTask returns error when not found", async () => {
+    const ctx = makeCtx();
+    mockGetRecurringTask.mockResolvedValue(null);
+    const result = await findTool("deleteRecurringTask").execute(
+      { recurringTaskId: "rt999" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Recurring task not found" });
+    expect(mockDeleteRecurringTask).not.toHaveBeenCalled();
   });
 });

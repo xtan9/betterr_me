@@ -65,6 +65,8 @@ export function reminderTools(): ToolDefinition[] {
             fire_at: params.snoozeUntil,
           });
         }
+        // Schema has no "dismissed" status — "sent" is the terminal state
+        // that marks a reminder as no longer pending.
         return db.updateReminderStatus(
           ctx.userId,
           params.reminderId,
@@ -80,6 +82,8 @@ export function reminderTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new RemindersDB(ctx.supabase);
+        // Verify existence — getRemindersBySource is the only scoped read,
+        // so we rely on deleteReminder's own userId filter + return check.
         await db.deleteReminder(ctx.userId, params.reminderId);
         return { success: true };
       },

@@ -74,17 +74,30 @@ describe("workoutTools", () => {
     expect(result).toEqual({ id: "w1", status: "in_progress" });
   });
 
-  it("completeWorkout sets status to completed", async () => {
+  it("completeWorkout verifies ownership then completes", async () => {
     const ctx = makeCtx();
+    mockGetWorkoutWithExercises.mockResolvedValue({ id: "w1", exercises: [] });
     mockUpdateWorkout.mockResolvedValue({ id: "w1", status: "completed" });
     await findTool("completeWorkout").execute(
       { workoutId: "w1", notes: "Great session" },
       ctx,
     );
+    expect(mockGetWorkoutWithExercises).toHaveBeenCalledWith("w1");
     expect(mockUpdateWorkout).toHaveBeenCalledWith("w1", {
       status: "completed",
       notes: "Great session",
     });
+  });
+
+  it("completeWorkout returns error when not found", async () => {
+    const ctx = makeCtx();
+    mockGetWorkoutWithExercises.mockResolvedValue(null);
+    const result = await findTool("completeWorkout").execute(
+      { workoutId: "w999" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Workout not found" });
+    expect(mockUpdateWorkout).not.toHaveBeenCalled();
   });
 
   it("getWorkoutDetails calls getWorkoutWithExercises", async () => {

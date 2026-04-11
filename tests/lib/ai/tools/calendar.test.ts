@@ -5,6 +5,7 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 const mockGetUserEvents = vi.fn();
 const mockCreateEvent = vi.fn();
 const mockUpdateEvent = vi.fn();
+const mockGetEvent = vi.fn();
 const mockDeleteEvent = vi.fn();
 
 vi.mock("@/lib/db", () => ({
@@ -12,6 +13,7 @@ vi.mock("@/lib/db", () => ({
     getUserEvents = mockGetUserEvents;
     createEvent = mockCreateEvent;
     updateEvent = mockUpdateEvent;
+    getEvent = mockGetEvent;
     deleteEvent = mockDeleteEvent;
   },
 }));
@@ -57,14 +59,27 @@ describe("calendarTools", () => {
     });
   });
 
-  it("deleteEvent returns success", async () => {
+  it("deleteEvent verifies existence then deletes", async () => {
     const ctx = makeCtx();
+    mockGetEvent.mockResolvedValue({ id: "e1" });
     mockDeleteEvent.mockResolvedValue(undefined);
     const result = await findTool("deleteEvent").execute(
       { eventId: "e1" },
       ctx,
     );
+    expect(mockGetEvent).toHaveBeenCalledWith("e1", "user-123");
     expect(mockDeleteEvent).toHaveBeenCalledWith("e1", "user-123");
     expect(result).toEqual({ success: true });
+  });
+
+  it("deleteEvent returns error when not found", async () => {
+    const ctx = makeCtx();
+    mockGetEvent.mockResolvedValue(null);
+    const result = await findTool("deleteEvent").execute(
+      { eventId: "e999" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Event not found" });
+    expect(mockDeleteEvent).not.toHaveBeenCalled();
   });
 });

@@ -98,6 +98,8 @@ export function projectTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new ProjectsDB(ctx.supabase);
+        const project = await db.getProject(params.projectId, ctx.userId);
+        if (!project) return { error: "Project not found" };
         await db.deleteProject(params.projectId, ctx.userId);
         return { success: true };
       },

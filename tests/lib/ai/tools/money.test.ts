@@ -5,6 +5,7 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 const mockGetByHousehold = vi.fn();
 const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
+const mockGetById = vi.fn();
 const mockGetByMonth = vi.fn();
 const mockGetSpendingByCategory = vi.fn();
 const mockGetSpendingTrends = vi.fn();
@@ -19,6 +20,7 @@ const mockGetBillsByHousehold = vi.fn();
 vi.mock("@/lib/db", () => ({
   TransactionsDB: class {
     getByHousehold = mockGetByHousehold;
+    getById = mockGetById;
     create = mockCreate;
     update = mockUpdate;
   },
@@ -74,14 +76,27 @@ describe("moneyTools", () => {
     expect(result).toEqual({ error: "No household found" });
   });
 
-  it("updateTransaction calls TransactionsDB.update", async () => {
+  it("updateTransaction verifies ownership then updates", async () => {
     const ctx = makeCtx();
+    mockGetById.mockResolvedValue({ id: "t1", household_id: "hh-1" });
     mockUpdate.mockResolvedValue({ id: "t1" });
     await findTool("updateTransaction").execute(
       { transactionId: "t1", notes: "Updated" },
       ctx,
     );
+    expect(mockGetById).toHaveBeenCalledWith("t1");
     expect(mockUpdate).toHaveBeenCalledWith("t1", { notes: "Updated" });
+  });
+
+  it("updateTransaction returns error for wrong household", async () => {
+    const ctx = makeCtx();
+    mockGetById.mockResolvedValue({ id: "t1", household_id: "other-hh" });
+    const result = await findTool("updateTransaction").execute(
+      { transactionId: "t1", notes: "test" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Transaction not found" });
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it("getAccounts calls MoneyAccountsDB.getByHousehold", async () => {
@@ -123,37 +138,54 @@ describe("moneyTools", () => {
     });
   });
 
-  it("updateSavingsGoal transforms camelCase to snake_case", async () => {
+  it("updateSavingsGoal verifies ownership and transforms params", async () => {
     const ctx = makeCtx();
+    mockGetGoalsByHousehold.mockResolvedValue([{ id: "g1" }]);
     mockUpdateGoal.mockResolvedValue({ id: "g1", name: "Renamed" });
     await findTool("updateSavingsGoal").execute(
       { goalId: "g1", name: "Renamed", targetCents: 200000 },
       ctx,
     );
+    expect(mockGetGoalsByHousehold).toHaveBeenCalledWith("hh-1");
     expect(mockUpdateGoal).toHaveBeenCalledWith("g1", {
       name: "Renamed",
       target_cents: 200000,
     });
   });
 
-  it("deleteSavingsGoal returns success", async () => {
+  it("deleteSavingsGoal verifies ownership then deletes", async () => {
     const ctx = makeCtx();
+    mockGetGoalsByHousehold.mockResolvedValue([{ id: "g1" }]);
     mockDeleteGoal.mockResolvedValue(undefined);
     const result = await findTool("deleteSavingsGoal").execute(
       { goalId: "g1" },
       ctx,
     );
+    expect(mockGetGoalsByHousehold).toHaveBeenCalledWith("hh-1");
     expect(mockDeleteGoal).toHaveBeenCalledWith("g1");
     expect(result).toEqual({ success: true });
   });
 
-  it("addSavingsContribution calls addContribution", async () => {
+  it("deleteSavingsGoal returns error when goal not in household", async () => {
     const ctx = makeCtx();
+    mockGetGoalsByHousehold.mockResolvedValue([{ id: "other-goal" }]);
+    const result = await findTool("deleteSavingsGoal").execute(
+      { goalId: "g1" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Savings goal not found" });
+    expect(mockDeleteGoal).not.toHaveBeenCalled();
+  });
+
+  it("addSavingsContribution verifies ownership then adds", async () => {
+    const ctx = makeCtx();
+    mockGetGoalsByHousehold.mockResolvedValue([{ id: "g1" }]);
     mockAddContribution.mockResolvedValue({ id: "c1" });
     await findTool("addSavingsContribution").execute(
       { goalId: "g1", amountCents: 10000, note: "Monthly" },
       ctx,
     );
+    expect(mockGetGoalsByHousehold).toHaveBeenCalledWith("hh-1");
     expect(mockAddContribution).toHaveBeenCalledWith("g1", 10000, "Monthly");
   });
 

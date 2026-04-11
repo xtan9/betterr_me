@@ -92,14 +92,27 @@ describe("projectTools", () => {
     });
   });
 
-  it("deleteProject returns success", async () => {
+  it("deleteProject verifies existence then deletes", async () => {
     const ctx = makeCtx();
+    mockGetProject.mockResolvedValue({ id: "p1" });
     mockDeleteProject.mockResolvedValue(undefined);
     const result = await findTool("deleteProject").execute(
       { projectId: "p1" },
       ctx,
     );
+    expect(mockGetProject).toHaveBeenCalledWith("p1", "user-123");
     expect(mockDeleteProject).toHaveBeenCalledWith("p1", "user-123");
     expect(result).toEqual({ success: true });
+  });
+
+  it("deleteProject returns error when not found", async () => {
+    const ctx = makeCtx();
+    mockGetProject.mockResolvedValue(null);
+    const result = await findTool("deleteProject").execute(
+      { projectId: "p999" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Project not found" });
+    expect(mockDeleteProject).not.toHaveBeenCalled();
   });
 });

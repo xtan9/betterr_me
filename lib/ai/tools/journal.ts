@@ -62,6 +62,8 @@ export function journalTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new JournalEntriesDB(ctx.supabase);
+        const entry = await db.getEntry(params.entryId, ctx.userId);
+        if (!entry) return { error: "Journal entry not found" };
         await db.deleteEntry(params.entryId, ctx.userId);
         return { success: true };
       },

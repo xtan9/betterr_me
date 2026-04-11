@@ -155,6 +155,8 @@ export function habitTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new HabitsDB(ctx.supabase);
+        const habit = await db.getHabit(params.habitId, ctx.userId);
+        if (!habit) return { error: "Habit not found" };
         await db.deleteHabit(params.habitId, ctx.userId);
         return { success: true };
       },

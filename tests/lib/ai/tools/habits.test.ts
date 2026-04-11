@@ -154,15 +154,28 @@ describe("habitTools", () => {
     expect(mockArchiveHabit).toHaveBeenCalledWith("h1", "user-123");
   });
 
-  it("deleteHabit calls HabitsDB.deleteHabit and returns success", async () => {
+  it("deleteHabit verifies existence then deletes", async () => {
     const ctx = makeCtx();
+    mockGetHabit.mockResolvedValue({ id: "h1" });
     mockDeleteHabit.mockResolvedValue(undefined);
     const result = await findTool("deleteHabit").execute(
       { habitId: "h1" },
       ctx,
     );
+    expect(mockGetHabit).toHaveBeenCalledWith("h1", "user-123");
     expect(mockDeleteHabit).toHaveBeenCalledWith("h1", "user-123");
     expect(result).toEqual({ success: true });
+  });
+
+  it("deleteHabit returns error when not found", async () => {
+    const ctx = makeCtx();
+    mockGetHabit.mockResolvedValue(null);
+    const result = await findTool("deleteHabit").execute(
+      { habitId: "h999" },
+      ctx,
+    );
+    expect(result).toEqual({ error: "Habit not found" });
+    expect(mockDeleteHabit).not.toHaveBeenCalled();
   });
 
   it("getDetailedHabitStats fetches habit then gets detailed stats", async () => {

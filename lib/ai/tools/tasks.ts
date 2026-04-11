@@ -153,6 +153,8 @@ export function taskTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new TasksDB(ctx.supabase);
+        const task = await db.getTask(params.taskId, ctx.userId);
+        if (!task) return { error: "Task not found" };
         await db.deleteTask(params.taskId, ctx.userId);
         return { success: true };
       },
@@ -294,6 +296,8 @@ export function taskTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new RecurringTasksDB(ctx.supabase);
+        const rt = await db.getRecurringTask(params.recurringTaskId, ctx.userId);
+        if (!rt) return { error: "Recurring task not found" };
         await db.deleteRecurringTask(
           params.recurringTaskId,
           ctx.userId,

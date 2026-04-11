@@ -8,6 +8,17 @@ import {
 } from "@/lib/db";
 import type { ToolDefinition, ToolContext } from "./types";
 
+/** Verify a savings goal belongs to the user's household. */
+async function verifySavingsGoal(
+  db: SavingsGoalsDB,
+  goalId: string,
+  householdId: string,
+): Promise<{ error: string } | null> {
+  const goals = await db.getByHousehold(householdId);
+  if (!goals.some((g) => g.id === goalId)) return { error: "Savings goal not found" };
+  return null;
+}
+
 export function moneyTools(): ToolDefinition[] {
   return [
     {
@@ -96,6 +107,9 @@ export function moneyTools(): ToolDefinition[] {
       execute: async (params, ctx: ToolContext) => {
         if (!ctx.householdId) return { error: "No household found" };
         const db = new TransactionsDB(ctx.supabase);
+        const txn = await db.getById(params.transactionId);
+        if (!txn || txn.household_id !== ctx.householdId)
+          return { error: "Transaction not found" };
         const { transactionId, categoryId, ...rest } = params;
         const updates: Record<string, unknown> = { ...rest };
         if (categoryId !== undefined) updates.category_id = categoryId;
@@ -180,6 +194,8 @@ export function moneyTools(): ToolDefinition[] {
       execute: async (params, ctx: ToolContext) => {
         if (!ctx.householdId) return { error: "No household found" };
         const db = new SavingsGoalsDB(ctx.supabase);
+        const notFound = await verifySavingsGoal(db, params.goalId, ctx.householdId);
+        if (notFound) return notFound;
         const { goalId, targetCents, targetDate, ...rest } = params;
         const updates: Record<string, unknown> = { ...rest };
         if (targetCents !== undefined) updates.target_cents = targetCents;
@@ -203,6 +219,8 @@ export function moneyTools(): ToolDefinition[] {
       execute: async (params, ctx: ToolContext) => {
         if (!ctx.householdId) return { error: "No household found" };
         const db = new SavingsGoalsDB(ctx.supabase);
+        const notFound = await verifySavingsGoal(db, params.goalId, ctx.householdId);
+        if (notFound) return notFound;
         await db.delete(params.goalId);
         return { success: true };
       },
@@ -222,6 +240,8 @@ export function moneyTools(): ToolDefinition[] {
       execute: async (params, ctx: ToolContext) => {
         if (!ctx.householdId) return { error: "No household found" };
         const db = new SavingsGoalsDB(ctx.supabase);
+        const notFound = await verifySavingsGoal(db, params.goalId, ctx.householdId);
+        if (notFound) return notFound;
         return db.addContribution(
           params.goalId,
           params.amountCents,
