@@ -50,12 +50,16 @@ describe("reminderTools", () => {
     const ctx = makeCtx();
     mockCreateReminder.mockResolvedValue({ id: "r1" });
     await findTool("createReminder").execute(
-      { title: "Call dentist", fireAt: "2026-04-10T09:00:00" },
+      {
+        sourceType: "task",
+        sourceId: "t1",
+        fireAt: "2026-04-10T09:00:00",
+      },
       ctx,
     );
     expect(mockCreateReminder).toHaveBeenCalledWith("user-123", {
       source_type: "task",
-      source_id: "",
+      source_id: "t1",
       reminder_type: "absolute",
       relative_minutes: null,
       absolute_time: "2026-04-10T09:00:00",

@@ -123,6 +123,19 @@ describe("moneyTools", () => {
     });
   });
 
+  it("updateSavingsGoal transforms camelCase to snake_case", async () => {
+    const ctx = makeCtx();
+    mockUpdateGoal.mockResolvedValue({ id: "g1", name: "Renamed" });
+    await findTool("updateSavingsGoal").execute(
+      { goalId: "g1", name: "Renamed", targetCents: 200000 },
+      ctx,
+    );
+    expect(mockUpdateGoal).toHaveBeenCalledWith("g1", {
+      name: "Renamed",
+      target_cents: 200000,
+    });
+  });
+
   it("deleteSavingsGoal returns success", async () => {
     const ctx = makeCtx();
     mockDeleteGoal.mockResolvedValue(undefined);

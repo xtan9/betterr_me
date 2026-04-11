@@ -98,6 +98,23 @@ describe("recurring task tools", () => {
     expect(result).toEqual({ id: "rt2", title: "Daily standup" });
   });
 
+  it("updateRecurringTask removes undefined and passes to DB", async () => {
+    const ctx = makeCtx();
+    mockUpdateRecurringTask.mockResolvedValue({
+      id: "rt1",
+      title: "Updated title",
+    });
+    await findTool("updateRecurringTask").execute(
+      { recurringTaskId: "rt1", title: "Updated title" },
+      ctx,
+    );
+    expect(mockUpdateRecurringTask).toHaveBeenCalledWith(
+      "rt1",
+      "user-123",
+      { title: "Updated title" },
+    );
+  });
+
   it("pauseRecurringTask calls pauseRecurringTask", async () => {
     const ctx = makeCtx();
     mockPauseRecurringTask.mockResolvedValue({

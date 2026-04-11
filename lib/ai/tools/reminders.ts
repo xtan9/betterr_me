@@ -10,6 +10,7 @@ export function reminderTools(): ToolDefinition[] {
       parameters: z.object({}),
       execute: async (_params, ctx: ToolContext) => {
         const db = new RemindersDB(ctx.supabase);
+        // Security: filter by userId since getPendingReminders is unscoped (designed for cron dispatcher)
         const tomorrow = new Date(ctx.date + "T23:59:59");
         tomorrow.setDate(tomorrow.getDate() + 1);
         const all = await db.getPendingReminders(tomorrow.toISOString());
@@ -18,28 +19,24 @@ export function reminderTools(): ToolDefinition[] {
     },
     {
       name: "createReminder",
-      description: "Create a standalone reminder at a specific date and time",
+      description:
+        "Create a reminder linked to an existing task, calendar event, habit, or bill. The reminder fires a push notification at the specified time.",
       parameters: z.object({
-        title: z.string().describe("Reminder title/message"),
+        sourceType: z
+          .enum(["calendar_event", "task", "habit", "bill"])
+          .describe("Type of item this reminder is for"),
+        sourceId: z.string().describe("ID of the task, event, habit, or bill"),
         fireAt: z
           .string()
           .describe(
             "When to fire the reminder (ISO datetime, e.g., 2026-04-10T09:00:00)",
           ),
-        sourceType: z
-          .enum(["calendar_event", "task", "habit", "bill"])
-          .optional()
-          .describe("What this reminder is for"),
-        sourceId: z
-          .string()
-          .optional()
-          .describe("ID of the related item"),
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new RemindersDB(ctx.supabase);
         return db.createReminder(ctx.userId, {
-          source_type: params.sourceType ?? "task",
-          source_id: params.sourceId ?? "",
+          source_type: params.sourceType,
+          source_id: params.sourceId,
           reminder_type: "absolute",
           relative_minutes: null,
           absolute_time: params.fireAt,
