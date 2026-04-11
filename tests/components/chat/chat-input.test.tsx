@@ -22,22 +22,20 @@ describe("ChatInput", () => {
   it("renders a textarea element and a send button", () => {
     render(<ChatInput {...defaultProps} />);
     expect(screen.getByRole("textbox")).toBeInTheDocument();
-    expect(screen.getByRole("button")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "input.send" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "input.attach" })).toBeInTheDocument();
   });
 
   it("send button is disabled when input is empty", () => {
     render(<ChatInput {...defaultProps} />);
-    const button = screen.getByRole("button");
+    const button = screen.getByRole("button", { name: "input.send" });
     expect(button).toBeDisabled();
   });
 
   it("send button is disabled when isStreaming=true", () => {
     render(<ChatInput {...defaultProps} isStreaming={true} />);
-    // When streaming, the stop button is shown, not send button
-    // but if we had a send button visible during streaming it should be disabled
-    // Per spec: stop button is shown instead
-    const button = screen.getByRole("button");
-    // Stop button should be enabled (it's the stop action)
+    // When streaming, the stop button is shown instead of send
+    const button = screen.getByRole("button", { name: "input.stop" });
     expect(button).not.toBeDisabled();
   });
 
@@ -49,7 +47,7 @@ describe("ChatInput", () => {
     fireEvent.change(textarea, { target: { value: "Hello world" } });
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
-    expect(onSend).toHaveBeenCalledWith("Hello world");
+    expect(onSend).toHaveBeenCalledWith("Hello world", undefined);
   });
 
   it("pressing Shift+Enter does NOT call onSend", async () => {
@@ -94,13 +92,9 @@ describe("ChatInput", () => {
   });
 
   it("stop button (CircleStop icon) is visible when isStreaming=true instead of send button", () => {
-    render(
-      <ChatInput {...defaultProps} isStreaming={true} />
-    );
-    // Stop button should have the CircleStop icon
-    const button = screen.getByRole("button");
+    render(<ChatInput {...defaultProps} isStreaming={true} />);
+    const button = screen.getByRole("button", { name: "input.stop" });
     expect(button).toBeInTheDocument();
-    // The button should be the stop button (not disabled, since stop is actionable)
     expect(button).not.toBeDisabled();
   });
 
@@ -139,12 +133,14 @@ describe("ChatInput", () => {
     expect(textarea).toHaveValue("");
   });
 
-  it("textarea and button are disabled when disabled prop is true", () => {
+  it("textarea and buttons are disabled when disabled prop is true", () => {
     render(<ChatInput {...defaultProps} disabled={true} />);
     const textarea = screen.getByRole("textbox");
-    const button = screen.getByRole("button");
+    const sendButton = screen.getByRole("button", { name: "input.send" });
+    const attachButton = screen.getByRole("button", { name: "input.attach" });
     expect(textarea).toBeDisabled();
-    expect(button).toBeDisabled();
+    expect(sendButton).toBeDisabled();
+    expect(attachButton).toBeDisabled();
   });
 
   it("pressing Enter while isStreaming does not call onSend", () => {
@@ -160,9 +156,10 @@ describe("ChatInput", () => {
 
   it("aria-labels use translated strings", () => {
     const { rerender } = render(<ChatInput {...defaultProps} />);
-    expect(screen.getByRole("button")).toHaveAttribute("aria-label", "input.send");
+    expect(screen.getByRole("button", { name: "input.send" })).toHaveAttribute("aria-label", "input.send");
+    expect(screen.getByRole("button", { name: "input.attach" })).toHaveAttribute("aria-label", "input.attach");
 
     rerender(<ChatInput {...defaultProps} isStreaming={true} />);
-    expect(screen.getByRole("button")).toHaveAttribute("aria-label", "input.stop");
+    expect(screen.getByRole("button", { name: "input.stop" })).toHaveAttribute("aria-label", "input.stop");
   });
 });
