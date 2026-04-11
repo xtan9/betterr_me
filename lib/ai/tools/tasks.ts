@@ -248,6 +248,7 @@ export function taskTools(): ToolDefinition[] {
             end_type: params.endType ?? "never",
             end_date: params.endDate ?? null,
             end_count: params.endCount ?? null,
+            status: "active",
           },
           throughDateStr,
         );

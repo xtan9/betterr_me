@@ -173,9 +173,13 @@ export function moneyTools(): ToolDefinition[] {
           name: params.name,
           target_cents: params.targetCents,
           current_cents: 0,
-          target_date: params.targetDate ?? null,
-          is_shared: false,
+          deadline: params.targetDate ?? null,
+          funding_type: "manual",
           linked_account_id: null,
+          icon: null,
+          color: null,
+          status: "active",
+          is_shared: false,
         });
       },
     },
@@ -199,7 +203,7 @@ export function moneyTools(): ToolDefinition[] {
         const { goalId, targetCents, targetDate, ...rest } = params;
         const updates: Record<string, unknown> = { ...rest };
         if (targetCents !== undefined) updates.target_cents = targetCents;
-        if (targetDate !== undefined) updates.target_date = targetDate;
+        if (targetDate !== undefined) updates.deadline = targetDate;
         for (const key of Object.keys(updates)) {
           if (updates[key] === undefined) delete updates[key];
         }

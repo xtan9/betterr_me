@@ -116,6 +116,7 @@ describe("habitTools", () => {
       description: null,
       frequency: { type: "daily" },
       category_id: null,
+      status: "active",
     });
     expect(result).toEqual({ id: "h2", name: "Read" });
   });

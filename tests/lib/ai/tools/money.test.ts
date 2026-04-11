@@ -132,9 +132,13 @@ describe("moneyTools", () => {
       name: "Vacation",
       target_cents: 500000,
       current_cents: 0,
-      target_date: null,
-      is_shared: false,
+      deadline: null,
+      funding_type: "manual",
       linked_account_id: null,
+      icon: null,
+      color: null,
+      status: "active",
+      is_shared: false,
     });
   });
 

@@ -75,6 +75,7 @@ export function habitTools(): ToolDefinition[] {
           description: params.description ?? null,
           frequency: params.frequency as HabitFrequency,
           category_id: params.categoryId ?? null,
+          status: "active",
         });
       },
     },
