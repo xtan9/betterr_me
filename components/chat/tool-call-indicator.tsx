@@ -29,6 +29,54 @@ const TOOL_LABELS: Record<string, string> = {
   getActiveWorkout: "Checking active workout",
   getProjects: "Looking up projects",
   getUpcomingReminders: "Checking reminders",
+  // Habit CRUD
+  createHabit: "Creating habit",
+  updateHabit: "Updating habit",
+  pauseHabit: "Pausing habit",
+  resumeHabit: "Resuming habit",
+  archiveHabit: "Archiving habit",
+  deleteHabit: "Deleting habit",
+  getDetailedHabitStats: "Analyzing habit stats",
+  // Recurring tasks
+  getRecurringTasks: "Looking up recurring tasks",
+  createRecurringTask: "Creating recurring task",
+  updateRecurringTask: "Updating recurring task",
+  pauseRecurringTask: "Pausing recurring task",
+  deleteRecurringTask: "Deleting recurring task",
+  // Projects
+  getProject: "Looking up project",
+  createProject: "Creating project",
+  updateProject: "Updating project",
+  deleteProject: "Deleting project",
+  // Calendar
+  updateEvent: "Updating event",
+  deleteEvent: "Deleting event",
+  // Reminders
+  createReminder: "Creating reminder",
+  dismissReminder: "Dismissing reminder",
+  deleteReminder: "Deleting reminder",
+  // Journal
+  deleteJournalEntry: "Deleting journal entry",
+  // Money
+  updateTransaction: "Updating transaction",
+  getAccounts: "Looking up accounts",
+  getSavingsGoals: "Looking up savings goals",
+  createSavingsGoal: "Creating savings goal",
+  updateSavingsGoal: "Updating savings goal",
+  deleteSavingsGoal: "Deleting savings goal",
+  addSavingsContribution: "Adding to savings",
+  getRecurringBills: "Looking up recurring bills",
+  getSpendingTrends: "Analyzing spending trends",
+  // Workouts
+  startWorkout: "Starting workout",
+  completeWorkout: "Completing workout",
+  getWorkoutDetails: "Loading workout details",
+  getExercises: "Looking up exercises",
+  getRoutines: "Looking up routines",
+  getExerciseHistory: "Checking exercise history",
+  // Categories
+  getCategories: "Looking up categories",
+  createCategory: "Creating category",
 };
 
 interface ToolCallIndicatorProps {

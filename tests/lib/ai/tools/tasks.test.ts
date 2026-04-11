@@ -14,6 +14,13 @@ const mockUpdateTask = vi.fn();
 const mockDeleteTask = vi.fn();
 
 vi.mock("@/lib/db", () => ({
+  RecurringTasksDB: class {
+    getUserRecurringTasks = vi.fn();
+    createRecurringTask = vi.fn();
+    updateRecurringTask = vi.fn();
+    pauseRecurringTask = vi.fn();
+    deleteRecurringTask = vi.fn();
+  },
   TasksDB: class {
     getTodayTasks = mockGetTodayTasks;
     getUpcomingTasks = mockGetUpcomingTasks;
@@ -40,9 +47,9 @@ function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
 describe("taskTools", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns an array of 9 tool definitions", () => {
+  it("returns an array of 14 tool definitions", () => {
     const tools = taskTools();
-    expect(tools).toHaveLength(9);
+    expect(tools).toHaveLength(14);
     expect(tools.map((t) => t.name)).toEqual([
       "getTodayTasks",
       "getUpcomingTasks",
@@ -53,6 +60,11 @@ describe("taskTools", () => {
       "toggleTask",
       "updateTask",
       "deleteTask",
+      "getRecurringTasks",
+      "createRecurringTask",
+      "updateRecurringTask",
+      "pauseRecurringTask",
+      "deleteRecurringTask",
     ]);
   });
 

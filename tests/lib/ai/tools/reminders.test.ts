@@ -1,0 +1,101 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { reminderTools } from "@/lib/ai/tools/reminders";
+import type { ToolContext } from "@/lib/ai/tools/types";
+
+const mockGetPendingReminders = vi.fn();
+const mockCreateReminder = vi.fn();
+const mockUpdateReminderStatus = vi.fn();
+const mockUpdateReminder = vi.fn();
+const mockDeleteReminder = vi.fn();
+
+vi.mock("@/lib/db", () => ({
+  RemindersDB: class {
+    getPendingReminders = mockGetPendingReminders;
+    createReminder = mockCreateReminder;
+    updateReminderStatus = mockUpdateReminderStatus;
+    updateReminder = mockUpdateReminder;
+    deleteReminder = mockDeleteReminder;
+  },
+}));
+
+function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
+  return {
+    userId: "user-123",
+    supabase: {} as ToolContext["supabase"],
+    date: "2026-04-10",
+    timezone: "America/Toronto",
+    ...overrides,
+  };
+}
+
+function findTool(name: string) {
+  return reminderTools().find((t) => t.name === name)!;
+}
+
+describe("reminderTools", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns 4 tool definitions", () => {
+    const tools = reminderTools();
+    expect(tools).toHaveLength(4);
+    expect(tools.map((t) => t.name)).toEqual([
+      "getUpcomingReminders",
+      "createReminder",
+      "dismissReminder",
+      "deleteReminder",
+    ]);
+  });
+
+  it("createReminder calls RemindersDB.createReminder with correct params", async () => {
+    const ctx = makeCtx();
+    mockCreateReminder.mockResolvedValue({ id: "r1" });
+    await findTool("createReminder").execute(
+      { title: "Call dentist", fireAt: "2026-04-10T09:00:00" },
+      ctx,
+    );
+    expect(mockCreateReminder).toHaveBeenCalledWith("user-123", {
+      source_type: "task",
+      source_id: "",
+      reminder_type: "absolute",
+      relative_minutes: null,
+      absolute_time: "2026-04-10T09:00:00",
+      channels: ["push"],
+      fire_at: "2026-04-10T09:00:00",
+    });
+  });
+
+  it("dismissReminder dismisses by setting status to sent", async () => {
+    const ctx = makeCtx();
+    mockUpdateReminderStatus.mockResolvedValue({ id: "r1", status: "sent" });
+    await findTool("dismissReminder").execute({ reminderId: "r1" }, ctx);
+    expect(mockUpdateReminderStatus).toHaveBeenCalledWith(
+      "user-123",
+      "r1",
+      "sent",
+    );
+  });
+
+  it("dismissReminder snoozes when snoozeUntil is provided", async () => {
+    const ctx = makeCtx();
+    mockUpdateReminder.mockResolvedValue({ id: "r1", status: "pending" });
+    await findTool("dismissReminder").execute(
+      { reminderId: "r1", snoozeUntil: "2026-04-10T14:00:00" },
+      ctx,
+    );
+    expect(mockUpdateReminder).toHaveBeenCalledWith("user-123", "r1", {
+      status: "pending",
+      fire_at: "2026-04-10T14:00:00",
+    });
+  });
+
+  it("deleteReminder returns success", async () => {
+    const ctx = makeCtx();
+    mockDeleteReminder.mockResolvedValue(undefined);
+    const result = await findTool("deleteReminder").execute(
+      { reminderId: "r1" },
+      ctx,
+    );
+    expect(mockDeleteReminder).toHaveBeenCalledWith("user-123", "r1");
+    expect(result).toEqual({ success: true });
+  });
+});
