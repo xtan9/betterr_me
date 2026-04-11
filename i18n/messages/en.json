@@ -1948,7 +1948,11 @@
     "input": {
       "placeholder": "Message...",
       "send": "Send",
-      "stop": "Stop"
+      "stop": "Stop",
+      "attach": "Attach image",
+      "dropZone": "Drop images here",
+      "fileTooLarge": "Image must be under 20MB",
+      "invalidType": "Only PNG, JPG, GIF, and WebP images are supported"
     },
     "error": {
       "generic": "Something went wrong. Please try again.",

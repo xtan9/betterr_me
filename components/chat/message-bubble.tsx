@@ -37,6 +37,17 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           }
           return <MarkdownRenderer key={i} content={part.text} />;
         }
+        if (part.type === "file" && part.mediaType?.startsWith("image/")) {
+          return (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={i}
+              src={part.url}
+              alt={part.filename ?? "image"}
+              className="max-w-[300px] rounded-lg mb-2"
+            />
+          );
+        }
         if (part.type === "dynamic-tool") {
           const isComplete = part.state === "output-available" || part.state === "output-error" || part.state === "output-denied";
           return (

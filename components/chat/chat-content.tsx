@@ -10,6 +10,7 @@ import {
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
+import type { FileUIPart } from "ai";
 import { useTranslations } from "next-intl";
 import useSWR from "swr";
 import { MessageList } from "@/components/chat/message-list";
@@ -217,11 +218,11 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   }, [error]);
 
   const handleSend = useCallback(
-    (text: string) => {
+    (text: string, files?: FileUIPart[]) => {
       // Just send to LLM — user message shown optimistically in useChat buffer.
       // Persistence (conversation creation + user + assistant messages) is handled
       // in the stream-complete effect, so a mid-stream refresh leaves no partial data.
-      sendMessage({ text });
+      sendMessage({ text, files });
     },
     [sendMessage]
   );
