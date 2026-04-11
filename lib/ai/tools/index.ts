@@ -42,7 +42,9 @@ export async function createChatTools({
   try {
     householdId = await resolveHousehold(supabase, userId);
   } catch (error) {
-    log.warn("[chat] Could not resolve household for money tools", { error: String(error) });
+    log.info("[chat] Household not available — money tools will have limited functionality", {
+      error: error instanceof Error ? error.message : JSON.stringify(error),
+    });
   }
 
   const ctx: ToolContext = { userId, supabase, date, timezone, householdId };

@@ -53,7 +53,10 @@ export function registerTools(server: McpServer): void {
       const { resolveHousehold } = await import("@/lib/db/households");
       householdId = await resolveHousehold(supabase, userId);
     } catch (error) {
-      log.warn("[mcp] Could not resolve household for money tools", { error: String(error), userId });
+      log.info("[mcp] Household not available — money tools will have limited functionality", {
+        error: error instanceof Error ? error.message : JSON.stringify(error),
+        userId,
+      });
     }
 
     return {
