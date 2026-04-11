@@ -11,6 +11,7 @@ import { moneyTools } from "./money";
 import { workoutTools } from "./workouts";
 import { projectTools } from "./projects";
 import { reminderTools } from "./reminders";
+import { categoryTools } from "./categories";
 import { toChatTools } from "./chat-adapter";
 import { registerSharedTools } from "./mcp-adapter";
 
@@ -24,6 +25,7 @@ export function getAllTools(): ToolDefinition[] {
     ...workoutTools(),
     ...projectTools(),
     ...reminderTools(),
+    ...categoryTools(),
   ];
 }
 

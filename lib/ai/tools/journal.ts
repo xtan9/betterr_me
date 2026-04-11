@@ -53,5 +53,20 @@ export function journalTools(): ToolDefinition[] {
         });
       },
     },
+    {
+      name: "deleteJournalEntry",
+      description:
+        "Delete a journal entry. This action cannot be undone. Always confirm with the user first.",
+      parameters: z.object({
+        entryId: z.string().describe("The journal entry ID"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        const db = new JournalEntriesDB(ctx.supabase);
+        const entry = await db.getEntry(params.entryId, ctx.userId);
+        if (!entry) return { error: "Journal entry not found" };
+        await db.deleteEntry(params.entryId, ctx.userId);
+        return { success: true };
+      },
+    },
   ];
 }

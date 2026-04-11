@@ -1,6 +1,23 @@
 import { z } from "zod";
-import { TransactionsDB, BudgetsDB } from "@/lib/db";
+import {
+  TransactionsDB,
+  BudgetsDB,
+  MoneyAccountsDB,
+  SavingsGoalsDB,
+  RecurringBillsDB,
+} from "@/lib/db";
 import type { ToolDefinition, ToolContext } from "./types";
+
+/** Verify a savings goal belongs to the user's household. */
+async function verifySavingsGoal(
+  db: SavingsGoalsDB,
+  goalId: string,
+  householdId: string,
+): Promise<{ error: string } | null> {
+  const goals = await db.getByHousehold(householdId);
+  if (!goals.some((g) => g.id === goalId)) return { error: "Savings goal not found" };
+  return null;
+}
 
 export function moneyTools(): ToolDefinition[] {
   return [
@@ -77,6 +94,192 @@ export function moneyTools(): ToolDefinition[] {
           plaid_category_detailed: null,
           source: "manual",
         });
+      },
+    },
+    {
+      name: "updateTransaction",
+      description: "Update a transaction's category or notes",
+      parameters: z.object({
+        transactionId: z.string().describe("The transaction ID"),
+        categoryId: z.string().optional().describe("New category ID"),
+        notes: z.string().optional().describe("New notes"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        if (!ctx.householdId) return { error: "No household found" };
+        const db = new TransactionsDB(ctx.supabase);
+        const txn = await db.getById(params.transactionId);
+        if (!txn || txn.household_id !== ctx.householdId)
+          return { error: "Transaction not found" };
+        const { transactionId, categoryId, ...rest } = params;
+        const updates: Record<string, unknown> = { ...rest };
+        if (categoryId !== undefined) updates.category_id = categoryId;
+        for (const key of Object.keys(updates)) {
+          if (updates[key] === undefined) delete updates[key];
+        }
+        return db.update(
+          transactionId,
+          updates as Partial<
+            Pick<
+              import("@/lib/db").Transaction,
+              "category_id" | "notes" | "category"
+            >
+          >,
+        );
+      },
+    },
+    {
+      name: "getAccounts",
+      description:
+        "List all financial accounts (bank accounts, credit cards, cash)",
+      parameters: z.object({}),
+      execute: async (_params, ctx: ToolContext) => {
+        if (!ctx.householdId) return { error: "No household found" };
+        const db = new MoneyAccountsDB(ctx.supabase);
+        return db.getByHousehold(ctx.householdId);
+      },
+    },
+    {
+      name: "getSavingsGoals",
+      description: "List all savings goals with progress",
+      parameters: z.object({}),
+      execute: async (_params, ctx: ToolContext) => {
+        if (!ctx.householdId) return { error: "No household found" };
+        const db = new SavingsGoalsDB(ctx.supabase);
+        return db.getByHousehold(ctx.householdId);
+      },
+    },
+    {
+      name: "createSavingsGoal",
+      description:
+        "Create a new savings goal. Always confirm with the user first.",
+      parameters: z.object({
+        name: z
+          .string()
+          .describe("Goal name (e.g., 'Emergency Fund')"),
+        targetCents: z
+          .number()
+          .describe("Target amount in cents (e.g., 100000 for $1000)"),
+        targetDate: z
+          .string()
+          .optional()
+          .describe("Target date in YYYY-MM-DD format"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        if (!ctx.householdId) return { error: "No household found" };
+        const db = new SavingsGoalsDB(ctx.supabase);
+        return db.create({
+          household_id: ctx.householdId,
+          owner_id: ctx.userId,
+          name: params.name,
+          target_cents: params.targetCents,
+          current_cents: 0,
+          deadline: params.targetDate ?? null,
+          funding_type: "manual",
+          linked_account_id: null,
+          icon: null,
+          color: null,
+          status: "active",
+          is_shared: false,
+        });
+      },
+    },
+    {
+      name: "updateSavingsGoal",
+      description: "Update a savings goal's name, target, or date",
+      parameters: z.object({
+        goalId: z.string().describe("The savings goal ID"),
+        name: z.string().optional().describe("New name"),
+        targetCents: z
+          .number()
+          .optional()
+          .describe("New target in cents"),
+        targetDate: z.string().optional().describe("New target date"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        if (!ctx.householdId) return { error: "No household found" };
+        const db = new SavingsGoalsDB(ctx.supabase);
+        const notFound = await verifySavingsGoal(db, params.goalId, ctx.householdId);
+        if (notFound) return notFound;
+        const { goalId, targetCents, targetDate, ...rest } = params;
+        const updates: Record<string, unknown> = { ...rest };
+        if (targetCents !== undefined) updates.target_cents = targetCents;
+        if (targetDate !== undefined) updates.deadline = targetDate;
+        for (const key of Object.keys(updates)) {
+          if (updates[key] === undefined) delete updates[key];
+        }
+        return db.update(
+          goalId,
+          updates as import("@/lib/db").SavingsGoalUpdate,
+        );
+      },
+    },
+    {
+      name: "deleteSavingsGoal",
+      description:
+        "Delete a savings goal and all its contributions. This action cannot be undone. Always confirm with the user first.",
+      parameters: z.object({
+        goalId: z.string().describe("The savings goal ID"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        if (!ctx.householdId) return { error: "No household found" };
+        const db = new SavingsGoalsDB(ctx.supabase);
+        const notFound = await verifySavingsGoal(db, params.goalId, ctx.householdId);
+        if (notFound) return notFound;
+        await db.delete(params.goalId);
+        return { success: true };
+      },
+    },
+    {
+      name: "addSavingsContribution",
+      description:
+        "Add money toward a savings goal. Always confirm with the user first.",
+      parameters: z.object({
+        goalId: z.string().describe("The savings goal ID"),
+        amountCents: z.number().describe("Amount in cents to add"),
+        note: z
+          .string()
+          .optional()
+          .describe("Note for this contribution"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        if (!ctx.householdId) return { error: "No household found" };
+        const db = new SavingsGoalsDB(ctx.supabase);
+        const notFound = await verifySavingsGoal(db, params.goalId, ctx.householdId);
+        if (notFound) return notFound;
+        return db.addContribution(
+          params.goalId,
+          params.amountCents,
+          params.note,
+        );
+      },
+    },
+    {
+      name: "getRecurringBills",
+      description: "List all recurring bills and subscriptions",
+      parameters: z.object({}),
+      execute: async (_params, ctx: ToolContext) => {
+        if (!ctx.householdId) return { error: "No household found" };
+        const db = new RecurringBillsDB(ctx.supabase);
+        return db.getByHousehold(ctx.householdId);
+      },
+    },
+    {
+      name: "getSpendingTrends",
+      description:
+        "Get spending trends by category across the last N months",
+      parameters: z.object({
+        months: z
+          .number()
+          .optional()
+          .describe("Number of months to analyze (default 3)"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        if (!ctx.householdId) return { error: "No household found" };
+        const db = new BudgetsDB(ctx.supabase);
+        return db.getSpendingTrends(
+          ctx.householdId,
+          params.months ?? 3,
+        );
       },
     },
   ];

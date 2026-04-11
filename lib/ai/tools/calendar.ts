@@ -49,5 +49,60 @@ export function calendarTools(): ToolDefinition[] {
         });
       },
     },
+    {
+      name: "updateEvent",
+      description: "Update a calendar event's details",
+      parameters: z.object({
+        eventId: z.string().describe("The event ID"),
+        title: z.string().optional().describe("New title"),
+        description: z.string().optional().describe("New description"),
+        startDate: z
+          .string()
+          .optional()
+          .describe("New start date in YYYY-MM-DD format"),
+        endDate: z
+          .string()
+          .optional()
+          .describe("New end date in YYYY-MM-DD format"),
+        startTime: z
+          .string()
+          .optional()
+          .describe("New start time in HH:MM format"),
+        endTime: z
+          .string()
+          .optional()
+          .describe("New end time in HH:MM format"),
+        location: z.string().optional().describe("New location"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        const db = new CalendarEventsDB(ctx.supabase);
+        const { eventId, startDate, endDate, startTime, endTime, ...rest } =
+          params;
+        const updates: Record<string, unknown> = { ...rest };
+        if (startDate !== undefined) updates.start_date = startDate;
+        if (endDate !== undefined) updates.end_date = endDate;
+        if (startTime !== undefined) updates.start_time = startTime;
+        if (endTime !== undefined) updates.end_time = endTime;
+        for (const key of Object.keys(updates)) {
+          if (updates[key] === undefined) delete updates[key];
+        }
+        return db.updateEvent(eventId, ctx.userId, updates);
+      },
+    },
+    {
+      name: "deleteEvent",
+      description:
+        "Delete a calendar event. This action cannot be undone. Always confirm with the user first.",
+      parameters: z.object({
+        eventId: z.string().describe("The event ID"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        const db = new CalendarEventsDB(ctx.supabase);
+        const event = await db.getEvent(params.eventId, ctx.userId);
+        if (!event) return { error: "Event not found" };
+        await db.deleteEvent(params.eventId, ctx.userId);
+        return { success: true };
+      },
+    },
   ];
 }

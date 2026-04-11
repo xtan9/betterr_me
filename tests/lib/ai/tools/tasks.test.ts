@@ -14,6 +14,13 @@ const mockUpdateTask = vi.fn();
 const mockDeleteTask = vi.fn();
 
 vi.mock("@/lib/db", () => ({
+  RecurringTasksDB: class {
+    getUserRecurringTasks = vi.fn();
+    createRecurringTask = vi.fn();
+    updateRecurringTask = vi.fn();
+    pauseRecurringTask = vi.fn();
+    deleteRecurringTask = vi.fn();
+  },
   TasksDB: class {
     getTodayTasks = mockGetTodayTasks;
     getUpcomingTasks = mockGetUpcomingTasks;
@@ -40,9 +47,9 @@ function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
 describe("taskTools", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns an array of 9 tool definitions", () => {
+  it("returns an array of 14 tool definitions", () => {
     const tools = taskTools();
-    expect(tools).toHaveLength(9);
+    expect(tools).toHaveLength(14);
     expect(tools.map((t) => t.name)).toEqual([
       "getTodayTasks",
       "getUpcomingTasks",
@@ -53,6 +60,11 @@ describe("taskTools", () => {
       "toggleTask",
       "updateTask",
       "deleteTask",
+      "getRecurringTasks",
+      "createRecurringTask",
+      "updateRecurringTask",
+      "pauseRecurringTask",
+      "deleteRecurringTask",
     ]);
   });
 
@@ -92,15 +104,29 @@ describe("taskTools", () => {
     expect(result).toEqual({ id: "t2", title: "New task" });
   });
 
-  it("deleteTask calls TasksDB.deleteTask", async () => {
+  it("deleteTask verifies existence then deletes", async () => {
     const ctx = makeCtx();
     const tools = taskTools();
     const deleteTask = tools.find((t) => t.name === "deleteTask")!;
+    mockGetTask.mockResolvedValue({ id: "t1" });
     mockDeleteTask.mockResolvedValue(undefined);
 
     const result = await deleteTask.execute({ taskId: "t1" }, ctx);
 
+    expect(mockGetTask).toHaveBeenCalledWith("t1", "user-123");
     expect(mockDeleteTask).toHaveBeenCalledWith("t1", "user-123");
     expect(result).toEqual({ success: true });
+  });
+
+  it("deleteTask returns error when not found", async () => {
+    const ctx = makeCtx();
+    const tools = taskTools();
+    const deleteTask = tools.find((t) => t.name === "deleteTask")!;
+    mockGetTask.mockResolvedValue(null);
+
+    const result = await deleteTask.execute({ taskId: "t999" }, ctx);
+
+    expect(result).toEqual({ error: "Task not found" });
+    expect(mockDeleteTask).not.toHaveBeenCalled();
   });
 });
