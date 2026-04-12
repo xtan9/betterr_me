@@ -76,7 +76,7 @@ export function SidebarLayout({ defaultPinned, children }: SidebarLayoutProps) {
           </Link>
         </header>
         <div className="flex-1 overflow-auto bg-background">
-          <div className="w-full px-4 py-6 sm:px-6 md:px-8 md:pt-10">
+          <div className="w-full px-4 py-6 sm:px-6 md:px-page-padding md:pt-page-padding-top">
             {children}
           </div>
         </div>
