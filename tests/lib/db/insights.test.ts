@@ -123,7 +123,7 @@ describe("InsightsDB", () => {
           name: "Meditate",
           frequency: { type: "daily" },
           status: "active",
-          current_streak: 20, // Not near any milestone
+          current_streak: 40, // Not near any milestone (between 30 and 50)
         },
       ];
 

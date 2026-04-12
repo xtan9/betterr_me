@@ -12,10 +12,12 @@ import {
   Tag,
   Pause,
   Play,
-  Archive,
+  GraduationCap,
+  RotateCcw,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { log } from "@/lib/logger";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { useCategories } from "@/lib/hooks/use-categories";
@@ -30,6 +32,8 @@ import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header
 import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import { StreakCounter } from "@/components/habits/streak-counter";
 import { NextMilestone } from "@/components/habits/next-milestone";
+import { GraduateDialog } from "@/components/habits/graduate-dialog";
+import { ReactivateDialog } from "@/components/habits/reactivate-dialog";
 import dynamic from "next/dynamic";
 
 const HabitCalendar = dynamic(() =>
@@ -138,6 +142,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
 
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
+  const [graduateOpen, setGraduateOpen] = useState(false);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
 
   const handleMonthChange = useCallback((newYear: number, newMonth: number) => {
     setCalendarYear(newYear);
@@ -283,20 +289,34 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     }
   };
 
-  const handleArchive = async () => {
-    const confirmed = window.confirm(t("detail.confirmArchive"));
-    if (!confirmed) return;
+  const handleGraduate = async () => {
     try {
-      const response = await fetch(`/api/habits/${habitId}?archive=true`, {
-        method: "DELETE",
+      const response = await fetch(`/api/habits/${habitId}/graduate`, {
+        method: "POST",
       });
-      if (!response.ok) throw new Error("Failed to archive");
+      if (!response.ok) throw new Error("Failed to graduate");
+      mutateHabit();
       revalidateSidebarCounts();
-      toast.success(t("toast.archiveSuccess"));
+      toast.success(t("toast.graduateSuccess"));
       router.push("/habits");
     } catch (err) {
-      console.error("Failed to archive habit:", err);
-      toast.error(t("toast.archiveError"));
+      log.error("[habits] graduate", err, { habitId });
+      toast.error(t("toast.graduateError"));
+    }
+  };
+
+  const handleReactivate = async () => {
+    try {
+      const response = await fetch(`/api/habits/${habitId}/reactivate`, {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error("Failed to reactivate");
+      mutateHabit();
+      revalidateSidebarCounts();
+      toast.success(t("toast.reactivateSuccess"));
+    } catch (err) {
+      log.error("[habits] reactivate", err, { habitId });
+      toast.error(t("toast.reactivateError"));
     }
   };
 
@@ -368,7 +388,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
                 className={cn(
                   habit.status === "active" && "bg-primary",
                   habit.status === "paused" && "bg-status-warning",
-                  habit.status === "archived" && "bg-muted-foreground"
+                  habit.status === "formed" && "bg-primary"
                 )}
               >
                 {t(`detail.status.${habit.status}`)}
@@ -451,10 +471,26 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
                 </>
               )}
             </Button>
-            <Button variant="outline" onClick={handleArchive} className="gap-2">
-              <Archive className="size-4" />
-              {t("detail.actions.archive")}
-            </Button>
+            {habit.status === "active" && (
+              <Button
+                variant="outline"
+                onClick={() => setGraduateOpen(true)}
+                className="gap-2"
+              >
+                <GraduationCap className="size-4" />
+                {t("detail.actions.graduate")}
+              </Button>
+            )}
+            {habit.status === "formed" && (
+              <Button
+                variant="outline"
+                onClick={() => setReactivateOpen(true)}
+                className="gap-2"
+              >
+                <RotateCcw className="size-4" />
+                {t("detail.actions.reactivate")}
+              </Button>
+            )}
             <Button variant="destructive" onClick={handleDelete} className="gap-2">
               <Trash2 className="size-4" />
               {t("detail.actions.delete")}
@@ -462,6 +498,20 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
           </div>
         </CardContent>
       </Card>
+
+      <GraduateDialog
+        open={graduateOpen}
+        onOpenChange={setGraduateOpen}
+        habitName={habit.name}
+        onConfirm={handleGraduate}
+      />
+      <ReactivateDialog
+        open={reactivateOpen}
+        onOpenChange={setReactivateOpen}
+        habitName={habit.name}
+        bestStreak={habit.best_streak}
+        onConfirm={handleReactivate}
+      />
     </div>
   );
 }

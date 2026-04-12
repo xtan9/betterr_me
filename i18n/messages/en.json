@@ -362,9 +362,9 @@
         "title": "No paused habits",
         "description": "Paused habits will appear here."
       },
-      "noArchived": {
-        "title": "No archived habits",
-        "description": "Archived habits will appear here."
+      "noFormed": {
+        "title": "No formed habits yet",
+        "description": "Once you graduate a habit, it'll live here as a badge of honor."
       }
     },
     "list": {
@@ -373,7 +373,7 @@
       "tabs": {
         "active": "Active",
         "paused": "Paused",
-        "archived": "Archived"
+        "formed": "Formed"
       }
     },
     "page": {
@@ -386,7 +386,7 @@
       "status": {
         "active": "Active",
         "paused": "Paused",
-        "archived": "Archived"
+        "formed": "Formed"
       },
       "completion": {
         "title": "Completion Rate",
@@ -399,10 +399,10 @@
       "actions": {
         "pause": "Pause Habit",
         "resume": "Resume Habit",
-        "archive": "Archive Habit",
+        "graduate": "Graduate Habit",
+        "reactivate": "Reactivate",
         "delete": "Delete Habit"
       },
-      "confirmArchive": "Are you sure you want to archive this habit?",
       "confirmDelete": "Are you sure you want to delete this habit? This cannot be undone.",
       "cannotEditOldLogs": "Cannot edit logs older than 7 days",
       "notFound": "Habit not found"
@@ -416,8 +416,10 @@
       "pauseError": "Failed to pause habit",
       "resumeSuccess": "Habit resumed",
       "resumeError": "Failed to resume habit",
-      "archiveSuccess": "Habit archived",
-      "archiveError": "Failed to archive habit",
+      "graduateSuccess": "🎓 Graduated! Find it in your Formed gallery.",
+      "graduateError": "Failed to graduate habit",
+      "reactivateSuccess": "Reactivated. Let's build it again.",
+      "reactivateError": "Failed to reactivate habit",
       "deleteSuccess": "Habit deleted",
       "deleteError": "Failed to delete habit"
     },
@@ -433,6 +435,7 @@
       "celebration": "Incredible! {habit} just hit {count} days!",
       "celebration7": "One week strong!",
       "celebration14": "Two weeks and counting!",
+      "celebration21": "Three weeks in — real momentum building.",
       "celebration30": "A full month! You're building something real.",
       "celebration50": "50 days. Half the people who start never get here.",
       "celebration100": "Triple digits. Legendary.",
@@ -441,6 +444,41 @@
       "nextMilestone": "{days} more days to your {milestone}-day milestone!",
       "noNextMilestone": "You've passed every milestone. Keep going!",
       "dismiss": "Dismiss"
+    },
+    "graduate": {
+      "nudge_title": "Ready to graduate?",
+      "nudge_body": "You've built real consistency. Mark it as formed anytime.",
+      "nudge_cta": "Graduate",
+      "nudge_dismiss": "Not yet",
+      "dismiss_error": "Failed to dismiss reminder",
+      "confirm_title": "Graduate \"{name}\"?",
+      "confirm_body": "This habit will move to your Formed gallery. You can reactivate it anytime.",
+      "confirm_cta": "Graduate",
+      "confirm_cancel": "Cancel",
+      "success_toast": "🎓 Graduated! Find it in your Formed gallery.",
+      "error_toast": "Failed to graduate habit",
+      "action_label": "Graduate this habit"
+    },
+    "reactivate": {
+      "confirm_title": "Reactivate \"{name}\"?",
+      "confirm_body": "This will move it back to Active. Your streak starts fresh, but your best streak of {n} days is preserved.",
+      "confirm_cta": "Reactivate",
+      "confirm_cancel": "Cancel",
+      "success_toast": "Reactivated. Let's build it again.",
+      "error_toast": "Failed to reactivate habit",
+      "action_label": "Reactivate"
+    },
+    "formed_gallery": {
+      "graduated_on": "Graduated on",
+      "at_streak": "At {n}-day streak",
+      "total_days_active": "{n} days active before graduation",
+      "best_streak": "Best streak: {n} days",
+      "reactivate": "Reactivate",
+      "delete": "Delete",
+      "confirm_delete": "Delete this formed habit? This cannot be undone.",
+      "delete_success": "Habit deleted",
+      "delete_error": "Failed to delete habit",
+      "empty_state": "Graduate your first habit to see it here."
     }
   },
   "auth": {

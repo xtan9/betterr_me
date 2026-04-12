@@ -2,11 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, PATCH, DELETE } from '@/app/api/habits/[id]/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetHabit, mockUpdateHabit, mockDeleteHabit, mockArchiveHabit } = vi.hoisted(() => ({
+const { mockGetHabit, mockUpdateHabit, mockDeleteHabit } = vi.hoisted(() => ({
   mockGetHabit: vi.fn(),
   mockUpdateHabit: vi.fn(),
   mockDeleteHabit: vi.fn(),
-  mockArchiveHabit: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -22,7 +21,6 @@ vi.mock('@/lib/db', () => ({
     getHabit = mockGetHabit;
     updateHabit = mockUpdateHabit;
     deleteHabit = mockDeleteHabit;
-    archiveHabit = mockArchiveHabit;
   },
 }));
 
@@ -182,21 +180,6 @@ describe('DELETE /api/habits/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-  });
-
-  it('should archive when archive=true', async () => {
-    const archived = { ...mockHabit, status: 'archived' };
-    mockArchiveHabit.mockResolvedValue(archived as any);
-
-    const request = new NextRequest('http://localhost:3000/api/habits/habit-1?archive=true', {
-      method: 'DELETE',
-    });
-    const response = await DELETE(request, { params });
-    const data = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(data.archived).toBe(true);
-    expect(mockArchiveHabit).toHaveBeenCalledWith('habit-1', 'user-123');
   });
 
   it('should return 401 if not authenticated', async () => {

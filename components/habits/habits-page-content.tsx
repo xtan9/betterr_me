@@ -135,6 +135,7 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
         onToggle={handleToggleHabit}
         onHabitClick={handleHabitClick}
         togglingHabitIds={togglingHabitIds}
+        onMutate={mutate}
       />
     </div>
   );

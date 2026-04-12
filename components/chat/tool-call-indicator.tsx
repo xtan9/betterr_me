@@ -34,7 +34,8 @@ const TOOL_LABELS: Record<string, string> = {
   updateHabit: "Updating habit",
   pauseHabit: "Pausing habit",
   resumeHabit: "Resuming habit",
-  archiveHabit: "Archiving habit",
+  graduateHabit: "Graduating habit",
+  reactivateHabit: "Reactivating habit",
   deleteHabit: "Deleting habit",
   getDetailedHabitStats: "Analyzing habit stats",
   // Recurring tasks
