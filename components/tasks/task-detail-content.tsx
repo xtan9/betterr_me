@@ -251,7 +251,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
           )}
 
           {/* Details grid */}
-          <TaskDetailsGrid task={task} category={category} catBgColor={catBgColor} isDark={isDark} />
+          <TaskDetailsGrid task={task} category={category} catBgColor={catBgColor} />
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3 pt-4 border-t">

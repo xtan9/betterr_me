@@ -1,3 +1,4 @@
+import type { useTranslations } from "next-intl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeaderSkeleton } from "@/components/layouts/page-header";
@@ -51,7 +52,7 @@ export function HabitDetailSkeleton() {
 
 export function formatFrequency(
   frequency: Habit["frequency"],
-  t: (key: string, values?: Record<string, unknown>) => string,
+  t: ReturnType<typeof useTranslations>,
 ): string {
   switch (frequency.type) {
     case "daily":

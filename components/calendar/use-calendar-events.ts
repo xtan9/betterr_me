@@ -136,10 +136,6 @@ export function useCalendarEvents(
     [quickCreate],
   );
 
-  const handleEventSaved = useCallback(() => {
-    onEventSaved();
-  }, [onEventSaved]);
-
   return {
     quickCreate,
     setQuickCreate,
@@ -151,6 +147,6 @@ export function useCalendarEvents(
     handleEventClick,
     handleNewEvent,
     handleQuickCreateMoreOptions,
-    handleEventSaved,
+    handleEventSaved: onEventSaved,
   };
 }

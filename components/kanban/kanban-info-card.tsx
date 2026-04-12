@@ -15,7 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { Task, TaskStatus } from "@/lib/db/types";
+import type { Task, TaskStatus, TaskUpdate } from "@/lib/db/types";
 
 const STATUS_STYLES: Record<TaskStatus, string> = {
   backlog: "bg-muted text-muted-foreground hover:bg-muted/80",
@@ -44,7 +44,7 @@ const PRIORITY_OPTIONS = [0, 1, 2, 3] as const;
 interface KanbanInfoCardProps {
   task: Task;
   projectName?: string;
-  onUpdateField: <K extends string>(field: K, value: unknown) => Promise<boolean>;
+  onUpdateField: <K extends keyof TaskUpdate>(field: K, value: TaskUpdate[K]) => Promise<boolean>;
 }
 
 export function KanbanInfoCard({

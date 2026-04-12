@@ -11,14 +11,12 @@ interface TaskDetailsGridProps {
   task: Task;
   category: Category | null;
   catBgColor: string | undefined;
-  isDark: boolean;
 }
 
 export function TaskDetailsGrid({
   task,
   category,
   catBgColor,
-  isDark: _isDark,
 }: TaskDetailsGridProps) {
   const t = useTranslations("tasks");
   const priorityT = useTranslations("tasks.priorities");

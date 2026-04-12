@@ -73,7 +73,7 @@ export function CalendarPageContent() {
     navigateToDate,
     handleDayClick,
     updateParams,
-  } = useCalendarNavigation(weekStartDay);
+  } = useCalendarNavigation();
 
   // Default view routing (VIEW-11): detect screen width when no ?view= param
   const viewParam = searchParams.get("view");

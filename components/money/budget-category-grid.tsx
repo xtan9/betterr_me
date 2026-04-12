@@ -3,19 +3,10 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { BudgetRing } from "@/components/money/budget-ring";
 import { formatMoney } from "@/lib/money/arithmetic";
-
-interface BudgetCategory {
-  category_id: string;
-  category_name: string;
-  category_icon: string | null;
-  category_color: string | null;
-  allocated_cents: number;
-  spent_cents: number;
-  rollover_cents: number;
-}
+import type { BudgetCategoryWithSpending } from "@/lib/db/types";
 
 interface BudgetCategoryGridProps {
-  categories: BudgetCategory[];
+  categories: BudgetCategoryWithSpending[];
   onCategoryClick: (categoryId: string) => void;
 }
 
