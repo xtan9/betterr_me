@@ -254,7 +254,7 @@ export function KanbanDetailModal({
           <TabsContent value="details" className="mt-0 flex-1 overflow-hidden">
             <div className="flex h-full">
               {/* Left column (~60%) - Info + Description */}
-              <div className="flex-[3] p-5 space-y-4 overflow-y-auto">
+              <div className="flex-[3] p-5 flex flex-col gap-4 overflow-y-auto">
                 {/* Info card */}
                 <div className="bg-background rounded-lg border shadow-sm">
                   <div className="flex items-center justify-between px-4 py-3 border-b">
@@ -361,19 +361,19 @@ export function KanbanDetailModal({
                 </div>
 
                 {/* Description card */}
-                <div className="bg-background rounded-lg border shadow-sm">
+                <div className="bg-background rounded-lg border shadow-sm flex-1 flex flex-col">
                   <div className="flex items-center justify-between px-4 py-3 border-b">
                     <h3 className="text-base font-semibold">
                       {t("detail.descriptionHeading")}
                     </h3>
                   </div>
-                  <div className="p-4">
+                  <div className="p-4 flex-1 flex flex-col">
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       onBlur={handleDescriptionBlur}
                       placeholder={t("detail.descriptionPlaceholder")}
-                      className="w-full min-h-[150px] p-3 rounded-md border-none bg-transparent text-base resize-y focus:outline-none placeholder:text-muted-foreground"
+                      className="w-full flex-1 min-h-[150px] p-3 rounded-md border-none bg-transparent text-base resize-y focus:outline-none placeholder:text-muted-foreground"
                     />
                   </div>
                 </div>
