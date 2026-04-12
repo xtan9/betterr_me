@@ -4,6 +4,7 @@ import type { Habit, HabitInsert, HabitUpdate, HabitFilters, HabitWithTodayStatu
 import type { HabitFrequency } from './types';
 import { getLocalDateString } from '@/lib/utils';
 import { shouldTrackOnDate } from '@/lib/habits/format';
+import { HabitGraduationsDB } from './habit-graduations';
 
 export class HabitsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -120,15 +121,6 @@ export class HabitsDB {
   }
 
   /**
-   * Archive a habit (soft delete)
-   */
-  async archiveHabit(habitId: string, userId: string): Promise<Habit> {
-    return this.updateHabit(habitId, userId, {
-      status: 'archived',
-    });
-  }
-
-  /**
    * Delete a habit permanently
    */
   async deleteHabit(habitId: string, userId: string): Promise<void> {
@@ -142,13 +134,74 @@ export class HabitsDB {
   }
 
   /**
+   * Graduate a habit — mark it as formed, snapshot streak, record history row.
+   */
+  async graduateHabit(habitId: string, userId: string): Promise<Habit> {
+    const habit = await this.getHabit(habitId, userId);
+    if (!habit) throw new Error('Habit not found');
+
+    const graduatedAt = new Date().toISOString();
+    const graduatedStreak = habit.current_streak;
+
+    const updated = await this.updateHabit(habitId, userId, {
+      status: 'formed',
+      graduated_at: graduatedAt,
+      graduated_streak: graduatedStreak,
+      nudge_dismissed_at: null,
+    });
+
+    const graduations = new HabitGraduationsDB(this.supabase);
+    await graduations.insertGraduation({
+      habit_id: habitId,
+      user_id: userId,
+      graduated_at: graduatedAt,
+      graduated_streak: graduatedStreak,
+    });
+
+    return updated;
+  }
+
+  /**
+   * Reactivate a formed habit — reset current_streak, keep best_streak, stamp reactivated_at.
+   */
+  async reactivateHabit(habitId: string, userId: string): Promise<Habit> {
+    const habit = await this.getHabit(habitId, userId);
+    if (!habit) throw new Error('Habit not found');
+    if (habit.status !== 'formed') {
+      throw new Error('Habit is not formed; cannot reactivate');
+    }
+
+    const updated = await this.updateHabit(habitId, userId, {
+      status: 'active',
+      current_streak: 0,
+      graduated_at: null,
+      graduated_streak: null,
+      nudge_dismissed_at: null,
+    });
+
+    const graduations = new HabitGraduationsDB(this.supabase);
+    await graduations.markReactivated(habitId, userId);
+
+    return updated;
+  }
+
+  /**
+   * Mark the graduation nudge as dismissed for this habit.
+   */
+  async dismissGraduationNudge(habitId: string, userId: string): Promise<Habit> {
+    return this.updateHabit(habitId, userId, {
+      nudge_dismissed_at: new Date().toISOString(),
+    });
+  }
+
+  /**
    * Get habits with today's completion status
    * Used for dashboard view
    */
   async getHabitsWithTodayStatus(userId: string, date?: string): Promise<HabitWithTodayStatus[]> {
     const today = date || getLocalDateString();
 
-    // Get all habits (active, paused, archived) so the UI can filter by tab
+    // Get all habits (active, paused, formed) so the UI can filter by tab
     const habits = await this.getUserHabits(userId);
 
     // Get today's logs for all habits
@@ -264,7 +317,7 @@ export class HabitsDB {
     const counts: Record<string, number> = {
       active: 0,
       paused: 0,
-      archived: 0,
+      formed: 0,
     };
 
     (data || []).forEach(habit => {

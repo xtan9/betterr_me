@@ -16,6 +16,9 @@ describe('HabitsDB', () => {
     current_streak: 5,
     best_streak: 12,
     paused_at: null,
+    graduated_at: null,
+    graduated_streak: null,
+    nudge_dismissed_at: null,
     created_at: '2026-01-30T10:00:00Z',
     updated_at: '2026-01-30T10:00:00Z',
   };
@@ -199,23 +202,11 @@ describe('HabitsDB', () => {
     });
   });
 
-  describe('archiveHabit', () => {
-    it('should set status to archived', async () => {
-      const archivedHabit = { ...mockHabit, status: 'archived' as const };
-      mockSupabaseClient.setMockResponse(archivedHabit);
-
-      const result = await habitsDB.archiveHabit('habit-123', mockUserId);
-
-      expect(result.status).toBe('archived');
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith({ status: 'archived' });
-    });
-  });
-
   describe('getHabitsWithTodayStatus', () => {
-    it('should fetch ALL habits (not just active) so paused/archived appear in their tabs', async () => {
+    it('should fetch ALL habits (not just active) so paused/formed appear in their tabs', async () => {
       const pausedHabit = { ...mockHabit, id: 'habit-paused', status: 'paused' as const };
-      const archivedHabit = { ...mockHabit, id: 'habit-archived', status: 'archived' as const };
-      const allHabits = [mockHabit, pausedHabit, archivedHabit];
+      const formedHabit = { ...mockHabit, id: 'habit-formed', status: 'formed' as const };
+      const allHabits = [mockHabit, pausedHabit, formedHabit];
 
       // First call: getUserHabits (no status filter)
       mockSupabaseClient.setMockResponse(allHabits);
@@ -233,7 +224,97 @@ describe('HabitsDB', () => {
       // Should return all 3 habits
       expect(result).toHaveLength(3);
       expect(result.map((h: { id: string }) => h.id)).toEqual(
-        expect.arrayContaining(['habit-123', 'habit-paused', 'habit-archived'])
+        expect.arrayContaining(['habit-123', 'habit-paused', 'habit-formed'])
+      );
+    });
+  });
+
+  describe('graduation', () => {
+    it('graduateHabit sets status=formed, snapshots streak, inserts graduation row', async () => {
+      const activeHabit = { ...mockHabit, status: 'active' as const, current_streak: 42 };
+      const formedHabit = {
+        ...mockHabit,
+        status: 'formed' as const,
+        current_streak: 42,
+        graduated_streak: 42,
+        graduated_at: '2026-04-12T00:00:00Z',
+        nudge_dismissed_at: null,
+      };
+      // 1st single(): getHabit → activeHabit
+      // 2nd single(): updateHabit → formedHabit
+      // 3rd single(): insertGraduation → grad row
+      mockSupabaseClient.single
+        .mockResolvedValueOnce({ data: activeHabit, error: null })
+        .mockResolvedValueOnce({ data: formedHabit, error: null })
+        .mockResolvedValueOnce({ data: { id: 'grad-1', habit_id: 'habit-123' }, error: null });
+
+      const result = await habitsDB.graduateHabit('habit-123', mockUserId);
+
+      expect(result.status).toBe('formed');
+      expect(result.graduated_streak).toBe(42);
+      expect(mockSupabaseClient.from).toHaveBeenCalledWith('habit_graduations');
+    });
+
+    it('graduateHabit throws when habit not found', async () => {
+      mockSupabaseClient.single.mockResolvedValueOnce({
+        data: null,
+        error: { code: 'PGRST116' },
+      });
+      await expect(habitsDB.graduateHabit('missing', mockUserId)).rejects.toThrow(/not found/i);
+    });
+
+    it('reactivateHabit sets status=active, resets current_streak, preserves best_streak', async () => {
+      const formedHabit = {
+        ...mockHabit,
+        status: 'formed' as const,
+        current_streak: 0,
+        best_streak: 87,
+        graduated_streak: 87,
+        graduated_at: '2026-04-01T00:00:00Z',
+      };
+      const activeHabit = {
+        ...mockHabit,
+        status: 'active' as const,
+        current_streak: 0,
+        best_streak: 87,
+        graduated_at: null,
+        graduated_streak: null,
+      };
+      // 1st single(): getHabit → formedHabit
+      // 2nd single(): updateHabit → activeHabit
+      mockSupabaseClient.single
+        .mockResolvedValueOnce({ data: formedHabit, error: null })
+        .mockResolvedValueOnce({ data: activeHabit, error: null });
+      // maybeSingle for markReactivated's select
+      mockSupabaseClient.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'grad-1' },
+        error: null,
+      });
+      // update (thenable) uses mockData; last setMockResponse applies
+      mockSupabaseClient.setMockResponse({});
+
+      const result = await habitsDB.reactivateHabit('habit-123', mockUserId);
+
+      expect(result.status).toBe('active');
+      expect(result.current_streak).toBe(0);
+      expect(result.best_streak).toBe(87);
+      expect(result.graduated_at).toBeNull();
+    });
+
+    it('reactivateHabit throws when habit is not formed', async () => {
+      const activeHabit = { ...mockHabit, status: 'active' as const };
+      mockSupabaseClient.single.mockResolvedValueOnce({ data: activeHabit, error: null });
+      await expect(habitsDB.reactivateHabit('habit-123', mockUserId)).rejects.toThrow(/not formed/i);
+    });
+
+    it('dismissGraduationNudge stamps nudge_dismissed_at', async () => {
+      const updated = { ...mockHabit, nudge_dismissed_at: '2026-04-12T00:00:00Z' };
+      mockSupabaseClient.single.mockResolvedValueOnce({ data: updated, error: null });
+
+      const result = await habitsDB.dismissGraduationNudge('habit-123', mockUserId);
+      expect(result.nudge_dismissed_at).toBe('2026-04-12T00:00:00Z');
+      expect(mockSupabaseClient.update).toHaveBeenCalledWith(
+        expect.objectContaining({ nudge_dismissed_at: expect.any(String) })
       );
     });
   });

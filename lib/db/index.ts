@@ -6,6 +6,7 @@ export * from "./profiles";
 export * from "./habits";
 export * from "./habit-logs";
 export * from "./habit-milestones";
+export { HabitGraduationsDB } from "./habit-graduations";
 export * from "./insights";
 export * from "./recurring-tasks";
 export * from "./categories";
