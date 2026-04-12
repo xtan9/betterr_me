@@ -45,7 +45,7 @@ export function KanbanColumn({
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Column header */}
-      <div className="flex items-center justify-between px-3 py-2.5">
+      <div className="flex items-center justify-between px-card-header-padding-x py-card-header-padding-y">
         <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
         <Badge variant="secondary" className="text-xs tabular-nums">
           {tasks.length}
