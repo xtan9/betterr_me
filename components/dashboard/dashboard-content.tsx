@@ -571,7 +571,7 @@ function DashboardSkeleton() {
       {/* Content grid skeleton */}
       <div className="grid gap-card-gap xl:grid-cols-2">
         <Card>
-          <div className="p-6 space-y-4">
+          <div className="p-card-padding space-y-4">
             <div className="flex justify-between">
               <Skeleton className="h-6 w-32" />
               <Skeleton className="h-9 w-24" />
@@ -582,7 +582,7 @@ function DashboardSkeleton() {
           </div>
         </Card>
         <Card>
-          <div className="p-6 space-y-4">
+          <div className="p-card-padding space-y-4">
             <div className="flex justify-between">
               <Skeleton className="h-6 w-32" />
               <Skeleton className="h-9 w-24" />

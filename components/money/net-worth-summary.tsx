@@ -15,7 +15,7 @@ export function NetWorthSummary({ view = "mine" }: { view?: ViewMode }) {
   if (isLoading) {
     return (
       <Card className="border-money-border bg-money-surface">
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-card-padding space-y-4">
           <Skeleton className="h-8 w-40" />
           <Skeleton className="h-5 w-28" />
           <div className="flex gap-8">
@@ -30,7 +30,7 @@ export function NetWorthSummary({ view = "mine" }: { view?: ViewMode }) {
   if (error) {
     return (
       <Card className="border-destructive/50 bg-destructive/10">
-        <CardContent className="p-6">
+        <CardContent className="p-card-padding">
           <p className="text-sm text-destructive">{t("fetchError")}</p>
         </CardContent>
       </Card>
@@ -46,7 +46,7 @@ export function NetWorthSummary({ view = "mine" }: { view?: ViewMode }) {
 
   return (
     <Card className="border-money-border bg-money-surface">
-      <CardContent className="p-6">
+      <CardContent className="p-card-padding">
         {/* Total net worth */}
         <div className="mb-1">
           <p className="text-sm text-muted-foreground">

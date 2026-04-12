@@ -67,7 +67,7 @@ function TaskDetailSkeleton() {
         <PageHeaderSkeleton hasActions />
       </div>
       <Card className="max-w-3xl">
-        <CardContent className="space-y-6 pt-6">
+        <CardContent className="space-y-6 pt-card-padding">
           <div>
             <Skeleton className="h-5 w-48 mb-2" />
             <Skeleton className="h-4 w-full max-w-md" />
@@ -235,7 +235,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
       </div>
 
       <Card className="max-w-3xl">
-        <CardContent className="space-y-6 pt-6">
+        <CardContent className="space-y-6 pt-card-padding">
           {/* Status */}
           <div>
             <Button

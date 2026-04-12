@@ -262,7 +262,7 @@ export function KanbanDetailModal({
                       {t("detail.infoHeading")}
                     </h3>
                   </div>
-                  <div className="p-4">
+                  <div className="p-card-padding">
                     <div className="grid grid-cols-2 gap-x-8 gap-y-5">
                       {/* Status */}
                       <div className="space-y-1.5">
@@ -367,7 +367,7 @@ export function KanbanDetailModal({
                       {t("detail.descriptionHeading")}
                     </h3>
                   </div>
-                  <div className="p-4 flex-1 flex flex-col">
+                  <div className="p-card-padding flex-1 flex flex-col">
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
@@ -387,7 +387,7 @@ export function KanbanDetailModal({
                       {t("detail.updatesHeading")}
                     </h3>
                   </div>
-                  <div className="p-4 flex flex-col flex-1">
+                  <div className="p-card-padding flex flex-col flex-1">
                     <textarea
                       placeholder={t("detail.writeUpdate")}
                       className="w-full min-h-[80px] p-3 rounded-md border bg-transparent text-base resize-none focus:outline-none mb-4 opacity-50 cursor-not-allowed"
