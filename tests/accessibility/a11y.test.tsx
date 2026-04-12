@@ -238,6 +238,17 @@ describe("Accessibility - HabitRow", () => {
   });
 });
 
+describe("Accessibility - BillCalendar icon buttons", () => {
+  it("month navigation buttons have accessible names", async () => {
+    const { BillCalendar } = await import("@/components/money/bill-calendar");
+    const { container } = render(<BillCalendar bills={[]} />);
+    const buttons = container.querySelectorAll("button");
+    const labels = Array.from(buttons).map((b) => b.getAttribute("aria-label"));
+    expect(labels).toContain("previousMonth");
+    expect(labels).toContain("nextMonth");
+  });
+});
+
 describe("Accessibility - HabitList", () => {
   it("should have no axe violations", async () => {
     const { HabitList } = await import("@/components/habits/habit-list");

@@ -909,6 +909,7 @@
     "menuEdit": "编辑",
     "menuArchive": "归档",
     "menuDelete": "删除",
+    "openMenu": "打开菜单",
     "sections": {
       "personal": "个人",
       "work": "工作"
@@ -1559,7 +1560,10 @@
       "created": "预算已创建",
       "updated": "预算已更新",
       "deleted": "预算已删除",
-      "rolloverConfirmed": "结转已确认"
+      "rolloverConfirmed": "结转已确认",
+      "previousMonth": "上个月",
+      "nextMonth": "下个月",
+      "removeCategory": "移除类别"
     },
     "export": {
       "title": "导出交易",
@@ -1653,7 +1657,9 @@
       "today": "今天",
       "noBillsOnDay": "当天无账单",
       "statusUpdateError": "更新账单状态失败",
-      "fetchError": "加载账单失败"
+      "fetchError": "加载账单失败",
+      "previousMonth": "上个月",
+      "nextMonth": "下个月"
     },
     "goals": {
       "title": "储蓄目标",
@@ -1812,6 +1818,7 @@
       "inviteLink": "将此链接分享给您的伴侣：",
       "inviteCopied": "链接已复制！",
       "inviteExpires": "7天后过期",
+      "inviteCopyLink": "复制邀请链接",
       "invitePending": "待处理邀请",
       "inviteRevoke": "撤销",
       "inviteRevokeConfirm": "撤销此邀请？",

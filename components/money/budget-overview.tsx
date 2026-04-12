@@ -139,7 +139,12 @@ export function BudgetOverview() {
 
       {/* Month navigation */}
       <div className="flex items-center justify-center gap-4">
-        <Button variant="ghost" size="icon" onClick={goToPreviousMonth}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={goToPreviousMonth}
+          aria-label={t("previousMonth")}
+        >
           <ChevronLeft className="size-5" />
         </Button>
         <h2 className="text-lg font-semibold min-w-[140px] text-center">
@@ -150,6 +155,7 @@ export function BudgetOverview() {
           size="icon"
           onClick={goToNextMonth}
           disabled={!canGoForward}
+          aria-label={t("nextMonth")}
         >
           <ChevronRight className="size-5" />
         </Button>

@@ -100,7 +100,12 @@ export function HouseholdInviteDialog({ onSuccess }: HouseholdInviteDialogProps)
             <p className="text-sm text-muted-foreground">{t("inviteLink")}</p>
             <div className="flex items-center gap-2">
               <Input value={inviteLink} readOnly className="text-xs" />
-              <Button variant="outline" size="icon" onClick={handleCopy}>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleCopy}
+                aria-label={copied ? t("inviteCopied") : t("inviteCopyLink")}
+              >
                 {copied ? (
                   <Check className="size-4" />
                 ) : (

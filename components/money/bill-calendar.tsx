@@ -15,6 +15,7 @@ import {
   addDays,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { BillCalendarDay } from "@/components/money/bill-calendar-day";
 import type { RecurringBill } from "@/lib/db/types";
@@ -102,6 +103,7 @@ function getBillDatesInMonth(
 }
 
 export function BillCalendar({ bills }: BillCalendarProps) {
+  const t = useTranslations("money.bills");
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
@@ -141,13 +143,23 @@ export function BillCalendar({ bills }: BillCalendarProps) {
     <div className="space-y-4">
       {/* Month navigation */}
       <div className="flex items-center justify-center gap-4">
-        <Button variant="ghost" size="icon" onClick={goToPreviousMonth}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={goToPreviousMonth}
+          aria-label={t("previousMonth")}
+        >
           <ChevronLeft className="size-5" />
         </Button>
         <h2 className="text-lg font-semibold min-w-[160px] text-center">
           {format(currentMonth, "MMMM yyyy")}
         </h2>
-        <Button variant="ghost" size="icon" onClick={goToNextMonth}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={goToNextMonth}
+          aria-label={t("nextMonth")}
+        >
           <ChevronRight className="size-5" />
         </Button>
       </div>

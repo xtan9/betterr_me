@@ -268,6 +268,7 @@ export function BudgetForm({
                     size="icon"
                     className="size-8 shrink-0"
                     onClick={() => remove(index)}
+                    aria-label={t("removeCategory")}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
