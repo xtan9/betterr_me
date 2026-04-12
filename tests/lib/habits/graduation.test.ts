@@ -143,4 +143,33 @@ describe("isGraduationEligible", () => {
       })
     ).toBe(true);
   });
+
+  it("returns false when createdAt is in the future", () => {
+    const createdAt = "2026-05-01T00:00:00Z"; // 19 days after today
+    const freq: HabitFrequency = { type: "daily" };
+    expect(
+      isGraduationEligible({ createdAt, today, frequency: freq, logs: [] })
+    ).toBe(false);
+  });
+
+  it("returns false with empty logs at minimum age (daily)", () => {
+    const createdAt = "2026-03-22T00:00:00Z"; // 21 days old
+    const freq: HabitFrequency = { type: "daily" };
+    expect(
+      isGraduationEligible({ createdAt, today, frequency: freq, logs: [] })
+    ).toBe(false);
+  });
+
+  it("custom with zero days returns false (treated as weekly, 0 scheduled)", () => {
+    const createdAt = "2026-01-01T00:00:00Z"; // very old
+    const freq: HabitFrequency = { type: "custom", days: [] };
+    // Even with ample logs and age, zero-scheduled-days must short-circuit to false.
+    const logs = [
+      { logged_date: "2026-04-10", completed: true },
+      { logged_date: "2026-04-11", completed: true },
+    ];
+    expect(
+      isGraduationEligible({ createdAt, today, frequency: freq, logs })
+    ).toBe(false);
+  });
 });

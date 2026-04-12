@@ -91,9 +91,25 @@ export function isGraduationEligible(args: Args): boolean {
   const scheduled = countScheduled(frequency, windowStart, today);
   if (scheduled === 0) return false;
 
+  const isScheduledYMD = (ymd: string): boolean => {
+    if (frequency.type === "times_per_week" || frequency.type === "weekly") {
+      // For count-based frequencies there's no fixed scheduled weekday — any
+      // completed day within the week counts toward the per-week target.
+      return true;
+    }
+    return shouldTrackOnDate(frequency, new Date(`${ymd}T00:00:00Z`));
+  };
+
   const completedInWindow = logs.filter(
-    (l) => l.completed && l.logged_date >= windowStart && l.logged_date <= today
+    (l) =>
+      l.completed &&
+      l.logged_date >= windowStart &&
+      l.logged_date <= today &&
+      isScheduledYMD(l.logged_date)
   ).length;
 
-  return completedInWindow / scheduled >= bucket.consistency;
+  // Clamp to scheduled ceiling so ratio never exceeds 1.0 (defensive).
+  const effectiveCompleted = Math.min(completedInWindow, scheduled);
+
+  return effectiveCompleted / scheduled >= bucket.consistency;
 }
