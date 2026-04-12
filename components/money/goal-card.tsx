@@ -71,7 +71,7 @@ export function GoalCard({ goal, onEdit, onContribute }: GoalCardProps) {
       className="border-money-border bg-money-surface transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
       onClick={() => onEdit(goal)}
     >
-      <CardContent className="p-5">
+      <CardContent className="p-card-padding">
         {/* Header: icon + name */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-2 min-w-0">

@@ -122,7 +122,7 @@ export function CreateTaskContent() {
         />
       </div>
       <Card className="max-w-2xl">
-        <CardContent className="pt-6">
+        <CardContent className="pt-card-padding">
           <TaskForm
             id="task-form"
             mode="create"

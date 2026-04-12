@@ -36,7 +36,7 @@ function EditHabitSkeleton() {
       </div>
       {/* Card-wrapped form skeleton */}
       <Card className="max-w-2xl">
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="pt-card-padding space-y-4">
           <div>
             <Skeleton className="h-4 w-24 mb-2" />
             <Skeleton className="h-10 w-full" />
@@ -138,7 +138,7 @@ export function EditHabitContent({ habitId }: EditHabitContentProps) {
         />
       </div>
       <Card className="max-w-2xl">
-        <CardContent className="pt-6">
+        <CardContent className="pt-card-padding">
           <HabitForm
             id="habit-form"
             mode="edit"

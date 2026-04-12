@@ -43,7 +43,7 @@ export function WorkoutHistoryCard({
   return (
     <Link href={`/workouts/${workout.id}`}>
       <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 motion-reduce:transition-none cursor-pointer">
-        <CardContent className="p-4">
+        <CardContent className="p-card-padding">
           {/* Top row: title + date */}
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-semibold truncate">{workout.title}</h3>

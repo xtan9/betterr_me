@@ -35,7 +35,7 @@ export function ExerciseCard({ exercise, onEdit, onDelete }: ExerciseCardProps) 
   return (
     <Link href={`/workouts/exercises/${exercise.id}`} className="block">
     <Card className="group relative hover:border-primary/50 transition-colors cursor-pointer">
-      <CardContent className="flex items-start gap-3 p-4">
+      <CardContent className="flex items-start gap-3 p-card-padding">
         <ExerciseThumbnail
           exerciseMedia={exercise.exercise_media}
           exerciseName={exercise.name}

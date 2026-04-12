@@ -221,7 +221,7 @@ export function BudgetOverview() {
 
           {/* Budget summary card */}
           <Card className="border-money-border bg-money-surface">
-            <CardContent className="flex items-center gap-6 p-6">
+            <CardContent className="flex items-center gap-6 p-card-padding">
               <BudgetRing percent={overallPercent} size={64} strokeWidth={5} />
               <div className="flex-1">
                 <div className="flex items-center justify-between">
@@ -321,7 +321,7 @@ export function BudgetOverview() {
                   className="cursor-pointer border-money-border transition-colors hover:bg-accent"
                   onClick={() => setSelectedCategoryId(cat.category_id)}
                 >
-                  <CardContent className="flex items-center gap-3 p-4">
+                  <CardContent className="flex items-center gap-3 p-card-padding">
                     <BudgetRing percent={percent} size={40} strokeWidth={3} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">

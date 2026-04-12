@@ -34,7 +34,7 @@ function EditTaskSkeleton() {
         <PageHeaderSkeleton hasActions />
       </div>
       <Card className="max-w-2xl">
-        <CardContent className="pt-6">
+        <CardContent className="pt-card-padding">
           <div className="space-y-4">
             <div>
               <Skeleton className="h-4 w-24 mb-2" />
@@ -156,7 +156,7 @@ export function EditTaskContent({ taskId }: EditTaskContentProps) {
         />
       </div>
       <Card className="max-w-2xl">
-        <CardContent className="pt-6">
+        <CardContent className="pt-card-padding">
           <TaskForm
             id="task-form"
             mode="edit"

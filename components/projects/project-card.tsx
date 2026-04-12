@@ -95,7 +95,7 @@ export function ProjectCard({
       }}
       onClick={handleCardClick}
     >
-      <CardContent className="p-4 space-y-3">
+      <CardContent className="p-card-padding space-y-3">
         {/* Header: name + three-dot menu */}
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-medium truncate min-w-0 flex-1">

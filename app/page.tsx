@@ -55,7 +55,7 @@ export default async function HomePage() {
             ].map((feature, index) => (
               <div
                 key={index}
-                className="p-6 bg-card rounded-xl shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 motion-reduce:transition-none motion-reduce:hover:transform-none border"
+                className="p-card-padding bg-card rounded-xl shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 motion-reduce:transition-none motion-reduce:hover:transform-none border"
               >
                 <div className="text-primary mb-4">{feature.icon}</div>
                 <h3 className="text-xl font-semibold mb-2 text-card-foreground">{feature.title}</h3>

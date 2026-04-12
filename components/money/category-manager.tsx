@@ -164,7 +164,7 @@ export function CategoryManager() {
 
         {/* New category form */}
         {showNewForm && (
-          <div className="mb-4 space-y-3 rounded-lg border border-money-border bg-money-surface p-4">
+          <div className="mb-4 space-y-3 rounded-lg border border-money-border bg-money-surface p-card-padding">
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
