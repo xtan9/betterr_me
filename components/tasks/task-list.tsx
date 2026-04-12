@@ -80,7 +80,7 @@ export function TaskList({
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="flex flex-col gap-section-gap">
         <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-40 rounded-xl" />
@@ -91,7 +91,7 @@ export function TaskList({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <TabsList>

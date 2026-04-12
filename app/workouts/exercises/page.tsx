@@ -6,7 +6,7 @@ export default async function ExercisesPage() {
   const t = await getTranslations("exercises");
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <PageHeader title={t("title")} />
       <ExerciseLibrary />
     </div>

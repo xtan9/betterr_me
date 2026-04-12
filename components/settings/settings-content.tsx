@@ -86,7 +86,7 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
 
   if (error) {
     return (
-      <div className="space-y-6">
+      <div className="flex flex-col gap-section-gap">
         <PageHeader title={t("title")} />
         <Card>
           <CardContent className="pt-card-padding">
@@ -98,7 +98,7 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <PageHeader
         title={t("title")}
         actions={

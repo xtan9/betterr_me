@@ -175,7 +175,7 @@ export function BudgetForm({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-section-gap">
           {/* Total amount */}
           <div className="space-y-2">
             <Label htmlFor="total" className="text-base font-semibold">
@@ -203,7 +203,7 @@ export function BudgetForm({
           </div>
 
           {/* Category allocations */}
-          <div className="space-y-3">
+          <div className="flex flex-col gap-field-gap">
             <div className="flex items-center justify-between">
               <Label className="text-base font-semibold">
                 {t("allocated")}

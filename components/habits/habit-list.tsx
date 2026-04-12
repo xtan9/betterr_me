@@ -166,7 +166,7 @@ export function HabitList({
   const emptyStateVariant = getEmptyStateVariant();
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <TabsList>

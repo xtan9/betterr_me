@@ -9,7 +9,7 @@ export default async function TransactionsPage() {
   const t = await getTranslations("money");
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <div className="flex items-center justify-between">
         <PageHeader title={t("transactions.title")} />
         <div className="flex items-center gap-2">

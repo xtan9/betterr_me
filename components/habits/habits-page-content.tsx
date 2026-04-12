@@ -117,7 +117,7 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       {/* Page Header */}
       <PageHeader
         title={t("page.title")}
@@ -143,7 +143,7 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
 
 function HabitsPageSkeleton() {
   return (
-    <div className="space-y-6" data-testid="habits-skeleton">
+    <div className="flex flex-col gap-section-gap" data-testid="habits-skeleton">
       {/* Header skeleton */}
       <PageHeaderSkeleton hasActions />
 

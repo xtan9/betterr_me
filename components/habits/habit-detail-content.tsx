@@ -61,7 +61,7 @@ const habitFetcher = async (url: string) => {
 
 function HabitDetailSkeleton() {
   return (
-    <div className="space-y-6" data-testid="habit-detail-skeleton">
+    <div className="flex flex-col gap-section-gap" data-testid="habit-detail-skeleton">
       {/* Breadcrumb + Header skeleton */}
       <div>
         <Skeleton className="h-4 w-40 mb-2" />
@@ -362,7 +362,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     : undefined;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       {/* Breadcrumbs + Header */}
       <div>
         <PageBreadcrumbs section="habits" itemName={habit.name} />

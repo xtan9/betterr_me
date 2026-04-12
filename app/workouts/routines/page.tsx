@@ -6,7 +6,7 @@ export default async function RoutinesPage() {
   const t = await getTranslations("routines");
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <PageHeader title={t("title")} />
       <RoutinesPageContent />
     </div>

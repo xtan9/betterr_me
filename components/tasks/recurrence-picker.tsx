@@ -210,7 +210,7 @@ export function RecurrencePicker({
   const showEndControls = value !== null;
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-field-gap">
       {/* Preset selector */}
       <Select
         value={preset}

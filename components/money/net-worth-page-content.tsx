@@ -16,7 +16,7 @@ export function NetWorthPageContent() {
   const { viewMode, setViewMode, isMultiMember } = useHousehold();
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <HouseholdViewTabs
         value={viewMode}
         onValueChange={setViewMode}

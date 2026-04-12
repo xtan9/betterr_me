@@ -116,8 +116,8 @@ export function ExerciseLibrary() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-section-gap">
+        <div className="flex flex-col gap-field-gap sm:flex-row sm:items-center">
           <Skeleton className="h-9 flex-1" />
           <Skeleton className="h-9 w-[180px]" />
           <Skeleton className="h-9 w-[180px]" />
@@ -140,7 +140,7 @@ export function ExerciseLibrary() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">{t("title")}</h1>
         <Button onClick={() => setIsFormOpen(true)} size="sm">

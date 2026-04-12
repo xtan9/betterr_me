@@ -254,7 +254,7 @@ export function TasksPageContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <PageHeader
         title={t("page.title")}
         actions={
@@ -542,7 +542,7 @@ function SectionBlock({
 
 function TasksPageSkeleton() {
   return (
-    <div className="space-y-6" data-testid="tasks-skeleton">
+    <div className="flex flex-col gap-section-gap" data-testid="tasks-skeleton">
       <PageHeaderSkeleton hasActions />
 
       {/* Tabs skeleton */}

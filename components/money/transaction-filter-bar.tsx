@@ -86,7 +86,7 @@ export function TransactionFilterBar({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-field-gap">
       {/* Filter inputs row */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {/* Date From */}

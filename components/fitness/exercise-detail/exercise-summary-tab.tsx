@@ -29,7 +29,7 @@ export function ExerciseSummaryTab({
   const alternativeNames = exercise.exercise_media?.alternative_names;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       {/* Animated GIF */}
       <div className="flex justify-center">
         <div className="h-[200px] w-[200px] rounded-xl overflow-hidden bg-muted flex items-center justify-center">

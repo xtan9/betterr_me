@@ -7,7 +7,7 @@ export default async function BillsPage() {
   const t = await getTranslations("money");
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <PageHeader title={t("bills.title")} />
       <Suspense>
         <BillsPageContent />

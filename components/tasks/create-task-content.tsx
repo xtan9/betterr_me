@@ -96,7 +96,7 @@ export function CreateTaskContent() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <div>
         <PageBreadcrumbs section="tasks" itemName={tBreadcrumb("newTask")} />
         <PageHeader

@@ -15,7 +15,7 @@ export default async function MoneySettingsPage() {
   const t = await getTranslations("money");
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <PageHeader title={t("settings.title")} />
       <HouseholdSettings />
       <CategoryManager />

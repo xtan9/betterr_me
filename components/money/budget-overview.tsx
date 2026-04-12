@@ -134,7 +134,7 @@ export function BudgetOverview() {
     budget ? budget.total_cents - budget.total_spent_cents : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       {/* Spending anomaly insights (AIML-01) */}
       <InsightList page="budgets" className="mb-4" />
 
@@ -359,7 +359,7 @@ export function BudgetOverview() {
           </div>
 
           {/* Charts section */}
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-section-gap lg:grid-cols-2">
             <Card className="border-money-border">
               <CardHeader>
                 <CardTitle className="text-base">

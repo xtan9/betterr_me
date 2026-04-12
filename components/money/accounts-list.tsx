@@ -125,7 +125,7 @@ export function AccountsList() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       {/* Mine/Household tabs */}
       <HouseholdViewTabs
         value={viewMode}
@@ -183,7 +183,7 @@ export function AccountsList() {
       </div>
 
       {/* Account groups */}
-      <div className="space-y-6">
+      <div className="flex flex-col gap-section-gap">
         {connections.map((connection) => (
           <AccountGroup
             key={connection.id}
