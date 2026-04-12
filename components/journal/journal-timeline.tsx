@@ -109,7 +109,7 @@ export function JournalTimeline({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-card-gap">
       {allEntries.map((entry) => (
         <JournalTimelineCard
           key={entry.entry_date}

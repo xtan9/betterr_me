@@ -94,7 +94,7 @@ export function DailySnapshot({ stats, yesterdayStats }: DailySnapshotProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-card-gap">
       <h2 className="font-display text-section-heading">{t("title")}</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-card-gap">
         <StatCard

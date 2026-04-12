@@ -51,12 +51,12 @@ export function JournalOnThisDayFull({ date }: JournalOnThisDayFullProps) {
   }
 
   return (
-    <div className="space-y-4" data-testid="on-this-day-full">
+    <div className="flex flex-col gap-card-gap" data-testid="on-this-day-full">
       <h2 className="text-lg font-semibold flex items-center gap-2">
         <CalendarHeart className="size-5" aria-hidden="true" />
         {t("title")}
       </h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
         {entries.map((entry) => {
           const emoji = getMoodEmoji(entry.mood);
           const preview = getPreviewText(entry.content, 200);

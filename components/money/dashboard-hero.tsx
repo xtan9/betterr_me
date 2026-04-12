@@ -36,7 +36,7 @@ export function DashboardHero({
       : "text-[hsl(var(--money-caution))]";
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-card-gap sm:grid-cols-3">
       {/* Available money */}
       <div className="rounded-xl border border-money-border bg-money-surface p-card-padding">
         <p className="text-sm text-muted-foreground">

@@ -38,9 +38,9 @@ export function MoneyDashboard({ viewMode }: MoneyDashboardProps) {
   // Loading skeleton matching the hero + bills layout
   if (isLoading || !dashboard) {
     return (
-      <div className="space-y-4">
+      <div className="flex flex-col gap-card-gap">
         {/* Hero skeleton */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-card-gap sm:grid-cols-3">
           <Skeleton className="h-24 w-full rounded-xl" />
           <Skeleton className="h-24 w-full rounded-xl" />
           <Skeleton className="h-24 w-full rounded-xl" />
@@ -74,7 +74,7 @@ export function MoneyDashboard({ viewMode }: MoneyDashboardProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-card-gap">
       {/* 1. Hero: three key numbers — always visible */}
       <DashboardHero
         availableCents={dashboard.available_cents}
@@ -107,7 +107,7 @@ export function MoneyDashboard({ viewMode }: MoneyDashboardProps) {
       <InsightList page="dashboard" className="mb-4" />
 
       {/* 6. Quick nav links grid */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
         <Button variant="outline" className="justify-start" asChild>
           <Link href="/money/transactions">
             <Receipt className="mr-2 size-4" />

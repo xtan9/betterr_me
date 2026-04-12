@@ -119,7 +119,7 @@ export function HouseholdMembersList({
   const pendingInvitations = invitations.filter((i) => i.status === "pending");
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-card-gap">
       {/* Member list */}
       <div className="space-y-2">
         <h4 className="text-sm font-medium text-muted-foreground">

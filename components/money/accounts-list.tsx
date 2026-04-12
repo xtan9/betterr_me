@@ -88,7 +88,7 @@ export function AccountsList() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="flex flex-col gap-card-gap">
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-16 w-full" />

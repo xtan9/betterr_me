@@ -84,11 +84,11 @@ export function GoalGrid() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="flex flex-col gap-card-gap">
         <div className="flex justify-end">
           <Skeleton className="h-9 w-32" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
           <Skeleton className="h-56 rounded-xl" />
           <Skeleton className="h-56 rounded-xl" />
           <Skeleton className="h-56 rounded-xl" />
@@ -133,7 +133,7 @@ export function GoalGrid() {
       </div>
 
       {/* Goal cards grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
         {sortedGoals.map((goal) => (
           <GoalCard
             key={goal.id}
