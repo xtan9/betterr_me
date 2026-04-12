@@ -60,7 +60,7 @@ export function ApiKeyRow({ apiKey, onDelete }: ApiKeyRowProps) {
   };
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 rounded-lg border p-card-padding sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
           <span className="font-medium">{apiKey.name}</span>

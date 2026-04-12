@@ -89,7 +89,7 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
       <div className="space-y-6">
         <PageHeader title={t("title")} />
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-card-padding">
             <p className="text-destructive">{t("error")}</p>
           </CardContent>
         </Card>
@@ -178,7 +178,7 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
       <NotificationSettings />
 
       <Card>
-        <CardContent className="pt-6 flex flex-col gap-4">
+        <CardContent className="pt-card-padding flex flex-col gap-4">
           <ApiKeysSection />
         </CardContent>
       </Card>

@@ -21,7 +21,7 @@ interface StatCardProps {
 function StatCard({ icon, iconBgClass, title, value, subtitle, trend }: StatCardProps) {
   return (
     <Card data-testid="stat-card" className="min-w-0 gap-0 py-0 shadow-sm">
-      <CardContent className="p-4">
+      <CardContent className="p-card-padding">
         <div className="flex items-start gap-3">
           <div className={cn("rounded-full p-2.5 shrink-0", iconBgClass)} aria-hidden="true">
             {icon}

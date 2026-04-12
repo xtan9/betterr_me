@@ -44,7 +44,7 @@ export function WorkoutStatsWidget({
 
   return (
     <Card data-testid="workout-stats-widget" className="min-w-0 gap-0 py-0 shadow-sm">
-      <CardContent className="p-4">
+      <CardContent className="p-card-padding">
         <div className="flex items-start gap-3">
           <div
             className="rounded-full bg-stat-icon-purple-bg p-2.5 shrink-0"

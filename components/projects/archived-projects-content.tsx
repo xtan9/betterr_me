@@ -97,7 +97,7 @@ function ArchivedProjectCard({ project, onRestore }: ArchivedProjectCardProps) {
           : colorHsl.replace("hsl(", "hsla(").replace(")", ", 0.04)"),
       }}
     >
-      <CardContent className="p-4">
+      <CardContent className="p-card-padding">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-medium truncate min-w-0 flex-1">
             {project.name}

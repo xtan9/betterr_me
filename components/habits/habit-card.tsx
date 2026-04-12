@@ -47,7 +47,7 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
   };
 
   return (
-    <Card data-testid={`habit-card-${habit.id}`} className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 motion-reduce:transition-none motion-reduce:hover:transform-none p-5">
+    <Card data-testid={`habit-card-${habit.id}`} className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 motion-reduce:transition-none motion-reduce:hover:transform-none p-card-padding">
       <CardContent className="p-0 space-y-3">
         <div className="flex items-start justify-between">
           <button

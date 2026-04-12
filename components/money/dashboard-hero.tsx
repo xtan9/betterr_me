@@ -38,7 +38,7 @@ export function DashboardHero({
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       {/* Available money */}
-      <div className="rounded-xl border border-money-border bg-money-surface p-5">
+      <div className="rounded-xl border border-money-border bg-money-surface p-card-padding">
         <p className="text-sm text-muted-foreground">
           {hasConfirmedIncome
             ? t("availableUntilPaycheck")
@@ -50,7 +50,7 @@ export function DashboardHero({
       </div>
 
       {/* Upcoming bills */}
-      <div className="rounded-xl border border-money-border bg-money-surface p-5">
+      <div className="rounded-xl border border-money-border bg-money-surface p-card-padding">
         <p className="text-sm text-muted-foreground">
           {t("upcomingBills30Days")}
         </p>
@@ -60,7 +60,7 @@ export function DashboardHero({
       </div>
 
       {/* Projected end-of-month balance */}
-      <div className="rounded-xl border border-money-border bg-money-surface p-5">
+      <div className="rounded-xl border border-money-border bg-money-surface p-card-padding">
         <p className="text-sm text-muted-foreground">
           {t("endOfMonthBalance")}
         </p>
