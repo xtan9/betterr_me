@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { HabitGraduation, HabitGraduationInsert } from "./types";
+import { log } from "@/lib/logger";
 
 export class HabitGraduationsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -26,7 +27,13 @@ export class HabitGraduationsDB {
       .limit(1)
       .maybeSingle();
     if (selErr) throw selErr;
-    if (!latest) return;
+    if (!latest) {
+      log.warn("[habits] markReactivated: no open graduation row found", {
+        habitId,
+        userId,
+      });
+      return;
+    }
 
     const { error } = await this.supabase
       .from("habit_graduations")

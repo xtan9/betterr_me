@@ -5,7 +5,13 @@ import type { HabitFrequency } from './types';
 import { getLocalDateString } from '@/lib/utils';
 import { shouldTrackOnDate } from '@/lib/habits/format';
 import { HabitGraduationsDB } from './habit-graduations';
+import {
+  HabitNotFoundError,
+  HabitNotFormedError,
+  HabitAlreadyFormedError,
+} from './habit-errors';
 import { isGraduationEligible } from '@/lib/habits/graduation';
+import { log } from '@/lib/logger';
 
 export class HabitsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -139,7 +145,10 @@ export class HabitsDB {
    */
   async graduateHabit(habitId: string, userId: string): Promise<Habit> {
     const habit = await this.getHabit(habitId, userId);
-    if (!habit) throw new Error('Habit not found');
+    if (!habit) throw new HabitNotFoundError(habitId);
+    if (habit.status === 'formed') {
+      throw new HabitAlreadyFormedError(habitId);
+    }
 
     const graduatedAt = new Date().toISOString();
     const graduatedStreak = habit.current_streak;
@@ -152,12 +161,34 @@ export class HabitsDB {
     });
 
     const graduations = new HabitGraduationsDB(this.supabase);
-    await graduations.insertGraduation({
-      habit_id: habitId,
-      user_id: userId,
-      graduated_at: graduatedAt,
-      graduated_streak: graduatedStreak,
-    });
+    try {
+      await graduations.insertGraduation({
+        habit_id: habitId,
+        user_id: userId,
+        graduated_at: graduatedAt,
+        graduated_streak: graduatedStreak,
+      });
+    } catch (historyErr) {
+      log.error(
+        '[habits] graduation history insert failed; rolling back status',
+        historyErr,
+        { habitId, userId },
+      );
+      try {
+        await this.updateHabit(habitId, userId, {
+          status: habit.status,
+          graduated_at: null,
+          graduated_streak: null,
+        });
+      } catch (rollbackErr) {
+        log.error(
+          '[habits] graduation rollback FAILED; habit is in inconsistent state',
+          rollbackErr,
+          { habitId, userId },
+        );
+      }
+      throw historyErr;
+    }
 
     return updated;
   }
@@ -167,9 +198,9 @@ export class HabitsDB {
    */
   async reactivateHabit(habitId: string, userId: string): Promise<Habit> {
     const habit = await this.getHabit(habitId, userId);
-    if (!habit) throw new Error('Habit not found');
+    if (!habit) throw new HabitNotFoundError(habitId);
     if (habit.status !== 'formed') {
-      throw new Error('Habit is not formed; cannot reactivate');
+      throw new HabitNotFormedError(habitId);
     }
 
     const updated = await this.updateHabit(habitId, userId, {
@@ -181,7 +212,16 @@ export class HabitsDB {
     });
 
     const graduations = new HabitGraduationsDB(this.supabase);
-    await graduations.markReactivated(habitId, userId);
+    try {
+      await graduations.markReactivated(habitId, userId);
+    } catch (err) {
+      log.error(
+        '[habits] markReactivated failed after status flip',
+        err,
+        { habitId, userId },
+      );
+      // Don't throw — reactivation already committed; history is best-effort.
+    }
 
     return updated;
   }

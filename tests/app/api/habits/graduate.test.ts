@@ -15,18 +15,45 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-vi.mock('@/lib/db', () => ({
-  HabitsDB: class {
-    graduateHabit = graduateMock;
-    reactivateHabit = reactivateMock;
-    dismissGraduationNudge = dismissMock;
-  },
-}));
+vi.mock('@/lib/db', () => {
+  class HabitNotFoundError extends Error {
+    constructor(habitId: string) {
+      super(`Habit not found: ${habitId}`);
+      this.name = 'HabitNotFoundError';
+    }
+  }
+  class HabitNotFormedError extends Error {
+    constructor(habitId: string) {
+      super(`Habit is not formed: ${habitId}`);
+      this.name = 'HabitNotFormedError';
+    }
+  }
+  class HabitAlreadyFormedError extends Error {
+    constructor(habitId: string) {
+      super(`Habit is already formed: ${habitId}`);
+      this.name = 'HabitAlreadyFormedError';
+    }
+  }
+  return {
+    HabitsDB: class {
+      graduateHabit = graduateMock;
+      reactivateHabit = reactivateMock;
+      dismissGraduationNudge = dismissMock;
+    },
+    HabitNotFoundError,
+    HabitNotFormedError,
+    HabitAlreadyFormedError,
+  };
+});
 
 import { POST as graduatePOST } from '@/app/api/habits/[id]/graduate/route';
 import { POST as reactivatePOST } from '@/app/api/habits/[id]/reactivate/route';
 import { POST as dismissPOST } from '@/app/api/habits/[id]/dismiss-graduation-nudge/route';
 import { createClient } from '@/lib/supabase/server';
+import {
+  HabitNotFoundError,
+  HabitNotFormedError,
+} from '@/lib/db';
 
 const params = Promise.resolve({ id: 'h1' });
 
@@ -50,7 +77,7 @@ describe('POST /api/habits/[id]/graduate', () => {
   });
 
   it('returns 404 when habit not found', async () => {
-    graduateMock.mockRejectedValue(new Error('Habit not found'));
+    graduateMock.mockRejectedValue(new HabitNotFoundError('h1'));
     const res = await graduatePOST(
       new NextRequest('http://localhost/api/habits/h1/graduate', { method: 'POST' }),
       { params }
@@ -79,7 +106,7 @@ describe('POST /api/habits/[id]/reactivate', () => {
   });
 
   it('returns 400 when habit is not formed', async () => {
-    reactivateMock.mockRejectedValue(new Error('Habit is not formed; cannot reactivate'));
+    reactivateMock.mockRejectedValue(new HabitNotFormedError('h1'));
     const res = await reactivatePOST(
       new NextRequest('http://localhost/api/habits/h1/reactivate', { method: 'POST' }),
       { params }
