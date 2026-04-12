@@ -179,6 +179,7 @@ export class HabitsDB {
           status: habit.status,
           graduated_at: null,
           graduated_streak: null,
+          nudge_dismissed_at: habit.nudge_dismissed_at,
         });
       } catch (rollbackErr) {
         log.error(

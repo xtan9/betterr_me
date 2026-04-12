@@ -228,6 +228,41 @@ describe('HabitsDB', () => {
       );
     });
 
+    it('falls back to empty logs when 90-day query fails (graceful degrade)', async () => {
+      const habit = {
+        ...mockHabit,
+        id: 'h1',
+        status: 'active' as const,
+        frequency: { type: 'daily' } as const,
+        created_at: '2026-01-01T00:00:00Z',
+      };
+
+      // The thenable `then` is called once per awaited query:
+      //  1) getUserHabits → returns [habit]
+      //  2) today-logs query → returns []
+      //  3) 90-day window query → rejects with timeout
+      const thenSpy = vi.spyOn(mockSupabaseClient, 'then');
+      thenSpy.mockImplementationOnce((onFulfilled: any, onRejected: any) =>
+        Promise.resolve({ data: [habit], error: null, count: null }).then(onFulfilled, onRejected)
+      );
+      thenSpy.mockImplementationOnce((onFulfilled: any, onRejected: any) =>
+        Promise.resolve({ data: [], error: null, count: null }).then(onFulfilled, onRejected)
+      );
+      thenSpy.mockImplementationOnce((_onFulfilled: any, onRejected: any) =>
+        Promise.reject(new Error('query timeout')).catch((e) => {
+          if (onRejected) return onRejected(e);
+          throw e;
+        })
+      );
+
+      const result = await habitsDB.getHabitsWithTodayStatus(mockUserId, '2026-04-12');
+      thenSpy.mockRestore();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].graduation_eligible).toBe(false);
+      expect(result[0].monthly_completion_rate).toBe(0);
+    });
+
     it('returns graduation_eligible flag per habit', async () => {
       const activeHabit = {
         ...mockHabit,
@@ -386,6 +421,52 @@ describe('HabitsDB', () => {
       await expect(
         habitsDB.graduateHabit('habit-123', mockUserId)
       ).rejects.toThrow(HabitAlreadyFormedError);
+    });
+
+    it('graduateHabit rolls back status when history insert fails', async () => {
+      const activeHabit = {
+        ...mockHabit,
+        status: 'active' as const,
+        current_streak: 42,
+        nudge_dismissed_at: '2026-04-01T00:00:00Z',
+      };
+      const formedHabit = {
+        ...activeHabit,
+        status: 'formed' as const,
+        graduated_at: '2026-04-12T00:00:00Z',
+        graduated_streak: 42,
+        nudge_dismissed_at: null,
+      };
+
+      // 1st single(): getHabit → activeHabit
+      // 2nd single(): updateHabit forward-flip → formedHabit
+      // 3rd single(): insertGraduation rejects
+      // 4th single(): rollback updateHabit → activeHabit
+      mockSupabaseClient.single
+        .mockResolvedValueOnce({ data: activeHabit, error: null })
+        .mockResolvedValueOnce({ data: formedHabit, error: null })
+        .mockRejectedValueOnce(new Error('history insert failed'))
+        .mockResolvedValueOnce({ data: activeHabit, error: null });
+
+      mockSupabaseClient.update.mockClear();
+
+      await expect(
+        habitsDB.graduateHabit('habit-123', mockUserId)
+      ).rejects.toThrow('history insert failed');
+
+      // Rollback payload should restore nudge_dismissed_at and clear graduation fields
+      const rollbackCall = mockSupabaseClient.update.mock.calls.find((c: unknown[]) => {
+        const payload = c[0] as Record<string, unknown>;
+        return (
+          payload.status === 'active' &&
+          payload.graduated_at === null &&
+          payload.graduated_streak === null
+        );
+      });
+      expect(rollbackCall).toBeDefined();
+      expect((rollbackCall![0] as { nudge_dismissed_at: string }).nudge_dismissed_at).toBe(
+        '2026-04-01T00:00:00Z'
+      );
     });
 
     it('dismissGraduationNudge stamps nudge_dismissed_at', async () => {

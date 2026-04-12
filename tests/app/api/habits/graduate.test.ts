@@ -53,6 +53,7 @@ import { createClient } from '@/lib/supabase/server';
 import {
   HabitNotFoundError,
   HabitNotFormedError,
+  HabitAlreadyFormedError,
 } from '@/lib/db';
 
 const params = Promise.resolve({ id: 'h1' });
@@ -83,6 +84,15 @@ describe('POST /api/habits/[id]/graduate', () => {
       { params }
     );
     expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when habit is already formed', async () => {
+    graduateMock.mockRejectedValue(new HabitAlreadyFormedError('h1'));
+    const res = await graduatePOST(
+      new NextRequest('http://localhost/api/habits/h1/graduate', { method: 'POST' }),
+      { params }
+    );
+    expect(res.status).toBe(400);
   });
 });
 
