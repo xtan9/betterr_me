@@ -383,10 +383,22 @@ describe("habitUpdateSchema", () => {
   });
 
   it("accepts all valid status values", () => {
-    for (const status of ["active", "paused", "archived"] as const) {
+    for (const status of ["active", "paused", "formed"] as const) {
       const result = habitUpdateSchema.safeParse({ status });
       expect(result.success).toBe(true);
     }
+  });
+
+  it("accepts formed status", () => {
+    expect(
+      habitUpdateSchema.safeParse({ status: "formed" }).success
+    ).toBe(true);
+  });
+
+  it("rejects archived status", () => {
+    expect(
+      habitUpdateSchema.safeParse({ status: "archived" }).success
+    ).toBe(false);
   });
 
   it("rejects invalid frequency in update", () => {
