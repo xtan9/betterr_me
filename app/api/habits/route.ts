@@ -13,7 +13,7 @@ import type { HabitInsert, HabitFilters } from '@/lib/db/types';
  * Get habits for the authenticated user with optional filters
  *
  * Query parameters:
- * - status: 'active' | 'paused' | 'archived'
+ * - status: 'active' | 'paused' | 'formed'
  * - category_id: UUID of user-defined category
  * - with_today: boolean - include today's completion status
  */
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     if (searchParams.has('status')) {
       const status = searchParams.get('status');
-      if (status === 'active' || status === 'paused' || status === 'archived') {
+      if (status === 'active' || status === 'paused' || status === 'formed') {
         filters.status = status;
       }
     }

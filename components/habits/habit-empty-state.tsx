@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ClipboardList, PartyPopper, Search, Pause, Archive } from "lucide-react";
+import { ClipboardList, PartyPopper, Search, Pause, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,7 @@ type EmptyStateVariant =
   | "all_complete"
   | "no_results"
   | "no_paused"
-  | "no_archived";
+  | "no_formed";
 
 interface HabitEmptyStateProps {
   variant: EmptyStateVariant;
@@ -47,12 +47,12 @@ const VARIANT_CONFIG = {
     ctaKey: null,
     iconColorClass: "text-muted-foreground",
   },
-  no_archived: {
-    icon: Archive,
-    titleKey: "noArchived.title",
-    descriptionKey: "noArchived.description",
+  no_formed: {
+    icon: GraduationCap,
+    titleKey: "noFormed.title",
+    descriptionKey: "noFormed.description",
     ctaKey: null,
-    iconColorClass: "text-muted-foreground",
+    iconColorClass: "text-status-warning",
   },
 } as const;
 

@@ -179,10 +179,14 @@ const mockHabit = {
   current_streak: 5,
   best_streak: 10,
   paused_at: null,
+  graduated_at: null,
+  graduated_streak: null,
+  nudge_dismissed_at: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
   completed_today: false,
   monthly_completion_rate: 75,
+  graduation_eligible: false,
 };
 
 describe("Accessibility - HabitCard", () => {

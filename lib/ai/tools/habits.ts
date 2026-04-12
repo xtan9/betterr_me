@@ -137,14 +137,27 @@ export function habitTools(): ToolDefinition[] {
       },
     },
     {
-      name: "archiveHabit",
-      description: "Archive a habit (soft delete, can be restored later)",
+      name: "graduateHabit",
+      description:
+        "Graduate a habit — mark it as formed/habitual. Moves it to the Formed gallery. Use when a habit has become automatic and the user wants to mark it as successfully built.",
       parameters: z.object({
-        habitId: z.string().describe("The habit ID"),
+        habitId: z.string().describe("The habit ID to graduate"),
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new HabitsDB(ctx.supabase);
-        return db.archiveHabit(params.habitId, ctx.userId);
+        return db.graduateHabit(params.habitId, ctx.userId);
+      },
+    },
+    {
+      name: "reactivateHabit",
+      description:
+        "Reactivate a previously graduated (formed) habit — moves it back to Active. Resets current_streak to 0 but preserves best_streak. Use when a user wants to rebuild a habit they had let graduate.",
+      parameters: z.object({
+        habitId: z.string().describe("The habit ID to reactivate"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        const db = new HabitsDB(ctx.supabase);
+        return db.reactivateHabit(params.habitId, ctx.userId);
       },
     },
     {

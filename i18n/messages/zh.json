@@ -362,9 +362,9 @@
         "title": "没有暂停的习惯",
         "description": "暂停的习惯会显示在这里。"
       },
-      "noArchived": {
-        "title": "没有归档的习惯",
-        "description": "归档的习惯会显示在这里。"
+      "noFormed": {
+        "title": "还没有已养成的习惯",
+        "description": "让一个习惯毕业后，它会像一枚荣誉勋章一样留在这里。"
       }
     },
     "list": {
@@ -373,7 +373,7 @@
       "tabs": {
         "active": "进行中",
         "paused": "已暂停",
-        "archived": "已归档"
+        "formed": "已养成"
       }
     },
     "page": {
@@ -386,7 +386,7 @@
       "status": {
         "active": "进行中",
         "paused": "已暂停",
-        "archived": "已归档"
+        "formed": "已养成"
       },
       "completion": {
         "title": "完成率",
@@ -399,10 +399,10 @@
       "actions": {
         "pause": "暂停习惯",
         "resume": "恢复习惯",
-        "archive": "归档习惯",
+        "graduate": "让习惯毕业",
+        "reactivate": "重新激活",
         "delete": "删除习惯"
       },
-      "confirmArchive": "确定要归档这个习惯吗？",
       "confirmDelete": "确定要删除这个习惯吗？此操作无法撤销。",
       "cannotEditOldLogs": "无法编辑超过7天的记录",
       "notFound": "习惯未找到"
@@ -416,8 +416,10 @@
       "pauseError": "暂停习惯失败",
       "resumeSuccess": "习惯已恢复",
       "resumeError": "恢复习惯失败",
-      "archiveSuccess": "习惯已归档",
-      "archiveError": "归档习惯失败",
+      "graduateSuccess": "🎓 毕业啦！去已养成展示柜看看吧。",
+      "graduateError": "毕业失败",
+      "reactivateSuccess": "已重新激活，再次一起坚持吧。",
+      "reactivateError": "重新激活失败",
       "deleteSuccess": "习惯已删除",
       "deleteError": "删除习惯失败"
     },
@@ -433,6 +435,7 @@
       "celebration": "太棒了！{habit} 达到了 {count} 天！",
       "celebration7": "一周坚持！",
       "celebration14": "两周不断！",
+      "celebration21": "三周了——真正的势头正在形成。",
       "celebration30": "整整一个月！你正在建立真正的习惯。",
       "celebration50": "50天。一半的人永远到不了这里。",
       "celebration100": "三位数。传奇般的坚持。",
@@ -441,6 +444,41 @@
       "nextMilestone": "再坚持 {days} 天就能达到 {milestone} 天里程碑！",
       "noNextMilestone": "你已经超越了所有里程碑。继续前进！",
       "dismiss": "关闭"
+    },
+    "graduate": {
+      "nudge_title": "准备毕业？",
+      "nudge_body": "你已经建立了真正的一致性。随时可以标记为已养成。",
+      "nudge_cta": "毕业",
+      "nudge_dismiss": "暂不",
+      "dismiss_error": "关闭提醒失败",
+      "confirm_title": "让「{name}」毕业？",
+      "confirm_body": "这个习惯将进入你的已养成展示柜。你可以随时重新激活它。",
+      "confirm_cta": "毕业",
+      "confirm_cancel": "取消",
+      "success_toast": "🎓 毕业啦！去已养成展示柜看看吧。",
+      "error_toast": "毕业失败",
+      "action_label": "让这个习惯毕业"
+    },
+    "reactivate": {
+      "confirm_title": "重新激活「{name}」？",
+      "confirm_body": "这个习惯会回到活跃状态。当前连续天数会重置，但最佳连续 {n} 天记录会保留。",
+      "confirm_cta": "重新激活",
+      "confirm_cancel": "取消",
+      "success_toast": "已重新激活，再次一起坚持吧。",
+      "error_toast": "重新激活失败",
+      "action_label": "重新激活"
+    },
+    "formed_gallery": {
+      "graduated_on": "毕业于",
+      "at_streak": "连续 {n} 天时毕业",
+      "total_days_active": "毕业前坚持了 {n} 天",
+      "best_streak": "最佳连续：{n} 天",
+      "reactivate": "重新激活",
+      "delete": "删除",
+      "confirm_delete": "删除这个已养成的习惯？此操作无法撤销。",
+      "delete_success": "习惯已删除",
+      "delete_error": "删除失败",
+      "empty_state": "让你的第一个习惯毕业，它会出现在这里。"
     }
   },
   "auth": {

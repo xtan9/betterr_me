@@ -1,4 +1,4 @@
-export const MILESTONE_THRESHOLDS = [7, 14, 30, 50, 100, 200, 365] as const;
+export const MILESTONE_THRESHOLDS = [7, 14, 21, 30, 50, 100, 200, 365] as const;
 
 export type MilestoneThreshold = typeof MILESTONE_THRESHOLDS[number];
 
