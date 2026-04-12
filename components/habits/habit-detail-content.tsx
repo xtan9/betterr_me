@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { log } from "@/lib/logger";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { useCategories } from "@/lib/hooks/use-categories";
@@ -299,7 +300,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       toast.success(t("toast.graduateSuccess"));
       router.push("/habits");
     } catch (err) {
-      console.error("Failed to graduate habit:", err);
+      log.error("[habits] graduate", err, { habitId });
       toast.error(t("toast.graduateError"));
     }
   };
@@ -314,7 +315,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
       revalidateSidebarCounts();
       toast.success(t("toast.reactivateSuccess"));
     } catch (err) {
-      console.error("Failed to reactivate habit:", err);
+      log.error("[habits] reactivate", err, { habitId });
       toast.error(t("toast.reactivateError"));
     }
   };

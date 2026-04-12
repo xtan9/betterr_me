@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { useCategories } from "@/lib/hooks/use-categories";
+import { log } from "@/lib/logger";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
 interface HabitListProps {
@@ -77,10 +78,15 @@ export function HabitList({
           `/api/habits/${habitId}/dismiss-graduation-nudge`,
           { method: "POST" },
         );
-        if (!res.ok) throw new Error("Failed");
-        await onMutate?.();
-      } catch {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error ?? `HTTP ${res.status}`);
+        }
+      } catch (err) {
+        log.error("[habits] dismiss-graduation-nudge", err, { habitId });
         toast.error(tHabits("graduate.dismiss_error"));
+      } finally {
+        await onMutate?.();
       }
     },
     [onMutate, tHabits],
@@ -88,29 +94,41 @@ export function HabitList({
 
   const confirmGraduate = useCallback(async () => {
     if (!graduateTarget) return;
+    const habitId = graduateTarget.id;
     try {
-      const res = await fetch(`/api/habits/${graduateTarget.id}/graduate`, {
+      const res = await fetch(`/api/habits/${habitId}/graduate`, {
         method: "POST",
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? `HTTP ${res.status}`);
+      }
       toast.success(tHabits("graduate.success_toast"));
-      await onMutate?.();
-    } catch {
+    } catch (err) {
+      log.error("[habits] graduate", err, { habitId });
       toast.error(tHabits("graduate.error_toast"));
+    } finally {
+      await onMutate?.();
     }
   }, [graduateTarget, onMutate, tHabits]);
 
   const confirmReactivate = useCallback(async () => {
     if (!reactivateTarget) return;
+    const habitId = reactivateTarget.id;
     try {
-      const res = await fetch(`/api/habits/${reactivateTarget.id}/reactivate`, {
+      const res = await fetch(`/api/habits/${habitId}/reactivate`, {
         method: "POST",
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? `HTTP ${res.status}`);
+      }
       toast.success(tHabits("reactivate.success_toast"));
-      await onMutate?.();
-    } catch {
+    } catch (err) {
+      log.error("[habits] reactivate", err, { habitId });
       toast.error(tHabits("reactivate.error_toast"));
+    } finally {
+      await onMutate?.();
     }
   }, [reactivateTarget, onMutate, tHabits]);
 
@@ -119,11 +137,16 @@ export function HabitList({
       if (!window.confirm(tHabits("formed_gallery.confirm_delete"))) return;
       try {
         const res = await fetch(`/api/habits/${habitId}`, { method: "DELETE" });
-        if (!res.ok) throw new Error("Failed");
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error ?? `HTTP ${res.status}`);
+        }
         toast.success(tHabits("formed_gallery.delete_success"));
-        await onMutate?.();
-      } catch {
+      } catch (err) {
+        log.error("[habits] delete-formed", err, { habitId });
         toast.error(tHabits("formed_gallery.delete_error"));
+      } finally {
+        await onMutate?.();
       }
     },
     [onMutate, tHabits],
