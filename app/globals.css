@@ -171,6 +171,11 @@
     --spacing-page-padding: 2rem;
     --spacing-page-padding-top: 2.5rem;
     --spacing-card-gap: 1rem;
+    --spacing-section-gap: 1.5rem;
+    --spacing-card-header-padding-x: 1rem;
+    --spacing-card-header-padding-y: 0.75rem;
+    --spacing-modal-padding: 1.5rem;
+    --spacing-field-gap: 0.75rem;
 
     /* === Content layout === */
     --content-max-width: 1400px;
