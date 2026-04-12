@@ -163,6 +163,11 @@ export default {
         "page-padding": "var(--spacing-page-padding)",
         "page-padding-top": "var(--spacing-page-padding-top)",
         "card-gap": "var(--spacing-card-gap)",
+        "section-gap": "var(--spacing-section-gap)",
+        "card-header-padding-x": "var(--spacing-card-header-padding-x)",
+        "card-header-padding-y": "var(--spacing-card-header-padding-y)",
+        "modal-padding": "var(--spacing-modal-padding)",
+        "field-gap": "var(--spacing-field-gap)",
       },
       maxWidth: {
         content: "var(--content-max-width)",
