@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { isGraduationEligible } from "@/lib/habits/graduation";
+import {
+  getGraduationProgress,
+  isGraduationEligible,
+} from "@/lib/habits/graduation";
 import type { HabitFrequency } from "@/lib/db/types";
 
 function buildLogs(completedDates: string[]) {
@@ -160,6 +163,89 @@ describe("isGraduationEligible", () => {
     ).toBe(false);
   });
 
+  it("weekdays: does NOT credit Saturday/Sunday completions toward consistency", () => {
+    // Window: 21 days ending 2026-04-12 (Sunday).
+    // Weekdays scheduled in that window: 15 Mon-Fri dates.
+    const createdAt = "2026-03-22T00:00:00Z";
+    const freq: HabitFrequency = { type: "weekdays" };
+    // Log only 8 weekdays (8/15 ≈ 53%) + every Sat/Sun (6 extras).
+    // With the scheduled-day filter intact: 8/15 → NOT eligible.
+    // If the filter is removed, (8+6)/15 → eligible (wrong, would be clamped to 1.0).
+    const weekdayDates = consecutiveDates(today, 21)
+      .filter((d) => {
+        const day = new Date(`${d}T00:00:00`).getDay();
+        return day >= 1 && day <= 5;
+      })
+      .slice(0, 8);
+    const weekendDates = consecutiveDates(today, 21).filter((d) => {
+      const day = new Date(`${d}T00:00:00`).getDay();
+      return day === 0 || day === 6;
+    });
+    const logs = buildLogs([...weekdayDates, ...weekendDates]);
+    expect(
+      isGraduationEligible({ createdAt, today, frequency: freq, logs })
+    ).toBe(false);
+  });
+
+  it("custom Mon/Wed/Fri: does NOT credit Tue/Thu completions", () => {
+    // Use a 30-day age so TIMES_PER_WEEK bucket (30d window) applies.
+    const createdAt30 = "2026-03-13T00:00:00Z";
+    const freq: HabitFrequency = { type: "custom", days: [1, 3, 5] };
+    // 30-day window. Scheduled MWF: 12. Log only 6 MWF (50%) + every Tue/Thu (8).
+    // With filter: 6/12 = 50% → NOT eligible.
+    // Without filter: (6+8)/12 clamps to 1.0 → eligible (wrong).
+    const dates = consecutiveDates(today, 30);
+    const mwfLogs = dates
+      .filter((d) => {
+        const day = new Date(`${d}T00:00:00`).getDay();
+        return day === 1 || day === 3 || day === 5;
+      })
+      .slice(0, 6);
+    const tueThuLogs = dates.filter((d) => {
+      const day = new Date(`${d}T00:00:00`).getDay();
+      return day === 2 || day === 4;
+    });
+    expect(
+      isGraduationEligible({
+        createdAt: createdAt30,
+        today,
+        frequency: freq,
+        logs: buildLogs([...mwfLogs, ...tueThuLogs]),
+      })
+    ).toBe(false);
+  });
+
+  it("nudge cooldown: blocks at 29 days dismissed, allows at 30", () => {
+    const createdAt = "2026-03-22T00:00:00Z";
+    const freq: HabitFrequency = { type: "daily" };
+    const logs = buildLogs(consecutiveDates(today, 21));
+
+    // 29 days ago — still in cooldown
+    const [y, m, d] = today.split("-").map(Number);
+    const dismissed29 = new Date(y, m - 1, d - 29).toISOString();
+    expect(
+      isGraduationEligible({
+        createdAt,
+        today,
+        frequency: freq,
+        logs,
+        nudgeDismissedAt: dismissed29,
+      })
+    ).toBe(false);
+
+    // 30 days ago — cooldown cleared
+    const dismissed30 = new Date(y, m - 1, d - 30).toISOString();
+    expect(
+      isGraduationEligible({
+        createdAt,
+        today,
+        frequency: freq,
+        logs,
+        nudgeDismissedAt: dismissed30,
+      })
+    ).toBe(true);
+  });
+
   it("custom with zero days returns false (treated as weekly, 0 scheduled)", () => {
     const createdAt = "2026-01-01T00:00:00Z"; // very old
     const freq: HabitFrequency = { type: "custom", days: [] };
@@ -171,5 +257,70 @@ describe("isGraduationEligible", () => {
     expect(
       isGraduationEligible({ createdAt, today, frequency: freq, logs })
     ).toBe(false);
+  });
+});
+
+describe("getGraduationProgress", () => {
+  const today = "2026-04-12";
+
+  it("reports bucket and progress numbers when eligible", () => {
+    const createdAt = "2026-03-22T00:00:00Z";
+    const freq: HabitFrequency = { type: "daily" };
+    const logs = buildLogs(consecutiveDates(today, 21));
+    const p = getGraduationProgress({ createdAt, today, frequency: freq, logs });
+    expect(p.eligible).toBe(true);
+    expect(p.bucket.minAgeDays).toBe(21);
+    expect(p.scheduled).toBe(21);
+    expect(p.completed).toBe(21);
+    expect(p.blockedBy).toBeNull();
+  });
+
+  it("reports blockedBy=age when too new", () => {
+    const createdAt = "2026-04-01T00:00:00Z";
+    const freq: HabitFrequency = { type: "daily" };
+    const p = getGraduationProgress({
+      createdAt,
+      today,
+      frequency: freq,
+      logs: [],
+    });
+    expect(p.eligible).toBe(false);
+    expect(p.blockedBy).toBe("age");
+  });
+
+  it("reports blockedBy=consistency when enough age but low ratio", () => {
+    const createdAt = "2026-03-22T00:00:00Z";
+    const freq: HabitFrequency = { type: "daily" };
+    const logs = buildLogs(consecutiveDates(today, 10)); // ~48%
+    const p = getGraduationProgress({ createdAt, today, frequency: freq, logs });
+    expect(p.eligible).toBe(false);
+    expect(p.blockedBy).toBe("consistency");
+  });
+
+  it("reports blockedBy=cooldown when recently dismissed", () => {
+    const createdAt = "2026-03-22T00:00:00Z";
+    const freq: HabitFrequency = { type: "daily" };
+    const logs = buildLogs(consecutiveDates(today, 21));
+    const p = getGraduationProgress({
+      createdAt,
+      today,
+      frequency: freq,
+      logs,
+      nudgeDismissedAt: "2026-04-01T00:00:00Z",
+    });
+    expect(p.blockedBy).toBe("cooldown");
+  });
+
+  it("reports blockedBy=already_formed for formed habits", () => {
+    const createdAt = "2026-03-22T00:00:00Z";
+    const freq: HabitFrequency = { type: "daily" };
+    const p = getGraduationProgress({
+      createdAt,
+      today,
+      frequency: freq,
+      logs: [],
+      status: "formed",
+    });
+    expect(p.blockedBy).toBe("already_formed");
   });
 });

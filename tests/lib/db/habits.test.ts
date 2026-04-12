@@ -339,6 +339,55 @@ describe('HabitsDB', () => {
       await expect(habitsDB.reactivateHabit('habit-123', mockUserId)).rejects.toThrow(/not formed/i);
     });
 
+    it('reactivateHabit does NOT reset best_streak in the update payload', async () => {
+      const formedHabit = {
+        ...mockHabit,
+        status: 'formed' as const,
+        current_streak: 0,
+        best_streak: 87,
+        graduated_streak: 87,
+        graduated_at: '2026-04-01T00:00:00Z',
+      };
+      const activeHabit = {
+        ...mockHabit,
+        status: 'active' as const,
+        current_streak: 0,
+        best_streak: 87,
+        graduated_at: null,
+        graduated_streak: null,
+      };
+      mockSupabaseClient.single
+        .mockResolvedValueOnce({ data: formedHabit, error: null })
+        .mockResolvedValueOnce({ data: activeHabit, error: null });
+      mockSupabaseClient.maybeSingle.mockResolvedValueOnce({
+        data: { id: 'grad-1' },
+        error: null,
+      });
+      mockSupabaseClient.update.mockClear();
+
+      await habitsDB.reactivateHabit('habit-123', mockUserId);
+
+      // Find the update call that flipped status to active
+      const statusUpdateCall = mockSupabaseClient.update.mock.calls.find(
+        (c: unknown[]) => (c[0] as { status?: string }).status === 'active'
+      );
+      expect(statusUpdateCall).toBeDefined();
+      expect(statusUpdateCall![0]).not.toHaveProperty('best_streak');
+      expect((statusUpdateCall![0] as { current_streak: number }).current_streak).toBe(0);
+    });
+
+    it('graduateHabit throws HabitAlreadyFormedError when habit is already formed', async () => {
+      const { HabitAlreadyFormedError } = await import('@/lib/db/habit-errors');
+      const alreadyFormed = { ...mockHabit, status: 'formed' as const };
+      mockSupabaseClient.single.mockResolvedValueOnce({
+        data: alreadyFormed,
+        error: null,
+      });
+      await expect(
+        habitsDB.graduateHabit('habit-123', mockUserId)
+      ).rejects.toThrow(HabitAlreadyFormedError);
+    });
+
     it('dismissGraduationNudge stamps nudge_dismissed_at', async () => {
       const updated = { ...mockHabit, nudge_dismissed_at: '2026-04-12T00:00:00Z' };
       mockSupabaseClient.single.mockResolvedValueOnce({ data: updated, error: null });
