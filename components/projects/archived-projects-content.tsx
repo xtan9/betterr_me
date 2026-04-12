@@ -60,7 +60,7 @@ export function ArchivedProjectsContent() {
           </h3>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
             <ArchivedProjectCard
               key={project.id}
@@ -120,7 +120,7 @@ function ArchivedProjectsSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-8 w-48" />
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
         {[1, 2, 3].map((i) => (
           <Skeleton key={i} className="h-20 rounded-xl" />
         ))}

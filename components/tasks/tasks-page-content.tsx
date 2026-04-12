@@ -359,7 +359,7 @@ export function TasksPageContent() {
             <Pause className="size-4" />
             {t("paused.title", { count: pausedTemplates.length })}
           </h3>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
             {pausedTemplates.map((template) => (
               <Card key={template.id} className="border-dashed">
                 <CardContent className="p-card-padding">
@@ -472,7 +472,7 @@ function SectionBlock({
   const showLabels = standaloneTasks.length > 0 && showProjects;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-card-gap">
       <h2 className="text-lg font-semibold tracking-tight">
         {t(`sections.${section}`)}
       </h2>
@@ -480,7 +480,7 @@ function SectionBlock({
       {isEmpty ? (
         <TaskEmptyState variant="no_tasks" onCreateTask={() => onCreateTask(section)} />
       ) : (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-card-gap">
           {/* Standalone tasks first */}
           {standaloneTasks.length > 0 && (
             <div className="space-y-2">
@@ -511,7 +511,7 @@ function SectionBlock({
                   {t("sections.projectsLabel")}
                 </h3>
               )}
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
                 {sectionProjects.map((project) => {
                   const projectTasks = allSectionTasks.filter(
                     (t) => t.project_id === project.id

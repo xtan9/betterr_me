@@ -27,7 +27,7 @@ export function BillsPageContent() {
     dashboard.daily_balances.length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-card-gap">
       {/* Subscription alerts (AIML-02) */}
       <InsightList page="bills" className="mb-4" />
 

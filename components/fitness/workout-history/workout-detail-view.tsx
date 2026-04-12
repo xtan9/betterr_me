@@ -367,7 +367,7 @@ export function WorkoutDetailView({
   const t = useTranslations("workouts");
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-card-gap">
       <SummaryStats workout={workout} weightUnit={weightUnit} />
 
       {workout.exercises.map((ex) => (
