@@ -38,16 +38,43 @@ export function getBucket(frequency: HabitFrequency): Bucket {
   }
 }
 
-function daysBetween(fromISO: string, toYMD: string): number {
-  const from = new Date(fromISO).getTime();
-  const to = new Date(`${toYMD}T00:00:00Z`).getTime();
-  return Math.floor((to - from) / (1000 * 60 * 60 * 24));
+/** Parse a YYYY-MM-DD (local date) into { y, m, d } */
+function parseYMD(ymd: string): { y: number; m: number; d: number } {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return { y, m, d };
 }
 
+/** Convert an ISO timestamp to its local YYYY-MM-DD. */
+function toLocalYMD(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Whole-day difference between two YYYY-MM-DD strings (or an ISO for fromISO). */
+function daysBetween(fromISOorYMD: string, toYMD: string): number {
+  const fromYMD = fromISOorYMD.includes("T")
+    ? toLocalYMD(fromISOorYMD)
+    : fromISOorYMD;
+  const f = parseYMD(fromYMD);
+  const t = parseYMD(toYMD);
+  const fromDate = new Date(f.y, f.m - 1, f.d);
+  const toDate = new Date(t.y, t.m - 1, t.d);
+  return Math.round(
+    (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24),
+  );
+}
+
+/** Add delta days to a YYYY-MM-DD and return a YYYY-MM-DD (local). */
 function addDays(ymd: string, delta: number): string {
-  const d = new Date(`${ymd}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + delta);
-  return d.toISOString().slice(0, 10);
+  const { y, m, d } = parseYMD(ymd);
+  const date = new Date(y, m - 1, d + delta);
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
 
 /** Count scheduled occurrences in [startYMD, endYMD] inclusive for a frequency. */
@@ -57,7 +84,7 @@ function countScheduled(
   endYMD: string
 ): number {
   if (frequency.type === "times_per_week" || frequency.type === "weekly") {
-    const days = daysBetween(`${startYMD}T00:00:00Z`, endYMD) + 1;
+    const days = daysBetween(startYMD, endYMD) + 1;
     const weeks = Math.max(Math.floor(days / 7), 1);
     const perWeek = frequency.type === "weekly" ? 1 : frequency.count;
     return weeks * perWeek;
@@ -66,8 +93,9 @@ function countScheduled(
   let count = 0;
   let cursor = startYMD;
   while (cursor <= endYMD) {
-    const d = new Date(`${cursor}T00:00:00Z`);
-    if (shouldTrackOnDate(frequency, d)) count++;
+    const { y, m, d } = parseYMD(cursor);
+    const date = new Date(y, m - 1, d);
+    if (shouldTrackOnDate(frequency, date)) count++;
     cursor = addDays(cursor, 1);
   }
   return count;
@@ -97,7 +125,8 @@ export function isGraduationEligible(args: Args): boolean {
       // completed day within the week counts toward the per-week target.
       return true;
     }
-    return shouldTrackOnDate(frequency, new Date(`${ymd}T00:00:00Z`));
+    const { y, m, d } = parseYMD(ymd);
+    return shouldTrackOnDate(frequency, new Date(y, m - 1, d));
   };
 
   const completedInWindow = logs.filter(

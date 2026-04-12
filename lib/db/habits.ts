@@ -235,9 +235,12 @@ export class HabitsDB {
 
     // Fetch logs needed to evaluate graduation eligibility (up to 90-day window)
     const eligibilityWindowStart = (() => {
-      const d = new Date(`${today}T00:00:00Z`);
-      d.setUTCDate(d.getUTCDate() - 90);
-      return d.toISOString().slice(0, 10);
+      const [y, m, d] = today.split("-").map(Number);
+      const start = new Date(y, m - 1, d - 90);
+      const yy = start.getFullYear();
+      const mm = String(start.getMonth() + 1).padStart(2, "0");
+      const dd = String(start.getDate()).padStart(2, "0");
+      return `${yy}-${mm}-${dd}`;
     })();
 
     const { data: eligibilityLogs, error: eligErr } = await this.supabase
