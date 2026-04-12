@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { DashboardSkeleton } from "./dashboard-skeleton";
+import { useDashboardDismissals } from "./use-dashboard-dismissals";
 import dynamic from "next/dynamic";
 
 const DailySnapshot = dynamic(() =>
@@ -84,65 +85,24 @@ export function DashboardContent({
 
   const today = getLocalDateString();
 
-  const [dismissedAbsenceIds, setDismissedAbsenceIds] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    try {
-      const stored = localStorage.getItem(`absence-dismissed-${today}`);
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  // Weekly insight — only fetch on the user's week start day
+  const dayOfWeek = new Date().getDay();
+  // Default to Monday (1) if no profile data yet; real check uses profile pref
+  const weekStartDay = 1;
+  const isWeekStartDay = dayOfWeek === weekStartDay;
+  const weekKey = getWeekKey(weekStartDay);
+  const dismissKey = `insight-dismissed-${weekKey}`;
 
-  const handleDismissAbsence = useCallback((habitId: string) => {
-    setDismissedAbsenceIds(prev => {
-      const next = new Set(prev);
-      next.add(habitId);
-      localStorage.setItem(`absence-dismissed-${today}`, JSON.stringify([...next]));
-      return next;
-    });
-  }, [today]);
-
-  const [dismissedMotivation, setDismissedMotivation] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return localStorage.getItem(`motivation-dismissed-${today}`) === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  const handleDismissMotivation = useCallback(() => {
-    setDismissedMotivation(true);
-    try {
-      localStorage.setItem(`motivation-dismissed-${today}`, "true");
-    } catch {
-      // Storage unavailable (private browsing, quota exceeded)
-    }
-  }, [today]);
-
-  const [dismissedMilestoneIds, setDismissedMilestoneIds] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    try {
-      const stored = localStorage.getItem(`milestones-dismissed-${today}`);
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-
-  const handleDismissMilestone = useCallback((milestoneId: string) => {
-    setDismissedMilestoneIds(prev => {
-      const next = new Set(prev);
-      next.add(milestoneId);
-      try {
-        localStorage.setItem(`milestones-dismissed-${today}`, JSON.stringify([...next]));
-      } catch {
-        // Storage unavailable (private browsing, quota exceeded)
-      }
-      return next;
-    });
-  }, [today]);
+  const {
+    dismissedAbsenceIds,
+    handleDismissAbsence,
+    dismissedMotivation,
+    handleDismissMotivation,
+    dismissedMilestoneIds,
+    handleDismissMilestone,
+    insightDismissed,
+    handleDismissInsight,
+  } = useDashboardDismissals(today, dismissKey);
 
   const { data, error, isLoading, mutate } = useSWR<DashboardData>(
     `/api/dashboard?date=${today}`,
@@ -163,30 +123,10 @@ export function DashboardContent({
     }
   }, [data]);
 
-  // Weekly insight — only fetch on the user's week start day
-  const dayOfWeek = new Date().getDay();
-  // Default to Monday (1) if no profile data yet; real check uses profile pref
-  const weekStartDay = 1;
-  const isWeekStartDay = dayOfWeek === weekStartDay;
-  const weekKey = getWeekKey(weekStartDay);
-  const dismissKey = `insight-dismissed-${weekKey}`;
-
-  const [insightDismissed, setInsightDismissed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(dismissKey) === "true";
-  });
-
   const { data: insightsData } = useSWR<{ insights: WeeklyInsight[] }>(
     isWeekStartDay && !insightDismissed ? "/api/insights/weekly" : null,
     fetcher,
   );
-
-  const handleDismissInsight = useCallback(() => {
-    setInsightDismissed(true);
-    if (typeof window !== "undefined") {
-      localStorage.setItem(dismissKey, "true");
-    }
-  }, [dismissKey]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -536,63 +476,3 @@ export function DashboardContent({
   );
 }
 
-// Loading skeleton component (DASH-007)
-function DashboardSkeleton() {
-  return (
-    <div className="flex flex-col gap-section-gap" data-testid="dashboard-skeleton">
-      {/* Greeting skeleton */}
-      <Card>
-        <CardContent className="flex items-center gap-3 py-0">
-          <Skeleton className="size-10 shrink-0 rounded-full" />
-          <div>
-            <Skeleton className="h-9 w-full max-w-64" />
-            <Skeleton className="mt-2 h-5 w-full max-w-96" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Motivation skeleton */}
-      <Card>
-        <CardContent className="py-4">
-          <Skeleton className="h-16 w-full rounded-lg" />
-        </CardContent>
-      </Card>
-
-      {/* Stats skeleton */}
-      <div className="flex flex-col gap-card-gap">
-        <Skeleton className="h-6 w-40" />
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-card-gap">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-28 rounded-xl" />
-          ))}
-        </div>
-      </div>
-
-      {/* Content grid skeleton */}
-      <div className="grid gap-card-gap xl:grid-cols-2">
-        <Card>
-          <div className="p-card-padding space-y-4">
-            <div className="flex justify-between">
-              <Skeleton className="h-6 w-32" />
-              <Skeleton className="h-9 w-24" />
-            </div>
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-14 w-full" />
-            ))}
-          </div>
-        </Card>
-        <Card>
-          <div className="p-card-padding space-y-4">
-            <div className="flex justify-between">
-              <Skeleton className="h-6 w-32" />
-              <Skeleton className="h-9 w-24" />
-            </div>
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-14 w-full" />
-            ))}
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
