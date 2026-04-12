@@ -2,9 +2,14 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { Search } from "lucide-react";
 import { HabitCard } from "./habit-card";
 import { HabitEmptyState } from "./habit-empty-state";
+import { GraduationNudgeBanner } from "./graduation-nudge-banner";
+import { FormedHabitCard } from "./formed-habit-card";
+import { GraduateDialog } from "./graduate-dialog";
+import { ReactivateDialog } from "./reactivate-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "@/lib/hooks/use-debounce";
@@ -16,6 +21,7 @@ interface HabitListProps {
   onToggle: (habitId: string) => Promise<void>;
   onHabitClick: (habitId: string) => void;
   togglingHabitIds?: Set<string>;
+  onMutate?: () => void | Promise<unknown>;
 }
 
 type StatusTab = "active" | "paused" | "formed";
@@ -25,12 +31,18 @@ export function HabitList({
   onToggle,
   onHabitClick,
   togglingHabitIds,
+  onMutate,
 }: HabitListProps) {
   const t = useTranslations("habits.list");
+  const tHabits = useTranslations("habits");
   const { categories } = useCategories();
   const [activeTab, setActiveTab] = useState<StatusTab>("active");
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 300);
+  const [graduateTarget, setGraduateTarget] =
+    useState<HabitWithTodayStatus | null>(null);
+  const [reactivateTarget, setReactivateTarget] =
+    useState<HabitWithTodayStatus | null>(null);
 
   // Count habits by status
   const counts = useMemo(() => {
@@ -57,6 +69,65 @@ export function HabitList({
     setActiveTab(value as StatusTab);
     setSearchQuery(""); // Clear search on tab change
   }, []);
+
+  const handleDismissNudge = useCallback(
+    async (habitId: string) => {
+      try {
+        const res = await fetch(
+          `/api/habits/${habitId}/dismiss-graduation-nudge`,
+          { method: "POST" },
+        );
+        if (!res.ok) throw new Error("Failed");
+        await onMutate?.();
+      } catch {
+        toast.error(tHabits("graduate.dismiss_error"));
+      }
+    },
+    [onMutate, tHabits],
+  );
+
+  const confirmGraduate = useCallback(async () => {
+    if (!graduateTarget) return;
+    try {
+      const res = await fetch(`/api/habits/${graduateTarget.id}/graduate`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast.success(tHabits("graduate.success_toast"));
+      await onMutate?.();
+    } catch {
+      toast.error(tHabits("graduate.error_toast"));
+    }
+  }, [graduateTarget, onMutate, tHabits]);
+
+  const confirmReactivate = useCallback(async () => {
+    if (!reactivateTarget) return;
+    try {
+      const res = await fetch(`/api/habits/${reactivateTarget.id}/reactivate`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast.success(tHabits("reactivate.success_toast"));
+      await onMutate?.();
+    } catch {
+      toast.error(tHabits("reactivate.error_toast"));
+    }
+  }, [reactivateTarget, onMutate, tHabits]);
+
+  const handleDeleteFormed = useCallback(
+    async (habitId: string) => {
+      if (!window.confirm(tHabits("formed_gallery.confirm_delete"))) return;
+      try {
+        const res = await fetch(`/api/habits/${habitId}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed");
+        toast.success(tHabits("formed_gallery.delete_success"));
+        await onMutate?.();
+      } catch {
+        toast.error(tHabits("formed_gallery.delete_error"));
+      }
+    },
+    [onMutate, tHabits],
+  );
 
   // Determine empty state variant
   const getEmptyStateVariant = () => {
@@ -108,22 +179,69 @@ export function HabitList({
               variant={emptyStateVariant}
               searchQuery={debouncedSearch}
             />
+          ) : activeTab === "formed" ? (
+            <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
+              {filteredHabits.map((habit) => (
+                <FormedHabitCard
+                  key={habit.id}
+                  habit={habit}
+                  onReactivate={(id) => {
+                    const target = habits.find((h) => h.id === id);
+                    if (target) setReactivateTarget(target);
+                  }}
+                  onDelete={handleDeleteFormed}
+                />
+              ))}
+            </div>
           ) : (
             <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
               {filteredHabits.map((habit) => (
-                <HabitCard
-                  key={habit.id}
-                  habit={habit}
-                  categories={categories}
-                  onToggle={() => onToggle(habit.id)}
-                  onClick={() => onHabitClick(habit.id)}
-                  isToggling={togglingHabitIds?.has(habit.id)}
-                />
+                <div key={habit.id} className="contents">
+                  {activeTab === "active" &&
+                    habit.graduation_eligible &&
+                    habit.status === "active" && (
+                      <div className="col-span-full">
+                        <GraduationNudgeBanner
+                          habitId={habit.id}
+                          onGraduate={(id) => {
+                            const target = habits.find((h) => h.id === id);
+                            if (target) setGraduateTarget(target);
+                          }}
+                          onDismiss={handleDismissNudge}
+                        />
+                      </div>
+                    )}
+                  <HabitCard
+                    habit={habit}
+                    categories={categories}
+                    onToggle={() => onToggle(habit.id)}
+                    onClick={() => onHabitClick(habit.id)}
+                    isToggling={togglingHabitIds?.has(habit.id)}
+                  />
+                </div>
               ))}
             </div>
           )}
         </TabsContent>
       </Tabs>
+
+      {graduateTarget && (
+        <GraduateDialog
+          open={!!graduateTarget}
+          onOpenChange={(open) => !open && setGraduateTarget(null)}
+          habitName={graduateTarget.name}
+          onConfirm={confirmGraduate}
+        />
+      )}
+      {reactivateTarget && (
+        <ReactivateDialog
+          open={!!reactivateTarget}
+          onOpenChange={(open) => !open && setReactivateTarget(null)}
+          habitName={reactivateTarget.name}
+          bestStreak={reactivateTarget.best_streak}
+          onConfirm={confirmReactivate}
+        />
+      )}
     </div>
   );
 }

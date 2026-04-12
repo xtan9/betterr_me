@@ -32,6 +32,28 @@ vi.mock('@/components/habits/habit-card', () => ({
   ),
 }));
 
+// Mock FormedHabitCard (used in Formed tab)
+vi.mock('@/components/habits/formed-habit-card', () => ({
+  FormedHabitCard: ({ habit }: { habit: HabitWithTodayStatus }) => (
+    <div data-testid={`habit-card-${habit.id}`}>{habit.name}</div>
+  ),
+}));
+
+// Mock GraduationNudgeBanner
+vi.mock('@/components/habits/graduation-nudge-banner', () => ({
+  GraduationNudgeBanner: ({ habitId }: { habitId: string }) => (
+    <div data-testid={`graduation-banner-${habitId}`} />
+  ),
+}));
+
+// Mock dialogs
+vi.mock('@/components/habits/graduate-dialog', () => ({
+  GraduateDialog: () => null,
+}));
+vi.mock('@/components/habits/reactivate-dialog', () => ({
+  ReactivateDialog: () => null,
+}));
+
 // Mock HabitEmptyState
 vi.mock('@/components/habits/habit-empty-state', () => ({
   HabitEmptyState: ({ variant, searchQuery }: { variant: string; searchQuery?: string }) => (
@@ -69,6 +91,7 @@ describe('HabitList', () => {
     updated_at: '2026-01-01T00:00:00Z',
     completed_today: false,
     monthly_completion_rate: 75,
+    graduation_eligible: false,
     ...overrides,
   });
 
