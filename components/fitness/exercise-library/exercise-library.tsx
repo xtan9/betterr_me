@@ -122,7 +122,7 @@ export function ExerciseLibrary() {
           <Skeleton className="h-9 w-[180px]" />
           <Skeleton className="h-9 w-[180px]" />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-28" />
           ))}
@@ -174,7 +174,7 @@ export function ExerciseLibrary() {
                 <h2 className="text-muted-foreground mb-3 text-sm font-semibold uppercase tracking-wider">
                   {t(`muscleGroups.${group}`)} ({groupExercises.length})
                 </h2>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
                   {groupExercises.map((exercise) => (
                     <ExerciseCard
                       key={exercise.id}

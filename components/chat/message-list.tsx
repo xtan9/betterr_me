@@ -46,7 +46,7 @@ export function MessageList({ messages, status }: MessageListProps) {
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto p-4 space-y-4"
+      className="flex flex-col flex-1 overflow-y-auto p-4 gap-card-gap"
       onScroll={handleScroll}
     >
       {messages.map((message) => (

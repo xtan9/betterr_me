@@ -127,7 +127,7 @@ export function TransactionList() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="flex flex-col gap-card-gap">
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-32 w-full" />
         <div className="space-y-2">
@@ -146,7 +146,7 @@ export function TransactionList() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-card-gap">
       {/* Mine/Household tabs */}
       <HouseholdViewTabs
         value={viewMode}

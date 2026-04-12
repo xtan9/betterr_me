@@ -20,7 +20,7 @@ export default function DashboardLoading() {
       </Card>
 
       {/* Stats skeleton */}
-      <div className="space-y-4">
+      <div className="flex flex-col gap-card-gap">
         <Skeleton className="h-6 w-40" />
         <div className="grid grid-cols-2 md:grid-cols-3 gap-card-gap">
           {[1, 2, 3].map((i) => (

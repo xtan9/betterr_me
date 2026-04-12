@@ -165,9 +165,9 @@ export function BudgetOverview() {
 
       {/* Loading state */}
       {isLoading && (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-card-gap">
           <Skeleton className="h-32 w-full rounded-xl" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
             <Skeleton className="h-24 w-full rounded-xl" />
             <Skeleton className="h-24 w-full rounded-xl" />
             <Skeleton className="h-24 w-full rounded-xl" />
@@ -306,7 +306,7 @@ export function BudgetOverview() {
           </div>
 
           {/* Category cards grid */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
             {budget.categories.map((cat) => {
               const percent =
                 cat.allocated_cents > 0

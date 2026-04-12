@@ -14,9 +14,9 @@ export function MoneyPageShell() {
   // Only show skeleton on initial load (no data yet)
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="flex flex-col gap-card-gap">
         {/* Hero skeleton */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-card-gap sm:grid-cols-3">
           <Skeleton className="h-24 w-full rounded-xl" />
           <Skeleton className="h-24 w-full rounded-xl" />
           <Skeleton className="h-24 w-full rounded-xl" />
@@ -24,7 +24,7 @@ export function MoneyPageShell() {
         {/* Bills skeleton */}
         <Skeleton className="h-40 w-full rounded-xl" />
         {/* Nav skeleton */}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-card-gap sm:grid-cols-2">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
         </div>
@@ -39,7 +39,7 @@ export function MoneyPageShell() {
 
   // Connected users see the forward-looking dashboard
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-card-gap">
       {/* Mine/Household tabs */}
       <HouseholdViewTabs
         value={viewMode}

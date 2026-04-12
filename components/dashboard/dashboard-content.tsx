@@ -477,7 +477,7 @@ export function DashboardContent({
 
       {/* Absence Recovery Cards — habits with missed scheduled days */}
       {absenceHabits.length > 0 && (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-card-gap">
           {absenceHabits.map((habit) => (
             <AbsenceCard
               key={habit.id}
@@ -559,7 +559,7 @@ function DashboardSkeleton() {
       </Card>
 
       {/* Stats skeleton */}
-      <div className="space-y-4">
+      <div className="flex flex-col gap-card-gap">
         <Skeleton className="h-6 w-40" />
         <div className="grid grid-cols-2 md:grid-cols-3 gap-card-gap">
           {[1, 2, 3].map((i) => (

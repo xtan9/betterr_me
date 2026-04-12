@@ -65,7 +65,7 @@ export function WorkoutsPageRoutines() {
     return (
       <div className="space-y-3">
         <Skeleton className="h-6 w-32" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 2 }).map((_, i) => (
             <Skeleton key={i} className="h-40" />
           ))}
@@ -104,7 +104,7 @@ export function WorkoutsPageRoutines() {
           <span>{t("createFirst")}</span>
         </Link>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
           {routines.slice(0, 3).map((routine) => (
             <RoutineCard
               key={routine.id}

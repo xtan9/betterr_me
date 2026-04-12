@@ -128,7 +128,7 @@ export function BillsList() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="flex flex-col gap-card-gap">
         <Skeleton className="h-20 w-full rounded-lg" />
         <Skeleton className="h-6 w-24" />
         <Skeleton className="h-14 w-full rounded-lg" />
@@ -141,7 +141,7 @@ export function BillsList() {
   // Empty state
   if (bills.length === 0) {
     return (
-      <div className="space-y-4">
+      <div className="flex flex-col gap-card-gap">
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={() => setFormOpen(true)}>
             <Plus className="mr-1 size-4" />
@@ -180,7 +180,7 @@ export function BillsList() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-card-gap">
       {/* Summary header */}
       {summary && (
         <BillSummaryHeader
