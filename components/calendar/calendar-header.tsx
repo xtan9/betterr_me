@@ -69,7 +69,7 @@ export function CalendarHeader({
   }, [view, currentDate, locale, weekStartDay]);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-card-header-padding-x py-card-header-padding-y">
       {/* Left: Mobile sidebar toggle + Today button */}
       <div className="flex items-center gap-2">
         {mobileSidebar && (
