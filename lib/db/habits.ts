@@ -255,46 +255,51 @@ export class HabitsDB {
 
     if (logsError) throw logsError;
 
-    // Get this month's logs for progress bars
-    const monthStart = today.substring(0, 7) + '-01';
-    const { data: monthLogs, error: monthLogsError } = await this.supabase
-      .from('habit_logs')
-      .select('habit_id, logged_date, completed')
-      .eq('user_id', userId)
-      .gte('logged_date', monthStart)
-      .lte('logged_date', today)
-      .eq('completed', true);
-
-    if (monthLogsError) throw monthLogsError;
-
-    // Count completed days per habit this month
-    const monthlyCompletions = new Map<string, number>();
-    (monthLogs || []).forEach(log => {
-      monthlyCompletions.set(log.habit_id, (monthlyCompletions.get(log.habit_id) || 0) + 1);
-    });
-
-    // Fetch logs needed to evaluate graduation eligibility (up to 90-day window)
-    const eligibilityWindowStart = (() => {
-      const [y, m, d] = today.split("-").map(Number);
+    // Fetch a single 90-day window for both monthly progress bars AND graduation
+    // eligibility. Degrades gracefully on failure: monthly rate renders as 0 and
+    // nudges simply don't show, but the habits list still renders.
+    const ninetyDayWindowStart = (() => {
+      const [y, m, d] = today.split('-').map(Number);
       const start = new Date(y, m - 1, d - 90);
       const yy = start.getFullYear();
-      const mm = String(start.getMonth() + 1).padStart(2, "0");
-      const dd = String(start.getDate()).padStart(2, "0");
+      const mm = String(start.getMonth() + 1).padStart(2, '0');
+      const dd = String(start.getDate()).padStart(2, '0');
       return `${yy}-${mm}-${dd}`;
     })();
 
-    const { data: eligibilityLogs, error: eligErr } = await this.supabase
-      .from('habit_logs')
-      .select('habit_id, logged_date, completed')
-      .eq('user_id', userId)
-      .gte('logged_date', eligibilityWindowStart)
-      .lte('logged_date', today)
-      .eq('completed', true);
+    let windowLogs: Array<{ habit_id: string; logged_date: string; completed: boolean }> = [];
+    try {
+      const { data, error } = await this.supabase
+        .from('habit_logs')
+        .select('habit_id, logged_date, completed')
+        .eq('user_id', userId)
+        .gte('logged_date', ninetyDayWindowStart)
+        .lte('logged_date', today)
+        .eq('completed', true);
+      if (error) throw error;
+      windowLogs = data ?? [];
+    } catch (err) {
+      log.warn(
+        '[habits] 90-day logs query failed; monthly rate + nudges will be empty',
+        { userId, error: String(err) },
+      );
+    }
 
-    if (eligErr) throw eligErr;
+    // Count completed days per habit this month (from monthStart onward)
+    const monthStart = today.substring(0, 7) + '-01';
+    const monthlyCompletions = new Map<string, number>();
+    windowLogs.forEach((row) => {
+      if (row.logged_date >= monthStart) {
+        monthlyCompletions.set(
+          row.habit_id,
+          (monthlyCompletions.get(row.habit_id) || 0) + 1,
+        );
+      }
+    });
 
+    // Build per-habit log map for graduation eligibility (full 90-day window)
     const logsByHabit = new Map<string, { logged_date: string; completed: boolean }[]>();
-    (eligibilityLogs || []).forEach((row) => {
+    windowLogs.forEach((row) => {
       const arr = logsByHabit.get(row.habit_id) ?? [];
       arr.push({ logged_date: row.logged_date, completed: row.completed });
       logsByHabit.set(row.habit_id, arr);
