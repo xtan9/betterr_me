@@ -11,19 +11,22 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let id: string | undefined;
+  let userId: string | undefined;
   try {
-    const { id } = await params;
+    ({ id } = await params);
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    userId = user.id;
 
     const habitsDB = new HabitsDB(supabase);
     const habit = await habitsDB.dismissGraduationNudge(id, user.id);
     return NextResponse.json({ habit });
   } catch (error) {
-    log.error('[habits] POST dismiss-graduation-nudge', error);
+    log.error('[habits] POST dismiss-graduation-nudge', error, { id, userId });
     return NextResponse.json({ error: 'Failed to dismiss nudge' }, { status: 500 });
   }
 }

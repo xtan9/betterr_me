@@ -26,13 +26,15 @@ export async function POST(
     const habit = await habitsDB.graduateHabit(id, user.id);
     return NextResponse.json({ habit });
   } catch (error: unknown) {
-    log.error('[habits] POST graduate', error, { id, userId });
     if (error instanceof HabitNotFoundError) {
+      log.info('[habits] graduate: not found', { id, userId });
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
     if (error instanceof HabitAlreadyFormedError) {
+      log.info('[habits] graduate: already formed', { id, userId });
       return NextResponse.json({ error: 'Habit is already formed' }, { status: 400 });
     }
+    log.error('[habits] POST graduate', error, { id, userId });
     return NextResponse.json({ error: 'Failed to graduate habit' }, { status: 500 });
   }
 }

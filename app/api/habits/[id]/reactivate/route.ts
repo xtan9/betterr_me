@@ -26,13 +26,15 @@ export async function POST(
     const habit = await habitsDB.reactivateHabit(id, user.id);
     return NextResponse.json({ habit });
   } catch (error: unknown) {
-    log.error('[habits] POST reactivate', error, { id, userId });
     if (error instanceof HabitNotFoundError) {
+      log.info('[habits] reactivate: not found', { id, userId });
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
     if (error instanceof HabitNotFormedError) {
+      log.info('[habits] reactivate: not formed', { id, userId });
       return NextResponse.json({ error: 'Habit is not formed' }, { status: 400 });
     }
+    log.error('[habits] POST reactivate', error, { id, userId });
     return NextResponse.json({ error: 'Failed to reactivate habit' }, { status: 500 });
   }
 }
