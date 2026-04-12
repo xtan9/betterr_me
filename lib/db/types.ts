@@ -254,6 +254,8 @@ export type HabitFrequency =
   | { type: "times_per_week"; count: 2 | 3 }
   | { type: "custom"; days: number[] }; // 0=Sunday, 1=Monday, etc.
 
+// TODO: Consider a discriminated union on `status` to encode the invariant that
+// formed habits have non-null graduated_at/graduated_streak.
 export interface Habit {
   id: string; // UUID
   user_id: string; // UUID
@@ -288,9 +290,7 @@ export type HabitInsert = Omit<
   current_streak?: number;
   best_streak?: number;
   paused_at?: string | null;
-  graduated_at?: string | null;
-  graduated_streak?: number | null;
-  nudge_dismissed_at?: string | null;
+  // graduation fields intentionally omitted — set via graduateHabit/reactivateHabit only
 };
 
 export type HabitUpdate = Partial<

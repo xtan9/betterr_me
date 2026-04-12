@@ -12,7 +12,26 @@ type Args = {
   nudgeDismissedAt?: string | null;
 };
 
-type Bucket = { minAgeDays: number; windowDays: number; consistency: number };
+export type Bucket = {
+  minAgeDays: number;
+  windowDays: number;
+  consistency: number;
+};
+
+export type GraduationProgress = {
+  eligible: boolean;
+  bucket: Bucket;
+  ageDays: number;
+  windowStart: string; // YYYY-MM-DD
+  scheduled: number;
+  completed: number;
+  blockedBy:
+    | "already_formed"
+    | "age"
+    | "cooldown"
+    | "consistency"
+    | null;
+};
 
 const DAILY_BUCKET: Bucket = { minAgeDays: 21, windowDays: 21, consistency: 0.8 };
 const TIMES_PER_WEEK_BUCKET: Bucket = { minAgeDays: 30, windowDays: 30, consistency: 0.8 };
@@ -101,23 +120,64 @@ function countScheduled(
   return count;
 }
 
-export function isGraduationEligible(args: Args): boolean {
+export function getGraduationProgress(args: Args): GraduationProgress {
   const { createdAt, today, frequency, logs, status, nudgeDismissedAt } = args;
-
-  if (status === "formed") return false;
 
   const bucket = getBucket(frequency);
   const ageDays = daysBetween(createdAt, today);
-  if (ageDays < bucket.minAgeDays) return false;
+  const windowStart = addDays(today, -(bucket.windowDays - 1));
+
+  if (status === "formed") {
+    return {
+      eligible: false,
+      bucket,
+      ageDays,
+      windowStart,
+      scheduled: 0,
+      completed: 0,
+      blockedBy: "already_formed",
+    };
+  }
+
+  if (ageDays < bucket.minAgeDays) {
+    return {
+      eligible: false,
+      bucket,
+      ageDays,
+      windowStart,
+      scheduled: 0,
+      completed: 0,
+      blockedBy: "age",
+    };
+  }
 
   if (nudgeDismissedAt) {
     const since = daysBetween(nudgeDismissedAt, today);
-    if (since < NUDGE_COOLDOWN_DAYS) return false;
+    if (since < NUDGE_COOLDOWN_DAYS) {
+      return {
+        eligible: false,
+        bucket,
+        ageDays,
+        windowStart,
+        scheduled: 0,
+        completed: 0,
+        blockedBy: "cooldown",
+      };
+    }
   }
 
-  const windowStart = addDays(today, -(bucket.windowDays - 1));
   const scheduled = countScheduled(frequency, windowStart, today);
-  if (scheduled === 0) return false;
+  if (scheduled === 0) {
+    return {
+      eligible: false,
+      bucket,
+      ageDays,
+      windowStart,
+      scheduled: 0,
+      completed: 0,
+      blockedBy: "consistency",
+    };
+  }
 
   const isScheduledYMD = (ymd: string): boolean => {
     if (frequency.type === "times_per_week" || frequency.type === "weekly") {
@@ -139,6 +199,19 @@ export function isGraduationEligible(args: Args): boolean {
 
   // Clamp to scheduled ceiling so ratio never exceeds 1.0 (defensive).
   const effectiveCompleted = Math.min(completedInWindow, scheduled);
+  const eligible = effectiveCompleted / scheduled >= bucket.consistency;
 
-  return effectiveCompleted / scheduled >= bucket.consistency;
+  return {
+    eligible,
+    bucket,
+    ageDays,
+    windowStart,
+    scheduled,
+    completed: effectiveCompleted,
+    blockedBy: eligible ? null : "consistency",
+  };
+}
+
+export function isGraduationEligible(args: Args): boolean {
+  return getGraduationProgress(args).eligible;
 }
