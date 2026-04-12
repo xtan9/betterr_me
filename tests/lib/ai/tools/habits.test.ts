@@ -9,7 +9,8 @@ const mockCreateHabit = vi.fn();
 const mockUpdateHabit = vi.fn();
 const mockPauseHabit = vi.fn();
 const mockResumeHabit = vi.fn();
-const mockArchiveHabit = vi.fn();
+const mockGraduateHabit = vi.fn();
+const mockReactivateHabit = vi.fn();
 const mockDeleteHabit = vi.fn();
 const mockGetHabit = vi.fn();
 const mockGetDetailedHabitStats = vi.fn();
@@ -22,7 +23,8 @@ vi.mock("@/lib/db", () => ({
     updateHabit = mockUpdateHabit;
     pauseHabit = mockPauseHabit;
     resumeHabit = mockResumeHabit;
-    archiveHabit = mockArchiveHabit;
+    graduateHabit = mockGraduateHabit;
+    reactivateHabit = mockReactivateHabit;
     deleteHabit = mockDeleteHabit;
   },
   HabitLogsDB: class {
@@ -49,9 +51,9 @@ function findTool(name: string) {
 describe("habitTools", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("returns 10 tool definitions", () => {
+  it("returns 11 tool definitions", () => {
     const tools = habitTools();
-    expect(tools).toHaveLength(10);
+    expect(tools).toHaveLength(11);
     expect(tools.map((t) => t.name)).toEqual([
       "getHabitsToday",
       "getHabitStats",
@@ -60,7 +62,8 @@ describe("habitTools", () => {
       "updateHabit",
       "pauseHabit",
       "resumeHabit",
-      "archiveHabit",
+      "graduateHabit",
+      "reactivateHabit",
       "deleteHabit",
       "getDetailedHabitStats",
     ]);
@@ -148,11 +151,18 @@ describe("habitTools", () => {
     expect(mockResumeHabit).toHaveBeenCalledWith("h1", "user-123");
   });
 
-  it("archiveHabit calls HabitsDB.archiveHabit", async () => {
+  it("graduateHabit calls HabitsDB.graduateHabit", async () => {
     const ctx = makeCtx();
-    mockArchiveHabit.mockResolvedValue({ id: "h1", status: "archived" });
-    await findTool("archiveHabit").execute({ habitId: "h1" }, ctx);
-    expect(mockArchiveHabit).toHaveBeenCalledWith("h1", "user-123");
+    mockGraduateHabit.mockResolvedValue({ id: "h1", status: "formed" });
+    await findTool("graduateHabit").execute({ habitId: "h1" }, ctx);
+    expect(mockGraduateHabit).toHaveBeenCalledWith("h1", "user-123");
+  });
+
+  it("reactivateHabit calls HabitsDB.reactivateHabit", async () => {
+    const ctx = makeCtx();
+    mockReactivateHabit.mockResolvedValue({ id: "h1", status: "active" });
+    await findTool("reactivateHabit").execute({ habitId: "h1" }, ctx);
+    expect(mockReactivateHabit).toHaveBeenCalledWith("h1", "user-123");
   });
 
   it("deleteHabit verifies existence then deletes", async () => {
