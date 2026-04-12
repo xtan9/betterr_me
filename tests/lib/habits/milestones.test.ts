@@ -9,7 +9,17 @@ import {
 describe('milestones', () => {
   describe('MILESTONE_THRESHOLDS', () => {
     it('should contain the correct thresholds in order', () => {
-      expect(MILESTONE_THRESHOLDS).toEqual([7, 14, 30, 50, 100, 200, 365]);
+      expect(MILESTONE_THRESHOLDS).toEqual([7, 14, 21, 30, 50, 100, 200, 365]);
+    });
+
+    it('includes 21 as a milestone', () => {
+      expect(MILESTONE_THRESHOLDS).toContain(21);
+    });
+
+    it('orders milestones ascending', () => {
+      const arr = [...MILESTONE_THRESHOLDS];
+      const sorted = [...arr].sort((a, b) => a - b);
+      expect(arr).toEqual(sorted);
     });
   });
 
@@ -26,8 +36,12 @@ describe('milestones', () => {
       expect(getNextMilestone(7)).toBe(14);
     });
 
-    it('returns 30 for streak of 14', () => {
-      expect(getNextMilestone(14)).toBe(30);
+    it('returns 21 for streak of 14', () => {
+      expect(getNextMilestone(14)).toBe(21);
+    });
+
+    it('returns 30 for streak of 21', () => {
+      expect(getNextMilestone(21)).toBe(30);
     });
 
     it('returns 365 for streak of 200', () => {
@@ -56,8 +70,13 @@ describe('milestones', () => {
       expect(isMilestoneStreak(6)).toBe(false);
       expect(isMilestoneStreak(8)).toBe(false);
       expect(isMilestoneStreak(15)).toBe(false);
+      expect(isMilestoneStreak(22)).toBe(false);
       expect(isMilestoneStreak(99)).toBe(false);
       expect(isMilestoneStreak(366)).toBe(false);
+    });
+
+    it('recognises 21', () => {
+      expect(isMilestoneStreak(21)).toBe(true);
     });
   });
 
@@ -72,6 +91,10 @@ describe('milestones', () => {
 
     it('returns 7 for streak of 7 (next is 14)', () => {
       expect(getDaysToNextMilestone(7)).toBe(7);
+    });
+
+    it('returns 7 for streak of 14 (next is 21)', () => {
+      expect(getDaysToNextMilestone(14)).toBe(7);
     });
 
     it('returns 165 for streak of 200 (next is 365)', () => {
