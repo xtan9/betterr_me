@@ -89,7 +89,7 @@ export async function PATCH(
       // Set paused_at timestamp when pausing
       if (validation.data.status === 'paused') {
         updates.paused_at = new Date().toISOString();
-      } else if (validation.data.status === 'active') {
+      } else {
         updates.paused_at = null;
       }
     }
@@ -113,12 +113,9 @@ export async function PATCH(
 /**
  * DELETE /api/habits/[id]
  * Delete a habit permanently
- *
- * Query parameter:
- * - archive: boolean - if true, archive instead of delete
  */
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -127,26 +124,13 @@ export async function DELETE(
     const {
       data: { user },
     } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const habitsDB = new HabitsDB(supabase);
-    const searchParams = request.nextUrl.searchParams;
-    const archive = searchParams.get('archive') === 'true';
-
-    if (archive) {
-      // Soft delete (archive)
-      const habit = await habitsDB.archiveHabit(id, user.id);
-      return NextResponse.json({ habit, archived: true });
-    }
-
-    // Hard delete
     await habitsDB.deleteHabit(id, user.id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    log.error('DELETE /api/habits/[id] error', error);
+    log.error('[habits] DELETE', error);
     return NextResponse.json({ error: 'Failed to delete habit' }, { status: 500 });
   }
 }
