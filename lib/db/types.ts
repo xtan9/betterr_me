@@ -244,7 +244,7 @@ export interface TaskFilters {
 // HABITS
 // =============================================================================
 
-export type HabitStatus = "active" | "paused" | "archived";
+export type HabitStatus = "active" | "paused" | "formed";
 
 // Discriminated union for habit frequency
 export type HabitFrequency =
@@ -265,6 +265,9 @@ export interface Habit {
   current_streak: number;
   best_streak: number;
   paused_at: string | null; // TIMESTAMPTZ
+  graduated_at: string | null;
+  graduated_streak: number | null;
+  nudge_dismissed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -277,11 +280,17 @@ export type HabitInsert = Omit<
   | "current_streak"
   | "best_streak"
   | "paused_at"
+  | "graduated_at"
+  | "graduated_streak"
+  | "nudge_dismissed_at"
 > & {
   id?: string;
   current_streak?: number;
   best_streak?: number;
   paused_at?: string | null;
+  graduated_at?: string | null;
+  graduated_streak?: number | null;
+  nudge_dismissed_at?: string | null;
 };
 
 export type HabitUpdate = Partial<
@@ -292,6 +301,21 @@ export interface HabitFilters {
   status?: HabitStatus;
   category_id?: string;
 }
+
+export interface HabitGraduation {
+  id: string;
+  habit_id: string;
+  user_id: string;
+  graduated_at: string;
+  graduated_streak: number;
+  reactivated_at: string | null;
+  created_at: string;
+}
+
+export type HabitGraduationInsert = Omit<HabitGraduation, "id" | "created_at" | "reactivated_at"> & {
+  id?: string;
+  reactivated_at?: string | null;
+};
 
 // =============================================================================
 // HABIT LOGS
@@ -323,6 +347,7 @@ export type HabitLogUpdate = Partial<Pick<HabitLog, "completed">>;
 export interface HabitWithTodayStatus extends Habit {
   completed_today: boolean;
   monthly_completion_rate: number; // 0-100, percentage of days completed this month
+  graduation_eligible: boolean;
 }
 
 /** Absence enrichment data — only meaningful in the dashboard context. */
