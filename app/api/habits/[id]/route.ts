@@ -86,10 +86,12 @@ export async function PATCH(
     if (validation.data.status !== undefined) {
       updates.status = validation.data.status;
 
-      // Set paused_at timestamp when pausing
+      // Set paused_at timestamp when pausing, clear when returning to active.
+      // status === 'formed' intentionally does not touch paused_at — graduation
+      // should go through POST /graduate, which handles state transitions.
       if (validation.data.status === 'paused') {
         updates.paused_at = new Date().toISOString();
-      } else {
+      } else if (validation.data.status === 'active') {
         updates.paused_at = null;
       }
     }
