@@ -257,7 +257,7 @@ export function KanbanDetailModal({
               <div className="flex-[3] p-5 flex flex-col gap-4 overflow-y-auto">
                 {/* Info card */}
                 <div className="bg-background rounded-lg border shadow-sm">
-                  <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <div className="flex items-center justify-between px-card-header-padding-x py-card-header-padding-y border-b">
                     <h3 className="text-base font-semibold">
                       {t("detail.infoHeading")}
                     </h3>
@@ -362,7 +362,7 @@ export function KanbanDetailModal({
 
                 {/* Description card */}
                 <div className="bg-background rounded-lg border shadow-sm flex-1 flex flex-col">
-                  <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <div className="flex items-center justify-between px-card-header-padding-x py-card-header-padding-y border-b">
                     <h3 className="text-base font-semibold">
                       {t("detail.descriptionHeading")}
                     </h3>
@@ -382,7 +382,7 @@ export function KanbanDetailModal({
               {/* Right column (~40%) - Item updates card */}
               <div className="flex-[2] p-5 overflow-y-auto">
                 <div className="bg-background rounded-lg border shadow-sm h-full flex flex-col">
-                  <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <div className="flex items-center justify-between px-card-header-padding-x py-card-header-padding-y border-b">
                     <h3 className="text-base font-semibold">
                       {t("detail.updatesHeading")}
                     </h3>

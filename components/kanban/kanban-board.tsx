@@ -201,7 +201,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
   return (
     <div className="flex flex-col h-[calc(100vh-theme(spacing.16))]">
       {/* Board header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b">
+      <div className="flex items-center gap-3 px-card-header-padding-x py-card-header-padding-y border-b">
         <Link
           href="/tasks"
           className={cn(
