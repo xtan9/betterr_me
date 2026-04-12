@@ -18,7 +18,7 @@ interface HabitListProps {
   togglingHabitIds?: Set<string>;
 }
 
-type StatusTab = "active" | "paused" | "archived";
+type StatusTab = "active" | "paused" | "formed";
 
 export function HabitList({
   habits,
@@ -37,7 +37,7 @@ export function HabitList({
     return {
       active: habits.filter((h) => h.status === "active").length,
       paused: habits.filter((h) => h.status === "paused").length,
-      archived: habits.filter((h) => h.status === "archived").length,
+      formed: habits.filter((h) => h.status === "formed").length,
     };
   }, [habits]);
 
@@ -64,8 +64,8 @@ export function HabitList({
     if (debouncedSearch && filteredHabits.length === 0) return "no_results";
     if (activeTab === "paused" && filteredHabits.length === 0)
       return "no_paused";
-    if (activeTab === "archived" && filteredHabits.length === 0)
-      return "no_archived";
+    if (activeTab === "formed" && filteredHabits.length === 0)
+      return "no_formed";
     return null;
   };
 
@@ -82,8 +82,8 @@ export function HabitList({
             <TabsTrigger value="paused">
               {t("tabs.paused")} ({counts.paused})
             </TabsTrigger>
-            <TabsTrigger value="archived">
-              {t("tabs.archived")} ({counts.archived})
+            <TabsTrigger value="formed">
+              {t("tabs.formed")} ({counts.formed})
             </TabsTrigger>
           </TabsList>
 

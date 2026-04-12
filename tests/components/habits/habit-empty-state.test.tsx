@@ -15,8 +15,8 @@ vi.mock('next-intl', () => ({
         'noResults.description': 'Try a different search term.',
         'noPaused.title': 'No paused habits',
         'noPaused.description': 'Paused habits will appear here.',
-        'noArchived.title': 'No archived habits',
-        'noArchived.description': 'Archived habits will appear here.',
+        'noFormed.title': 'No formed habits yet',
+        'noFormed.description': 'Formed habits will appear here.',
       };
       return messages[key] ?? key;
     };
@@ -32,7 +32,7 @@ vi.mock('lucide-react', async (importOriginal) => {
     PartyPopper: (props: Record<string, unknown>) => <span data-testid="icon-party" {...props} />,
     Search: (props: Record<string, unknown>) => <span data-testid="icon-search" {...props} />,
     Pause: (props: Record<string, unknown>) => <span data-testid="icon-pause" {...props} />,
-    Archive: (props: Record<string, unknown>) => <span data-testid="icon-archive" {...props} />,
+    GraduationCap: (props: Record<string, unknown>) => <span data-testid="icon-graduation" {...props} />,
   };
 });
 
@@ -117,16 +117,16 @@ describe('HabitEmptyState', () => {
     });
   });
 
-  describe('no_archived variant', () => {
-    it('renders the archived title and description', () => {
-      render(<HabitEmptyState variant="no_archived" />);
-      expect(screen.getByText('No archived habits')).toBeInTheDocument();
-      expect(screen.getByText('Archived habits will appear here.')).toBeInTheDocument();
+  describe('no_formed variant', () => {
+    it('renders the formed title and description', () => {
+      render(<HabitEmptyState variant="no_formed" />);
+      expect(screen.getByText('No formed habits yet')).toBeInTheDocument();
+      expect(screen.getByText('Formed habits will appear here.')).toBeInTheDocument();
     });
 
-    it('renders the archive icon', () => {
-      render(<HabitEmptyState variant="no_archived" />);
-      expect(screen.getByTestId('icon-archive')).toBeInTheDocument();
+    it('renders the graduation icon', () => {
+      render(<HabitEmptyState variant="no_formed" />);
+      expect(screen.getByTestId('icon-graduation')).toBeInTheDocument();
     });
   });
 

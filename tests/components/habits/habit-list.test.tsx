@@ -13,7 +13,7 @@ vi.mock('next-intl', () => ({
         'searchPlaceholder': 'Search habits...',
         'tabs.active': 'Active',
         'tabs.paused': 'Paused',
-        'tabs.archived': 'Archived',
+        'tabs.formed': 'Formed',
         'showing': `Showing ${params?.count ?? 0} ${params?.status ?? ''} habits`,
         'noResults': `No habits matching "${params?.query ?? ''}"`,
       };
@@ -76,7 +76,7 @@ describe('HabitList', () => {
     makeHabit({ id: '1', name: 'Morning Run', status: 'active' }),
     makeHabit({ id: '2', name: 'Read Book', status: 'active' }),
     makeHabit({ id: '3', name: 'Meditate', status: 'paused', paused_at: '2026-01-15T00:00:00Z' }),
-    makeHabit({ id: '4', name: 'Old Habit', status: 'archived' }),
+    makeHabit({ id: '4', name: 'Old Habit', status: 'formed' }),
   ];
 
   const defaultProps = {
@@ -94,7 +94,7 @@ describe('HabitList', () => {
       render(<HabitList {...defaultProps} />);
       expect(screen.getByRole('tab', { name: /Active/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Paused/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /Archived/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Formed/i })).toBeInTheDocument();
     });
 
     it('renders search input', () => {
@@ -124,11 +124,11 @@ describe('HabitList', () => {
       expect(screen.queryByTestId('habit-card-1')).not.toBeInTheDocument();
     });
 
-    it('shows archived habits when archived tab is clicked', async () => {
+    it('shows formed habits when formed tab is clicked', async () => {
       const user = userEvent.setup();
       render(<HabitList {...defaultProps} />);
 
-      await user.click(screen.getByRole('tab', { name: /Archived/i }));
+      await user.click(screen.getByRole('tab', { name: /Formed/i }));
 
       await waitFor(() => {
         expect(screen.getByTestId('habit-card-4')).toBeInTheDocument();
@@ -180,15 +180,15 @@ describe('HabitList', () => {
       });
     });
 
-    it('shows no_archived empty state when no archived habits', async () => {
+    it('shows no_formed empty state when no formed habits', async () => {
       const user = userEvent.setup();
-      const habitsWithoutArchived = mockHabits.filter(h => h.status !== 'archived');
-      render(<HabitList {...defaultProps} habits={habitsWithoutArchived} />);
+      const habitsWithoutFormed = mockHabits.filter(h => h.status !== 'formed');
+      render(<HabitList {...defaultProps} habits={habitsWithoutFormed} />);
 
-      await user.click(screen.getByRole('tab', { name: /Archived/i }));
+      await user.click(screen.getByRole('tab', { name: /Formed/i }));
 
       await waitFor(() => {
-        expect(screen.getByTestId('empty-state-no_archived')).toBeInTheDocument();
+        expect(screen.getByTestId('empty-state-no_formed')).toBeInTheDocument();
       });
     });
   });
@@ -206,10 +206,10 @@ describe('HabitList', () => {
   describe('tab counts', () => {
     it('shows count badges on tabs', () => {
       render(<HabitList {...defaultProps} />);
-      // Active: 2, Paused: 1, Archived: 1
+      // Active: 2, Paused: 1, Formed: 1
       expect(screen.getByText(/Active.*\(2\)/i)).toBeInTheDocument();
       expect(screen.getByText(/Paused.*\(1\)/i)).toBeInTheDocument();
-      expect(screen.getByText(/Archived.*\(1\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/Formed.*\(1\)/i)).toBeInTheDocument();
     });
   });
 });
