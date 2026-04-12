@@ -227,6 +227,38 @@ describe('HabitsDB', () => {
         expect.arrayContaining(['habit-123', 'habit-paused', 'habit-formed'])
       );
     });
+
+    it('returns graduation_eligible flag per habit', async () => {
+      const activeHabit = {
+        ...mockHabit,
+        id: 'h-active',
+        status: 'active' as const,
+        created_at: '2026-01-01T00:00:00Z', // well over 21 days
+        frequency: { type: 'daily' } as const,
+      };
+      const formedHabit = {
+        ...mockHabit,
+        id: 'h-formed',
+        status: 'formed' as const,
+        created_at: '2026-01-01T00:00:00Z',
+        frequency: { type: 'daily' } as const,
+      };
+
+      // All thenable queries share the mock; habit objects lack log fields
+      // so logs parsing yields empty per-habit lists. That's fine — this test
+      // only asserts the property is present and that formed is never eligible.
+      mockSupabaseClient.setMockResponse([activeHabit, formedHabit]);
+
+      const result = await habitsDB.getHabitsWithTodayStatus(mockUserId, '2026-04-12');
+      expect(result.find((h: { id: string }) => h.id === 'h-active')).toHaveProperty(
+        'graduation_eligible'
+      );
+      // Formed is never eligible
+      expect(
+        result.find((h: { id: string; graduation_eligible: boolean }) => h.id === 'h-formed')
+          ?.graduation_eligible
+      ).toBe(false);
+    });
   });
 
   describe('graduation', () => {

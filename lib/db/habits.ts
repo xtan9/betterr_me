@@ -5,6 +5,7 @@ import type { HabitFrequency } from './types';
 import { getLocalDateString } from '@/lib/utils';
 import { shouldTrackOnDate } from '@/lib/habits/format';
 import { HabitGraduationsDB } from './habit-graduations';
+import { isGraduationEligible } from '@/lib/habits/graduation';
 
 export class HabitsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -232,6 +233,30 @@ export class HabitsDB {
       monthlyCompletions.set(log.habit_id, (monthlyCompletions.get(log.habit_id) || 0) + 1);
     });
 
+    // Fetch logs needed to evaluate graduation eligibility (up to 90-day window)
+    const eligibilityWindowStart = (() => {
+      const d = new Date(`${today}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() - 90);
+      return d.toISOString().slice(0, 10);
+    })();
+
+    const { data: eligibilityLogs, error: eligErr } = await this.supabase
+      .from('habit_logs')
+      .select('habit_id, logged_date, completed')
+      .eq('user_id', userId)
+      .gte('logged_date', eligibilityWindowStart)
+      .lte('logged_date', today)
+      .eq('completed', true);
+
+    if (eligErr) throw eligErr;
+
+    const logsByHabit = new Map<string, { logged_date: string; completed: boolean }[]>();
+    (eligibilityLogs || []).forEach((row) => {
+      const arr = logsByHabit.get(row.habit_id) ?? [];
+      arr.push({ logged_date: row.logged_date, completed: row.completed });
+      logsByHabit.set(row.habit_id, arr);
+    });
+
     // Create a set of completed habit IDs
     const completedHabitIds = new Set((logs || []).map(log => log.habit_id));
 
@@ -277,12 +302,21 @@ export class HabitsDB {
     return habits.map(habit => {
       const scheduled = getScheduledDays(habit.frequency);
       const completed = monthlyCompletions.get(habit.id) || 0;
+      const eligible = isGraduationEligible({
+        createdAt: habit.created_at,
+        today,
+        frequency: habit.frequency,
+        logs: logsByHabit.get(habit.id) ?? [],
+        status: habit.status,
+        nudgeDismissedAt: habit.nudge_dismissed_at,
+      });
       return {
         ...habit,
         completed_today: completedHabitIds.has(habit.id),
         monthly_completion_rate: scheduled > 0
           ? Math.min(Math.round((completed / scheduled) * 100), 100)
           : 0,
+        graduation_eligible: eligible,
       };
     });
   }
