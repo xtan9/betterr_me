@@ -51,7 +51,7 @@ export function EditScopeDialog({
         <RadioGroup
           value={scope}
           onValueChange={(v) => setScope(v as EditScope)}
-          className="space-y-3"
+          className="flex flex-col gap-field-gap"
         >
           <div className="flex items-center gap-3">
             <RadioGroupItem value="this" id="scope-this" />

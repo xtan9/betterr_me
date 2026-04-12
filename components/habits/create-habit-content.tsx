@@ -55,7 +55,7 @@ export function CreateHabitContent() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <div>
         <PageBreadcrumbs section="habits" itemName={tBreadcrumb("newHabit")} />
         <PageHeader

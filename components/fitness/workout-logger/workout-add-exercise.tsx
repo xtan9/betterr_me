@@ -112,7 +112,7 @@ export function WorkoutAddExercise({
               </p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="flex flex-col gap-section-gap">
               {Array.from(groupedExercises.entries()).map(
                 ([group, groupExercises]) => (
                   <section key={group}>

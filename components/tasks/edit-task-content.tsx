@@ -28,7 +28,7 @@ const fetcher = async (url: string) => {
 
 function EditTaskSkeleton() {
   return (
-    <div className="space-y-6" data-testid="edit-task-skeleton">
+    <div className="flex flex-col gap-section-gap" data-testid="edit-task-skeleton">
       <div>
         <Skeleton className="h-4 w-32 mb-2" />
         <PageHeaderSkeleton hasActions />
@@ -130,7 +130,7 @@ export function EditTaskContent({ taskId }: EditTaskContentProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <div>
         <PageBreadcrumbs section="tasks" itemName={task.title} />
         <PageHeader

@@ -244,7 +244,7 @@ export function RoutineForm({
               {isEditing && routine && (
                 <>
                   <Separator />
-                  <div className="space-y-3">
+                  <div className="flex flex-col gap-field-gap">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium">
                         {t("exercises")}

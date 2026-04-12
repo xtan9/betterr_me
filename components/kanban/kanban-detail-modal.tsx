@@ -217,7 +217,7 @@ export function KanbanDetailModal({
       <DialogContent className="sm:max-w-[85vw] h-[85vh] p-0 gap-0 overflow-hidden flex flex-col bg-[#f5f6f8] dark:bg-[#1a1a2e] data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-4">
         <Tabs defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
           {/* Header area — white bar */}
-          <div className="bg-background border-b px-6 pt-5 pb-4 flex-shrink-0">
+          <div className="bg-background border-b px-modal-padding pt-5 pb-4 flex-shrink-0">
             <div className="flex items-start justify-between gap-2 mb-3">
               {isEditingTitle ? (
                 <DialogTitle asChild>
@@ -254,7 +254,7 @@ export function KanbanDetailModal({
           <TabsContent value="details" className="mt-0 flex-1 overflow-hidden">
             <div className="flex h-full">
               {/* Left column (~60%) - Info + Description */}
-              <div className="flex-[3] p-5 flex flex-col gap-4 overflow-y-auto">
+              <div className="flex-[3] p-modal-padding flex flex-col gap-4 overflow-y-auto">
                 {/* Info card */}
                 <div className="bg-background rounded-lg border shadow-sm">
                   <div className="flex items-center justify-between px-card-header-padding-x py-card-header-padding-y border-b">
@@ -380,7 +380,7 @@ export function KanbanDetailModal({
               </div>
 
               {/* Right column (~40%) - Item updates card */}
-              <div className="flex-[2] p-5 overflow-y-auto">
+              <div className="flex-[2] p-modal-padding overflow-y-auto">
                 <div className="bg-background rounded-lg border shadow-sm h-full flex flex-col">
                   <div className="flex items-center justify-between px-card-header-padding-x py-card-header-padding-y border-b">
                     <h3 className="text-base font-semibold">
@@ -414,7 +414,7 @@ export function KanbanDetailModal({
           </TabsContent>
 
           {/* Footer bar */}
-          <div className="flex items-center justify-between border-t bg-muted/30 px-6 py-3 flex-shrink-0">
+          <div className="flex items-center justify-between border-t bg-muted/30 px-modal-padding py-3 flex-shrink-0">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               {isSaving ? (
                 <>

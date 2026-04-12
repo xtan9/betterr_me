@@ -121,7 +121,7 @@ export function RoutinesPageContent() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="flex flex-col gap-section-gap">
         <div className="flex justify-end">
           <Skeleton className="h-9 w-36" />
         </div>
@@ -143,7 +143,7 @@ export function RoutinesPageContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <div className="flex justify-end">
         <Button onClick={() => setIsFormOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />

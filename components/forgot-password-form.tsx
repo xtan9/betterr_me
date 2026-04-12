@@ -48,7 +48,7 @@ export function ForgotPasswordForm({
   };
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
+    <div className={cn("flex flex-col gap-section-gap", className)} {...props}>
       {success ? (
         <Card>
           <CardHeader>
@@ -71,7 +71,7 @@ export function ForgotPasswordForm({
           </CardHeader>
           <CardContent>
             <form onSubmit={handleForgotPassword}>
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-field-gap">
                 <div className="grid gap-2">
                   <Label htmlFor="email">{t('email')}</Label>
                   <Input

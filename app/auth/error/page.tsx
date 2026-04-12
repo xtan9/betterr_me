@@ -12,7 +12,7 @@ export default async function Page({
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
       <div className="w-full max-w-sm">
         <AuthBranding />
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-section-gap">
           <Card>
             <CardHeader>
               <CardTitle className="text-2xl">

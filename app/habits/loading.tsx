@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function HabitsLoading() {
   return (
-    <div className="space-y-6" data-testid="habits-skeleton">
+    <div className="flex flex-col gap-section-gap" data-testid="habits-skeleton">
       {/* Header skeleton */}
       <div className="flex items-center justify-between">
         <Skeleton className="h-9 w-40" />

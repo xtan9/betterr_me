@@ -357,7 +357,7 @@ export function DashboardContent({
     (data.stats.total_habits === 0 && data.stats.total_tasks === 0)
   ) {
     return (
-      <div className="space-y-6">
+      <div className="flex flex-col gap-section-gap">
         {/* Greeting */}
         <Card>
           <CardContent className="flex items-center gap-3 py-0">
@@ -438,7 +438,7 @@ export function DashboardContent({
   });
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       {/* Greeting */}
       <Card>
         <CardContent className="flex items-center gap-3 py-0">
@@ -539,7 +539,7 @@ export function DashboardContent({
 // Loading skeleton component (DASH-007)
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6" data-testid="dashboard-skeleton">
+    <div className="flex flex-col gap-section-gap" data-testid="dashboard-skeleton">
       {/* Greeting skeleton */}
       <Card>
         <CardContent className="flex items-center gap-3 py-0">

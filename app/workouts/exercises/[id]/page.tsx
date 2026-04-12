@@ -25,7 +25,7 @@ export default async function ExerciseDetailPage({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <PageHeader
         title={exercise.name}
         actions={

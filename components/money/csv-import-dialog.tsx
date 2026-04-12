@@ -329,7 +329,7 @@ export function CsvImportDialog() {
         {/* Step 2: Column Mapping */}
         {step === 2 && (
           <div className="space-y-4">
-            <div className="space-y-3">
+            <div className="flex flex-col gap-field-gap">
               {TARGET_FIELDS.map((field) => {
                 const isRequired =
                   field === "transaction_date" ||

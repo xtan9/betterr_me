@@ -33,7 +33,7 @@ export function CalendarSidebar({
   const t = useTranslations("calendar");
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-section-gap">
       {/* Mini month picker */}
       <Calendar
         mode="single"

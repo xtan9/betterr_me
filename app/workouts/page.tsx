@@ -19,7 +19,7 @@ export default async function WorkoutsPage() {
   const t = await getTranslations("workouts");
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <PageHeader
         title={t("title")}
         actions={<StartWorkoutButton />}

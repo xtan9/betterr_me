@@ -6,7 +6,7 @@ export default async function BudgetsPage() {
   const t = await getTranslations("money");
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <PageHeader title={t("budgets.title")} />
       <BudgetOverview />
     </div>

@@ -104,7 +104,7 @@ export function FrequencySelector({
       : "";
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-field-gap">
       <div className="grid grid-cols-3 gap-2">
         {FREQUENCY_OPTIONS.map((option) => {
           const isActive = option.match(value);

@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export default function DashboardLoading() {
   return (
-    <div className="space-y-6" data-testid="dashboard-skeleton">
+    <div className="flex flex-col gap-section-gap" data-testid="dashboard-skeleton">
       {/* Greeting skeleton */}
       <Card>
         <CardContent className="py-5">

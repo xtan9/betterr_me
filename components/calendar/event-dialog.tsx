@@ -335,7 +335,7 @@ export function EventDialog({
           </div>
 
           {/* Date & Time */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-field-gap">
             <div className="space-y-1">
               <Label htmlFor="event-start-date">
                 {t("eventDialog.date")}
@@ -360,7 +360,7 @@ export function EventDialog({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-field-gap">
             <div className="space-y-1">
               <Label htmlFor="event-end-date">
                 {t("eventDialog.date")}

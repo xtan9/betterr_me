@@ -28,7 +28,7 @@ const fetcher = async (url: string) => {
 
 function EditHabitSkeleton() {
   return (
-    <div className="space-y-6" data-testid="edit-habit-skeleton">
+    <div className="flex flex-col gap-section-gap" data-testid="edit-habit-skeleton">
       {/* Breadcrumb + Header skeleton */}
       <div>
         <Skeleton className="h-4 w-40 mb-2" />
@@ -120,7 +120,7 @@ export function EditHabitContent({ habitId }: EditHabitContentProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <div>
         <PageBreadcrumbs section="habits" itemName={habit.name} />
         <PageHeader

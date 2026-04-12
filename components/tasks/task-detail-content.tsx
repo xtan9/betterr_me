@@ -61,7 +61,7 @@ const taskFetcher = async (url: string) => {
 
 function TaskDetailSkeleton() {
   return (
-    <div className="space-y-6" data-testid="task-detail-skeleton">
+    <div className="flex flex-col gap-section-gap" data-testid="task-detail-skeleton">
       <div>
         <Skeleton className="h-4 w-32 mb-2" />
         <PageHeaderSkeleton hasActions />
@@ -220,7 +220,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   const priorityColor = getPriorityColor(task.priority);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-section-gap">
       <div>
         <PageBreadcrumbs section="tasks" itemName={task.title} />
         <PageHeader

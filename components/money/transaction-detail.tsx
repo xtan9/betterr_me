@@ -106,7 +106,7 @@ export function TransactionDetail({
       <div className="rounded-b-lg border border-t-0 border-money-border bg-money-surface px-4 py-3">
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Left column: Category + Notes */}
-          <div className="space-y-3">
+          <div className="flex flex-col gap-field-gap">
             <CategoryOverride
               transaction={transaction}
               categories={categories}
@@ -142,7 +142,7 @@ export function TransactionDetail({
           </div>
 
           {/* Right column: Account info + Plaid category */}
-          <div className="space-y-3">
+          <div className="flex flex-col gap-field-gap">
             {/* Account */}
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
