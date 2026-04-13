@@ -242,10 +242,29 @@ describe("Accessibility - BillCalendar icon buttons", () => {
   it("month navigation buttons have accessible names", async () => {
     const { BillCalendar } = await import("@/components/money/bill-calendar");
     const { container } = render(<BillCalendar bills={[]} />);
-    const buttons = container.querySelectorAll("button");
-    const labels = Array.from(buttons).map((b) => b.getAttribute("aria-label"));
-    expect(labels).toContain("previousMonth");
-    expect(labels).toContain("nextMonth");
+    const prev = container.querySelector('button[aria-label="previousMonth"]');
+    const next = container.querySelector('button[aria-label="nextMonth"]');
+    expect(prev).toBeTruthy();
+    expect(next).toBeTruthy();
+  });
+});
+
+describe("Accessibility - SmartBillCalendar icon buttons", () => {
+  it("month navigation buttons have accessible names", async () => {
+    const { SmartBillCalendar } = await import(
+      "@/components/money/smart-bill-calendar"
+    );
+    const { container } = render(
+      <SmartBillCalendar
+        bills={[]}
+        dailyBalances={[]}
+        dailySpendingRateCents={0}
+      />
+    );
+    const prev = container.querySelector('button[aria-label="previousMonth"]');
+    const next = container.querySelector('button[aria-label="nextMonth"]');
+    expect(prev).toBeTruthy();
+    expect(next).toBeTruthy();
   });
 });
 
