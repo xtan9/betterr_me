@@ -32,7 +32,7 @@ export function BudgetSummaryCard({
               <p className="text-sm text-muted-foreground">
                 {t("totalBudget")}
               </p>
-              <p className="text-2xl font-bold tabular-nums">
+              <p className="text-stat tabular-nums">
                 {formatMoney(totalCents)}
               </p>
             </div>

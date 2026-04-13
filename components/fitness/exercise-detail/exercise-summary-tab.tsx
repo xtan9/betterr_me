@@ -91,7 +91,7 @@ export function ExerciseSummaryTab({
             <div className="grid grid-cols-3 gap-4">
               {records.best_weight_kg != null && (
                 <div className="text-center space-y-1">
-                  <p className="text-2xl font-bold">
+                  <p className="text-stat">
                     {formatWeight(records.best_weight_kg, weightUnit)}
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -108,7 +108,7 @@ export function ExerciseSummaryTab({
               )}
               {records.best_reps != null && (
                 <div className="text-center space-y-1">
-                  <p className="text-2xl font-bold">{records.best_reps}</p>
+                  <p className="text-stat">{records.best_reps}</p>
                   <p className="text-xs text-muted-foreground">
                     {t("exerciseDetail.bestReps")}
                   </p>
@@ -116,7 +116,7 @@ export function ExerciseSummaryTab({
               )}
               {records.best_volume != null && (
                 <div className="text-center space-y-1">
-                  <p className="text-2xl font-bold">
+                  <p className="text-stat">
                     {formatWeight(records.best_volume, weightUnit)}
                   </p>
                   <p className="text-xs text-muted-foreground">

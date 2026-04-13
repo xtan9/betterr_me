@@ -50,7 +50,7 @@ export const StreakCounter = memo(function StreakCounter({
         <p className="text-xs text-muted-foreground uppercase tracking-wide">{t("current")}</p>
         <div className="flex items-center gap-1.5 mt-1">
           {currentStreak >= 7 && <Flame className="size-5 text-status-streak" />}
-          <span className="text-2xl font-bold text-status-streak">
+          <span className="text-stat text-status-streak">
             {t("days", { count: currentStreak })}
           </span>
         </div>
@@ -65,7 +65,7 @@ export const StreakCounter = memo(function StreakCounter({
         <p className="text-xs text-muted-foreground uppercase tracking-wide">{t("best")}</p>
         <div className="flex items-center gap-1.5 mt-1">
           <Star className="size-5 text-primary" />
-          <span className="text-2xl font-bold text-primary">
+          <span className="text-stat text-primary">
             {t("days", { count: bestStreak })}
           </span>
         </div>

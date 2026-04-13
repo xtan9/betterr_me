@@ -99,7 +99,7 @@ export function GoalCard({ goal, onEdit, onContribute }: GoalCardProps) {
             color={statusToRingColor(goal.status_color)}
           />
           <div className="flex-1 min-w-0">
-            <p className="text-2xl font-bold tabular-nums">
+            <p className="text-stat tabular-nums">
               {formatMoney(goal.current_cents)}
             </p>
             <p className="text-sm text-muted-foreground tabular-nums">
