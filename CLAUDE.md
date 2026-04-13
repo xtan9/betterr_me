@@ -124,7 +124,6 @@ log.warn("POST /api/chat: invalid JSON body", { error: String(error) });
 
 - Config: `vitest.config.ts` (jsdom, globals). Setup: `tests/setup.ts` (polyfills, global Supabase mock)
 - Coverage threshold: 50%. `components/ui/` excluded from coverage
-- **Known:** 2 pre-existing failures in `habit-logs.test.ts` (`times_per_week getDetailedHabitStats`) — issue #98
 
 ### Mocking Patterns
 
