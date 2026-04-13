@@ -13,17 +13,17 @@ export function ThinkingIndicator() {
       >
         <span
           data-testid="thinking-dot"
-          className="h-2 w-2 rounded-full bg-muted-foreground/60 animate-bounce"
+          className="h-2 w-2 rounded-pill bg-muted-foreground/60 animate-bounce"
           style={{ animationDelay: "0s" }}
         />
         <span
           data-testid="thinking-dot"
-          className="h-2 w-2 rounded-full bg-muted-foreground/60 animate-bounce"
+          className="h-2 w-2 rounded-pill bg-muted-foreground/60 animate-bounce"
           style={{ animationDelay: "0.2s" }}
         />
         <span
           data-testid="thinking-dot"
-          className="h-2 w-2 rounded-full bg-muted-foreground/60 animate-bounce"
+          className="h-2 w-2 rounded-pill bg-muted-foreground/60 animate-bounce"
           style={{ animationDelay: "0.4s" }}
         />
       </div>

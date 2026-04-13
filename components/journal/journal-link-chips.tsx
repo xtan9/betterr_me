@@ -46,7 +46,7 @@ export function JournalLinkChips({ links, onRemove }: JournalLinkChipsProps) {
           <span
             key={link.id}
             className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
+              "inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 text-xs font-medium",
               style,
             )}
             data-testid={`link-chip-${link.link_type}`}
@@ -57,7 +57,7 @@ export function JournalLinkChips({ links, onRemove }: JournalLinkChipsProps) {
               <button
                 type="button"
                 onClick={() => onRemove(link.id)}
-                className="ml-0.5 rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                className="ml-0.5 rounded-pill p-0.5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
                 aria-label={`Remove ${displayName}`}
                 data-testid={`remove-link-${link.id}`}
               >

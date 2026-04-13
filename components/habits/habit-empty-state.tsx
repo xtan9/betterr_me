@@ -87,7 +87,7 @@ export function HabitEmptyState({
     >
       <div
         className={cn(
-          "flex items-center justify-center size-16 rounded-full mb-4",
+          "flex items-center justify-center size-16 rounded-pill mb-4",
           ICON_BG_CLASS[variant] ?? "bg-muted"
         )}
       >

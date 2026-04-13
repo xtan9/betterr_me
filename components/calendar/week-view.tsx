@@ -68,7 +68,7 @@ export function WeekView({
               <div
                 className={`text-sm font-semibold ${
                   isToday
-                    ? "bg-primary text-primary-foreground rounded-full w-7 h-7 flex items-center justify-center mx-auto"
+                    ? "bg-primary text-primary-foreground rounded-pill w-7 h-7 flex items-center justify-center mx-auto"
                     : ""
                 }`}
               >

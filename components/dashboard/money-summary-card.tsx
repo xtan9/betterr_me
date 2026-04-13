@@ -47,7 +47,7 @@ export function MoneySummaryCard() {
       <Card className="border-money-border bg-money-surface transition-colors hover:bg-accent/50">
         <CardContent className="flex items-center gap-3 p-card-padding">
           {/* Icon */}
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--money-sage-light))]">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-pill bg-[hsl(var(--money-sage-light))]">
             <Wallet className="size-4 text-[hsl(var(--money-sage-foreground))]" />
           </div>
 
@@ -67,10 +67,10 @@ export function MoneySummaryCard() {
 
             {/* Budget progress bar */}
             {weeklyPercent !== null && (
-              <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+              <div className="mt-1.5 h-1 w-full overflow-hidden rounded-pill bg-muted">
                 <div
                   className={cn(
-                    "h-full rounded-full transition-all",
+                    "h-full rounded-pill transition-all",
                     getProgressColor(weeklyPercent)
                   )}
                   style={{ width: `${weeklyPercent}%` }}

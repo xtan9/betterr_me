@@ -13,7 +13,7 @@ export function KanbanSkeleton() {
           {/* Column header */}
           <div className="flex items-center justify-between">
             <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-5 w-8 rounded-full" />
+            <Skeleton className="h-5 w-8 rounded-pill" />
           </div>
 
           {/* Card placeholders */}
@@ -25,8 +25,8 @@ export function KanbanSkeleton() {
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-3 w-2/3" />
               <div className="flex items-center gap-2 pt-1">
-                <Skeleton className="h-5 w-14 rounded-full" />
-                <Skeleton className="h-5 w-10 rounded-full" />
+                <Skeleton className="h-5 w-14 rounded-pill" />
+                <Skeleton className="h-5 w-10 rounded-pill" />
               </div>
             </div>
           ))}

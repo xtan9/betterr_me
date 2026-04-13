@@ -249,7 +249,7 @@ export function CategoryManager() {
                   )}
                   {cat.color && (
                     <span
-                      className="inline-block size-3 rounded-full"
+                      className="inline-block size-3 rounded-pill"
                       style={{ backgroundColor: cat.color }}
                       aria-hidden="true"
                     />

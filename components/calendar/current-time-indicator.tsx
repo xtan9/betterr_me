@@ -26,7 +26,7 @@ export function CurrentTimeIndicator() {
       aria-hidden="true"
     >
       {/* Circle dot on the left edge */}
-      <div className="absolute -left-1.5 -top-1.5 h-3 w-3 rounded-full bg-[hsl(var(--calendar-event))]" />
+      <div className="absolute -left-1.5 -top-1.5 h-3 w-3 rounded-pill bg-[hsl(var(--calendar-event))]" />
       {/* Horizontal line */}
       <div className="h-[2px] w-full bg-[hsl(var(--calendar-event))]" />
     </div>

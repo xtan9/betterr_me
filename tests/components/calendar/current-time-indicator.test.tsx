@@ -35,7 +35,7 @@ describe("CurrentTimeIndicator", () => {
   it("uses calendar-event CSS variable for color", () => {
     const { container } = render(<CurrentTimeIndicator />);
     // The circle and line should use bg-[hsl(var(--calendar-event))]
-    const circle = container.querySelector(".rounded-full");
+    const circle = container.querySelector(".rounded-pill");
     expect(circle).not.toBeNull();
     expect(circle!.className).toContain("calendar-event");
   });

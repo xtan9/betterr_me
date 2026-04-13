@@ -166,7 +166,7 @@ export function ProjectCard({
               >
                 <span
                   className={cn(
-                    "size-2 rounded-full shrink-0",
+                    "size-2 rounded-pill shrink-0",
                     STATUS_DOT_COLORS[task.status]
                   )}
                 />

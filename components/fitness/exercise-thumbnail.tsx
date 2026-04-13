@@ -42,12 +42,12 @@ export function ExerciseThumbnail({
 
   return (
     <div
-      className={`rounded-full overflow-hidden bg-muted flex items-center justify-center shrink-0 ${sizeClasses[size]} ${className}`}
+      className={`rounded-pill overflow-hidden bg-muted flex items-center justify-center shrink-0 ${sizeClasses[size]} ${className}`}
     >
       {showGif ? (
         <>
           {isLoading && (
-            <Skeleton className={`rounded-full ${sizeClasses[size]}`} />
+            <Skeleton className={`rounded-pill ${sizeClasses[size]}`} />
           )}
           <img
             src={exerciseMedia.gif_url!}

@@ -234,7 +234,7 @@ export function TaskForm({
                         <SelectItem key={project.id} value={project.id}>
                           <span className="flex items-center gap-2">
                             <span
-                              className="inline-block h-3 w-3 rounded-full shrink-0"
+                              className="inline-block h-3 w-3 rounded-pill shrink-0"
                               style={{ backgroundColor: bgColor }}
                             />
                             {project.name}

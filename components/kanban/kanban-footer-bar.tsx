@@ -42,12 +42,12 @@ export function KanbanFooterBar({
           </>
         ) : lastSaveError ? (
           <>
-            <span className="size-2 rounded-full bg-destructive inline-block" />
+            <span className="size-2 rounded-pill bg-destructive inline-block" />
             {t("detail.footer.saveFailed")}
           </>
         ) : (
           <>
-            <span className="size-2 rounded-full bg-green-500 inline-block" />
+            <span className="size-2 rounded-pill bg-green-500 inline-block" />
             {t("detail.footer.allSaved")}
           </>
         )}

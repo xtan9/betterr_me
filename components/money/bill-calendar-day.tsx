@@ -98,7 +98,7 @@ export function BillCalendarDay({
 
         {bills.length > 2 && (
           <div className="flex items-center gap-1">
-            <div className="size-1.5 rounded-full bg-[hsl(var(--money-sage))]" />
+            <div className="size-1.5 rounded-pill bg-[hsl(var(--money-sage))]" />
             <span className="text-[10px] text-muted-foreground">
               {bills.length} bills
             </span>

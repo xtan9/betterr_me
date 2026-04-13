@@ -77,7 +77,7 @@ describe("ExerciseThumbnail", () => {
     expect(svg).toBeInTheDocument();
   });
 
-  it("applies circular crop (rounded-full class) to the container", () => {
+  it("applies circular crop (rounded-pill class) to the container", () => {
     const { container } = render(
       <ExerciseThumbnail
         exerciseMedia={makeMedia()}
@@ -86,7 +86,7 @@ describe("ExerciseThumbnail", () => {
     );
 
     const wrapper = container.firstElementChild;
-    expect(wrapper?.className).toContain("rounded-full");
+    expect(wrapper?.className).toContain("rounded-pill");
   });
 
   it("accepts size prop with sm=32px, md=40px, lg=64px defaults", () => {

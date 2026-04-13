@@ -80,7 +80,7 @@ export function HabitChecklist({
             <div className="mt-auto pt-4 border-t">
               {allComplete ? (
                 <div className="rounded-xl bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20 border border-primary/20 dark:border-primary/30 p-6 text-center">
-                  <div className="inline-flex items-center justify-center rounded-full bg-primary/10 p-3 mb-3">
+                  <div className="inline-flex items-center justify-center rounded-pill bg-primary/10 p-3 mb-3">
                     <PartyPopper className="size-6 text-primary" />
                   </div>
                   <p className="font-display text-section-heading font-bold text-foreground">

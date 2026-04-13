@@ -44,7 +44,7 @@ export async function ProfileAvatar() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+        <Button variant="ghost" className="relative h-8 w-8 rounded-pill">
           <Avatar className="h-8 w-8">
             <AvatarImage src={user.user_metadata?.avatar_url} alt={getDisplayName()} />
             <AvatarFallback>{getInitials(user.email || 'User')}</AvatarFallback>

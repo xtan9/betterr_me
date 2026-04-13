@@ -8,7 +8,7 @@ export function DashboardSkeleton() {
       {/* Greeting skeleton */}
       <Card>
         <CardContent className="flex items-center gap-3 py-0">
-          <Skeleton className="size-10 shrink-0 rounded-full" />
+          <Skeleton className="size-10 shrink-0 rounded-pill" />
           <div>
             <Skeleton className="h-9 w-full max-w-64" />
             <Skeleton className="mt-2 h-5 w-full max-w-96" />
