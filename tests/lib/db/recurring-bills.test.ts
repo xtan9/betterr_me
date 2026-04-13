@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { RecurringBillsDB } from "@/lib/db/recurring-bills";
 import { mockSupabaseClient } from "../../setup";
 
@@ -9,6 +9,14 @@ describe("RecurringBillsDB", () => {
     vi.clearAllMocks();
     mockSupabaseClient.setMockResponse(null);
     db = new RecurringBillsDB(mockSupabaseClient as any);
+  });
+
+  // Safety net: upsertFromPlaid tests monkey-patch `mockSupabaseClient.then` to
+  // sequence multi-query responses. Deleting the own property here restores
+  // the prototype `then` even if an inline assertion throws before cleanup —
+  // prevents leakage into subsequent tests.
+  afterEach(() => {
+    delete (mockSupabaseClient as { then?: unknown }).then;
   });
 
   // =========================================================================
