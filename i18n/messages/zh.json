@@ -1069,6 +1069,20 @@
     "editor": {
       "placeholder": "开始写作..."
     },
+    "toolbar": {
+      "bold": "粗体",
+      "italic": "斜体",
+      "strike": "删除线",
+      "heading2": "标题 2",
+      "heading3": "标题 3",
+      "bulletList": "无序列表",
+      "orderedList": "有序列表",
+      "taskList": "任务列表",
+      "blockquote": "引用",
+      "codeBlock": "代码块",
+      "link": "链接",
+      "horizontalRule": "分隔线"
+    },
     "prompts": {
       "title": "写作灵感",
       "trigger": "需要灵感？",

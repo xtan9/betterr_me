@@ -15,6 +15,7 @@ import {
   Minus,
   ListChecks,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Toggle } from "@/components/ui/toggle";
 
 interface JournalToolbarProps {
@@ -26,6 +27,7 @@ function Separator() {
 }
 
 export function JournalToolbar({ editor }: JournalToolbarProps) {
+  const t = useTranslations("journal.toolbar");
   const handleLink = () => {
     const url = window.prompt("URL:");
     if (url) {
@@ -40,6 +42,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       {/* Text formatting */}
       <Toggle
         size="sm"
+        aria-label={t("bold")}
         pressed={editor.isActive("bold")}
         onPressedChange={() => editor.chain().focus().toggleBold().run()}
       >
@@ -47,6 +50,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       </Toggle>
       <Toggle
         size="sm"
+        aria-label={t("italic")}
         pressed={editor.isActive("italic")}
         onPressedChange={() => editor.chain().focus().toggleItalic().run()}
       >
@@ -54,6 +58,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       </Toggle>
       <Toggle
         size="sm"
+        aria-label={t("strike")}
         pressed={editor.isActive("strike")}
         onPressedChange={() => editor.chain().focus().toggleStrike().run()}
       >
@@ -65,6 +70,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       {/* Headings */}
       <Toggle
         size="sm"
+        aria-label={t("heading2")}
         pressed={editor.isActive("heading", { level: 2 })}
         onPressedChange={() =>
           editor.chain().focus().toggleHeading({ level: 2 }).run()
@@ -74,6 +80,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       </Toggle>
       <Toggle
         size="sm"
+        aria-label={t("heading3")}
         pressed={editor.isActive("heading", { level: 3 })}
         onPressedChange={() =>
           editor.chain().focus().toggleHeading({ level: 3 }).run()
@@ -87,6 +94,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       {/* Lists */}
       <Toggle
         size="sm"
+        aria-label={t("bulletList")}
         pressed={editor.isActive("bulletList")}
         onPressedChange={() =>
           editor.chain().focus().toggleBulletList().run()
@@ -96,6 +104,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       </Toggle>
       <Toggle
         size="sm"
+        aria-label={t("orderedList")}
         pressed={editor.isActive("orderedList")}
         onPressedChange={() =>
           editor.chain().focus().toggleOrderedList().run()
@@ -105,6 +114,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       </Toggle>
       <Toggle
         size="sm"
+        aria-label={t("taskList")}
         pressed={editor.isActive("taskList")}
         onPressedChange={() =>
           editor.chain().focus().toggleTaskList().run()
@@ -118,6 +128,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       {/* Block formatting */}
       <Toggle
         size="sm"
+        aria-label={t("blockquote")}
         pressed={editor.isActive("blockquote")}
         onPressedChange={() =>
           editor.chain().focus().toggleBlockquote().run()
@@ -127,6 +138,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       </Toggle>
       <Toggle
         size="sm"
+        aria-label={t("codeBlock")}
         pressed={editor.isActive("codeBlock")}
         onPressedChange={() =>
           editor.chain().focus().toggleCodeBlock().run()
@@ -140,6 +152,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       {/* Link & Horizontal Rule */}
       <Toggle
         size="sm"
+        aria-label={t("link")}
         pressed={editor.isActive("link")}
         onPressedChange={handleLink}
       >
@@ -147,6 +160,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
       </Toggle>
       <Toggle
         size="sm"
+        aria-label={t("horizontalRule")}
         pressed={false}
         onPressedChange={() =>
           editor.chain().focus().setHorizontalRule().run()

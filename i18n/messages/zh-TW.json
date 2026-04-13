@@ -1069,6 +1069,20 @@
     "editor": {
       "placeholder": "開始寫作..."
     },
+    "toolbar": {
+      "bold": "粗體",
+      "italic": "斜體",
+      "strike": "刪除線",
+      "heading2": "標題 2",
+      "heading3": "標題 3",
+      "bulletList": "無序列表",
+      "orderedList": "有序列表",
+      "taskList": "任務列表",
+      "blockquote": "引用",
+      "codeBlock": "程式碼區塊",
+      "link": "連結",
+      "horizontalRule": "分隔線"
+    },
     "prompts": {
       "title": "寫作靈感",
       "trigger": "需要靈感嗎？",
