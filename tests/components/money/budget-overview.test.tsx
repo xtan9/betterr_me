@@ -238,6 +238,9 @@ describe("BudgetOverview", () => {
 
     const { container } = render(<BudgetOverview />);
 
+    // This file's next-intl mock echoes keys verbatim, so labels appear as
+    // the raw translation keys. tests/accessibility/a11y.test.tsx asserts
+    // the resolved English strings for the same labels.
     expect(
       container.querySelector('button[aria-label="previousMonth"]')
     ).toBeTruthy();
