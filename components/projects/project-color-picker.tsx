@@ -27,7 +27,7 @@ export function ProjectColorPicker({ value, onChange }: ProjectColorPickerProps)
             type="button"
             aria-label={t(`colors.${color.key}`)}
             className={cn(
-              "h-8 w-8 rounded-full transition-all",
+              "h-8 w-8 rounded-pill transition-all",
               isSelected && "ring-2 ring-offset-2 ring-offset-background ring-primary"
             )}
             style={{ backgroundColor: bgColor }}

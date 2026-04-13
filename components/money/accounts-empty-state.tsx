@@ -19,7 +19,7 @@ export function AccountsEmptyState({ mutate }: AccountsEmptyStateProps) {
 
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-money-border bg-money-surface px-6 py-16 text-center">
-      <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-money-sage-light">
+      <div className="mb-6 flex size-16 items-center justify-center rounded-pill bg-money-sage-light">
         <Wallet className="size-8 text-money-sage" />
       </div>
 

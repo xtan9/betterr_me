@@ -19,7 +19,7 @@ export function BillSummaryHeader({
 
   return (
     <div className="flex items-center gap-4 rounded-lg border border-money-border bg-money-surface p-card-padding">
-      <div className="flex size-10 items-center justify-center rounded-full bg-[hsl(var(--money-sage))]/10">
+      <div className="flex size-10 items-center justify-center rounded-pill bg-[hsl(var(--money-sage))]/10">
         <Receipt className="size-5 text-[hsl(var(--money-sage))]" />
       </div>
       <div className="flex-1">

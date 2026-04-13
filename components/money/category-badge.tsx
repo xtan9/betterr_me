@@ -14,7 +14,7 @@ export function CategoryBadge({ category, className }: CategoryBadgeProps) {
   if (!category) {
     return (
       <span className={`inline-flex items-center gap-1.5 text-xs text-muted-foreground ${className ?? ""}`}>
-        <span className="inline-block size-2 rounded-full bg-muted" />
+        <span className="inline-block size-2 rounded-pill bg-muted" />
         {t("transactions.uncategorized")}
       </span>
     );
@@ -31,7 +31,7 @@ export function CategoryBadge({ category, className }: CategoryBadgeProps) {
       )}
       {category.color && (
         <span
-          className="inline-block size-2 shrink-0 rounded-full"
+          className="inline-block size-2 shrink-0 rounded-pill"
           style={{ backgroundColor: category.color }}
           aria-hidden="true"
         />

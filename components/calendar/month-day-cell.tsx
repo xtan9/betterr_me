@@ -52,7 +52,7 @@ export function MonthDayCell({
             text-xs font-medium inline-flex items-center justify-center
             ${
               isToday
-                ? "bg-primary text-primary-foreground rounded-full w-6 h-6"
+                ? "bg-primary text-primary-foreground rounded-pill w-6 h-6"
                 : isOutsideMonth
                   ? "text-muted-foreground"
                   : "text-foreground"

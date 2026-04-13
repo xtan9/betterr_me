@@ -319,7 +319,7 @@ export function DashboardContent({
         {/* Empty state card */}
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 space-y-6">
-            <div className="rounded-full bg-primary/10 p-4">
+            <div className="rounded-pill bg-primary/10 p-4">
               <Sparkles className="size-8 text-primary" />
             </div>
             <div className="text-center space-y-2">

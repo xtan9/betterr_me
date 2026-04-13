@@ -64,7 +64,7 @@ export function CalendarSidebar({
                   className="h-4 w-4"
                 />
                 <span
-                  className="h-2.5 w-2.5 rounded-full shrink-0"
+                  className="h-2.5 w-2.5 rounded-pill shrink-0"
                   style={{ backgroundColor: `hsl(var(${layer.cssVar}))` }}
                 />
                 <span className="text-sm">

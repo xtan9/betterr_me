@@ -76,7 +76,7 @@ export function CategoryPicker({ value, onChange, disabled }: CategoryPickerProp
             style={value === cat.id ? { backgroundColor: bgColor, color: "white" } : {}}
           >
             <span
-              className="inline-block size-2.5 rounded-full shrink-0"
+              className="inline-block size-2.5 rounded-pill shrink-0"
               style={{ backgroundColor: bgColor }}
             />
             <span className="text-xs">{getCategoryDisplayName(cat.name, t)}</span>
@@ -106,7 +106,7 @@ export function CategoryPicker({ value, onChange, disabled }: CategoryPickerProp
                   key={c.key}
                   type="button"
                   className={cn(
-                    "size-7 rounded-full transition-all",
+                    "size-7 rounded-pill transition-all",
                     newColor === c.key && "ring-2 ring-offset-2 ring-primary"
                   )}
                   style={{ backgroundColor: bg }}

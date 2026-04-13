@@ -113,7 +113,7 @@ export function CategoryOverride({
                 {cat.icon && <span aria-hidden="true">{cat.icon}</span>}
                 {cat.color && (
                   <span
-                    className="inline-block size-2 rounded-full"
+                    className="inline-block size-2 rounded-pill"
                     style={{ backgroundColor: cat.color }}
                     aria-hidden="true"
                   />

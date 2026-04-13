@@ -47,7 +47,7 @@ export function WorkoutStatsWidget({
       <CardContent className="p-card-padding">
         <div className="flex items-start gap-3">
           <div
-            className="rounded-full bg-stat-icon-purple-bg p-2.5 shrink-0"
+            className="rounded-pill bg-stat-icon-purple-bg p-2.5 shrink-0"
             aria-hidden="true"
           >
             <Dumbbell className="size-4 text-stat-icon-purple" />

@@ -218,7 +218,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
         {project && (
           <div className="flex items-center gap-2 min-w-0">
             <div
-              className="size-3 rounded-full shrink-0"
+              className="size-3 rounded-pill shrink-0"
               style={{ backgroundColor: colorHsl }}
             />
             <h1 className="text-sm font-semibold truncate">{project.name}</h1>
@@ -228,7 +228,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
         <div className="flex items-center gap-2 ml-auto shrink-0">
           <span
             className={cn(
-              "size-2 rounded-full",
+              "size-2 rounded-pill",
               realtimeStatus === "connected" && "bg-green-500",
               realtimeStatus === "connecting" && "bg-yellow-500 animate-pulse",
               realtimeStatus === "error" && "bg-red-500"

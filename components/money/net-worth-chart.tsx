@@ -136,7 +136,7 @@ export function NetWorthChart() {
 
         {!error && isLoading && (
           <div className="flex h-[300px] items-center justify-center">
-            <div className="size-6 animate-spin rounded-full border-2 border-muted border-t-[hsl(var(--money-sage))]" />
+            <div className="size-6 animate-spin rounded-pill border-2 border-muted border-t-[hsl(var(--money-sage))]" />
           </div>
         )}
 

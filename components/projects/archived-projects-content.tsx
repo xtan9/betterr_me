@@ -52,7 +52,7 @@ export function ArchivedProjectsContent() {
 
       {projects.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-center py-12 px-4">
-          <div className="flex items-center justify-center size-16 rounded-full bg-muted mb-4">
+          <div className="flex items-center justify-center size-16 rounded-pill bg-muted mb-4">
             <Archive className="size-8 text-muted-foreground" />
           </div>
           <h3 className="text-section-heading text-foreground mb-2">

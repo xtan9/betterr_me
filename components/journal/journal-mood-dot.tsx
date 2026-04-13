@@ -30,7 +30,7 @@ interface JournalMoodDotProps {
 export function JournalMoodDot({ mood, className }: JournalMoodDotProps) {
   return (
     <div
-      className={cn("size-1.5 rounded-full", moodDotColor(mood), className)}
+      className={cn("size-1.5 rounded-pill", moodDotColor(mood), className)}
       aria-hidden="true"
     />
   );

@@ -418,7 +418,7 @@ export function EventDialog({
                 <button
                   key={colorKey}
                   type="button"
-                  className={`w-6 h-6 rounded-full border-2 transition-all ${
+                  className={`w-6 h-6 rounded-pill border-2 transition-all ${
                     form.watch("color") === colorKey
                       ? "border-primary scale-110"
                       : "border-border"

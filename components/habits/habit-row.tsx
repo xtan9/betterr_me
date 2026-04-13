@@ -66,7 +66,7 @@ export function HabitRow({ habit, categories, onToggle, onClick, isToggling }: H
       </button>
       {category && (
         <span
-          className="text-xs px-2 py-0.5 rounded-full shrink-0 inline-flex items-center gap-1"
+          className="text-xs px-2 py-0.5 rounded-pill shrink-0 inline-flex items-center gap-1"
           style={bgColor ? { backgroundColor: bgColor, color: "white" } : undefined}
         >
           <Tag className="size-3" aria-hidden="true" />

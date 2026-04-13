@@ -113,9 +113,9 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>{t("card.thisMonth", { percent: habit.monthly_completion_rate })}</span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-muted" aria-hidden="true">
+          <div className="h-1.5 w-full rounded-pill bg-muted" aria-hidden="true">
             <div
-              className="h-full rounded-full bg-primary"
+              className="h-full rounded-pill bg-primary"
               style={{ width: `${habit.monthly_completion_rate}%` }}
             />
           </div>
