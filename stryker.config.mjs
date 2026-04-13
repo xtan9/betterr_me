@@ -1,0 +1,65 @@
+// @ts-check
+/** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
+const config = {
+  _comment:
+    "Stryker mutation testing config. Scoped narrowly to lib/db — the most heavily tested area. " +
+    "See docs/superpowers/specs/2026-04-12-mutation-testing.md for rationale and CI recipe.",
+  packageManager: "pnpm",
+  testRunner: "vitest",
+  // Explicit plugin list — pnpm's isolated node_modules layout breaks Stryker's default
+  // `@stryker-mutator/*` auto-discovery, so we must list plugins explicitly.
+  plugins: [
+    "@stryker-mutator/vitest-runner",
+    // typescript-checker disabled by default — it runs against the entire project
+    // tsconfig and surfaces pre-existing test-file type errors unrelated to the
+    // mutated code. Re-enable by adding "@stryker-mutator/typescript-checker" here
+    // and restoring the `checkers` + `tsconfigFile` options below, once a
+    // narrowed tsconfig scoped to lib/db is introduced.
+  ],
+  // Exclude heavy / irrelevant directories from the sandbox copy. .claude contains
+  // symlinked skill dirs that break Stryker's copyfile sandbox; .next / coverage /
+  // playwright artifacts are large and not needed for unit-test mutation runs.
+  ignorePatterns: [
+    ".claude",
+    ".next",
+    "coverage",
+    "playwright-report",
+    "test-results",
+    "e2e",
+    "public",
+    "docs",
+    "supabase",
+    "emails",
+    ".worktrees",
+    ".github",
+    ".vscode",
+  ],
+  coverageAnalysis: "perTest",
+  // Restrict the initial test run to the DB unit tests. Running the full suite
+  // slows startup and pulls in tests for app/ API routes that depend on files
+  // outside the mutated scope.
+  testFiles: ["tests/lib/db/**/*.test.ts"],
+  mutate: [
+    "lib/db/**/*.ts",
+    "!lib/db/index.ts",
+    "!lib/db/types.ts",
+  ],
+  // checkers: ["typescript"],
+  // tsconfigFile: "tsconfig.json",
+  reporters: ["html", "clear-text", "progress"],
+  htmlReporter: {
+    fileName: "reports/mutation/mutation.html",
+  },
+  thresholds: {
+    high: 85,
+    low: 70,
+    break: 60,
+  },
+  timeoutMS: 60000,
+  concurrency: 4,
+  cleanTempDir: true,
+  tempDirName: ".stryker-tmp",
+  logLevel: "info",
+};
+
+export default config;
