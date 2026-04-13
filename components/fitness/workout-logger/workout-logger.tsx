@@ -37,7 +37,7 @@ export function WorkoutLogger() {
           <Dumbbell className="h-8 w-8 text-muted-foreground" />
         </div>
         <div className="text-center">
-          <h2 className="text-lg font-semibold">{t("noActiveWorkout")}</h2>
+          <h2 className="text-section-heading">{t("noActiveWorkout")}</h2>
           <p className="text-sm text-muted-foreground">
             {t("noActiveWorkoutDescription")}
           </p>

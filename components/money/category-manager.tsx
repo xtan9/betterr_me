@@ -151,7 +151,7 @@ export function CategoryManager() {
       {/* Categories Section */}
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("categories.title")}</h2>
+          <h2 className="text-section-heading">{t("categories.title")}</h2>
           <Button
             variant="outline"
             size="sm"
@@ -324,7 +324,7 @@ export function CategoryManager() {
 
       {/* Merchant Rules Section */}
       <section>
-        <h2 className="mb-4 text-lg font-semibold">
+        <h2 className="mb-4 text-section-heading">
           {t("merchantRules.title")}
         </h2>
 

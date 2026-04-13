@@ -55,7 +55,7 @@ export function SectionBlock({
 
   return (
     <div className="flex flex-col gap-card-gap">
-      <h2 className="text-lg font-semibold tracking-tight">
+      <h2 className="text-section-heading tracking-tight">
         {t(`sections.${section}`)}
       </h2>
 

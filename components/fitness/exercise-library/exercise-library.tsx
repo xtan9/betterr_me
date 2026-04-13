@@ -142,7 +142,7 @@ export function ExerciseLibrary() {
   return (
     <div className="flex flex-col gap-section-gap">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">{t("title")}</h1>
+        <h1 className="text-page-title tracking-tight">{t("title")}</h1>
         <Button onClick={() => setIsFormOpen(true)} size="sm">
           <Plus className="mr-2 h-4 w-4" />
           {t("createCustom")}

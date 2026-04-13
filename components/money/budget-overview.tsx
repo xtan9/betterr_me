@@ -147,7 +147,7 @@ export function BudgetOverview() {
         >
           <ChevronLeft className="size-5" />
         </Button>
-        <h2 className="text-lg font-semibold min-w-[140px] text-center">
+        <h2 className="text-section-heading min-w-[140px] text-center">
           {format(currentDate, "MMMM yyyy")}
         </h2>
         <Button

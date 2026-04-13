@@ -20,7 +20,7 @@ export function WorkoutHistoryList() {
   if (isLoading && workouts.length === 0) {
     return (
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">{t("history")}</h2>
+        <h2 className="text-section-heading">{t("history")}</h2>
         {Array.from({ length: 3 }).map((_, i) => (
           <Skeleton key={i} className="h-28 w-full rounded-lg" />
         ))}
@@ -31,7 +31,7 @@ export function WorkoutHistoryList() {
   if (error) {
     return (
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">{t("history")}</h2>
+        <h2 className="text-section-heading">{t("history")}</h2>
         <div className="text-center py-12 text-muted-foreground">
           <p>{t("loadError")}</p>
         </div>
@@ -42,7 +42,7 @@ export function WorkoutHistoryList() {
   if (workouts.length === 0) {
     return (
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">{t("history")}</h2>
+        <h2 className="text-section-heading">{t("history")}</h2>
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
           <Calendar className="mb-3 h-10 w-10 text-muted-foreground/50" />
           <p className="font-medium text-muted-foreground">
@@ -60,7 +60,7 @@ export function WorkoutHistoryList() {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-semibold">{t("history")}</h2>
+      <h2 className="text-section-heading">{t("history")}</h2>
       {workouts.map((workout) => (
         <WorkoutHistoryCard
           key={workout.id}

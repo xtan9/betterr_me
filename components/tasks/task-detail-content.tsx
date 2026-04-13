@@ -157,7 +157,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
     return (
       <div className="max-w-3xl mx-auto text-center py-12">
         <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-        <h2 className="text-lg font-semibold mb-2">{t("error.title")}</h2>
+        <h2 className="text-section-heading mb-2">{t("error.title")}</h2>
         <Button onClick={() => mutate()} variant="outline">
           {t("error.retry")}
         </Button>
@@ -169,7 +169,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
     return (
       <div className="max-w-3xl mx-auto text-center py-12">
         <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <h2 className="text-lg font-semibold">{t("detail.notFound")}</h2>
+        <h2 className="text-section-heading">{t("detail.notFound")}</h2>
       </div>
     );
   }

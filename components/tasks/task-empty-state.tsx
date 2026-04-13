@@ -66,7 +66,7 @@ export function TaskEmptyState({ variant, onCreateTask }: TaskEmptyStateProps) {
         <Icon className={cn("size-8", config.iconColorClass)} />
       </div>
 
-      <h3 className="text-lg font-semibold text-foreground mb-2">
+      <h3 className="text-section-heading text-foreground mb-2">
         {t(config.titleKey)}
       </h3>
 
