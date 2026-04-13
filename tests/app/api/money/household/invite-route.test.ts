@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { POST } from "@/app/api/money/household/invite/route";
+import { POST, DELETE } from "@/app/api/money/household/invite/route";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -12,12 +12,14 @@ const {
   mockGetMemberCount,
   mockGetMembers,
   mockCreateInvite,
+  mockRevokeInvite,
 } = vi.hoisted(() => ({
   mockResolveHousehold: vi.fn(),
   mockGetMemberRole: vi.fn(),
   mockGetMemberCount: vi.fn(),
   mockGetMembers: vi.fn(),
   mockCreateInvite: vi.fn(),
+  mockRevokeInvite: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -45,6 +47,7 @@ vi.mock("@/lib/db/households", () => ({
     getMemberCount = mockGetMemberCount;
     getMembers = mockGetMembers;
     createInvite = mockCreateInvite;
+    revokeInvite = mockRevokeInvite;
   },
 }));
 
@@ -66,6 +69,23 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
   });
 }
 
+function makeDeleteRequest(id?: string): NextRequest {
+  const url = id
+    ? `http://localhost:3000/api/money/household/invite?id=${id}`
+    : "http://localhost:3000/api/money/household/invite";
+  return new NextRequest(url, { method: "DELETE" });
+}
+
+function authedClient() {
+  return {
+    auth: {
+      getUser: vi.fn(() => ({
+        data: { user: { id: "user-123", email: "owner@example.com" } },
+      })),
+    },
+  } as any;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -73,14 +93,7 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
 describe("POST /api/money/household/invite", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: authenticated owner with room for more members
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn(() => ({
-          data: { user: { id: "user-123", email: "owner@example.com" } },
-        })),
-      },
-    } as any);
+    vi.mocked(createClient).mockReturnValue(authedClient());
     mockResolveHousehold.mockResolvedValue("household-abc");
     mockGetMemberRole.mockResolvedValue("owner");
     mockGetMemberCount.mockResolvedValue(2);
@@ -165,5 +178,74 @@ describe("POST /api/money/household/invite", () => {
 
     expect(response.status).toBe(409);
     expect(data.error).toContain("already been sent");
+  });
+
+  it("returns 500 on unexpected DB error", async () => {
+    mockCreateInvite.mockRejectedValue(new Error("connection lost"));
+
+    const response = await POST(makeRequest({ email: "new@example.com" }));
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to create invitation");
+  });
+});
+
+describe("DELETE /api/money/household/invite", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockReturnValue(authedClient());
+    mockResolveHousehold.mockResolvedValue("household-abc");
+    mockGetMemberRole.mockResolvedValue("owner");
+    mockRevokeInvite.mockResolvedValue(undefined);
+  });
+
+  it("returns 401 when not authenticated", async () => {
+    vi.mocked(createClient).mockReturnValue({
+      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
+    } as any);
+
+    const response = await DELETE(makeDeleteRequest("invite-1"));
+    const data = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(data.error).toBe("Unauthorized");
+  });
+
+  it("returns 400 when invitation id is missing", async () => {
+    const response = await DELETE(makeDeleteRequest());
+    const data = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(data.error).toContain("Missing invitation id");
+  });
+
+  it("returns 403 when non-owner attempts to revoke", async () => {
+    mockGetMemberRole.mockResolvedValue("member");
+
+    const response = await DELETE(makeDeleteRequest("invite-1"));
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.error).toContain("owner");
+  });
+
+  it("returns success=true on successful revocation", async () => {
+    const response = await DELETE(makeDeleteRequest("invite-1"));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(mockRevokeInvite).toHaveBeenCalledWith("invite-1");
+  });
+
+  it("returns 500 when revokeInvite throws", async () => {
+    mockRevokeInvite.mockRejectedValue(new Error("db error"));
+
+    const response = await DELETE(makeDeleteRequest("invite-1"));
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to revoke invitation");
   });
 });

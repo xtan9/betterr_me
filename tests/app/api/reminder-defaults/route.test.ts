@@ -160,4 +160,46 @@ describe("PUT /api/reminder-defaults", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("returns 500 when upsert throws", async () => {
+    const { PUT } = await import("@/app/api/reminder-defaults/route");
+    mockReminderDefaultsDB.upsertDefault.mockRejectedValue(new Error("db error"));
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/reminder-defaults",
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          source_type: "task",
+          relative_minutes: 10,
+          channels: ["push"],
+        }),
+      }
+    );
+    const response = await PUT(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to upsert reminder default");
+  });
+});
+
+describe("GET /api/reminder-defaults - error handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 500 when getDefaults throws", async () => {
+    const { GET } = await import("@/app/api/reminder-defaults/route");
+    mockReminderDefaultsDB.getDefaults.mockRejectedValue(new Error("db error"));
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/reminder-defaults"
+    );
+    const response = await GET(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to fetch reminder defaults");
+  });
 });

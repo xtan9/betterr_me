@@ -22,28 +22,25 @@ vi.mock("@/lib/calendar/recurrence", () => ({
   expandEventsForRange: vi.fn((events: unknown[]) => events),
 }));
 
-// Mock Supabase client with chainable query builder
-function createMockQuery(data: unknown[] = []) {
-  const query: Record<string, unknown> = {};
-  const methods = ["select", "eq", "neq", "gte", "lte", "not", "single"];
-  for (const method of methods) {
-    query[method] = vi.fn(() => query);
+vi.mock("@/lib/logger", () => ({
+  log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
+
+// A chainable builder whose terminal methods (non-`single`) resolve to { data, error }.
+function createMockQuery(result: { data?: unknown; error?: unknown } = { data: [], error: null }) {
+  const thenable: Record<string, unknown> = {};
+  const chainMethods = ["select", "eq", "neq", "gte", "lte", "not"];
+  for (const m of chainMethods) {
+    thenable[m] = vi.fn(() => thenable);
   }
-  // Terminal: `single()` returns data/error, other terminal is the chain itself
-  // For array queries, the chain resolves by reading .data
-  (query as Record<string, unknown>).data = data;
-  (query as Record<string, unknown>).error = null;
-
-  // Override `single` to return a single record
-  query.single = vi.fn(() => ({
-    data: data[0] ?? null,
-    error: data.length === 0 ? { code: "PGRST116" } : null,
+  thenable.single = vi.fn(() => ({
+    data: Array.isArray(result.data) ? (result.data as unknown[])[0] ?? null : result.data ?? null,
+    error: result.error ?? null,
   }));
-
-  // Make the chain thenable for select queries that return arrays
-  // Actually, Supabase returns { data, error } at the end of the chain
-  // We need to intercept the chain to return properly
-  return query;
+  // Make awaiting the chain yield { data, error }
+  (thenable as any).then = (resolve: (v: unknown) => unknown) =>
+    resolve({ data: result.data ?? [], error: result.error ?? null });
+  return thenable;
 }
 
 let mockFromHandlers: Record<string, ReturnType<typeof createMockQuery>> = {};
@@ -117,6 +114,17 @@ describe("GET /api/calendar/feed", () => {
     expect(body.error).toContain("YYYY-MM-DD");
   });
 
+  it("returns 400 for invalid layers", async () => {
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=events,bogus",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("Invalid layers");
+    expect(body.error).toContain("bogus");
+  });
+
   it("returns events when events layer is enabled", async () => {
     mockGetUserEvents.mockResolvedValue([
       {
@@ -174,7 +182,185 @@ describe("GET /api/calendar/feed", () => {
     );
     const res = await GET(req);
     expect(res.status).toBe(200);
-    // Should have called getUserEvents since 'events' is default
     expect(mockGetUserEvents).toHaveBeenCalled();
+  });
+
+  it("fetches tasks when tasks layer enabled", async () => {
+    mockFromHandlers.tasks = createMockQuery({
+      data: [
+        {
+          id: "task-1",
+          user_id: "user-123",
+          title: "Do laundry",
+          due_date: "2026-04-02",
+          due_time: null,
+          completed: false,
+          category_id: null,
+        },
+      ],
+      error: null,
+    });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=tasks",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items.some((i: { domain: string }) => i.domain === "tasks")).toBe(true);
+  });
+
+  it("reports partial failure when tasks query errors", async () => {
+    mockFromHandlers.tasks = createMockQuery({
+      data: null,
+      error: { message: "boom" },
+    });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=tasks",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.partialFailures).toEqual(["tasks"]);
+  });
+
+  it("fetches habits + logs when habits layer enabled", async () => {
+    mockFromHandlers.habits = createMockQuery({
+      data: [
+        {
+          id: "h-1",
+          user_id: "user-123",
+          name: "Meditate",
+          frequency: { type: "daily" },
+          status: "active",
+          created_at: "2026-01-01",
+        },
+      ],
+      error: null,
+    });
+    mockFromHandlers.habit_logs = createMockQuery({
+      data: [
+        { habit_id: "h-1", logged_date: "2026-04-02", completed: true },
+      ],
+      error: null,
+    });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=habits",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.partialFailures).toBeUndefined();
+  });
+
+  it("reports partial failure when habits query errors", async () => {
+    mockFromHandlers.habits = createMockQuery({
+      data: null,
+      error: { message: "boom" },
+    });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=habits",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.partialFailures).toEqual(["habits"]);
+  });
+
+  it("returns empty bills when user has no household", async () => {
+    // household_members.single returns null
+    mockFromHandlers.household_members = createMockQuery({ data: [], error: null });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=bills",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.items).toEqual([]);
+    expect(body.partialFailures).toBeUndefined();
+  });
+
+  it("fetches bills when user has a household", async () => {
+    mockFromHandlers.household_members = createMockQuery({
+      data: [{ household_id: "hh-1" }],
+      error: null,
+    });
+    mockFromHandlers.recurring_bills = createMockQuery({
+      data: [],
+      error: null,
+    });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=bills",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.partialFailures).toBeUndefined();
+  });
+
+  it("reports partial failure when bills query errors", async () => {
+    mockFromHandlers.household_members = createMockQuery({
+      data: [{ household_id: "hh-1" }],
+      error: null,
+    });
+    mockFromHandlers.recurring_bills = createMockQuery({
+      data: null,
+      error: { message: "boom" },
+    });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=bills",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.partialFailures).toEqual(["bills"]);
+  });
+
+  it("fetches workouts when workouts layer enabled", async () => {
+    mockFromHandlers.workouts = createMockQuery({
+      data: [],
+      error: null,
+    });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=workouts&timezone=UTC",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.partialFailures).toBeUndefined();
+  });
+
+  it("reports partial failure when workouts query errors", async () => {
+    mockFromHandlers.workouts = createMockQuery({
+      data: null,
+      error: { message: "boom" },
+    });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=workouts",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.partialFailures).toEqual(["workouts"]);
+  });
+
+  it("returns 500 when createClient throws", async () => {
+    vi.mocked(createClient).mockRejectedValueOnce(new Error("db down") as never);
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=events",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe("Failed to fetch calendar feed");
   });
 });

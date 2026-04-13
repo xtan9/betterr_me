@@ -214,4 +214,45 @@ describe("POST /api/money/categories", () => {
     expect(response.status).toBe(400);
     expect(data.error).toBe("Validation failed");
   });
+
+  it("should return 500 when create throws", async () => {
+    mockCreate.mockRejectedValue(new Error("db error"));
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/money/categories",
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "gas" }),
+      }
+    );
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to create category");
+  });
+});
+
+describe("GET /api/money/categories - error handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockReturnValue({
+      auth: {
+        getUser: vi.fn(() => ({
+          data: { user: { id: "user-123" } },
+        })),
+      },
+    } as any);
+    mockResolveHousehold.mockResolvedValue("household-abc");
+  });
+
+  it("should return 500 when getVisible throws", async () => {
+    mockGetVisible.mockRejectedValue(new Error("db error"));
+
+    const response = await GET();
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to fetch categories");
+  });
 });
