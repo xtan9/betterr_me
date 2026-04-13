@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { isDeepStrictEqual } from 'node:util';
 
 // Silence console noise during tests (API error handlers, etc.)
 // Restore with vi.restoreAllMocks() in individual tests if needed.
@@ -175,6 +176,10 @@ class MockQueryBuilder {
   // Example:
   //   expectQuery({ table: 'habits', method: 'eq', args: ['user_id', 'u1'] })
   // Any field omitted means "don't care".
+  //
+  // `args` matching uses `isDeepStrictEqual` so Date, undefined, nested
+  // objects, and symbols compare correctly (unlike JSON.stringify which
+  // coerces Date→string and drops undefined).
   expectQuery(match: {
     table?: string | null;
     method?: string;
@@ -185,7 +190,7 @@ class MockQueryBuilder {
         (match.table === undefined || entry.table === match.table) &&
         (match.method === undefined || entry.method === match.method) &&
         (match.args === undefined ||
-          JSON.stringify(entry.args) === JSON.stringify(match.args)),
+          isDeepStrictEqual(entry.args, match.args)),
     );
     if (!found) {
       const matchStr = JSON.stringify(match);

@@ -67,6 +67,44 @@ describe('MockQueryBuilder query-tracking helpers', () => {
     expect(entry.method).toBe('from');
   });
 
+  it('expectQuery matches Date and undefined args correctly (deep equal)', () => {
+    const createdAt = new Date('2026-01-15T00:00:00Z');
+    mockSupabaseClient.from('transactions').gte('created_at', createdAt);
+    mockSupabaseClient.insert({ name: 'x', description: undefined });
+
+    // Date object — JSON.stringify would coerce to string; deep-equal matches.
+    expect(() =>
+      mockSupabaseClient.expectQuery({
+        method: 'gte',
+        args: ['created_at', createdAt],
+      }),
+    ).not.toThrow();
+
+    // A different Date should NOT match (JSON.stringify with same-day would
+    // incorrectly match due to ms-level precision loss in some encodings).
+    expect(() =>
+      mockSupabaseClient.expectQuery({
+        method: 'gte',
+        args: ['created_at', new Date('2026-01-16T00:00:00Z')],
+      }),
+    ).toThrow(/no matching call/);
+
+    // undefined field — JSON.stringify would drop it on both sides (false
+    // positive); deep-equal correctly distinguishes.
+    expect(() =>
+      mockSupabaseClient.expectQuery({
+        method: 'insert',
+        args: [{ name: 'x', description: undefined }],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      mockSupabaseClient.expectQuery({
+        method: 'insert',
+        args: [{ name: 'x' }], // no description field at all
+      }),
+    ).toThrow(/no matching call/);
+  });
+
   it('expectQuery throws with diagnostic when no match found', () => {
     mockSupabaseClient.from('habits').eq('user_id', 'u1');
 
