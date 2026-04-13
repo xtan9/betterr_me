@@ -60,7 +60,7 @@ export function HabitForm({
   return (
     <div className="flex flex-col gap-section-gap">
       {!hideChrome && (
-        <h2 className="text-lg font-semibold">
+        <h2 className="text-section-heading">
           {mode === "create" ? t("createTitle") : t("editTitle")}
         </h2>
       )}

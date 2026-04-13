@@ -280,7 +280,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     return (
       <div className="text-center py-12">
         <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-        <h2 className="text-lg font-semibold mb-2">{t("error.title")}</h2>
+        <h2 className="text-section-heading mb-2">{t("error.title")}</h2>
         <Button onClick={() => mutateHabit()} variant="outline">
           {t("error.retry")}
         </Button>
@@ -363,7 +363,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
 
           {/* Completion Stats */}
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold">{t("detail.completion.title")}</h2>
+            <h2 className="text-section-heading">{t("detail.completion.title")}</h2>
             <div className="space-y-3">
               {completionPeriods.map(({ key, label, percent }) => (
                 <div key={key} className="flex items-center gap-4">

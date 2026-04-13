@@ -121,7 +121,7 @@ export function EditTaskContent({ taskId }: EditTaskContentProps) {
     return (
       <div className="text-center py-12">
         <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-        <h2 className="text-lg font-semibold mb-2">{t("error.title")}</h2>
+        <h2 className="text-section-heading mb-2">{t("error.title")}</h2>
         <Button onClick={() => mutate()} variant="outline">
           {t("error.retry")}
         </Button>

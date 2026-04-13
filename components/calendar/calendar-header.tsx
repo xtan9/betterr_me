@@ -101,7 +101,7 @@ export function CalendarHeader({
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <h2 className="text-lg font-semibold min-w-[160px] text-center">
+        <h2 className="text-section-heading min-w-[160px] text-center">
           {title}
         </h2>
         <Button

@@ -103,7 +103,7 @@ export function GoalGrid() {
       <>
         <div className="flex flex-col items-center justify-center rounded-xl border border-money-border bg-money-surface py-16 px-6 text-center">
           <Target className="size-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">{t("emptyHeading")}</h3>
+          <h3 className="text-section-heading mb-2">{t("emptyHeading")}</h3>
           <p className="text-sm text-muted-foreground mb-6 max-w-md">
             {t("emptyDescription")}
           </p>

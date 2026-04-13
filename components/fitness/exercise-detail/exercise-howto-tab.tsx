@@ -11,7 +11,7 @@ export function ExerciseHowToTab({ instructions }: ExerciseHowToTabProps) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">
+      <h3 className="text-section-heading">
         {t("exerciseDetail.instructions")}
       </h3>
       <ol className="space-y-3 list-none">

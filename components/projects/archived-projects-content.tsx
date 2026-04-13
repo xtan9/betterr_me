@@ -55,7 +55,7 @@ export function ArchivedProjectsContent() {
           <div className="flex items-center justify-center size-16 rounded-full bg-muted mb-4">
             <Archive className="size-8 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">
+          <h3 className="text-section-heading text-foreground mb-2">
             {t("empty")}
           </h3>
         </div>

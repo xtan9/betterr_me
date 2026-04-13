@@ -52,7 +52,7 @@ export function JournalOnThisDayFull({ date }: JournalOnThisDayFullProps) {
 
   return (
     <div className="flex flex-col gap-card-gap" data-testid="on-this-day-full">
-      <h2 className="text-lg font-semibold flex items-center gap-2">
+      <h2 className="text-section-heading flex items-center gap-2">
         <CalendarHeart className="size-5" aria-hidden="true" />
         {t("title")}
       </h2>

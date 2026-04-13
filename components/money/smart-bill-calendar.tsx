@@ -170,7 +170,7 @@ export function SmartBillCalendar({
         >
           <ChevronLeft className="size-5" />
         </Button>
-        <h2 className="text-lg font-semibold min-w-[160px] text-center">
+        <h2 className="text-section-heading min-w-[160px] text-center">
           {format(currentMonth, "MMMM yyyy")}
         </h2>
         <Button

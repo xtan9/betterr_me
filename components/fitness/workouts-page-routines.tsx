@@ -85,7 +85,7 @@ export function WorkoutsPageRoutines() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{t("myRoutines")}</h2>
+        <h2 className="text-section-heading">{t("myRoutines")}</h2>
         <Link
           href="/workouts/routines"
           className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
