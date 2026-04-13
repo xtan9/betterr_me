@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, act, createEvent } from "@testing-library/react";
 import { ChatInput } from "@/components/chat/chat-input";
 
@@ -19,6 +19,10 @@ const defaultProps = {
 };
 
 describe("ChatInput", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("renders a textarea element and a send button", () => {
     render(<ChatInput {...defaultProps} />);
     expect(screen.getByRole("textbox")).toBeInTheDocument();
@@ -168,7 +172,6 @@ describe("ChatInput", () => {
     const file = new File(["hello"], "pic.png", { type: "image/png" });
 
     // Mock FileReader
-    const origFR = globalThis.FileReader;
     class MockFileReader {
       onload: (() => void) | null = null;
       result: string | null = null;
@@ -177,8 +180,7 @@ describe("ChatInput", () => {
         this.onload?.();
       }
     }
-    // @ts-expect-error override
-    globalThis.FileReader = MockFileReader;
+    vi.stubGlobal("FileReader", MockFileReader);
 
     fireEvent.change(fileInput, { target: { files: [file] } });
 
@@ -188,8 +190,6 @@ describe("ChatInput", () => {
     // Send button enabled because images present (no text needed)
     expect(screen.getByRole("button", { name: "input.send" })).not.toBeDisabled();
     expect(screen.getByRole("button", { name: "Remove image 1" })).toBeInTheDocument();
-
-    globalThis.FileReader = origFR;
   });
 
   it("removing an uploaded image clears the preview", async () => {
@@ -197,7 +197,6 @@ describe("ChatInput", () => {
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(["hello"], "pic.png", { type: "image/png" });
 
-    const origFR = globalThis.FileReader;
     class MockFileReader {
       onload: (() => void) | null = null;
       result: string | null = null;
@@ -206,15 +205,12 @@ describe("ChatInput", () => {
         this.onload?.();
       }
     }
-    // @ts-expect-error override
-    globalThis.FileReader = MockFileReader;
+    vi.stubGlobal("FileReader", MockFileReader);
 
     fireEvent.change(fileInput, { target: { files: [file] } });
     const removeBtn = await screen.findByRole("button", { name: "Remove image 1" });
     fireEvent.click(removeBtn);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-
-    globalThis.FileReader = origFR;
   });
 
   it("rejects files with invalid MIME type and shows error message", () => {
@@ -262,7 +258,6 @@ describe("ChatInput", () => {
     const { container } = render(<ChatInput {...defaultProps} />);
     const dropTarget = container.firstChild as HTMLElement;
 
-    const origFR = globalThis.FileReader;
     class MockFileReader {
       onload: (() => void) | null = null;
       result: string | null = null;
@@ -271,8 +266,7 @@ describe("ChatInput", () => {
         this.onload?.();
       }
     }
-    // @ts-expect-error override
-    globalThis.FileReader = MockFileReader;
+    vi.stubGlobal("FileReader", MockFileReader);
 
     const file = new File(["x"], "drop.png", { type: "image/png" });
     fireEvent.dragEnter(dropTarget);
@@ -286,15 +280,12 @@ describe("ChatInput", () => {
     expect(img).toBeInTheDocument();
     // drop zone should be hidden after drop
     expect(screen.queryByText("input.dropZone")).not.toBeInTheDocument();
-
-    globalThis.FileReader = origFR;
   });
 
   it("pasting an image file into textarea adds it as attachment", async () => {
     render(<ChatInput {...defaultProps} />);
     const textarea = screen.getByRole("textbox");
 
-    const origFR = globalThis.FileReader;
     class MockFileReader {
       onload: (() => void) | null = null;
       result: string | null = null;
@@ -303,8 +294,7 @@ describe("ChatInput", () => {
         this.onload?.();
       }
     }
-    // @ts-expect-error override
-    globalThis.FileReader = MockFileReader;
+    vi.stubGlobal("FileReader", MockFileReader);
 
     const file = new File(["x"], "paste.png", { type: "image/png" });
     const pasteEvent = createEvent.paste(textarea);
@@ -317,8 +307,6 @@ describe("ChatInput", () => {
 
     const img = await screen.findByRole("img");
     expect(img).toHaveAttribute("src", "data:image/png;base64,PASTE");
-
-    globalThis.FileReader = origFR;
   });
 
   it("pasting non-image content does not add attachments", () => {
@@ -345,7 +333,6 @@ describe("ChatInput", () => {
     const { container } = render(<ChatInput {...defaultProps} onSend={onSend} />);
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
 
-    const origFR = globalThis.FileReader;
     class MockFileReader {
       onload: (() => void) | null = null;
       result: string | null = null;
@@ -354,8 +341,7 @@ describe("ChatInput", () => {
         this.onload?.();
       }
     }
-    // @ts-expect-error override
-    globalThis.FileReader = MockFileReader;
+    vi.stubGlobal("FileReader", MockFileReader);
 
     const file = new File(["x"], "pic.png", { type: "image/png" });
     fireEvent.change(fileInput, { target: { files: [file] } });
@@ -376,8 +362,6 @@ describe("ChatInput", () => {
         }),
       ])
     );
-
-    globalThis.FileReader = origFR;
   });
 
   it("file input with no files selected is a no-op", () => {

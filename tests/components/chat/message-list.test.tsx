@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import * as axeMatchers from "vitest-axe/matchers";
@@ -33,6 +33,26 @@ const makeMessage = (
 });
 
 describe("MessageList", () => {
+  const originalVisibilityDescriptor = Object.getOwnPropertyDescriptor(
+    Document.prototype,
+    "visibilityState"
+  );
+
+  afterEach(() => {
+    // Restore visibilityState to avoid leaking "hidden" into later tests
+    if (originalVisibilityDescriptor) {
+      Object.defineProperty(
+        Document.prototype,
+        "visibilityState",
+        originalVisibilityDescriptor
+      );
+    } else {
+      // If no original descriptor existed on the prototype, remove any own
+      // property we set directly on document.
+      delete (document as unknown as { visibilityState?: unknown }).visibilityState;
+    }
+  });
+
   it("renders a MessageBubble for each message", () => {
     const messages = [
       makeMessage("1", "user", "hi"),

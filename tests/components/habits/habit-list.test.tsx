@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import * as axeMatchers from 'vitest-axe/matchers';
@@ -203,9 +203,14 @@ describe('HabitList', () => {
     toastSuccess.mockClear();
     toastError.mockClear();
     // Reset fetch between tests
-    (global.fetch as unknown) = vi.fn(() =>
-      Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }))
     );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   describe('rendering', () => {
@@ -391,12 +396,15 @@ describe('HabitList', () => {
     });
 
     it('surfaces error toast when graduate API fails', async () => {
-      (global.fetch as unknown) = vi.fn(() =>
-        Promise.resolve({
-          ok: false,
-          status: 500,
-          json: () => Promise.resolve({ error: 'boom' }),
-        })
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ error: 'boom' }),
+          })
+        )
       );
       const onMutate = vi.fn();
       const user = userEvent.setup();
@@ -443,12 +451,15 @@ describe('HabitList', () => {
     });
 
     it('toasts error when dismiss-nudge fails', async () => {
-      (global.fetch as unknown) = vi.fn(() =>
-        Promise.resolve({
-          ok: false,
-          status: 500,
-          json: () => Promise.resolve({}),
-        })
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({}),
+          })
+        )
       );
       const user = userEvent.setup();
       render(<HabitList {...defaultProps} habits={eligibleHabits} onMutate={vi.fn()} />);
@@ -483,12 +494,15 @@ describe('HabitList', () => {
     });
 
     it('toasts error when reactivate API fails', async () => {
-      (global.fetch as unknown) = vi.fn(() =>
-        Promise.resolve({
-          ok: false,
-          status: 500,
-          json: () => Promise.resolve({}),
-        })
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({}),
+          })
+        )
       );
       const user = userEvent.setup();
       render(<HabitList {...defaultProps} onMutate={vi.fn()} />);
@@ -552,12 +566,15 @@ describe('HabitList', () => {
 
     it('toasts error when delete API fails', async () => {
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-      (global.fetch as unknown) = vi.fn(() =>
-        Promise.resolve({
-          ok: false,
-          status: 500,
-          json: () => Promise.resolve({}),
-        })
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({}),
+          })
+        )
       );
       const user = userEvent.setup();
       render(<HabitList {...defaultProps} onMutate={vi.fn()} />);
