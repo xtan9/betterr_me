@@ -909,6 +909,7 @@
     "menuEdit": "編輯",
     "menuArchive": "封存",
     "menuDelete": "刪除",
+    "openMenu": "開啟選單",
     "sections": {
       "personal": "個人",
       "work": "工作"
@@ -1559,7 +1560,10 @@
       "created": "預算已建立",
       "updated": "預算已更新",
       "deleted": "預算已刪除",
-      "rolloverConfirmed": "結轉已確認"
+      "rolloverConfirmed": "結轉已確認",
+      "previousMonth": "上個月",
+      "nextMonth": "下個月",
+      "removeCategory": "移除類別"
     },
     "export": {
       "title": "匯出交易",
@@ -1653,7 +1657,9 @@
       "today": "今天",
       "noBillsOnDay": "當天無帳單",
       "statusUpdateError": "更新帳單狀態失敗",
-      "fetchError": "載入帳單失敗"
+      "fetchError": "載入帳單失敗",
+      "previousMonth": "上個月",
+      "nextMonth": "下個月"
     },
     "goals": {
       "title": "儲蓄目標",
@@ -1812,6 +1818,7 @@
       "inviteLink": "將此連結分享給您的伴侶：",
       "inviteCopied": "連結已複製！",
       "inviteExpires": "7天後過期",
+      "inviteCopyLink": "複製邀請連結",
       "invitePending": "待處理邀請",
       "inviteRevoke": "撤銷",
       "inviteRevokeConfirm": "撤銷此邀請？",

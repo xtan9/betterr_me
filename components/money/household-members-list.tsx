@@ -171,6 +171,7 @@ export function HouseholdMembersList({
                           size="icon"
                           className="size-8"
                           disabled={loadingId === member.id}
+                          aria-label={t("memberRemove")}
                         >
                           <UserMinus className="size-4 text-destructive" />
                         </Button>

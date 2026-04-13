@@ -103,6 +103,7 @@ export function ApiKeyRow({ apiKey, onDelete }: ApiKeyRowProps) {
             size="icon"
             className="self-end text-destructive hover:text-destructive sm:self-center"
             disabled={isDeleting}
+            aria-label={t("delete")}
           >
             {isDeleting ? (
               <Loader2 className="h-4 w-4 animate-spin" />

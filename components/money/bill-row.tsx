@@ -138,6 +138,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
           size="icon"
           className="size-7"
           onClick={() => onEdit(bill)}
+          aria-label={t("editBill")}
         >
           <Pencil className="size-3.5" />
         </Button>

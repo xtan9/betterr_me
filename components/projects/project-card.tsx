@@ -108,6 +108,7 @@ export function ProjectCard({
                 size="icon"
                 className="size-7 shrink-0"
                 onClick={(e) => e.stopPropagation()}
+                aria-label={t("openMenu")}
               >
                 <MoreVertical className="size-4" />
               </Button>

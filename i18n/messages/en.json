@@ -909,6 +909,7 @@
     "menuEdit": "Edit",
     "menuArchive": "Archive",
     "menuDelete": "Delete",
+    "openMenu": "Open menu",
     "sections": {
       "personal": "Personal",
       "work": "Work"
@@ -1559,7 +1560,10 @@
       "created": "Budget created",
       "updated": "Budget updated",
       "deleted": "Budget deleted",
-      "rolloverConfirmed": "Rollover confirmed"
+      "rolloverConfirmed": "Rollover confirmed",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
+      "removeCategory": "Remove category"
     },
     "export": {
       "title": "Export Transactions",
@@ -1653,7 +1657,9 @@
       "today": "Today",
       "noBillsOnDay": "No bills on this day",
       "statusUpdateError": "Failed to update bill status",
-      "fetchError": "Failed to load bills"
+      "fetchError": "Failed to load bills",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month"
     },
     "goals": {
       "title": "Savings Goals",
@@ -1812,6 +1818,7 @@
       "inviteLink": "Share this link with your partner:",
       "inviteCopied": "Link copied!",
       "inviteExpires": "Expires in 7 days",
+      "inviteCopyLink": "Copy invite link",
       "invitePending": "Pending Invitations",
       "inviteRevoke": "Revoke",
       "inviteRevokeConfirm": "Revoke this invitation?",
