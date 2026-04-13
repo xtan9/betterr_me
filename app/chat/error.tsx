@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertCircle } from "lucide-react";
+import { log } from "@/lib/logger";
 
 export default function ChatError({
   error,
@@ -12,7 +13,7 @@ export default function ChatError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[chat] Rendering error:", error);
+    log.error("[chat] Rendering error", error);
   }, [error]);
 
   return (
