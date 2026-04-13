@@ -178,6 +178,7 @@ export default {
         sm: "calc(var(--radius) - 4px)",
         card: "var(--radius-card)",
         control: "var(--radius-control)",
+        chip: "var(--radius-chip)",
         pill: "var(--radius-pill)",
       },
     },

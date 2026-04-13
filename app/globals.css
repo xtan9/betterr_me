@@ -39,6 +39,7 @@
     --radius: 0.75rem;
     --radius-card: var(--radius);
     --radius-control: calc(var(--radius) - 2px);
+    --radius-chip: calc(var(--radius) - 4px);
     --radius-pill: 9999px;
 
     /* === Sidebar === */
