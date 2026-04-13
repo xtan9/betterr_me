@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import * as matchers from "vitest-axe/matchers";
 import { toast } from "sonner";
@@ -198,7 +199,7 @@ describe("BudgetForm", () => {
     expect(amountSpan).not.toBeNull();
   });
 
-  it("submits POST with correct payload shape and calls onSuccess", async () => {
+  it("blocks submission and does not POST when category_id is missing (Zod validation)", async () => {
     const onSuccess = vi.fn();
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -206,7 +207,7 @@ describe("BudgetForm", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { container } = render(
+    render(
       <BudgetForm
         mode="create"
         month="2026-02"
@@ -217,24 +218,81 @@ describe("BudgetForm", () => {
 
     fireEvent.change(screen.getByLabelText("totalBudget"), { target: { value: "500" } });
 
-    // Interact with the native React Hook Form registered input via data attributes:
-    // Radix Select triggers are tough to operate in jsdom, so we use setValue through the
-    // actual DOM. Instead, fill amount directly and rely on existing field.
-    const numberInputs = container.querySelectorAll('input[type="number"]');
-    fireEvent.change(numberInputs[1], { target: { value: "100" } });
-
-    // Manually set category_id via hidden form state: trigger setValue by opening select?
-    // Instead of going through Radix, dispatch a change on a form control we can reach.
-    // Actually the underlying form uses setValue for category, so we skip that by
-    // asserting the error path instead in this test — submit should fail validation.
     const submit = screen.getAllByRole("button", { name: "createBudget" }).pop()!;
     fireEvent.click(submit);
 
-    // With no category_id picked, validation blocks submission.
+    // With no category_id picked, the Zod guard (`category_id: z.string().min(1, ...)`)
+    // blocks submission — fetch must never be called.
     await waitFor(() => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
     expect(onSuccess).not.toHaveBeenCalled();
+  });
+
+  it("POSTs to /api/money/budgets with correct body shape when a category is selected", async () => {
+    const user = userEvent.setup();
+    const onSuccess = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "new" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <BudgetForm
+        mode="create"
+        month="2026-02"
+        onSuccess={onSuccess}
+        onCancel={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("totalBudget"), { target: { value: "500" } });
+
+    // Drive the Radix Select via keyboard — the SelectTrigger is reachable as
+    // role="combobox". Click to open, then click the option by its display name.
+    // Radix renders options twice in jsdom (one in the listbox and one in the
+    // hidden native select shim), so grab the first.
+    const combobox = screen.getByRole("combobox");
+    await user.click(combobox);
+    const options = await screen.findAllByRole("option", { name: /Groceries/i });
+    await user.click(options[0]);
+
+    // Set the category amount. Both the totalBudget and category amount inputs
+    // share placeholder "0.00"; the category one is the second number input.
+    const numberInputs = screen
+      .getAllByPlaceholderText("0.00")
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement);
+    fireEvent.change(numberInputs[1], { target: { value: "100" } });
+
+    const submit = screen.getAllByRole("button", { name: "createBudget" }).pop()!;
+    fireEvent.click(submit);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    // Lock POST contract: endpoint, method, JSON body shape. Note that the
+    // body uses dollar-denominated `total` and `amount` (parseFloat), not
+    // cents — the API route converts when persisting.
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/money/budgets");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body as string);
+    expect(body).toEqual(
+      expect.objectContaining({
+        month: "2026-02-01",
+        total: 500,
+        rollover_enabled: expect.any(Boolean),
+        categories: [
+          expect.objectContaining({
+            category_id: "cat-1",
+            amount: 100,
+          }),
+        ],
+      })
+    );
+    expect(onSuccess).toHaveBeenCalled();
   });
 
   it("edit mode: PUT to /api/money/budgets/:id with correct body", async () => {

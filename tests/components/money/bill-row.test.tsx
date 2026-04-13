@@ -117,10 +117,27 @@ describe("BillRow", () => {
     expect(screen.getByText("paid")).toBeInTheDocument();
   });
 
-  it("does not show paid badge when inactive or updated_at is old", () => {
+  it("does not show paid badge when inactive (even if updated_at is this month)", () => {
     render(
       <BillRow
         bill={makeBill({ is_active: false, updated_at: new Date().toISOString() })}
+        onStatusChange={vi.fn()}
+        onEdit={vi.fn()}
+      />
+    );
+    expect(screen.queryByText("paid")).not.toBeInTheDocument();
+  });
+
+  it("does not show paid badge when updated_at is in a previous month (even if active)", () => {
+    // Pick a date two months back to avoid boundary flakiness around month rollover.
+    const twoMonthsAgo = new Date();
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+    render(
+      <BillRow
+        bill={makeBill({
+          is_active: true,
+          updated_at: twoMonthsAgo.toISOString(),
+        })}
         onStatusChange={vi.fn()}
         onEdit={vi.fn()}
       />
