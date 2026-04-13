@@ -449,7 +449,7 @@
 }
 
 .tiptap-journal pre {
-  @apply bg-muted rounded-md p-4 font-mono text-sm overflow-x-auto mb-3;
+  @apply bg-muted rounded-card p-4 font-mono text-sm overflow-x-auto mb-3;
 }
 
 .tiptap-journal code {
