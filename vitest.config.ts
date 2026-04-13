@@ -22,7 +22,7 @@ export default defineConfig({
         'coverage/',
         // Data, templates, thin wrappers, re-exports — no logic to test
         'i18n/messages/**',
-        'lib/db/index.ts',
+        'lib/**/index.ts', // barrel re-exports
         'lib/constants.ts',
         '**/ndi-exercise-catalog.json',
         'emails/**',
@@ -32,11 +32,14 @@ export default defineConfig({
         'e2e/**',
       ],
       thresholds: {
-        // Recommended thresholds for new code
-        lines: 50,
-        functions: 50,
-        branches: 50,
-        statements: 50,
+        // Locked in by the coverage improvement effort (docs/superpowers/
+        // specs/2026-04-12-coverage-improvement-design.md). These reflect
+        // actual coverage with a small regression cushion. Raise over time
+        // as further tests land — do not lower without a documented reason.
+        lines: 80,
+        statements: 80,
+        functions: 75,
+        branches: 70,
       },
     },
   },
