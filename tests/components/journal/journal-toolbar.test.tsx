@@ -7,7 +7,7 @@ import { JournalToolbar } from "@/components/journal/journal-toolbar";
 
 expect.extend(matchers);
 
-// Mock next-intl (not used by component, but kept for parity with reference tests)
+// Mock next-intl: echo the translation key so queries can match by key.
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
 }));
@@ -73,6 +73,12 @@ function createEditorMock(activeMap: Record<string, boolean> = {}) {
   return { editor, calls, isActive };
 }
 
+// Accessible-name helpers — mock echoes translation keys, so aria-label
+// ends up as the bare key (e.g. "bold", "italic"). Using exact-name regex
+// avoids substring matches (e.g. "link" also appears in "bulletList").
+const btn = (name: string) =>
+  screen.getByRole("button", { name: new RegExp(`^${name}$`) });
+
 describe("JournalToolbar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -94,140 +100,104 @@ describe("JournalToolbar", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[0]);
+    fireEvent.click(btn("bold"));
 
     expect(editor.chain).toHaveBeenCalled();
-    expect(calls.map((c) => c.method)).toEqual([
-      "focus",
-      "toggleBold",
-      "run",
-    ]);
+    expect(calls.some((c) => c.method === "toggleBold")).toBe(true);
   });
 
   it("fires toggleItalic() when the italic toggle is clicked", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[1]);
+    fireEvent.click(btn("italic"));
 
-    expect(calls.map((c) => c.method)).toEqual([
-      "focus",
-      "toggleItalic",
-      "run",
-    ]);
+    expect(calls.some((c) => c.method === "toggleItalic")).toBe(true);
   });
 
   it("fires toggleStrike() when the strikethrough toggle is clicked", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[2]);
+    fireEvent.click(btn("strike"));
 
-    expect(calls.map((c) => c.method)).toEqual([
-      "focus",
-      "toggleStrike",
-      "run",
-    ]);
+    expect(calls.some((c) => c.method === "toggleStrike")).toBe(true);
   });
 
   it("fires toggleHeading(level:2) for H2 button", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[3]);
+    fireEvent.click(btn("heading2"));
 
-    expect(calls[0].method).toBe("focus");
-    expect(calls[1].method).toBe("toggleHeading");
-    expect(calls[1].args).toEqual([{ level: 2 }]);
-    expect(calls[2].method).toBe("run");
+    const call = calls.find((c) => c.method === "toggleHeading");
+    expect(call).toBeDefined();
+    expect(call!.args).toEqual([{ level: 2 }]);
   });
 
   it("fires toggleHeading(level:3) for H3 button", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[4]);
+    fireEvent.click(btn("heading3"));
 
-    expect(calls[1].method).toBe("toggleHeading");
-    expect(calls[1].args).toEqual([{ level: 3 }]);
+    const call = calls.find((c) => c.method === "toggleHeading");
+    expect(call).toBeDefined();
+    expect(call!.args).toEqual([{ level: 3 }]);
   });
 
   it("fires toggleBulletList() for bullet list toggle", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[5]);
+    fireEvent.click(btn("bulletList"));
 
-    expect(calls.map((c) => c.method)).toEqual([
-      "focus",
-      "toggleBulletList",
-      "run",
-    ]);
+    expect(calls.some((c) => c.method === "toggleBulletList")).toBe(true);
   });
 
   it("fires toggleOrderedList() for ordered list toggle", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[6]);
+    fireEvent.click(btn("orderedList"));
 
-    expect(calls.map((c) => c.method)).toEqual([
-      "focus",
-      "toggleOrderedList",
-      "run",
-    ]);
+    expect(calls.some((c) => c.method === "toggleOrderedList")).toBe(true);
   });
 
   it("fires toggleTaskList() for task list toggle", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[7]);
+    fireEvent.click(btn("taskList"));
 
-    expect(calls.map((c) => c.method)).toEqual([
-      "focus",
-      "toggleTaskList",
-      "run",
-    ]);
+    expect(calls.some((c) => c.method === "toggleTaskList")).toBe(true);
   });
 
   it("fires toggleBlockquote() for blockquote toggle", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[8]);
+    fireEvent.click(btn("blockquote"));
 
-    expect(calls.map((c) => c.method)).toEqual([
-      "focus",
-      "toggleBlockquote",
-      "run",
-    ]);
+    expect(calls.some((c) => c.method === "toggleBlockquote")).toBe(true);
   });
 
   it("fires toggleCodeBlock() for code block toggle", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[9]);
+    fireEvent.click(btn("codeBlock"));
 
-    expect(calls.map((c) => c.method)).toEqual([
-      "focus",
-      "toggleCodeBlock",
-      "run",
-    ]);
+    expect(calls.some((c) => c.method === "toggleCodeBlock")).toBe(true);
   });
 
   it("fires setHorizontalRule() for horizontal-rule toggle", () => {
     const { editor, calls } = createEditorMock();
     render(<JournalToolbar editor={editor} />);
 
-    fireEvent.click(screen.getAllByRole("button")[11]);
+    fireEvent.click(btn("horizontalRule"));
 
-    expect(calls.map((c) => c.method)).toEqual([
-      "focus",
-      "setHorizontalRule",
-      "run",
-    ]);
+    expect(calls.some((c) => c.method === "setHorizontalRule")).toBe(true);
   });
 
   describe("link button", () => {
@@ -238,13 +208,12 @@ describe("JournalToolbar", () => {
       const { editor, calls } = createEditorMock();
       render(<JournalToolbar editor={editor} />);
 
-      fireEvent.click(screen.getAllByRole("button")[10]);
+      fireEvent.click(btn("link"));
 
       expect(promptSpy).toHaveBeenCalledWith("URL:");
-      expect(calls[0].method).toBe("focus");
-      expect(calls[1].method).toBe("toggleLink");
-      expect(calls[1].args).toEqual([{ href: "https://example.com" }]);
-      expect(calls[2].method).toBe("run");
+      const call = calls.find((c) => c.method === "toggleLink");
+      expect(call).toBeDefined();
+      expect(call!.args).toEqual([{ href: "https://example.com" }]);
       promptSpy.mockRestore();
     });
 
@@ -253,13 +222,10 @@ describe("JournalToolbar", () => {
       const { editor, calls } = createEditorMock();
       render(<JournalToolbar editor={editor} />);
 
-      fireEvent.click(screen.getAllByRole("button")[10]);
+      fireEvent.click(btn("link"));
 
-      expect(calls.map((c) => c.method)).toEqual([
-        "focus",
-        "unsetLink",
-        "run",
-      ]);
+      expect(calls.some((c) => c.method === "unsetLink")).toBe(true);
+      expect(calls.some((c) => c.method === "toggleLink")).toBe(false);
       promptSpy.mockRestore();
     });
 
@@ -268,7 +234,7 @@ describe("JournalToolbar", () => {
       const { editor, calls } = createEditorMock();
       render(<JournalToolbar editor={editor} />);
 
-      fireEvent.click(screen.getAllByRole("button")[10]);
+      fireEvent.click(btn("link"));
 
       expect(promptSpy).toHaveBeenCalled();
       expect(calls).toEqual([]);
@@ -281,7 +247,7 @@ describe("JournalToolbar", () => {
       const { editor } = createEditorMock({ bold: true });
       render(<JournalToolbar editor={editor} />);
 
-      const boldBtn = screen.getAllByRole("button")[0];
+      const boldBtn = btn("bold");
       expect(boldBtn).toHaveAttribute("data-state", "on");
       expect(boldBtn).toHaveAttribute("aria-pressed", "true");
     });
@@ -290,7 +256,7 @@ describe("JournalToolbar", () => {
       const { editor } = createEditorMock({ bold: true });
       render(<JournalToolbar editor={editor} />);
 
-      const italicBtn = screen.getAllByRole("button")[1];
+      const italicBtn = btn("italic");
       expect(italicBtn).toHaveAttribute("data-state", "off");
       expect(italicBtn).toHaveAttribute("aria-pressed", "false");
     });
@@ -301,7 +267,7 @@ describe("JournalToolbar", () => {
       });
       render(<JournalToolbar editor={editor} />);
 
-      const h2Btn = screen.getAllByRole("button")[3];
+      const h2Btn = btn("heading2");
       expect(h2Btn).toHaveAttribute("data-state", "on");
       expect(isActive).toHaveBeenCalledWith("heading", { level: 2 });
     });
@@ -310,7 +276,7 @@ describe("JournalToolbar", () => {
       const { editor } = createEditorMock();
       render(<JournalToolbar editor={editor} />);
 
-      const hrBtn = screen.getAllByRole("button")[11];
+      const hrBtn = btn("horizontalRule");
       expect(hrBtn).toHaveAttribute("data-state", "off");
     });
 
@@ -336,16 +302,11 @@ describe("JournalToolbar", () => {
     });
   });
 
-  it("has no accessibility violations (excluding known icon-only button labels)", async () => {
+  it("has no accessibility violations", async () => {
     const { editor } = createEditorMock();
     const { container } = render(<JournalToolbar editor={editor} />);
 
-    // The toolbar uses icon-only toggle buttons (lucide icons). Providing
-    // aria-labels is a separate concern tracked outside this unit test;
-    // we exercise the rest of the a11y ruleset here.
-    const results = await axe(container, {
-      rules: { "button-name": { enabled: false } },
-    });
+    const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 });

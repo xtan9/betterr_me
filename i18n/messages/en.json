@@ -1069,6 +1069,20 @@
     "editor": {
       "placeholder": "Start writing..."
     },
+    "toolbar": {
+      "bold": "Bold",
+      "italic": "Italic",
+      "strike": "Strikethrough",
+      "heading2": "Heading 2",
+      "heading3": "Heading 3",
+      "bulletList": "Bullet list",
+      "orderedList": "Ordered list",
+      "taskList": "Task list",
+      "blockquote": "Blockquote",
+      "codeBlock": "Code block",
+      "link": "Link",
+      "horizontalRule": "Horizontal rule"
+    },
     "prompts": {
       "title": "Writing Prompts",
       "trigger": "Need inspiration?",
