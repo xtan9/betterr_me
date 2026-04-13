@@ -164,11 +164,11 @@ export function BudgetOverview() {
       {/* Loading state */}
       {isLoading && (
         <div className="flex flex-col gap-card-gap">
-          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-card" />
           <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
-            <Skeleton className="h-24 w-full rounded-xl" />
-            <Skeleton className="h-24 w-full rounded-xl" />
-            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-card" />
+            <Skeleton className="h-24 w-full rounded-card" />
+            <Skeleton className="h-24 w-full rounded-card" />
           </div>
         </div>
       )}

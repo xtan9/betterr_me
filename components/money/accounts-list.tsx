@@ -100,7 +100,7 @@ export function AccountsList() {
   // Error state
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-money-border bg-money-surface px-6 py-16 text-center">
+      <div className="flex flex-col items-center justify-center rounded-card border border-money-border bg-money-surface px-6 py-16 text-center">
         <AlertCircle className="mb-4 size-8 text-destructive" />
         <h3 className="text-base font-semibold">{t("accounts.errorTitle")}</h3>
         <Button

@@ -18,10 +18,10 @@ export function TaskDetailSkeleton() {
             <Skeleton className="h-4 w-full max-w-md" />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-20 rounded-xl" />
-            <Skeleton className="h-20 rounded-xl" />
-            <Skeleton className="h-20 rounded-xl" />
-            <Skeleton className="h-20 rounded-xl" />
+            <Skeleton className="h-20 rounded-card" />
+            <Skeleton className="h-20 rounded-card" />
+            <Skeleton className="h-20 rounded-card" />
+            <Skeleton className="h-20 rounded-card" />
           </div>
         </CardContent>
       </Card>

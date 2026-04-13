@@ -75,7 +75,7 @@ export function GoalGrid() {
   // Error state
   if (error) {
     return (
-      <div className="rounded-xl border border-destructive/50 bg-destructive/10 px-6 py-8 text-center">
+      <div className="rounded-card border border-destructive/50 bg-destructive/10 px-6 py-8 text-center">
         <p className="text-sm text-destructive">{t("fetchError")}</p>
       </div>
     );
@@ -89,9 +89,9 @@ export function GoalGrid() {
           <Skeleton className="h-9 w-32" />
         </div>
         <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-56 rounded-xl" />
-          <Skeleton className="h-56 rounded-xl" />
-          <Skeleton className="h-56 rounded-xl" />
+          <Skeleton className="h-56 rounded-card" />
+          <Skeleton className="h-56 rounded-card" />
+          <Skeleton className="h-56 rounded-card" />
         </div>
       </div>
     );
@@ -101,7 +101,7 @@ export function GoalGrid() {
   if (goals.length === 0) {
     return (
       <>
-        <div className="flex flex-col items-center justify-center rounded-xl border border-money-border bg-money-surface py-16 px-6 text-center">
+        <div className="flex flex-col items-center justify-center rounded-card border border-money-border bg-money-surface py-16 px-6 text-center">
           <Target className="size-12 text-muted-foreground mb-4" />
           <h3 className="text-section-heading mb-2">{t("emptyHeading")}</h3>
           <p className="text-sm text-muted-foreground mb-6 max-w-md">

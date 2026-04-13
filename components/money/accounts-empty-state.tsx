@@ -18,7 +18,7 @@ export function AccountsEmptyState({ mutate }: AccountsEmptyStateProps) {
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
 
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-money-border bg-money-surface px-6 py-16 text-center">
+    <div className="flex flex-col items-center justify-center rounded-card border border-money-border bg-money-surface px-6 py-16 text-center">
       <div className="mb-6 flex size-16 items-center justify-center rounded-pill bg-money-sage-light">
         <Wallet className="size-8 text-money-sage" />
       </div>

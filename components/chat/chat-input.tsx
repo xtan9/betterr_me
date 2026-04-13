@@ -190,7 +190,7 @@ export function ChatInput({
       onDrop={handleDrop}
     >
       {isDragging && (
-        <div className="mb-2 flex items-center justify-center rounded-xl border-2 border-dashed border-primary/50 bg-primary/5 py-6 text-sm text-muted-foreground">
+        <div className="mb-2 flex items-center justify-center rounded-card border-2 border-dashed border-primary/50 bg-primary/5 py-6 text-sm text-muted-foreground">
           {t("input.dropZone")}
         </div>
       )}

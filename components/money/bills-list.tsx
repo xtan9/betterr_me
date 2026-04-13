@@ -119,7 +119,7 @@ export function BillsList() {
   // Error state
   if (error) {
     return (
-      <div className="rounded-xl border border-destructive/50 bg-destructive/10 px-6 py-8 text-center">
+      <div className="rounded-card border border-destructive/50 bg-destructive/10 px-6 py-8 text-center">
         <p className="text-sm text-destructive">{t("fetchError")}</p>
       </div>
     );
@@ -158,7 +158,7 @@ export function BillsList() {
           </Button>
         </div>
 
-        <div className="flex flex-col items-center justify-center rounded-xl border border-money-border bg-money-surface px-6 py-16 text-center">
+        <div className="flex flex-col items-center justify-center rounded-card border border-money-border bg-money-surface px-6 py-16 text-center">
           <Inbox className="mb-4 size-8 text-muted-foreground" />
           <h3 className="text-base font-semibold">{t("noBills")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">

@@ -41,14 +41,14 @@ export function MoneyDashboard({ viewMode }: MoneyDashboardProps) {
       <div className="flex flex-col gap-card-gap">
         {/* Hero skeleton */}
         <div className="grid grid-cols-1 gap-card-gap sm:grid-cols-3">
-          <Skeleton className="h-24 w-full rounded-xl" />
-          <Skeleton className="h-24 w-full rounded-xl" />
-          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-card" />
+          <Skeleton className="h-24 w-full rounded-card" />
+          <Skeleton className="h-24 w-full rounded-card" />
         </div>
         {/* Bills skeleton */}
-        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-card" />
         {/* Cash flow skeleton */}
-        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-card" />
       </div>
     );
   }

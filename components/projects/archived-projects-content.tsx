@@ -122,7 +122,7 @@ function ArchivedProjectsSkeleton() {
       <Skeleton className="h-8 w-48" />
       <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
         {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-20 rounded-xl" />
+          <Skeleton key={i} className="h-20 rounded-card" />
         ))}
       </div>
     </div>
