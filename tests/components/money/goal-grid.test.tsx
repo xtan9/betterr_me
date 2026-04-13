@@ -26,8 +26,12 @@ vi.mock("@/lib/money/arithmetic", () => ({
 vi.mock("@/components/money/goal-card", () => ({
   GoalCard: ({
     goal,
+    onEdit,
+    onContribute,
   }: {
     goal: { id: string; name: string; status_color: string; current_amount_cents: number; target_amount_cents: number };
+    onEdit: (goal: unknown) => void;
+    onContribute: (id: string) => void;
   }) => (
     <div data-testid={`goal-card-${goal.id}`}>
       <span>{goal.name}</span>
@@ -35,13 +39,35 @@ vi.mock("@/components/money/goal-card", () => ({
         {Math.round((goal.current_amount_cents / goal.target_amount_cents) * 100)}%
       </span>
       <span data-testid={`status-${goal.id}`}>{goal.status_color}</span>
+      <button data-testid={`edit-${goal.id}`} onClick={() => onEdit(goal)}>
+        Edit
+      </button>
+      <button data-testid={`contribute-${goal.id}`} onClick={() => onContribute(goal.id)}>
+        Contribute
+      </button>
     </div>
   ),
 }));
 
 vi.mock("@/components/money/goal-form", () => ({
-  GoalForm: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="goal-form">Goal Form</div> : null,
+  GoalForm: ({
+    open,
+    mode,
+    onOpenChange,
+    onSuccess,
+  }: {
+    open: boolean;
+    mode: string;
+    onOpenChange: (open: boolean) => void;
+    onSuccess: () => void;
+  }) =>
+    open ? (
+      <div data-testid="goal-form" role="dialog" aria-label={`goal-form-${mode}`}>
+        <span data-testid="goal-form-mode">{mode}</span>
+        <button onClick={() => onOpenChange(false)}>close-goal-form</button>
+        <button onClick={onSuccess}>success-goal-form</button>
+      </div>
+    ) : null,
 }));
 
 // Mock useGoals hook
@@ -204,5 +230,111 @@ describe("GoalGrid", () => {
     const { container } = render(<GoalGrid />);
 
     expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("renders error state when hook returns error", () => {
+    mockUseGoals.mockReturnValue({
+      goals: [],
+      isLoading: false,
+      error: new Error("boom"),
+      mutate: vi.fn(),
+    });
+
+    render(<GoalGrid />);
+    expect(screen.getByText("fetchError")).toBeInTheDocument();
+  });
+
+  it("edit button opens form in edit mode with selected goal", () => {
+    mockUseGoals.mockReturnValue({
+      goals: [makeGoal({ id: "g1" })],
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<GoalGrid />);
+    fireEvent.click(screen.getByTestId("edit-g1"));
+    expect(screen.getByRole("dialog", { name: "goal-form-edit" })).toBeInTheDocument();
+    expect(screen.getByTestId("goal-form-mode")).toHaveTextContent("edit");
+  });
+
+  it("contribute button opens form in contribute mode", () => {
+    mockUseGoals.mockReturnValue({
+      goals: [makeGoal({ id: "g1" })],
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<GoalGrid />);
+    fireEvent.click(screen.getByTestId("contribute-g1"));
+    expect(
+      screen.getByRole("dialog", { name: "goal-form-contribute" })
+    ).toBeInTheDocument();
+  });
+
+  it("onSuccess closes form and calls mutate", () => {
+    const mutate = vi.fn();
+    mockUseGoals.mockReturnValue({
+      goals: [makeGoal({ id: "g1" })],
+      isLoading: false,
+      mutate,
+    });
+
+    render(<GoalGrid />);
+    fireEvent.click(screen.getByTestId("edit-g1"));
+    fireEvent.click(screen.getByRole("button", { name: "success-goal-form" }));
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: "goal-form-edit" })).not.toBeInTheDocument();
+  });
+
+  it("onOpenChange(false) closes the form", () => {
+    mockUseGoals.mockReturnValue({
+      goals: [makeGoal({ id: "g1" })],
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<GoalGrid />);
+    fireEvent.click(screen.getByTestId("edit-g1"));
+    fireEvent.click(screen.getByRole("button", { name: "close-goal-form" }));
+    expect(screen.queryByRole("dialog", { name: "goal-form-edit" })).not.toBeInTheDocument();
+  });
+
+  it("sorts completed goals to the bottom and goals with deadlines before those without", () => {
+    mockUseGoals.mockReturnValue({
+      goals: [
+        makeGoal({ id: "done", status: "completed", deadline: "2026-02-01" }),
+        makeGoal({ id: "no-deadline", deadline: null, created_at: "2026-01-10T00:00:00Z" }),
+        makeGoal({ id: "late", deadline: "2026-12-31" }),
+        makeGoal({ id: "early", deadline: "2026-03-01" }),
+        makeGoal({ id: "no-deadline-new", deadline: null, created_at: "2026-02-10T00:00:00Z" }),
+      ],
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    const { container } = render(<GoalGrid />);
+    const cards = container.querySelectorAll('[data-testid^="goal-card-"]');
+    const ids = Array.from(cards).map((c) => c.getAttribute("data-testid"));
+    expect(ids).toEqual([
+      "goal-card-early",
+      "goal-card-late",
+      "goal-card-no-deadline-new",
+      "goal-card-no-deadline",
+      "goal-card-done",
+    ]);
+  });
+
+  it("create goal button from populated view opens create form", () => {
+    mockUseGoals.mockReturnValue({
+      goals: [makeGoal({ id: "g1" })],
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<GoalGrid />);
+    fireEvent.click(screen.getByRole("button", { name: /createGoal/ }));
+    expect(
+      screen.getByRole("dialog", { name: "goal-form-create" })
+    ).toBeInTheDocument();
   });
 });
