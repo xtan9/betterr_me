@@ -20,6 +20,16 @@ export default defineConfig({
         '**/components/ui/**', // Exclude shadcn/ui components (third-party)
         '.next/',
         'coverage/',
+        // Data, templates, thin wrappers, re-exports — no logic to test
+        'i18n/messages/**',
+        'lib/db/index.ts',
+        'lib/constants.ts',
+        '**/ndi-exercise-catalog.json',
+        'emails/**',
+        'app/**/layout.tsx',
+        'app/**/loading.tsx',
+        'app/**/error.tsx',
+        'e2e/**',
       ],
       thresholds: {
         // Recommended thresholds for new code
