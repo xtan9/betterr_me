@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 import useSWR, { useSWRConfig } from "swr";
@@ -16,6 +16,8 @@ import {
 } from "@/lib/calendar/date-utils";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useCalendarActions } from "@/hooks/use-calendar-actions";
+import { useCalendarNavigation } from "./use-calendar-navigation";
+import { useCalendarEvents } from "./use-calendar-events";
 import { CalendarHeader } from "./calendar-header";
 import { CalendarSidebar } from "./calendar-sidebar";
 import { MonthGrid } from "./month-grid";
@@ -47,30 +49,7 @@ interface FeedResponse {
 export function CalendarPageContent() {
   const t = useTranslations("calendar");
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
   const { mutate: globalMutate } = useSWRConfig();
-
-  // Read URL state
-  const validViews = ["month", "week", "day"];
-  const viewParam = searchParams.get("view");
-  const rawView = viewParam || "month";
-  const view = validViews.includes(rawView) ? rawView : "month";
-
-  const rawDate = searchParams.get("date") || "";
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  const dateParam = dateRegex.test(rawDate) ? rawDate : getLocalDateString();
-
-  // Parse the date param into year/month
-  const [year, month] = useMemo(() => {
-    const parts = dateParam.split("-").map(Number);
-    return [parts[0], parts[1] - 1] as const; // month is 0-indexed
-  }, [dateParam]);
-
-  const currentDate = useMemo(() => {
-    const parts = dateParam.split("-").map(Number);
-    return new Date(parts[0], parts[1] - 1, parts[2]);
-  }, [dateParam]);
 
   // Fetch user profile for week_start_day
   const {
@@ -79,6 +58,33 @@ export function CalendarPageContent() {
     error: profileError,
   } = useSWR<ProfileResponse>("/api/profile", fetcher);
   const weekStartDay = profileData?.profile?.preferences?.week_start_day ?? 0;
+
+  // Navigation hook
+  const {
+    view,
+    dateParam,
+    year,
+    month,
+    currentDate,
+    goToToday,
+    goToPrev,
+    goToNext,
+    setView,
+    navigateToDate,
+    handleDayClick,
+    updateParams,
+  } = useCalendarNavigation();
+
+  // Default view routing (VIEW-11): detect screen width when no ?view= param
+  const viewParam = searchParams.get("view");
+  useEffect(() => {
+    if (!viewParam) {
+      const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+      const defaultView = isDesktop ? "week" : "day";
+      updateParams({ view: defaultView }, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount only
 
   // --- Layer state (lifted from sidebar) ---
   const [enabledLayers, setEnabledLayers] = useState<Set<string>>(
@@ -96,33 +102,6 @@ export function CalendarPageContent() {
       return next;
     });
   }, []);
-
-  // URL update helper
-  const updateParams = useCallback(
-    (updates: Record<string, string>, options?: { replace?: boolean }) => {
-      const params = new URLSearchParams(searchParams.toString());
-      for (const [key, value] of Object.entries(updates)) {
-        params.set(key, value);
-      }
-      const url = `${pathname}?${params.toString()}`;
-      if (options?.replace) {
-        router.replace(url);
-      } else {
-        router.push(url);
-      }
-    },
-    [searchParams, router, pathname],
-  );
-
-  // Default view routing (VIEW-11): detect screen width when no ?view= param
-  useEffect(() => {
-    if (!viewParam) {
-      const isDesktop = window.matchMedia("(min-width: 768px)").matches;
-      const defaultView = isDesktop ? "week" : "day";
-      updateParams({ view: defaultView }, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount only
 
   // Compute date range based on current view
   const { startDate, endDate } = useMemo(() => {
@@ -204,6 +183,27 @@ export function CalendarPageContent() {
     [dispatch],
   );
 
+  const onEventSavedCallback = useCallback(() => {
+    globalMutate(
+      `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
+    );
+  }, [startDate, endDate, globalMutate]);
+
+  // Event creation state and handlers
+  const {
+    quickCreate,
+    setQuickCreate,
+    eventDialog,
+    setEventDialog,
+    isOverlayOpen,
+    handleTimeSlotClick,
+    handleDragSelect,
+    handleEventClick,
+    handleNewEvent,
+    handleQuickCreateMoreOptions,
+    handleEventSaved,
+  } = useCalendarEvents(dateParam, handleItemAction, onEventSavedCallback);
+
   // --- Merge calendar events + feed items ---
 
   const eventsByDate = useMemo(() => {
@@ -236,193 +236,6 @@ export function CalendarPageContent() {
   const today = useMemo(() => getLocalDateString(), []);
 
   const isLoading = profileLoading || eventsLoading;
-
-  // --- Navigation functions ---
-
-  const goToToday = useCallback(() => {
-    updateParams({ date: getLocalDateString() });
-  }, [updateParams]);
-
-  const goToPrev = useCallback(() => {
-    if (view === "day") {
-      const prev = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        currentDate.getDate() - 1,
-      );
-      updateParams({ date: getLocalDateString(prev) });
-    } else if (view === "week") {
-      const prev = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        currentDate.getDate() - 7,
-      );
-      updateParams({ date: getLocalDateString(prev) });
-    } else {
-      const prevMonth = month === 0 ? 11 : month - 1;
-      const prevYear = month === 0 ? year - 1 : year;
-      updateParams({
-        date: getLocalDateString(new Date(prevYear, prevMonth, 1)),
-      });
-    }
-  }, [view, currentDate, month, year, updateParams]);
-
-  const goToNext = useCallback(() => {
-    if (view === "day") {
-      const next = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        currentDate.getDate() + 1,
-      );
-      updateParams({ date: getLocalDateString(next) });
-    } else if (view === "week") {
-      const next = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        currentDate.getDate() + 7,
-      );
-      updateParams({ date: getLocalDateString(next) });
-    } else {
-      const nextMonth = month === 11 ? 0 : month + 1;
-      const nextYear = month === 11 ? year + 1 : year;
-      updateParams({
-        date: getLocalDateString(new Date(nextYear, nextMonth, 1)),
-      });
-    }
-  }, [view, currentDate, month, year, updateParams]);
-
-  const setView = useCallback(
-    (newView: string) => {
-      if (newView) {
-        updateParams({ view: newView });
-      }
-    },
-    [updateParams],
-  );
-
-  const navigateToDate = useCallback(
-    (date: Date | undefined) => {
-      if (date) {
-        updateParams({ date: getLocalDateString(date) });
-      }
-    },
-    [updateParams],
-  );
-
-  const handleDayClick = useCallback(
-    (date: Date) => {
-      updateParams({ view: "day", date: getLocalDateString(date) });
-    },
-    [updateParams],
-  );
-
-  // --- Event creation state ---
-
-  const [quickCreate, setQuickCreate] = useState<{
-    isOpen: boolean;
-    date: string;
-    startTime: string;
-    endTime: string;
-    anchorPosition: { x: number; y: number };
-  } | null>(null);
-
-  const [eventDialog, setEventDialog] = useState<{
-    isOpen: boolean;
-    event?: ExpandedCalendarEvent | null;
-    prefill?: {
-      title?: string;
-      date?: string;
-      startTime?: string;
-      endTime?: string;
-    };
-  } | null>(null);
-
-  const isOverlayOpen = !!(quickCreate?.isOpen || eventDialog?.isOpen);
-
-  // --- Event creation handlers ---
-
-  const handleTimeSlotClick = useCallback(
-    (date: Date, time: string, position: { x: number; y: number }) => {
-      const [h, m] = time.split(":").map(Number);
-      const endMinutes = h * 60 + m + 30;
-      const endH = Math.floor(endMinutes / 60) % 24;
-      const endM = endMinutes % 60;
-      const endTime = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
-
-      setQuickCreate({
-        isOpen: true,
-        date: getLocalDateString(date),
-        startTime: time,
-        endTime,
-        anchorPosition: position,
-      });
-    },
-    [],
-  );
-
-  const handleDragSelect = useCallback(
-    (
-      date: Date,
-      startTime: string,
-      endTime: string,
-      position: { x: number; y: number },
-    ) => {
-      setQuickCreate({
-        isOpen: true,
-        date: getLocalDateString(date),
-        startTime,
-        endTime,
-        anchorPosition: position,
-      });
-    },
-    [],
-  );
-
-  const handleEventClick = useCallback(
-    (event: ExpandedCalendarEvent) => {
-      // If it's a domain item with actions, execute the action instead of opening dialog
-      const domainEvent = event as DomainCalendarEvent;
-      if (domainEvent._domain && domainEvent._domain !== "events") {
-        handleItemAction(event);
-        return;
-      }
-      setEventDialog({ isOpen: true, event });
-    },
-    [handleItemAction],
-  );
-
-  const handleNewEvent = useCallback(() => {
-    setEventDialog({
-      isOpen: true,
-      event: null,
-      prefill: { date: dateParam },
-    });
-  }, [dateParam]);
-
-  const handleQuickCreateMoreOptions = useCallback(
-    (title: string) => {
-      if (quickCreate) {
-        setQuickCreate(null);
-        setEventDialog({
-          isOpen: true,
-          event: null,
-          prefill: {
-            title,
-            date: quickCreate.date,
-            startTime: quickCreate.startTime,
-            endTime: quickCreate.endTime,
-          },
-        });
-      }
-    },
-    [quickCreate],
-  );
-
-  const handleEventSaved = useCallback(() => {
-    globalMutate(
-      `/api/calendar-events?start_date=${startDate}&end_date=${endDate}`,
-    );
-  }, [startDate, endDate, globalMutate]);
 
   // --- Keyboard shortcuts ---
 

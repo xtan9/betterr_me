@@ -29,8 +29,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { BudgetRing } from "@/components/money/budget-ring";
 import { BudgetForm } from "@/components/money/budget-form";
+import { BudgetSummaryCard } from "@/components/money/budget-summary-card";
+import { BudgetCategoryGrid } from "@/components/money/budget-category-grid";
 import { SpendingDonut } from "@/components/money/spending-donut";
 import { SpendingTrendBar } from "@/components/money/spending-trend-bar";
 import { CategoryDrillDown } from "@/components/money/category-drill-down";
@@ -38,7 +39,6 @@ import { RolloverPrompt } from "@/components/money/rollover-prompt";
 import { useBudget } from "@/lib/hooks/use-budgets";
 import { useHousehold } from "@/lib/hooks/use-household";
 import { useSpendingTrends } from "@/lib/hooks/use-spending-analytics";
-import { formatMoney } from "@/lib/money/arithmetic";
 import { HouseholdViewTabs } from "@/components/money/household-view-tabs";
 import { InsightList } from "@/components/money/insight-list";
 
@@ -124,14 +124,6 @@ export function BudgetOverview() {
       toast.error("Failed to delete budget");
     }
   };
-
-  // Overall progress
-  const overallPercent =
-    budget && budget.total_cents > 0
-      ? Math.round((budget.total_spent_cents / budget.total_cents) * 100)
-      : 0;
-  const remaining =
-    budget ? budget.total_cents - budget.total_spent_cents : 0;
 
   return (
     <div className="flex flex-col gap-section-gap">
@@ -220,43 +212,7 @@ export function BudgetOverview() {
           )}
 
           {/* Budget summary card */}
-          <Card className="border-money-border bg-money-surface">
-            <CardContent className="flex items-center gap-6 p-card-padding">
-              <BudgetRing percent={overallPercent} size={64} strokeWidth={5} />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      {t("totalBudget")}
-                    </p>
-                    <p className="text-2xl font-bold tabular-nums">
-                      {formatMoney(budget.total_cents)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">
-                      {remaining >= 0 ? t("remaining") : t("overBudget")}
-                    </p>
-                    <p
-                      className={`text-lg font-semibold tabular-nums ${
-                        remaining < 0
-                          ? "text-[hsl(var(--money-caution))]"
-                          : "text-[hsl(var(--money-sage))]"
-                      }`}
-                    >
-                      {formatMoney(Math.abs(remaining))}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="tabular-nums">
-                    {formatMoney(budget.total_spent_cents)} {t("spent")}
-                  </span>
-                  <span>({overallPercent}%)</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <BudgetSummaryCard totalCents={budget.total_cents} totalSpentCents={budget.total_spent_cents} />
 
           {/* Budget actions */}
           <div className="flex gap-2 justify-end">
@@ -306,57 +262,7 @@ export function BudgetOverview() {
           </div>
 
           {/* Category cards grid */}
-          <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">
-            {budget.categories.map((cat) => {
-              const percent =
-                cat.allocated_cents > 0
-                  ? Math.round(
-                      (cat.spent_cents / cat.allocated_cents) * 100
-                    )
-                  : 0;
-
-              return (
-                <Card
-                  key={cat.category_id}
-                  className="cursor-pointer border-money-border transition-colors hover:bg-accent"
-                  onClick={() => setSelectedCategoryId(cat.category_id)}
-                >
-                  <CardContent className="flex items-center gap-3 p-card-padding">
-                    <BudgetRing percent={percent} size={40} strokeWidth={3} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        {cat.category_icon && (
-                          <span className="text-sm">{cat.category_icon}</span>
-                        )}
-                        <p className="text-sm font-medium truncate">
-                          {cat.category_name}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <span className="tabular-nums">
-                          {formatMoney(cat.spent_cents)}
-                        </span>
-                        <span>/</span>
-                        <span className="tabular-nums">
-                          {formatMoney(cat.allocated_cents)}
-                        </span>
-                        {cat.rollover_cents !== 0 && (
-                          <span className="tabular-nums">
-                            {cat.rollover_cents > 0
-                              ? ` + ${formatMoney(cat.rollover_cents)} rollover`
-                              : ` - ${formatMoney(Math.abs(cat.rollover_cents))} debt`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {percent}%
-                    </span>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          <BudgetCategoryGrid categories={budget.categories} onCategoryClick={setSelectedCategoryId} />
 
           {/* Charts section */}
           <div className="grid gap-section-gap lg:grid-cols-2">

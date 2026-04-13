@@ -12,21 +12,12 @@ import {
   AlertCircle,
   CheckCircle2,
   Circle,
-  Calendar,
-  Clock,
-  Flag,
-  Tag,
   Repeat,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  PageHeader,
-  PageHeaderSkeleton,
-} from "@/components/layouts/page-header";
+import { PageHeader } from "@/components/layouts/page-header";
 import { PageBreadcrumbs } from "@/components/layouts/page-breadcrumbs";
 import {
   AlertDialog,
@@ -40,14 +31,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EditScopeDialog } from "@/components/tasks/edit-scope-dialog";
+import { TaskDetailSkeleton } from "@/components/tasks/task-detail-skeleton";
+import { TaskDetailsGrid } from "@/components/tasks/task-details-grid";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { getProjectColor } from "@/lib/projects/colors";
-import { getCategoryDisplayName } from "@/lib/categories/get-category-display-name";
 import type { Task, RecurringTask } from "@/lib/db/types";
 import type { EditScope } from "@/lib/validations/recurring-task";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
-import { getPriorityColor } from "@/lib/tasks/format";
 import { fetcher } from "@/lib/fetcher";
 
 interface TaskDetailContentProps {
@@ -59,36 +50,9 @@ const taskFetcher = async (url: string) => {
   return data.task;
 };
 
-function TaskDetailSkeleton() {
-  return (
-    <div className="flex flex-col gap-section-gap" data-testid="task-detail-skeleton">
-      <div>
-        <Skeleton className="h-4 w-32 mb-2" />
-        <PageHeaderSkeleton hasActions />
-      </div>
-      <Card className="max-w-3xl">
-        <CardContent className="space-y-6 pt-card-padding">
-          <div>
-            <Skeleton className="h-5 w-48 mb-2" />
-            <Skeleton className="h-4 w-full max-w-md" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-20 rounded-xl" />
-            <Skeleton className="h-20 rounded-xl" />
-            <Skeleton className="h-20 rounded-xl" />
-            <Skeleton className="h-20 rounded-xl" />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   const router = useRouter();
   const t = useTranslations("tasks");
-  const priorityT = useTranslations("tasks.priorities");
-  const tCat = useTranslations("categories");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const { categories } = useCategories();
@@ -217,7 +181,6 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   const catBgColor = catColor
     ? (isDark ? catColor.hslDark : catColor.hsl)
     : undefined;
-  const priorityColor = getPriorityColor(task.priority);
 
   return (
     <div className="flex flex-col gap-section-gap">
@@ -288,70 +251,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
           )}
 
           {/* Details grid */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Category */}
-            <div className="flex items-center gap-3 p-4 rounded-lg border">
-              <Tag className="size-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {t("detail.category")}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span
-                    className={cn(
-                      "inline-flex items-center justify-center rounded p-0.5",
-                      !catBgColor && "bg-muted"
-                    )}
-                    style={catBgColor ? { backgroundColor: catBgColor } : undefined}
-                  >
-                    <Tag className="size-4 text-white" aria-hidden="true" />
-                  </span>
-                  <span className="font-medium">
-                    {category ? getCategoryDisplayName(category.name, tCat) : "---"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Priority */}
-            <div className="flex items-center gap-3 p-4 rounded-lg border">
-              <Flag className={cn("size-5", priorityColor)} />
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {t("detail.priority")}
-                </p>
-                <span className={cn("font-medium", priorityColor)}>
-                  {priorityT(String(task.priority))}
-                </span>
-              </div>
-            </div>
-
-            {/* Due date */}
-            <div className="flex items-center gap-3 p-4 rounded-lg border">
-              <Calendar className="size-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {t("detail.dueDate")}
-                </p>
-                <span className="font-medium">
-                  {task.due_date || t("detail.noDueDate")}
-                </span>
-              </div>
-            </div>
-
-            {/* Due time */}
-            <div className="flex items-center gap-3 p-4 rounded-lg border">
-              <Clock className="size-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {t("detail.dueTime")}
-                </p>
-                <span className="font-medium">
-                  {task.due_time ? task.due_time.slice(0, 5) : "---"}
-                </span>
-              </div>
-            </div>
-          </div>
+          <TaskDetailsGrid task={task} category={category} catBgColor={catBgColor} />
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3 pt-4 border-t">

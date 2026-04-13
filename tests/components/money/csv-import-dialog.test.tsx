@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { CsvImportDialog } from "@/components/money/csv-import-dialog";
+import { CsvImportDialog } from "@/components/money/csv-import/csv-import-dialog";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
