@@ -44,7 +44,7 @@ export function DashboardHero({
             ? t("availableUntilPaycheck")
             : t("availableUntilEndOfMonth")}
         </p>
-        <p className={`text-2xl font-bold tabular-nums ${availableColor}`}>
+        <p className={`text-stat tabular-nums ${availableColor}`}>
           {formatMoney(availableCents)}
         </p>
       </div>
@@ -64,7 +64,7 @@ export function DashboardHero({
         <p className="text-sm text-muted-foreground">
           {t("endOfMonthBalance")}
         </p>
-        <p className={`text-2xl font-bold tabular-nums ${projectedColor}`}>
+        <p className={`text-stat tabular-nums ${projectedColor}`}>
           {formatMoney(endOfMonthBalanceCents)}
         </p>
         <p className="mt-1 text-xs italic text-muted-foreground">
