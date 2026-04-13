@@ -83,7 +83,7 @@ export function TaskList({
       <div className="flex flex-col gap-section-gap">
         <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-40 rounded-xl" />
+            <Skeleton key={i} className="h-40 rounded-card" />
           ))}
         </div>
       </div>

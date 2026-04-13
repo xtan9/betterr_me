@@ -28,7 +28,7 @@ export function DashboardSkeleton() {
         <Skeleton className="h-6 w-40" />
         <div className="grid grid-cols-2 md:grid-cols-3 gap-card-gap">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-28 rounded-xl" />
+            <Skeleton key={i} className="h-28 rounded-card" />
           ))}
         </div>
       </div>

@@ -156,7 +156,7 @@ function HabitsPageSkeleton() {
       {/* Cards skeleton */}
       <div className="grid gap-card-gap md:grid-cols-2 lg:grid-cols-3">
         {[1, 2, 3, 4, 5, 6].map((i) => (
-          <Skeleton key={i} className="h-48 rounded-xl" />
+          <Skeleton key={i} className="h-48 rounded-card" />
         ))}
       </div>
     </div>

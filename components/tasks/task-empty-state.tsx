@@ -54,7 +54,7 @@ export function TaskEmptyState({ variant, onCreateTask }: TaskEmptyStateProps) {
       className={cn(
         "flex flex-col items-center justify-center text-center py-12 px-4",
         variant === "all_complete" &&
-          "bg-gradient-to-b from-empty-state-celebration-bg/50 to-transparent rounded-xl"
+          "bg-gradient-to-b from-empty-state-celebration-bg/50 to-transparent rounded-card"
       )}
     >
       <div

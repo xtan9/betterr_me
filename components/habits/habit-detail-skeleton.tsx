@@ -21,8 +21,8 @@ export function HabitDetailSkeleton() {
           </div>
           {/* Streak skeleton */}
           <div className="grid grid-cols-2 gap-3">
-            <Skeleton className="h-32 rounded-xl" />
-            <Skeleton className="h-32 rounded-xl" />
+            <Skeleton className="h-32 rounded-card" />
+            <Skeleton className="h-32 rounded-card" />
           </div>
           {/* Stats skeleton */}
           <div className="space-y-3">

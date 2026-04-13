@@ -32,7 +32,7 @@ export function ExerciseSummaryTab({
     <div className="flex flex-col gap-section-gap">
       {/* Animated GIF */}
       <div className="flex justify-center">
-        <div className="h-[200px] w-[200px] rounded-xl overflow-hidden bg-muted flex items-center justify-center">
+        <div className="h-[200px] w-[200px] rounded-card overflow-hidden bg-muted flex items-center justify-center">
           {showGif ? (
             <img
               src={gifUrl}
