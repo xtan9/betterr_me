@@ -30,7 +30,7 @@ export function BillSummaryHeader({
             amount: formatMoney(totalMonthlyCents),
           })}
         </p>
-        <p className="text-2xl font-bold tabular-nums">
+        <p className="text-stat tabular-nums">
           {formatMoney(totalMonthlyCents)}
           <span className="text-sm font-normal text-muted-foreground">
             /mo

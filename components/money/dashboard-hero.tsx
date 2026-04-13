@@ -54,7 +54,7 @@ export function DashboardHero({
         <p className="text-sm text-muted-foreground">
           {t("upcomingBills30Days")}
         </p>
-        <p className="text-2xl font-bold tabular-nums">
+        <p className="text-stat tabular-nums">
           {formatMoney(upcomingBillsTotalCents)}
         </p>
       </div>
