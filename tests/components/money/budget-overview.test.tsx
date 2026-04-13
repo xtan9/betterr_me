@@ -232,6 +232,20 @@ describe("BudgetOverview", () => {
     expect(screen.getByTestId("spending-trend-bar")).toBeInTheDocument();
   });
 
+  it("month navigation buttons have accessible names", () => {
+    const budget = makeBudget();
+    setupDefaultMocks({ budget });
+
+    const { container } = render(<BudgetOverview />);
+
+    expect(
+      container.querySelector('button[aria-label="previousMonth"]')
+    ).toBeTruthy();
+    expect(
+      container.querySelector('button[aria-label="nextMonth"]')
+    ).toBeTruthy();
+  });
+
   it("month navigation: clicking back arrow changes to previous month", () => {
     const budget = makeBudget();
     setupDefaultMocks({ budget });
