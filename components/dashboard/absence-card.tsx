@@ -61,7 +61,7 @@ export function AbsenceCard({ habit, onDismiss, onNavigate }: AbsenceCardProps) 
   return (
     <div
       className={cn(
-        "flex items-start gap-3 p-4 rounded-lg border-l-4",
+        "flex items-start gap-3 p-4 rounded-card border-l-4",
         config.border,
         config.bg,
       )}

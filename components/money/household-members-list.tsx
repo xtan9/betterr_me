@@ -131,7 +131,7 @@ export function HouseholdMembersList({
             return (
               <div
                 key={member.id}
-                className="flex items-center justify-between rounded-lg border border-money-border bg-money-surface px-4 py-3"
+                className="flex items-center justify-between rounded-card border border-money-border bg-money-surface px-4 py-3"
               >
                 <div className="flex items-center gap-3">
                   <Avatar className="size-8">
@@ -213,7 +213,7 @@ export function HouseholdMembersList({
             {pendingInvitations.map((invite) => (
               <div
                 key={invite.id}
-                className="flex items-center justify-between rounded-lg border border-dashed border-money-border px-4 py-3"
+                className="flex items-center justify-between rounded-card border border-dashed border-money-border px-4 py-3"
               >
                 <div>
                   <span className="text-sm">{invite.email}</span>

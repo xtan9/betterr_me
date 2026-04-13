@@ -26,7 +26,7 @@ export function TaskDetailsGrid({
   return (
     <div className="grid grid-cols-2 gap-4">
       {/* Category */}
-      <div className="flex items-center gap-3 p-4 rounded-lg border">
+      <div className="flex items-center gap-3 p-4 rounded-card border">
         <Tag className="size-5 text-muted-foreground" />
         <div>
           <p className="text-sm text-muted-foreground">
@@ -50,7 +50,7 @@ export function TaskDetailsGrid({
       </div>
 
       {/* Priority */}
-      <div className="flex items-center gap-3 p-4 rounded-lg border">
+      <div className="flex items-center gap-3 p-4 rounded-card border">
         <Flag className={cn("size-5", priorityColor)} />
         <div>
           <p className="text-sm text-muted-foreground">
@@ -63,7 +63,7 @@ export function TaskDetailsGrid({
       </div>
 
       {/* Due date */}
-      <div className="flex items-center gap-3 p-4 rounded-lg border">
+      <div className="flex items-center gap-3 p-4 rounded-card border">
         <Calendar className="size-5 text-muted-foreground" />
         <div>
           <p className="text-sm text-muted-foreground">
@@ -76,7 +76,7 @@ export function TaskDetailsGrid({
       </div>
 
       {/* Due time */}
-      <div className="flex items-center gap-3 p-4 rounded-lg border">
+      <div className="flex items-center gap-3 p-4 rounded-card border">
         <Clock className="size-5 text-muted-foreground" />
         <div>
           <p className="text-sm text-muted-foreground">

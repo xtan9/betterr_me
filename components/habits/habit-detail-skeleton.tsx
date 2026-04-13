@@ -40,7 +40,7 @@ export function HabitDetailSkeleton() {
             <Skeleton className="h-5 w-32" />
             <div className="grid grid-cols-7 gap-1">
               {Array.from({ length: 35 }).map((_, i) => (
-                <Skeleton key={i} className="size-8 rounded-md" />
+                <Skeleton key={i} className="size-8 rounded-control" />
               ))}
             </div>
           </div>

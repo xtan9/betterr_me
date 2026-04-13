@@ -55,7 +55,7 @@ export function KanbanInfoCard({
   const t = useTranslations("kanban");
 
   return (
-    <div className="bg-background rounded-lg border shadow-sm">
+    <div className="bg-background rounded-card border shadow-sm">
       <div className="flex items-center justify-between px-card-header-padding-x py-card-header-padding-y border-b">
         <h3 className="text-base font-semibold">
           {t("detail.infoHeading")}
@@ -142,7 +142,7 @@ export function KanbanInfoCard({
                   type="date"
                   defaultValue={task.due_date || ""}
                   onChange={(e) => onUpdateField("due_date", e.target.value || null)}
-                  className="w-full p-2 rounded-md border bg-transparent text-base focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full p-2 rounded-control border bg-transparent text-base focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </PopoverContent>
             </Popover>

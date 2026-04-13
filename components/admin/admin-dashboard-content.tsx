@@ -127,7 +127,7 @@ export function AdminDashboardContent({
           )}
 
           {result && (
-            <div className="rounded-md bg-muted p-3 text-sm space-y-1">
+            <div className="rounded-card bg-muted p-3 text-sm space-y-1">
               <p className="font-medium">{t("sync.success")}</p>
               <p>{t("sync.resultTotal", { count: result.total })}</p>
               <p>{t("sync.resultCreated", { count: result.created })}</p>

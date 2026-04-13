@@ -16,7 +16,7 @@ export function GraduationNudgeBanner({ habitId, onGraduate, onDismiss }: Props)
     <div
       role="region"
       aria-label={t("graduate.nudge_title")}
-      className="mb-2 flex flex-col gap-2 rounded-md border bg-primary/5 p-3 text-sm sm:flex-row sm:items-start"
+      className="mb-2 flex flex-col gap-2 rounded-control border bg-primary/5 p-3 text-sm sm:flex-row sm:items-start"
     >
       <GraduationCap className="size-5 shrink-0 text-status-warning" aria-hidden="true" />
       <div className="flex-1">

@@ -127,7 +127,7 @@ export function WorkoutAddExercise({
                             key={exercise.id}
                             type="button"
                             onClick={() => handleSelect(exercise.id)}
-                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent"
+                            className="flex w-full items-center gap-3 rounded-card px-3 py-2.5 text-left transition-colors hover:bg-accent"
                           >
                             <ExerciseThumbnail
                               exerciseMedia={exercise.exercise_media}

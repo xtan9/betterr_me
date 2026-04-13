@@ -207,7 +207,7 @@ export function ChatInput({
               <img
                 src={img.url}
                 alt={img.filename ?? `Image ${index + 1}`}
-                className="h-[60px] w-[60px] rounded-lg object-cover"
+                className="h-[60px] w-[60px] rounded-card object-cover"
               />
               <button
                 type="button"
@@ -251,7 +251,7 @@ export function ChatInput({
           placeholder={t("input.placeholder")}
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none min-h-[40px] max-h-[150px] overflow-y-auto rounded-xl border border-input bg-background px-4 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="flex-1 resize-none min-h-[40px] max-h-[150px] overflow-y-auto rounded-control border border-input bg-background px-4 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
         {isStreaming ? (
           <Button

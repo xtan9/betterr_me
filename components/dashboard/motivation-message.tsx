@@ -82,7 +82,7 @@ export function MotivationMessage({
   const message = getMessage();
 
   return (
-    <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/5 dark:bg-primary/10 border border-primary/10 dark:border-primary/20">
+    <div className="flex items-start gap-3 p-4 rounded-card bg-primary/5 dark:bg-primary/10 border border-primary/10 dark:border-primary/20">
       <Lightbulb className="size-5 text-primary shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-foreground/90">{message}</p>

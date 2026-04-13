@@ -103,7 +103,7 @@ export default async function HomePage() {
           <p className="text-muted-foreground max-w-2xl mx-auto mb-8">
             {t("cta.subtitle")}
           </p>
-          <button className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl active:scale-[0.98] motion-reduce:active:transform-none">
+          <button className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary/90 text-white font-semibold rounded-control transition-all duration-200 shadow-lg hover:shadow-xl active:scale-[0.98] motion-reduce:active:transform-none">
             {t("cta.button")}
             <ArrowUpRight className="ml-2 w-5 h-5" />
           </button>

@@ -211,7 +211,7 @@ export function KanbanDetailModal({
                 <KanbanInfoCard task={task} projectName={projectName} onUpdateField={updateField} />
 
                 {/* Description card */}
-                <div className="bg-background rounded-lg border shadow-sm flex-1 flex flex-col">
+                <div className="bg-background rounded-card border shadow-sm flex-1 flex flex-col">
                   <div className="flex items-center justify-between px-card-header-padding-x py-card-header-padding-y border-b">
                     <h3 className="text-base font-semibold">
                       {t("detail.descriptionHeading")}
@@ -223,7 +223,7 @@ export function KanbanDetailModal({
                       onChange={(e) => setDescription(e.target.value)}
                       onBlur={handleDescriptionBlur}
                       placeholder={t("detail.descriptionPlaceholder")}
-                      className="w-full flex-1 min-h-[150px] p-3 rounded-md border-none bg-transparent text-base resize-y focus:outline-none placeholder:text-muted-foreground"
+                      className="w-full flex-1 min-h-[150px] p-3 rounded-control border-none bg-transparent text-base resize-y focus:outline-none placeholder:text-muted-foreground"
                     />
                   </div>
                 </div>
@@ -231,7 +231,7 @@ export function KanbanDetailModal({
 
               {/* Right column (~40%) - Item updates card */}
               <div className="flex-[2] p-modal-padding overflow-y-auto">
-                <div className="bg-background rounded-lg border shadow-sm h-full flex flex-col">
+                <div className="bg-background rounded-card border shadow-sm h-full flex flex-col">
                   <div className="flex items-center justify-between px-card-header-padding-x py-card-header-padding-y border-b">
                     <h3 className="text-base font-semibold">
                       {t("detail.updatesHeading")}
@@ -240,7 +240,7 @@ export function KanbanDetailModal({
                   <div className="p-card-padding flex flex-col flex-1">
                     <textarea
                       placeholder={t("detail.writeUpdate")}
-                      className="w-full min-h-[80px] p-3 rounded-md border bg-transparent text-base resize-none focus:outline-none mb-4 opacity-50 cursor-not-allowed"
+                      className="w-full min-h-[80px] p-3 rounded-control border bg-transparent text-base resize-none focus:outline-none mb-4 opacity-50 cursor-not-allowed"
                       disabled
                     />
                     <div className="flex-1 flex items-center justify-center">

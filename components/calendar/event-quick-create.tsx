@@ -150,7 +150,7 @@ export function EventQuickCreate({
   return (
     <div
       ref={popoverRef}
-      className="fixed bg-popover border border-border rounded-lg shadow-lg p-3 w-64 z-50"
+      className="fixed bg-popover border border-border rounded-card shadow-lg p-3 w-64 z-50"
       style={{ top: adjustedPosition.y, left: adjustedPosition.x }}
       role="dialog"
       aria-label={t("quickCreate.titlePlaceholder")}

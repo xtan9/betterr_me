@@ -38,7 +38,7 @@ export function JournalToolbar({ editor }: JournalToolbarProps) {
   };
 
   return (
-    <div className="flex items-center gap-0.5 flex-wrap rounded-lg border bg-background p-1 mb-2">
+    <div className="flex items-center gap-0.5 flex-wrap rounded-card border bg-background p-1 mb-2">
       {/* Text formatting */}
       <Toggle
         size="sm"

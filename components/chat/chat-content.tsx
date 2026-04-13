@@ -303,7 +303,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         )}
 
         {error && (
-          <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-destructive text-sm">
+          <div className="mx-4 mb-2 flex items-center gap-2 rounded-card bg-destructive/10 px-4 py-3 text-destructive text-sm">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span className="flex-1">{errorMessage}</span>
             {isRetryable && lastUserMessage && (

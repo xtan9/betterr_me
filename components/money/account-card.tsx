@@ -17,7 +17,7 @@ export function AccountCard({ account, syncStatus, extra }: AccountCardProps) {
   const t = useTranslations("money");
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-money-border bg-money-surface px-4 py-3">
+    <div className="flex items-center justify-between rounded-card border border-money-border bg-money-surface px-4 py-3">
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{account.name}</span>

@@ -50,7 +50,7 @@ export function CsvUploadStep({
       <div
         onDrop={handleDrop}
         onDragOver={handleDragOver}
-        className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-money-border p-8 transition-colors hover:border-money-accent"
+        className="flex flex-col items-center justify-center rounded-card border-2 border-dashed border-money-border p-8 transition-colors hover:border-money-accent"
       >
         <Upload className="text-muted-foreground mb-2 size-8" />
         <Label
