@@ -238,7 +238,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
 
           {/* Reflection badge */}
           {task.completion_difficulty && (
-            <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
+            <div className="flex items-center gap-2 rounded-card bg-muted/50 p-3">
               <span className="text-sm">
                 {{ 1: "⚡", 2: "👌", 3: "💪" }[task.completion_difficulty]}
               </span>

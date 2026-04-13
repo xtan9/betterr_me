@@ -129,11 +129,11 @@ export function BillsList() {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-card-gap">
-        <Skeleton className="h-20 w-full rounded-lg" />
+        <Skeleton className="h-20 w-full rounded-card" />
         <Skeleton className="h-6 w-24" />
-        <Skeleton className="h-14 w-full rounded-lg" />
-        <Skeleton className="h-14 w-full rounded-lg" />
-        <Skeleton className="h-14 w-full rounded-lg" />
+        <Skeleton className="h-14 w-full rounded-card" />
+        <Skeleton className="h-14 w-full rounded-card" />
+        <Skeleton className="h-14 w-full rounded-card" />
       </div>
     );
   }

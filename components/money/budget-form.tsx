@@ -296,7 +296,7 @@ export function BudgetForm({
             </Button>
 
             {/* Unallocated amount */}
-            <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2 text-sm">
+            <div className="flex items-center justify-between rounded-card bg-muted/50 px-3 py-2 text-sm">
               <span>{t("unallocated")}</span>
               <span
                 className={`font-medium tabular-nums ${
@@ -309,7 +309,7 @@ export function BudgetForm({
           </div>
 
           {/* Rollover toggle */}
-          <div className="flex items-start gap-3 rounded-lg border border-money-border p-3">
+          <div className="flex items-start gap-3 rounded-card border border-money-border p-3">
             <Checkbox
               id="rollover"
               checked={watch("rollover_enabled")}

@@ -104,7 +104,7 @@ export function ExerciseProgressChart({
   // Empty state: not enough data points
   if (chartData.length < 2) {
     return (
-      <div className="rounded-lg border border-dashed p-4 text-center">
+      <div className="rounded-card border border-dashed p-4 text-center">
         <p className="text-sm text-muted-foreground">{t("notEnoughData")}</p>
         <p className="mt-1 text-xs text-muted-foreground">
           {t("notEnoughDataDescription")}

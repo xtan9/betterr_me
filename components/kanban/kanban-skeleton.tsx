@@ -8,7 +8,7 @@ export function KanbanSkeleton() {
       {columns.map((column) => (
         <div
           key={column}
-          className="w-72 min-w-72 bg-muted/30 rounded-lg p-3 space-y-3"
+          className="w-72 min-w-72 bg-muted/30 rounded-card p-3 space-y-3"
         >
           {/* Column header */}
           <div className="flex items-center justify-between">
@@ -20,7 +20,7 @@ export function KanbanSkeleton() {
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="bg-background rounded-md p-3 space-y-2 shadow-sm"
+              className="bg-background rounded-card p-3 space-y-2 shadow-sm"
             >
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-3 w-2/3" />

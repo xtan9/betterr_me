@@ -28,7 +28,7 @@ export function KanbanCardOverlay({ task }: KanbanCardOverlayProps) {
   return (
     <div
       className={cn(
-        "rounded-md bg-background border p-3 shadow-lg",
+        "rounded-card bg-background border p-3 shadow-lg",
         "w-64 rotate-[2deg]"
       )}
     >

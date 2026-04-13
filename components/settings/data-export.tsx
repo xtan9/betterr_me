@@ -162,7 +162,7 @@ export function DataExport() {
                 type="date"
                 value={customStart}
                 onChange={(e) => setCustomStart(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                className="h-9 rounded-control border border-input bg-background px-3 text-sm"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -177,7 +177,7 @@ export function DataExport() {
                 type="date"
                 value={customEnd}
                 onChange={(e) => setCustomEnd(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                className="h-9 rounded-control border border-input bg-background px-3 text-sm"
               />
             </div>
           </div>

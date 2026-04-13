@@ -84,7 +84,7 @@ function RoutineExerciseRow({
   );
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border p-3">
+    <div className="flex items-center gap-3 rounded-card border p-3">
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex items-center justify-between">
           <span className="truncate text-sm font-medium">

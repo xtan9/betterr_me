@@ -35,7 +35,7 @@ export function JournalMoodSelector({
             onChange(value === mood.value ? null : mood.value)
           }
           className={cn(
-            "text-2xl p-2 rounded-lg transition-all",
+            "text-2xl p-2 rounded-control transition-all",
             value === mood.value
               ? "bg-primary/10 ring-2 ring-primary scale-110"
               : "hover:bg-muted opacity-60 hover:opacity-100"

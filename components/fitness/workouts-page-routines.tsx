@@ -98,7 +98,7 @@ export function WorkoutsPageRoutines() {
       {routines.length === 0 ? (
         <Link
           href="/workouts/routines"
-          className="flex items-center gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+          className="flex items-center gap-3 rounded-card border border-dashed p-4 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
         >
           <LayoutTemplate className="h-5 w-5 shrink-0" />
           <span>{t("createFirst")}</span>

@@ -40,7 +40,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
     bill.previous_amount_cents !== bill.amount_cents;
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-money-border bg-money-surface p-3 transition-colors hover:bg-accent/50">
+    <div className="flex items-center gap-3 rounded-card border border-money-border bg-money-surface p-3 transition-colors hover:bg-accent/50">
       {/* Bill info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">

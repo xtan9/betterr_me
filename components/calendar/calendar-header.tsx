@@ -119,15 +119,15 @@ export function CalendarHeader({
         type="single"
         value={view}
         onValueChange={onViewChange}
-        className="rounded-lg"
+        className="rounded-control"
       >
-        <ToggleGroupItem value="day" className="rounded-l-lg text-xs px-3">
+        <ToggleGroupItem value="day" className="rounded-l-control text-xs px-3">
           {t("views.day")}
         </ToggleGroupItem>
         <ToggleGroupItem value="week" className="text-xs px-3">
           {t("views.week")}
         </ToggleGroupItem>
-        <ToggleGroupItem value="month" className="rounded-r-lg text-xs px-3">
+        <ToggleGroupItem value="month" className="rounded-r-control text-xs px-3">
           {t("views.month")}
         </ToggleGroupItem>
       </ToggleGroup>

@@ -112,7 +112,7 @@ export const HabitCalendar = memo(function HabitCalendar({
   };
 
   const getCellClasses = (cell: HeatmapCell) => {
-    const base = "size-8 md:size-8 rounded-md transition-colors";
+    const base = "size-8 md:size-8 rounded-control transition-colors";
 
     // Status colors
     let statusClass = "";
@@ -186,7 +186,7 @@ export const HabitCalendar = memo(function HabitCalendar({
           {[0, 1, 2, 3, 4].map((week) => (
             <div key={week} className="grid grid-cols-7 gap-1 mb-1">
               {[0, 1, 2, 3, 4, 5, 6].map((day) => (
-                <div key={day} className="size-8 bg-muted rounded-md" />
+                <div key={day} className="size-8 bg-muted rounded-control" />
               ))}
             </div>
           ))}

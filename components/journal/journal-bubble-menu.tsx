@@ -39,7 +39,7 @@ export function JournalBubbleMenu({ editor }: JournalBubbleMenuProps) {
   return (
     <BubbleMenu
       editor={editor}
-      className="flex items-center gap-0.5 rounded-lg border bg-background p-1 shadow-lg"
+      className="flex items-center gap-0.5 rounded-card border bg-background p-1 shadow-lg"
     >
       {/* Text formatting */}
       <Toggle

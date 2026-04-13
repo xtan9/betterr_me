@@ -164,7 +164,7 @@ export function CategoryManager() {
 
         {/* New category form */}
         {showNewForm && (
-          <div className="mb-4 flex flex-col gap-field-gap rounded-lg border border-money-border bg-money-surface p-card-padding">
+          <div className="mb-4 flex flex-col gap-field-gap rounded-card border border-money-border bg-money-surface p-card-padding">
             <div className="grid gap-field-gap sm:grid-cols-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -230,7 +230,7 @@ export function CategoryManager() {
         )}
 
         {/* Category list */}
-        <div className="divide-y divide-money-border rounded-lg border border-money-border">
+        <div className="divide-y divide-money-border rounded-card border border-money-border">
           {categories.map((cat) => {
             const isHidden = hiddenIds.has(cat.id);
             const isToggling = togglingIds.has(cat.id);
@@ -329,13 +329,13 @@ export function CategoryManager() {
         </h2>
 
         {rules.length === 0 ? (
-          <div className="rounded-lg border border-money-border bg-money-surface px-6 py-8 text-center">
+          <div className="rounded-card border border-money-border bg-money-surface px-6 py-8 text-center">
             <p className="text-sm text-muted-foreground">
               {t("merchantRules.noRules")}
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-money-border rounded-lg border border-money-border">
+          <div className="divide-y divide-money-border rounded-card border border-money-border">
             {rules.map((rule) => (
               <div
                 key={rule.id}

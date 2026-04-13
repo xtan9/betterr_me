@@ -56,7 +56,7 @@ export function PromptBrowserSheet({
                     key={prompt.key}
                     type="button"
                     onClick={() => onSelect(prompt.key)}
-                    className={`w-full text-left p-3 rounded-lg border hover:bg-accent transition-colors ${
+                    className={`w-full text-left p-3 rounded-card border hover:bg-accent transition-colors ${
                       prompt.key === selectedKey
                         ? "bg-accent/50 border-primary/20"
                         : ""

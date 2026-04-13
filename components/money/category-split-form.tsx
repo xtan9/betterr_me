@@ -129,7 +129,7 @@ export function CategorySplitForm({
       .length >= 2 && remainingCents === 0;
 
   return (
-    <div className="space-y-3 rounded-lg border border-money-border bg-money-surface/50 p-3">
+    <div className="space-y-3 rounded-card border border-money-border bg-money-surface/50 p-3">
       {/* Header with original amount */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">

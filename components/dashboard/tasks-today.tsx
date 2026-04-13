@@ -38,7 +38,7 @@ function ReflectionStrip({ onReflect }: ReflectionStripProps) {
             key={difficulty}
             type="button"
             onClick={() => onReflect(difficulty)}
-            className="text-sm px-2 py-0.5 rounded-md hover:bg-muted transition-colors duration-150 motion-reduce:transition-none"
+            className="text-sm px-2 py-0.5 rounded-control hover:bg-muted transition-colors duration-150 motion-reduce:transition-none"
             title={t(label)}
             aria-label={t(label)}
           >
@@ -89,7 +89,7 @@ function TaskRow({
   };
 
   return (
-    <div className="flex items-start gap-3 rounded-lg px-3 py-2 transition-colors duration-150 hover:bg-accent motion-reduce:transition-none">
+    <div className="flex items-start gap-3 rounded-card px-3 py-2 transition-colors duration-150 hover:bg-accent motion-reduce:transition-none">
       <Checkbox
         checked={task.is_completed}
         onCheckedChange={handleCheckboxChange}
@@ -102,7 +102,7 @@ function TaskRow({
           <button
             type="button"
             className={cn(
-              "font-medium text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md",
+              "font-medium text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-control",
               task.is_completed && "line-through text-muted-foreground",
             )}
             onClick={() => onClick?.(task.id)}
@@ -323,7 +323,7 @@ export function TasksToday({
               {visibleTomorrow.map((task) => (
                 <div
                   key={task.id}
-                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-muted-foreground"
+                  className="flex items-center gap-2 rounded-card px-3 py-1.5 text-sm text-muted-foreground"
                 >
                   <Circle
                     className={cn(

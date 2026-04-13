@@ -40,7 +40,7 @@ export function ExerciseHistoryTab({
 
   if (sortedHistory.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed p-8 text-center">
+      <div className="rounded-card border border-dashed p-8 text-center">
         <p className="text-sm text-muted-foreground">
           {t("exerciseDetail.noHistoryYet")}
         </p>

@@ -66,7 +66,7 @@ function CustomTooltip({
   const liabilities = payload.find((p) => p.dataKey === "liabilities_cents");
 
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 text-sm shadow-md">
+    <div className="rounded-card border bg-popover px-3 py-2 text-sm shadow-md">
       <p className="mb-1 font-medium">{label}</p>
       {netWorth && (
         <p className="tabular-nums text-[hsl(var(--money-sage))]">

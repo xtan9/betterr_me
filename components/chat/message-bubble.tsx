@@ -44,7 +44,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               key={i}
               src={part.url}
               alt={part.filename ?? "image"}
-              className="max-w-[300px] rounded-lg mb-2"
+              className="max-w-[300px] rounded-card mb-2"
             />
           );
         }

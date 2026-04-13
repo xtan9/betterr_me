@@ -43,7 +43,7 @@ export default async function Hero() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
               <Link
                 href="/auth/signup"
-                className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl"
+                className="inline-flex items-center px-8 py-4 bg-primary hover:bg-primary/90 text-white font-semibold rounded-control transition-colors shadow-lg hover:shadow-xl"
               >
                 {navT("getStarted")}
                 <ArrowUpRight className="ml-2 w-5 h-5" />
@@ -51,7 +51,7 @@ export default async function Hero() {
 
               <Link
                 href="#features"
-                className="inline-flex items-center px-8 py-4 border border-border bg-background hover:bg-secondary text-foreground font-semibold rounded-lg transition-colors"
+                className="inline-flex items-center px-8 py-4 border border-border bg-background hover:bg-secondary text-foreground font-semibold rounded-control transition-colors"
               >
                 {navT("learnMore")}
               </Link>

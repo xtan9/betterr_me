@@ -72,7 +72,7 @@ export function CashFlowProjection({
 
         {/* Danger zone warning */}
         {firstDangerDate && (
-          <div className="flex items-start gap-2 rounded-lg bg-[hsl(var(--money-caution)/0.08)] px-3 py-2">
+          <div className="flex items-start gap-2 rounded-card bg-[hsl(var(--money-caution)/0.08)] px-3 py-2">
             <AlertCircle className="mt-0.5 size-4 shrink-0 text-[hsl(var(--money-caution))]" />
             <p className="text-sm text-[hsl(var(--money-caution))]">
               {t("dangerZoneWarning", {

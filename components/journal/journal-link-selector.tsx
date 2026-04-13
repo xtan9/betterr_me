@@ -106,7 +106,7 @@ export function JournalLinkSelector({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t("searchPlaceholder")}
-              className="w-full rounded-md bg-muted/50 py-1.5 pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground"
+              className="w-full rounded-control bg-muted/50 py-1.5 pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground"
               data-testid="link-search-input"
             />
           </div>
@@ -131,7 +131,7 @@ export function JournalLinkSelector({
                   key={habit.id}
                   type="button"
                   onClick={() => handleAdd("habit", habit.id)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted transition-colors"
+                  className="flex w-full items-center gap-2 rounded-control px-2 py-1.5 text-sm hover:bg-muted transition-colors"
                   data-testid={`link-habit-${habit.id}`}
                 >
                   <Repeat className="size-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
@@ -151,7 +151,7 @@ export function JournalLinkSelector({
                   key={task.id}
                   type="button"
                   onClick={() => handleAdd("task", task.id)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted transition-colors"
+                  className="flex w-full items-center gap-2 rounded-control px-2 py-1.5 text-sm hover:bg-muted transition-colors"
                   data-testid={`link-task-${task.id}`}
                 >
                   <ListChecks className="size-3.5 text-blue-600 dark:text-blue-400 shrink-0" />

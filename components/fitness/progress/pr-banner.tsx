@@ -44,7 +44,7 @@ export function PRBanner({
 
   return (
     <div
-      className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 motion-reduce:transition-none dark:border-amber-800 dark:bg-amber-950/30 animate-in fade-in slide-in-from-top-1 duration-300"
+      className="flex items-center gap-2 rounded-card border border-amber-200 bg-amber-50 px-3 py-2 motion-reduce:transition-none dark:border-amber-800 dark:bg-amber-950/30 animate-in fade-in slide-in-from-top-1 duration-300"
       role="status"
       aria-live="polite"
     >
