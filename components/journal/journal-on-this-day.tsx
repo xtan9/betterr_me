@@ -45,7 +45,7 @@ export function JournalOnThisDay({ entries }: JournalOnThisDayProps) {
           return (
             <div
               key={entry.id}
-              className="flex items-start gap-2 rounded-md bg-muted/50 p-2 text-sm"
+              className="flex items-start gap-2 rounded-card bg-muted/50 p-2 text-sm"
             >
               {emoji && (
                 <span className="text-base shrink-0" aria-hidden="true">

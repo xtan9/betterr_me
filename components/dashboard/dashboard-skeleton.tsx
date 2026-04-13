@@ -19,7 +19,7 @@ export function DashboardSkeleton() {
       {/* Motivation skeleton */}
       <Card>
         <CardContent className="py-4">
-          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-card" />
         </CardContent>
       </Card>
 

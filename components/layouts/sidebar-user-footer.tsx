@@ -105,8 +105,8 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton size="lg">
-            <Avatar className="h-8 w-8 rounded-lg">
-              <AvatarFallback className="rounded-lg">!</AvatarFallback>
+            <Avatar className="h-8 w-8 rounded-card">
+              <AvatarFallback className="rounded-card">!</AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-semibold text-destructive">
@@ -127,8 +127,8 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton size="lg">
-            <Avatar className="h-8 w-8 rounded-lg">
-              <AvatarFallback className="rounded-lg">?</AvatarFallback>
+            <Avatar className="h-8 w-8 rounded-card">
+              <AvatarFallback className="rounded-card">?</AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-semibold">{tSidebar("loading")}</span>
@@ -151,12 +151,12 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
               size="lg"
               className={`${SIDEBAR_TRANSITION} ${SIDEBAR_HOVER} data-[state=open]:bg-sidebar-hover-bg data-[state=open]:text-sidebar-hover-text data-[state=open]:shadow-[inset_0_0_0_0.5px_hsl(var(--sidebar-hover-ring))] group-data-[collapsible=icon]:!size-10 group-data-[collapsible=icon]:justify-center`}
             >
-              <Avatar className="h-8 w-8 rounded-lg group-data-[collapsible=icon]:hidden">
+              <Avatar className="h-8 w-8 rounded-card group-data-[collapsible=icon]:hidden">
                 <AvatarImage
                   src={profile?.avatar_url ?? undefined}
                   alt={profile?.full_name ?? ""}
                 />
-                <AvatarFallback className="rounded-lg">
+                <AvatarFallback className="rounded-card">
                   {initials}
                 </AvatarFallback>
               </Avatar>
@@ -171,19 +171,19 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[var(--radix-dropdown-menu-trigger-width)] rounded-lg"
+            className="w-[var(--radix-dropdown-menu-trigger-width)] rounded-card"
             side="top"
             align="start"
             sideOffset={8}
           >
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <Avatar className="h-8 w-8 rounded-lg">
+                <Avatar className="h-8 w-8 rounded-card">
                   <AvatarImage
                     src={profile?.avatar_url ?? undefined}
                     alt={profile?.full_name ?? ""}
                   />
-                  <AvatarFallback className="rounded-lg">
+                  <AvatarFallback className="rounded-card">
                     {initials}
                   </AvatarFallback>
                 </Avatar>

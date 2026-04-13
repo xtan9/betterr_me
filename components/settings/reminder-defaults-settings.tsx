@@ -171,7 +171,7 @@ export function ReminderDefaultsSettings() {
         {SOURCE_TYPES.map((sourceType) => (
           <div
             key={sourceType}
-            className="flex flex-wrap items-center gap-3 rounded-md border p-3"
+            className="flex flex-wrap items-center gap-3 rounded-control border p-3"
           >
             <span className="text-sm font-medium w-[120px]">
               {t(`reminderDefaults.sourceType.${sourceType}`)}

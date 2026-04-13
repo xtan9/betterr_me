@@ -29,7 +29,7 @@ export function TransactionRow({
     <button
       type="button"
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors duration-150",
+        "flex w-full items-center gap-3 rounded-card px-3 py-3 text-left transition-colors duration-150",
         !redacted && "hover:bg-accent",
         isExpanded && "bg-accent",
         redacted && "cursor-default"

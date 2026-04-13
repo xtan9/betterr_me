@@ -138,21 +138,21 @@ export function WorkoutFinishDialog({
         </AlertDialogHeader>
 
         <div className="grid grid-cols-2 gap-4 py-4">
-          <div className="rounded-lg border p-3 text-center">
+          <div className="rounded-card border p-3 text-center">
             <p className="text-muted-foreground text-xs">{t("workoutDuration")}</p>
             <p className="text-lg font-semibold">
               {formatDuration(durationSeconds)}
             </p>
           </div>
-          <div className="rounded-lg border p-3 text-center">
+          <div className="rounded-card border p-3 text-center">
             <p className="text-muted-foreground text-xs">{t("workoutExercises")}</p>
             <p className="text-lg font-semibold">{stats.exerciseCount}</p>
           </div>
-          <div className="rounded-lg border p-3 text-center">
+          <div className="rounded-card border p-3 text-center">
             <p className="text-muted-foreground text-xs">{t("workoutSets")}</p>
             <p className="text-lg font-semibold">{stats.completedSets}</p>
           </div>
-          <div className="rounded-lg border p-3 text-center">
+          <div className="rounded-card border p-3 text-center">
             <p className="text-muted-foreground text-xs">{t("workoutVolume")}</p>
             <p className="text-lg font-semibold">
               {stats.totalVolume > 0

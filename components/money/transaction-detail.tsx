@@ -103,7 +103,7 @@ export function TransactionDetail({
 
   return (
     <div className="overflow-hidden transition-all duration-200">
-      <div className="rounded-b-lg border border-t-0 border-money-border bg-money-surface px-4 py-3">
+      <div className="rounded-b-card border border-t-0 border-money-border bg-money-surface px-4 py-3">
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Left column: Category + Notes */}
           <div className="flex flex-col gap-field-gap">
@@ -198,7 +198,7 @@ export function TransactionDetail({
                       return (
                         <span
                           key={split.id}
-                          className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-0.5 text-xs"
+                          className="inline-flex items-center gap-1.5 rounded-control bg-muted px-2 py-0.5 text-xs"
                         >
                           <CategoryBadge category={cat ?? null} />
                           <span className="tabular-nums">

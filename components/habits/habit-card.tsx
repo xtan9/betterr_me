@@ -52,12 +52,12 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
         <div className="flex items-start justify-between">
           <button
             type="button"
-            className="flex items-center gap-2 min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+            className="flex items-center gap-2 min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-control"
             onClick={() => onClick(habit.id)}
           >
             <span
               className={cn(
-                "inline-flex items-center justify-center rounded-md p-1.5",
+                "inline-flex items-center justify-center rounded-control p-1.5",
                 !bgColor && "bg-muted"
               )}
               style={bgColor ? { backgroundColor: bgColor } : undefined}
@@ -81,7 +81,7 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
         </div>
 
         <div className="flex gap-3" data-testid="habit-streaks">
-          <div className="flex-1 rounded-lg border p-2 text-center">
+          <div className="flex-1 rounded-card border p-2 text-center">
             <div className="flex items-center justify-center gap-1">
               {habit.current_streak >= 7 && <Flame className="size-4 text-status-streak" aria-hidden="true" />}
               <span className="font-semibold text-sm">
@@ -95,7 +95,7 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
             </div>
             <p className="text-xs text-muted-foreground">{t("card.currentStreak")}</p>
           </div>
-          <div className="flex-1 rounded-lg border p-2 text-center">
+          <div className="flex-1 rounded-card border p-2 text-center">
             <span className="font-semibold text-sm">
               {t(
                 habit.frequency.type === 'times_per_week' || habit.frequency.type === 'weekly'

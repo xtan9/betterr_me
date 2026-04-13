@@ -90,7 +90,7 @@ export function WorkoutResumeBanner() {
 
   return (
     <>
-      <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+      <div className="flex items-center gap-3 rounded-card border border-primary/20 bg-primary/5 p-4">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-pill bg-primary/10">
           <Dumbbell className="h-5 w-5 text-primary" />
         </div>

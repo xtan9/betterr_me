@@ -62,12 +62,12 @@ export function TaskCard({ task, categories, onToggle, onClick, isToggling }: Ta
         <div className="flex items-start justify-between">
           <button
             type="button"
-            className="flex items-center gap-2 min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+            className="flex items-center gap-2 min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-control"
             onClick={() => onClick(task.id)}
           >
             <span
               className={cn(
-                "inline-flex items-center justify-center rounded-md p-1.5",
+                "inline-flex items-center justify-center rounded-control p-1.5",
                 !bgColor && "bg-muted"
               )}
               style={bgColor ? { backgroundColor: bgColor } : undefined}

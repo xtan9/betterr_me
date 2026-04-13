@@ -22,7 +22,7 @@ export function WorkoutHistoryList() {
       <div className="space-y-3">
         <h2 className="text-section-heading">{t("history")}</h2>
         {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-28 w-full rounded-lg" />
+          <Skeleton key={i} className="h-28 w-full rounded-card" />
         ))}
       </div>
     );
@@ -43,7 +43,7 @@ export function WorkoutHistoryList() {
     return (
       <div className="space-y-3">
         <h2 className="text-section-heading">{t("history")}</h2>
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+        <div className="flex flex-col items-center justify-center rounded-card border border-dashed p-8 text-center">
           <Calendar className="mb-3 h-10 w-10 text-muted-foreground/50" />
           <p className="font-medium text-muted-foreground">
             {t("noWorkouts")}

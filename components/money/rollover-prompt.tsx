@@ -73,7 +73,7 @@ export function RolloverPrompt({
         </DialogHeader>
 
         {isStaleData && (
-          <div className="rounded-lg border border-money-amber bg-[hsl(var(--money-amber-light))] px-3 py-2 text-sm text-[hsl(var(--money-amber-foreground))]">
+          <div className="rounded-card border border-money-amber bg-[hsl(var(--money-amber-light))] px-3 py-2 text-sm text-[hsl(var(--money-amber-foreground))]">
             {t("syncWarning")}
           </div>
         )}
@@ -87,7 +87,7 @@ export function RolloverPrompt({
             return (
               <div
                 key={cat.category_id}
-                className="flex items-center justify-between rounded-lg border border-money-border px-3 py-2"
+                className="flex items-center justify-between rounded-card border border-money-border px-3 py-2"
               >
                 <div className="flex items-center gap-2">
                   {cat.category_icon && (

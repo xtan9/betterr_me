@@ -405,7 +405,7 @@ export function EventDialog({
             <textarea
               id="event-description"
               placeholder={t("eventDialog.descriptionPlaceholder")}
-              className="min-h-[80px] w-full resize-none rounded-md border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="min-h-[80px] w-full resize-none rounded-control border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               {...form.register("description")}
             />
           </div>

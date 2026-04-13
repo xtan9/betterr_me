@@ -56,7 +56,7 @@ export function BillCalendarDay({
     <div className="min-h-[4rem]">
       <button
         className={cn(
-          "flex w-full flex-col items-start rounded-md p-1 text-left text-sm transition-colors",
+          "flex w-full flex-col items-start rounded-control p-1 text-left text-sm transition-colors",
           !isCurrentMonth && "opacity-40",
           isCurrentMonth && "hover:bg-accent/50",
           isToday && "ring-1 ring-[hsl(var(--money-sage))]",
@@ -115,7 +115,7 @@ export function BillCalendarDay({
 
       {/* Inline expansion for bill details */}
       {isExpanded && hasBills && (
-        <div className="mt-1 rounded-md border border-money-border bg-money-surface p-2 space-y-1">
+        <div className="mt-1 rounded-card border border-money-border bg-money-surface p-2 space-y-1">
           {bills.map((bill) => (
             <div
               key={bill.id}

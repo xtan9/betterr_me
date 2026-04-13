@@ -41,7 +41,7 @@ export function InsightCard({ insight, onDismiss }: InsightCardProps) {
   return (
     <div
       className={cn(
-        "flex items-start gap-3 rounded-lg border border-money-border bg-money-surface p-3",
+        "flex items-start gap-3 rounded-card border border-money-border bg-money-surface p-3",
         getSeverityBorderClass(insight.severity)
       )}
     >

@@ -27,7 +27,7 @@ const components: Components = {
     const isFenced = className?.startsWith("language-");
     if (isFenced) {
       return (
-        <pre className="rounded-md bg-muted/50 p-3 my-2 overflow-x-auto text-sm">
+        <pre className="rounded-control bg-muted/50 p-3 my-2 overflow-x-auto text-sm">
           <code className="font-mono" {...props}>
             {children}
           </code>

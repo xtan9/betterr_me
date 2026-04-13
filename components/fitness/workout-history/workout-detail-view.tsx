@@ -90,7 +90,7 @@ function SummaryStats({
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border bg-card p-3 text-center">
+    <div className="rounded-card border bg-card p-3 text-center">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-lg font-semibold">{value}</p>
     </div>

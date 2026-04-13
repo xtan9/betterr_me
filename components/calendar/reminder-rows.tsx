@@ -135,7 +135,7 @@ export function ReminderRows({ rows, onChange, disabled }: ReminderRowsProps) {
       {rows.map((row) => (
         <div
           key={row.tempId}
-          className="flex flex-wrap items-center gap-2 rounded-md border p-2"
+          className="flex flex-wrap items-center gap-2 rounded-card border p-2"
         >
           <Select
             value={getSelectValue(row)}

@@ -48,7 +48,7 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
       ref={setNodeRef}
       style={style}
       className={cn(
-        "rounded-md bg-background border p-3 shadow-sm",
+        "rounded-card bg-background border p-3 shadow-sm",
         "cursor-grab active:cursor-grabbing",
         "transition-opacity",
         isDragging && "opacity-50 shadow-lg"

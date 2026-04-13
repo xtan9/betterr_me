@@ -85,7 +85,7 @@ export function ConversationItem({
 
   return (
     <div
-      className={`group flex w-full min-w-0 items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors cursor-pointer ${
+      className={`group flex w-full min-w-0 items-center justify-between rounded-control px-3 py-2 text-left text-sm transition-colors cursor-pointer ${
         isActive ? "bg-accent text-accent-foreground" : "hover:bg-muted"
       }`}
       onClick={() => !isRenaming && onSelect(conversation.id)}
