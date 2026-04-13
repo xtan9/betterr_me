@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { axe } from "vitest-axe";
 import * as matchers from "vitest-axe/matchers";
+import { toast } from "sonner";
 import { BillsList } from "@/components/money/bills-list";
 
 expect.extend(matchers);
@@ -125,7 +126,10 @@ function makeBill(overrides: Partial<{
 describe("BillsList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    global.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("renders summary header with correct stats", () => {
@@ -203,7 +207,8 @@ describe("BillsList", () => {
 
   it("confirm button triggers correct API call", async () => {
     const mockMutate = vi.fn();
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
 
     mockUseBills.mockReturnValue({
       bills: [makeBill({ id: "b1", name: "Netflix", user_status: "auto" })],
@@ -218,7 +223,7 @@ describe("BillsList", () => {
 
     // Wait for async handler
     await vi.waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         "/api/money/bills/b1",
         expect.objectContaining({
           method: "PATCH",
@@ -226,6 +231,167 @@ describe("BillsList", () => {
         })
       );
     });
+    expect(mockMutate).toHaveBeenCalled();
+  });
+
+  it("status change failure shows error toast and does not call mutate", async () => {
+    const mockMutate = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false })
+    );
+
+    mockUseBills.mockReturnValue({
+      bills: [makeBill({ id: "b1" })],
+      summary: { total_monthly_cents: 1599, bill_count: 1, pending_count: 1 },
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    render(<BillsList />);
+    fireEvent.click(screen.getByTestId("dismiss-b1"));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("statusUpdateError");
+    });
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it("renders error state when hook returns error", () => {
+    mockUseBills.mockReturnValue({
+      bills: [],
+      summary: null,
+      isLoading: false,
+      error: new Error("boom"),
+      mutate: vi.fn(),
+    });
+
+    render(<BillsList />);
+    expect(screen.getByText("fetchError")).toBeInTheDocument();
+  });
+
+  it("sync button success shows success toast and calls mutate", async () => {
+    const mockMutate = vi.fn();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+
+    mockUseBills.mockReturnValue({
+      bills: [makeBill({ id: "b1" })],
+      summary: { total_monthly_cents: 1599, bill_count: 1, pending_count: 0 },
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    render(<BillsList />);
+    fireEvent.click(screen.getByRole("button", { name: /syncBills/ }));
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("syncSuccess");
+    });
+    expect(mockMutate).toHaveBeenCalled();
+  });
+
+  it("sync button failure shows error toast", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+
+    mockUseBills.mockReturnValue({
+      bills: [makeBill({ id: "b1" })],
+      summary: { total_monthly_cents: 1599, bill_count: 1, pending_count: 0 },
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<BillsList />);
+    fireEvent.click(screen.getByRole("button", { name: /syncBills/ }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("syncError");
+    });
+  });
+
+  it("sync button is used on the empty-state variant as well", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    const mockMutate = vi.fn();
+
+    mockUseBills.mockReturnValue({
+      bills: [],
+      summary: null,
+      isLoading: false,
+      mutate: mockMutate,
+    });
+
+    render(<BillsList />);
+    fireEvent.click(screen.getByRole("button", { name: /syncBills/ }));
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith("syncSuccess");
+    });
+  });
+
+  it("add bill button opens form in empty state", () => {
+    mockUseBills.mockReturnValue({
+      bills: [],
+      summary: null,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<BillsList />);
+    fireEvent.click(screen.getByRole("button", { name: /addBill/ }));
+    // BillForm mock renders a static testid
+    expect(screen.getByTestId("bill-form")).toBeInTheDocument();
+  });
+
+  it("edit button opens the form", () => {
+    mockUseBills.mockReturnValue({
+      bills: [makeBill({ id: "b1", name: "Netflix" })],
+      summary: { total_monthly_cents: 1599, bill_count: 1, pending_count: 0 },
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<BillsList />);
+    fireEvent.click(screen.getByTestId("edit-b1"));
+    expect(screen.getByTestId("bill-form")).toBeInTheDocument();
+  });
+
+  it("dismissed collapsible expands and renders dismissed bills", () => {
+    mockUseBills.mockReturnValue({
+      bills: [
+        makeBill({ id: "b1", name: "Netflix", user_status: "confirmed" }),
+        makeBill({ id: "b2", name: "Old Sub", user_status: "dismissed" }),
+      ],
+      summary: { total_monthly_cents: 1599, bill_count: 2, pending_count: 0 },
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<BillsList />);
+    fireEvent.click(screen.getByText(/dismissed/i));
+    // Both active + dismissed rows present
+    expect(screen.getByTestId("bill-row-b1")).toBeInTheDocument();
+    expect(screen.getByTestId("bill-row-b2")).toBeInTheDocument();
+  });
+
+  it("sorts bills by due date within a frequency group", () => {
+    mockUseBills.mockReturnValue({
+      bills: [
+        makeBill({ id: "later", name: "Later", next_due_date: "2026-05-01" }),
+        makeBill({ id: "earlier", name: "Earlier", next_due_date: "2026-03-01" }),
+        makeBill({ id: "nulldue", name: "NullDue", next_due_date: null }),
+      ],
+      summary: { total_monthly_cents: 4500, bill_count: 3, pending_count: 0 },
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    const { container } = render(<BillsList />);
+    const rows = container.querySelectorAll('[data-testid^="bill-row-"]');
+    const ids = Array.from(rows).map((r) => r.getAttribute("data-testid"));
+    expect(ids).toEqual([
+      "bill-row-earlier",
+      "bill-row-later",
+      "bill-row-nulldue",
+    ]);
   });
 
   it("renders loading skeleton when data is loading", () => {
