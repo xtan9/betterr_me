@@ -391,20 +391,44 @@ describe("MoneyAccountsDB", () => {
       const result = await db.updateVisibility("acc-1", "ours", "hh-1");
 
       expect(result).toEqual(updated);
-      // Transactions bulk-hide should have been called
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith("transactions");
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith({
+      // Two updates must happen in a specific order: bulk-hide first, then the
+      // accounts update. Asserting by call index rejects swaps or double-calls
+      // that would otherwise be hidden by `toHaveBeenCalledWith`.
+      expect(mockSupabaseClient.update).toHaveBeenCalledTimes(2);
+      expect(mockSupabaseClient.update.mock.calls[0][0]).toEqual({
         is_hidden_from_household: true,
       });
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith("account_id", "acc-1");
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith("household_id", "hh-1");
-      // Accounts update should include shared_since
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith(
+      expect(mockSupabaseClient.update.mock.calls[1][0]).toEqual(
         expect.objectContaining({
           visibility: "ours",
           shared_since: expect.any(String),
         })
       );
+      expect(mockSupabaseClient.from).toHaveBeenCalledWith("transactions");
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith("account_id", "acc-1");
+      expect(mockSupabaseClient.eq).toHaveBeenCalledWith("household_id", "hh-1");
+    });
+
+    it("does not bulk-hide on hidden -> ours transition", async () => {
+      const current = {
+        id: "acc-1",
+        visibility: "hidden",
+        shared_since: "2026-01-01",
+      };
+      const updated = { id: "acc-1", visibility: "ours" };
+      mockSupabaseClient.single
+        .mockResolvedValueOnce({ data: current, error: null })
+        .mockResolvedValueOnce({ data: updated, error: null });
+
+      await db.updateVisibility("acc-1", "ours", "hh-1");
+
+      // Only the accounts update — the transactions bulk-hide is skipped
+      // because current.visibility === "hidden", not "mine".
+      expect(mockSupabaseClient.update).toHaveBeenCalledTimes(1);
+      expect(mockSupabaseClient.update.mock.calls[0][0]).toEqual({
+        visibility: "ours",
+      });
+      expect(mockSupabaseClient.from).not.toHaveBeenCalledWith("transactions");
     });
 
     it("transitions ours -> mine: clears shared_since", async () => {

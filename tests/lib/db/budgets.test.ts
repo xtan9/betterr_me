@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BudgetsDB } from "@/lib/db/budgets";
 import { mockSupabaseClient } from "../../setup";
 
@@ -9,6 +9,14 @@ describe("BudgetsDB", () => {
     vi.clearAllMocks();
     mockSupabaseClient.setMockResponse(null);
     db = new BudgetsDB(mockSupabaseClient as any);
+  });
+
+  // Safety net: several tests monkey-patch `mockSupabaseClient.then` to sequence
+  // multi-query responses. If an assertion throws before the inline restore,
+  // the own-property `then` would leak into subsequent tests. Deleting the own
+  // property after each test restores the `MockQueryBuilder` prototype `then`.
+  afterEach(() => {
+    delete (mockSupabaseClient as { then?: unknown }).then;
   });
 
   // =========================================================================
@@ -939,6 +947,20 @@ describe("BudgetsDB", () => {
       const map = new Map(result.map((r) => [r.category_id, r.total_cents]));
       expect(map.get("cat-1")).toBe(3500);
       expect(map.get("cat-2")).toBe(500);
+
+      // Sign-convention contract: spending is negative amounts. If the filter
+      // regresses to .gt(..., 0) or drops, every spending total flips or
+      // leaks income. Lock the comparison down explicitly.
+      expect(mockSupabaseClient.lt).toHaveBeenCalledWith("amount_cents", 0);
+      // Date window is half-open [from, to): .gte(from) + .lt(to).
+      expect(mockSupabaseClient.gte).toHaveBeenCalledWith(
+        "transaction_date",
+        "2026-04-01"
+      );
+      expect(mockSupabaseClient.lt).toHaveBeenCalledWith(
+        "transaction_date",
+        "2026-05-01"
+      );
 
       mockSupabaseClient.then = origThen;
     });
