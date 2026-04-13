@@ -37,6 +37,9 @@
 
     /* === Radius === */
     --radius: 0.75rem;
+    --radius-card: var(--radius);
+    --radius-control: calc(var(--radius) - 2px);
+    --radius-pill: 9999px;
 
     /* === Sidebar === */
     --sidebar-background: 220 20% 98%;
