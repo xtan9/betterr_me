@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { axe } from "vitest-axe";
+import * as axeMatchers from "vitest-axe/matchers";
 import { EventDialog } from "@/components/calendar/event-dialog";
+
+expect.extend(axeMatchers);
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarEvent } from "@/lib/db/types";
 
@@ -293,5 +297,305 @@ describe("EventDialog", () => {
         expect.objectContaining({ method: "DELETE" }),
       );
     });
+  });
+
+  it("does NOT call fetch DELETE when delete is cancelled via window.confirm", async () => {
+    window.confirm = vi.fn().mockReturnValue(false);
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+    // Wait for reminder fetch (the only expected call) to resolve
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalled();
+    });
+    const priorCalls = mockFetch.mock.calls.length;
+
+    fireEvent.click(screen.getByText("eventDialog.delete"));
+
+    // No additional fetch calls should be issued
+    expect(window.confirm).toHaveBeenCalledWith("eventDialog.deleteConfirm");
+    expect(mockFetch.mock.calls.length).toBe(priorCalls);
+    expect(defaultProps.onSaved).not.toHaveBeenCalled();
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
+  });
+
+  it("calls onSaved and onClose after successful delete", async () => {
+    window.confirm = vi.fn().mockReturnValue(true);
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders") && (!opts || !opts.method || opts.method === "GET")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ reminders: [] }) });
+      }
+      if (opts?.method === "DELETE") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+    fireEvent.click(screen.getByText("eventDialog.delete"));
+
+    await waitFor(() => {
+      expect(defaultProps.onSaved).toHaveBeenCalledOnce();
+      expect(defaultProps.onClose).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("shows error message when delete API fails with error body", async () => {
+    window.confirm = vi.fn().mockReturnValue(true);
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders") && (!opts || !opts.method || opts.method === "GET")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ reminders: [] }) });
+      }
+      if (opts?.method === "DELETE") {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ error: "Could not delete" }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+    fireEvent.click(screen.getByText("eventDialog.delete"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Could not delete")).toBeInTheDocument();
+    });
+    // onSaved / onClose NOT called on failure
+    expect(defaultProps.onSaved).not.toHaveBeenCalled();
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
+  });
+
+  it("shows fallback error when delete throws a network error", async () => {
+    window.confirm = vi.fn().mockReturnValue(true);
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders") && (!opts || !opts.method || opts.method === "GET")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ reminders: [] }) });
+      }
+      if (opts?.method === "DELETE") {
+        return Promise.reject(new Error("network down"));
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+    fireEvent.click(screen.getByText("eventDialog.delete"));
+
+    await waitFor(() => {
+      expect(screen.getByText("eventDialog.deleteFailed")).toBeInTheDocument();
+    });
+  });
+
+  it("shows API error message when save fails with error body", async () => {
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders") && (!opts || !opts.method || opts.method === "GET")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ reminders: [] }) });
+      }
+      if (typeof url === "string" && url === "/api/calendar-events") {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ error: "Title required" }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<EventDialog {...defaultProps} prefill={{ title: "Bad Event" }} />);
+    fireEvent.click(screen.getByText("eventDialog.save"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Title required")).toBeInTheDocument();
+    });
+    expect(defaultProps.onSaved).not.toHaveBeenCalled();
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
+  });
+
+  it("shows fallback save error when fetch throws", async () => {
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders") && (!opts || !opts.method || opts.method === "GET")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ reminders: [] }) });
+      }
+      if (typeof url === "string" && url === "/api/calendar-events") {
+        return Promise.reject(new Error("network"));
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<EventDialog {...defaultProps} prefill={{ title: "Net Fail" }} />);
+    fireEvent.click(screen.getByText("eventDialog.save"));
+
+    await waitFor(() => {
+      expect(screen.getByText("eventDialog.saveFailed")).toBeInTheDocument();
+    });
+  });
+
+  it("hides time fields when all-day checkbox is toggled on", () => {
+    render(<EventDialog {...defaultProps} />);
+    expect(screen.getByLabelText("eventDialog.startTime")).toBeInTheDocument();
+    expect(screen.getByLabelText("eventDialog.endTime")).toBeInTheDocument();
+
+    const allDay = screen.getByLabelText("eventDialog.allDay");
+    fireEvent.click(allDay);
+
+    expect(screen.queryByLabelText("eventDialog.startTime")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("eventDialog.endTime")).not.toBeInTheDocument();
+  });
+
+  it("sends null start_time/end_time when is_all_day is true", async () => {
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders") && (!opts || !opts.method || opts.method === "GET")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ reminders: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ event: { id: "new" } }) });
+    });
+
+    render(<EventDialog {...defaultProps} prefill={{ title: "AD", startTime: "10:00", endTime: "11:00" }} />);
+    fireEvent.click(screen.getByLabelText("eventDialog.allDay"));
+    fireEvent.click(screen.getByText("eventDialog.save"));
+
+    await waitFor(() => {
+      const eventCall = mockFetch.mock.calls.find(
+        ([url, opts]: [string, RequestInit | undefined]) =>
+          url === "/api/calendar-events" && opts?.method === "POST",
+      );
+      expect(eventCall).toBeDefined();
+      const body = JSON.parse((eventCall![1] as RequestInit).body as string);
+      expect(body.start_time).toBeNull();
+      expect(body.end_time).toBeNull();
+    });
+  });
+
+  it("updates selected color when a color swatch is clicked", () => {
+    render(<EventDialog {...defaultProps} />);
+    // Dialog is rendered in a portal — query the whole document
+    const blueSwatch = document.querySelector('[title="eventDialog.colors.blue"]') as HTMLButtonElement;
+    expect(blueSwatch).not.toBeNull();
+    fireEvent.click(blueSwatch);
+    // After selection it should get the scale-110 class (selected indicator)
+    expect(blueSwatch.className).toContain("scale-110");
+  });
+
+  it("loads existing reminders in edit mode and issues PATCH for unchanged reminders", async () => {
+    const reminder = {
+      id: "rem-1",
+      user_id: "u1",
+      source_type: "calendar_event",
+      source_id: "e1",
+      reminder_type: "relative",
+      relative_minutes: 15,
+      absolute_time: null,
+      channels: ["push"],
+      created_at: "2026-04-01T00:00:00Z",
+    };
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders?source_type")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ reminders: [reminder] }),
+        });
+      }
+      if (typeof url === "string" && url.includes("/api/calendar-events/e1") && opts?.method === "PATCH") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ event: { id: "e1" } }),
+        });
+      }
+      if (typeof url === "string" && url.includes("/api/reminders/rem-1") && opts?.method === "PATCH") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/reminders?source_type=calendar_event&source_id=e1"),
+      );
+    });
+
+    fireEvent.click(screen.getByText("eventDialog.save"));
+
+    await waitFor(() => {
+      const patchReminder = mockFetch.mock.calls.find(
+        ([url, opts]: [string, RequestInit | undefined]) =>
+          typeof url === "string" && url.includes("/api/reminders/rem-1") && opts?.method === "PATCH",
+      );
+      expect(patchReminder).toBeDefined();
+    });
+  });
+
+  it("calls onClose when cancel button is clicked", () => {
+    render(<EventDialog {...defaultProps} />);
+    fireEvent.click(screen.getByText("eventDialog.cancel"));
+    expect(defaultProps.onClose).toHaveBeenCalledOnce();
+  });
+
+  it("warns via toast when a reminder save request fails", async () => {
+    // Existing reminder: PATCH will reject
+    const reminder = {
+      id: "rem-fail",
+      user_id: "u1",
+      source_type: "calendar_event",
+      source_id: "e1",
+      reminder_type: "relative",
+      relative_minutes: 15,
+      absolute_time: null,
+      channels: ["push"],
+      created_at: "2026-04-01T00:00:00Z",
+    };
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders?source_type")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ reminders: [reminder] }),
+        });
+      }
+      if (typeof url === "string" && url.includes("/api/calendar-events/e1") && opts?.method === "PATCH") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ event: { id: "e1" } }),
+        });
+      }
+      if (typeof url === "string" && url.includes("/api/reminders/rem-fail") && opts?.method === "PATCH") {
+        return Promise.reject(new Error("reminder patch failed"));
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    const { toast } = await import("sonner");
+    const warningSpy = vi.spyOn(toast, "warning").mockImplementation(() => "" as never);
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+
+    // Wait for the reminders to load
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/reminders?source_type"),
+      );
+    });
+
+    fireEvent.click(screen.getByText("eventDialog.save"));
+
+    await waitFor(() => {
+      expect(warningSpy).toHaveBeenCalledWith("eventDialog.reminderSaveWarning");
+    });
+    warningSpy.mockRestore();
+  });
+
+  it("closes the dialog via Dialog onOpenChange (e.g. ESC key)", () => {
+    const onClose = vi.fn();
+    render(<EventDialog {...defaultProps} onClose={onClose} />);
+    // Radix Dialog closes on ESC keydown on the content
+    fireEvent.keyDown(document.body, { key: "Escape", code: "Escape" });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("has no axe accessibility violations in create mode", async () => {
+    render(<EventDialog {...defaultProps} />);
+    // Dialog portals to body — audit the whole body
+    const results = await axe(document.body);
+    expect(results).toHaveNoViolations();
   });
 });

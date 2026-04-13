@@ -1,8 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { axe } from 'vitest-axe';
+import * as axeMatchers from 'vitest-axe/matchers';
 import userEvent from '@testing-library/user-event';
 import { HabitList } from '@/components/habits/habit-list';
 import type { HabitWithTodayStatus } from '@/lib/db/types';
+
+expect.extend(axeMatchers);
+
+// Mock sonner toast
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
+vi.mock('sonner', () => ({
+  toast: {
+    success: (...args: unknown[]) => toastSuccess(...args),
+    error: (...args: unknown[]) => toastError(...args),
+  },
+}));
+
+// Mock logger
+vi.mock('@/lib/logger', () => ({
+  log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
+
+// Mock useCategories so no SWR network calls happen
+vi.mock('@/lib/hooks/use-categories', () => ({
+  useCategories: () => ({ categories: [], error: null, isLoading: false, mutate: vi.fn() }),
+}));
 
 vi.mock('next-intl', () => ({
   useTranslations: () => {
@@ -34,24 +58,90 @@ vi.mock('@/components/habits/habit-card', () => ({
 
 // Mock FormedHabitCard (used in Formed tab)
 vi.mock('@/components/habits/formed-habit-card', () => ({
-  FormedHabitCard: ({ habit }: { habit: HabitWithTodayStatus }) => (
-    <div data-testid={`habit-card-${habit.id}`}>{habit.name}</div>
+  FormedHabitCard: ({
+    habit,
+    onReactivate,
+    onDelete,
+  }: {
+    habit: HabitWithTodayStatus;
+    onReactivate: (id: string) => void;
+    onDelete: (id: string) => void;
+  }) => (
+    <div data-testid={`habit-card-${habit.id}`}>
+      {habit.name}
+      <button data-testid={`reactivate-btn-${habit.id}`} onClick={() => onReactivate(habit.id)}>
+        reactivate
+      </button>
+      <button data-testid={`delete-btn-${habit.id}`} onClick={() => onDelete(habit.id)}>
+        delete
+      </button>
+    </div>
   ),
 }));
 
-// Mock GraduationNudgeBanner
+// Mock GraduationNudgeBanner — expose onGraduate/onDismiss
 vi.mock('@/components/habits/graduation-nudge-banner', () => ({
-  GraduationNudgeBanner: ({ habitId }: { habitId: string }) => (
-    <div data-testid={`graduation-banner-${habitId}`} />
+  GraduationNudgeBanner: ({
+    habitId,
+    onGraduate,
+    onDismiss,
+  }: {
+    habitId: string;
+    onGraduate: (id: string) => void;
+    onDismiss: (id: string) => void;
+  }) => (
+    <div data-testid={`graduation-banner-${habitId}`}>
+      <button data-testid={`graduate-btn-${habitId}`} onClick={() => onGraduate(habitId)}>
+        graduate
+      </button>
+      <button data-testid={`dismiss-btn-${habitId}`} onClick={() => onDismiss(habitId)}>
+        dismiss
+      </button>
+    </div>
   ),
 }));
 
-// Mock dialogs
+// Mock dialogs — expose open state and confirm/cancel hooks
 vi.mock('@/components/habits/graduate-dialog', () => ({
-  GraduateDialog: () => null,
+  GraduateDialog: ({
+    open,
+    onOpenChange,
+    habitName,
+    onConfirm,
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    habitName: string;
+    onConfirm: () => void;
+  }) =>
+    open ? (
+      <div data-testid="graduate-dialog">
+        <span>{habitName}</span>
+        <button data-testid="graduate-confirm" onClick={onConfirm}>confirm</button>
+        <button data-testid="graduate-cancel" onClick={() => onOpenChange(false)}>cancel</button>
+      </div>
+    ) : null,
 }));
 vi.mock('@/components/habits/reactivate-dialog', () => ({
-  ReactivateDialog: () => null,
+  ReactivateDialog: ({
+    open,
+    onOpenChange,
+    habitName,
+    onConfirm,
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    habitName: string;
+    bestStreak: number;
+    onConfirm: () => void;
+  }) =>
+    open ? (
+      <div data-testid="reactivate-dialog">
+        <span>{habitName}</span>
+        <button data-testid="reactivate-confirm" onClick={onConfirm}>confirm</button>
+        <button data-testid="reactivate-cancel" onClick={() => onOpenChange(false)}>cancel</button>
+      </div>
+    ) : null,
 }));
 
 // Mock HabitEmptyState
@@ -110,6 +200,12 @@ describe('HabitList', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    toastSuccess.mockClear();
+    toastError.mockClear();
+    // Reset fetch between tests
+    (global.fetch as unknown) = vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    );
   });
 
   describe('rendering', () => {
@@ -233,6 +329,253 @@ describe('HabitList', () => {
       expect(screen.getByText(/Active.*\(2\)/i)).toBeInTheDocument();
       expect(screen.getByText(/Paused.*\(1\)/i)).toBeInTheDocument();
       expect(screen.getByText(/Formed.*\(1\)/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('search behavior', () => {
+    it('clears the search query when switching tabs', async () => {
+      const user = userEvent.setup();
+      render(<HabitList {...defaultProps} />);
+
+      const searchInput = screen.getByPlaceholderText('Search habits...') as HTMLInputElement;
+      fireEvent.change(searchInput, { target: { value: 'Morning' } });
+      expect(searchInput.value).toBe('Morning');
+
+      await user.click(screen.getByRole('tab', { name: /Paused/i }));
+      await waitFor(() => {
+        expect(
+          (screen.getByPlaceholderText('Search habits...') as HTMLInputElement).value
+        ).toBe('');
+      });
+    });
+  });
+
+  describe('graduation nudge flow', () => {
+    const eligibleHabits = [
+      makeHabit({ id: 'g1', name: 'Water', status: 'active', graduation_eligible: true }),
+    ];
+
+    it('renders the nudge banner for graduation_eligible active habits', () => {
+      render(<HabitList {...defaultProps} habits={eligibleHabits} />);
+      expect(screen.getByTestId('graduation-banner-g1')).toBeInTheDocument();
+    });
+
+    it('opens the graduate dialog when the user clicks graduate', async () => {
+      const user = userEvent.setup();
+      render(<HabitList {...defaultProps} habits={eligibleHabits} />);
+
+      await user.click(screen.getByTestId('graduate-btn-g1'));
+      const dialog = screen.getByTestId('graduate-dialog');
+      expect(dialog).toBeInTheDocument();
+      expect(dialog).toHaveTextContent('Water');
+    });
+
+    it('confirms graduation — fires POST, shows success toast, and calls onMutate', async () => {
+      const onMutate = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <HabitList {...defaultProps} habits={eligibleHabits} onMutate={onMutate} />
+      );
+
+      await user.click(screen.getByTestId('graduate-btn-g1'));
+      await user.click(screen.getByTestId('graduate-confirm'));
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/habits/g1/graduate',
+          expect.objectContaining({ method: 'POST' })
+        );
+      });
+      expect(toastSuccess).toHaveBeenCalled();
+      expect(onMutate).toHaveBeenCalled();
+    });
+
+    it('surfaces error toast when graduate API fails', async () => {
+      (global.fetch as unknown) = vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ error: 'boom' }),
+        })
+      );
+      const onMutate = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <HabitList {...defaultProps} habits={eligibleHabits} onMutate={onMutate} />
+      );
+      await user.click(screen.getByTestId('graduate-btn-g1'));
+      await user.click(screen.getByTestId('graduate-confirm'));
+
+      await waitFor(() => {
+        expect(toastError).toHaveBeenCalled();
+      });
+      expect(onMutate).toHaveBeenCalled();
+    });
+
+    it('closes the graduate dialog when onOpenChange(false) fires', async () => {
+      const user = userEvent.setup();
+      render(<HabitList {...defaultProps} habits={eligibleHabits} />);
+
+      await user.click(screen.getByTestId('graduate-btn-g1'));
+      expect(screen.getByTestId('graduate-dialog')).toBeInTheDocument();
+
+      await user.click(screen.getByTestId('graduate-cancel'));
+      await waitFor(() => {
+        expect(screen.queryByTestId('graduate-dialog')).not.toBeInTheDocument();
+      });
+    });
+
+    it('dismisses the nudge via POST and calls onMutate', async () => {
+      const onMutate = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <HabitList {...defaultProps} habits={eligibleHabits} onMutate={onMutate} />
+      );
+
+      await user.click(screen.getByTestId('dismiss-btn-g1'));
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/habits/g1/dismiss-graduation-nudge',
+          expect.objectContaining({ method: 'POST' })
+        );
+      });
+      expect(onMutate).toHaveBeenCalled();
+    });
+
+    it('toasts error when dismiss-nudge fails', async () => {
+      (global.fetch as unknown) = vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({}),
+        })
+      );
+      const user = userEvent.setup();
+      render(<HabitList {...defaultProps} habits={eligibleHabits} onMutate={vi.fn()} />);
+
+      await user.click(screen.getByTestId('dismiss-btn-g1'));
+      await waitFor(() => {
+        expect(toastError).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('reactivate flow (formed tab)', () => {
+    it('opens reactivate dialog and confirms — fires POST and success toast', async () => {
+      const onMutate = vi.fn();
+      const user = userEvent.setup();
+      render(<HabitList {...defaultProps} onMutate={onMutate} />);
+
+      await user.click(screen.getByRole('tab', { name: /Formed/i }));
+      await user.click(await screen.findByTestId('reactivate-btn-4'));
+
+      expect(screen.getByTestId('reactivate-dialog')).toBeInTheDocument();
+      await user.click(screen.getByTestId('reactivate-confirm'));
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/habits/4/reactivate',
+          expect.objectContaining({ method: 'POST' })
+        );
+      });
+      expect(toastSuccess).toHaveBeenCalled();
+      expect(onMutate).toHaveBeenCalled();
+    });
+
+    it('toasts error when reactivate API fails', async () => {
+      (global.fetch as unknown) = vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({}),
+        })
+      );
+      const user = userEvent.setup();
+      render(<HabitList {...defaultProps} onMutate={vi.fn()} />);
+
+      await user.click(screen.getByRole('tab', { name: /Formed/i }));
+      await user.click(await screen.findByTestId('reactivate-btn-4'));
+      await user.click(screen.getByTestId('reactivate-confirm'));
+
+      await waitFor(() => {
+        expect(toastError).toHaveBeenCalled();
+      });
+    });
+
+    it('closes reactivate dialog on cancel', async () => {
+      const user = userEvent.setup();
+      render(<HabitList {...defaultProps} />);
+
+      await user.click(screen.getByRole('tab', { name: /Formed/i }));
+      await user.click(await screen.findByTestId('reactivate-btn-4'));
+      await user.click(screen.getByTestId('reactivate-cancel'));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('reactivate-dialog')).not.toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('delete formed habit', () => {
+    it('does nothing when user cancels the confirm prompt', async () => {
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const user = userEvent.setup();
+      render(<HabitList {...defaultProps} />);
+
+      await user.click(screen.getByRole('tab', { name: /Formed/i }));
+      await user.click(await screen.findByTestId('delete-btn-4'));
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(toastSuccess).not.toHaveBeenCalled();
+      confirmSpy.mockRestore();
+    });
+
+    it('deletes a formed habit when user confirms', async () => {
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const onMutate = vi.fn();
+      const user = userEvent.setup();
+      render(<HabitList {...defaultProps} onMutate={onMutate} />);
+
+      await user.click(screen.getByRole('tab', { name: /Formed/i }));
+      await user.click(await screen.findByTestId('delete-btn-4'));
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/habits/4',
+          expect.objectContaining({ method: 'DELETE' })
+        );
+      });
+      expect(toastSuccess).toHaveBeenCalled();
+      expect(onMutate).toHaveBeenCalled();
+      confirmSpy.mockRestore();
+    });
+
+    it('toasts error when delete API fails', async () => {
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      (global.fetch as unknown) = vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({}),
+        })
+      );
+      const user = userEvent.setup();
+      render(<HabitList {...defaultProps} onMutate={vi.fn()} />);
+
+      await user.click(screen.getByRole('tab', { name: /Formed/i }));
+      await user.click(await screen.findByTestId('delete-btn-4'));
+
+      await waitFor(() => {
+        expect(toastError).toHaveBeenCalled();
+      });
+      confirmSpy.mockRestore();
+    });
+  });
+
+  describe('accessibility', () => {
+    it('has no axe violations', async () => {
+      const { container } = render(<HabitList {...defaultProps} />);
+      expect(await axe(container)).toHaveNoViolations();
     });
   });
 });

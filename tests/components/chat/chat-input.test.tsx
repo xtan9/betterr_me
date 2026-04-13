@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act, createEvent } from "@testing-library/react";
 import { ChatInput } from "@/components/chat/chat-input";
 
 vi.mock("next-intl", () => ({
@@ -152,6 +152,239 @@ describe("ChatInput", () => {
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
     expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("clicking attach button triggers hidden file input click", () => {
+    const { container } = render(<ChatInput {...defaultProps} />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const clickSpy = vi.spyOn(fileInput, "click");
+    fireEvent.click(screen.getByRole("button", { name: "input.attach" }));
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  it("uploading a valid image file adds a preview and send button becomes enabled", async () => {
+    const { container } = render(<ChatInput {...defaultProps} />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["hello"], "pic.png", { type: "image/png" });
+
+    // Mock FileReader
+    const origFR = globalThis.FileReader;
+    class MockFileReader {
+      onload: (() => void) | null = null;
+      result: string | null = null;
+      readAsDataURL() {
+        this.result = "data:image/png;base64,AAA";
+        this.onload?.();
+      }
+    }
+    // @ts-expect-error override
+    globalThis.FileReader = MockFileReader;
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    const img = await screen.findByRole("img");
+    expect(img).toHaveAttribute("src", "data:image/png;base64,AAA");
+    expect(img).toHaveAttribute("alt", "pic.png");
+    // Send button enabled because images present (no text needed)
+    expect(screen.getByRole("button", { name: "input.send" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove image 1" })).toBeInTheDocument();
+
+    globalThis.FileReader = origFR;
+  });
+
+  it("removing an uploaded image clears the preview", async () => {
+    const { container } = render(<ChatInput {...defaultProps} />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["hello"], "pic.png", { type: "image/png" });
+
+    const origFR = globalThis.FileReader;
+    class MockFileReader {
+      onload: (() => void) | null = null;
+      result: string | null = null;
+      readAsDataURL() {
+        this.result = "data:image/png;base64,AAA";
+        this.onload?.();
+      }
+    }
+    // @ts-expect-error override
+    globalThis.FileReader = MockFileReader;
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    const removeBtn = await screen.findByRole("button", { name: "Remove image 1" });
+    fireEvent.click(removeBtn);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+
+    globalThis.FileReader = origFR;
+  });
+
+  it("rejects files with invalid MIME type and shows error message", () => {
+    const { container } = render(<ChatInput {...defaultProps} />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["x"], "doc.pdf", { type: "application/pdf" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    expect(screen.getByText("input.invalidType")).toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("rejects files exceeding max size and shows error message", () => {
+    const { container } = render(<ChatInput {...defaultProps} />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const big = new File(["x"], "big.png", { type: "image/png" });
+    Object.defineProperty(big, "size", { value: 21 * 1024 * 1024 });
+    fireEvent.change(fileInput, { target: { files: [big] } });
+    expect(screen.getByText("input.fileTooLarge")).toBeInTheDocument();
+  });
+
+  it("file error auto-clears after 3 seconds", () => {
+    vi.useFakeTimers();
+    const { container } = render(<ChatInput {...defaultProps} />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["x"], "doc.pdf", { type: "application/pdf" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    expect(screen.getByText("input.invalidType")).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(3100);
+    });
+    expect(screen.queryByText("input.invalidType")).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("drag enter shows drop zone; drag leave hides it", () => {
+    const { container } = render(<ChatInput {...defaultProps} />);
+    const dropTarget = container.firstChild as HTMLElement;
+    fireEvent.dragEnter(dropTarget);
+    expect(screen.getByText("input.dropZone")).toBeInTheDocument();
+    fireEvent.dragLeave(dropTarget);
+    expect(screen.queryByText("input.dropZone")).not.toBeInTheDocument();
+  });
+
+  it("drag over is handled (prevents default) and drop processes files", async () => {
+    const { container } = render(<ChatInput {...defaultProps} />);
+    const dropTarget = container.firstChild as HTMLElement;
+
+    const origFR = globalThis.FileReader;
+    class MockFileReader {
+      onload: (() => void) | null = null;
+      result: string | null = null;
+      readAsDataURL() {
+        this.result = "data:image/png;base64,AAA";
+        this.onload?.();
+      }
+    }
+    // @ts-expect-error override
+    globalThis.FileReader = MockFileReader;
+
+    const file = new File(["x"], "drop.png", { type: "image/png" });
+    fireEvent.dragEnter(dropTarget);
+    fireEvent.dragOver(dropTarget);
+    const dropEvent = createEvent.drop(dropTarget);
+    Object.defineProperty(dropEvent, "dataTransfer", {
+      value: { files: [file] },
+    });
+    fireEvent(dropTarget, dropEvent);
+    const img = await screen.findByRole("img");
+    expect(img).toBeInTheDocument();
+    // drop zone should be hidden after drop
+    expect(screen.queryByText("input.dropZone")).not.toBeInTheDocument();
+
+    globalThis.FileReader = origFR;
+  });
+
+  it("pasting an image file into textarea adds it as attachment", async () => {
+    render(<ChatInput {...defaultProps} />);
+    const textarea = screen.getByRole("textbox");
+
+    const origFR = globalThis.FileReader;
+    class MockFileReader {
+      onload: (() => void) | null = null;
+      result: string | null = null;
+      readAsDataURL() {
+        this.result = "data:image/png;base64,PASTE";
+        this.onload?.();
+      }
+    }
+    // @ts-expect-error override
+    globalThis.FileReader = MockFileReader;
+
+    const file = new File(["x"], "paste.png", { type: "image/png" });
+    const pasteEvent = createEvent.paste(textarea);
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      value: {
+        items: [{ type: "image/png", getAsFile: () => file }],
+      },
+    });
+    fireEvent(textarea, pasteEvent);
+
+    const img = await screen.findByRole("img");
+    expect(img).toHaveAttribute("src", "data:image/png;base64,PASTE");
+
+    globalThis.FileReader = origFR;
+  });
+
+  it("pasting non-image content does not add attachments", () => {
+    render(<ChatInput {...defaultProps} />);
+    const textarea = screen.getByRole("textbox");
+    fireEvent.paste(textarea, {
+      clipboardData: {
+        items: [{ type: "text/plain", getAsFile: () => null }],
+      },
+    });
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("paste with no clipboardData items is a no-op", () => {
+    render(<ChatInput {...defaultProps} />);
+    const textarea = screen.getByRole("textbox");
+    // jsdom represents missing items as undefined
+    fireEvent.paste(textarea, { clipboardData: {} });
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("clicking send with text and attached image calls onSend with both", async () => {
+    const onSend = vi.fn();
+    const { container } = render(<ChatInput {...defaultProps} onSend={onSend} />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+
+    const origFR = globalThis.FileReader;
+    class MockFileReader {
+      onload: (() => void) | null = null;
+      result: string | null = null;
+      readAsDataURL() {
+        this.result = "data:image/png;base64,AAA";
+        this.onload?.();
+      }
+    }
+    // @ts-expect-error override
+    globalThis.FileReader = MockFileReader;
+
+    const file = new File(["x"], "pic.png", { type: "image/png" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    await screen.findByRole("img");
+
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "caption" } });
+    fireEvent.click(screen.getByRole("button", { name: "input.send" }));
+
+    expect(onSend).toHaveBeenCalledWith(
+      "caption",
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "file",
+          filename: "pic.png",
+          mediaType: "image/png",
+          url: "data:image/png;base64,AAA",
+        }),
+      ])
+    );
+
+    globalThis.FileReader = origFR;
+  });
+
+  it("file input with no files selected is a no-op", () => {
+    const { container } = render(<ChatInput {...defaultProps} />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: null } });
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
   it("aria-labels use translated strings", () => {
