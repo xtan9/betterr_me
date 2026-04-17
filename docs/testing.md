@@ -2,7 +2,7 @@
 
 Rules for writing tests in this repo. These exist so tests actually catch bugs rather than just executing lines — mutation testing (`pnpm mutation-test`) verifies the bar.
 
-The target is **≥85% mutation score per file** across `lib/db/**`, `lib/money/**`, `lib/recurring-tasks/**`, `lib/habits/**`. Tests that only assert "was called" or "returns a shape" inflate coverage without catching regressions and will let mutants survive.
+The target is **≥85% mutation score per file**. Current Stryker scope is `lib/db/**` only (break threshold starts at 60 and tightens phase-by-phase per the [foundation spec](./superpowers/specs/2026-04-17-mutation-testing-foundation-design.md)); Phase 5 adds `lib/money/**`, `lib/recurring-tasks/**`, and `lib/habits/**` to the scope. Tests that only assert "was called" or "returns a shape" inflate coverage without catching regressions and will let mutants survive.
 
 ## The five rules
 
@@ -116,17 +116,16 @@ const peakReps = Math.max(...reps);
 ## Running mutation tests
 
 ```bash
-# Full run (8-30 min depending on scope)
+# Full run (~8 min for lib/db scope today)
 pnpm mutation-test
-
-# Changed files only (2-5 min, what CI runs per-PR)
-pnpm mutation-test:changed
 
 # Narrow to one file for iteration
 pnpm stryker run --mutate "lib/db/habits.ts"
 ```
 
 Reports land at `reports/mutation/mutation.html`.
+
+> A `pnpm mutation-test:changed` wrapper (for per-PR runs scoped to files changed since `origin/main`) lands in Phase 4 of the foundation rollout — not yet available.
 
 ## Mocking reference
 
