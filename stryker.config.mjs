@@ -28,13 +28,15 @@ const config = {
     "e2e",
     "public",
     "docs",
-    "supabase",
+    // NOTE: do NOT add `supabase` here — it would match `lib/supabase/`
+    // (Supabase client code the DB tests import) and break the sandbox.
+    // The root `supabase/` dir (CLI/migrations) doesn't exist in this repo.
     "emails",
     ".worktrees",
     ".github",
     ".vscode",
   ],
-  coverageAnalysis: "perTest",
+  coverageAnalysis: "all",
   // Restrict the initial test run to the DB unit tests. Running the full suite
   // slows startup and pulls in tests for app/ API routes that depend on files
   // outside the mutated scope.
