@@ -129,6 +129,8 @@ export class JournalEntriesDB {
     const monthStr = String(month).padStart(2, "0");
     const lastDay = new Date(year, month, 0).getDate();
     const startDate = `${year}-${monthStr}-01`;
+    // Stryker disable next-line StringLiteral: lastDay is always 28, 29, 30, or 31 (getDate() on month end),
+    // so String(lastDay) is always 2 chars and the padStart pad-char is never consumed — "" vs "0" are equivalent.
     const endDate = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
 
     const { data, error } = await this.supabase

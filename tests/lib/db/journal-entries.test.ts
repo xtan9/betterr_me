@@ -1,268 +1,740 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { JournalEntriesDB } from '@/lib/db/journal-entries';
-import { mockSupabaseClient } from '../../setup';
-import type { JournalEntry, JournalEntryInsert } from '@/lib/db/types';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { JournalEntriesDB } from "@/lib/db/journal-entries";
+import { mockSupabaseClient } from "../../setup";
+import { restoreMockSupabaseThen } from "../../helpers/mock-supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type {
+  JournalEntry,
+  JournalEntryInsert,
+  JournalCalendarDay,
+} from "@/lib/db/types";
 
-describe('JournalEntriesDB', () => {
-  const mockUserId = 'user-123';
-  const journalDB = new JournalEntriesDB(mockSupabaseClient as any);
+// Mock logger so we can assert exact args for error paths (Stryker loves
+// mutating log.error message strings and context objects).
+vi.mock("@/lib/logger", () => ({
+  log: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+import { log } from "@/lib/logger";
 
-  const mockEntry: JournalEntry = {
-    id: 'entry-123',
-    user_id: mockUserId,
-    entry_date: '2026-02-22',
-    title: 'Test Entry',
-    content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }] },
+const USER_ID = "user-123";
+const ENTRY_ID = "entry-123";
+
+function makeEntry(over: Partial<JournalEntry> = {}): JournalEntry {
+  return {
+    id: ENTRY_ID,
+    user_id: USER_ID,
+    entry_date: "2026-02-22",
+    title: "Test Entry",
+    content: {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "Hello" }] },
+      ],
+    },
     mood: 4,
     word_count: 1,
-    tags: ['test'],
+    tags: ["test"],
     prompt_key: null,
-    created_at: '2026-02-22T10:00:00Z',
-    updated_at: '2026-02-22T10:00:00Z',
+    created_at: "2026-02-22T10:00:00Z",
+    updated_at: "2026-02-22T10:00:00Z",
+    ...over,
   };
+}
+
+describe("JournalEntriesDB", () => {
+  let db: JournalEntriesDB;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabaseClient.setMockResponse(null);
+    db = new JournalEntriesDB(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
   });
 
-  describe('upsertEntry', () => {
-    it('should call supabase upsert with onConflict', async () => {
-      mockSupabaseClient.setMockResponse(mockEntry);
+  afterEach(() => {
+    restoreMockSupabaseThen();
+  });
 
-      const insertData: JournalEntryInsert = {
-        user_id: mockUserId,
-        entry_date: '2026-02-22',
-        title: 'Test Entry',
-        content: { type: 'doc', content: [] },
-        mood: 4,
-        word_count: 1,
-        tags: ['test'],
-        prompt_key: null,
-      };
+  // ─── upsertEntry ──────────────────────────────────────────────────────────
+  describe("upsertEntry", () => {
+    const insertData: JournalEntryInsert = {
+      user_id: USER_ID,
+      entry_date: "2026-02-22",
+      title: "Test Entry",
+      content: { type: "doc", content: [] },
+      mood: 4,
+      word_count: 1,
+      tags: ["test"],
+      prompt_key: null,
+    };
 
-      const result = await journalDB.upsertEntry(insertData);
+    it("upserts the entry and returns the inserted record", async () => {
+      const expected = makeEntry();
+      mockSupabaseClient.setMockResponse(expected);
 
-      expect(result).toEqual(mockEntry);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('journal_entries');
-      expect(mockSupabaseClient.upsert).toHaveBeenCalledWith(insertData, {
-        onConflict: 'user_id,entry_date',
+      const result = await db.upsertEntry(insertData);
+
+      expect(result).toEqual(expected);
+
+      // Full chain: from → upsert(row, onConflict) → select() → single()
+      mockSupabaseClient.expectQuery({
+        table: "journal_entries",
+        method: "from",
+        args: ["journal_entries"],
       });
-      expect(mockSupabaseClient.single).toHaveBeenCalled();
+      mockSupabaseClient.expectQuery({
+        table: "journal_entries",
+        method: "upsert",
+        args: [insertData, { onConflict: "user_id,entry_date" }],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "journal_entries",
+        method: "select",
+        args: [],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "journal_entries",
+        method: "single",
+        args: [],
+      });
+
+      // Happy path must NOT log.
+      expect(log.error).not.toHaveBeenCalled();
     });
 
-    it('should throw on Supabase error', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'DB error', code: 'ERROR' });
+    it("logs and throws when the upsert fails", async () => {
+      const dbErr = new Error("duplicate key");
+      mockSupabaseClient.setMockResponse(null, dbErr);
 
-      await expect(
-        journalDB.upsertEntry({
-          user_id: mockUserId,
-          entry_date: '2026-02-22',
-          title: 'Test',
-          content: { type: 'doc', content: [] },
-          mood: 3,
-          word_count: 0,
-          tags: [],
-          prompt_key: null,
-        })
-      ).rejects.toEqual({ message: 'DB error', code: 'ERROR' });
+      await expect(db.upsertEntry(insertData)).rejects.toThrow("duplicate key");
+
+      expect(log.error).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(
+        "JournalEntriesDB.upsertEntry failed",
+        dbErr,
+        { entry_date: insertData.entry_date },
+      );
     });
   });
 
-  describe('getEntryByDate', () => {
-    it('should call maybeSingle and return data', async () => {
-      // For maybeSingle, the mock thenable resolves with data
-      mockSupabaseClient.setMockResponse(mockEntry);
+  // ─── getEntryByDate ───────────────────────────────────────────────────────
+  describe("getEntryByDate", () => {
+    const DATE = "2026-02-22";
 
-      const result = await journalDB.getEntryByDate(mockUserId, '2026-02-22');
+    it("returns the entry for the given user + date", async () => {
+      const expected = makeEntry();
+      mockSupabaseClient.setMockResponse(expected);
 
-      expect(result).toEqual(mockEntry);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('journal_entries');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('entry_date', '2026-02-22');
+      const result = await db.getEntryByDate(USER_ID, DATE);
+
+      expect(result).toEqual(expected);
+
+      // Full ordered chain — each phase is asserted to catch string/arg
+      // mutations (table name, select *, eq cols).
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: "journal_entries",
+          method: "from",
+          args: ["journal_entries"],
+        },
+        { table: "journal_entries", method: "select", args: ["*"] },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["entry_date", DATE],
+        },
+        { table: "journal_entries", method: "maybeSingle", args: [] },
+      ]);
+      expect(log.error).not.toHaveBeenCalled();
     });
 
-    it('should return null when no entry exists', async () => {
+    it("returns null when no entry exists for that date", async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      const result = await journalDB.getEntryByDate(mockUserId, '2026-02-22');
+      const result = await db.getEntryByDate(USER_ID, DATE);
 
       expect(result).toBeNull();
+      expect(log.error).not.toHaveBeenCalled();
     });
 
-    it('should throw on error', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'DB error' });
+    it("logs and throws on db error", async () => {
+      const dbErr = new Error("select failed");
+      mockSupabaseClient.setMockResponse(null, dbErr);
 
-      await expect(
-        journalDB.getEntryByDate(mockUserId, '2026-02-22')
-      ).rejects.toEqual({ message: 'DB error' });
+      await expect(db.getEntryByDate(USER_ID, DATE)).rejects.toThrow(
+        "select failed",
+      );
+
+      expect(log.error).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(
+        "JournalEntriesDB.getEntryByDate failed",
+        dbErr,
+        { date: DATE },
+      );
     });
   });
 
-  describe('getEntry', () => {
-    it('should call single and return data', async () => {
-      mockSupabaseClient.setMockResponse(mockEntry);
+  // ─── getEntry ─────────────────────────────────────────────────────────────
+  describe("getEntry", () => {
+    it("returns the entry when found", async () => {
+      const expected = makeEntry();
+      mockSupabaseClient.setMockResponse(expected);
 
-      const result = await journalDB.getEntry('entry-123', mockUserId);
+      const result = await db.getEntry(ENTRY_ID, USER_ID);
 
-      expect(result).toEqual(mockEntry);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('journal_entries');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'entry-123');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
-      expect(mockSupabaseClient.single).toHaveBeenCalled();
+      expect(result).toEqual(expected);
+
+      // Full chain catches table/select/eq-column mutations.
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: "journal_entries",
+          method: "from",
+          args: ["journal_entries"],
+        },
+        { table: "journal_entries", method: "select", args: ["*"] },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["id", ENTRY_ID],
+        },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        { table: "journal_entries", method: "single", args: [] },
+      ]);
+      expect(log.error).not.toHaveBeenCalled();
     });
 
-    it('should return null for PGRST116 error code', async () => {
-      mockSupabaseClient.setMockResponse(null, { code: 'PGRST116' });
+    it("returns null when the error code is PGRST116 (not found)", async () => {
+      mockSupabaseClient.setMockResponse(null, { code: "PGRST116" });
 
-      const result = await journalDB.getEntry('nonexistent', mockUserId);
+      const result = await db.getEntry("nonexistent", USER_ID);
 
       expect(result).toBeNull();
+      // PGRST116 must NOT trigger log.error — it's the "not found" sentinel.
+      expect(log.error).not.toHaveBeenCalled();
     });
 
-    it('should throw on other errors', async () => {
-      mockSupabaseClient.setMockResponse(null, { code: 'OTHER', message: 'DB error' });
+    it("logs and throws on non-PGRST116 errors", async () => {
+      const dbErr = { code: "OTHER", message: "select failed" };
+      mockSupabaseClient.setMockResponse(null, dbErr);
 
-      await expect(
-        journalDB.getEntry('entry-123', mockUserId)
-      ).rejects.toEqual({ code: 'OTHER', message: 'DB error' });
-    });
-  });
+      await expect(db.getEntry(ENTRY_ID, USER_ID)).rejects.toEqual(dbErr);
 
-  describe('updateEntry', () => {
-    it('should call update with correct filters', async () => {
-      const updates = { title: 'Updated Title', mood: 5 };
-      const updatedEntry = { ...mockEntry, ...updates };
-      mockSupabaseClient.setMockResponse(updatedEntry);
-
-      const result = await journalDB.updateEntry('entry-123', mockUserId, updates);
-
-      expect(result).toEqual(updatedEntry);
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith(updates);
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'entry-123');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
-      expect(mockSupabaseClient.single).toHaveBeenCalled();
-    });
-
-    it('should throw on error', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'Not found' });
-
-      await expect(
-        journalDB.updateEntry('entry-123', mockUserId, { title: 'New' })
-      ).rejects.toEqual({ message: 'Not found' });
+      expect(log.error).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(
+        "JournalEntriesDB.getEntry failed",
+        dbErr,
+        { entryId: ENTRY_ID },
+      );
     });
   });
 
-  describe('deleteEntry', () => {
-    it('should call delete with correct filters', async () => {
+  // ─── updateEntry ──────────────────────────────────────────────────────────
+  describe("updateEntry", () => {
+    it("updates and returns the entry", async () => {
+      const updates = { title: "Updated Title", mood: 5 as const };
+      const expected = makeEntry({ title: "Updated Title", mood: 5 });
+      mockSupabaseClient.setMockResponse(expected);
+
+      const result = await db.updateEntry(ENTRY_ID, USER_ID, updates);
+
+      expect(result).toEqual(expected);
+
+      // Full chain: from → update → eq(id) → eq(user_id) → select → single
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: "journal_entries",
+          method: "from",
+          args: ["journal_entries"],
+        },
+        { table: "journal_entries", method: "update", args: [updates] },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["id", ENTRY_ID],
+        },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        { table: "journal_entries", method: "select", args: [] },
+        { table: "journal_entries", method: "single", args: [] },
+      ]);
+      expect(log.error).not.toHaveBeenCalled();
+    });
+
+    it("logs and throws on db error", async () => {
+      const dbErr = new Error("update failed");
+      mockSupabaseClient.setMockResponse(null, dbErr);
+
+      await expect(
+        db.updateEntry(ENTRY_ID, USER_ID, { title: "New" }),
+      ).rejects.toThrow("update failed");
+
+      expect(log.error).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(
+        "JournalEntriesDB.updateEntry failed",
+        dbErr,
+        { entryId: ENTRY_ID },
+      );
+    });
+  });
+
+  // ─── deleteEntry ──────────────────────────────────────────────────────────
+  describe("deleteEntry", () => {
+    it("deletes the entry scoped by id + user", async () => {
+      // delete builder is thenable-terminal; setMockResponse with no error
+      // makes the awaited destructure return { error: null }.
       mockSupabaseClient.setMockResponse(null);
 
-      await journalDB.deleteEntry('entry-123', mockUserId);
+      await db.deleteEntry(ENTRY_ID, USER_ID);
 
-      expect(mockSupabaseClient.delete).toHaveBeenCalled();
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'entry-123');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
+      // Full chain: from → delete() → eq(id) → eq(user_id).
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: "journal_entries",
+          method: "from",
+          args: ["journal_entries"],
+        },
+        { table: "journal_entries", method: "delete", args: [] },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["id", ENTRY_ID],
+        },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+      ]);
+      expect(log.error).not.toHaveBeenCalled();
     });
 
-    it('should throw on error', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'FK constraint' });
+    it("logs and throws on db error", async () => {
+      const dbErr = new Error("FK constraint");
+      mockSupabaseClient.setMockResponse(null, dbErr);
 
-      await expect(
-        journalDB.deleteEntry('entry-123', mockUserId)
-      ).rejects.toEqual({ message: 'FK constraint' });
+      await expect(db.deleteEntry(ENTRY_ID, USER_ID)).rejects.toThrow(
+        "FK constraint",
+      );
+
+      expect(log.error).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(
+        "JournalEntriesDB.deleteEntry failed",
+        dbErr,
+        { entryId: ENTRY_ID },
+      );
     });
   });
 
-  describe('getCalendarMonth', () => {
-    it('should select only entry_date, mood, title', async () => {
-      const calendarData = [
-        { entry_date: '2026-02-01', mood: 4, title: 'Day 1' },
-        { entry_date: '2026-02-15', mood: 3, title: 'Day 15' },
+  // ─── getCalendarMonth ─────────────────────────────────────────────────────
+  describe("getCalendarMonth", () => {
+    it("queries entries for a 31-day month (December)", async () => {
+      const rows: JournalCalendarDay[] = [
+        { entry_date: "2026-12-01", mood: 4, title: "Day 1" },
+        { entry_date: "2026-12-31", mood: 3, title: "Day 31" },
       ];
-      mockSupabaseClient.setMockResponse(calendarData);
+      mockSupabaseClient.setMockResponse(rows);
 
-      const result = await journalDB.getCalendarMonth(mockUserId, 2026, 2);
+      const result = await db.getCalendarMonth(USER_ID, 2026, 12);
 
-      expect(result).toEqual(calendarData);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('journal_entries');
-      expect(mockSupabaseClient.select).toHaveBeenCalledWith('entry_date, mood, title');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
-      expect(mockSupabaseClient.gte).toHaveBeenCalledWith('entry_date', '2026-02-01');
-      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2026-02-28');
+      expect(result).toEqual(rows);
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: "journal_entries",
+          method: "from",
+          args: ["journal_entries"],
+        },
+        {
+          table: "journal_entries",
+          method: "select",
+          args: ["entry_date, mood, title"],
+        },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        {
+          table: "journal_entries",
+          method: "gte",
+          args: ["entry_date", "2026-12-01"],
+        },
+        {
+          table: "journal_entries",
+          method: "lte",
+          args: ["entry_date", "2026-12-31"],
+        },
+        {
+          table: "journal_entries",
+          method: "order",
+          args: ["entry_date", { ascending: true }],
+        },
+      ]);
+      expect(log.error).not.toHaveBeenCalled();
     });
 
-    it('should filter by date range for given month', async () => {
+    it("zero-pads single-digit months in the date range", async () => {
       mockSupabaseClient.setMockResponse([]);
 
-      await journalDB.getCalendarMonth(mockUserId, 2026, 12);
+      await db.getCalendarMonth(USER_ID, 2026, 3);
 
-      expect(mockSupabaseClient.gte).toHaveBeenCalledWith('entry_date', '2026-12-01');
-      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2026-12-31');
+      mockSupabaseClient.expectQuery({
+        method: "gte",
+        args: ["entry_date", "2026-03-01"],
+      });
+      mockSupabaseClient.expectQuery({
+        method: "lte",
+        args: ["entry_date", "2026-03-31"],
+      });
     });
 
-    it('should use correct last day for months with fewer than 31 days', async () => {
+    it("uses 30 as the last day for April", async () => {
       mockSupabaseClient.setMockResponse([]);
 
-      // April has 30 days
-      await journalDB.getCalendarMonth(mockUserId, 2026, 4);
-      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2026-04-30');
+      await db.getCalendarMonth(USER_ID, 2026, 4);
 
-      vi.clearAllMocks();
-
-      // February 2026 has 28 days (not a leap year)
-      await journalDB.getCalendarMonth(mockUserId, 2026, 2);
-      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2026-02-28');
-
-      vi.clearAllMocks();
-
-      // February 2028 has 29 days (leap year)
-      await journalDB.getCalendarMonth(mockUserId, 2028, 2);
-      expect(mockSupabaseClient.lte).toHaveBeenCalledWith('entry_date', '2028-02-29');
+      mockSupabaseClient.expectQuery({
+        method: "gte",
+        args: ["entry_date", "2026-04-01"],
+      });
+      mockSupabaseClient.expectQuery({
+        method: "lte",
+        args: ["entry_date", "2026-04-30"],
+      });
     });
 
-    it('should return empty array when no entries', async () => {
+    it("uses 28 as last day for February in a non-leap year", async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await db.getCalendarMonth(USER_ID, 2026, 2);
+
+      mockSupabaseClient.expectQuery({
+        method: "lte",
+        args: ["entry_date", "2026-02-28"],
+      });
+    });
+
+    it("uses 29 as last day for February in a leap year", async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await db.getCalendarMonth(USER_ID, 2028, 2);
+
+      mockSupabaseClient.expectQuery({
+        method: "lte",
+        args: ["entry_date", "2028-02-29"],
+      });
+    });
+
+    it("returns empty array when data is null", async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      const result = await journalDB.getCalendarMonth(mockUserId, 2026, 3);
+      const result = await db.getCalendarMonth(USER_ID, 2026, 3);
 
       expect(result).toEqual([]);
     });
 
-    it('should throw on error', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'DB error' });
+    it("logs and throws on db error", async () => {
+      const dbErr = new Error("select failed");
+      mockSupabaseClient.setMockResponse(null, dbErr);
 
-      await expect(
-        journalDB.getCalendarMonth(mockUserId, 2026, 2)
-      ).rejects.toEqual({ message: 'DB error' });
+      await expect(db.getCalendarMonth(USER_ID, 2026, 2)).rejects.toThrow(
+        "select failed",
+      );
+
+      expect(log.error).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(
+        "JournalEntriesDB.getCalendarMonth failed",
+        dbErr,
+        { year: 2026, month: 2 },
+      );
     });
   });
 
-  describe('getTimeline', () => {
-    it('should order by entry_date DESC with limit', async () => {
-      const entries = [mockEntry];
-      mockSupabaseClient.setMockResponse(entries);
+  // ─── getTimeline ──────────────────────────────────────────────────────────
+  describe("getTimeline", () => {
+    it("returns entries ordered DESC with the given limit and no cursor", async () => {
+      const rows = [makeEntry()];
+      mockSupabaseClient.setMockResponse(rows);
 
-      const result = await journalDB.getTimeline(mockUserId, 10);
+      const result = await db.getTimeline(USER_ID, 10);
 
-      expect(result).toEqual(entries);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('journal_entries');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
-      expect(mockSupabaseClient.order).toHaveBeenCalledWith('entry_date', { ascending: false });
+      expect(result).toEqual(rows);
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: "journal_entries",
+          method: "from",
+          args: ["journal_entries"],
+        },
+        { table: "journal_entries", method: "select", args: ["*"] },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        {
+          table: "journal_entries",
+          method: "order",
+          args: ["entry_date", { ascending: false }],
+        },
+        { table: "journal_entries", method: "limit", args: [10] },
+      ]);
+      expect(log.error).not.toHaveBeenCalled();
     });
 
-    it('should apply cursor filter when provided', async () => {
+    it("uses the default limit (10) when none is passed", async () => {
       mockSupabaseClient.setMockResponse([]);
 
-      await journalDB.getTimeline(mockUserId, 10, '2026-02-01');
+      await db.getTimeline(USER_ID);
 
-      expect(mockSupabaseClient.lt).toHaveBeenCalledWith('entry_date', '2026-02-01');
+      mockSupabaseClient.expectQuery({ method: "limit", args: [10] });
     });
 
-    it('should return empty array when no entries', async () => {
+    it("applies .lt('entry_date', cursor) when a cursor is provided", async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await db.getTimeline(USER_ID, 5, "2026-02-01");
+
+      // Full chain including the cursor filter.
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: "journal_entries",
+          method: "from",
+          args: ["journal_entries"],
+        },
+        { table: "journal_entries", method: "select", args: ["*"] },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        {
+          table: "journal_entries",
+          method: "order",
+          args: ["entry_date", { ascending: false }],
+        },
+        { table: "journal_entries", method: "limit", args: [5] },
+        {
+          table: "journal_entries",
+          method: "lt",
+          args: ["entry_date", "2026-02-01"],
+        },
+      ]);
+    });
+
+    it("does NOT call .lt when cursor is undefined", async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await db.getTimeline(USER_ID, 10);
+
+      // Absence of `lt` proves the `if (cursor)` branch did not execute.
+      const ltCalls = mockSupabaseClient.queryLog.filter(
+        (e) => e.method === "lt",
+      );
+      expect(ltCalls).toHaveLength(0);
+    });
+
+    it("returns empty array when data is null", async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      const result = await journalDB.getTimeline(mockUserId);
+      const result = await db.getTimeline(USER_ID);
 
       expect(result).toEqual([]);
+    });
+
+    it("logs and throws on db error", async () => {
+      const dbErr = new Error("timeline failed");
+      mockSupabaseClient.setMockResponse(null, dbErr);
+
+      await expect(db.getTimeline(USER_ID)).rejects.toThrow("timeline failed");
+
+      expect(log.error).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(
+        "JournalEntriesDB.getTimeline failed",
+        dbErr,
+      );
+    });
+  });
+
+  // ─── getRecentEntryDates ──────────────────────────────────────────────────
+  describe("getRecentEntryDates", () => {
+    const BEFORE = "2026-04-17";
+
+    it("returns the flattened entry_date strings in DESC order", async () => {
+      const rows = [
+        { entry_date: "2026-04-16" },
+        { entry_date: "2026-04-10" },
+        { entry_date: "2026-04-01" },
+      ];
+      mockSupabaseClient.setMockResponse(rows);
+
+      const result = await db.getRecentEntryDates(USER_ID, BEFORE, 50);
+
+      // Exact value + order — catches `.map(() => undefined)` and
+      // `data || ["Stryker was here"]` mutants.
+      expect(result).toEqual(["2026-04-16", "2026-04-10", "2026-04-01"]);
+
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: "journal_entries",
+          method: "from",
+          args: ["journal_entries"],
+        },
+        {
+          table: "journal_entries",
+          method: "select",
+          args: ["entry_date"],
+        },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        {
+          table: "journal_entries",
+          method: "lte",
+          args: ["entry_date", BEFORE],
+        },
+        {
+          table: "journal_entries",
+          method: "order",
+          args: ["entry_date", { ascending: false }],
+        },
+        { table: "journal_entries", method: "limit", args: [50] },
+      ]);
+      expect(log.error).not.toHaveBeenCalled();
+    });
+
+    it("uses the default limit (400) when none is passed", async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await db.getRecentEntryDates(USER_ID, BEFORE);
+
+      mockSupabaseClient.expectQuery({ method: "limit", args: [400] });
+    });
+
+    it("returns an empty array when data is null", async () => {
+      mockSupabaseClient.setMockResponse(null);
+
+      const result = await db.getRecentEntryDates(USER_ID, BEFORE);
+
+      expect(result).toEqual([]);
+    });
+
+    it("returns an empty array when data is an empty array", async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      const result = await db.getRecentEntryDates(USER_ID, BEFORE);
+
+      expect(result).toEqual([]);
+    });
+
+    it("logs and throws on db error", async () => {
+      const dbErr = new Error("dates failed");
+      mockSupabaseClient.setMockResponse(null, dbErr);
+
+      await expect(
+        db.getRecentEntryDates(USER_ID, BEFORE),
+      ).rejects.toThrow("dates failed");
+
+      expect(log.error).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(
+        "JournalEntriesDB.getRecentEntryDates failed",
+        dbErr,
+        { beforeDate: BEFORE },
+      );
+    });
+  });
+
+  // ─── getEntriesForDates ───────────────────────────────────────────────────
+  describe("getEntriesForDates", () => {
+    const DATES = ["2026-04-17", "2025-04-17", "2024-04-17"];
+
+    it("returns [] and does NOT query the DB when dates is empty", async () => {
+      const result = await db.getEntriesForDates(USER_ID, []);
+
+      expect(result).toEqual([]);
+      // No supabase call should be made at all.
+      expect(mockSupabaseClient.queryLog).toEqual([]);
+      expect(mockSupabaseClient.from).not.toHaveBeenCalled();
+    });
+
+    it("fetches entries for the provided dates in DESC order", async () => {
+      const rows = [
+        makeEntry({ id: "e1", entry_date: "2026-04-17" }),
+        makeEntry({ id: "e2", entry_date: "2025-04-17" }),
+        makeEntry({ id: "e3", entry_date: "2024-04-17" }),
+      ];
+      mockSupabaseClient.setMockResponse(rows);
+
+      const result = await db.getEntriesForDates(USER_ID, DATES);
+
+      expect(result).toEqual(rows);
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: "journal_entries",
+          method: "from",
+          args: ["journal_entries"],
+        },
+        {
+          table: "journal_entries",
+          method: "select",
+          args: [
+            "id, entry_date, mood, title, content, word_count, user_id, tags, prompt_key, created_at, updated_at",
+          ],
+        },
+        {
+          table: "journal_entries",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        {
+          table: "journal_entries",
+          method: "in",
+          args: ["entry_date", DATES],
+        },
+        {
+          table: "journal_entries",
+          method: "order",
+          args: ["entry_date", { ascending: false }],
+        },
+      ]);
+      expect(log.error).not.toHaveBeenCalled();
+    });
+
+    it("returns [] when data is null", async () => {
+      mockSupabaseClient.setMockResponse(null);
+
+      const result = await db.getEntriesForDates(USER_ID, DATES);
+
+      expect(result).toEqual([]);
+    });
+
+    it("logs and throws on db error", async () => {
+      const dbErr = new Error("fetch for dates failed");
+      mockSupabaseClient.setMockResponse(null, dbErr);
+
+      await expect(
+        db.getEntriesForDates(USER_ID, DATES),
+      ).rejects.toThrow("fetch for dates failed");
+
+      expect(log.error).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(
+        "JournalEntriesDB.getEntriesForDates failed",
+        dbErr,
+        { dates: DATES },
+      );
     });
   });
 });
