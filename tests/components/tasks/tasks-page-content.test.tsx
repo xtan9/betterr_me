@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import { TasksPageContent } from "@/components/tasks/tasks-page-content";
+
+// Bypass debounce so search tests work without fake timers
+vi.mock("@/lib/hooks/use-debounce", () => ({
+  useDebounce: (val: string) => val,
+}));
 
 // Mock next/navigation
 const mockPush = vi.fn();
@@ -18,15 +24,22 @@ vi.mock("next-themes", () => ({
   useTheme: () => ({ resolvedTheme: "light", theme: "light" }),
 }));
 
-// Mock useProjects hook
+// Mock useProjects hook — return value is dynamic so individual tests can
+// override the projects array via mockProjectsReturn.projects = [...].
 const mockProjectsMutate = vi.fn();
+const mockProjectsReturn: {
+  projects: unknown[];
+  isLoading: boolean;
+  error: Error | undefined;
+  mutate: typeof mockProjectsMutate;
+} = {
+  projects: [],
+  isLoading: false,
+  error: undefined,
+  mutate: mockProjectsMutate,
+};
 vi.mock("@/lib/hooks/use-projects", () => ({
-  useProjects: () => ({
-    projects: [],
-    isLoading: false,
-    error: undefined,
-    mutate: mockProjectsMutate,
-  }),
+  useProjects: () => mockProjectsReturn,
 }));
 
 // Mock useCategories hook
@@ -63,6 +76,7 @@ const messages = {
       title: "My Tasks",
       createButton: "Create Task",
       createProject: "Create Project",
+      viewArchived: "Archived",
     },
     paused: {
       title: "{count} paused recurring tasks",
@@ -120,6 +134,7 @@ const messages = {
       title: "Failed to load task",
       retry: "Try again",
     },
+    toggleError: "Failed to update task",
     recurrence: {
       describe: {
         everyDay: "Every day",
@@ -178,6 +193,7 @@ const messages = {
     menuArchive: "Archive",
     menuDelete: "Delete",
     archiveSuccess: "Project archived",
+    archiveError: "Failed to archive project",
     deleteSuccess: "Project deleted",
     createSuccess: "Project created",
     updateSuccess: "Project updated",
@@ -262,6 +278,11 @@ const defaultPausedReturn = {
 describe("TasksPageContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset the dynamic projects-hook return to its default (no projects).
+    mockProjectsReturn.projects = [];
+    mockProjectsReturn.isLoading = false;
+    mockProjectsReturn.error = undefined;
+    mockProjectsReturn.mutate = mockProjectsMutate;
   });
 
   it("shows loading skeleton while data is loading", () => {
@@ -762,5 +783,224 @@ describe("TasksPageContent", () => {
     createButtons[0].click();
 
     expect(mockPush).toHaveBeenCalledWith("/tasks/new?section=personal");
+  });
+
+  it("switching to Completed tab shows completed tasks and hides pending tasks", async () => {
+    const user = userEvent.setup();
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return {
+          data: mockTasks,
+          error: undefined,
+          isLoading: false,
+          mutate: vi.fn(),
+        };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    // Initially on Pending tab — "Buy groceries" (pending) is visible
+    expect(screen.getByText("Buy groceries")).toBeInTheDocument();
+    expect(screen.queryByText("Finish report")).not.toBeInTheDocument();
+
+    // Radix Tabs respond to real pointer events; use userEvent.
+    await user.click(screen.getByRole("tab", { name: /Completed/i }));
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Finish report")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Buy groceries")).not.toBeInTheDocument();
+  });
+
+  it("switching tabs clears the search query", async () => {
+    const user = userEvent.setup();
+
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return {
+          data: mockTasks,
+          error: undefined,
+          isLoading: false,
+          mutate: vi.fn(),
+        };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    const searchInput = screen.getByRole("textbox", { name: /Search tasks/i });
+    await user.type(searchInput, "groceries");
+    expect(searchInput).toHaveValue("groceries");
+
+    await user.click(screen.getByRole("tab", { name: /Completed/i }));
+
+    await vi.waitFor(() => {
+      expect(searchInput).toHaveValue("");
+    });
+  });
+
+  it("search input filters tasks by title", async () => {
+    const user = userEvent.setup();
+
+    // Add a third pending task so we have two pending tasks to filter between
+    const threeTasks = [
+      ...mockTasks,
+      {
+        id: "3",
+        user_id: "user-1",
+        title: "Walk the dog",
+        description: null,
+        is_completed: false,
+        priority: 1,
+        category_id: null,
+        due_date: null,
+        due_time: null,
+        completion_difficulty: null,
+        completed_at: null,
+        status: "todo",
+        section: "personal",
+        sort_order: 3,
+        project_id: null,
+        recurring_task_id: null,
+        is_exception: false,
+        original_date: null,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+    ];
+
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return {
+          data: threeTasks,
+          error: undefined,
+          isLoading: false,
+          mutate: vi.fn(),
+        };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    // Both pending tasks are visible initially
+    expect(screen.getByText("Buy groceries")).toBeInTheDocument();
+    expect(screen.getByText("Walk the dog")).toBeInTheDocument();
+
+    // Type a search query that only matches one task
+    const searchInput = screen.getByRole("textbox", { name: /Search tasks/i });
+    await user.type(searchInput, "groceries");
+
+    // Only the matching task should remain visible
+    expect(screen.getByText("Buy groceries")).toBeInTheDocument();
+    expect(screen.queryByText("Walk the dog")).not.toBeInTheDocument();
+  });
+
+  it("renders a project board when the projects hook returns a project", () => {
+    mockProjectsReturn.projects = [
+      {
+        id: "proj-1",
+        user_id: "user-1",
+        name: "Test Project",
+        description: null,
+        color: null,
+        icon: null,
+        status: "active",
+        section: "personal",
+        sort_order: 0,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+    ];
+
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return {
+          data: mockTasks,
+          error: undefined,
+          isLoading: false,
+          mutate: vi.fn(),
+        };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    // Project name should be visible as a SectionBlock heading.
+    expect(screen.getByText("Test Project")).toBeInTheDocument();
+  });
+
+  it("toggle fetch failure shows error toast", async () => {
+    const mockMutate = vi.fn();
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false });
+    global.fetch = mockFetch;
+
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return {
+          data: mockTasks,
+          error: undefined,
+          isLoading: false,
+          mutate: mockMutate,
+        };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    checkboxes[0].click();
+
+    await vi.waitFor(() => {
+      expect(mockToast.error).toHaveBeenCalledWith("Failed to update task");
+    });
+  });
+
+  it("retry button in error state calls both mutate and projectsMutate", async () => {
+    const mockMutate = vi.fn();
+
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return {
+          data: undefined,
+          error: new Error("Failed"),
+          isLoading: false,
+          mutate: mockMutate,
+        };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    const retryButton = screen.getByText("Try again");
+    fireEvent.click(retryButton);
+
+    expect(mockMutate).toHaveBeenCalled();
+    expect(mockProjectsMutate).toHaveBeenCalled();
+  });
+
+  it("View Archived link exists and points to /projects/archived", () => {
+    mockUseSWR.mockImplementation((key: string) => {
+      if (key === "/api/tasks") {
+        return {
+          data: mockTasks,
+          error: undefined,
+          isLoading: false,
+          mutate: vi.fn(),
+        };
+      }
+      return { ...defaultPausedReturn, mutate: vi.fn() };
+    });
+
+    renderWithProviders(<TasksPageContent />);
+
+    const archivedLink = screen.getByText("Archived").closest("a");
+    expect(archivedLink).toHaveAttribute("href", "/projects/archived");
   });
 });
