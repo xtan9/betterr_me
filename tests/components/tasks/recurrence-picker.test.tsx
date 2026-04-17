@@ -143,4 +143,365 @@ describe("RecurrencePicker", () => {
       null,
     );
   });
+
+  // ruleToPreset branches
+  it("ruleToPreset: biweekly rule (weekly interval=2) renders 'Every 2 weeks' preset", () => {
+    const biweeklyRule: RecurrenceRule = {
+      frequency: "weekly",
+      interval: 2,
+      days_of_week: [1],
+    };
+    render(<RecurrencePicker {...defaultProps} value={biweeklyRule} />);
+    expect(screen.getByRole("combobox")).toHaveTextContent("Every 2 weeks");
+  });
+
+  it("ruleToPreset: monthly rule renders 'Monthly' preset", () => {
+    const monthlyRule: RecurrenceRule = {
+      frequency: "monthly",
+      interval: 1,
+      day_of_month: 15,
+    };
+    render(<RecurrencePicker {...defaultProps} value={monthlyRule} />);
+    expect(screen.getByRole("combobox")).toHaveTextContent("Monthly");
+  });
+
+  it("ruleToPreset: yearly rule renders 'Yearly' preset", () => {
+    const yearlyRule: RecurrenceRule = {
+      frequency: "yearly",
+      interval: 1,
+      month_of_year: 6,
+      day_of_month: 15,
+    };
+    render(<RecurrencePicker {...defaultProps} value={yearlyRule} />);
+    expect(screen.getByRole("combobox")).toHaveTextContent("Yearly");
+  });
+
+  it("ruleToPreset: non-standard rule falls back to 'Custom' preset", () => {
+    const customRule: RecurrenceRule = {
+      frequency: "daily",
+      interval: 3,
+    };
+    render(<RecurrencePicker {...defaultProps} value={customRule} />);
+    // When custom is active, a second combobox (frequency) also renders;
+    // assert on the preset combobox (first).
+    const comboboxes = screen.getAllByRole("combobox");
+    expect(comboboxes[0]).toHaveTextContent("Custom");
+  });
+
+  // presetToRule with startDate
+  it("weekly preset with startDate uses startDate's day of week", async () => {
+    // 2026-01-05 is a Monday (day 1)
+    render(<RecurrencePicker {...defaultProps} startDate="2026-01-05" />);
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(screen.getByRole("option", { name: "Weekly" }));
+
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "weekly", interval: 1, days_of_week: [1] },
+      "never",
+      null,
+      null,
+    );
+  });
+
+  it("biweekly preset with startDate uses startDate's day of week", async () => {
+    // 2026-01-07 is a Wednesday (day 3)
+    render(<RecurrencePicker {...defaultProps} startDate="2026-01-07" />);
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(screen.getByRole("option", { name: "Every 2 weeks" }));
+
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "weekly", interval: 2, days_of_week: [3] },
+      "never",
+      null,
+      null,
+    );
+  });
+
+  it("monthly preset with startDate uses day_of_month from startDate", async () => {
+    render(<RecurrencePicker {...defaultProps} startDate="2026-03-20" />);
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(screen.getByRole("option", { name: "Monthly" }));
+
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "monthly", interval: 1, day_of_month: 20 },
+      "never",
+      null,
+      null,
+    );
+  });
+
+  it("yearly preset with startDate uses month_of_year and day_of_month from startDate", async () => {
+    render(<RecurrencePicker {...defaultProps} startDate="2026-07-04" />);
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(screen.getByRole("option", { name: "Yearly" }));
+
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "yearly", interval: 1, month_of_year: 7, day_of_month: 4 },
+      "never",
+      null,
+      null,
+    );
+  });
+
+  // End type changes
+  it("selecting 'After' end type fires onChange with after_count endType", async () => {
+    render(
+      <RecurrencePicker
+        {...defaultProps}
+        value={{ frequency: "daily", interval: 1 }}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("After"));
+
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "daily", interval: 1 },
+      "after_count",
+      null,
+      null,
+    );
+  });
+
+  it("selecting 'On date' end type fires onChange with on_date endType", async () => {
+    render(
+      <RecurrencePicker
+        {...defaultProps}
+        value={{ frequency: "daily", interval: 1 }}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("On date"));
+
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "daily", interval: 1 },
+      "on_date",
+      null,
+      null,
+    );
+  });
+
+  it("after_count end type shows count input and changing it fires onChange", async () => {
+    render(
+      <RecurrencePicker
+        {...defaultProps}
+        value={{ frequency: "daily", interval: 1 }}
+        endType="after_count"
+        endCount={10}
+      />,
+    );
+
+    expect(screen.getByText("times")).toBeInTheDocument();
+
+    const countInput = screen.getByDisplayValue("10") as HTMLInputElement;
+    // userEvent.clear/type on number inputs is flaky in jsdom — use fireEvent.
+    const { fireEvent } = await import("@testing-library/react");
+    fireEvent.change(countInput, { target: { value: "5" } });
+
+    expect(mockOnChange).toHaveBeenLastCalledWith(
+      { frequency: "daily", interval: 1 },
+      "after_count",
+      null,
+      5,
+    );
+  });
+
+  it("on_date end type shows date input and changing it fires onChange", async () => {
+    render(
+      <RecurrencePicker
+        {...defaultProps}
+        value={{ frequency: "daily", interval: 1 }}
+        endType="on_date"
+        endDate="2026-12-31"
+      />,
+    );
+
+    const dateInput = screen.getByDisplayValue("2026-12-31") as HTMLInputElement;
+    expect(dateInput).toBeInTheDocument();
+
+    const { fireEvent } = await import("@testing-library/react");
+    fireEvent.change(dateInput, { target: { value: "2027-01-01" } });
+
+    expect(mockOnChange).toHaveBeenLastCalledWith(
+      { frequency: "daily", interval: 1 },
+      "on_date",
+      "2027-01-01",
+      null,
+    );
+  });
+
+  // Custom mode: frequency and interval changes
+  it("custom mode: changing frequency to 'weekly' fires onChange with days_of_week", async () => {
+    render(
+      <RecurrencePicker
+        {...defaultProps}
+        value={{ frequency: "daily", interval: 3 }}
+      />,
+    );
+
+    // The component initialises to "custom" because interval=3 doesn't match any preset
+    // There are two comboboxes: preset selector and custom frequency selector
+    const comboboxes = screen.getAllByRole("combobox");
+    // second combobox is the frequency selector inside custom controls
+    await user.click(comboboxes[1]);
+    await user.click(screen.getByRole("option", { name: "weeks" }));
+
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "weekly", interval: 3, days_of_week: [0] },
+      "never",
+      null,
+      null,
+    );
+  });
+
+  it("custom mode: changing frequency to 'monthly' fires onChange with day_of_month", async () => {
+    render(
+      <RecurrencePicker
+        {...defaultProps}
+        value={{ frequency: "daily", interval: 3 }}
+      />,
+    );
+
+    const comboboxes = screen.getAllByRole("combobox");
+    await user.click(comboboxes[1]);
+    await user.click(screen.getByRole("option", { name: "months" }));
+
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "monthly", interval: 3, day_of_month: 1 },
+      "never",
+      null,
+      null,
+    );
+  });
+
+  it("custom mode: changing frequency to 'yearly' fires onChange with month_of_year and day_of_month", async () => {
+    render(
+      <RecurrencePicker
+        {...defaultProps}
+        value={{ frequency: "daily", interval: 3 }}
+      />,
+    );
+
+    const comboboxes = screen.getAllByRole("combobox");
+    await user.click(comboboxes[1]);
+    await user.click(screen.getByRole("option", { name: "years" }));
+
+    expect(mockOnChange).toHaveBeenCalledWith(
+      {
+        frequency: "yearly",
+        interval: 3,
+        month_of_year: 1,
+        day_of_month: 1,
+      },
+      "never",
+      null,
+      null,
+    );
+  });
+
+  it("custom mode: changing interval fires onChange with new interval", async () => {
+    render(
+      <RecurrencePicker
+        {...defaultProps}
+        value={{ frequency: "daily", interval: 3 }}
+      />,
+    );
+
+    const intervalInput = screen.getByDisplayValue("3") as HTMLInputElement;
+    const { fireEvent } = await import("@testing-library/react");
+    fireEvent.change(intervalInput, { target: { value: "7" } });
+
+    expect(mockOnChange).toHaveBeenLastCalledWith(
+      { frequency: "daily", interval: 7 },
+      "never",
+      null,
+      null,
+    );
+  });
+
+  // Day picker (ToggleGroup) for weekly rules.
+  // The day items render in DOM order Sun(0), Mon(1), Tue(2), Wed(3), Thu(4),
+  // Fri(5), Sat(6). We identify them via the `data-slot="toggle-group-item"`
+  // attribute that shadcn's ToggleGroupItem sets — stable across Radix versions.
+  function getDayItems(): HTMLElement[] {
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-slot="toggle-group-item"]',
+      ),
+    );
+  }
+
+  it("day picker: toggling a day in weekly mode fires onChange with updated days_of_week", async () => {
+    const weeklyRule: RecurrenceRule = {
+      frequency: "weekly",
+      interval: 1,
+      days_of_week: [1], // Mon
+    };
+
+    render(<RecurrencePicker {...defaultProps} value={weeklyRule} />);
+
+    const dayItems = getDayItems();
+    expect(dayItems).toHaveLength(7);
+
+    // Click Wednesday (index 3); Monday was already selected so onChange
+    // should be called with both days in sorted order.
+    await user.click(dayItems[3]);
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "weekly", interval: 1, days_of_week: [1, 3] },
+      "never",
+      null,
+      null,
+    );
+  });
+
+  it("day picker: deselecting the only selected day does not fire onChange (empty selection ignored)", async () => {
+    const weeklyRule: RecurrenceRule = {
+      frequency: "weekly",
+      interval: 1,
+      days_of_week: [1], // Mon only
+    };
+
+    render(<RecurrencePicker {...defaultProps} value={weeklyRule} />);
+
+    const dayItems = getDayItems();
+    expect(dayItems).toHaveLength(7);
+
+    // Click the currently-selected Monday to deselect.
+    await user.click(dayItems[1]);
+
+    // handleDaysToggle guards against days.length === 0 — onChange should never
+    // be called with an empty days_of_week array.
+    const callsWithEmpty = mockOnChange.mock.calls.filter(
+      (call) =>
+        call[0] &&
+        Array.isArray(call[0].days_of_week) &&
+        call[0].days_of_week.length === 0,
+    );
+    expect(callsWithEmpty).toHaveLength(0);
+  });
+
+  it("day picker: selecting additional days fires onChange with sorted days array", async () => {
+    const weeklyRule: RecurrenceRule = {
+      frequency: "weekly",
+      interval: 1,
+      days_of_week: [3], // Wed only
+    };
+
+    render(<RecurrencePicker {...defaultProps} value={weeklyRule} />);
+
+    const dayItems = getDayItems();
+    expect(dayItems).toHaveLength(7);
+
+    // Click Friday (index 5); Wed is already selected → sorted [3,5].
+    await user.click(dayItems[5]);
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "weekly", interval: 1, days_of_week: [3, 5] },
+      "never",
+      null,
+      null,
+    );
+  });
 });

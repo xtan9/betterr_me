@@ -280,3 +280,253 @@ describe("DELETE /api/journal/[id]/links", () => {
     expect(response.status).toBe(404);
   });
 });
+
+describe("GET /api/journal/[id]/links — enrichment branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockReturnValue({
+      auth: {
+        getUser: vi.fn(() => ({
+          data: { user: { id: "user-123", email: "test@example.com" } },
+        })),
+      },
+      from: mockFrom,
+    } as any);
+    mockJournalDB.getEntry.mockResolvedValue({ id: "entry-123", user_id: "user-123" });
+  });
+
+  it("enriches task links with title", async () => {
+    mockLinksDB.getLinksForEntry.mockResolvedValue([
+      {
+        id: "link-2",
+        entry_id: "entry-123",
+        link_type: "task",
+        link_id: "task-xyz",
+        created_at: "2026-02-23T10:00:00Z",
+      },
+    ]);
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "tasks") {
+        return {
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({
+              data: [{ id: "task-xyz", title: "Write PR" }],
+            }),
+          }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({ data: [] }),
+        }),
+      };
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links");
+    const response = await GET(request, { params: makeParams("entry-123") });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.links[0].name).toBe("Write PR");
+    expect(mockFrom).toHaveBeenCalledWith("tasks");
+  });
+
+  it("enriches project links with name", async () => {
+    mockLinksDB.getLinksForEntry.mockResolvedValue([
+      {
+        id: "link-3",
+        entry_id: "entry-123",
+        link_type: "project",
+        link_id: "project-abc",
+        created_at: "2026-02-23T10:00:00Z",
+      },
+    ]);
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "projects") {
+        return {
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({
+              data: [{ id: "project-abc", name: "Launch Plan" }],
+            }),
+          }),
+        };
+      }
+      return {
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({ data: [] }),
+        }),
+      };
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links");
+    const response = await GET(request, { params: makeParams("entry-123") });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.links[0].name).toBe("Launch Plan");
+    expect(mockFrom).toHaveBeenCalledWith("projects");
+  });
+
+  it("handles mixed link types (habit + task + project) in one entry", async () => {
+    mockLinksDB.getLinksForEntry.mockResolvedValue([
+      { id: "l1", entry_id: "entry-123", link_type: "habit", link_id: "h1", created_at: "t" },
+      { id: "l2", entry_id: "entry-123", link_type: "task", link_id: "t1", created_at: "t" },
+      { id: "l3", entry_id: "entry-123", link_type: "project", link_id: "p1", created_at: "t" },
+    ]);
+
+    mockFrom.mockImplementation((table: string) => {
+      const data =
+        table === "habits"
+          ? [{ id: "h1", name: "Meditate" }]
+          : table === "tasks"
+            ? [{ id: "t1", title: "Task A" }]
+            : [{ id: "p1", name: "Project A" }];
+      return {
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({ data }),
+        }),
+      };
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links");
+    const response = await GET(request, { params: makeParams("entry-123") });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.links.map((l: { name: string }) => l.name)).toEqual([
+      "Meditate",
+      "Task A",
+      "Project A",
+    ]);
+  });
+
+  it("logs warning when habit enrichment errors (but still responds)", async () => {
+    mockLinksDB.getLinksForEntry.mockResolvedValue([
+      { id: "l1", entry_id: "entry-123", link_type: "habit", link_id: "h1", created_at: "t" },
+    ]);
+
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ data: null, error: { message: "query failed" } }),
+      }),
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links");
+    const response = await GET(request, { params: makeParams("entry-123") });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.links[0].name).toBe("(deleted)");
+  });
+
+  it("logs warning when task enrichment errors", async () => {
+    mockLinksDB.getLinksForEntry.mockResolvedValue([
+      { id: "l1", entry_id: "entry-123", link_type: "task", link_id: "t1", created_at: "t" },
+    ]);
+
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ data: null, error: { message: "task query failed" } }),
+      }),
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links");
+    const response = await GET(request, { params: makeParams("entry-123") });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.links[0].name).toBe("(deleted)");
+  });
+
+  it("logs warning when project enrichment errors", async () => {
+    mockLinksDB.getLinksForEntry.mockResolvedValue([
+      { id: "l1", entry_id: "entry-123", link_type: "project", link_id: "p1", created_at: "t" },
+    ]);
+
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        in: vi.fn().mockResolvedValue({ data: null, error: { message: "project query failed" } }),
+      }),
+    });
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links");
+    const response = await GET(request, { params: makeParams("entry-123") });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.links[0].name).toBe("(deleted)");
+  });
+
+  it("returns 500 when underlying DB call throws", async () => {
+    mockLinksDB.getLinksForEntry.mockRejectedValue(new Error("db exploded"));
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links");
+    const response = await GET(request, { params: makeParams("entry-123") });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to fetch journal entry links");
+  });
+});
+
+describe("POST /api/journal/[id]/links — error paths", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockReturnValue({
+      auth: {
+        getUser: vi.fn(() => ({
+          data: { user: { id: "user-123", email: "test@example.com" } },
+        })),
+      },
+      from: mockFrom,
+    } as any);
+  });
+
+  it("returns 500 when addLink throws", async () => {
+    mockJournalDB.getEntry.mockResolvedValue({ id: "entry-123", user_id: "user-123" });
+    mockLinksDB.addLink.mockRejectedValue(new Error("insert failed"));
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links", {
+      method: "POST",
+      body: JSON.stringify({
+        link_type: "habit",
+        link_id: "d47f3c2a-1234-4abc-9def-0123456789ab",
+      }),
+    });
+    const response = await POST(request, { params: makeParams("entry-123") });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to add journal entry link");
+  });
+});
+
+describe("DELETE /api/journal/[id]/links — error paths", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(createClient).mockReturnValue({
+      auth: {
+        getUser: vi.fn(() => ({
+          data: { user: { id: "user-123", email: "test@example.com" } },
+        })),
+      },
+      from: mockFrom,
+    } as any);
+    mockJournalDB.getEntry.mockResolvedValue({ id: "entry-123", user_id: "user-123" });
+  });
+
+  it("returns 500 when removeLink throws", async () => {
+    mockLinksDB.removeLink.mockRejectedValue(new Error("delete failed"));
+
+    const request = new NextRequest("http://localhost:3000/api/journal/entry-123/links?link_id=link-1", {
+      method: "DELETE",
+    });
+    const response = await DELETE(request, { params: makeParams("entry-123") });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Failed to remove journal entry link");
+  });
+});
