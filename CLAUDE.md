@@ -123,11 +123,12 @@ log.warn("POST /api/chat: invalid JSON body", { error: String(error) });
 ## Testing
 
 - Config: `vitest.config.ts` (jsdom, globals). Setup: `tests/setup.ts` (polyfills, global Supabase mock)
-- Coverage threshold: 50%. `components/ui/` excluded from coverage
+- Coverage thresholds: 89/90/88/82 (statements/lines/functions/branches). `components/ui/` excluded from coverage.
+- **Test-writing rules: see [`docs/testing.md`](./docs/testing.md)**. Target is ≥85% mutation score on DB / money / recurring-tasks / habits layers. Use `expectQuery()` for DB assertions, test error paths explicitly, assert specific values (not just shapes), and import pure helpers instead of stubbing them.
 
-### Mocking Patterns
+### Mocking Patterns (see docs/testing.md for rationale)
 
-**Supabase (DB layer):** `mockSupabaseClient.setMockResponse([mockData])` from `tests/setup.ts`
+**Supabase (DB layer):** `mockSupabaseClient.setMockResponse([mockData])` + `mockSupabaseClient.expectQuery({ table, method, args })` from `tests/setup.ts`.
 
 **Supabase (API routes):** `vi.hoisted` + mock DB classes:
 ```ts
