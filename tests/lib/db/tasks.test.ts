@@ -1,10 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TasksDB } from "@/lib/db/tasks";
 import { mockSupabaseClient } from "../../setup";
-import {
-  queueThenResponses,
-  restoreMockSupabaseThen,
-} from "../../helpers/mock-supabase";
+import { restoreMockSupabaseThen } from "../../helpers/mock-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Task, TaskInsert, TaskUpdate } from "@/lib/db/types";
 
@@ -82,6 +79,19 @@ describe("TasksDB", () => {
   afterEach(() => {
     restoreMockSupabaseThen();
   });
+
+  // Queue a one-shot response for the next `.single()` call. Used by
+  // multi-phase methods like toggleTaskCompletion which does
+  //   SELECT .single() → UPDATE .single()
+  // and each phase needs its own response. Wrapping the cast here keeps
+  // the suite readable without changing the established template pattern.
+  const mockSingleOnce = (data: unknown, error: unknown = null): void => {
+    (
+      mockSupabaseClient.single as unknown as {
+        mockResolvedValueOnce: (v: unknown) => void;
+      }
+    ).mockResolvedValueOnce({ data, error });
+  };
 
   // ─── getUserTasks ─────────────────────────────────────────────────────────
   describe("getUserTasks", () => {
@@ -582,16 +592,8 @@ describe("TasksDB", () => {
         });
         // Phase 1 (getTask): single() returns incomplete task
         // Phase 2 (updateTask): single() returns completed task
-        (
-          mockSupabaseClient.single as unknown as {
-            mockResolvedValueOnce: (v: unknown) => void;
-          }
-        ).mockResolvedValueOnce({ data: incomplete, error: null });
-        (
-          mockSupabaseClient.single as unknown as {
-            mockResolvedValueOnce: (v: unknown) => void;
-          }
-        ).mockResolvedValueOnce({ data: completed, error: null });
+        mockSingleOnce(incomplete);
+        mockSingleOnce(completed);
 
         const result = await db.toggleTaskCompletion(TASK_ID, USER_ID);
 
@@ -625,16 +627,8 @@ describe("TasksDB", () => {
         status: "todo",
         completed_at: null,
       });
-      (
-        mockSupabaseClient.single as unknown as {
-          mockResolvedValueOnce: (v: unknown) => void;
-        }
-      ).mockResolvedValueOnce({ data: completed, error: null });
-      (
-        mockSupabaseClient.single as unknown as {
-          mockResolvedValueOnce: (v: unknown) => void;
-        }
-      ).mockResolvedValueOnce({ data: incomplete, error: null });
+      mockSingleOnce(completed);
+      mockSingleOnce(incomplete);
 
       const result = await db.toggleTaskCompletion(TASK_ID, USER_ID);
 
@@ -651,11 +645,7 @@ describe("TasksDB", () => {
     });
 
     it("throws when task is not found (PGRST116 → getTask returns null)", async () => {
-      (
-        mockSupabaseClient.single as unknown as {
-          mockResolvedValueOnce: (v: unknown) => void;
-        }
-      ).mockResolvedValueOnce({ data: null, error: { code: "PGRST116" } });
+      mockSingleOnce(null, { code: "PGRST116" });
 
       await expect(
         db.toggleTaskCompletion(TASK_ID, USER_ID),
@@ -669,14 +659,7 @@ describe("TasksDB", () => {
     });
 
     it("propagates getTask errors without attempting update", async () => {
-      (
-        mockSupabaseClient.single as unknown as {
-          mockResolvedValueOnce: (v: unknown) => void;
-        }
-      ).mockResolvedValueOnce({
-        data: null,
-        error: { code: "FATAL", message: "select blew up" },
-      });
+      mockSingleOnce(null, { code: "FATAL", message: "select blew up" });
 
       await expect(db.toggleTaskCompletion(TASK_ID, USER_ID)).rejects.toEqual({
         code: "FATAL",
@@ -691,19 +674,8 @@ describe("TasksDB", () => {
 
     it("propagates updateTask errors from the second phase", async () => {
       const incomplete = makeTask({ is_completed: false, status: "todo" });
-      (
-        mockSupabaseClient.single as unknown as {
-          mockResolvedValueOnce: (v: unknown) => void;
-        }
-      ).mockResolvedValueOnce({ data: incomplete, error: null });
-      (
-        mockSupabaseClient.single as unknown as {
-          mockResolvedValueOnce: (v: unknown) => void;
-        }
-      ).mockResolvedValueOnce({
-        data: null,
-        error: new Error("update rejected"),
-      });
+      mockSingleOnce(incomplete);
+      mockSingleOnce(null, new Error("update rejected"));
 
       await expect(
         db.toggleTaskCompletion(TASK_ID, USER_ID),
@@ -803,9 +775,7 @@ describe("TasksDB", () => {
         const result = await db.getUpcomingTasks(USER_ID, "2026-01-31", 7);
 
         expect(result).toEqual(tasks);
-        // "2026-01-31" + 7 days = "2026-02-07". Compute this via the real
-        // getLocalDateString helper to match whatever local TZ the test runs in.
-        // But we can assert the chain as: gt(due_date, "2026-01-31") → lte(due_date, <7 days later>)
+        // Jan 31 + 7 days = Feb 7. Time is frozen so this is TZ-deterministic.
         expect(mockSupabaseClient.queryLog).toEqual([
           { table: "tasks", method: "from", args: ["tasks"] },
           { table: "tasks", method: "select", args: ["*"] },
@@ -965,7 +935,4 @@ describe("TasksDB", () => {
       ).rejects.toThrow("overdue failed");
     });
   });
-
-  // Prevent unused import warning for queueThenResponses (used by afterEach import only)
-  void queueThenResponses;
 });
