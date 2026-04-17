@@ -1,20 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HouseholdsDB } from "@/lib/db/households";
 import { mockSupabaseClient } from "../../setup";
-
-// Helper: queue an ordered sequence of thenable responses for awaited query
-// builders (destructured `{ data, error, count }`). Restores the prototype
-// `then` automatically between tests via the top-level afterEach.
-function queueThenResponses(
-  responses: Array<{ data?: any; error?: any; count?: number | null }>
-) {
-  const origThen = mockSupabaseClient.then.bind(mockSupabaseClient);
-  mockSupabaseClient.then = function (onFulfilled: any, onRejected?: any) {
-    const next = responses.shift();
-    if (next) return Promise.resolve(next).then(onFulfilled, onRejected);
-    return origThen(onFulfilled, onRejected);
-  };
-}
+import {
+  queueThenResponses,
+  restoreMockSupabaseThen,
+} from "../../helpers/mock-supabase";
 
 describe("HouseholdsDB", () => {
   let db: HouseholdsDB;
@@ -26,7 +16,7 @@ describe("HouseholdsDB", () => {
   });
 
   afterEach(() => {
-    delete (mockSupabaseClient as { then?: unknown }).then;
+    restoreMockSupabaseThen();
   });
 
   // =========================================================================

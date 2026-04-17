@@ -26,6 +26,19 @@ mockSupabaseClient.expectQuery({
 
 **Use for:** every meaningful DB call — `from`, `select`, `eq`, `in`, `gte`, `order`, `range`, `insert`, `update`, `delete`.
 
+**Gotcha — multi-phase queries with repeated args:** `expectQuery` finds *any* matching call. When a source method runs two phases (e.g. SELECT then UPDATE) and both use the same `.from(table)` or `.eq("user_id", userId)`, mutating just one phase won't be caught — the other, unmutated phase still satisfies the assertion. For these cases, assert on the full `queryLog` array:
+
+```ts
+expect(mockSupabaseClient.queryLog).toEqual([
+  { table: "habit_graduations", method: "from", args: ["habit_graduations"] },
+  { table: "habit_graduations", method: "select", args: ["id"] },
+  { table: "habit_graduations", method: "eq", args: ["habit_id", habitId] },
+  // ... full ordered chain, both phases
+]);
+```
+
+This catches mutations to *any* single arg/method in *any* position. Use for methods that make multiple DB calls; `expectQuery` is fine for single-query methods.
+
 ### R2 — Test error paths explicitly
 
 Any `if (error) throw …` or `if (error) log.error(…)` branch in source needs a test that actually triggers it. Without one, Stryker mutates `if (error)` → `if (false)` and the test still passes.
@@ -132,7 +145,13 @@ Reports land at `reports/mutation/mutation.html`.
 Established patterns (see examples in `tests/lib/db/`):
 
 - **Supabase DB calls**: `mockSupabaseClient.setMockResponse(data, error)` + `expectQuery(...)` assertions.
-- **Multi-call sequences**: for endpoints that make multiple awaited queries, monkey-patch `.then` temporarily (see `tests/lib/db/households.test.ts` `queueThenResponses`).
+- **Multi-call sequences**: for endpoints that make multiple awaited queries (`const { data, error } = await supabase.from(…).update(…).eq(…)`), use `queueThenResponses` from `tests/helpers/mock-supabase.ts`. Always pair with `afterEach(() => restoreMockSupabaseThen())` — without the cleanup, queued responses leak into the next test.
+  ```ts
+  import { queueThenResponses, restoreMockSupabaseThen } from "../../helpers/mock-supabase";
+  // ...
+  afterEach(() => restoreMockSupabaseThen());
+  ```
+  Note: `.single()` / `.maybeSingle()` do NOT consume queued responses — they read from `setMockResponse` state directly. Mix the two when a method does a `maybeSingle` SELECT then an awaited `.eq()` UPDATE.
 - **`fetch`**: `vi.stubGlobal("fetch", vi.fn().mockResolvedValue(...))` + `afterEach(vi.unstubAllGlobals)`.
 - **`next-intl`**: `vi.mock("next-intl", () => ({ useTranslations: () => (key) => key }))` or wrap with `NextIntlClientProvider`.
 - **SWR**: `vi.mock("swr", () => ({ default: (...args) => mockUseSWR(...args) }))`.
