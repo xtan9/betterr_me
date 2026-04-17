@@ -36,10 +36,13 @@ export default defineConfig({
         // specs/2026-04-12-coverage-improvement-design.md). These reflect
         // actual coverage with a small regression cushion. Raise over time
         // as further tests land — do not lower without a documented reason.
-        lines: 80,
-        statements: 80,
-        functions: 75,
-        branches: 70,
+        //
+        // Current baseline (post-PR 427): 90.33 stmts / 83.36 branches /
+        // 89.75 functions / 91.83 lines.
+        lines: 90,
+        statements: 89,
+        functions: 88,
+        branches: 82,
       },
     },
   },
