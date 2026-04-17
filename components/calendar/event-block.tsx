@@ -56,7 +56,7 @@ export const EventBlock = memo(function EventBlock({
     <button
       type="button"
       className={`
-        absolute rounded-control px-1.5 py-0.5
+        absolute rounded-chip px-1.5 py-0.5
         border-l-2 overflow-hidden
         text-xs text-left cursor-pointer
         hover:opacity-80 transition-opacity

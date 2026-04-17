@@ -198,7 +198,7 @@ export function TransactionDetail({
                       return (
                         <span
                           key={split.id}
-                          className="inline-flex items-center gap-1.5 rounded-control bg-muted px-2 py-0.5 text-xs"
+                          className="inline-flex items-center gap-1.5 rounded-chip bg-muted px-2 py-0.5 text-xs"
                         >
                           <CategoryBadge category={cat ?? null} />
                           <span className="tabular-nums">
