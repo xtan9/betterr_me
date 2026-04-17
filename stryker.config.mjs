@@ -28,13 +28,17 @@ const config = {
     "e2e",
     "public",
     "docs",
-    "supabase",
+    // NOTE: do NOT add a bare `supabase` pattern — it would also match
+    // `lib/supabase/` (Supabase client code the DB tests import) and break
+    // the sandbox with "Failed to resolve import @/lib/supabase/client".
+    // The root `supabase/` dir (CLI config + migrations) contains no JS/TS
+    // that Stryker would mutate, so there's no need to exclude it either.
     "emails",
     ".worktrees",
     ".github",
     ".vscode",
   ],
-  coverageAnalysis: "perTest",
+  coverageAnalysis: "all",
   // Restrict the initial test run to the DB unit tests. Running the full suite
   // slows startup and pulls in tests for app/ API routes that depend on files
   // outside the mutated scope.
