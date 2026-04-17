@@ -796,11 +796,11 @@ describe("InsightsDB", () => {
     it("does NOT fire when change is 0 (below > 10 threshold)", async () => {
       // Rounded per-week rates on a 7-day daily habit are {0, 14, 29, 43, 57,
       // 71, 86, 100}; pairwise diffs are always 14 or 15, so an exact change
-      // of 10 isn't reachable. We instead exercise the nearest boundary below
-      // the threshold: change === 0 (identical logs in both weeks) → mutant
-      // `change >= 10` is not reached, so this test kills the `true` /
-      // `twoWeeksAgoOverall > 0` guard mutants and documents the "no-fire"
-      // contract for change below 10.
+      // of 10 isn't reachable with integer-rounded rates. We exercise the
+      // nearest below-threshold case (identical logs in both weeks → change
+      // = 0) to lock the "no-fire" contract for change below the threshold.
+      // The `change >= 10` and `twoWeeksAgoOverall > 0 → true` mutants are
+      // documented as equivalent in the trailing comment block.
       const habit = makeHabit({ current_streak: 0 });
       const logs = [
         ...logsFor(habit.id, PREV_WEEK_DATES.slice(0, 5)),
@@ -1571,13 +1571,13 @@ describe("InsightsDB", () => {
   //     already 0 (either from `new Date(dateStr + "T00:00:00")` or from
   //     an earlier `setHours(0,0,0,0)` on the source copy), so the two
   //     methods produce identical post-conditions.
-  //   - Line 275 `if (scheduled > 0)` / Line 318 equivalent: `scheduled`
-  //     is only incremented inside the while-loop when
-  //     `shouldTrackOnDate(frequency, checkDate)` returns true. For
-  //     daily/weekly/times_per_week, `shouldTrackOnDate` is always true
-  //     over a 7-day window, so scheduled > 0. For custom/weekdays the
-  //     only way to hit scheduled === 0 is an empty `days[]` array, which
-  //     the frequency validator rejects.
+  //   - Line 275 `if (scheduled > 0)` / Line 318 equivalent: weekly and
+  //     times_per_week habits short-circuit before the scheduled++ loop
+  //     (line 257 `continue`) and never reach the guard at all. Daily
+  //     habits always increment scheduled 7 times, so scheduled > 0.
+  //     Weekdays always increment 5 times. The only path to scheduled === 0
+  //     is a custom habit with an empty `days[]` array, which the
+  //     frequency validator rejects.
   //   - Line 326 `if (habitRates.size === 0) return 0`: `habitRates` is
   //     populated from `habits`, which line 63 has already short-circuited
   //     to an empty array (early return). Combined with the previous point,
@@ -1592,6 +1592,20 @@ describe("InsightsDB", () => {
   //     (streak_proximity 100 → best_habit 80 → best_week 80 → worst_day 60
   //     → decline 60 → improvement 40), so a stable no-op sort produces the
   //     same array.
+  //   - Line 204 `if (twoWeeksAgoOverall > 0)` → `>= 0` / `true` (decline
+  //     branch only): when twoWeeksAgoOverall is 0, the subsequent
+  //     `change = twoWeeksAgoOverall − prevWeekOverall` is ≤ 0, which
+  //     fails the inner `change > 15` check anyway. When twoWeeksAgoOverall
+  //     > 0 the mutant and original evaluate identically. The mirror
+  //     mutant on line 217 (improvement branch) IS killed by the
+  //     "does NOT fire when twoWeeksAgoOverall is 0 (guard)" improvement
+  //     test, because there `change = prevWeekOverall − twoWeeksAgoOverall`
+  //     can exceed 10.
+  //   - Line 219 `if (change > 10)` → `>= 10`: integer-rounded rates make
+  //     change === 10 unreachable from the per-habit code paths we test
+  //     (per-week rates land at {0, 14, 29, 43, 57, 71, 86, 100} for a
+  //     7-day habit; pairwise diffs are 14 or 15), so no input
+  //     distinguishes `>` from `>=`.
   //
   // A separate category of 8 survivors on module-level `DAY_NAMES` string
   // literals stems from a Stryker + Vitest 4.x limitation: static mutants
