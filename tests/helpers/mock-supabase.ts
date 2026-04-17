@@ -22,24 +22,31 @@ import { mockSupabaseClient } from "../setup";
  *     { data: null, error: myError },    // second awaited query
  *   ]);
  */
+// The return type mirrors the mock's built-in `then` signature: the mock
+// resolves with `{ data, error, count }` shapes, but callers destructure
+// only the fields they care about, so the loose typing is safe here.
+type MockThenable = typeof mockSupabaseClient.then;
+
 export function queueThenResponses(
   responses: Array<{ data?: unknown; error?: unknown; count?: number | null }>,
 ): void {
   const origThen = mockSupabaseClient.then.bind(mockSupabaseClient);
-  (mockSupabaseClient as { then: typeof mockSupabaseClient.then }).then =
-    function (onFulfilled: unknown, onRejected?: unknown) {
-      const next = responses.shift();
-      if (next) {
-        return Promise.resolve(next).then(
-          onFulfilled as (value: unknown) => unknown,
-          onRejected as ((reason: unknown) => unknown) | undefined,
-        );
-      }
-      return origThen(
-        onFulfilled as (value: unknown) => unknown,
-        onRejected as ((reason: unknown) => unknown) | undefined,
-      );
-    };
+  const patched: MockThenable = function (onFulfilled, onRejected) {
+    const next = responses.shift();
+    if (next) {
+      // Fill in defaults so the queued response matches the mock's full
+      // shape (`{ data, error, count }`) — callers that destructure a
+      // missing field get `undefined`, same as the stock mock behavior.
+      const filled = {
+        data: next.data ?? null,
+        error: next.error ?? null,
+        count: next.count ?? null,
+      };
+      return Promise.resolve(filled).then(onFulfilled, onRejected);
+    }
+    return origThen(onFulfilled, onRejected);
+  };
+  mockSupabaseClient.then = patched;
 }
 
 /**
