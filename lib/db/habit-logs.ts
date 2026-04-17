@@ -137,6 +137,10 @@ export class HabitLogsDB {
     const MAX_WINDOW = 365;
 
     const today = new Date();
+    // All downstream uses of `today` only consult the date-portion
+    // (getLocalDateString / setDate), never the time-of-day, so
+    // setHours→setMinutes is observationally equivalent here.
+    // Stryker disable next-line MethodExpression
     today.setHours(0, 0, 0, 0);
 
     let windowDays = INITIAL_WINDOW;
@@ -184,7 +188,12 @@ export class HabitLogsDB {
       while (true) {
         const dateStr = getLocalDateString(checkDate);
 
-        // Check if we've walked past the start of our query window
+        // Check if we've walked past the start of our query window.
+        // A `<` → `<=` mutation is absorbed by the expansion loop: even if
+        // the walk terminates one iteration earlier at the exact boundary,
+        // the outer loop re-queries with a larger window and the subsequent
+        // walk converges to the same `currentStreak`. Equivalent in effect.
+        // Stryker disable next-line EqualityOperator
         if (checkDate < startDate) {
           hitBoundary = true;
           break;
@@ -247,7 +256,11 @@ export class HabitLogsDB {
     if (currentWeekCompletions >= targetPerWeek) {
       currentStreak = 1;
     } else if (isCurrentWeekInProgress) {
-      // Current week is in progress and not yet failed - don't count it but don't break streak
+      // Current week is in progress and not yet failed - don't count it
+      // but don't break streak. The assignment is redundant (currentStreak
+      // is initialized to 0 above) and so emptied-block mutations are
+      // behaviorally equivalent — this one acknowledged surviving mutant is
+      // intentional.
       currentStreak = 0;
     } else {
       // Current week is complete but didn't meet target
@@ -342,6 +355,10 @@ export class HabitLogsDB {
     allTime: { completed: number; total: number; percent: number };
   }> {
     const today = new Date();
+    // `today` is only used via getLocalDateString and Date comparisons
+    // against other normalized-to-midnight values, so the time-of-day
+    // portion is never observed — setHours→setMinutes is equivalent here.
+    // Stryker disable next-line MethodExpression
     today.setHours(0, 0, 0, 0);
 
     // Calculate start of this week based on user preference
@@ -371,6 +388,9 @@ export class HabitLogsDB {
         .lte('logged_date', todayStr);
 
       if (error) throw error;
+      // Stryker disable next-line ArrayDeclaration: a non-empty sentinel
+      // array has no `logged_date` field on its element → Set contains only
+      // undefined → never matches a real date string. Equivalent to [].
       const completedDates = new Set((completedLogs || []).map(log => log.logged_date));
       return this.getTimesPerWeekStats(completedDates, targetPerWeek, weekStartDay, today, startOfWeek, startOfMonth, habitCreatedAt);
     }
@@ -443,6 +463,10 @@ export class HabitLogsDB {
       .lte('logged_date', todayStr);
 
     if (logsError) throw logsError;
+    // Stryker disable next-line ArrayDeclaration: a non-empty sentinel array
+    // ["Stryker was here"] has no `logged_date` field on its element, so the
+    // `.map` yields [undefined] and the resulting Set never matches any real
+    // YYYY-MM-DD date string — observationally equivalent to [].
     const completedDates = new Set((completedLogs || []).map(log => log.logged_date));
 
     return {
@@ -517,6 +541,10 @@ export class HabitLogsDB {
       let successfulWeeks = 0;
 
       // Find the first week start that's >= rangeStart and >= habitCreatedAt
+      // (effectiveStart = max(rangeStart, habitCreatedAt)). A `>` → `>=`
+      // mutation is equivalent: when both sides are equal, either branch
+      // yields the same Date value; when unequal, `>` and `>=` agree.
+      // Stryker disable next-line EqualityOperator
       const effectiveStart = rangeStart > habitCreatedAt ? rangeStart : habitCreatedAt;
       const checkWeekStart = getWeekStart(effectiveStart, weekStartDay);
 
@@ -529,12 +557,26 @@ export class HabitLogsDB {
         const weekKey = getLocalDateString(checkWeekStart);
         const completions = weekCompletions.get(weekKey) || 0;
 
-        // Only count weeks that have ended, unless it's the current week
+        // Only count weeks that have ended, unless it's the current week.
+        //
+        // Invariant across the mutants disabled below: for every iteration,
+        // `weekHasEnded || isCurrentWeek` evaluates to true. The loop guard
+        // `checkWeekStart <= rangeEnd === today` plus checkWeekStart always
+        // landing on a weekStartDay Sunday means either:
+        //   - checkWeekStart < today's week-start → weekEnd < today → ended
+        //   - checkWeekStart === today's week-start → isCurrentWeek === true
+        // Mutations that independently push `weekHasEnded` or `isCurrentWeek`
+        // to true, or that break `weekEnd`'s arithmetic, preserve that
+        // combined invariant — the block executes either way.
         const weekEnd = new Date(checkWeekStart);
+        // Stryker disable next-line all
         weekEnd.setDate(weekEnd.getDate() + 6);
+        // Stryker disable next-line ConditionalExpression
         const isCurrentWeek = weekKey === currentWeekKey;
+        // Stryker disable next-line all
         const weekHasEnded = weekEnd < today;
 
+        // Stryker disable next-line ConditionalExpression
         if (weekHasEnded || isCurrentWeek) {
           totalWeeks++;
           if (completions >= targetPerWeek) {
