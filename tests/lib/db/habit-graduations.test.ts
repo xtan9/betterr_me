@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HabitGraduationsDB } from "@/lib/db/habit-graduations";
 import { mockSupabaseClient } from "../../setup";
+import {
+  queueThenResponses,
+  restoreMockSupabaseThen,
+} from "../../helpers/mock-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { HabitGraduation, HabitGraduationInsert } from "@/lib/db/types";
 
@@ -10,28 +14,6 @@ vi.mock("@/lib/logger", () => ({
   log: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 import { log } from "@/lib/logger";
-
-// Queue an ordered sequence of thenable responses for awaited query builders
-// (destructured `{ data, error }`). Monkey-patches the prototype `then`; the
-// top-level afterEach restores it between tests.
-function queueThenResponses(
-  responses: Array<{ data?: unknown; error?: unknown }>,
-) {
-  const origThen = mockSupabaseClient.then.bind(mockSupabaseClient);
-  mockSupabaseClient.then = function (onFulfilled: unknown, onRejected?: unknown) {
-    const next = responses.shift();
-    if (next) {
-      return Promise.resolve(next).then(
-        onFulfilled as (value: unknown) => unknown,
-        onRejected as ((reason: unknown) => unknown) | undefined,
-      );
-    }
-    return origThen(
-      onFulfilled as (value: unknown) => unknown,
-      onRejected as ((reason: unknown) => unknown) | undefined,
-    );
-  };
-}
 
 const HABIT_ID = "habit-abc";
 const USER_ID = "user-1";
@@ -59,7 +41,7 @@ describe("HabitGraduationsDB", () => {
   });
 
   afterEach(() => {
-    delete (mockSupabaseClient as { then?: unknown }).then;
+    restoreMockSupabaseThen();
   });
 
   // ─── insertGraduation ─────────────────────────────────────────────────────

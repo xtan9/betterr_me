@@ -145,7 +145,13 @@ Reports land at `reports/mutation/mutation.html`.
 Established patterns (see examples in `tests/lib/db/`):
 
 - **Supabase DB calls**: `mockSupabaseClient.setMockResponse(data, error)` + `expectQuery(...)` assertions.
-- **Multi-call sequences**: for endpoints that make multiple awaited queries, monkey-patch `.then` temporarily (see `tests/lib/db/households.test.ts` `queueThenResponses`).
+- **Multi-call sequences**: for endpoints that make multiple awaited queries (`const { data, error } = await supabase.from(…).update(…).eq(…)`), use `queueThenResponses` from `tests/helpers/mock-supabase.ts`. Always pair with `afterEach(() => restoreMockSupabaseThen())` — without the cleanup, queued responses leak into the next test.
+  ```ts
+  import { queueThenResponses, restoreMockSupabaseThen } from "../../helpers/mock-supabase";
+  // ...
+  afterEach(() => restoreMockSupabaseThen());
+  ```
+  Note: `.single()` / `.maybeSingle()` do NOT consume queued responses — they read from `setMockResponse` state directly. Mix the two when a method does a `maybeSingle` SELECT then an awaited `.eq()` UPDATE.
 - **`fetch`**: `vi.stubGlobal("fetch", vi.fn().mockResolvedValue(...))` + `afterEach(vi.unstubAllGlobals)`.
 - **`next-intl`**: `vi.mock("next-intl", () => ({ useTranslations: () => (key) => key }))` or wrap with `NextIntlClientProvider`.
 - **SWR**: `vi.mock("swr", () => ({ default: (...args) => mockUseSWR(...args) }))`.
