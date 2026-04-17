@@ -233,7 +233,12 @@ export class BudgetsDB {
 
     if (splitError) throw splitError;
 
+    // Equivalent mutant note: `splits || []` below survives a mutation to
+    // `splits || ["Stryker was here"]`. When `splits` is null, mapping that
+    // string to `s.transaction_id` yields `[undefined]`, whose Set membership
+    // never matches a real tx.id — behavior is identical to the empty array.
     const splitTxIds = new Set(
+      // Stryker disable next-line ArrayDeclaration
       (splits || []).map((s: { transaction_id: string }) => s.transaction_id)
     );
 
@@ -247,6 +252,10 @@ export class BudgetsDB {
       }
     }
 
+    // Equivalent mutant: `splits || ["Stryker was here"]` would iterate one
+    // string — `"Stryker was here".category_id` is `undefined`, so the guard
+    // below skips the body, producing identical behavior to `|| []`.
+    // Stryker disable next-line ArrayDeclaration
     for (const split of splits || []) {
       if (split.category_id) {
         const current = categoryTotals.get(split.category_id) || 0;
@@ -418,7 +427,12 @@ export class BudgetsDB {
     if (splitError) throw splitError;
 
     // Build a set of transaction IDs that have splits
+    // Equivalent mutant note: `splits || []` below survives a mutation to
+    // `splits || ["Stryker was here"]`. When `splits` is null, mapping that
+    // string to `s.transaction_id` yields `[undefined]`, whose Set membership
+    // never matches a real tx.id — behavior is identical to the empty array.
     const splitTxIds = new Set(
+      // Stryker disable next-line ArrayDeclaration
       (splits || []).map((s: { transaction_id: string }) => s.transaction_id)
     );
 
@@ -441,6 +455,11 @@ export class BudgetsDB {
     }
 
     // Process splits
+    // Equivalent mutant note: `splits || []` below survives a mutation to
+    // `splits || ["Stryker was here"]`. Iterating the synthesized one-element
+    // string array passes through the `if (split.category_id)` guard without
+    // effect (the string has no `category_id`), identical to `|| []`.
+    // Stryker disable next-line ArrayDeclaration
     for (const split of splits || []) {
       if (split.category_id) {
         const current = categoryTotals.get(split.category_id) || 0;
