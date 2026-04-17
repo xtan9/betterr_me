@@ -28,9 +28,11 @@ const config = {
     "e2e",
     "public",
     "docs",
-    // NOTE: do NOT add `supabase` here — it would match `lib/supabase/`
-    // (Supabase client code the DB tests import) and break the sandbox.
-    // The root `supabase/` dir (CLI/migrations) doesn't exist in this repo.
+    // NOTE: do NOT add a bare `supabase` pattern — it would also match
+    // `lib/supabase/` (Supabase client code the DB tests import) and break
+    // the sandbox with "Failed to resolve import @/lib/supabase/client".
+    // The root `supabase/` dir (CLI config + migrations) contains no JS/TS
+    // that Stryker would mutate, so there's no need to exclude it either.
     "emails",
     ".worktrees",
     ".github",
