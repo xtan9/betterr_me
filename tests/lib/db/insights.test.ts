@@ -793,14 +793,12 @@ describe("InsightsDB", () => {
       }
     });
 
-    it("does NOT fire when change is 0 (below > 10 threshold)", async () => {
-      // Rounded per-week rates on a 7-day daily habit are {0, 14, 29, 43, 57,
-      // 71, 86, 100}; pairwise diffs are always 14 or 15, so an exact change
-      // of 10 isn't reachable with integer-rounded rates. We exercise the
-      // nearest below-threshold case (identical logs in both weeks → change
-      // = 0) to lock the "no-fire" contract for change below the threshold.
-      // The `change >= 10` and `twoWeeksAgoOverall > 0 → true` mutants are
-      // documented as equivalent in the trailing comment block.
+    it("does NOT fire when change is 0 (sub-threshold)", async () => {
+      // Identical logs in both weeks → change = 0 < 10. Pins the "no-fire"
+      // contract for change below threshold. Reaching change === 10 exactly
+      // requires a specific 3-habit setup that also accidentally fires
+      // best_habit/worst_day, bumping improvement out of slice(0, 2); the
+      // `change > 10 → >= 10` mutant is left as a known survivor.
       const habit = makeHabit({ current_streak: 0 });
       const logs = [
         ...logsFor(habit.id, PREV_WEEK_DATES.slice(0, 5)),
@@ -814,7 +812,6 @@ describe("InsightsDB", () => {
         "2026-04-17",
       );
 
-      // change = 0 → below 10 threshold, no improvement.
       expect(out.find((i) => i.type === "improvement")).toBeUndefined();
     });
 
@@ -1601,11 +1598,17 @@ describe("InsightsDB", () => {
   //     "does NOT fire when twoWeeksAgoOverall is 0 (guard)" improvement
   //     test, because there `change = prevWeekOverall − twoWeeksAgoOverall`
   //     can exceed 10.
-  //   - Line 219 `if (change > 10)` → `>= 10`: integer-rounded rates make
-  //     change === 10 unreachable from the per-habit code paths we test
-  //     (per-week rates land at {0, 14, 29, 43, 57, 71, 86, 100} for a
-  //     7-day habit; pairwise diffs are 14 or 15), so no input
-  //     distinguishes `>` from `>=`.
+  //
+  // Documented non-equivalent survivors (killable, but expensive to set up):
+  //
+  //   - Line 219 `if (change > 10)` → `>= 10`: change === 10 IS reachable
+  //     with a 3-habit setup (e.g. (71+71+57)/3=66 prev vs (57+57+43)/3=52
+  //     two-weeks-ago gives change=14, not 10 — but other combinations
+  //     yield exactly 10). The tricky part is arranging inputs so that
+  //     neither best_habit nor worst_day/decline fires and pushes
+  //     improvement out of the top-2 slice(0,2). Left as a known survivor
+  //     rather than engineered, since the positive boundary is already
+  //     pinned by `fires when change > 10 with exact change value`.
   //
   // A separate category of 8 survivors on module-level `DAY_NAMES` string
   // literals stems from a Stryker + Vitest 4.x limitation: static mutants
