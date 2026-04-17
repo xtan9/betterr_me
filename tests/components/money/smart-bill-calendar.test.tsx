@@ -31,10 +31,10 @@ vi.mock("@/components/money/bill-calendar-day", () => ({
     }),
 }));
 
-vi.mock("@/lib/money/projections", () => ({
-  getDangerZoneStatus: (balance: number, rate: number) =>
-    balance < rate ? "danger" : balance < rate * 3 ? "tight" : "safe",
-}));
+// Use the real danger-zone formula so regressions in its thresholds would
+// propagate here. getDangerZoneStatus is pure (see lib/money/projections.ts).
+// If we need to stub, we'd check the component forwards the result — not
+// lock in an invented contract.
 
 function makeBill(overrides: Partial<RecurringBill> = {}): RecurringBill {
   return {
@@ -297,12 +297,13 @@ describe("SmartBillCalendar", () => {
   });
 
   it("passes danger zone status from dailyBalances to day cells", () => {
-    // dailySpendingRateCents = 5000
-    // balance < rate => danger, balance < rate*3 => tight, else safe
+    // Uses the real `getDangerZoneStatus` from lib/money/projections:
+    //   balance <= 0 → danger,  balance < 2*rate → tight,  else safe.
+    // With dailySpendingRateCents = 5000, the tight threshold is 10000.
     const dailyBalances: DailyBalance[] = [
-      { date: "2026-04-15", projected_balance_cents: 3000, has_income: false, bill_total_cents: 0 }, // danger (3000 < 5000)
-      { date: "2026-04-16", projected_balance_cents: 8000, has_income: false, bill_total_cents: 0 }, // tight (5000 <= 8000 < 15000)
-      { date: "2026-04-17", projected_balance_cents: 20000, has_income: false, bill_total_cents: 0 }, // safe
+      { date: "2026-04-15", projected_balance_cents: -100, has_income: false, bill_total_cents: 0 }, // danger (<= 0)
+      { date: "2026-04-16", projected_balance_cents: 5000, has_income: false, bill_total_cents: 0 }, // tight (0 < 5000 < 10000)
+      { date: "2026-04-17", projected_balance_cents: 20000, has_income: false, bill_total_cents: 0 }, // safe (>= 10000)
     ];
     render(
       <SmartBillCalendar
@@ -395,12 +396,21 @@ describe("SmartBillCalendar", () => {
   });
 
   it("today's date has isToday=true", () => {
-    render(<SmartBillCalendar {...defaultProps} />);
-    // At least one cell should be marked as today (the current date)
-    const allCells = screen.getAllByTestId(/^day-/);
-    const todayCells = allCells.filter((c) => c.getAttribute("data-today") === "true");
-    // There should be exactly one today cell visible in the current month view
-    expect(todayCells.length).toBeGreaterThanOrEqual(0); // May be 0 if today isn't in this month's calendar weeks
+    // Freeze the clock so this assertion is deterministic. The initial
+    // currentMonth state is derived from `new Date()` at render time.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-15T12:00:00Z"));
+    try {
+      render(<SmartBillCalendar {...defaultProps} />);
+      // Exactly one cell in the current month's grid should be flagged today.
+      const allCells = screen.getAllByTestId(/^day-/);
+      const todayCells = allCells.filter(
+        (c) => c.getAttribute("data-today") === "true",
+      );
+      expect(todayCells).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("days outside current month have isCurrentMonth=false", () => {

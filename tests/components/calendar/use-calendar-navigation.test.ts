@@ -12,12 +12,18 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/calendar",
 }));
 
-vi.mock("@/lib/utils", () => ({
-  getLocalDateString: (d?: Date) => {
-    if (!d) return "2026-04-17";
-    return d.toISOString().split("T")[0];
-  },
-}));
+// Partial mock: pass through every real export, override only the
+// "no-arg today" case with a fixed date. Using toISOString() here would be
+// timezone-dependent (CLAUDE.md explicitly calls this out as a bug pattern).
+vi.mock("@/lib/utils", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/utils")>("@/lib/utils");
+  return {
+    ...actual,
+    getLocalDateString: (d?: Date) =>
+      d === undefined ? "2026-04-17" : actual.getLocalDateString(d),
+  };
+});
 
 beforeEach(() => {
   mockPush.mockClear();

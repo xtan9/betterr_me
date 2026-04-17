@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
@@ -285,6 +285,12 @@ describe("TasksPageContent", () => {
     mockProjectsReturn.mutate = mockProjectsMutate;
   });
 
+  afterEach(() => {
+    // Restore any global.fetch stubs set by individual tests so they don't
+    // leak into the next test. vi.clearAllMocks() only clears call records.
+    vi.unstubAllGlobals();
+  });
+
   it("shows loading skeleton while data is loading", () => {
     mockUseSWR.mockImplementation((key: string) => {
       if (key === "/api/tasks") {
@@ -387,7 +393,7 @@ describe("TasksPageContent", () => {
   it("calls toggle API when task checkbox is clicked", async () => {
     const mockMutate = vi.fn();
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
-    global.fetch = mockFetch;
+    vi.stubGlobal("fetch", mockFetch);
 
     mockUseSWR.mockImplementation((key: string) => {
       if (key === "/api/tasks") {
@@ -476,7 +482,7 @@ describe("TasksPageContent", () => {
     const mockMutate = vi.fn();
     const mockMutatePaused = vi.fn();
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
-    global.fetch = mockFetch;
+    vi.stubGlobal("fetch", mockFetch);
 
     mockUseSWR.mockImplementation((key: string) => {
       if (key === "/api/tasks") {
@@ -532,7 +538,7 @@ describe("TasksPageContent", () => {
 
   it("shows error toast when resume fails", async () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: false });
-    global.fetch = mockFetch;
+    vi.stubGlobal("fetch", mockFetch);
 
     mockUseSWR.mockImplementation((key: string) => {
       if (key === "/api/tasks") {
@@ -583,7 +589,7 @@ describe("TasksPageContent", () => {
   it("deletes a paused template successfully", async () => {
     const mockMutatePaused = vi.fn();
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
-    global.fetch = mockFetch;
+    vi.stubGlobal("fetch", mockFetch);
 
     mockUseSWR.mockImplementation((key: string) => {
       if (key === "/api/tasks") {
@@ -637,7 +643,7 @@ describe("TasksPageContent", () => {
 
   it("shows error toast when delete fails", async () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: false });
-    global.fetch = mockFetch;
+    vi.stubGlobal("fetch", mockFetch);
 
     mockUseSWR.mockImplementation((key: string) => {
       if (key === "/api/tasks") {
@@ -937,7 +943,7 @@ describe("TasksPageContent", () => {
   it("toggle fetch failure shows error toast", async () => {
     const mockMutate = vi.fn();
     const mockFetch = vi.fn().mockResolvedValue({ ok: false });
-    global.fetch = mockFetch;
+    vi.stubGlobal("fetch", mockFetch);
 
     mockUseSWR.mockImplementation((key: string) => {
       if (key === "/api/tasks") {

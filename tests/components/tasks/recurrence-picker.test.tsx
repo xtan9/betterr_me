@@ -422,101 +422,86 @@ describe("RecurrencePicker", () => {
     );
   });
 
-  // Day picker (ToggleGroup) for weekly rules
+  // Day picker (ToggleGroup) for weekly rules.
+  // The day items render in DOM order Sun(0), Mon(1), Tue(2), Wed(3), Thu(4),
+  // Fri(5), Sat(6). We identify them via the `data-slot="toggle-group-item"`
+  // attribute that shadcn's ToggleGroupItem sets — stable across Radix versions.
+  function getDayItems(): HTMLElement[] {
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-slot="toggle-group-item"]',
+      ),
+    );
+  }
+
   it("day picker: toggling a day in weekly mode fires onChange with updated days_of_week", async () => {
     const weeklyRule: RecurrenceRule = {
       frequency: "weekly",
       interval: 1,
-      days_of_week: [1],
+      days_of_week: [1], // Mon
     };
 
     render(<RecurrencePicker {...defaultProps} value={weeklyRule} />);
 
-    // The day picker shows S M T W T F S buttons
-    // Find all buttons with accessible text — day buttons are ToggleGroupItems
-    // Monday (index 1) is already selected; click Wednesday (index 3, text "W")
-    const dayButtons = screen.getAllByRole("button");
-    // Filter to the ones inside the ToggleGroup (they have value attributes "0"-"6")
-    const wednesdayBtn = dayButtons.find(
-      (btn) => btn.getAttribute("data-value") === "3",
-    );
+    const dayItems = getDayItems();
+    expect(dayItems).toHaveLength(7);
 
-    if (wednesdayBtn) {
-      await user.click(wednesdayBtn);
-      expect(mockOnChange).toHaveBeenCalled();
-    } else {
-      // Fallback: click the fourth day button rendered (index 3 = Wednesday)
-      // ToggleGroupItems render in order sun(0) mon(1) tue(2) wed(3) ...
-      // The day buttons appear after the preset combobox trigger button
-      const toggleItems = dayButtons.filter((btn) =>
-        ["0", "1", "2", "3", "4", "5", "6"].includes(
-          btn.getAttribute("data-value") ?? "",
-        ),
-      );
-      if (toggleItems.length > 0) {
-        await user.click(toggleItems[3]); // Wednesday
-        expect(mockOnChange).toHaveBeenCalled();
-      }
-    }
+    // Click Wednesday (index 3); Monday was already selected so onChange
+    // should be called with both days in sorted order.
+    await user.click(dayItems[3]);
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "weekly", interval: 1, days_of_week: [1, 3] },
+      "never",
+      null,
+      null,
+    );
   });
 
   it("day picker: deselecting the only selected day does not fire onChange (empty selection ignored)", async () => {
     const weeklyRule: RecurrenceRule = {
       frequency: "weekly",
       interval: 1,
-      days_of_week: [1],
+      days_of_week: [1], // Mon only
     };
 
     render(<RecurrencePicker {...defaultProps} value={weeklyRule} />);
 
-    // ToggleGroup calls onValueChange with empty array when last item is deselected
-    // handleDaysToggle guards against days.length === 0 — onChange should NOT fire
-    // We simulate by finding the active Monday button and clicking it
-    const dayButtons = screen.getAllByRole("button");
-    const mondayBtn = dayButtons.find(
-      (btn) => btn.getAttribute("data-value") === "1",
-    );
+    const dayItems = getDayItems();
+    expect(dayItems).toHaveLength(7);
 
-    if (mondayBtn) {
-      await user.click(mondayBtn);
-      // If empty array was produced, mockOnChange should NOT have been called
-      // (the guard prevents it)
-      // But if Radix prevents empty selection internally, it also won't fire
-      // Either way, we assert onChange is NOT called with days_of_week: []
-      const callsWithEmpty = mockOnChange.mock.calls.filter(
-        (call) =>
-          call[0] &&
-          Array.isArray(call[0].days_of_week) &&
-          call[0].days_of_week.length === 0,
-      );
-      expect(callsWithEmpty).toHaveLength(0);
-    }
+    // Click the currently-selected Monday to deselect.
+    await user.click(dayItems[1]);
+
+    // handleDaysToggle guards against days.length === 0 — onChange should never
+    // be called with an empty days_of_week array.
+    const callsWithEmpty = mockOnChange.mock.calls.filter(
+      (call) =>
+        call[0] &&
+        Array.isArray(call[0].days_of_week) &&
+        call[0].days_of_week.length === 0,
+    );
+    expect(callsWithEmpty).toHaveLength(0);
   });
 
   it("day picker: selecting additional days fires onChange with sorted days array", async () => {
     const weeklyRule: RecurrenceRule = {
       frequency: "weekly",
       interval: 1,
-      days_of_week: [3], // Wednesday only
+      days_of_week: [3], // Wed only
     };
 
     render(<RecurrencePicker {...defaultProps} value={weeklyRule} />);
 
-    // Find ToggleGroupItems by data-value attribute
-    const dayButtons = screen.getAllByRole("button");
-    const fridayBtn = dayButtons.find(
-      (btn) => btn.getAttribute("data-value") === "5",
-    );
+    const dayItems = getDayItems();
+    expect(dayItems).toHaveLength(7);
 
-    if (fridayBtn) {
-      await user.click(fridayBtn);
-      // The ToggleGroup will pass ["3","5"] to onValueChange → sorted [3,5]
-      expect(mockOnChange).toHaveBeenCalledWith(
-        { frequency: "weekly", interval: 1, days_of_week: [3, 5] },
-        "never",
-        null,
-        null,
-      );
-    }
+    // Click Friday (index 5); Wed is already selected → sorted [3,5].
+    await user.click(dayItems[5]);
+    expect(mockOnChange).toHaveBeenCalledWith(
+      { frequency: "weekly", interval: 1, days_of_week: [3, 5] },
+      "never",
+      null,
+      null,
+    );
   });
 });
