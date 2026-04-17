@@ -509,10 +509,9 @@ describe("EventDialog", () => {
 
     render(<EventDialog {...defaultProps} event={makeEvent()} />);
 
+    // Wait for the reminder row to render (proves fetch resolved AND state updated)
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/reminders?source_type=calendar_event&source_id=e1"),
-      );
+      expect(screen.getByLabelText("reminders.typeLabel")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByText("eventDialog.save"));
@@ -569,11 +568,9 @@ describe("EventDialog", () => {
 
     render(<EventDialog {...defaultProps} event={makeEvent()} />);
 
-    // Wait for the reminders to load
+    // Wait for the reminder row to render (proves fetch resolved AND state updated)
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/reminders?source_type"),
-      );
+      expect(screen.getByLabelText("reminders.typeLabel")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByText("eventDialog.save"));
