@@ -1204,14 +1204,13 @@ describe("BudgetsDB", () => {
         (e) => e.method === "delete",
       );
       expect(deleteCalls).toHaveLength(1);
-      // …but there is no INSERT on budget_categories.
-      const catInserts = mockSupabaseClient.queryLog.filter(
-        (e) =>
-          e.method === "insert" &&
-          Array.isArray(e.args[0]) &&
-          Array.isArray((e.args[0] as unknown[]).slice(0, 0)),
+      // …but there is no INSERT on budget_categories. The `categories.length
+      // > 0` guard in source must skip the insert branch when the array is
+      // empty.
+      const bcInserts = mockSupabaseClient.queryLog.filter(
+        (e) => e.method === "insert" && e.table === "budget_categories",
       );
-      expect(catInserts).toHaveLength(0);
+      expect(bcInserts).toHaveLength(0);
     });
 
     it("throws when budget update errors", async () => {
