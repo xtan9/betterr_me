@@ -11,6 +11,10 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
+vi.mock('@/lib/logger', () => ({
+  log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
+
 const mockProfilesDB = {
   updatePreferences: vi.fn(),
 };
@@ -21,9 +25,14 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
+import { createClient } from '@/lib/supabase/server';
+
 describe('PATCH /api/profile/preferences', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(createClient).mockReturnValue({
+      auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
+    } as any);
   });
 
   it('should update preferences', async () => {
@@ -89,6 +98,81 @@ describe('PATCH /api/profile/preferences', () => {
     const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
       method: 'PATCH',
       body: JSON.stringify('invalid'),
+    });
+
+    const response = await PATCH(request);
+    expect(response.status).toBe(400);
+  });
+
+  it('should return 401 when not authenticated', async () => {
+    vi.mocked(createClient).mockReturnValue({
+      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
+    } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ theme: 'dark' }),
+    });
+
+    const response = await PATCH(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(data.error).toBe('Unauthorized');
+  });
+
+  it('should return 404 when profile not found', async () => {
+    vi.mocked(mockProfilesDB.updatePreferences).mockRejectedValue(
+      new Error('Profile not found for user user-123')
+    );
+
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ theme: 'dark' }),
+    });
+
+    const response = await PATCH(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(data.error).toBe('Profile not found');
+  });
+
+  it('should return 500 on unexpected DB error', async () => {
+    vi.mocked(mockProfilesDB.updatePreferences).mockRejectedValue(
+      new Error('connection lost')
+    );
+
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ theme: 'dark' }),
+    });
+
+    const response = await PATCH(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('Failed to update preferences');
+  });
+
+  it('should return 500 when error is a non-Error object', async () => {
+    vi.mocked(mockProfilesDB.updatePreferences).mockRejectedValue('string error');
+
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ theme: 'dark' }),
+    });
+
+    const response = await PATCH(request);
+    expect(response.status).toBe(500);
+  });
+
+  it('should validate weight_unit', async () => {
+    vi.mocked(mockProfilesDB.updatePreferences).mockResolvedValue({ id: 'user-123' } as any);
+
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ weight_unit: 'stones' }),
     });
 
     const response = await PATCH(request);
