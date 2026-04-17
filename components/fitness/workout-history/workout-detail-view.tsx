@@ -338,14 +338,14 @@ function SetRow({
       <div className="flex items-center gap-1">
         {set.set_type !== "normal" && (
           <span
-            className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${SET_TYPE_COLORS[set.set_type] ?? ""}`}
+            className={`inline-flex items-center rounded-chip px-1.5 py-0.5 text-[10px] font-medium ${SET_TYPE_COLORS[set.set_type] ?? ""}`}
           >
             {t(set.set_type === "drop" ? "dropSet" : set.set_type)}
           </span>
         )}
         {prBadges.length > 0 && (
           <span
-            className="inline-flex items-center rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs font-medium px-1.5 py-0.5"
+            className="inline-flex items-center rounded-chip bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs font-medium px-1.5 py-0.5"
             title={t("prBadgeTooltip")}
           >
             {t("prBadge")}
