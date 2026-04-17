@@ -33,11 +33,18 @@ export interface WorkoutSummary {
 }
 
 /** Valid workout status transitions. Terminal states have no outgoing edges. */
+// Stryker disable all: module-scope const — vitest caches the module on first
+// import, so Stryker's per-test activeMutant switch doesn't re-evaluate this
+// literal. Test coverage for these transitions lives in updateWorkout's
+// it.each() rejection matrix and its two happy-path cases (in_progress →
+// completed, in_progress → discarded), which would all fail if the table were
+// changed. Verified manually by patching the source.
 const VALID_TRANSITIONS: Record<string, string[]> = {
   in_progress: ["completed", "discarded"],
   completed: [],
   discarded: [],
 };
+// Stryker restore all
 
 /** CRUD for workouts. RLS handles user scoping. */
 export class WorkoutsDB {
@@ -420,6 +427,9 @@ export class WorkoutsDB {
 
     return (data ?? []).map((row: Record<string, unknown>) => {
       const workout = row.workout as { id: string; started_at: string };
+      // Stryker disable next-line ArrayDeclaration: equivalent mutant — the
+      // immediately-following filter rejects any non-object element, so
+      // `?? ["Stryker was here"]` produces the same filtered result as `?? []`.
       const sets = (row.sets as Record<string, unknown>[]) ?? [];
       const completedNormal = sets.filter(
         (s) => s.is_completed && s.set_type === "normal"
@@ -479,10 +489,16 @@ export class WorkoutsDB {
     }
 
     const result: Array<WorkoutSet & { workout_started_at: string }> = [];
+    // Stryker disable next-line ArrayDeclaration: equivalent mutant — a
+    // string fallback yields characters whose `.workout` and `.sets` are
+    // undefined, so the inner loop is empty and result stays [].
     for (const row of data ?? []) {
       const workout = (row as Record<string, unknown>).workout as {
         started_at: string;
       };
+      // Stryker disable next-line ArrayDeclaration: equivalent mutant — the
+      // inner `is_completed && set_type === "normal"` filter rejects string
+      // characters, so `?? ["Stryker was here"]` contributes nothing.
       const sets = ((row as Record<string, unknown>).sets as WorkoutSet[]) ?? [];
       for (const set of sets) {
         if (set.is_completed && set.set_type === "normal") {
