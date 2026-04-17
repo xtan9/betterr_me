@@ -1,503 +1,1526 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { habitsDB } from '@/lib/db/habits';
-import { mockSupabaseClient } from '../../setup';
-import type { Habit, HabitInsert } from '@/lib/db/types';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { HabitsDB } from "@/lib/db/habits";
+import { mockSupabaseClient } from "../../setup";
+import {
+  queueThenResponses,
+  restoreMockSupabaseThen,
+} from "../../helpers/mock-supabase";
+import type { Habit, HabitInsert } from "@/lib/db/types";
+import {
+  HabitNotFoundError,
+  HabitNotFormedError,
+  HabitAlreadyFormedError,
+} from "@/lib/db/habit-errors";
 
-describe('HabitsDB', () => {
-  const mockUserId = 'user-123';
-  const mockHabit: Habit = {
-    id: 'habit-123',
-    user_id: mockUserId,
-    name: 'Morning Run',
-    description: 'Run 5km every morning',
+// Mock logger so we can assert on log.error / log.warn calls. Tests below
+// verify both happy-path (no log) and failure-path (log called with exact
+// args) so mutants that remove the log call get killed.
+vi.mock("@/lib/logger", () => ({
+  log: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+import { log } from "@/lib/logger";
+
+const USER_ID = "user-123";
+const HABIT_ID = "habit-123";
+
+function makeHabit(over: Partial<Habit> = {}): Habit {
+  return {
+    id: HABIT_ID,
+    user_id: USER_ID,
+    name: "Morning Run",
+    description: "Run 5km every morning",
     category_id: null,
-    frequency: { type: 'daily' },
-    status: 'active',
+    frequency: { type: "daily" },
+    status: "active",
     current_streak: 5,
     best_streak: 12,
     paused_at: null,
     graduated_at: null,
     graduated_streak: null,
     nudge_dismissed_at: null,
-    created_at: '2026-01-30T10:00:00Z',
-    updated_at: '2026-01-30T10:00:00Z',
+    created_at: "2026-01-30T10:00:00Z",
+    updated_at: "2026-01-30T10:00:00Z",
+    ...over,
   };
+}
+
+describe("HabitsDB", () => {
+  let db: HabitsDB;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabaseClient.setMockResponse(null);
+    db = new HabitsDB(mockSupabaseClient as unknown as SupabaseClient);
   });
 
-  describe('getUserHabits', () => {
-    it('should fetch all habits for a user', async () => {
-      mockSupabaseClient.setMockResponse([mockHabit]);
+  afterEach(() => {
+    restoreMockSupabaseThen();
+  });
 
-      const habits = await habitsDB.getUserHabits(mockUserId);
+  // ─── getUserHabits ────────────────────────────────────────────────────────
+  describe("getUserHabits", () => {
+    it("returns all habits for a user with the full SELECT chain", async () => {
+      const rows = [makeHabit()];
+      mockSupabaseClient.setMockResponse(rows);
 
-      expect(habits).toEqual([mockHabit]);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('habits');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
+      const result = await db.getUserHabits(USER_ID);
+
+      expect(result).toEqual(rows);
+
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "from",
+        args: ["habits"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "select",
+        args: ["*"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["user_id", USER_ID],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "order",
+        args: ["created_at", { ascending: false }],
+      });
     });
 
-    it('should filter by status', async () => {
-      mockSupabaseClient.setMockResponse([mockHabit]);
-
-      await habitsDB.getUserHabits(mockUserId, { status: 'active' });
-
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('status', 'active');
-    });
-
-    it('should filter by category_id', async () => {
-      mockSupabaseClient.setMockResponse([mockHabit]);
-
-      await habitsDB.getUserHabits(mockUserId, { category_id: 'cat-123' });
-
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('category_id', 'cat-123');
-    });
-
-    it('should handle database errors', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'DB error' });
-
-      await expect(habitsDB.getUserHabits(mockUserId)).rejects.toEqual({ message: 'DB error' });
-    });
-
-    it('should return empty array when no data', async () => {
+    it("returns empty array when data is null", async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      const habits = await habitsDB.getUserHabits(mockUserId);
+      const result = await db.getUserHabits(USER_ID);
 
-      expect(habits).toEqual([]);
-    });
-  });
-
-  describe('getActiveHabits', () => {
-    it('should fetch only active habits', async () => {
-      mockSupabaseClient.setMockResponse([mockHabit]);
-
-      await habitsDB.getActiveHabits(mockUserId);
-
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('status', 'active');
-    });
-  });
-
-  describe('getHabit', () => {
-    it('should fetch a single habit by ID', async () => {
-      mockSupabaseClient.setMockResponse(mockHabit);
-
-      const habit = await habitsDB.getHabit('habit-123', mockUserId);
-
-      expect(habit).toEqual(mockHabit);
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'habit-123');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
-      expect(mockSupabaseClient.single).toHaveBeenCalled();
+      expect(result).toEqual([]);
     });
 
-    it('should return null if habit not found', async () => {
-      mockSupabaseClient.setMockResponse(null, { code: 'PGRST116' });
+    it("filters by status when provided", async () => {
+      mockSupabaseClient.setMockResponse([]);
 
-      const habit = await habitsDB.getHabit('nonexistent', mockUserId);
+      await db.getUserHabits(USER_ID, { status: "paused" });
 
-      expect(habit).toBeNull();
-    });
-
-    it('should throw on other errors', async () => {
-      mockSupabaseClient.setMockResponse(null, { code: 'OTHER_ERROR', message: 'DB error' });
-
-      await expect(habitsDB.getHabit('habit-123', mockUserId)).rejects.toEqual({
-        code: 'OTHER_ERROR',
-        message: 'DB error',
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["status", "paused"],
       });
     });
-  });
 
-  describe('createHabit', () => {
-    it('should create a new habit', async () => {
-      const newHabit: HabitInsert = {
-        user_id: mockUserId,
-        name: 'Read Books',
-        description: 'Read for 30 minutes',
-        category_id: null,
-        frequency: { type: 'daily' },
-        status: 'active',
-      };
+    it("filters by category_id when provided", async () => {
+      mockSupabaseClient.setMockResponse([]);
 
-      mockSupabaseClient.setMockResponse(mockHabit);
+      await db.getUserHabits(USER_ID, { category_id: "cat-123" });
 
-      const created = await habitsDB.createHabit(newHabit);
-
-      expect(created).toEqual(mockHabit);
-      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(newHabit);
-      expect(mockSupabaseClient.single).toHaveBeenCalled();
-    });
-
-    it('should handle creation errors', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'Insert failed' });
-
-      const newHabit: HabitInsert = {
-        user_id: mockUserId,
-        name: 'Test',
-        description: null,
-        category_id: null,
-        frequency: { type: 'daily' },
-        status: 'active',
-      };
-
-      await expect(habitsDB.createHabit(newHabit)).rejects.toEqual({ message: 'Insert failed' });
-    });
-  });
-
-  describe('updateHabit', () => {
-    it('should update a habit', async () => {
-      const updates = { name: 'Evening Run' };
-      const updatedHabit = { ...mockHabit, ...updates };
-
-      mockSupabaseClient.setMockResponse(updatedHabit);
-
-      const result = await habitsDB.updateHabit('habit-123', mockUserId, updates);
-
-      expect(result).toEqual(updatedHabit);
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith(updates);
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'habit-123');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
-    });
-  });
-
-  describe('updateHabitStreak', () => {
-    it('should update streak values', async () => {
-      const updatedHabit = { ...mockHabit, current_streak: 10, best_streak: 15 };
-      mockSupabaseClient.setMockResponse(updatedHabit);
-
-      const result = await habitsDB.updateHabitStreak('habit-123', mockUserId, 10, 15);
-
-      expect(result).toEqual(updatedHabit);
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith({
-        current_streak: 10,
-        best_streak: 15,
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["category_id", "cat-123"],
       });
     });
-  });
 
-  describe('pauseHabit', () => {
-    it('should set status to paused with timestamp', async () => {
-      const pausedHabit = { ...mockHabit, status: 'paused' as const };
-      mockSupabaseClient.setMockResponse(pausedHabit);
+    it("does NOT apply status filter when filters object is empty", async () => {
+      mockSupabaseClient.setMockResponse([]);
 
-      const result = await habitsDB.pauseHabit('habit-123', mockUserId);
+      await db.getUserHabits(USER_ID, {});
 
-      expect(result.status).toBe('paused');
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'paused', paused_at: expect.any(String) })
+      // Only the user_id eq should exist; no status / category_id eq calls.
+      const eqCalls = mockSupabaseClient.queryLog.filter(
+        (e) => e.method === "eq",
+      );
+      expect(eqCalls).toHaveLength(1);
+      expect(eqCalls[0].args).toEqual(["user_id", USER_ID]);
+    });
+
+    it("applies both status and category_id filters together", async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await db.getUserHabits(USER_ID, {
+        status: "active",
+        category_id: "cat-xyz",
+      });
+
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["status", "active"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["category_id", "cat-xyz"],
+      });
+    });
+
+    it("throws when the query errors", async () => {
+      mockSupabaseClient.setMockResponse(null, new Error("connection refused"));
+
+      await expect(db.getUserHabits(USER_ID)).rejects.toThrow(
+        "connection refused",
       );
     });
   });
 
-  describe('resumeHabit', () => {
-    it('should set status to active and clear paused_at', async () => {
-      const activeHabit = { ...mockHabit, status: 'active' as const, paused_at: null };
-      mockSupabaseClient.setMockResponse(activeHabit);
+  // ─── getActiveHabits ──────────────────────────────────────────────────────
+  describe("getActiveHabits", () => {
+    it("delegates to getUserHabits with status='active' filter", async () => {
+      mockSupabaseClient.setMockResponse([makeHabit()]);
 
-      const result = await habitsDB.resumeHabit('habit-123', mockUserId);
+      await db.getActiveHabits(USER_ID);
 
-      expect(result.status).toBe('active');
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith({ status: 'active', paused_at: null });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["status", "active"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["user_id", USER_ID],
+      });
+    });
+
+    it("returns the rows from getUserHabits", async () => {
+      const rows = [makeHabit({ status: "active" })];
+      mockSupabaseClient.setMockResponse(rows);
+
+      const result = await db.getActiveHabits(USER_ID);
+
+      expect(result).toEqual(rows);
     });
   });
 
-  describe('getHabitsWithTodayStatus', () => {
-    it('should fetch ALL habits (not just active) so paused/formed appear in their tabs', async () => {
-      const pausedHabit = { ...mockHabit, id: 'habit-paused', status: 'paused' as const };
-      const formedHabit = { ...mockHabit, id: 'habit-formed', status: 'formed' as const };
-      const allHabits = [mockHabit, pausedHabit, formedHabit];
+  // ─── getHabit ─────────────────────────────────────────────────────────────
+  describe("getHabit", () => {
+    it("fetches a single habit with the full chain", async () => {
+      const habit = makeHabit();
+      mockSupabaseClient.setMockResponse(habit);
 
-      // First call: getUserHabits (no status filter)
-      mockSupabaseClient.setMockResponse(allHabits);
+      const result = await db.getHabit(HABIT_ID, USER_ID);
 
-      const result = await habitsDB.getHabitsWithTodayStatus(mockUserId, '2026-02-04');
+      expect(result).toEqual(habit);
 
-      // Verify it called getUserHabits WITHOUT a status filter
-      // (i.e. eq should NOT have been called with 'status', 'active')
-      const eqCalls = mockSupabaseClient.eq.mock.calls;
-      const statusFilterCalls = eqCalls.filter(
-        (call: string[]) => call[0] === 'status' && call[1] === 'active'
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "from",
+        args: ["habits"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "select",
+        args: ["*"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["id", HABIT_ID],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["user_id", USER_ID],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "single",
+        args: [],
+      });
+    });
+
+    it("returns null when error.code === 'PGRST116' (row not found)", async () => {
+      mockSupabaseClient.setMockResponse(null, { code: "PGRST116" });
+
+      const result = await db.getHabit(HABIT_ID, USER_ID);
+
+      expect(result).toBeNull();
+    });
+
+    it("throws on other error codes", async () => {
+      const err = { code: "22P02", message: "invalid uuid" };
+      mockSupabaseClient.setMockResponse(null, err);
+
+      await expect(db.getHabit(HABIT_ID, USER_ID)).rejects.toEqual(err);
+    });
+
+    it("throws when error has no code (generic Error)", async () => {
+      mockSupabaseClient.setMockResponse(null, new Error("boom"));
+
+      await expect(db.getHabit(HABIT_ID, USER_ID)).rejects.toThrow("boom");
+    });
+  });
+
+  // ─── createHabit ──────────────────────────────────────────────────────────
+  describe("createHabit", () => {
+    const insertRow: HabitInsert = {
+      user_id: USER_ID,
+      name: "Read Books",
+      description: "Read for 30 minutes",
+      category_id: null,
+      frequency: { type: "daily" },
+      status: "active",
+    };
+
+    it("inserts the row and returns the created habit via full chain", async () => {
+      const created = makeHabit({ name: "Read Books" });
+      mockSupabaseClient.setMockResponse(created);
+
+      const result = await db.createHabit(insertRow);
+
+      expect(result).toEqual(created);
+
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "from",
+        args: ["habits"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "insert",
+        args: [insertRow],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "select",
+        args: [],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "single",
+        args: [],
+      });
+    });
+
+    it("throws on insert error", async () => {
+      mockSupabaseClient.setMockResponse(null, new Error("insert failed"));
+
+      await expect(db.createHabit(insertRow)).rejects.toThrow("insert failed");
+    });
+  });
+
+  // ─── updateHabit ──────────────────────────────────────────────────────────
+  describe("updateHabit", () => {
+    it("updates and returns the habit via the full chain", async () => {
+      const updates = { name: "Evening Run" };
+      const updated = makeHabit({ name: "Evening Run" });
+      mockSupabaseClient.setMockResponse(updated);
+
+      const result = await db.updateHabit(HABIT_ID, USER_ID, updates);
+
+      expect(result).toEqual(updated);
+
+      // Full ordered log — SELECT/UPDATE share table/eq args so we must pin
+      // the exact chain rather than rely on positional expectQuery.
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "habits", method: "from", args: ["habits"] },
+        { table: "habits", method: "update", args: [updates] },
+        { table: "habits", method: "eq", args: ["id", HABIT_ID] },
+        { table: "habits", method: "eq", args: ["user_id", USER_ID] },
+        { table: "habits", method: "select", args: [] },
+        { table: "habits", method: "single", args: [] },
+      ]);
+    });
+
+    it("throws when the update errors", async () => {
+      mockSupabaseClient.setMockResponse(null, new Error("update failed"));
+
+      await expect(
+        db.updateHabit(HABIT_ID, USER_ID, { name: "x" }),
+      ).rejects.toThrow("update failed");
+    });
+  });
+
+  // ─── updateHabitStreak ────────────────────────────────────────────────────
+  describe("updateHabitStreak", () => {
+    it("calls updateHabit with exact current_streak and best_streak payload", async () => {
+      const updated = makeHabit({ current_streak: 10, best_streak: 15 });
+      mockSupabaseClient.setMockResponse(updated);
+
+      const result = await db.updateHabitStreak(HABIT_ID, USER_ID, 10, 15);
+
+      expect(result).toEqual(updated);
+
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "update",
+        args: [{ current_streak: 10, best_streak: 15 }],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["id", HABIT_ID],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["user_id", USER_ID],
+      });
+    });
+
+    it("preserves parameter ORDER — first number → current_streak, second → best_streak", async () => {
+      // Kills mutants that swap argument order.
+      mockSupabaseClient.setMockResponse(makeHabit());
+
+      await db.updateHabitStreak(HABIT_ID, USER_ID, 7, 99);
+
+      const updateCall = mockSupabaseClient.queryLog.find(
+        (e) => e.method === "update",
+      );
+      expect(updateCall?.args[0]).toEqual({
+        current_streak: 7,
+        best_streak: 99,
+      });
+    });
+  });
+
+  // ─── pauseHabit ───────────────────────────────────────────────────────────
+  describe("pauseHabit", () => {
+    it("sets status='paused' with exact frozen timestamp", async () => {
+      const fixedNow = new Date("2026-04-15T12:00:00.000Z");
+      vi.useFakeTimers();
+      vi.setSystemTime(fixedNow);
+      try {
+        const paused = makeHabit({
+          status: "paused",
+          paused_at: fixedNow.toISOString(),
+        });
+        mockSupabaseClient.setMockResponse(paused);
+
+        const result = await db.pauseHabit(HABIT_ID, USER_ID);
+
+        expect(result).toEqual(paused);
+
+        mockSupabaseClient.expectQuery({
+          table: "habits",
+          method: "update",
+          args: [
+            {
+              status: "paused",
+              paused_at: fixedNow.toISOString(),
+            },
+          ],
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("throws when update fails", async () => {
+      mockSupabaseClient.setMockResponse(null, new Error("pause failed"));
+
+      await expect(db.pauseHabit(HABIT_ID, USER_ID)).rejects.toThrow(
+        "pause failed",
+      );
+    });
+  });
+
+  // ─── resumeHabit ──────────────────────────────────────────────────────────
+  describe("resumeHabit", () => {
+    it("sets status='active' and clears paused_at=null", async () => {
+      const resumed = makeHabit({ status: "active", paused_at: null });
+      mockSupabaseClient.setMockResponse(resumed);
+
+      const result = await db.resumeHabit(HABIT_ID, USER_ID);
+
+      expect(result).toEqual(resumed);
+
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "update",
+        args: [{ status: "active", paused_at: null }],
+      });
+    });
+
+    it("throws on update error", async () => {
+      mockSupabaseClient.setMockResponse(null, new Error("resume failed"));
+
+      await expect(db.resumeHabit(HABIT_ID, USER_ID)).rejects.toThrow(
+        "resume failed",
+      );
+    });
+  });
+
+  // ─── deleteHabit ──────────────────────────────────────────────────────────
+  describe("deleteHabit", () => {
+    it("deletes with scoped id+user_id eq chain", async () => {
+      mockSupabaseClient.setMockResponse(null);
+
+      await db.deleteHabit(HABIT_ID, USER_ID);
+
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "habits", method: "from", args: ["habits"] },
+        { table: "habits", method: "delete", args: [] },
+        { table: "habits", method: "eq", args: ["id", HABIT_ID] },
+        { table: "habits", method: "eq", args: ["user_id", USER_ID] },
+      ]);
+    });
+
+    it("throws on delete error", async () => {
+      mockSupabaseClient.setMockResponse(null, new Error("delete failed"));
+
+      await expect(db.deleteHabit(HABIT_ID, USER_ID)).rejects.toThrow(
+        "delete failed",
+      );
+    });
+  });
+
+  // ─── graduateHabit ────────────────────────────────────────────────────────
+  describe("graduateHabit", () => {
+    it("flips status→formed, snapshots streak, inserts graduation row", async () => {
+      const fixedNow = new Date("2026-04-15T12:00:00.000Z");
+      vi.useFakeTimers();
+      vi.setSystemTime(fixedNow);
+      try {
+        const active = makeHabit({ status: "active", current_streak: 42 });
+        const formed = makeHabit({
+          status: "formed",
+          current_streak: 42,
+          graduated_streak: 42,
+          graduated_at: fixedNow.toISOString(),
+          nudge_dismissed_at: null,
+        });
+        const gradRow = {
+          id: "grad-1",
+          habit_id: HABIT_ID,
+          user_id: USER_ID,
+          graduated_at: fixedNow.toISOString(),
+          graduated_streak: 42,
+          reactivated_at: null,
+          created_at: fixedNow.toISOString(),
+        };
+
+        // 1st single: getHabit → active
+        // 2nd single: updateHabit forward-flip → formed
+        // 3rd single: insertGraduation → gradRow
+        mockSupabaseClient.single
+          .mockResolvedValueOnce({ data: active, error: null })
+          .mockResolvedValueOnce({ data: formed, error: null })
+          .mockResolvedValueOnce({ data: gradRow, error: null });
+
+        const result = await db.graduateHabit(HABIT_ID, USER_ID);
+
+        expect(result).toEqual(formed);
+
+        // Verify the forward-flip UPDATE payload is exactly what we expect.
+        // Must have status=formed, graduated_at=<now>, graduated_streak=<snapshot>,
+        // nudge_dismissed_at=null. Kills mutants that drop any field.
+        const forwardUpdate = mockSupabaseClient.queryLog.find(
+          (e) =>
+            e.method === "update" &&
+            (e.args[0] as { status?: string }).status === "formed",
+        );
+        expect(forwardUpdate?.args[0]).toEqual({
+          status: "formed",
+          graduated_at: fixedNow.toISOString(),
+          graduated_streak: 42,
+          nudge_dismissed_at: null,
+        });
+
+        // Verify insertGraduation was called with EXACT row (kills mutants
+        // that drop fields or swap habit_id/user_id).
+        mockSupabaseClient.expectQuery({
+          table: "habit_graduations",
+          method: "from",
+          args: ["habit_graduations"],
+        });
+        mockSupabaseClient.expectQuery({
+          table: "habit_graduations",
+          method: "insert",
+          args: [
+            {
+              habit_id: HABIT_ID,
+              user_id: USER_ID,
+              graduated_at: fixedNow.toISOString(),
+              graduated_streak: 42,
+            },
+          ],
+        });
+
+        // No rollback update was issued (happy path).
+        const rollback = mockSupabaseClient.queryLog.find(
+          (e) =>
+            e.method === "update" &&
+            (e.args[0] as { graduated_at?: unknown }).graduated_at === null,
+        );
+        expect(rollback).toBeUndefined();
+
+        // No error logged.
+        expect(log.error).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("throws HabitNotFoundError when habit doesn't exist (PGRST116)", async () => {
+      mockSupabaseClient.single.mockResolvedValueOnce({
+        data: null,
+        error: { code: "PGRST116" },
+      });
+
+      await expect(db.graduateHabit("missing", USER_ID)).rejects.toThrow(
+        HabitNotFoundError,
+      );
+    });
+
+    it("throws HabitAlreadyFormedError when habit is already formed", async () => {
+      const already = makeHabit({ status: "formed" });
+      mockSupabaseClient.single.mockResolvedValueOnce({
+        data: already,
+        error: null,
+      });
+
+      await expect(db.graduateHabit(HABIT_ID, USER_ID)).rejects.toThrow(
+        HabitAlreadyFormedError,
+      );
+    });
+
+    it("rolls back status and preserves original nudge_dismissed_at when history insert fails", async () => {
+      const fixedNow = new Date("2026-04-15T12:00:00.000Z");
+      vi.useFakeTimers();
+      vi.setSystemTime(fixedNow);
+      try {
+        const active = makeHabit({
+          status: "active",
+          current_streak: 42,
+          nudge_dismissed_at: "2026-04-01T00:00:00Z",
+        });
+        const formed = makeHabit({
+          status: "formed",
+          current_streak: 42,
+          graduated_at: fixedNow.toISOString(),
+          graduated_streak: 42,
+          nudge_dismissed_at: null,
+        });
+        const rolledBack = makeHabit({
+          status: "active",
+          current_streak: 42,
+          nudge_dismissed_at: "2026-04-01T00:00:00Z",
+          graduated_at: null,
+          graduated_streak: null,
+        });
+
+        mockSupabaseClient.single
+          .mockResolvedValueOnce({ data: active, error: null }) // getHabit
+          .mockResolvedValueOnce({ data: formed, error: null }) // forward update
+          .mockResolvedValueOnce({
+            data: null,
+            error: new Error("history insert failed"),
+          }) // insertGraduation
+          .mockResolvedValueOnce({ data: rolledBack, error: null }); // rollback update
+
+        await expect(
+          db.graduateHabit(HABIT_ID, USER_ID),
+        ).rejects.toThrow("history insert failed");
+
+        // The rollback UPDATE must restore: status back to ORIGINAL status,
+        // nulls on graduation fields, AND the ORIGINAL nudge_dismissed_at.
+        const rollbackCall = mockSupabaseClient.queryLog.find(
+          (e) =>
+            e.method === "update" &&
+            (e.args[0] as { graduated_at?: unknown }).graduated_at === null,
+        );
+        expect(rollbackCall?.args[0]).toEqual({
+          status: "active", // restored original
+          graduated_at: null,
+          graduated_streak: null,
+          nudge_dismissed_at: "2026-04-01T00:00:00Z", // original preserved
+        });
+
+        // log.error was called with exact message + context for the history fail.
+        expect(log.error).toHaveBeenCalledWith(
+          "[habits] graduation history insert failed; rolling back status",
+          expect.any(Error),
+          { habitId: HABIT_ID, userId: USER_ID },
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("logs secondary error when rollback itself fails, and still throws the original history error", async () => {
+      const active = makeHabit({
+        status: "active",
+        current_streak: 10,
+        nudge_dismissed_at: null,
+      });
+      const formed = makeHabit({ status: "formed" });
+
+      mockSupabaseClient.single
+        .mockResolvedValueOnce({ data: active, error: null }) // getHabit
+        .mockResolvedValueOnce({ data: formed, error: null }) // forward update
+        .mockResolvedValueOnce({
+          data: null,
+          error: new Error("history insert failed"),
+        }) // insertGraduation errors
+        .mockResolvedValueOnce({
+          data: null,
+          error: new Error("rollback failed"),
+        }); // rollback updateHabit also errors
+
+      await expect(db.graduateHabit(HABIT_ID, USER_ID)).rejects.toThrow(
+        "history insert failed",
+      );
+
+      // Both error logs fired.
+      expect(log.error).toHaveBeenCalledWith(
+        "[habits] graduation history insert failed; rolling back status",
+        expect.any(Error),
+        { habitId: HABIT_ID, userId: USER_ID },
+      );
+      expect(log.error).toHaveBeenCalledWith(
+        "[habits] graduation rollback FAILED; habit is in inconsistent state",
+        expect.any(Error),
+        { habitId: HABIT_ID, userId: USER_ID },
+      );
+      expect(log.error).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ─── reactivateHabit ──────────────────────────────────────────────────────
+  describe("reactivateHabit", () => {
+    it("resets current_streak to 0 and preserves best_streak; update payload is exact", async () => {
+      const formed = makeHabit({
+        status: "formed",
+        current_streak: 0,
+        best_streak: 87,
+        graduated_streak: 87,
+        graduated_at: "2026-04-01T00:00:00Z",
+      });
+      const active = makeHabit({
+        status: "active",
+        current_streak: 0,
+        best_streak: 87,
+        graduated_at: null,
+        graduated_streak: null,
+      });
+
+      mockSupabaseClient.single
+        .mockResolvedValueOnce({ data: formed, error: null }) // getHabit
+        .mockResolvedValueOnce({ data: active, error: null }); // updateHabit
+
+      // markReactivated: SELECT via maybeSingle; UPDATE awaited (no error).
+      mockSupabaseClient.maybeSingle.mockResolvedValueOnce({
+        data: { id: "grad-1" },
+        error: null,
+      });
+
+      const result = await db.reactivateHabit(HABIT_ID, USER_ID);
+
+      expect(result).toEqual(active);
+
+      // Exact update payload — catches mutants that drop a field, flip a
+      // value, or reset best_streak.
+      const statusUpdate = mockSupabaseClient.queryLog.find(
+        (e) =>
+          e.method === "update" &&
+          (e.args[0] as { status?: string }).status === "active",
+      );
+      expect(statusUpdate?.args[0]).toEqual({
+        status: "active",
+        current_streak: 0,
+        graduated_at: null,
+        graduated_streak: null,
+        nudge_dismissed_at: null,
+      });
+      expect(statusUpdate?.args[0]).not.toHaveProperty("best_streak");
+
+      // markReactivated issued against habit_graduations table.
+      mockSupabaseClient.expectQuery({
+        table: "habit_graduations",
+        method: "from",
+        args: ["habit_graduations"],
+      });
+
+      expect(log.error).not.toHaveBeenCalled();
+    });
+
+    it("throws HabitNotFoundError when habit doesn't exist", async () => {
+      mockSupabaseClient.single.mockResolvedValueOnce({
+        data: null,
+        error: { code: "PGRST116" },
+      });
+
+      await expect(db.reactivateHabit("missing", USER_ID)).rejects.toThrow(
+        HabitNotFoundError,
+      );
+    });
+
+    it("throws HabitNotFormedError when habit is active (not formed)", async () => {
+      const active = makeHabit({ status: "active" });
+      mockSupabaseClient.single.mockResolvedValueOnce({
+        data: active,
+        error: null,
+      });
+
+      await expect(db.reactivateHabit(HABIT_ID, USER_ID)).rejects.toThrow(
+        HabitNotFormedError,
+      );
+    });
+
+    it("throws HabitNotFormedError when habit is paused (not formed)", async () => {
+      const paused = makeHabit({ status: "paused" });
+      mockSupabaseClient.single.mockResolvedValueOnce({
+        data: paused,
+        error: null,
+      });
+
+      await expect(db.reactivateHabit(HABIT_ID, USER_ID)).rejects.toThrow(
+        HabitNotFormedError,
+      );
+    });
+
+    it("does NOT throw when markReactivated fails — logs error instead (best-effort)", async () => {
+      const formed = makeHabit({ status: "formed", best_streak: 50 });
+      const active = makeHabit({
+        status: "active",
+        current_streak: 0,
+        best_streak: 50,
+      });
+
+      mockSupabaseClient.single
+        .mockResolvedValueOnce({ data: formed, error: null })
+        .mockResolvedValueOnce({ data: active, error: null });
+
+      // maybeSingle returns an error → markReactivated throws, caught by
+      // reactivateHabit which only logs.
+      mockSupabaseClient.maybeSingle.mockResolvedValueOnce({
+        data: null,
+        error: new Error("graduation lookup failed"),
+      });
+
+      const result = await db.reactivateHabit(HABIT_ID, USER_ID);
+
+      // Still returns the updated habit (best-effort semantics).
+      expect(result).toEqual(active);
+
+      expect(log.error).toHaveBeenCalledWith(
+        "[habits] markReactivated failed after status flip",
+        expect.any(Error),
+        { habitId: HABIT_ID, userId: USER_ID },
+      );
+    });
+  });
+
+  // ─── dismissGraduationNudge ───────────────────────────────────────────────
+  describe("dismissGraduationNudge", () => {
+    it("stamps nudge_dismissed_at with exact frozen timestamp", async () => {
+      const fixedNow = new Date("2026-04-15T12:00:00.000Z");
+      vi.useFakeTimers();
+      vi.setSystemTime(fixedNow);
+      try {
+        const updated = makeHabit({
+          nudge_dismissed_at: fixedNow.toISOString(),
+        });
+        mockSupabaseClient.setMockResponse(updated);
+
+        const result = await db.dismissGraduationNudge(HABIT_ID, USER_ID);
+
+        expect(result).toEqual(updated);
+
+        mockSupabaseClient.expectQuery({
+          table: "habits",
+          method: "update",
+          args: [{ nudge_dismissed_at: fixedNow.toISOString() }],
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  // ─── getHabitsWithTodayStatus ─────────────────────────────────────────────
+  describe("getHabitsWithTodayStatus", () => {
+    // Three awaited queries in order:
+    //  1. getUserHabits → habits list
+    //  2. today's completed logs
+    //  3. 90-day window logs
+
+    it("fetches ALL habits (no status filter) and returns per-habit today status", async () => {
+      const active = makeHabit({ id: "h-active", status: "active" });
+      const paused = makeHabit({ id: "h-paused", status: "paused" });
+      const formed = makeHabit({ id: "h-formed", status: "formed" });
+
+      queueThenResponses([
+        { data: [active, paused, formed], error: null }, // getUserHabits
+        { data: [{ habit_id: "h-active", completed: true }], error: null }, // today's logs
+        { data: [], error: null }, // 90-day window
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(
+        USER_ID,
+        "2026-04-15",
+      );
+
+      expect(result).toHaveLength(3);
+
+      // Only h-active is completed today
+      const byId = Object.fromEntries(result.map((h) => [h.id, h]));
+      expect(byId["h-active"].completed_today).toBe(true);
+      expect(byId["h-paused"].completed_today).toBe(false);
+      expect(byId["h-formed"].completed_today).toBe(false);
+
+      // Confirm no status-filter on the habits SELECT (would leak paused/formed).
+      const statusFilterCalls = mockSupabaseClient.queryLog.filter(
+        (e) =>
+          e.method === "eq" &&
+          e.args[0] === "status" &&
+          e.args[1] === "active",
       );
       expect(statusFilterCalls).toHaveLength(0);
-
-      // Should return all 3 habits
-      expect(result).toHaveLength(3);
-      expect(result.map((h: { id: string }) => h.id)).toEqual(
-        expect.arrayContaining(['habit-123', 'habit-paused', 'habit-formed'])
-      );
     });
 
-    it('falls back to empty logs when 90-day query fails (graceful degrade)', async () => {
-      const habit = {
-        ...mockHabit,
-        id: 'h1',
-        status: 'active' as const,
-        frequency: { type: 'daily' } as const,
-        created_at: '2026-01-01T00:00:00Z',
-      };
+    it("issues habit_logs SELECT with exact filters for TODAY query", async () => {
+      queueThenResponses([
+        { data: [], error: null }, // getUserHabits
+        { data: [], error: null }, // today's logs
+        { data: [], error: null }, // 90-day window
+      ]);
 
-      // The thenable `then` is called once per awaited query:
-      //  1) getUserHabits → returns [habit]
-      //  2) today-logs query → returns []
-      //  3) 90-day window query → rejects with timeout
-      const thenSpy = vi.spyOn(mockSupabaseClient, 'then');
-      thenSpy.mockImplementationOnce((onFulfilled: any, onRejected: any) =>
-        Promise.resolve({ data: [habit], error: null, count: null }).then(onFulfilled, onRejected)
-      );
-      thenSpy.mockImplementationOnce((onFulfilled: any, onRejected: any) =>
-        Promise.resolve({ data: [], error: null, count: null }).then(onFulfilled, onRejected)
-      );
-      thenSpy.mockImplementationOnce((_onFulfilled: any, onRejected: any) =>
-        Promise.reject(new Error('query timeout')).catch((e) => {
-          if (onRejected) return onRejected(e);
-          throw e;
-        })
-      );
+      await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
 
-      const result = await habitsDB.getHabitsWithTodayStatus(mockUserId, '2026-04-12');
-      thenSpy.mockRestore();
+      // Today-logs chain: from('habit_logs').select('habit_id, completed')
+      //  .eq('user_id', userId).eq('logged_date', today).eq('completed', true)
+      mockSupabaseClient.expectQuery({
+        table: "habit_logs",
+        method: "select",
+        args: ["habit_id, completed"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habit_logs",
+        method: "eq",
+        args: ["user_id", USER_ID],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habit_logs",
+        method: "eq",
+        args: ["logged_date", "2026-04-15"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habit_logs",
+        method: "eq",
+        args: ["completed", true],
+      });
+    });
+
+    it("issues habit_logs SELECT for 90-DAY window with gte+lte bounds (pad zero, single-digit day)", async () => {
+      // Pick a today whose 90-day-earlier date has BOTH a single-digit month
+      // AND a single-digit day, so that padStart(2, '0') mutations to
+      // padStart(2, '') produce a different string and are killed.
+      //
+      // today = 2026-04-09 → 90 days earlier (local) = 2026-01-09.
+      queueThenResponses([
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+      ]);
+
+      const today = new Date(2026, 3, 9); // Apr 9, 2026
+      const windowStartDate = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() - 90,
+      );
+      const yy = windowStartDate.getFullYear();
+      const mm = String(windowStartDate.getMonth() + 1).padStart(2, "0");
+      const dd = String(windowStartDate.getDate()).padStart(2, "0");
+      const expectedStart = `${yy}-${mm}-${dd}`;
+      // Sanity check: both month and day parts are zero-padded.
+      expect(expectedStart).toBe("2026-01-09");
+
+      await db.getHabitsWithTodayStatus(USER_ID, "2026-04-09");
+
+      mockSupabaseClient.expectQuery({
+        table: "habit_logs",
+        method: "select",
+        args: ["habit_id, logged_date, completed"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habit_logs",
+        method: "gte",
+        args: ["logged_date", expectedStart],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habit_logs",
+        method: "lte",
+        args: ["logged_date", "2026-04-09"],
+      });
+    });
+
+    it("issues the full ordered query log across getUserHabits + today-logs + 90-day phases", async () => {
+      // Uses toEqual on the whole queryLog to lock down args for every
+      // .eq/.from/.select/.order in ALL three phases. Catches mutations to
+      // duplicated args like `.eq('user_id', userId)` that expectQuery
+      // would otherwise find elsewhere in the log.
+      queueThenResponses([
+        { data: [], error: null }, // getUserHabits
+        { data: [], error: null }, // today-logs
+        { data: [], error: null }, // 90-day window
+      ]);
+
+      await db.getHabitsWithTodayStatus(USER_ID, "2026-04-09");
+
+      expect(mockSupabaseClient.queryLog).toEqual([
+        // Phase 1: getUserHabits → habits
+        { table: "habits", method: "from", args: ["habits"] },
+        { table: "habits", method: "select", args: ["*"] },
+        { table: "habits", method: "eq", args: ["user_id", USER_ID] },
+        {
+          table: "habits",
+          method: "order",
+          args: ["created_at", { ascending: false }],
+        },
+        // Phase 2: today's completed logs
+        { table: "habit_logs", method: "from", args: ["habit_logs"] },
+        {
+          table: "habit_logs",
+          method: "select",
+          args: ["habit_id, completed"],
+        },
+        {
+          table: "habit_logs",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        {
+          table: "habit_logs",
+          method: "eq",
+          args: ["logged_date", "2026-04-09"],
+        },
+        {
+          table: "habit_logs",
+          method: "eq",
+          args: ["completed", true],
+        },
+        // Phase 3: 90-day window
+        { table: "habit_logs", method: "from", args: ["habit_logs"] },
+        {
+          table: "habit_logs",
+          method: "select",
+          args: ["habit_id, logged_date, completed"],
+        },
+        {
+          table: "habit_logs",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        {
+          table: "habit_logs",
+          method: "gte",
+          args: ["logged_date", "2026-01-09"],
+        },
+        {
+          table: "habit_logs",
+          method: "lte",
+          args: ["logged_date", "2026-04-09"],
+        },
+        {
+          table: "habit_logs",
+          method: "eq",
+          args: ["completed", true],
+        },
+      ]);
+    });
+
+    it("defaults `date` arg to getLocalDateString() when none provided", async () => {
+      // Freeze time so getLocalDateString is deterministic.
+      const fixedNow = new Date(2026, 3, 10, 9, 0, 0); // local Apr 10, 2026 09:00
+      vi.useFakeTimers();
+      vi.setSystemTime(fixedNow);
+      try {
+        queueThenResponses([
+          { data: [], error: null },
+          { data: [], error: null },
+          { data: [], error: null },
+        ]);
+
+        await db.getHabitsWithTodayStatus(USER_ID);
+
+        mockSupabaseClient.expectQuery({
+          table: "habit_logs",
+          method: "eq",
+          args: ["logged_date", "2026-04-10"],
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("computes monthly_completion_rate correctly for a daily habit", async () => {
+      // Habit started Jan 1, today is Apr 15.
+      // month-start = 2026-04-01, so daily scheduled days up to Apr 15 = 15.
+      // We'll feed 12 completed days within the month → rate = round(12/15 * 100) = 80.
+      const habit = makeHabit({
+        id: "h1",
+        status: "active",
+        frequency: { type: "daily" },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+
+      const daysThisMonth = Array.from({ length: 12 }, (_, i) => ({
+        habit_id: "h1",
+        logged_date: `2026-04-${String(i + 1).padStart(2, "0")}`,
+        completed: true,
+      }));
+
+      queueThenResponses([
+        { data: [habit], error: null },
+        { data: [], error: null },
+        { data: daysThisMonth, error: null },
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
 
       expect(result).toHaveLength(1);
-      expect(result[0].graduation_eligible).toBe(false);
+      expect(result[0].monthly_completion_rate).toBe(80);
+    });
+
+    it("caps monthly_completion_rate at 100 (never exceeds)", async () => {
+      // Daily habit; today Apr 5 → scheduled = 5 days.
+      // Feed 10 completed rows within the month (absurd but possible with dupes)
+      // → ratio 2.0, capped at 100.
+      const habit = makeHabit({
+        id: "h1",
+        frequency: { type: "daily" },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+      const windowLogs = Array.from({ length: 10 }, (_, i) => ({
+        habit_id: "h1",
+        logged_date: `2026-04-0${(i % 5) + 1}`, // dupes within month
+        completed: true,
+      }));
+
+      queueThenResponses([
+        { data: [habit], error: null },
+        { data: [], error: null },
+        { data: windowLogs, error: null },
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-05");
+
+      expect(result[0].monthly_completion_rate).toBe(100);
+    });
+
+    it("returns monthly_completion_rate = 0 when scheduled days is 0", async () => {
+      // Custom habit scheduled only on Sunday (day 0). Today is Apr 1, 2026
+      // which is a Wednesday — no Sundays in [Apr 1, Apr 1] so scheduled = 0.
+      // Source: `scheduled > 0 ? Math.round(...) : 0`.
+      const habit = makeHabit({
+        id: "h1",
+        frequency: { type: "custom", days: [0] },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+
+      queueThenResponses([
+        { data: [habit], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-01");
       expect(result[0].monthly_completion_rate).toBe(0);
     });
 
-    it('returns graduation_eligible flag per habit', async () => {
-      const activeHabit = {
-        ...mockHabit,
-        id: 'h-active',
-        status: 'active' as const,
-        created_at: '2026-01-01T00:00:00Z', // well over 21 days
-        frequency: { type: 'daily' } as const,
-      };
-      const formedHabit = {
-        ...mockHabit,
-        id: 'h-formed',
-        status: 'formed' as const,
-        created_at: '2026-01-01T00:00:00Z',
-        frequency: { type: 'daily' } as const,
-      };
+    it("weekly frequency: scheduled = weeks (count defaults to 1)", async () => {
+      // Type 'weekly' — in source: targetPerWeek = 1 (not frequency.count).
+      // today Apr 15, 2026; same Monday count as times_per_week test = 2.
+      // With 1 completed → rate = round(1/2*100) = 50.
+      //
+      // Kills the ConditionalExpression mutant at line 318:
+      //   `... || frequency.type === 'weekly'` → `... || false`
+      // because with that mutant, weekly falls through to the shouldTrackOnDate
+      // branch which counts every day (Apr 1..Apr 15 = 15 days),
+      // yielding rate = round(1/15*100) = 7, not 50.
+      //
+      // Also kills line 319's ternary mutant `true ? count : 1` — with that
+      // mutant, frequency.count is undefined → weeks * undefined = NaN →
+      // rate becomes NaN, not 50.
+      const habit = makeHabit({
+        id: "h-weekly",
+        frequency: { type: "weekly" },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+      const windowLogs = [
+        { habit_id: "h-weekly", logged_date: "2026-04-10", completed: true },
+      ];
 
-      // All thenable queries share the mock; habit objects lack log fields
-      // so logs parsing yields empty per-habit lists. That's fine — this test
-      // only asserts the property is present and that formed is never eligible.
-      mockSupabaseClient.setMockResponse([activeHabit, formedHabit]);
+      queueThenResponses([
+        { data: [habit], error: null },
+        { data: [], error: null },
+        { data: windowLogs, error: null },
+      ]);
 
-      const result = await habitsDB.getHabitsWithTodayStatus(mockUserId, '2026-04-12');
-      expect(result.find((h: { id: string }) => h.id === 'h-active')).toHaveProperty(
-        'graduation_eligible'
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
+      expect(result[0].monthly_completion_rate).toBe(50);
+    });
+
+    it("weekdays frequency: scheduled counts only Mon–Fri (kills shouldTrackOnDate→true mutant)", async () => {
+      // today 2026-04-05 (Sunday). Month-start Apr 1 (Wed). Weekdays in
+      // Apr 1..Apr 5 = {Wed=1, Thu=2, Fri=3}. Sat(4) and Sun(5) excluded.
+      // scheduled = 3. Feed 0 completions → rate = 0.
+      // With mutant shouldTrackOnDate → true, scheduled = 5, still rate = 0.
+      // So use a completion count that distinguishes: 3 completions (all
+      // weekdays) → rate = round(3/3*100)=100 (real) vs round(3/5*100)=60 (mutant).
+      const habit = makeHabit({
+        id: "h-wd",
+        frequency: { type: "weekdays" },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+      const windowLogs = [
+        { habit_id: "h-wd", logged_date: "2026-04-01", completed: true },
+        { habit_id: "h-wd", logged_date: "2026-04-02", completed: true },
+        { habit_id: "h-wd", logged_date: "2026-04-03", completed: true },
+      ];
+
+      queueThenResponses([
+        { data: [habit], error: null },
+        { data: [], error: null },
+        { data: windowLogs, error: null },
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-05");
+      expect(result[0].monthly_completion_rate).toBe(100);
+    });
+
+    it("times_per_week when today IS a Monday: last-day Monday counts toward weeks", async () => {
+      // today = 2026-04-06 (Monday). Month-start Apr 1 (Wed).
+      // With `while (cursor <= end)`: Mondays in [Apr 1..Apr 6] = {Apr 6} → 1 week.
+      // With mutant `while (cursor < end)`: cursor stops BEFORE Apr 6,
+      // missing the Monday → weeks = 0, Math.max(0, 1) = 1, same.
+      //
+      // To kill the `<= vs <` mutant we need TWO Mondays where the last is
+      // the end day: use today = 2026-04-13 (Monday). Mondays in [Apr 1, Apr 13]
+      // = {Apr 6, Apr 13} → 2 weeks (real). Mutant stops before Apr 13 →
+      // {Apr 6} → 1 week. With count=3, scheduled = 6 (real) vs 3 (mutant).
+      // Feed 3 completions → rate = round(3/6*100)=50 vs round(3/3*100)=100.
+      const habit = makeHabit({
+        id: "h-tpw",
+        frequency: { type: "times_per_week", count: 3 },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+      const windowLogs = [
+        { habit_id: "h-tpw", logged_date: "2026-04-02", completed: true },
+        { habit_id: "h-tpw", logged_date: "2026-04-07", completed: true },
+        { habit_id: "h-tpw", logged_date: "2026-04-10", completed: true },
+      ];
+
+      queueThenResponses([
+        { data: [habit], error: null },
+        { data: [], error: null },
+        { data: windowLogs, error: null },
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-13");
+      expect(result[0].monthly_completion_rate).toBe(50);
+    });
+
+    it("times_per_week: scheduled = weeks * count", async () => {
+      // times_per_week with count=3; today Apr 15, 2026 (Wednesday).
+      // Month starts Apr 1 (Wednesday). In source: count Mondays from
+      // Apr 1..Apr 15 → Apr 6, Apr 13 = 2 weeks. scheduled = 2 * 3 = 6.
+      const habit = makeHabit({
+        id: "h1",
+        frequency: { type: "times_per_week", count: 3 },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+      // Feed 3 completed days within month → rate = round(3/6 * 100) = 50
+      const windowLogs = [
+        { habit_id: "h1", logged_date: "2026-04-02", completed: true },
+        { habit_id: "h1", logged_date: "2026-04-07", completed: true },
+        { habit_id: "h1", logged_date: "2026-04-10", completed: true },
+      ];
+
+      queueThenResponses([
+        { data: [habit], error: null },
+        { data: [], error: null },
+        { data: windowLogs, error: null },
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
+      expect(result[0].monthly_completion_rate).toBe(50);
+    });
+
+    it("only counts logs >= monthStart toward monthly_completion_rate", async () => {
+      // today 2026-04-15 → monthStart 2026-04-01. A log from March must be
+      // ignored (catches mutants that flip the >= check).
+      const habit = makeHabit({
+        id: "h1",
+        frequency: { type: "daily" },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+      const windowLogs = [
+        { habit_id: "h1", logged_date: "2026-03-31", completed: true }, // ignore
+        { habit_id: "h1", logged_date: "2026-04-01", completed: true }, // count
+        { habit_id: "h1", logged_date: "2026-04-02", completed: true }, // count
+        { habit_id: "h1", logged_date: "2026-04-15", completed: true }, // count
+      ];
+
+      queueThenResponses([
+        { data: [habit], error: null },
+        { data: [], error: null },
+        { data: windowLogs, error: null },
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
+
+      // scheduled = 15 days, completed = 3 (March excluded) → round(3/15*100)=20
+      expect(result[0].monthly_completion_rate).toBe(20);
+    });
+
+    it("throws when today-logs query errors", async () => {
+      queueThenResponses([
+        { data: [], error: null }, // getUserHabits
+        { data: null, error: new Error("logs select failed") }, // today's logs
+      ]);
+
+      await expect(
+        db.getHabitsWithTodayStatus(USER_ID, "2026-04-15"),
+      ).rejects.toThrow("logs select failed");
+    });
+
+    it("handles null data (no error) from today-logs query — completed_today defaults to false", async () => {
+      // Exercises the `(logs || []).map(...)` branch when logs is null.
+      const habit = makeHabit({
+        id: "h1",
+        frequency: { type: "daily" },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+
+      queueThenResponses([
+        { data: [habit], error: null }, // getUserHabits
+        { data: null, error: null }, // today-logs: success but null data
+        { data: [], error: null }, // 90-day window
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
+
+      expect(result).toHaveLength(1);
+      expect(result[0].completed_today).toBe(false);
+    });
+
+    it("handles null data (no error) from 90-day window — windowLogs defaults to []", async () => {
+      // Exercises `windowLogs = data ?? []` branch when data is null.
+      const habit = makeHabit({
+        id: "h1",
+        frequency: { type: "daily" },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+
+      queueThenResponses([
+        { data: [habit], error: null },
+        { data: [], error: null },
+        { data: null, error: null }, // 90-day window: success but null data
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
+
+      expect(result).toHaveLength(1);
+      expect(result[0].monthly_completion_rate).toBe(0);
+      expect(result[0].graduation_eligible).toBe(false);
+      // No warn fired: data was null but no error.
+      expect(log.warn).not.toHaveBeenCalled();
+    });
+
+    it("falls back to empty logs + logs warning when 90-day window query errors", async () => {
+      const habit = makeHabit({
+        id: "h1",
+        frequency: { type: "daily" },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+
+      queueThenResponses([
+        { data: [habit], error: null }, // getUserHabits
+        { data: [], error: null }, // today's logs
+        { data: null, error: new Error("window query failed") }, // 90-day (caught)
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
+
+      // Habits still render; rate falls back to 0 because windowLogs = [].
+      expect(result).toHaveLength(1);
+      expect(result[0].monthly_completion_rate).toBe(0);
+      // graduation_eligible is false because logs = [].
+      expect(result[0].graduation_eligible).toBe(false);
+
+      expect(log.warn).toHaveBeenCalledWith(
+        "[habits] 90-day logs query failed; monthly rate + nudges will be empty",
+        { userId: USER_ID, error: expect.stringContaining("window query failed") },
       );
-      // Formed is never eligible
-      expect(
-        result.find((h: { id: string; graduation_eligible: boolean }) => h.id === 'h-formed')
-          ?.graduation_eligible
-      ).toBe(false);
+    });
+
+    it("sets graduation_eligible=true for an eligible active habit with 80%+ completion", async () => {
+      // Daily habit, 21 days old, logs show completion every day.
+      const habit = makeHabit({
+        id: "h-grad",
+        status: "active",
+        frequency: { type: "daily" },
+        created_at: "2026-01-01T00:00:00Z", // well over 21 days
+      });
+
+      // Provide 21 consecutive completed logs in the 21-day window prior to today
+      const today = "2026-04-15";
+      const windowLogs: Array<{
+        habit_id: string;
+        logged_date: string;
+        completed: boolean;
+      }> = [];
+      for (let i = 20; i >= 0; i--) {
+        const d = new Date(2026, 3, 15 - i);
+        const yy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        windowLogs.push({
+          habit_id: "h-grad",
+          logged_date: `${yy}-${mm}-${dd}`,
+          completed: true,
+        });
+      }
+
+      queueThenResponses([
+        { data: [habit], error: null },
+        { data: [], error: null },
+        { data: windowLogs, error: null },
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, today);
+      expect(result[0].graduation_eligible).toBe(true);
+    });
+
+    it("sets graduation_eligible=false for formed habits regardless of logs", async () => {
+      const formed = makeHabit({
+        id: "h-formed",
+        status: "formed",
+        frequency: { type: "daily" },
+        created_at: "2026-01-01T00:00:00Z",
+      });
+
+      queueThenResponses([
+        { data: [formed], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+      ]);
+
+      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
+      expect(result[0].graduation_eligible).toBe(false);
     });
   });
 
-  describe('graduation', () => {
-    it('graduateHabit sets status=formed, snapshots streak, inserts graduation row', async () => {
-      const activeHabit = { ...mockHabit, status: 'active' as const, current_streak: 42 };
-      const formedHabit = {
-        ...mockHabit,
-        status: 'formed' as const,
-        current_streak: 42,
-        graduated_streak: 42,
-        graduated_at: '2026-04-12T00:00:00Z',
-        nudge_dismissed_at: null,
-      };
-      // 1st single(): getHabit → activeHabit
-      // 2nd single(): updateHabit → formedHabit
-      // 3rd single(): insertGraduation → grad row
-      mockSupabaseClient.single
-        .mockResolvedValueOnce({ data: activeHabit, error: null })
-        .mockResolvedValueOnce({ data: formedHabit, error: null })
-        .mockResolvedValueOnce({ data: { id: 'grad-1', habit_id: 'habit-123' }, error: null });
+  // ─── getActiveHabitCount ──────────────────────────────────────────────────
+  describe("getActiveHabitCount", () => {
+    it("returns count filtered by user_id + status IN (active, paused)", async () => {
+      mockSupabaseClient.setMockResponse(null, null, 7);
 
-      const result = await habitsDB.graduateHabit('habit-123', mockUserId);
+      const result = await db.getActiveHabitCount(USER_ID);
 
-      expect(result.status).toBe('formed');
-      expect(result.graduated_streak).toBe(42);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('habit_graduations');
-    });
+      expect(result).toBe(7);
 
-    it('graduateHabit throws when habit not found', async () => {
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: null,
-        error: { code: 'PGRST116' },
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "from",
+        args: ["habits"],
       });
-      await expect(habitsDB.graduateHabit('missing', mockUserId)).rejects.toThrow(/not found/i);
-    });
-
-    it('reactivateHabit sets status=active, resets current_streak, preserves best_streak', async () => {
-      const formedHabit = {
-        ...mockHabit,
-        status: 'formed' as const,
-        current_streak: 0,
-        best_streak: 87,
-        graduated_streak: 87,
-        graduated_at: '2026-04-01T00:00:00Z',
-      };
-      const activeHabit = {
-        ...mockHabit,
-        status: 'active' as const,
-        current_streak: 0,
-        best_streak: 87,
-        graduated_at: null,
-        graduated_streak: null,
-      };
-      // 1st single(): getHabit → formedHabit
-      // 2nd single(): updateHabit → activeHabit
-      mockSupabaseClient.single
-        .mockResolvedValueOnce({ data: formedHabit, error: null })
-        .mockResolvedValueOnce({ data: activeHabit, error: null });
-      // maybeSingle for markReactivated's select
-      mockSupabaseClient.maybeSingle.mockResolvedValueOnce({
-        data: { id: 'grad-1' },
-        error: null,
+      // IMPORTANT: { count: 'exact', head: true } — catches mutants that
+      // drop either option.
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "select",
+        args: ["*", { count: "exact", head: true }],
       });
-      // update (thenable) uses mockData; last setMockResponse applies
-      mockSupabaseClient.setMockResponse({});
-
-      const result = await habitsDB.reactivateHabit('habit-123', mockUserId);
-
-      expect(result.status).toBe('active');
-      expect(result.current_streak).toBe(0);
-      expect(result.best_streak).toBe(87);
-      expect(result.graduated_at).toBeNull();
-    });
-
-    it('reactivateHabit throws when habit is not formed', async () => {
-      const activeHabit = { ...mockHabit, status: 'active' as const };
-      mockSupabaseClient.single.mockResolvedValueOnce({ data: activeHabit, error: null });
-      await expect(habitsDB.reactivateHabit('habit-123', mockUserId)).rejects.toThrow(/not formed/i);
-    });
-
-    it('reactivateHabit does NOT reset best_streak in the update payload', async () => {
-      const formedHabit = {
-        ...mockHabit,
-        status: 'formed' as const,
-        current_streak: 0,
-        best_streak: 87,
-        graduated_streak: 87,
-        graduated_at: '2026-04-01T00:00:00Z',
-      };
-      const activeHabit = {
-        ...mockHabit,
-        status: 'active' as const,
-        current_streak: 0,
-        best_streak: 87,
-        graduated_at: null,
-        graduated_streak: null,
-      };
-      mockSupabaseClient.single
-        .mockResolvedValueOnce({ data: formedHabit, error: null })
-        .mockResolvedValueOnce({ data: activeHabit, error: null });
-      mockSupabaseClient.maybeSingle.mockResolvedValueOnce({
-        data: { id: 'grad-1' },
-        error: null,
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["user_id", USER_ID],
       });
-      mockSupabaseClient.update.mockClear();
-
-      await habitsDB.reactivateHabit('habit-123', mockUserId);
-
-      // Find the update call that flipped status to active
-      const statusUpdateCall = mockSupabaseClient.update.mock.calls.find(
-        (c: unknown[]) => (c[0] as { status?: string }).status === 'active'
-      );
-      expect(statusUpdateCall).toBeDefined();
-      expect(statusUpdateCall![0]).not.toHaveProperty('best_streak');
-      expect((statusUpdateCall![0] as { current_streak: number }).current_streak).toBe(0);
-    });
-
-    it('graduateHabit throws HabitAlreadyFormedError when habit is already formed', async () => {
-      const { HabitAlreadyFormedError } = await import('@/lib/db/habit-errors');
-      const alreadyFormed = { ...mockHabit, status: 'formed' as const };
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: alreadyFormed,
-        error: null,
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "in",
+        args: ["status", ["active", "paused"]],
       });
-      await expect(
-        habitsDB.graduateHabit('habit-123', mockUserId)
-      ).rejects.toThrow(HabitAlreadyFormedError);
     });
 
-    it('graduateHabit rolls back status when history insert fails', async () => {
-      const activeHabit = {
-        ...mockHabit,
-        status: 'active' as const,
-        current_streak: 42,
-        nudge_dismissed_at: '2026-04-01T00:00:00Z',
-      };
-      const formedHabit = {
-        ...activeHabit,
-        status: 'formed' as const,
-        graduated_at: '2026-04-12T00:00:00Z',
-        graduated_streak: 42,
-        nudge_dismissed_at: null,
-      };
+    it("returns 0 when count is null", async () => {
+      mockSupabaseClient.setMockResponse(null, null, null);
 
-      // 1st single(): getHabit → activeHabit
-      // 2nd single(): updateHabit forward-flip → formedHabit
-      // 3rd single(): insertGraduation rejects
-      // 4th single(): rollback updateHabit → activeHabit
-      mockSupabaseClient.single
-        .mockResolvedValueOnce({ data: activeHabit, error: null })
-        .mockResolvedValueOnce({ data: formedHabit, error: null })
-        .mockRejectedValueOnce(new Error('history insert failed'))
-        .mockResolvedValueOnce({ data: activeHabit, error: null });
+      const result = await db.getActiveHabitCount(USER_ID);
 
-      mockSupabaseClient.update.mockClear();
-
-      await expect(
-        habitsDB.graduateHabit('habit-123', mockUserId)
-      ).rejects.toThrow('history insert failed');
-
-      // Rollback payload should restore nudge_dismissed_at and clear graduation fields
-      const rollbackCall = mockSupabaseClient.update.mock.calls.find((c: unknown[]) => {
-        const payload = c[0] as Record<string, unknown>;
-        return (
-          payload.status === 'active' &&
-          payload.graduated_at === null &&
-          payload.graduated_streak === null
-        );
-      });
-      expect(rollbackCall).toBeDefined();
-      expect((rollbackCall![0] as { nudge_dismissed_at: string }).nudge_dismissed_at).toBe(
-        '2026-04-01T00:00:00Z'
-      );
+      expect(result).toBe(0);
     });
 
-    it('dismissGraduationNudge stamps nudge_dismissed_at', async () => {
-      const updated = { ...mockHabit, nudge_dismissed_at: '2026-04-12T00:00:00Z' };
-      mockSupabaseClient.single.mockResolvedValueOnce({ data: updated, error: null });
+    it("throws when the query errors", async () => {
+      mockSupabaseClient.setMockResponse(null, new Error("count failed"));
 
-      const result = await habitsDB.dismissGraduationNudge('habit-123', mockUserId);
-      expect(result.nudge_dismissed_at).toBe('2026-04-12T00:00:00Z');
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith(
-        expect.objectContaining({ nudge_dismissed_at: expect.any(String) })
+      await expect(db.getActiveHabitCount(USER_ID)).rejects.toThrow(
+        "count failed",
       );
     });
   });
 
-  describe('deleteHabit', () => {
-    it('should delete a habit', async () => {
+  // ─── getHabitCountsByStatus ───────────────────────────────────────────────
+  describe("getHabitCountsByStatus", () => {
+    it("returns zeros for all three statuses when no habits exist", async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      const result = await db.getHabitCountsByStatus(USER_ID);
+
+      expect(result).toEqual({ active: 0, paused: 0, formed: 0 });
+
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "select",
+        args: ["status"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "habits",
+        method: "eq",
+        args: ["user_id", USER_ID],
+      });
+    });
+
+    it("aggregates exact counts per status", async () => {
+      mockSupabaseClient.setMockResponse([
+        { status: "active" },
+        { status: "active" },
+        { status: "active" },
+        { status: "paused" },
+        { status: "formed" },
+        { status: "formed" },
+      ]);
+
+      const result = await db.getHabitCountsByStatus(USER_ID);
+
+      expect(result).toEqual({ active: 3, paused: 1, formed: 2 });
+    });
+
+    it("initializes an unknown status bucket if seen in data", async () => {
+      // The source does `counts[status] = (counts[status] || 0) + 1`, so
+      // unknown statuses should be tallied from 0.
+      mockSupabaseClient.setMockResponse([{ status: "archived" }]);
+
+      const result = await db.getHabitCountsByStatus(USER_ID);
+
+      expect(result).toEqual({
+        active: 0,
+        paused: 0,
+        formed: 0,
+        archived: 1,
+      });
+    });
+
+    it("handles null data gracefully (no crash)", async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      await habitsDB.deleteHabit('habit-123', mockUserId);
+      const result = await db.getHabitCountsByStatus(USER_ID);
 
-      expect(mockSupabaseClient.delete).toHaveBeenCalled();
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'habit-123');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
+      expect(result).toEqual({ active: 0, paused: 0, formed: 0 });
     });
 
-    it('should throw on delete error', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'Delete failed' });
+    it("throws on query error", async () => {
+      mockSupabaseClient.setMockResponse(null, new Error("select failed"));
 
-      await expect(habitsDB.deleteHabit('habit-123', mockUserId)).rejects.toEqual({
-        message: 'Delete failed',
-      });
+      await expect(db.getHabitCountsByStatus(USER_ID)).rejects.toThrow(
+        "select failed",
+      );
     });
   });
 });
