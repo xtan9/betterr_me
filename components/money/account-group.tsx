@@ -47,7 +47,7 @@ export function AccountGroup({
           <h3 className="text-base font-semibold">
             {connection.institution_name ?? t("accounts.unknownInstitution")}
           </h3>
-          <span className="text-sm text-muted-foreground tabular-nums">
+          <span className="text-body text-muted-foreground tabular-nums">
             {t("accounts.institutionSubtotal")}: {formatMoney(subtotalCents)}
           </span>
         </div>
@@ -86,7 +86,7 @@ export function AccountGroup({
 
       {/* Connection error message */}
       {connection.sync_status === "error" && connection.error_message && (
-        <p className="text-sm text-destructive">{connection.error_message}</p>
+        <p className="text-body text-destructive">{connection.error_message}</p>
       )}
 
       {/* Account cards */}

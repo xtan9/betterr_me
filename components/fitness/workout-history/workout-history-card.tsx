@@ -47,13 +47,13 @@ export function WorkoutHistoryCard({
           {/* Top row: title + date */}
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-semibold truncate">{workout.title}</h3>
-            <span className="text-sm text-muted-foreground whitespace-nowrap">
+            <span className="text-body text-muted-foreground whitespace-nowrap">
               {formatDate(workout.started_at)}
             </span>
           </div>
 
           {/* Middle row: duration */}
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-body text-muted-foreground">
             {(() => {
               const { hours, minutes } = formatDurationParts(
                 workout.duration_seconds

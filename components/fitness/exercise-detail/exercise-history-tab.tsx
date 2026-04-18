@@ -41,7 +41,7 @@ export function ExerciseHistoryTab({
   if (sortedHistory.length === 0) {
     return (
       <div className="rounded-card border border-dashed p-8 text-center">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t("exerciseDetail.noHistoryYet")}
         </p>
       </div>
@@ -54,7 +54,7 @@ export function ExerciseHistoryTab({
         <Card key={entry.workout_id}>
           <CardContent className="py-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium">
+              <p className="text-body font-medium">
                 {new Date(entry.started_at).toLocaleDateString(undefined, {
                   weekday: "short",
                   year: "numeric",
@@ -69,7 +69,7 @@ export function ExerciseHistoryTab({
             <div className="grid grid-cols-3 gap-4 text-center">
               {entry.best_set_weight_kg != null && (
                 <div>
-                  <p className="text-sm font-semibold">
+                  <p className="text-body font-semibold">
                     {formatWeight(entry.best_set_weight_kg, weightUnit)}
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -79,7 +79,7 @@ export function ExerciseHistoryTab({
               )}
               {entry.best_set_reps != null && (
                 <div>
-                  <p className="text-sm font-semibold">{entry.best_set_reps}</p>
+                  <p className="text-body font-semibold">{entry.best_set_reps}</p>
                   <p className="text-xs text-muted-foreground">
                     {t("exerciseDetail.bestReps")}
                   </p>
@@ -87,7 +87,7 @@ export function ExerciseHistoryTab({
               )}
               {entry.total_volume != null && (
                 <div>
-                  <p className="text-sm font-semibold">
+                  <p className="text-body font-semibold">
                     {formatWeight(entry.total_volume, weightUnit)}
                   </p>
                   <p className="text-xs text-muted-foreground">

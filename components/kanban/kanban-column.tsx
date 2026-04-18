@@ -46,7 +46,7 @@ export function KanbanColumn({
     >
       {/* Column header */}
       <div className="flex items-center justify-between px-card-header-padding-x py-card-header-padding-y">
-        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+        <h3 className="text-body font-medium text-muted-foreground">{title}</h3>
         <Badge variant="secondary" className="text-xs tabular-nums">
           {tasks.length}
         </Badge>

@@ -137,7 +137,7 @@ export function ManualAssetForm({
         </DialogHeader>
 
         {/* Clarification text */}
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t("assetClarification")}
         </p>
 
@@ -151,7 +151,7 @@ export function ManualAssetForm({
               {...register("name")}
             />
             {errors.name && (
-              <p className="text-sm text-destructive">{errors.name.message}</p>
+              <p className="text-body text-destructive">{errors.name.message}</p>
             )}
           </div>
 
@@ -173,7 +173,7 @@ export function ManualAssetForm({
               />
             </div>
             {errors.value && (
-              <p className="text-sm text-destructive">{errors.value.message}</p>
+              <p className="text-body text-destructive">{errors.value.message}</p>
             )}
           </div>
 

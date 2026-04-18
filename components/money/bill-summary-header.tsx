@@ -23,7 +23,7 @@ export function BillSummaryHeader({
         <Receipt className="size-5 text-[hsl(var(--money-sage))]" />
       </div>
       <div className="flex-1">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t("summary", {
             count: billCount,
             pending: pendingCount,
@@ -32,7 +32,7 @@ export function BillSummaryHeader({
         </p>
         <p className="text-stat tabular-nums">
           {formatMoney(totalMonthlyCents)}
-          <span className="text-sm font-normal text-muted-foreground">
+          <span className="text-body font-normal text-muted-foreground">
             /mo
           </span>
         </p>

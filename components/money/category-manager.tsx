@@ -243,7 +243,7 @@ export function CategoryManager() {
               >
                 <div className="flex items-center gap-2">
                   {cat.icon && (
-                    <span className="text-sm" aria-hidden="true">
+                    <span className="text-body" aria-hidden="true">
                       {cat.icon}
                     </span>
                   )}
@@ -254,7 +254,7 @@ export function CategoryManager() {
                       aria-hidden="true"
                     />
                   )}
-                  <span className="text-sm font-medium">
+                  <span className="text-body font-medium">
                     {cat.display_name || cat.name}
                   </span>
                   <Badge
@@ -330,7 +330,7 @@ export function CategoryManager() {
 
         {rules.length === 0 ? (
           <div className="rounded-card border border-money-border bg-money-surface px-6 py-8 text-center">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t("merchantRules.noRules")}
             </p>
           </div>
@@ -341,7 +341,7 @@ export function CategoryManager() {
                 key={rule.id}
                 className="flex items-center justify-between px-4 py-2.5"
               >
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-body">
                   <span className="font-medium">{rule.merchant_name}</span>
                   <span className="text-muted-foreground">&rarr;</span>
                   <Badge variant="outline" className="gap-1">

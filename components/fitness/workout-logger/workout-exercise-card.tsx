@@ -143,7 +143,7 @@ export function WorkoutExerciseCard({
               href={`/workouts/exercises/${exerciseInfo.id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-semibold hover:underline"
+              className="text-body font-semibold hover:underline"
             >
               {exerciseInfo.name}
             </Link>

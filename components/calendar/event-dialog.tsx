@@ -329,7 +329,7 @@ export function EventDialog({
                 form.setValue("is_all_day", !!checked)
               }
             />
-            <Label htmlFor="event-all-day" className="text-sm cursor-pointer">
+            <Label htmlFor="event-all-day" className="text-body cursor-pointer">
               {t("eventDialog.allDay")}
             </Label>
           </div>
@@ -405,7 +405,7 @@ export function EventDialog({
             <textarea
               id="event-description"
               placeholder={t("eventDialog.descriptionPlaceholder")}
-              className="min-h-[80px] w-full resize-none rounded-control border border-input bg-background p-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="min-h-[80px] w-full resize-none rounded-control border border-input bg-background p-2 text-body placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               {...form.register("description")}
             />
           </div>
@@ -449,12 +449,12 @@ export function EventDialog({
             <Label className="text-muted-foreground">
               {t("eventDialog.recurrence")}
             </Label>
-            <p className="text-sm text-muted-foreground">None</p>
+            <p className="text-body text-muted-foreground">None</p>
           </div>
 
           {/* Error */}
           {form.formState.errors.root && (
-            <p className="text-sm text-destructive">
+            <p className="text-body text-destructive">
               {form.formState.errors.root.message}
             </p>
           )}

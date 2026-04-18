@@ -54,12 +54,12 @@ export function UpcomingBillsList({ bills }: UpcomingBillsListProps) {
             className="flex items-start justify-between"
           >
             <div>
-              <p className="text-sm font-medium">{bill.merchant_name}</p>
+              <p className="text-body font-medium">{bill.merchant_name}</p>
               <p className="text-xs text-muted-foreground">
                 {format(parseISO(bill.due_date), "MMM d")}
               </p>
             </div>
-            <p className="text-sm font-medium tabular-nums">
+            <p className="text-body font-medium tabular-nums">
               {formatMoney(Math.abs(bill.amount_cents))}
             </p>
           </div>

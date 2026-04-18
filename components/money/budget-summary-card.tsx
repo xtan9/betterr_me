@@ -29,7 +29,7 @@ export function BudgetSummaryCard({
         <div className="flex-1">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t("totalBudget")}
               </p>
               <p className="text-stat tabular-nums">
@@ -37,7 +37,7 @@ export function BudgetSummaryCard({
               </p>
             </div>
             <div className="text-right">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {remaining >= 0 ? t("remaining") : t("overBudget")}
               </p>
               <p
@@ -51,7 +51,7 @@ export function BudgetSummaryCard({
               </p>
             </div>
           </div>
-          <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="mt-2 flex items-center gap-2 text-body text-muted-foreground">
             <span className="tabular-nums">
               {formatMoney(totalSpentCents)} {t("spent")}
             </span>

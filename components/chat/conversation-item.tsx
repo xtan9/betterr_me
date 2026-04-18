@@ -85,7 +85,7 @@ export function ConversationItem({
 
   return (
     <div
-      className={`group flex w-full min-w-0 items-center justify-between rounded-control px-3 py-2 text-left text-sm transition-colors cursor-pointer ${
+      className={`group flex w-full min-w-0 items-center justify-between rounded-control px-3 py-2 text-left text-body transition-colors cursor-pointer ${
         isActive ? "bg-accent text-accent-foreground" : "hover:bg-muted"
       }`}
       onClick={() => !isRenaming && onSelect(conversation.id)}
@@ -102,7 +102,7 @@ export function ConversationItem({
           onChange={(e) => setRenameValue(e.target.value)}
           onKeyDown={handleRenameKeyDown}
           onBlur={handleConfirmRename}
-          className="flex-1 mr-2 rounded border border-input bg-background px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          className="flex-1 mr-2 rounded border border-input bg-background px-2 py-0.5 text-body focus:outline-none focus:ring-1 focus:ring-ring"
         />
       ) : (
         <span

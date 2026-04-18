@@ -87,7 +87,7 @@ function RoutineExerciseRow({
     <div className="flex items-center gap-3 rounded-card border p-3">
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex items-center justify-between">
-          <span className="truncate text-sm font-medium">
+          <span className="truncate text-body font-medium">
             {re.exercise.name}
           </span>
           {re.rest_timer_seconds > 0 && (
@@ -194,7 +194,7 @@ export function RoutineExerciseList({
 
   if (exercises.length === 0) {
     return (
-      <p className="py-4 text-center text-sm text-muted-foreground">
+      <p className="py-4 text-center text-body text-muted-foreground">
         {t("noExercises")}
       </p>
     );

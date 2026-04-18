@@ -41,7 +41,7 @@ export function JournalOnThisDayFull({ date }: JournalOnThisDayFullProps) {
   if (entries.length === 0) {
     return (
       <div
-        className="flex items-center gap-2 text-sm text-muted-foreground py-4"
+        className="flex items-center gap-2 text-body text-muted-foreground py-4"
         data-testid="on-this-day-full-empty"
       >
         <CalendarHeart className="size-4 shrink-0" aria-hidden="true" />
@@ -78,12 +78,12 @@ export function JournalOnThisDayFull({ date }: JournalOnThisDayFullProps) {
                   )}
                 </div>
                 {entry.title && (
-                  <CardTitle className="text-sm">{entry.title}</CardTitle>
+                  <CardTitle className="text-body">{entry.title}</CardTitle>
                 )}
               </CardHeader>
               <CardContent>
                 {preview && (
-                  <p className="text-sm text-muted-foreground line-clamp-4">
+                  <p className="text-body text-muted-foreground line-clamp-4">
                     {preview}
                   </p>
                 )}

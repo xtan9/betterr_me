@@ -45,7 +45,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <button
-            className="truncate text-sm font-medium text-left hover:underline"
+            className="truncate text-body font-medium text-left hover:underline"
             onClick={() => onEdit(bill)}
           >
             {bill.name}
@@ -87,7 +87,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
       </div>
 
       {/* Amount */}
-      <p className="shrink-0 text-sm font-semibold tabular-nums">
+      <p className="shrink-0 text-body font-semibold tabular-nums">
         {formatMoney(bill.amount_cents)}
       </p>
 

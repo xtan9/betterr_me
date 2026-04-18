@@ -39,7 +39,7 @@ export function DashboardHero({
     <div className="grid grid-cols-1 gap-card-gap sm:grid-cols-3">
       {/* Available money */}
       <div className="rounded-card border border-money-border bg-money-surface p-card-padding">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {hasConfirmedIncome
             ? t("availableUntilPaycheck")
             : t("availableUntilEndOfMonth")}
@@ -51,7 +51,7 @@ export function DashboardHero({
 
       {/* Upcoming bills */}
       <div className="rounded-card border border-money-border bg-money-surface p-card-padding">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t("upcomingBills30Days")}
         </p>
         <p className="text-stat tabular-nums">
@@ -61,7 +61,7 @@ export function DashboardHero({
 
       {/* Projected end-of-month balance */}
       <div className="rounded-card border border-money-border bg-money-surface p-card-padding">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t("endOfMonthBalance")}
         </p>
         <p className={`text-stat tabular-nums ${projectedColor}`}>

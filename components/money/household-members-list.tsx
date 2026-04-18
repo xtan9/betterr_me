@@ -122,7 +122,7 @@ export function HouseholdMembersList({
     <div className="flex flex-col gap-card-gap">
       {/* Member list */}
       <div className="space-y-2">
-        <h4 className="text-sm font-medium text-muted-foreground">
+        <h4 className="text-body font-medium text-muted-foreground">
           {t("members")}
         </h4>
         <div className="space-y-2">
@@ -142,7 +142,7 @@ export function HouseholdMembersList({
                   </Avatar>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">
+                      <span className="text-body font-medium">
                         {member.full_name || member.email}
                       </span>
                       {isCurrentUser && (
@@ -206,7 +206,7 @@ export function HouseholdMembersList({
       {/* Pending invitations */}
       {pendingInvitations.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium text-muted-foreground">
+          <h4 className="text-body font-medium text-muted-foreground">
             {t("invitePending")}
           </h4>
           <div className="space-y-2">
@@ -216,7 +216,7 @@ export function HouseholdMembersList({
                 className="flex items-center justify-between rounded-card border border-dashed border-money-border px-4 py-3"
               >
                 <div>
-                  <span className="text-sm">{invite.email}</span>
+                  <span className="text-body">{invite.email}</span>
                   <p className="text-xs text-muted-foreground">
                     {t("inviteExpires")}
                   </p>

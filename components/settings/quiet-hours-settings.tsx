@@ -82,7 +82,7 @@ export function QuietHoursSettings() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
-          <Label htmlFor="quiet-hours-toggle" className="text-sm font-medium">
+          <Label htmlFor="quiet-hours-toggle" className="text-body font-medium">
             {enabled
               ? t("quietHours.enabled")
               : t("quietHours.disabled")}

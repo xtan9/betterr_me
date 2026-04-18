@@ -56,7 +56,7 @@ export function BillCalendarDay({
     <div className="min-h-[4rem]">
       <button
         className={cn(
-          "flex w-full flex-col items-start rounded-control p-1 text-left text-sm transition-colors",
+          "flex w-full flex-col items-start rounded-control p-1 text-left text-body transition-colors",
           !isCurrentMonth && "opacity-40",
           isCurrentMonth && "hover:bg-accent/50",
           isToday && "ring-1 ring-[hsl(var(--money-sage))]",

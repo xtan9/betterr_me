@@ -225,7 +225,7 @@ export function JournalEntryModal({
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle>{title}</DialogTitle>
-              <p className="text-sm text-muted-foreground">{formattedDate}</p>
+              <p className="text-body text-muted-foreground">{formattedDate}</p>
             </div>
             <div className="flex items-center gap-2">
               <JournalSaveStatus status={saveStatus} />

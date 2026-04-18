@@ -135,7 +135,7 @@ export function CategorySplitForm({
         <span className="text-xs font-medium text-muted-foreground">
           {t("transactions.splitTransaction")}
         </span>
-        <span className="text-sm font-semibold tabular-nums">
+        <span className="text-body font-semibold tabular-nums">
           {formatMoney(totalAbsCents)}
         </span>
       </div>

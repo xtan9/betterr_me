@@ -34,7 +34,7 @@ export function JournalWidget() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">{t("fetchError")}</p>
+          <p className="text-body text-muted-foreground">{t("fetchError")}</p>
         </CardContent>
       </Card>
     );
@@ -74,7 +74,7 @@ export function JournalWidget() {
                   {getMoodEmoji(entry.mood)}
                 </span>
               )}
-              <p className="text-sm text-muted-foreground line-clamp-3">
+              <p className="text-body text-muted-foreground line-clamp-3">
                 {getPreviewText(entry.content, 150)}
               </p>
             </div>
@@ -91,7 +91,7 @@ export function JournalWidget() {
         ) : (
           /* No entry state */
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">{t("prompt")}</p>
+            <p className="text-body text-muted-foreground">{t("prompt")}</p>
             <div className="flex gap-1" aria-hidden="true">
               {MOODS.map((mood) => (
                 <span

@@ -96,7 +96,7 @@ export function CategoryPicker({ value, onChange, disabled }: CategoryPickerProp
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             disabled={isCreating}
-            className="h-8 text-sm"
+            className="h-8 text-body"
           />
           <div className="grid grid-cols-6 gap-1.5">
             {PROJECT_COLORS.map((c) => {

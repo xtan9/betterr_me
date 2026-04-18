@@ -122,13 +122,13 @@ export function NotificationSettings() {
             <CardDescription>{t("emailDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t("emailExplainer")}
             </p>
             <div className="flex items-center justify-between">
               <Label
                 htmlFor="email-notifications-toggle"
-                className="text-sm font-medium"
+                className="text-body font-medium"
               >
                 {emailEnabled ? t("emailEnabled") : t("emailDisabled")}
               </Label>
@@ -162,11 +162,11 @@ export function NotificationSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Explainer text */}
-          <p className="text-sm text-muted-foreground">{t("explainer")}</p>
+          <p className="text-body text-muted-foreground">{t("explainer")}</p>
 
           {/* Permission denied warning */}
           {isDenied && (
-            <div className="flex items-start gap-2 rounded-control bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="flex items-start gap-2 rounded-control bg-destructive/10 p-3 text-body text-destructive">
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>{t("denied")}</span>
             </div>
@@ -176,7 +176,7 @@ export function NotificationSettings() {
           <div className="flex items-center justify-between">
             <Label
               htmlFor="push-notifications-toggle"
-              className="text-sm font-medium"
+              className="text-body font-medium"
             >
               {isSubscribed ? t("enabled") : t("disabled")}
             </Label>
@@ -190,7 +190,7 @@ export function NotificationSettings() {
 
           {/* Device count -- only shown when subscribed (D-15) */}
           {isSubscribed && deviceCount > 0 && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t("subscribedDevices", { count: deviceCount })}
             </p>
           )}
@@ -224,13 +224,13 @@ export function NotificationSettings() {
           <CardDescription>{t("emailDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t("emailExplainer")}
           </p>
           <div className="flex items-center justify-between">
             <Label
               htmlFor="email-notifications-toggle"
-              className="text-sm font-medium"
+              className="text-body font-medium"
             >
               {emailEnabled ? t("emailEnabled") : t("emailDisabled")}
             </Label>

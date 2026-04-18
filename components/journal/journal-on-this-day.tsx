@@ -22,7 +22,7 @@ export function JournalOnThisDay({ entries }: JournalOnThisDayProps) {
   if (entries.length === 0) {
     return (
       <div
-        className="flex items-center gap-2 text-sm text-muted-foreground py-2"
+        className="flex items-center gap-2 text-body text-muted-foreground py-2"
         data-testid="on-this-day-empty"
       >
         <CalendarHeart className="size-4 shrink-0" aria-hidden="true" />
@@ -33,7 +33,7 @@ export function JournalOnThisDay({ entries }: JournalOnThisDayProps) {
 
   return (
     <div className="space-y-2" data-testid="on-this-day">
-      <h4 className="text-sm font-medium text-muted-foreground">
+      <h4 className="text-body font-medium text-muted-foreground">
         {t("title")}
       </h4>
       <div className="space-y-2">
@@ -45,7 +45,7 @@ export function JournalOnThisDay({ entries }: JournalOnThisDayProps) {
           return (
             <div
               key={entry.id}
-              className="flex items-start gap-2 rounded-card bg-muted/50 p-2 text-sm"
+              className="flex items-start gap-2 rounded-card bg-muted/50 p-2 text-body"
             >
               {emoji && (
                 <span className="text-base shrink-0" aria-hidden="true">

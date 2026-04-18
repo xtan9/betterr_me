@@ -38,7 +38,7 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-3 py-3">
-        <h2 className="text-sm font-semibold">{t("sidebar.title")}</h2>
+        <h2 className="text-body font-semibold">{t("sidebar.title")}</h2>
         <Button
           variant="ghost"
           size="icon"

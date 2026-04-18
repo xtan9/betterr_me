@@ -257,7 +257,7 @@ export function KanbanDetailModal({
           {/* Activity tab */}
           <TabsContent value="activity" className="mt-0">
             <div className="flex items-center justify-center h-64">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t("detail.activityPlaceholder")}
               </p>
             </div>

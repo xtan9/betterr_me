@@ -94,7 +94,7 @@ export function JournalTimeline({
   if (error && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-sm text-muted-foreground">{t("fetchError")}</p>
+        <p className="text-body text-muted-foreground">{t("fetchError")}</p>
       </div>
     );
   }
@@ -103,7 +103,7 @@ export function JournalTimeline({
   if (allEntries.length === 0 && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-sm text-muted-foreground">{t("noEntries")}</p>
+        <p className="text-body text-muted-foreground">{t("noEntries")}</p>
       </div>
     );
   }

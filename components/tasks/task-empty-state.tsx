@@ -70,7 +70,7 @@ export function TaskEmptyState({ variant, onCreateTask }: TaskEmptyStateProps) {
         {t(config.titleKey)}
       </h3>
 
-      <p className="text-sm text-muted-foreground max-w-xs">
+      <p className="text-body text-muted-foreground max-w-xs">
         {t(config.descriptionKey)}
       </p>
 

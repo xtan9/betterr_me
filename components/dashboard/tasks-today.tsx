@@ -38,7 +38,7 @@ function ReflectionStrip({ onReflect }: ReflectionStripProps) {
             key={difficulty}
             type="button"
             onClick={() => onReflect(difficulty)}
-            className="text-sm px-2 py-0.5 rounded-control hover:bg-muted transition-colors duration-150 motion-reduce:transition-none"
+            className="text-body px-2 py-0.5 rounded-control hover:bg-muted transition-colors duration-150 motion-reduce:transition-none"
             title={t(label)}
             aria-label={t(label)}
           >
@@ -280,7 +280,7 @@ export function TasksToday({
         {totalCount === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p className="font-medium mb-1">{t("noTasks")}</p>
-            <p className="text-sm">{t("createFirst")}</p>
+            <p className="text-body">{t("createFirst")}</p>
           </div>
         ) : (
           <>
@@ -299,7 +299,7 @@ export function TasksToday({
                 />
               ))}
             </div>
-            <div className="mt-auto pt-4 border-t text-sm text-center text-muted-foreground">
+            <div className="mt-auto pt-4 border-t text-body text-center text-muted-foreground">
               {allComplete ? (
                 <span className="text-primary font-medium">
                   {t("allComplete")} 🎉
@@ -316,14 +316,14 @@ export function TasksToday({
           <div
             className={cn("mt-4 pt-4 border-t", !todayClear && "opacity-50")}
           >
-            <p className="text-sm font-medium text-muted-foreground mb-2">
+            <p className="text-body font-medium text-muted-foreground mb-2">
               {todayClear ? t("headStart") : t("comingUp")}
             </p>
             <div className="space-y-1">
               {visibleTomorrow.map((task) => (
                 <div
                   key={task.id}
-                  className="flex items-center gap-2 rounded-card px-3 py-1.5 text-sm text-muted-foreground"
+                  className="flex items-center gap-2 rounded-card px-3 py-1.5 text-body text-muted-foreground"
                 >
                   <Circle
                     className={cn(

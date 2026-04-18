@@ -121,7 +121,7 @@ export function FrequencySelector({
               onPressedChange={() => handleFrequencySelect(option)}
               disabled={disabled}
               className={cn(
-                "h-10 text-sm",
+                "h-10 text-body",
                 isActive && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
               )}
             >
@@ -158,7 +158,7 @@ export function FrequencySelector({
             })}
           </div>
           {selectedDayNames && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t("selectedDays", { days: selectedDayNames })}
             </p>
           )}

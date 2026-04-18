@@ -48,7 +48,7 @@ export function WorkoutHistoryList() {
           <p className="font-medium text-muted-foreground">
             {t("noWorkouts")}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground/70">
+          <p className="mt-1 text-body text-muted-foreground/70">
             {t("noWorkoutsDescription")}
           </p>
         </div>

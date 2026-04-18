@@ -108,7 +108,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
             <Avatar className="h-8 w-8 rounded-card">
               <AvatarFallback className="rounded-card">!</AvatarFallback>
             </Avatar>
-            <div className="grid flex-1 text-left text-sm leading-tight">
+            <div className="grid flex-1 text-left text-body leading-tight">
               <span className="truncate font-semibold text-destructive">
                 {tSidebar("profileError")}
               </span>
@@ -130,7 +130,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
             <Avatar className="h-8 w-8 rounded-card">
               <AvatarFallback className="rounded-card">?</AvatarFallback>
             </Avatar>
-            <div className="grid flex-1 text-left text-sm leading-tight">
+            <div className="grid flex-1 text-left text-body leading-tight">
               <span className="truncate font-semibold">{tSidebar("loading")}</span>
               <span className="truncate text-xs text-muted-foreground">
                 &nbsp;
@@ -161,7 +161,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
                 </AvatarFallback>
               </Avatar>
               <Settings className="hidden size-4 shrink-0 group-data-[collapsible=icon]:block" />
-              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+              <div className="grid flex-1 text-left text-body leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-semibold">{displayName}</span>
                 <span className="truncate text-xs text-muted-foreground">
                   {displayEmail}
@@ -177,7 +177,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
             sideOffset={8}
           >
             <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-body">
                 <Avatar className="h-8 w-8 rounded-card">
                   <AvatarImage
                     src={profile?.avatar_url ?? undefined}
@@ -187,7 +187,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
+                <div className="grid flex-1 text-left text-body leading-tight">
                   <span className="truncate font-semibold">{displayName}</span>
                   <span className="truncate text-xs text-muted-foreground">
                     {displayEmail}

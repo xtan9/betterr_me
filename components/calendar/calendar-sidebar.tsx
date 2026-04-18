@@ -46,7 +46,7 @@ export function CalendarSidebar({
 
       {/* Layer toggles */}
       <div className="space-y-3">
-        <h3 className="text-sm font-medium text-muted-foreground">
+        <h3 className="text-body font-medium text-muted-foreground">
           {t("sidebar.layers")}
         </h3>
         <div className="space-y-2">
@@ -67,7 +67,7 @@ export function CalendarSidebar({
                   className="h-2.5 w-2.5 rounded-pill shrink-0"
                   style={{ backgroundColor: `hsl(var(${layer.cssVar}))` }}
                 />
-                <span className="text-sm">
+                <span className="text-body">
                   {t(`layers.${layer.key}`)}
                 </span>
               </label>

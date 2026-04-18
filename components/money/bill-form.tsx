@@ -139,7 +139,7 @@ export function BillForm({ open, onOpenChange, bill, onSuccess }: BillFormProps)
               {...register("name")}
             />
             {errors.name && (
-              <p className="text-sm text-destructive">{errors.name.message}</p>
+              <p className="text-body text-destructive">{errors.name.message}</p>
             )}
           </div>
 
@@ -161,7 +161,7 @@ export function BillForm({ open, onOpenChange, bill, onSuccess }: BillFormProps)
               />
             </div>
             {errors.amount && (
-              <p className="text-sm text-destructive">{errors.amount.message}</p>
+              <p className="text-body text-destructive">{errors.amount.message}</p>
             )}
           </div>
 

@@ -118,7 +118,7 @@ export function ContributeDialog({
               />
             </div>
             {errors.amount && (
-              <p className="text-sm text-destructive">{errors.amount.message}</p>
+              <p className="text-body text-destructive">{errors.amount.message}</p>
             )}
           </div>
 

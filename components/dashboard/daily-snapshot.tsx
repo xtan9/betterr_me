@@ -27,15 +27,15 @@ function StatCard({ icon, iconBgClass, title, value, subtitle, trend }: StatCard
             {icon}
           </div>
           <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{title}</p>
+            <p className="text-body text-muted-foreground">{title}</p>
             <p className="text-stat mt-0.5">{value}</p>
             {subtitle && (
-              <p className="text-sm text-muted-foreground">{subtitle}</p>
+              <p className="text-body text-muted-foreground">{subtitle}</p>
             )}
             {trend && (
               <div
                 className={cn(
-                  "flex items-center gap-1 text-sm mt-1",
+                  "flex items-center gap-1 text-body mt-1",
                   trend.isPositive ? "text-primary" : "text-status-error"
                 )}
               >

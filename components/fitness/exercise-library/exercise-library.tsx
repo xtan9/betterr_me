@@ -162,7 +162,7 @@ export function ExerciseLibrary() {
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Dumbbell className="text-muted-foreground mb-4 h-12 w-12" />
           <h3 className="text-section-heading font-medium">{t("noResults")}</h3>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <p className="text-muted-foreground mt-1 text-body">
             {t("noResultsDescription")}
           </p>
         </div>
@@ -171,7 +171,7 @@ export function ExerciseLibrary() {
           {Array.from(groupedExercises.entries()).map(
             ([group, groupExercises]) => (
               <section key={group}>
-                <h2 className="text-muted-foreground mb-3 text-sm font-semibold uppercase tracking-wider">
+                <h2 className="text-muted-foreground mb-3 text-body font-semibold uppercase tracking-wider">
                   {t(`muscleGroups.${group}`)} ({groupExercises.length})
                 </h2>
                 <div className="grid gap-card-gap sm:grid-cols-2 lg:grid-cols-3">

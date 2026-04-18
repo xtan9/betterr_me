@@ -58,7 +58,7 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
       {...attributes}
     >
       {/* Task title */}
-      <p className="text-sm font-medium leading-tight">{task.title}</p>
+      <p className="text-body font-medium leading-tight">{task.title}</p>
 
       {/* Metadata row */}
       {(task.priority > 0 || task.due_date) && (

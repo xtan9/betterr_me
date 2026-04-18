@@ -13,7 +13,7 @@ export function JournalSaveStatus({ status }: JournalSaveStatusProps) {
   const t = useTranslations("journal");
 
   return (
-    <div className="flex items-center gap-1.5 text-sm text-muted-foreground h-5">
+    <div className="flex items-center gap-1.5 text-body text-muted-foreground h-5">
       {status === "saving" && (
         <>
           <Loader2 className="size-4 animate-spin" />

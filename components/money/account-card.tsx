@@ -20,7 +20,7 @@ export function AccountCard({ account, syncStatus, extra }: AccountCardProps) {
     <div className="flex items-center justify-between rounded-card border border-money-border bg-money-surface px-4 py-3">
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{account.name}</span>
+          <span className="text-body font-medium">{account.name}</span>
           {account.mask && (
             <span className="text-xs text-muted-foreground">
               {t("account.mask", { mask: account.mask })}
@@ -42,7 +42,7 @@ export function AccountCard({ account, syncStatus, extra }: AccountCardProps) {
 
       <div className="flex items-center gap-3">
         {extra}
-        <span className="text-sm font-semibold tabular-nums">
+        <span className="text-body font-semibold tabular-nums">
           {formatMoney(account.balance_cents)}
         </span>
         <SyncStatusBadge status={syncStatus} />

@@ -97,7 +97,7 @@ export function HouseholdInviteDialog({ onSuccess }: HouseholdInviteDialogProps)
 
         {inviteLink ? (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">{t("inviteLink")}</p>
+            <p className="text-body text-muted-foreground">{t("inviteLink")}</p>
             <div className="flex items-center gap-2">
               <Input value={inviteLink} readOnly className="text-xs" />
               <Button
@@ -126,7 +126,7 @@ export function HouseholdInviteDialog({ onSuccess }: HouseholdInviteDialogProps)
                 {...register("email")}
               />
               {errors.email && (
-                <p className="text-sm text-destructive">
+                <p className="text-body text-destructive">
                   {errors.email.message}
                 </p>
               )}

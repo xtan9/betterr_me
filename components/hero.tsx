@@ -58,7 +58,7 @@ export default async function Hero() {
             </div>
 
             {/* Trust indicators */}
-            <div className="flex flex-wrap justify-center items-center gap-8 text-sm text-muted-foreground">
+            <div className="flex flex-wrap justify-center items-center gap-8 text-body text-muted-foreground">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-status-success" />
                 <span>{homeT("features.freeToUse")}</span>

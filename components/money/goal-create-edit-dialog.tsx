@@ -176,7 +176,7 @@ export function GoalCreateEditDialog({
               {...register("name")}
             />
             {errors.name && (
-              <p className="text-sm text-destructive">{errors.name.message}</p>
+              <p className="text-body text-destructive">{errors.name.message}</p>
             )}
           </div>
 
@@ -210,7 +210,7 @@ export function GoalCreateEditDialog({
               />
             </div>
             {errors.target_amount && (
-              <p className="text-sm text-destructive">
+              <p className="text-body text-destructive">
                 {errors.target_amount.message}
               </p>
             )}
@@ -268,7 +268,7 @@ export function GoalCreateEditDialog({
                 </SelectContent>
               </Select>
               {errors.linked_account_id && (
-                <p className="text-sm text-destructive">
+                <p className="text-body text-destructive">
                   {errors.linked_account_id.message}
                 </p>
               )}

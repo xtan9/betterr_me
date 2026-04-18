@@ -93,7 +93,7 @@ export function ExportTransactionsDialog() {
             />
           </div>
 
-          <p className="text-muted-foreground text-sm">{t("noDateNote")}</p>
+          <p className="text-muted-foreground text-body">{t("noDateNote")}</p>
         </div>
 
         <DialogFooter>

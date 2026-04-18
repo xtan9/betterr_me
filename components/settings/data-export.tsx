@@ -127,7 +127,7 @@ export function DataExport() {
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="date-range"
-              className="text-sm font-medium text-muted-foreground"
+              className="text-body font-medium text-muted-foreground"
             >
               {t("dateRange")}
             </label>
@@ -153,7 +153,7 @@ export function DataExport() {
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="custom-start"
-                className="text-sm font-medium text-muted-foreground"
+                className="text-body font-medium text-muted-foreground"
               >
                 {t("startDate")}
               </label>
@@ -162,13 +162,13 @@ export function DataExport() {
                 type="date"
                 value={customStart}
                 onChange={(e) => setCustomStart(e.target.value)}
-                className="h-9 rounded-control border border-input bg-background px-3 text-sm"
+                className="h-9 rounded-control border border-input bg-background px-3 text-body"
               />
             </div>
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="custom-end"
-                className="text-sm font-medium text-muted-foreground"
+                className="text-body font-medium text-muted-foreground"
               >
                 {t("endDate")}
               </label>
@@ -177,7 +177,7 @@ export function DataExport() {
                 type="date"
                 value={customEnd}
                 onChange={(e) => setCustomEnd(e.target.value)}
-                className="h-9 rounded-control border border-input bg-background px-3 text-sm"
+                className="h-9 rounded-control border border-input bg-background px-3 text-body"
               />
             </div>
           </div>
@@ -216,7 +216,7 @@ export function DataExport() {
       </div>
 
       {exportState && (
-        <p className="text-sm text-muted-foreground" role="status">
+        <p className="text-body text-muted-foreground" role="status">
           {t(exportState.phase)}
         </p>
       )}

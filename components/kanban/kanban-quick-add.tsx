@@ -66,7 +66,7 @@ export function KanbanQuickAdd({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={t("quickAdd.placeholder")}
-        className="h-8 text-sm"
+        className="h-8 text-body"
         disabled={isSubmitting}
         autoFocus
       />

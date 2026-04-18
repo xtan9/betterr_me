@@ -123,7 +123,7 @@ export function SignUpForm({
                   onChange={(e) => setRepeatPassword(e.target.value)}
                 />
               </div>
-              {error && <p className="text-sm text-status-error">{error}</p>}
+              {error && <p className="text-body text-status-error">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? t('creatingAccount') : t('signUpButton')}
               </Button>
@@ -168,7 +168,7 @@ export function SignUpForm({
                 {t('continueWithGoogle')}
               </Button>
             </div>
-            <div className="mt-4 text-center text-sm">
+            <div className="mt-4 text-center text-body">
               {t('haveAccount')}{" "}
               <Link href="/auth/login" className="underline underline-offset-4">
                 {t('login')}

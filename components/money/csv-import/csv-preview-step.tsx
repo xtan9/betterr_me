@@ -30,7 +30,7 @@ export function CsvPreviewStep({
 
   return (
     <div className="space-y-4">
-      <p className="text-muted-foreground text-sm">
+      <p className="text-muted-foreground text-body">
         {t("importingTo", {
           count: mappedRows.length,
           account: accountName,

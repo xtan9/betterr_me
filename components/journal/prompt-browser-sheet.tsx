@@ -62,7 +62,7 @@ export function PromptBrowserSheet({
                         : ""
                     }`}
                   >
-                    <span className="text-sm">{t(prompt.i18nKey)}</span>
+                    <span className="text-body">{t(prompt.i18nKey)}</span>
                   </button>
                 ))}
               </div>

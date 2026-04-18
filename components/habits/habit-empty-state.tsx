@@ -96,7 +96,7 @@ export function HabitEmptyState({
 
       <h3 className="text-section-heading text-foreground mb-2">{title}</h3>
 
-      <p className="text-sm text-muted-foreground max-w-xs">
+      <p className="text-body text-muted-foreground max-w-xs">
         {t(config.descriptionKey)}
       </p>
 

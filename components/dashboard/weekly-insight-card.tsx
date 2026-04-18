@@ -23,10 +23,10 @@ export function WeeklyInsightCard({ insights, onDismiss }: WeeklyInsightCardProp
       <CardContent className="flex items-start gap-3 p-card-padding">
         <Brain className="size-5 text-info-card-icon mt-0.5 shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-info-card-text mb-0.5">
+          <p className="text-body font-medium text-info-card-text mb-0.5">
             {t("title")}
           </p>
-          <p className="text-sm text-info-card-text-secondary">
+          <p className="text-body text-info-card-text-secondary">
             {t(topInsight.message, topInsight.params)}
           </p>
         </div>

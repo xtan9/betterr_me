@@ -44,7 +44,7 @@ export function ExerciseCard({ exercise, onEdit, onDelete }: ExerciseCardProps) 
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <h3 className="truncate text-sm font-medium">{exercise.name}</h3>
+              <h3 className="truncate text-body font-medium">{exercise.name}</h3>
               {exercise.is_custom && (
                 <Badge variant="outline" className="shrink-0 text-[10px]">
                   {t("custom")}

@@ -95,7 +95,7 @@ export function WorkoutResumeBanner() {
           <Dumbbell className="h-5 w-5 text-primary" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{t("resumeBannerTitle")}</p>
+          <p className="text-body font-medium">{t("resumeBannerTitle")}</p>
           <p className="text-muted-foreground text-xs truncate">
             {workout.title} &middot; {elapsedDisplay}
           </p>

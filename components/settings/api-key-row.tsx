@@ -77,7 +77,7 @@ export function ApiKeyRow({ apiKey, onDelete }: ApiKeyRowProps) {
               : t("permissionRead")}
           </Badge>
         </div>
-        <code className="text-sm text-muted-foreground font-mono">
+        <code className="text-body text-muted-foreground font-mono">
           {apiKey.key_prefix}...
         </code>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">

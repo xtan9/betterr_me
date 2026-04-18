@@ -68,7 +68,7 @@ export function UpdatePasswordForm({
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
-              {error && <p className="text-sm text-status-error">{error}</p>}
+              {error && <p className="text-body text-status-error">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? t('updating') : t('updateButton')}
               </Button>

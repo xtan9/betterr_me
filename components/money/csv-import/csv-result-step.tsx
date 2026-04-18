@@ -25,7 +25,7 @@ export function CsvResultStep({
       {isImporting ? (
         <>
           <Loader2 className="text-money-accent size-8 animate-spin" />
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-body">
             {t("importing")}
           </p>
         </>
@@ -35,7 +35,7 @@ export function CsvResultStep({
             {t("importSuccess", { count: importResult.imported })}
           </p>
           {importResult.duplicates_skipped > 0 && (
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-body">
               {t("duplicatesSkipped", {
                 count: importResult.duplicates_skipped,
               })}
@@ -45,7 +45,7 @@ export function CsvResultStep({
         </>
       ) : (
         <>
-          <p className="text-sm text-red-500">{t("importError")}</p>
+          <p className="text-body text-red-500">{t("importError")}</p>
           <Button variant="outline" onClick={onBack}>
             {t("back")}
           </Button>

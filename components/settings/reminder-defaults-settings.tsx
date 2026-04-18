@@ -173,7 +173,7 @@ export function ReminderDefaultsSettings() {
             key={sourceType}
             className="flex flex-wrap items-center gap-3 rounded-control border p-3"
           >
-            <span className="text-sm font-medium w-[120px]">
+            <span className="text-body font-medium w-[120px]">
               {t(`reminderDefaults.sourceType.${sourceType}`)}
             </span>
 

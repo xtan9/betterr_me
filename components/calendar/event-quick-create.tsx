@@ -162,7 +162,7 @@ export function EventQuickCreate({
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={t("quickCreate.titlePlaceholder")}
-        className="w-full border-b border-border bg-transparent text-sm pb-2 mb-2 outline-none placeholder:text-muted-foreground"
+        className="w-full border-b border-border bg-transparent text-body pb-2 mb-2 outline-none placeholder:text-muted-foreground"
         disabled={saving}
         autoFocus
       />

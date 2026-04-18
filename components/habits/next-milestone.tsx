@@ -20,7 +20,7 @@ export const NextMilestone = memo(function NextMilestone({ currentStreak }: Next
     return (
       <div className="flex items-center gap-3 rounded-card bg-muted/50 p-3">
         <Target className="size-5 text-primary" />
-        <p className="text-sm text-muted-foreground">{t("noNextMilestone")}</p>
+        <p className="text-body text-muted-foreground">{t("noNextMilestone")}</p>
       </div>
     );
   }
@@ -31,7 +31,7 @@ export const NextMilestone = memo(function NextMilestone({ currentStreak }: Next
     <div className="space-y-2 rounded-card bg-muted/50 p-3">
       <div className="flex items-center gap-3">
         <Target className="size-5 text-primary" />
-        <p className="text-sm font-medium">
+        <p className="text-body font-medium">
           {t("nextMilestone", { days: daysRemaining, milestone: nextMilestone })}
         </p>
       </div>

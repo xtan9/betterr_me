@@ -196,7 +196,7 @@ export function BudgetForm({
               />
             </div>
             {errors.total && (
-              <p className="text-sm text-destructive">
+              <p className="text-body text-destructive">
                 {errors.total.message}
               </p>
             )}
@@ -208,7 +208,7 @@ export function BudgetForm({
               <Label className="text-base font-semibold">
                 {t("allocated")}
               </Label>
-              <span className="text-sm text-muted-foreground tabular-nums">
+              <span className="text-body text-muted-foreground tabular-nums">
                 {formatMoney(toCents(allocatedAmount))} /{" "}
                 {formatMoney(toCents(totalAmount))}
               </span>
@@ -277,7 +277,7 @@ export function BudgetForm({
             ))}
 
             {errors.categories && (
-              <p className="text-sm text-destructive">
+              <p className="text-body text-destructive">
                 {typeof errors.categories === "object" && "message" in errors.categories
                   ? (errors.categories as { message?: string }).message
                   : ""}
@@ -296,7 +296,7 @@ export function BudgetForm({
             </Button>
 
             {/* Unallocated amount */}
-            <div className="flex items-center justify-between rounded-card bg-muted/50 px-3 py-2 text-sm">
+            <div className="flex items-center justify-between rounded-card bg-muted/50 px-3 py-2 text-body">
               <span>{t("unallocated")}</span>
               <span
                 className={`font-medium tabular-nums ${

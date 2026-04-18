@@ -246,7 +246,7 @@ export function RoutineForm({
                   <Separator />
                   <div className="flex flex-col gap-field-gap">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-medium">
+                      <h3 className="text-body font-medium">
                         {t("exercises")}
                       </h3>
                       <Button

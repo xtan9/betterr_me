@@ -67,7 +67,7 @@ export function SectionBlock({
           {standaloneTasks.length > 0 && (
             <div className="space-y-2">
               {showLabels && (
-                <h3 className="text-sm font-medium text-muted-foreground">
+                <h3 className="text-body font-medium text-muted-foreground">
                   {t("sections.tasksLabel")}
                 </h3>
               )}
@@ -89,7 +89,7 @@ export function SectionBlock({
           {showProjects && (
             <div className="space-y-2">
               {showLabels && (
-                <h3 className="text-sm font-medium text-muted-foreground">
+                <h3 className="text-body font-medium text-muted-foreground">
                   {t("sections.projectsLabel")}
                 </h3>
               )}

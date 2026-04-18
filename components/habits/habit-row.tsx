@@ -73,7 +73,7 @@ export function HabitRow({ habit, categories, onToggle, onClick, isToggling }: H
           {getCategoryDisplayName(category.name, tCat)}
         </span>
       )}
-      <div className="flex items-center gap-1 text-sm text-muted-foreground shrink-0">
+      <div className="flex items-center gap-1 text-body text-muted-foreground shrink-0">
         {habit.current_streak >= 7 && <Flame className="size-3.5 text-status-streak" aria-hidden="true" />}
         <span>
           {t(

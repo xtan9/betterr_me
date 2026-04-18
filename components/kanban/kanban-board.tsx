@@ -191,7 +191,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
   if (projectError || tasksError) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {projectError?.message || tasksError?.message || "Failed to load board"}
         </p>
       </div>
@@ -205,7 +205,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
         <Link
           href="/tasks"
           className={cn(
-            "flex items-center gap-1 text-sm text-muted-foreground",
+            "flex items-center gap-1 text-body text-muted-foreground",
             "hover:text-foreground transition-colors"
           )}
         >
@@ -221,7 +221,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
               className="size-3 rounded-pill shrink-0"
               style={{ backgroundColor: colorHsl }}
             />
-            <h1 className="text-sm font-semibold truncate">{project.name}</h1>
+            <h1 className="text-body font-semibold truncate">{project.name}</h1>
           </div>
         )}
 

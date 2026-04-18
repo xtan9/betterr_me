@@ -96,7 +96,7 @@ export function TaskCard({ task, categories, onToggle, onClick, isToggling }: Ta
         </div>
 
         {/* Priority and due date */}
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-body">
           <div className="flex items-center gap-1.5">
             <Circle className={cn("size-2.5 fill-current", priorityColor)} />
             <span className={cn("text-xs font-medium", priorityColor)}>
