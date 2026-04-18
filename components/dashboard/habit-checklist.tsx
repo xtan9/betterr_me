@@ -2,10 +2,10 @@
 
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Plus, PartyPopper, ChevronRight } from "lucide-react";
+import { Plus, PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { CardHeaderWithActions } from "@/components/shared/card-header-with-actions";
 import { HabitRow } from "@/components/habits/habit-row";
 import { useCategories } from "@/lib/hooks/use-categories";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
@@ -42,21 +42,21 @@ export function HabitChecklist({
 
   return (
     <Card className="flex flex-col">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <Link href="/habits" className="group flex items-center gap-1">
-          <h2 className="font-display text-section-heading">{t("title")}</h2>
-          <ChevronRight className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150 motion-reduce:transition-none" />
-        </Link>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onCreateHabit}
-          className="gap-1"
-        >
-          <Plus className="size-4" />
-          {t("addHabit")}
-        </Button>
-      </CardHeader>
+      <CardHeaderWithActions
+        title={t("title")}
+        href="/habits"
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCreateHabit}
+            className="gap-1"
+          >
+            <Plus className="size-4" />
+            {t("addHabit")}
+          </Button>
+        }
+      />
       <CardContent className="flex-1 flex flex-col">
         {totalCount === 0 ? (
           <div className="text-center py-8 text-muted-foreground">

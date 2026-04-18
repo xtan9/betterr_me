@@ -6,8 +6,9 @@ import { toast } from "sonner";
 import { Plus, Circle, ChevronRight, Repeat } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CardHeaderWithActions } from "@/components/shared/card-header-with-actions";
 import { cn, getLocalDateString } from "@/lib/utils";
 import type { Task } from "@/lib/db/types";
 import { getPriorityColor } from "@/lib/tasks/format";
@@ -261,21 +262,21 @@ export function TasksToday({
 
   return (
     <Card className="flex flex-col">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <Link href="/tasks" className="group flex items-center gap-1">
-          <h2 className="font-display text-section-heading">{t("title")}</h2>
-          <ChevronRight className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-150 motion-reduce:transition-none" />
-        </Link>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onCreateTask}
-          className="gap-1"
-        >
-          <Plus className="size-4" />
-          {t("addTask")}
-        </Button>
-      </CardHeader>
+      <CardHeaderWithActions
+        title={t("title")}
+        href="/tasks"
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCreateTask}
+            className="gap-1"
+          >
+            <Plus className="size-4" />
+            {t("addTask")}
+          </Button>
+        }
+      />
       <CardContent className="flex-1 flex flex-col">
         {totalCount === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
