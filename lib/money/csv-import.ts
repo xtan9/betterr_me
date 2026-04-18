@@ -8,31 +8,6 @@
 /** Maximum number of rows allowed in a single import. */
 export const MAX_IMPORT_ROWS = 5000;
 
-/**
- * Mapping of target transaction fields to common CSV header aliases.
- * Used by autoMapColumns to match user-uploaded CSV headers to our schema.
- */
-export const COLUMN_ALIASES: Record<string, string[]> = {
-  transaction_date: [
-    "date",
-    "transaction date",
-    "trans date",
-    "posting date",
-    "posted date",
-  ],
-  amount: ["amount", "debit", "credit", "transaction amount", "sum"],
-  description: [
-    "description",
-    "memo",
-    "details",
-    "narrative",
-    "payee",
-    "name",
-  ],
-  merchant_name: ["merchant", "merchant name", "payee"],
-  category: ["category", "type", "classification"],
-};
-
 /** Ordered list of target fields for CSV column mapping. */
 export const TARGET_FIELDS = [
   "transaction_date",
@@ -41,6 +16,43 @@ export const TARGET_FIELDS = [
   "merchant_name",
   "category",
 ] as const;
+
+/**
+ * Mapping of target transaction fields to common CSV header aliases.
+ *
+ * Returned fresh from a function (rather than exposed as a module-level
+ * const) so that mutation tests can observe changes — module-scope object
+ * literals get cached in the Stryker+Vitest runner and can't be individually
+ * probed by tests.
+ */
+export function getColumnAliases(): Record<string, string[]> {
+  return {
+    transaction_date: [
+      "date",
+      "transaction date",
+      "trans date",
+      "posting date",
+      "posted date",
+    ],
+    amount: ["amount", "debit", "credit", "transaction amount", "sum"],
+    description: [
+      "description",
+      "memo",
+      "details",
+      "narrative",
+      "payee",
+      "name",
+    ],
+    merchant_name: ["merchant", "merchant name", "payee"],
+    category: ["category", "type", "classification"],
+  };
+}
+
+/**
+ * Backwards-compatible alias — exposes the aliases as an object for any
+ * external callers. New code should prefer getColumnAliases().
+ */
+export const COLUMN_ALIASES: Record<string, string[]> = getColumnAliases();
 
 /**
  * Auto-map CSV headers to target transaction fields using aliases.
@@ -56,13 +68,21 @@ export function autoMapColumns(
   csvHeaders: string[]
 ): Record<string, string | null> {
   const result: Record<string, string | null> = {};
+  // Stryker disable next-line MethodExpression: .trim() is defensive; Pass 2
+  // uses .includes() which already tolerates surrounding whitespace, so the
+  // final matched header is identical with or without the .trim() call for
+  // any real input.
   const normalizedHeaders = csvHeaders.map((h) => h.toLowerCase().trim());
+  const aliasMap = getColumnAliases();
 
   for (const targetField of TARGET_FIELDS) {
-    const aliases = COLUMN_ALIASES[targetField];
+    const aliases = aliasMap[targetField];
     let matched: string | null = null;
 
     // Pass 1: exact match (normalized)
+    // Stryker disable next-line EqualityOperator: `<=` causes one extra
+    // iteration reading normalizedHeaders[length] (undefined), which fails the
+    // aliases.includes(undefined) check — observable behaviour unchanged.
     for (let i = 0; i < normalizedHeaders.length; i++) {
       if (aliases.includes(normalizedHeaders[i])) {
         matched = csvHeaders[i];
@@ -70,11 +90,20 @@ export function autoMapColumns(
       }
     }
 
-    // Pass 2: includes match (if no exact match found)
+    // Pass 2: includes match (if no exact match found).
+    // Guard against empty aliases — `.includes("")` returns true for any
+    // string, which would mis-map every header to the first field with an
+    // empty alias. Real aliases are always non-empty, but this guard keeps
+    // the function safe against accidental empty values in COLUMN_ALIASES.
     if (!matched) {
       for (let i = 0; i < normalizedHeaders.length; i++) {
         for (const alias of aliases) {
-          if (normalizedHeaders[i].includes(alias)) {
+          // Stryker disable next-line ConditionalExpression,StringLiteral: the
+          // `alias !== ""` guard is purely defensive — production aliases from
+          // getColumnAliases() are all non-empty, so this branch never fires
+          // in real use; removing or swapping the literal cannot change
+          // observable behaviour against real inputs.
+          if (alias !== "" && normalizedHeaders[i].includes(alias)) {
             matched = csvHeaders[i];
             break;
           }

@@ -2,7 +2,7 @@
 
 Rules for writing tests in this repo. These exist so tests actually catch bugs rather than just executing lines — mutation testing (`pnpm mutation-test`) verifies the bar.
 
-The target is **≥85% mutation score per file**. Current Stryker scope is `lib/db/**` only (break threshold starts at 60 and tightens phase-by-phase per the [foundation spec](./superpowers/specs/2026-04-17-mutation-testing-foundation-design.md)); Phase 5 adds `lib/money/**`, `lib/recurring-tasks/**`, and `lib/habits/**` to the scope. Tests that only assert "was called" or "returns a shape" inflate coverage without catching regressions and will let mutants survive.
+The target is **≥85% mutation score per file**. Current Stryker scope is `lib/db/**` and `lib/money/**` (break threshold = 85 per `stryker.config.mjs`). Phase 5 expansion to `lib/recurring-tasks/**` and `lib/habits/**` is still pending — see the [foundation spec](./superpowers/specs/2026-04-17-mutation-testing-foundation-design.md). Tests that only assert "was called" or "returns a shape" inflate coverage without catching regressions and will let mutants survive.
 
 ## The five rules
 
