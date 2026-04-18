@@ -1,184 +1,369 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ProjectsDB } from '@/lib/db/projects';
-import { mockSupabaseClient } from '../../setup';
-import type { Project, ProjectInsert } from '@/lib/db/types';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { ProjectsDB } from "@/lib/db/projects";
+import { mockSupabaseClient } from "../../setup";
+import {
+  queueThenResponses,
+  restoreMockSupabaseThen,
+} from "../../helpers/mock-supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Project, ProjectInsert, ProjectUpdate } from "@/lib/db/types";
 
-describe('ProjectsDB', () => {
-  const mockUserId = 'user-123';
-  const projectsDB = new ProjectsDB(mockSupabaseClient as any);
+const USER_ID = "user-123";
+const PROJECT_ID = "project-123";
 
-  const mockProject: Project = {
-    id: 'project-123',
-    user_id: mockUserId,
-    name: 'My Project',
-    section: 'personal',
-    color: 'blue',
-    status: 'active',
+function makeProject(over: Partial<Project> = {}): Project {
+  return {
+    id: PROJECT_ID,
+    user_id: USER_ID,
+    name: "My Project",
+    section: "personal",
+    color: "blue",
+    status: "active",
     sort_order: 0,
-    created_at: '2026-02-20T10:00:00Z',
-    updated_at: '2026-02-20T10:00:00Z',
+    created_at: "2026-02-20T10:00:00Z",
+    updated_at: "2026-02-20T10:00:00Z",
+    ...over,
   };
+}
+
+describe("ProjectsDB", () => {
+  let db: ProjectsDB;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSupabaseClient.setMockResponse(null);
+    db = new ProjectsDB(mockSupabaseClient as unknown as SupabaseClient);
   });
 
-  describe('getUserProjects', () => {
-    it('should fetch active projects for a user by default', async () => {
-      mockSupabaseClient.setMockResponse([mockProject]);
-
-      const projects = await projectsDB.getUserProjects(mockUserId);
-
-      expect(projects).toEqual([mockProject]);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('projects');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('status', 'active');
-    });
-
-    it('should filter by section', async () => {
-      mockSupabaseClient.setMockResponse([mockProject]);
-
-      await projectsDB.getUserProjects(mockUserId, { section: 'work' });
-
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('section', 'work');
-    });
-
-    it('should filter by status', async () => {
-      mockSupabaseClient.setMockResponse([]);
-
-      await projectsDB.getUserProjects(mockUserId, { status: 'archived' });
-
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('status', 'archived');
-    });
-
-    it('should handle database errors', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'DB error' });
-
-      await expect(projectsDB.getUserProjects(mockUserId)).rejects.toEqual({
-        message: 'DB error',
-      });
-    });
+  afterEach(() => {
+    restoreMockSupabaseThen();
   });
 
-  describe('getProject', () => {
-    it('should fetch a single project by ID', async () => {
-      mockSupabaseClient.setMockResponse(mockProject);
+  // ─── getUserProjects ──────────────────────────────────────────────────────
+  describe("getUserProjects", () => {
+    it("defaults to status='active' with no section filter and orders by sort_order asc", async () => {
+      const rows = [makeProject()];
+      queueThenResponses([{ data: rows, error: null }]);
 
-      const project = await projectsDB.getProject('project-123', mockUserId);
+      const result = await db.getUserProjects(USER_ID);
 
-      expect(project).toEqual(mockProject);
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'project-123');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
-      expect(mockSupabaseClient.single).toHaveBeenCalled();
+      expect(result).toEqual(rows);
+
+      // Full chain for default path: from → select("*") → eq(user_id) →
+      // order(sort_order asc) → eq(status, 'active'). Asserting the whole
+      // ordered log kills mutations that drop the default 'active' branch
+      // (the `?? 'active'` path) or flip the order direction.
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "projects", method: "from", args: ["projects"] },
+        { table: "projects", method: "select", args: ["*"] },
+        {
+          table: "projects",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        {
+          table: "projects",
+          method: "order",
+          args: ["sort_order", { ascending: true }],
+        },
+        {
+          table: "projects",
+          method: "eq",
+          args: ["status", "active"],
+        },
+      ]);
     });
 
-    it('should return null if project not found', async () => {
-      mockSupabaseClient.setMockResponse(null, { code: 'PGRST116' });
+    it("applies the provided status filter and the section filter together", async () => {
+      queueThenResponses([{ data: [], error: null }]);
 
-      const project = await projectsDB.getProject('nonexistent', mockUserId);
-
-      expect(project).toBeNull();
-    });
-
-    it('should throw on other errors', async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: 'OTHER_ERROR',
-        message: 'DB error',
+      await db.getUserProjects(USER_ID, {
+        status: "archived",
+        section: "work",
       });
 
-      await expect(
-        projectsDB.getProject('project-123', mockUserId)
-      ).rejects.toEqual({ code: 'OTHER_ERROR', message: 'DB error' });
+      // Full log — catches: dropping section branch, swapping status with
+      // hardcoded 'active', dropping either eq call.
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "projects", method: "from", args: ["projects"] },
+        { table: "projects", method: "select", args: ["*"] },
+        {
+          table: "projects",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+        {
+          table: "projects",
+          method: "order",
+          args: ["sort_order", { ascending: true }],
+        },
+        {
+          table: "projects",
+          method: "eq",
+          args: ["status", "archived"],
+        },
+        {
+          table: "projects",
+          method: "eq",
+          args: ["section", "work"],
+        },
+      ]);
     });
-  });
 
-  describe('createProject', () => {
-    it('should create a new project', async () => {
-      const newProject: ProjectInsert = {
-        user_id: mockUserId,
-        name: 'New Project',
-        section: 'personal',
-        color: 'blue',
-        status: 'active',
-      };
+    it("falls back to 'active' when status is explicitly undefined but applies the section filter", async () => {
+      queueThenResponses([{ data: [], error: null }]);
 
-      mockSupabaseClient.setMockResponse(mockProject);
+      // Passing { section } without status exercises the ?? 'active' default
+      // while still entering the `if (filters?.section)` branch — covers
+      // both logical-operator mutations at once.
+      await db.getUserProjects(USER_ID, { section: "personal" });
 
-      const created = await projectsDB.createProject(newProject);
-
-      expect(created).toEqual(mockProject);
-      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(newProject);
-      expect(mockSupabaseClient.single).toHaveBeenCalled();
-    });
-
-    it('should handle creation errors', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'Duplicate key' });
-
-      const newProject: ProjectInsert = {
-        user_id: mockUserId,
-        name: 'Project',
-        section: 'personal',
-        color: 'blue',
-        status: 'active',
-      };
-
-      await expect(projectsDB.createProject(newProject)).rejects.toEqual({
-        message: 'Duplicate key',
+      // Assert section filter applied AND default status still kicks in.
+      mockSupabaseClient.expectQuery({
+        method: "eq",
+        args: ["status", "active"],
+      });
+      mockSupabaseClient.expectQuery({
+        method: "eq",
+        args: ["section", "personal"],
       });
     });
-  });
 
-  describe('updateProject', () => {
-    it('should update a project', async () => {
-      const updates = { name: 'Updated Name', color: 'red' };
-      const updatedProject = { ...mockProject, ...updates };
+    it("does NOT apply a section filter when only status is supplied", async () => {
+      queueThenResponses([{ data: [], error: null }]);
 
-      mockSupabaseClient.setMockResponse(updatedProject);
+      await db.getUserProjects(USER_ID, { status: "archived" });
 
-      const result = await projectsDB.updateProject(
-        'project-123',
-        mockUserId,
-        updates
+      // Prove no section eq was emitted. A mutation that replaces the
+      // `if (filters?.section)` with `if (true)` would crash on undefined,
+      // but a mutation flipping to always-emit would be caught here.
+      const sectionCalls = mockSupabaseClient.queryLog.filter(
+        (e) => e.method === "eq" && e.args[0] === "section",
       );
+      expect(sectionCalls).toHaveLength(0);
+    });
 
-      expect(result).toEqual(updatedProject);
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith(updates);
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'project-123');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
+    it("returns empty array when data is null", async () => {
+      queueThenResponses([{ data: null, error: null }]);
+
+      const result = await db.getUserProjects(USER_ID);
+
+      expect(result).toEqual([]);
+    });
+
+    it("throws on database error", async () => {
+      const err = { message: "DB error" };
+      queueThenResponses([{ data: null, error: err }]);
+
+      await expect(db.getUserProjects(USER_ID)).rejects.toEqual(err);
     });
   });
 
-  describe('archiveProject', () => {
-    it('should archive a project by setting status to archived', async () => {
-      const archivedProject = { ...mockProject, status: 'archived' as const };
-      mockSupabaseClient.setMockResponse(archivedProject);
+  // ─── getProject ───────────────────────────────────────────────────────────
+  describe("getProject", () => {
+    it("fetches a single project by (id, user_id) with full chain", async () => {
+      const expected = makeProject();
+      mockSupabaseClient.setMockResponse(expected);
 
-      const result = await projectsDB.archiveProject('project-123', mockUserId);
+      const result = await db.getProject(PROJECT_ID, USER_ID);
 
-      expect(result).toEqual(archivedProject);
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith({
-        status: 'archived',
+      expect(result).toEqual(expected);
+
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "from",
+        args: ["projects"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "select",
+        args: ["*"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "eq",
+        args: ["id", PROJECT_ID],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "eq",
+        args: ["user_id", USER_ID],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "single",
+        args: [],
+      });
+    });
+
+    it("returns null when error.code === 'PGRST116' (not found)", async () => {
+      mockSupabaseClient.setMockResponse(null, { code: "PGRST116" });
+
+      const result = await db.getProject("nonexistent", USER_ID);
+
+      expect(result).toBeNull();
+    });
+
+    it("throws when error.code is not 'PGRST116'", async () => {
+      const err = { code: "OTHER_ERROR", message: "DB error" };
+      mockSupabaseClient.setMockResponse(null, err);
+
+      await expect(db.getProject(PROJECT_ID, USER_ID)).rejects.toEqual(err);
+    });
+  });
+
+  // ─── createProject ────────────────────────────────────────────────────────
+  describe("createProject", () => {
+    const insertRow: ProjectInsert = {
+      user_id: USER_ID,
+      name: "New Project",
+      section: "personal",
+      color: "blue",
+      status: "active",
+    };
+
+    it("inserts and returns the created project", async () => {
+      const expected = makeProject();
+      mockSupabaseClient.setMockResponse(expected);
+
+      const result = await db.createProject(insertRow);
+
+      expect(result).toEqual(expected);
+
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "from",
+        args: ["projects"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "insert",
+        args: [insertRow],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "select",
+        args: [],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "single",
+        args: [],
+      });
+    });
+
+    it("throws when the insert errors", async () => {
+      const err = { message: "Duplicate key" };
+      mockSupabaseClient.setMockResponse(null, err);
+
+      await expect(db.createProject(insertRow)).rejects.toEqual(err);
+    });
+  });
+
+  // ─── updateProject ────────────────────────────────────────────────────────
+  describe("updateProject", () => {
+    it("updates by (id, user_id) and returns the updated project", async () => {
+      const updates: ProjectUpdate = { name: "Updated Name", color: "red" };
+      const expected = makeProject({ ...updates });
+      mockSupabaseClient.setMockResponse(expected);
+
+      const result = await db.updateProject(PROJECT_ID, USER_ID, updates);
+
+      expect(result).toEqual(expected);
+
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "from",
+        args: ["projects"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "update",
+        args: [updates],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "eq",
+        args: ["id", PROJECT_ID],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "eq",
+        args: ["user_id", USER_ID],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "single",
+        args: [],
+      });
+    });
+
+    it("throws when the update errors", async () => {
+      const err = { message: "Update failed" };
+      mockSupabaseClient.setMockResponse(null, err);
+
+      await expect(
+        db.updateProject(PROJECT_ID, USER_ID, { name: "x" }),
+      ).rejects.toEqual(err);
+    });
+  });
+
+  // ─── archiveProject ───────────────────────────────────────────────────────
+  describe("archiveProject", () => {
+    it("delegates to updateProject with status='archived'", async () => {
+      const expected = makeProject({ status: "archived" });
+      mockSupabaseClient.setMockResponse(expected);
+
+      const result = await db.archiveProject(PROJECT_ID, USER_ID);
+
+      expect(result).toEqual(expected);
+
+      // Assert the exact update payload — catches mutations that swap the
+      // literal 'archived' for '' or an object-property drop.
+      mockSupabaseClient.expectQuery({
+        table: "projects",
+        method: "update",
+        args: [{ status: "archived" }],
+      });
+      mockSupabaseClient.expectQuery({
+        method: "eq",
+        args: ["id", PROJECT_ID],
+      });
+      mockSupabaseClient.expectQuery({
+        method: "eq",
+        args: ["user_id", USER_ID],
       });
     });
   });
 
-  describe('deleteProject', () => {
-    it('should delete a project', async () => {
-      mockSupabaseClient.setMockResponse(null);
+  // ─── deleteProject ────────────────────────────────────────────────────────
+  describe("deleteProject", () => {
+    it("deletes by (id, user_id) with full query chain", async () => {
+      queueThenResponses([{ data: null, error: null }]);
 
-      await projectsDB.deleteProject('project-123', mockUserId);
+      await db.deleteProject(PROJECT_ID, USER_ID);
 
-      expect(mockSupabaseClient.delete).toHaveBeenCalled();
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 'project-123');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('user_id', mockUserId);
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "projects", method: "from", args: ["projects"] },
+        { table: "projects", method: "delete", args: [] },
+        {
+          table: "projects",
+          method: "eq",
+          args: ["id", PROJECT_ID],
+        },
+        {
+          table: "projects",
+          method: "eq",
+          args: ["user_id", USER_ID],
+        },
+      ]);
     });
 
-    it('should handle deletion errors', async () => {
-      mockSupabaseClient.setMockResponse(null, { message: 'FK constraint' });
+    it("throws when the delete errors", async () => {
+      const err = { message: "FK constraint" };
+      queueThenResponses([{ data: null, error: err }]);
 
-      await expect(
-        projectsDB.deleteProject('project-123', mockUserId)
-      ).rejects.toEqual({ message: 'FK constraint' });
+      await expect(db.deleteProject(PROJECT_ID, USER_ID)).rejects.toEqual(err);
     });
   });
 });
