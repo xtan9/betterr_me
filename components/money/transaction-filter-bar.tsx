@@ -220,7 +220,7 @@ export function TransactionFilterBar({
               <button
                 type="button"
                 onClick={() => handleRemoveChip(chip.key)}
-                className="ml-0.5 rounded-sm p-0.5 hover:bg-accent"
+                className="ml-0.5 rounded-chip p-0.5 hover:bg-accent"
                 aria-label={t("transactions.filters.removeFilter")}
               >
                 <X className="size-3" />

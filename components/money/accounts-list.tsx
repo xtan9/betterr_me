@@ -143,7 +143,7 @@ export function AccountsList() {
           </AlertDescription>
           <button
             onClick={() => setErrorBannerVisible(false)}
-            className="absolute right-3 top-3 rounded-sm p-0.5 text-destructive opacity-70 ring-offset-background transition-opacity hover:opacity-100"
+            className="absolute right-3 top-3 rounded-chip p-0.5 text-destructive opacity-70 ring-offset-background transition-opacity hover:opacity-100"
             aria-label={t("accounts.errorBannerDismiss")}
           >
             <X className="size-4" />

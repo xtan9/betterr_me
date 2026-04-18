@@ -46,7 +46,7 @@ export function TransactionSearch({ value, onChange }: TransactionSearchProps) {
         <button
           type="button"
           onClick={() => setLocalValue("")}
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-chip p-0.5 text-muted-foreground hover:text-foreground"
           aria-label={t("transactions.clearSearch")}
         >
           <X className="size-3.5" />
