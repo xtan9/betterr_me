@@ -4,6 +4,8 @@
 // min) while the weekly workflow runs the full scope (~15 min).
 
 import { execFileSync, spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import path from "node:path";
 
 const BASE_REF = process.env.STRYKER_BASE_REF || "origin/main";
 const MUTATE_SCOPE = "lib/db/**/*.ts";
@@ -48,11 +50,15 @@ console.log(
 
 // Resolve Stryker's bin via Node's module resolution rather than relying on
 // PATH — makes the script robust to direct `node scripts/...` invocation and
-// to package-manager PATH differences. `execPath` + resolved bin path, no
-// shell, no command-injection risk.
-import { createRequire } from "node:module";
-const require = createRequire(import.meta.url);
-const strykerBin = require.resolve("@stryker-mutator/core/bin/stryker.js");
+// to package-manager PATH differences. Stryker's package.json "exports" field
+// doesn't expose ./bin/*, so we resolve package.json first and then join the
+// bin path manually. `execPath` + resolved bin path, no shell, no
+// command-injection risk.
+const requireFromScript = createRequire(import.meta.url);
+const strykerPkgJson = requireFromScript.resolve(
+  "@stryker-mutator/core/package.json",
+);
+const strykerBin = path.join(path.dirname(strykerPkgJson), "bin", "stryker.js");
 
 const child = spawn(
   process.execPath,
