@@ -36,7 +36,7 @@ const VARIANT_CONFIG = {
   },
 } as const;
 
-const ICON_BG_CLASS: Record<string, string> = {
+const ICON_BG_CLASS: Partial<Record<EmptyStateVariant, string>> = {
   all_complete: "bg-status-warning/20",
   no_tasks: "bg-primary/10",
 };

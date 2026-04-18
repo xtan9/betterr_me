@@ -58,6 +58,19 @@ describe("EmptyState", () => {
     expect(screen.getByRole("button", { name: "Create" })).toBeInTheDocument();
   });
 
+  it("wraps the action slot in an mt-6 spacer", () => {
+    render(
+      <EmptyState
+        icon={Sparkles}
+        title="Nothing yet"
+        description="Add an item."
+        action={<button type="button">Create</button>}
+      />
+    );
+    const button = screen.getByRole("button", { name: "Create" });
+    expect(button.parentElement).toHaveClass("mt-6");
+  });
+
   it("applies celebration variant classes", () => {
     render(
       <EmptyState
@@ -98,6 +111,20 @@ describe("EmptyState", () => {
     expect(iconWrapper).toHaveClass("bg-primary/10");
     const icon = screen.getByTestId("icon-sparkles");
     expect(icon).toHaveClass("text-primary");
+  });
+
+  it("falls back to bg-muted when iconBgClass is omitted", () => {
+    const { container } = render(
+      <EmptyState icon={Sparkles} title="Nothing" description="Add." />
+    );
+    const iconWrapper = container.querySelector(".rounded-pill");
+    expect(iconWrapper).toHaveClass("bg-muted");
+  });
+
+  it("falls back to text-muted-foreground when iconColorClass is omitted", () => {
+    render(<EmptyState icon={Sparkles} title="Nothing" description="Add." />);
+    const icon = screen.getByTestId("icon-sparkles");
+    expect(icon).toHaveClass("text-muted-foreground");
   });
 
   it("merges caller className onto the outer container", () => {
