@@ -1,6 +1,49 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CategoriesDB } from "@/lib/db/categories-db";
 import { mockSupabaseClient } from "../../setup";
+import {
+  queueThenResponses,
+  restoreMockSupabaseThen,
+} from "../../helpers/mock-supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { MoneyCategoryInsert } from "@/lib/db/types";
+
+/**
+ * Rewires `.single()` so tests can queue distinct per-phase payloads AND
+ * still have the call recorded in `queryLog`. `mockResolvedValueOnce`
+ * replaces the implementation outright and skips `record()`, which breaks
+ * full-queryLog assertions.
+ */
+interface SingleResponse {
+  data: unknown;
+  error: unknown;
+}
+let singleQueue: SingleResponse[] = [];
+function queueSingleResponses(responses: SingleResponse[]) {
+  singleQueue = [...responses];
+}
+function reinstallSingle() {
+  const fn = mockSupabaseClient.single as unknown as ReturnType<typeof vi.fn>;
+  fn.mockReset();
+  fn.mockImplementation(() => {
+    const self = mockSupabaseClient as unknown as {
+      queryLog: Array<{ table: string | null; method: string; args: unknown[] }>;
+      currentTable: string | null;
+      mockData: unknown;
+      mockError: unknown;
+    };
+    self.queryLog.push({
+      table: self.currentTable ?? null,
+      method: "single",
+      args: [],
+    });
+    const next = singleQueue.shift();
+    if (next) {
+      return Promise.resolve({ data: next.data, error: next.error });
+    }
+    return Promise.resolve({ data: self.mockData, error: self.mockError });
+  });
+}
 
 describe("CategoriesDB (lib/db/categories-db, money)", () => {
   let db: CategoriesDB;
@@ -8,14 +51,13 @@ describe("CategoriesDB (lib/db/categories-db, money)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSupabaseClient.setMockResponse(null);
-    db = new CategoriesDB(mockSupabaseClient as any);
+    singleQueue = [];
+    reinstallSingle();
+    db = new CategoriesDB(mockSupabaseClient as unknown as SupabaseClient);
   });
 
-  // Safety net: some tests monkey-patch `mockSupabaseClient.then` to sequence
-  // multiple distinct terminal awaits within a single call. Delete the own
-  // property after each test so it doesn't leak into subsequent tests.
   afterEach(() => {
-    delete (mockSupabaseClient as { then?: unknown }).then;
+    restoreMockSupabaseThen();
   });
 
   // =========================================================================
@@ -23,49 +65,64 @@ describe("CategoriesDB (lib/db/categories-db, money)", () => {
   // =========================================================================
 
   describe("getAll", () => {
+    const HOUSEHOLD_ID = "hh-1";
+
     it("returns system + household categories ordered is_system DESC then name ASC", async () => {
       const rows = [
         { id: "s1", name: "Food", is_system: true, household_id: null },
-        { id: "h1", name: "Custom", is_system: false, household_id: "hh-1" },
+        { id: "h1", name: "Custom", is_system: false, household_id: HOUSEHOLD_ID },
       ];
       mockSupabaseClient.setMockResponse(rows);
 
-      const result = await db.getAll("hh-1");
+      const result = await db.getAll(HOUSEHOLD_ID);
 
       expect(result).toEqual(rows);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith(
-        "transaction_categories"
-      );
-      expect(mockSupabaseClient.select).toHaveBeenCalledWith("*");
-      expect(mockSupabaseClient.or).toHaveBeenCalledWith(
-        "household_id.is.null,household_id.eq.hh-1"
-      );
-      expect(mockSupabaseClient.order).toHaveBeenCalledWith("is_system", {
-        ascending: false,
-      });
-      expect(mockSupabaseClient.order).toHaveBeenCalledWith("name", {
-        ascending: true,
-      });
+
+      // Full SELECT chain, in order.
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "transaction_categories", method: "from", args: ["transaction_categories"] },
+        { table: "transaction_categories", method: "select", args: ["*"] },
+        {
+          table: "transaction_categories",
+          method: "or",
+          args: [`household_id.is.null,household_id.eq.${HOUSEHOLD_ID}`],
+        },
+        {
+          table: "transaction_categories",
+          method: "order",
+          args: ["is_system", { ascending: false }],
+        },
+        {
+          table: "transaction_categories",
+          method: "order",
+          args: ["name", { ascending: true }],
+        },
+      ]);
     });
 
-    it("returns empty array when data is null", async () => {
+    it("returns empty array when data is null (exercises the `data || []` branch)", async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      const result = await db.getAll("hh-1");
+      const result = await db.getAll(HOUSEHOLD_ID);
+
+      expect(result).toEqual([]);
+    });
+
+    it("returns data verbatim when it is an empty array (no fallback applied)", async () => {
+      // Empty array is truthy-for-`||` in the sense that it's not null/undefined,
+      // so source returns `data`. Still testing the happy-path return value.
+      mockSupabaseClient.setMockResponse([]);
+
+      const result = await db.getAll(HOUSEHOLD_ID);
 
       expect(result).toEqual([]);
     });
 
     it("throws on DB error", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "500",
-        message: "fail",
-      });
+      const dbError = { code: "500", message: "fail" };
+      mockSupabaseClient.setMockResponse(null, dbError);
 
-      await expect(db.getAll("hh-1")).rejects.toEqual({
-        code: "500",
-        message: "fail",
-      });
+      await expect(db.getAll(HOUSEHOLD_ID)).rejects.toEqual(dbError);
     });
   });
 
@@ -74,41 +131,38 @@ describe("CategoriesDB (lib/db/categories-db, money)", () => {
   // =========================================================================
 
   describe("getHidden", () => {
-    it("returns hidden category IDs", async () => {
+    const HOUSEHOLD_ID = "hh-1";
+
+    it("returns hidden category IDs (maps category_id column)", async () => {
       mockSupabaseClient.setMockResponse([
         { category_id: "cat-1" },
         { category_id: "cat-2" },
       ]);
 
-      const result = await db.getHidden("hh-1");
+      const result = await db.getHidden(HOUSEHOLD_ID);
 
       expect(result).toEqual(["cat-1", "cat-2"]);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith("hidden_categories");
-      expect(mockSupabaseClient.select).toHaveBeenCalledWith("category_id");
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith(
-        "household_id",
-        "hh-1"
-      );
+
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "hidden_categories", method: "from", args: ["hidden_categories"] },
+        { table: "hidden_categories", method: "select", args: ["category_id"] },
+        { table: "hidden_categories", method: "eq", args: ["household_id", HOUSEHOLD_ID] },
+      ]);
     });
 
-    it("returns empty array when data is null", async () => {
+    it("returns empty array when data is null (exercises `(data || [])` branch)", async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      const result = await db.getHidden("hh-1");
+      const result = await db.getHidden(HOUSEHOLD_ID);
 
       expect(result).toEqual([]);
     });
 
-    it("throws on error", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "500",
-        message: "fail",
-      });
+    it("throws on DB error", async () => {
+      const dbError = { code: "500", message: "fail" };
+      mockSupabaseClient.setMockResponse(null, dbError);
 
-      await expect(db.getHidden("hh-1")).rejects.toEqual({
-        code: "500",
-        message: "fail",
-      });
+      await expect(db.getHidden(HOUSEHOLD_ID)).rejects.toEqual(dbError);
     });
   });
 
@@ -117,88 +171,127 @@ describe("CategoriesDB (lib/db/categories-db, money)", () => {
   // =========================================================================
 
   describe("getVisible", () => {
+    const HOUSEHOLD_ID = "hh-1";
+
     it("returns all categories when none are hidden (skips .not filter)", async () => {
       const categories = [
         { id: "s1", name: "Food", is_system: true },
         { id: "s2", name: "Rent", is_system: true },
       ];
-      const thenSeq = [
-        { data: [], error: null }, // getHidden → []
-        { data: categories, error: null }, // final query
-      ];
-      mockSupabaseClient.then = function (onFulfilled: any, onRejected?: any) {
-        const next = thenSeq.shift();
-        return Promise.resolve(next).then(onFulfilled, onRejected);
-      } as any;
+      // Phase 1: getHidden awaited → []
+      // Phase 2: final awaited query → categories
+      queueThenResponses([
+        { data: [], error: null },
+        { data: categories, error: null },
+      ]);
 
-      const result = await db.getVisible("hh-1");
+      const result = await db.getVisible(HOUSEHOLD_ID);
 
       expect(result).toEqual(categories);
-      expect(mockSupabaseClient.not).not.toHaveBeenCalled();
+
+      // .not MUST NOT have been called because hidden list was empty.
+      const notCalls = mockSupabaseClient.queryLog.filter(
+        (e) => e.method === "not",
+      );
+      expect(notCalls).toHaveLength(0);
+
+      // Assert the SELECT chain args explicitly.
+      mockSupabaseClient.expectQuery({
+        table: "transaction_categories",
+        method: "from",
+        args: ["transaction_categories"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "transaction_categories",
+        method: "select",
+        args: ["*"],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "transaction_categories",
+        method: "or",
+        args: [`household_id.is.null,household_id.eq.${HOUSEHOLD_ID}`],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "transaction_categories",
+        method: "order",
+        args: ["is_system", { ascending: false }],
+      });
+      mockSupabaseClient.expectQuery({
+        table: "transaction_categories",
+        method: "order",
+        args: ["name", { ascending: true }],
+      });
     });
 
-    it("excludes hidden category IDs via .not('id','in',...)", async () => {
+    it("excludes hidden category IDs via .not('id','in',...) when list is non-empty", async () => {
       const categories = [{ id: "s2", name: "Rent", is_system: true }];
-      const thenSeq = [
+      queueThenResponses([
         { data: [{ category_id: "cat-h1" }, { category_id: "cat-h2" }], error: null },
         { data: categories, error: null },
-      ];
-      mockSupabaseClient.then = function (onFulfilled: any, onRejected?: any) {
-        const next = thenSeq.shift();
-        return Promise.resolve(next).then(onFulfilled, onRejected);
-      } as any;
+      ]);
 
-      const result = await db.getVisible("hh-1");
+      const result = await db.getVisible(HOUSEHOLD_ID);
 
       expect(result).toEqual(categories);
-      expect(mockSupabaseClient.not).toHaveBeenCalledWith(
-        "id",
-        "in",
-        "(cat-h1,cat-h2)"
-      );
+
+      mockSupabaseClient.expectQuery({
+        table: "transaction_categories",
+        method: "not",
+        args: ["id", "in", "(cat-h1,cat-h2)"],
+      });
     });
 
-    it("returns empty array when final data is null", async () => {
-      const thenSeq = [
+    it("passes a single hidden ID through the join without a trailing comma", async () => {
+      const categories = [{ id: "s2", name: "Rent", is_system: true }];
+      queueThenResponses([
+        { data: [{ category_id: "only" }], error: null },
+        { data: categories, error: null },
+      ]);
+
+      await db.getVisible(HOUSEHOLD_ID);
+
+      // Catches mutants that change the join separator or parentheses.
+      mockSupabaseClient.expectQuery({
+        table: "transaction_categories",
+        method: "not",
+        args: ["id", "in", "(only)"],
+      });
+    });
+
+    it("returns empty array when final data is null (exercises `data || []` branch)", async () => {
+      queueThenResponses([
         { data: [], error: null },
         { data: null, error: null },
-      ];
-      mockSupabaseClient.then = function (onFulfilled: any, onRejected?: any) {
-        const next = thenSeq.shift();
-        return Promise.resolve(next).then(onFulfilled, onRejected);
-      } as any;
+      ]);
 
-      const result = await db.getVisible("hh-1");
+      const result = await db.getVisible(HOUSEHOLD_ID);
 
       expect(result).toEqual([]);
     });
 
     it("throws when final query errors", async () => {
-      const thenSeq = [
+      const dbError = { code: "500", message: "bad" };
+      queueThenResponses([
         { data: [], error: null },
-        { data: null, error: { code: "500", message: "bad" } },
-      ];
-      mockSupabaseClient.then = function (onFulfilled: any, onRejected?: any) {
-        const next = thenSeq.shift();
-        return Promise.resolve(next).then(onFulfilled, onRejected);
-      } as any;
+        { data: null, error: dbError },
+      ]);
 
-      await expect(db.getVisible("hh-1")).rejects.toEqual({
-        code: "500",
-        message: "bad",
-      });
+      await expect(db.getVisible(HOUSEHOLD_ID)).rejects.toEqual(dbError);
     });
 
-    it("propagates getHidden error", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "500",
-        message: "hidden fail",
-      });
+    it("propagates getHidden error (bails out before building the SELECT)", async () => {
+      const dbError = { code: "500", message: "hidden fail" };
+      mockSupabaseClient.setMockResponse(null, dbError);
 
-      await expect(db.getVisible("hh-1")).rejects.toEqual({
-        code: "500",
-        message: "hidden fail",
-      });
+      await expect(db.getVisible(HOUSEHOLD_ID)).rejects.toEqual(dbError);
+
+      // The SELECT phase never ran → only the hidden_categories chain present.
+      // `.or` belongs to the SELECT phase and must be absent when getHidden
+      // throws. This catches mutants that reorder the two phases.
+      const orCalls = mockSupabaseClient.queryLog.filter(
+        (e) => e.method === "or",
+      );
+      expect(orCalls).toHaveLength(0);
     });
   });
 
@@ -207,36 +300,44 @@ describe("CategoriesDB (lib/db/categories-db, money)", () => {
   // =========================================================================
 
   describe("create", () => {
-    it("inserts and returns the new category", async () => {
-      const insert = {
+    it("inserts and returns the new category (full chain)", async () => {
+      const insert: MoneyCategoryInsert = {
         household_id: "hh-1",
         name: "Custom",
         color: "blue",
         icon: "star",
+        is_system: false,
+        display_name: null,
       };
-      const created = { id: "c-new", ...insert, is_system: false };
+      const created = { id: "c-new", ...insert };
       mockSupabaseClient.setMockResponse(created);
 
-      const result = await db.create(insert as any);
+      const result = await db.create(insert);
 
       expect(result).toEqual(created);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith(
-        "transaction_categories"
-      );
-      expect(mockSupabaseClient.insert).toHaveBeenCalledWith(insert);
-      expect(mockSupabaseClient.select).toHaveBeenCalled();
-      expect(mockSupabaseClient.single).toHaveBeenCalled();
+
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "transaction_categories", method: "from", args: ["transaction_categories"] },
+        { table: "transaction_categories", method: "insert", args: [insert] },
+        { table: "transaction_categories", method: "select", args: [] },
+        { table: "transaction_categories", method: "single", args: [] },
+      ]);
     });
 
-    it("throws on error", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "23505",
-        message: "dup",
-      });
+    it("throws on DB error", async () => {
+      const dbError = { code: "23505", message: "dup" };
+      mockSupabaseClient.setMockResponse(null, dbError);
 
       await expect(
-        db.create({ household_id: "hh-1", name: "X" } as any)
-      ).rejects.toEqual({ code: "23505", message: "dup" });
+        db.create({
+          household_id: "hh-1",
+          name: "X",
+          icon: null,
+          color: null,
+          display_name: null,
+          is_system: false,
+        }),
+      ).rejects.toEqual(dbError);
     });
   });
 
@@ -245,37 +346,33 @@ describe("CategoriesDB (lib/db/categories-db, money)", () => {
   // =========================================================================
 
   describe("update", () => {
-    it("updates and returns the category", async () => {
-      const updated = { id: "c1", name: "Renamed", color: "green" };
+    const CATEGORY_ID = "c1";
+
+    it("updates and returns the category (full chain)", async () => {
+      const updated = { id: CATEGORY_ID, name: "Renamed", color: "green" };
       mockSupabaseClient.setMockResponse(updated);
 
-      const result = await db.update("c1", {
-        name: "Renamed",
-        color: "green",
-      } as any);
+      const updates = { name: "Renamed", color: "green" } as const;
+      const result = await db.update(CATEGORY_ID, updates);
 
       expect(result).toEqual(updated);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith(
-        "transaction_categories"
-      );
-      expect(mockSupabaseClient.update).toHaveBeenCalledWith({
-        name: "Renamed",
-        color: "green",
-      });
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith("id", "c1");
-      expect(mockSupabaseClient.single).toHaveBeenCalled();
+
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "transaction_categories", method: "from", args: ["transaction_categories"] },
+        { table: "transaction_categories", method: "update", args: [updates] },
+        { table: "transaction_categories", method: "eq", args: ["id", CATEGORY_ID] },
+        { table: "transaction_categories", method: "select", args: [] },
+        { table: "transaction_categories", method: "single", args: [] },
+      ]);
     });
 
-    it("throws on error", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "500",
-        message: "fail",
-      });
+    it("throws on DB error", async () => {
+      const dbError = { code: "500", message: "fail" };
+      mockSupabaseClient.setMockResponse(null, dbError);
 
-      await expect(db.update("c1", { name: "X" } as any)).rejects.toEqual({
-        code: "500",
-        message: "fail",
-      });
+      await expect(
+        db.update(CATEGORY_ID, { name: "X" }),
+      ).rejects.toEqual(dbError);
     });
   });
 
@@ -284,75 +381,73 @@ describe("CategoriesDB (lib/db/categories-db, money)", () => {
   // =========================================================================
 
   describe("delete", () => {
-    it("deletes non-system category", async () => {
-      // fetch .single() → { is_system: false }
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: { is_system: false },
-        error: null,
-      });
-      // Final delete await
-      mockSupabaseClient.setMockResponse(null);
+    const CATEGORY_ID = "c1";
 
-      await db.delete("c1");
+    it("deletes a non-system category (asserts two-phase full chain)", async () => {
+      // Phase 1: SELECT is_system via .single() → { is_system: false }
+      queueSingleResponses([{ data: { is_system: false }, error: null }]);
+      // Phase 2: DELETE awaited → { data: null, error: null }
+      queueThenResponses([{ data: null, error: null }]);
 
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith(
-        "transaction_categories"
+      await db.delete(CATEGORY_ID);
+
+      expect(mockSupabaseClient.queryLog).toEqual([
+        // SELECT is_system
+        { table: "transaction_categories", method: "from", args: ["transaction_categories"] },
+        { table: "transaction_categories", method: "select", args: ["is_system"] },
+        { table: "transaction_categories", method: "eq", args: ["id", CATEGORY_ID] },
+        { table: "transaction_categories", method: "single", args: [] },
+        // DELETE
+        { table: "transaction_categories", method: "from", args: ["transaction_categories"] },
+        { table: "transaction_categories", method: "delete", args: [] },
+        { table: "transaction_categories", method: "eq", args: ["id", CATEGORY_ID] },
+      ]);
+    });
+
+    it("throws when fetching the category fails and does NOT attempt delete", async () => {
+      const dbError = { code: "500", message: "fetch fail" };
+      queueSingleResponses([{ data: null, error: dbError }]);
+
+      await expect(db.delete(CATEGORY_ID)).rejects.toEqual(dbError);
+
+      const deletes = mockSupabaseClient.queryLog.filter(
+        (e) => e.method === "delete",
       );
-      expect(mockSupabaseClient.delete).toHaveBeenCalled();
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith("id", "c1");
+      expect(deletes).toHaveLength(0);
     });
 
-    it("throws when fetching the category fails", async () => {
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: null,
-        error: { code: "500", message: "fetch fail" },
-      });
-
-      await expect(db.delete("c1")).rejects.toEqual({
-        code: "500",
-        message: "fetch fail",
-      });
-      expect(mockSupabaseClient.delete).not.toHaveBeenCalled();
-    });
-
-    it("refuses to delete system categories", async () => {
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: { is_system: true },
-        error: null,
-      });
+    it("refuses to delete system categories with exact error message", async () => {
+      queueSingleResponses([{ data: { is_system: true }, error: null }]);
 
       await expect(db.delete("sys-1")).rejects.toThrow(
-        "Cannot delete system categories"
+        "Cannot delete system categories",
       );
-      expect(mockSupabaseClient.delete).not.toHaveBeenCalled();
+
+      const deletes = mockSupabaseClient.queryLog.filter(
+        (e) => e.method === "delete",
+      );
+      expect(deletes).toHaveLength(0);
     });
 
-    it("throws when final delete fails", async () => {
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: { is_system: false },
-        error: null,
-      });
-      mockSupabaseClient.setMockResponse(null, {
-        code: "500",
-        message: "del fail",
-      });
+    it("throws when the final DELETE fails", async () => {
+      const dbError = { code: "500", message: "del fail" };
+      queueSingleResponses([{ data: { is_system: false }, error: null }]);
+      queueThenResponses([{ data: null, error: dbError }]);
 
-      await expect(db.delete("c1")).rejects.toEqual({
-        code: "500",
-        message: "del fail",
-      });
+      await expect(db.delete(CATEGORY_ID)).rejects.toEqual(dbError);
     });
 
-    it("allows delete when fetched row is null (no is_system guard trip)", async () => {
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: null,
-        error: null,
-      });
-      mockSupabaseClient.setMockResponse(null);
+    it("allows delete when fetched row is null (is_system guard uses optional-chaining)", async () => {
+      // Source uses `category?.is_system`, so a null row falls through to delete.
+      queueSingleResponses([{ data: null, error: null }]);
+      queueThenResponses([{ data: null, error: null }]);
 
-      await db.delete("c1");
+      await db.delete(CATEGORY_ID);
 
-      expect(mockSupabaseClient.delete).toHaveBeenCalled();
+      const deletes = mockSupabaseClient.queryLog.filter(
+        (e) => e.method === "delete",
+      );
+      expect(deletes).toHaveLength(1);
     });
   });
 
@@ -361,28 +456,29 @@ describe("CategoriesDB (lib/db/categories-db, money)", () => {
   // =========================================================================
 
   describe("hide", () => {
-    it("inserts a hidden_categories row", async () => {
+    const HOUSEHOLD_ID = "hh-1";
+    const CATEGORY_ID = "cat-1";
+
+    it("inserts a hidden_categories row with full chain", async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      await db.hide("hh-1", "cat-1");
+      await db.hide(HOUSEHOLD_ID, CATEGORY_ID);
 
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith("hidden_categories");
-      expect(mockSupabaseClient.insert).toHaveBeenCalledWith({
-        household_id: "hh-1",
-        category_id: "cat-1",
-      });
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "hidden_categories", method: "from", args: ["hidden_categories"] },
+        {
+          table: "hidden_categories",
+          method: "insert",
+          args: [{ household_id: HOUSEHOLD_ID, category_id: CATEGORY_ID }],
+        },
+      ]);
     });
 
-    it("throws on error", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "500",
-        message: "fail",
-      });
+    it("throws on DB error", async () => {
+      const dbError = { code: "500", message: "fail" };
+      mockSupabaseClient.setMockResponse(null, dbError);
 
-      await expect(db.hide("hh-1", "cat-1")).rejects.toEqual({
-        code: "500",
-        message: "fail",
-      });
+      await expect(db.hide(HOUSEHOLD_ID, CATEGORY_ID)).rejects.toEqual(dbError);
     });
   });
 
@@ -391,33 +487,29 @@ describe("CategoriesDB (lib/db/categories-db, money)", () => {
   // =========================================================================
 
   describe("unhide", () => {
-    it("deletes the hidden_categories row", async () => {
+    const HOUSEHOLD_ID = "hh-1";
+    const CATEGORY_ID = "cat-1";
+
+    it("deletes the hidden_categories row with full chain (both .eq args)", async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      await db.unhide("hh-1", "cat-1");
+      await db.unhide(HOUSEHOLD_ID, CATEGORY_ID);
 
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith("hidden_categories");
-      expect(mockSupabaseClient.delete).toHaveBeenCalled();
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith(
-        "household_id",
-        "hh-1"
-      );
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith(
-        "category_id",
-        "cat-1"
-      );
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "hidden_categories", method: "from", args: ["hidden_categories"] },
+        { table: "hidden_categories", method: "delete", args: [] },
+        { table: "hidden_categories", method: "eq", args: ["household_id", HOUSEHOLD_ID] },
+        { table: "hidden_categories", method: "eq", args: ["category_id", CATEGORY_ID] },
+      ]);
     });
 
-    it("throws on error", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "500",
-        message: "fail",
-      });
+    it("throws on DB error", async () => {
+      const dbError = { code: "500", message: "fail" };
+      mockSupabaseClient.setMockResponse(null, dbError);
 
-      await expect(db.unhide("hh-1", "cat-1")).rejects.toEqual({
-        code: "500",
-        message: "fail",
-      });
+      await expect(
+        db.unhide(HOUSEHOLD_ID, CATEGORY_ID),
+      ).rejects.toEqual(dbError);
     });
   });
 });
