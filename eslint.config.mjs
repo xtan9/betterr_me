@@ -6,7 +6,7 @@ const eslintConfig = [
   ...typescript,
   // Ignore worktrees and shadcn/ui managed files
   {
-    ignores: [".worktrees/**", "components/ui/**"],
+    ignores: [".worktrees/**", ".claude/**", "components/ui/**"],
   },
   // Global: unused vars are errors, not warnings
   {

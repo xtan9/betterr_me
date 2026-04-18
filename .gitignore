@@ -33,6 +33,11 @@ e2e/.auth/
 # worktrees
 .worktrees/
 
+# Claude Code runtime artifacts (agent working copies, lock files, personal settings)
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+
 # debug
 npm-debug.log*
 yarn-debug.log*
