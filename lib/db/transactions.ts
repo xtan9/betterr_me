@@ -136,6 +136,10 @@ export class TransactionsDB {
    * Returns the count of inserted rows.
    */
   async createBatch(transactions: TransactionInsert[]): Promise<number> {
+    // Stryker disable next-line ConditionalExpression: Early-exit optimization.
+    // When transactions.length === 0, the for-loop below runs 0 iterations
+    // and returns `inserted` (still 0), so the guard is behaviorally equivalent
+    // to removing it. Kept for readability.
     if (transactions.length === 0) return 0;
 
     let inserted = 0;
