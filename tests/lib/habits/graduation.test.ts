@@ -589,8 +589,9 @@ describe("getGraduationProgress", () => {
 
   it("custom Mon: scheduled counts only Mondays in the daily-walk branch", () => {
     // custom with 1 day = WEEKLY bucket (90-day window).
-    // today=2026-04-12 (Sun), windowStart=2026-01-13 (90-day window).
-    // Mondays Jan 13..Apr 12: 13 Mondays (weekly cadence for 13 weeks).
+    // today=2026-04-12 (Sun), windowStart=2026-01-13 (Tue).
+    // Mondays in window [2026-01-13..2026-04-12]: Jan 19, 26, Feb 2/9/16/23,
+    // Mar 2/9/16/23/30, Apr 6 = 12 Mondays.
     const freq: HabitFrequency = { type: "custom", days: [1] };
     const createdAt = "2026-01-12";
     const p = getGraduationProgress({
@@ -599,8 +600,6 @@ describe("getGraduationProgress", () => {
       frequency: freq,
       logs: [],
     });
-    // Mondays in window [2026-01-13..2026-04-12]: Jan 19, 26, Feb 2/9/16/23,
-    // Mar 2/9/16/23/30, Apr 6 = 12 Mondays.
     expect(p.scheduled).toBe(12);
   });
 

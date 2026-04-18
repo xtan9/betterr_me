@@ -426,20 +426,6 @@ describe('computeMissedDays', () => {
     expect(result.previous_streak).toBe(1);
   });
 
-  it('weekly: skips date that parses to Invalid Date (e.g. month 99) — kills isNaN(date.getTime()) branch', () => {
-    const weekly: HabitFrequency = { type: 'weekly' };
-    // Strictly speaking JS `new Date(2026, 98, 1)` rolls over rather than becoming NaN,
-    // but '2026-02-99' gives y=2026, m=2, d=99. `new Date(2026, 1, 99)` is a valid date
-    // (rolls over). To force an actually-invalid Date we use an extreme negative day count.
-    // Instead we test via the date.getTime() branch with a huge negative that triggers
-    // invalid behaviour through NaN propagation. Here we rely on the three-NaN check above.
-    // We supply a known-working mix so this test asserts behaviour on the happy path.
-    const completed = new Set(['2026-01-20']);
-    const result = computeMissedDays(weekly, completed, '2026-02-09', '2026-01-01');
-    expect(result.missed_scheduled_periods).toBe(2);
-    expect(result.previous_streak).toBe(1);
-  });
-
   it('weekly: emits a console.warn when skipping malformed dates — kills string-literal mutant in warn', () => {
     const weekly: HabitFrequency = { type: 'weekly' };
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
