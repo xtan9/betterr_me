@@ -55,9 +55,9 @@ const config = {
     fileName: "reports/mutation/mutation.html",
   },
   thresholds: {
-    high: 85,
-    low: 70,
-    break: 60,
+    high: 95,
+    low: 85,
+    break: 85,
   },
   timeoutMS: 60000,
   concurrency: 4,
