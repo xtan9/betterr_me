@@ -426,6 +426,26 @@ describe('computeMissedDays', () => {
     expect(result.previous_streak).toBe(1);
   });
 
+  it('weekly: skips entries that parse to Invalid Date (extreme year) — kills isNaN(date.getTime()) guard', () => {
+    const weekly: HabitFrequency = { type: 'weekly' };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      // y=9999999 is finite (passes the first guard) but `new Date(9999999, 0, 1)`
+      // overflows the max timestamp range and yields an Invalid Date — the second
+      // guard must catch it. Valid completion '2026-01-20' still counts → streak=1.
+      const completed = new Set(['2026-01-20', '9999999-01-01']);
+      const result = computeMissedDays(weekly, completed, '2026-02-09', '2026-01-01');
+      expect(result.missed_scheduled_periods).toBe(2);
+      expect(result.previous_streak).toBe(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Skipping unparseable date in completedDatesSet:',
+        '9999999-01-01',
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   it('weekly: emits a console.warn when skipping malformed dates — kills string-literal mutant in warn', () => {
     const weekly: HabitFrequency = { type: 'weekly' };
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});

@@ -77,7 +77,6 @@ export function computeMissedDays(
         continue;
       }
       const date = new Date(y, m - 1, d);
-      // Stryker disable next-line ConditionalExpression,BlockStatement: with finite y/m/d (guarded above), `new Date(y, m-1, d)` never returns an Invalid Date — rollover produces a valid date — so this guard is defensive but unreachable. Equivalent mutant.
       if (isNaN(date.getTime())) {
         console.warn('Skipping unparseable date in completedDatesSet:', dateStr);
         continue;
