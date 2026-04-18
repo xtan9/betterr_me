@@ -129,16 +129,21 @@ const peakReps = Math.max(...reps);
 ## Running mutation tests
 
 ```bash
-# Full run (~8 min for lib/db scope today)
+# Full run (~15 min for lib/db scope)
 pnpm mutation-test
+
+# Changed files only vs origin/main — what CI runs per PR (~2-5 min)
+pnpm mutation-test:changed
 
 # Narrow to one file for iteration
 pnpm stryker run --mutate "lib/db/habits.ts"
 ```
 
-Reports land at `reports/mutation/mutation.html`.
+Reports land at `reports/mutation/mutation.html`. GitHub Actions uploads both
+per-PR and weekly reports as `mutation-report-pr` / `mutation-report-full`
+artifacts.
 
-> A `pnpm mutation-test:changed` wrapper (for per-PR runs scoped to files changed since `origin/main`) lands in Phase 4 of the foundation rollout — not yet available.
+**CI gate:** any PR touching `lib/db/**`, `tests/lib/db/**`, `tests/helpers/mock-supabase.ts`, `tests/setup.ts`, or `stryker.config.mjs` triggers the per-PR Stryker job. The `thresholds.break = 85` config fails the job if mutation score drops below 85%. A scheduled Monday 03:00 UTC run executes the full scope and catches cross-file regressions a per-PR run would miss.
 
 ## Mocking reference
 

@@ -19,7 +19,8 @@
     "perf:lighthouse": "lhci autorun",
     "perf:bundle": "tsx scripts/analyze-bundle.ts",
     "analyze": "ANALYZE=true pnpm build",
-    "mutation-test": "stryker run"
+    "mutation-test": "stryker run",
+    "mutation-test:changed": "node scripts/stryker-changed.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.68",
