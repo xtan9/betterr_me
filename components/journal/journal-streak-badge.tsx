@@ -20,7 +20,7 @@ export function JournalStreakBadge({ streak }: JournalStreakBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 text-sm",
+        "inline-flex items-center gap-1 text-body",
         isMilestone
           ? "text-orange-500 font-semibold"
           : "text-muted-foreground",

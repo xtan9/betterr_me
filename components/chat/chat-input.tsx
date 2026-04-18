@@ -190,7 +190,7 @@ export function ChatInput({
       onDrop={handleDrop}
     >
       {isDragging && (
-        <div className="mb-2 flex items-center justify-center rounded-card border-2 border-dashed border-primary/50 bg-primary/5 py-6 text-sm text-muted-foreground">
+        <div className="mb-2 flex items-center justify-center rounded-card border-2 border-dashed border-primary/50 bg-primary/5 py-6 text-body text-muted-foreground">
           {t("input.dropZone")}
         </div>
       )}
@@ -251,7 +251,7 @@ export function ChatInput({
           placeholder={t("input.placeholder")}
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none min-h-[40px] max-h-[150px] overflow-y-auto rounded-control border border-input bg-background px-4 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="flex-1 resize-none min-h-[40px] max-h-[150px] overflow-y-auto rounded-control border border-input bg-background px-4 py-2.5 text-body focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
         {isStreaming ? (
           <Button

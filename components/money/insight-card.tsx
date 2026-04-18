@@ -51,7 +51,7 @@ export function InsightCard({ insight, onDismiss }: InsightCardProps) {
       </div>
 
       {/* Message */}
-      <p className="flex-1 text-sm text-foreground">{message}</p>
+      <p className="flex-1 text-body text-foreground">{message}</p>
 
       {/* Dismiss */}
       <Button

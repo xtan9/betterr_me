@@ -84,7 +84,7 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
           <div className="flex-1 rounded-card border p-2 text-center">
             <div className="flex items-center justify-center gap-1">
               {habit.current_streak >= 7 && <Flame className="size-4 text-status-streak" aria-hidden="true" />}
-              <span className="font-semibold text-sm">
+              <span className="font-semibold text-body">
                 {t(
                   habit.frequency.type === 'times_per_week' || habit.frequency.type === 'weekly'
                     ? "card.streakWeeks"
@@ -96,7 +96,7 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
             <p className="text-xs text-muted-foreground">{t("card.currentStreak")}</p>
           </div>
           <div className="flex-1 rounded-card border p-2 text-center">
-            <span className="font-semibold text-sm">
+            <span className="font-semibold text-body">
               {t(
                 habit.frequency.type === 'times_per_week' || habit.frequency.type === 'weekly'
                   ? "card.streakWeeks"

@@ -50,7 +50,7 @@ export function PRBanner({
     >
       <Trophy className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+        <p className="text-body font-semibold text-amber-900 dark:text-amber-100">
           {t("newPR")}
         </p>
         <p className="truncate text-xs text-amber-700 dark:text-amber-300">

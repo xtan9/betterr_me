@@ -339,7 +339,7 @@ export function TasksPageContent() {
 
       {/* Paused recurring tasks load error */}
       {pausedError && (
-        <p className="text-sm text-destructive">
+        <p className="text-body text-destructive">
           {t("paused.loadError")}{" "}
           <button
             onClick={() => mutatePaused()}
@@ -353,7 +353,7 @@ export function TasksPageContent() {
       {/* Paused recurring tasks banner */}
       {pausedTemplates && pausedTemplates.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          <h3 className="text-body font-medium text-muted-foreground flex items-center gap-2">
             <Pause className="size-4" />
             {t("paused.title", { count: pausedTemplates.length })}
           </h3>
@@ -363,7 +363,7 @@ export function TasksPageContent() {
                 <CardContent className="p-card-padding">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-medium truncate text-sm">
+                      <h4 className="font-medium truncate text-body">
                         {template.title}
                       </h4>
                       <p className="text-xs text-muted-foreground">

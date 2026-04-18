@@ -27,7 +27,7 @@ export function AccountsEmptyState({ mutate }: AccountsEmptyStateProps) {
         {t("emptyState.heading")}
       </h2>
 
-      <p className="mt-2 max-w-md text-sm text-muted-foreground">
+      <p className="mt-2 max-w-md text-body text-muted-foreground">
         {t("emptyState.description")}
       </p>
 

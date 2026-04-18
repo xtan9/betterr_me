@@ -127,7 +127,7 @@ export function ReminderRows({ rows, onChange, disabled }: ReminderRowsProps) {
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Bell className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium">
+        <span className="text-body font-medium">
           {t("reminders.title")}
         </span>
       </div>

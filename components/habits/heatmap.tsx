@@ -170,7 +170,7 @@ export const HabitCalendar = memo(function HabitCalendar({
           <Button variant="ghost" size="icon" className="size-8" disabled aria-label={t("prevMonth")}>
             <ChevronLeft className="size-4" />
           </Button>
-          <h3 className="text-sm font-medium text-muted-foreground">
+          <h3 className="text-body font-medium text-muted-foreground">
             {t("title", { month: monthName, year: String(year) })}
           </h3>
           <Button variant="ghost" size="icon" className="size-8" disabled aria-label={t("nextMonth")}>
@@ -209,7 +209,7 @@ export const HabitCalendar = memo(function HabitCalendar({
         >
           <ChevronLeft className="size-4" />
         </Button>
-        <h3 className="text-sm font-medium text-muted-foreground">
+        <h3 className="text-body font-medium text-muted-foreground">
           {t("title", { month: monthName, year: String(year) })}
         </h3>
         <Button

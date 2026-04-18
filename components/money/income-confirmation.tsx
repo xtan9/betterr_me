@@ -80,14 +80,14 @@ export function IncomeConfirmation({
           const frequencyKey = getFrequencyLabelKey(pattern.frequency);
           return (
             <div key={pattern.merchant_name} className="space-y-2">
-              <p className="text-sm">
+              <p className="text-body">
                 {t("incomePatternDescription", {
                   amount: formatMoney(pattern.amount_cents),
                   merchant: pattern.merchant_name,
                   frequency: t(frequencyKey),
                 })}
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t("incomeConfirmQuestion")}
               </p>
               <div className="flex gap-2">

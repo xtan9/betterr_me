@@ -39,7 +39,7 @@ export function FormedHabitCard({ habit, onReactivate, onDelete }: Props) {
           {habit.name}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-1 text-sm">
+      <CardContent className="space-y-1 text-body">
         {habit.graduated_at && (
           <div className="text-muted-foreground">
             {t("formed_gallery.graduated_on")}: {graduatedDate}

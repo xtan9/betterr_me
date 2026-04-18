@@ -56,7 +56,7 @@ export function ApiKeyCreatedDialog({
         </DialogHeader>
 
         <div className="flex items-center gap-2">
-          <code className="flex-1 rounded-control border bg-muted p-3 font-mono text-sm break-all">
+          <code className="flex-1 rounded-control border bg-muted p-3 font-mono text-body break-all">
             {fullKey}
           </code>
           <Button

@@ -63,7 +63,7 @@ export function CategoryDrillDown({
               {t("categoryDrillDown", { category: category.category_name })}
             </span>
           </SheetTitle>
-          <p className="text-sm text-muted-foreground tabular-nums">
+          <p className="text-body text-muted-foreground tabular-nums">
             {formatMoney(category.spent_cents)} {t("spent")}
           </p>
         </SheetHeader>
@@ -76,7 +76,7 @@ export function CategoryDrillDown({
               ))}
             </div>
           ) : transactions.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
+            <p className="py-8 text-center text-body text-muted-foreground">
               {tTx("noTransactions")}
             </p>
           ) : (

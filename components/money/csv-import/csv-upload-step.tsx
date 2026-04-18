@@ -59,7 +59,7 @@ export function CsvUploadStep({
         >
           {t("selectFile")}
         </Label>
-        <p className="text-muted-foreground text-sm">{t("dragDrop")}</p>
+        <p className="text-muted-foreground text-body">{t("dragDrop")}</p>
         <input
           id="csv-file-input"
           type="file"
@@ -68,12 +68,12 @@ export function CsvUploadStep({
           onChange={handleFileInputChange}
         />
         {file && (
-          <p className="mt-2 text-sm font-medium">{file.name}</p>
+          <p className="mt-2 text-body font-medium">{file.name}</p>
         )}
       </div>
 
       {parseError && (
-        <p className="text-sm text-red-500">{parseError}</p>
+        <p className="text-body text-red-500">{parseError}</p>
       )}
 
       <div className="space-y-2">

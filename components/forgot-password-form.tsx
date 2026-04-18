@@ -56,7 +56,7 @@ export function ForgotPasswordForm({
             <CardDescription>{t('instructionsSent')}</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('emailSentMessage')}
             </p>
           </CardContent>
@@ -83,12 +83,12 @@ export function ForgotPasswordForm({
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
-                {error && <p className="text-sm text-status-error">{error}</p>}
+                {error && <p className="text-body text-status-error">{error}</p>}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? t('sending') : t('sendButton')}
                 </Button>
               </div>
-              <div className="mt-4 text-center text-sm">
+              <div className="mt-4 text-center text-body">
                 {t('haveAccount')}{" "}
                 <Link
                   href="/auth/login"

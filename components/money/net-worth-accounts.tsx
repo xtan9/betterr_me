@@ -146,11 +146,11 @@ export function NetWorthAccounts({ view = "mine" }: NetWorthAccountsProps) {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Icon className="size-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">
+                    <span className="text-body font-medium">
                       {t(labelKey)}
                     </span>
                   </div>
-                  <span className="text-sm font-medium tabular-nums">
+                  <span className="text-body font-medium tabular-nums">
                     {formatMoney(group.subtotal)}
                   </span>
                 </div>
@@ -160,7 +160,7 @@ export function NetWorthAccounts({ view = "mine" }: NetWorthAccountsProps) {
                   {group.accounts.map((acc) => (
                     <div
                       key={acc.id}
-                      className="flex items-center justify-between text-sm"
+                      className="flex items-center justify-between text-body"
                     >
                       <span className="text-muted-foreground truncate mr-2">
                         {acc.name}
@@ -182,7 +182,7 @@ export function NetWorthAccounts({ view = "mine" }: NetWorthAccountsProps) {
 
           {/* Empty connected accounts state */}
           {accountsByType.length === 0 && !netWorth?.manual_assets_cents && (
-            <p className="text-sm text-muted-foreground text-center py-4">
+            <p className="text-body text-muted-foreground text-center py-4">
               {t("noData")}
             </p>
           )}
@@ -190,7 +190,7 @@ export function NetWorthAccounts({ view = "mine" }: NetWorthAccountsProps) {
           {/* Manual assets section */}
           <div className="border-t border-money-border pt-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">{t("manualAssets")}</span>
+              <span className="text-body font-medium">{t("manualAssets")}</span>
               <Button
                 variant="ghost"
                 size="sm"
@@ -212,7 +212,7 @@ export function NetWorthAccounts({ view = "mine" }: NetWorthAccountsProps) {
             {/* The API includes manual asset totals -- individual items need their own fetch */}
             {netWorth && netWorth.manual_assets_cents > 0 && (
               <div className="ml-6">
-                <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center justify-between text-body">
                   <span className="text-muted-foreground">
                     {t("manualAssets")}
                   </span>

@@ -143,7 +143,7 @@ export function WorkoutHeader({
       <div className="flex items-center justify-between gap-2 px-card-header-padding-x py-card-header-padding-y">
         {/* Left: Timer + Title */}
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="flex items-center gap-1.5 text-sm font-mono text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-body font-mono text-muted-foreground">
             <Timer className="h-4 w-4" />
             <span>{elapsed}</span>
           </div>
@@ -155,7 +155,7 @@ export function WorkoutHeader({
               onChange={(e) => setTitleValue(e.target.value)}
               onBlur={handleTitleBlur}
               onKeyDown={handleTitleKeyDown}
-              className="h-8 text-sm font-semibold"
+              className="h-8 text-body font-semibold"
             />
           ) : (
             <button
@@ -164,7 +164,7 @@ export function WorkoutHeader({
                 setTitleValue(workout.title);
                 setIsEditingTitle(true);
               }}
-              className="truncate text-sm font-semibold hover:underline"
+              className="truncate text-body font-semibold hover:underline"
             >
               {workout.title}
             </button>
@@ -191,7 +191,7 @@ export function WorkoutHeader({
       {/* Rest timer overlay */}
       {restTimer.isActive && (
         <div className="flex items-center justify-between border-t bg-primary/5 px-4 py-2">
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-body">
             <Timer className="h-4 w-4 text-primary" />
             <span className="font-mono font-semibold text-primary">
               {formatTime(restTimer.remaining)}
@@ -253,7 +253,7 @@ export function WorkoutHeader({
               value={notesValue}
               onChange={(e) => handleNotesChange(e.target.value)}
               placeholder={t("workoutNotesPlaceholder")}
-              className="min-h-[60px] text-sm"
+              className="min-h-[60px] text-body"
             />
           </div>
         </CollapsibleContent>

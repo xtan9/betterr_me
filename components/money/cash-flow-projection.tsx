@@ -57,7 +57,7 @@ export function CashFlowProjection({
           ) : (
             <TrendingDown className="mt-0.5 size-4 text-[hsl(var(--money-caution))]" />
           )}
-          <p className="text-sm">
+          <p className="text-body">
             {isIncreasing
               ? t("balanceProjectedIncrease", {
                   amount: formatMoney(Math.abs(changeCents)),
@@ -74,7 +74,7 @@ export function CashFlowProjection({
         {firstDangerDate && (
           <div className="flex items-start gap-2 rounded-card bg-[hsl(var(--money-caution)/0.08)] px-3 py-2">
             <AlertCircle className="mt-0.5 size-4 shrink-0 text-[hsl(var(--money-caution))]" />
-            <p className="text-sm text-[hsl(var(--money-caution))]">
+            <p className="text-body text-[hsl(var(--money-caution))]">
               {t("dangerZoneWarning", {
                 date: format(parseISO(firstDangerDate.date), "MMM d"),
               })}

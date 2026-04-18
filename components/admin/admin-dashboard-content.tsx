@@ -84,7 +84,7 @@ export function AdminDashboardContent({
           <CardDescription>{t("sync.description")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="text-sm text-muted-foreground space-y-1">
+          <div className="text-body text-muted-foreground space-y-1">
             <p>{t("sync.exerciseCount", { count: totalExercises })}</p>
             <p>{t("sync.gifCount", { count: mediaCount })}</p>
             <p>
@@ -121,13 +121,13 @@ export function AdminDashboardContent({
           </Button>
 
           {syncing && !skipGifs && !dryRun && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t("sync.syncingLong")}
             </p>
           )}
 
           {result && (
-            <div className="rounded-card bg-muted p-3 text-sm space-y-1">
+            <div className="rounded-card bg-muted p-3 text-body space-y-1">
               <p className="font-medium">{t("sync.success")}</p>
               <p>{t("sync.resultTotal", { count: result.total })}</p>
               <p>{t("sync.resultCreated", { count: result.created })}</p>
@@ -144,7 +144,7 @@ export function AdminDashboardContent({
           )}
 
           {error && (
-            <p className="text-sm text-destructive" role="alert">
+            <p className="text-body text-destructive" role="alert">
               {error}
             </p>
           )}

@@ -68,7 +68,7 @@ export function AbsenceCard({ habit, onDismiss, onNavigate }: AbsenceCardProps) 
     >
       <Icon className={cn("size-5 shrink-0 mt-0.5", config.iconColor)} />
       <div className="flex-1 min-w-0">
-        <p className={cn("text-sm font-medium", config.titleColor)}>
+        <p className={cn("text-body font-medium", config.titleColor)}>
           {t(`${variant}Title${titleSuffix}`, { name: habit.name, days: habit.missed_scheduled_periods })}
         </p>
 

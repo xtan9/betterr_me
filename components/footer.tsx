@@ -134,7 +134,7 @@ export default async function Footer() {
               <Github className="w-5 h-5" />
             </Link>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             © {currentYear} BetterR.me. {t("allRightsReserved")}
           </p>
         </div>

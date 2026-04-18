@@ -39,7 +39,7 @@ export function TransactionRow({
       {/* Left: Category badge + description */}
       <div className="min-w-0 flex-1">
         {!redacted && (
-          <p className="truncate text-sm font-medium">
+          <p className="truncate text-body font-medium">
             {transaction.merchant_name || transaction.description}
           </p>
         )}
@@ -52,7 +52,7 @@ export function TransactionRow({
       <div className="shrink-0 text-right">
         <p
           className={cn(
-            "text-sm font-semibold tabular-nums",
+            "text-body font-semibold tabular-nums",
             isIncome
               ? "text-green-600 dark:text-green-400"
               : "text-red-600 dark:text-red-400"

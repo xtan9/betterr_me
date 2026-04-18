@@ -111,7 +111,7 @@ function NavIconContainer({ icon: Icon }: { icon: LucideIcon }) {
 /** Chameleon-matched nav item class overrides */
 const navButtonClassName = [
   // Size & spacing (h-10 = 40px matches collapsed !size-10 for seamless transition)
-  "h-10 rounded-control font-medium text-sm",
+  "h-10 rounded-control font-medium text-body",
   // Collapsed: enlarge button so 24px icon container fits (40px - 2*8px padding = 24px)
   "group-data-[collapsible=icon]:!size-10",
   // Transition + hover
@@ -142,9 +142,9 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
         <div className="flex h-8 items-center gap-2">
           <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
             <div className="ml-1 flex size-8 shrink-0 items-center justify-center rounded-control bg-primary text-primary-foreground">
-              <span className="font-display font-bold text-sm">B</span>
+              <span className="font-display font-bold text-body">B</span>
             </div>
-            <span className="font-display font-semibold text-sm text-sidebar-foreground truncate group-data-[collapsible=icon]:hidden">
+            <span className="font-display font-semibold text-body text-sidebar-foreground truncate group-data-[collapsible=icon]:hidden">
               BetterR.me
             </span>
           </Link>

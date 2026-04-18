@@ -61,7 +61,7 @@ export function HabitChecklist({
         {totalCount === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p className="font-medium mb-1">{t("noHabits")}</p>
-            <p className="text-sm">{t("createFirst")}</p>
+            <p className="text-body">{t("createFirst")}</p>
           </div>
         ) : (
           <>
@@ -86,12 +86,12 @@ export function HabitChecklist({
                   <p className="font-display text-section-heading font-bold text-foreground">
                     {t("perfectDay")}
                   </p>
-                  <p className="text-sm text-primary mt-1">
+                  <p className="text-body text-primary mt-1">
                     {t("allCompletedDesc", { count: totalCount })}
                   </p>
                 </div>
               ) : (
-                <p className="text-sm text-center text-muted-foreground">
+                <p className="text-body text-center text-muted-foreground">
                   {t("completed", {
                     completed: completedCount,
                     total: totalCount,

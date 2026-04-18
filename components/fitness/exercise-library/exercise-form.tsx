@@ -169,7 +169,7 @@ export function ExerciseForm({
                     ).map((mg) => (
                       <label
                         key={mg}
-                        className="flex items-center gap-2 text-sm"
+                        className="flex items-center gap-2 text-body"
                       >
                         <Checkbox
                           checked={field.value?.includes(mg) ?? false}

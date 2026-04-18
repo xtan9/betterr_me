@@ -56,7 +56,7 @@ export function ApiKeysSection() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-section-heading font-medium">{t("title")}</h3>
-          <p className="text-sm text-muted-foreground">{t("description")}</p>
+          <p className="text-body text-muted-foreground">{t("description")}</p>
         </div>
         <Button
           onClick={() => setCreateDialogOpen(true)}
@@ -70,7 +70,7 @@ export function ApiKeysSection() {
       </div>
 
       {keys.length >= 10 && (
-        <p className="text-sm text-muted-foreground">{t("maxKeysReached")}</p>
+        <p className="text-body text-muted-foreground">{t("maxKeysReached")}</p>
       )}
 
       {isLoading ? (
@@ -79,7 +79,7 @@ export function ApiKeysSection() {
           <Skeleton className="h-24 w-full" />
         </div>
       ) : keys.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4">{t("emptyState")}</p>
+        <p className="text-body text-muted-foreground py-4">{t("emptyState")}</p>
       ) : (
         <div className="flex flex-col gap-3">
           {keys.map((key) => (

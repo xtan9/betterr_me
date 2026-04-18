@@ -367,11 +367,11 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
             <div className="space-y-3">
               {completionPeriods.map(({ key, label, percent }) => (
                 <div key={key} className="flex items-center gap-4">
-                  <span className="w-24 text-sm text-muted-foreground">
+                  <span className="w-24 text-body text-muted-foreground">
                     {label}
                   </span>
                   <Progress value={percent} className="flex-1" />
-                  <span className="w-24 text-sm text-right">
+                  <span className="w-24 text-body text-right">
                     {t("detail.completion.percent", { percent })}
                   </span>
                 </div>

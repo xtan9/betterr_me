@@ -31,7 +31,7 @@ export function NetWorthSummary({ view = "mine" }: { view?: ViewMode }) {
     return (
       <Card className="border-destructive/50 bg-destructive/10">
         <CardContent className="p-card-padding">
-          <p className="text-sm text-destructive">{t("fetchError")}</p>
+          <p className="text-body text-destructive">{t("fetchError")}</p>
         </CardContent>
       </Card>
     );
@@ -49,7 +49,7 @@ export function NetWorthSummary({ view = "mine" }: { view?: ViewMode }) {
       <CardContent className="p-card-padding">
         {/* Total net worth */}
         <div className="mb-1">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t("totalNetWorth")}
           </p>
           <p className="text-2xl font-semibold tabular-nums">
@@ -66,7 +66,7 @@ export function NetWorthSummary({ view = "mine" }: { view?: ViewMode }) {
               <ArrowDownRight className="size-4 text-[hsl(var(--money-caution))]" />
             )}
             <span
-              className={`text-sm font-medium tabular-nums ${
+              className={`text-body font-medium tabular-nums ${
                 changePositive
                   ? "text-[hsl(var(--money-sage))]"
                   : "text-[hsl(var(--money-caution))]"

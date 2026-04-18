@@ -17,10 +17,10 @@ export function ExerciseHowToTab({ instructions }: ExerciseHowToTabProps) {
       <ol className="space-y-3 list-none">
         {instructions.map((instruction, index) => (
           <li key={index} className="flex gap-3">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-pill bg-primary text-primary-foreground text-sm font-medium">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-pill bg-primary text-primary-foreground text-body font-medium">
               {index + 1}
             </span>
-            <p className="text-sm leading-relaxed pt-1">{instruction}</p>
+            <p className="text-body leading-relaxed pt-1">{instruction}</p>
           </li>
         ))}
       </ol>

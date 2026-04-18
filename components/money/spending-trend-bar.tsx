@@ -35,7 +35,7 @@ function CustomTooltip({
   if (!active || !payload?.length) return null;
 
   return (
-    <div className="rounded-card border bg-popover px-3 py-2 text-sm shadow-md">
+    <div className="rounded-card border bg-popover px-3 py-2 text-body shadow-md">
       <p className="mb-1 font-medium">{label}</p>
       {payload.map((entry) => (
         <p
@@ -61,7 +61,7 @@ export function SpendingTrendBar({ data }: SpendingTrendBarProps) {
 
   if (data.length === 0) {
     return (
-      <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-[300px] items-center justify-center text-body text-muted-foreground">
         {t("noSpendingData")}
       </div>
     );

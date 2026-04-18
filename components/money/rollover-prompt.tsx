@@ -73,7 +73,7 @@ export function RolloverPrompt({
         </DialogHeader>
 
         {isStaleData && (
-          <div className="rounded-card border border-money-amber bg-[hsl(var(--money-amber-light))] px-3 py-2 text-sm text-[hsl(var(--money-amber-foreground))]">
+          <div className="rounded-card border border-money-amber bg-[hsl(var(--money-amber-light))] px-3 py-2 text-body text-[hsl(var(--money-amber-foreground))]">
             {t("syncWarning")}
           </div>
         )}
@@ -91,15 +91,15 @@ export function RolloverPrompt({
               >
                 <div className="flex items-center gap-2">
                   {cat.category_icon && (
-                    <span className="text-sm">{cat.category_icon}</span>
+                    <span className="text-body">{cat.category_icon}</span>
                   )}
-                  <span className="text-sm font-medium">
+                  <span className="text-body font-medium">
                     {cat.category_name}
                   </span>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-sm font-medium tabular-nums">
+                  <div className="text-body font-medium tabular-nums">
                     {isOverspent ? (
                       <span className="text-[hsl(var(--money-caution))]">
                         {formatMoney(rolloverAmount)}

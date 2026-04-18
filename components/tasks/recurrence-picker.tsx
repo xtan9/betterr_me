@@ -235,7 +235,7 @@ export function RecurrencePicker({
       {/* Custom frequency & interval */}
       {showCustomControls && (
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">
+          <span className="text-body text-muted-foreground whitespace-nowrap">
             {t("every")}
           </span>
           <Input
@@ -268,7 +268,7 @@ export function RecurrencePicker({
       {/* Day of week picker */}
       {showDayPicker && value.frequency === "weekly" && (
         <div>
-          <Label className="text-sm text-muted-foreground mb-1.5 block">
+          <Label className="text-body text-muted-foreground mb-1.5 block">
             {t("onDays")}
           </Label>
           <ToggleGroup
@@ -300,7 +300,7 @@ export function RecurrencePicker({
       {/* End condition */}
       {showEndControls && (
         <div className="space-y-2 pt-1">
-          <Label className="text-sm text-muted-foreground">{t("ends")}</Label>
+          <Label className="text-body text-muted-foreground">{t("ends")}</Label>
           <RadioGroup
             value={endType}
             onValueChange={handleEndTypeChange}
@@ -308,13 +308,13 @@ export function RecurrencePicker({
           >
             <div className="flex items-center gap-2">
               <RadioGroupItem value="never" id="end-never" />
-              <Label htmlFor="end-never" className="text-sm font-normal">
+              <Label htmlFor="end-never" className="text-body font-normal">
                 {t("endNever")}
               </Label>
             </div>
             <div className="flex items-center gap-2">
               <RadioGroupItem value="after_count" id="end-count" />
-              <Label htmlFor="end-count" className="text-sm font-normal">
+              <Label htmlFor="end-count" className="text-body font-normal">
                 {t("endAfter")}
               </Label>
               {endType === "after_count" && (
@@ -336,14 +336,14 @@ export function RecurrencePicker({
                 />
               )}
               {endType === "after_count" && (
-                <span className="text-sm text-muted-foreground">
+                <span className="text-body text-muted-foreground">
                   {t("endTimes")}
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2">
               <RadioGroupItem value="on_date" id="end-date" />
-              <Label htmlFor="end-date" className="text-sm font-normal">
+              <Label htmlFor="end-date" className="text-body font-normal">
                 {t("endOn")}
               </Label>
               {endType === "on_date" && (

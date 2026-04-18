@@ -228,7 +228,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
 
           {/* Recurrence info */}
           {task.recurring_task_id && recurringTemplate && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-body text-muted-foreground">
               <Repeat className="size-4" />
               <span>
                 {describeRecurrence(recurringTemplate.recurrence_rule, t)}
@@ -239,10 +239,10 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
           {/* Reflection badge */}
           {task.completion_difficulty && (
             <div className="flex items-center gap-2 rounded-card bg-muted/50 p-3">
-              <span className="text-sm">
+              <span className="text-body">
                 {{ 1: "⚡", 2: "👌", 3: "💪" }[task.completion_difficulty]}
               </span>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-body text-muted-foreground">
                 {t(
                   `detail.reflection.${{ 1: "easy", 2: "good", 3: "hard" }[task.completion_difficulty]}`,
                 )}

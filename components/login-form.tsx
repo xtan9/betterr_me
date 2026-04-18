@@ -97,7 +97,7 @@ export function LoginForm({
                   <Label htmlFor="password">{t('password')}</Label>
                   <Link
                     href="/auth/forgot-password"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                    className="ml-auto inline-block text-body underline-offset-4 hover:underline"
                   >
                     {t('forgotPassword')}
                   </Link>
@@ -110,7 +110,7 @@ export function LoginForm({
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
-              {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
+              {error && <p role="alert" className="text-body text-status-error">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? t('loggingIn') : t('loginButton')}
               </Button>
@@ -154,7 +154,7 @@ export function LoginForm({
                 {t('continueWithGoogle')}
               </Button>
             </div>
-            <div className="mt-4 text-center text-sm">
+            <div className="mt-4 text-center text-body">
               {t('noAccount')}{" "}
               <Link
                 href="/auth/sign-up"

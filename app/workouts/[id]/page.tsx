@@ -76,7 +76,7 @@ export default async function WorkoutDetailPage({
   return (
     <div className="flex flex-col gap-section-gap">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1 text-sm text-muted-foreground">
+      <nav className="flex items-center gap-1 text-body text-muted-foreground">
         <Link href="/workouts" className="hover:text-foreground transition-colors">
           {t("title")}
         </Link>

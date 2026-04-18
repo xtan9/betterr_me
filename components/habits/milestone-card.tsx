@@ -33,11 +33,11 @@ export function MilestoneCard({ milestone, habitName, onDismiss }: MilestoneCard
     <div className="flex items-start gap-3 p-4 rounded-card bg-gradient-to-r from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/20 border border-primary/20 dark:border-primary/30">
       <Trophy className="size-5 text-primary shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">
+        <p className="text-body font-medium text-foreground truncate">
           {t("celebration", { habit: habitName, count: milestone.milestone })}
         </p>
         {celebrationKey && (
-          <p className="text-sm text-primary">
+          <p className="text-body text-primary">
             {t(celebrationKey)}
           </p>
         )}

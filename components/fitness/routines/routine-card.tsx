@@ -101,7 +101,7 @@ export function RoutineCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-3 text-body text-muted-foreground">
           <span>
             {t("exerciseCount", { count: exerciseCount })}
           </span>
@@ -115,7 +115,7 @@ export function RoutineCard({
             {displayExercises.map((re) => (
               <div
                 key={re.id}
-                className="flex items-center justify-between text-sm"
+                className="flex items-center justify-between text-body"
               >
                 <span className="truncate text-muted-foreground">
                   {re.exercise.name}

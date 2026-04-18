@@ -69,7 +69,7 @@ function AcceptInviteContent() {
           {state === "loading" && (
             <>
               <Loader2 className="size-10 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 {t("acceptProcessing")}
               </p>
             </>
@@ -78,7 +78,7 @@ function AcceptInviteContent() {
           {state === "success" && (
             <>
               <CheckCircle2 className="size-10 text-green-600 dark:text-green-400" />
-              <p className="text-sm font-medium">{t("acceptSuccess")}</p>
+              <p className="text-body font-medium">{t("acceptSuccess")}</p>
               <Button asChild>
                 <Link href="/money">{t("acceptGoToMoney")}</Link>
               </Button>
@@ -88,7 +88,7 @@ function AcceptInviteContent() {
           {state === "error" && (
             <>
               <XCircle className="size-10 text-destructive" />
-              <p className="text-sm font-medium text-destructive">
+              <p className="text-body font-medium text-destructive">
                 {errorMessage}
               </p>
               <Button variant="outline" asChild>

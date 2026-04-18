@@ -66,7 +66,7 @@ export function WeekView({
                 {dayFormatter.format(date)}
               </div>
               <div
-                className={`text-sm font-semibold ${
+                className={`text-body font-semibold ${
                   isToday
                     ? "bg-primary text-primary-foreground rounded-pill w-7 h-7 flex items-center justify-center mx-auto"
                     : ""

@@ -45,7 +45,7 @@ export function CsvMappingStep({
             field === "description";
           return (
             <div key={field} className="flex items-center gap-3">
-              <Label className="min-w-32 text-sm">
+              <Label className="min-w-32 text-body">
                 {field}
                 {isRequired && (
                   <span className="ml-1 text-red-500">*</span>
@@ -101,7 +101,7 @@ export function CsvMappingStep({
       )}
 
       {!canProceedToPreview && (
-        <p className="text-sm text-red-500">{t("requiredFields")}</p>
+        <p className="text-body text-red-500">{t("requiredFields")}</p>
       )}
 
       <DialogFooter className="flex justify-between sm:justify-between">

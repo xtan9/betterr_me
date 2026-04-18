@@ -120,7 +120,7 @@ function ExerciseDetailCard({
     <Card>
       <CardHeader className="pb-2">
         <div className="min-w-0">
-          <CardTitle className="text-sm font-semibold">
+          <CardTitle className="text-body font-semibold">
             {exerciseInfo.name}
           </CardTitle>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -310,7 +310,7 @@ function SetRow({
 
   return (
     <div
-      className={`grid ${gridClass} items-center gap-1 px-1 py-1.5 text-sm rounded hover:bg-muted/50`}
+      className={`grid ${gridClass} items-center gap-1 px-1 py-1.5 text-body rounded hover:bg-muted/50`}
     >
       <span className="text-xs text-muted-foreground">{set.set_number}</span>
       {fields.showWeight && (
@@ -382,10 +382,10 @@ export function WorkoutDetailView({
       {workout.notes && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">{t("workoutNotes")}</CardTitle>
+            <CardTitle className="text-body">{t("workoutNotes")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+            <p className="text-body text-muted-foreground whitespace-pre-wrap">
               {workout.notes}
             </p>
           </CardContent>

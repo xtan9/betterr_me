@@ -44,7 +44,7 @@ export function HouseholdSettings() {
           <div className="flex items-center gap-2">
             <Users className="size-5 text-muted-foreground" />
             <CardTitle className="text-base">{t("settings")}</CardTitle>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-body text-muted-foreground">
               ({members.length})
             </span>
           </div>

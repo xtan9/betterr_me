@@ -53,10 +53,10 @@ export function WorkoutStatsWidget({
             <Dumbbell className="size-4 text-stat-icon-purple" />
           </div>
           <div className="min-w-0 space-y-2">
-            <p className="text-sm font-medium">{t("title")}</p>
+            <p className="text-body font-medium">{t("title")}</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-muted-foreground">{t("lastWorkout")}</p>
+                <p className="text-body text-muted-foreground">{t("lastWorkout")}</p>
                 <p className="text-stat mt-0.5">
                   {lastWorkoutAt
                     ? getRelativeDate(lastWorkoutAt, t)
@@ -64,7 +64,7 @@ export function WorkoutStatsWidget({
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{t("thisWeek")}</p>
+                <p className="text-body text-muted-foreground">{t("thisWeek")}</p>
                 <p className="text-stat mt-0.5">
                   {t("workoutsCount", { count: weekWorkoutCount })}
                 </p>

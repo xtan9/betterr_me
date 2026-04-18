@@ -102,7 +102,7 @@ export function GoalCard({ goal, onEdit, onContribute }: GoalCardProps) {
             <p className="text-stat tabular-nums">
               {formatMoney(goal.current_cents)}
             </p>
-            <p className="text-sm text-muted-foreground tabular-nums">
+            <p className="text-body text-muted-foreground tabular-nums">
               {t("ofTarget", { target: formatMoney(goal.target_cents) })}
             </p>
             <p className="text-xs text-muted-foreground mt-1 tabular-nums">
@@ -112,7 +112,7 @@ export function GoalCard({ goal, onEdit, onContribute }: GoalCardProps) {
         </div>
 
         {/* Projection */}
-        <p className={`text-sm mb-3 ${statusToTextClass(goal.status_color)}`}>
+        <p className={`text-body mb-3 ${statusToTextClass(goal.status_color)}`}>
           {projectionText}
         </p>
 

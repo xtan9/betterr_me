@@ -30,7 +30,7 @@ export const StreakCounter = memo(function StreakCounter({
 
   if (variant === "compact") {
     return (
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-2 text-body">
         <div className="flex items-center gap-1">
           {currentStreak >= 7 && <Flame className="size-3.5 text-status-streak" />}
           <span className="font-medium">{t("days", { count: currentStreak })}</span>

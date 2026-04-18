@@ -44,20 +44,20 @@ export function JournalTimelineCard({
       <CardContent className="py-4">
         <div className="flex items-center gap-2 mb-1">
           {mood && <span className="text-lg">{mood.emoji}</span>}
-          <span className="text-sm text-muted-foreground">{formattedDate}</span>
+          <span className="text-body text-muted-foreground">{formattedDate}</span>
           {entry.title && (
-            <span className="text-sm font-medium truncate">
+            <span className="text-body font-medium truncate">
               {entry.title}
             </span>
           )}
           {!entry.title && (
-            <span className="text-sm font-medium text-muted-foreground italic">
+            <span className="text-body font-medium text-muted-foreground italic">
               {t("untitled")}
             </span>
           )}
         </div>
         {preview && (
-          <p className="text-sm text-muted-foreground line-clamp-2">
+          <p className="text-body text-muted-foreground line-clamp-2">
             {preview}
           </p>
         )}

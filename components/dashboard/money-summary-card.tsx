@@ -56,7 +56,7 @@ export function MoneySummaryCard() {
             <p className="text-xs font-medium text-muted-foreground">
               {t("title")}
             </p>
-            <div className="flex items-baseline gap-3 text-sm">
+            <div className="flex items-baseline gap-3 text-body">
               <span className="tabular-nums">
                 {t("spentToday")}: {formatMoney(summary.spent_today_cents)}
               </span>

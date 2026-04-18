@@ -76,7 +76,7 @@ export function GoalGrid() {
   if (error) {
     return (
       <div className="rounded-card border border-destructive/50 bg-destructive/10 px-6 py-8 text-center">
-        <p className="text-sm text-destructive">{t("fetchError")}</p>
+        <p className="text-body text-destructive">{t("fetchError")}</p>
       </div>
     );
   }
@@ -104,7 +104,7 @@ export function GoalGrid() {
         <div className="flex flex-col items-center justify-center rounded-card border border-money-border bg-money-surface py-16 px-6 text-center">
           <Target className="size-12 text-muted-foreground mb-4" />
           <h3 className="text-section-heading mb-2">{t("emptyHeading")}</h3>
-          <p className="text-sm text-muted-foreground mb-6 max-w-md">
+          <p className="text-body text-muted-foreground mb-6 max-w-md">
             {t("emptyDescription")}
           </p>
           <Button onClick={handleCreate}>

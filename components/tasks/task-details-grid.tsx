@@ -29,7 +29,7 @@ export function TaskDetailsGrid({
       <div className="flex items-center gap-3 p-4 rounded-card border">
         <Tag className="size-5 text-muted-foreground" />
         <div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t("detail.category")}
           </p>
           <div className="flex items-center gap-2 mt-1">
@@ -53,7 +53,7 @@ export function TaskDetailsGrid({
       <div className="flex items-center gap-3 p-4 rounded-card border">
         <Flag className={cn("size-5", priorityColor)} />
         <div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t("detail.priority")}
           </p>
           <span className={cn("font-medium", priorityColor)}>
@@ -66,7 +66,7 @@ export function TaskDetailsGrid({
       <div className="flex items-center gap-3 p-4 rounded-card border">
         <Calendar className="size-5 text-muted-foreground" />
         <div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t("detail.dueDate")}
           </p>
           <span className="font-medium">
@@ -79,7 +79,7 @@ export function TaskDetailsGrid({
       <div className="flex items-center gap-3 p-4 rounded-card border">
         <Clock className="size-5 text-muted-foreground" />
         <div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t("detail.dueTime")}
           </p>
           <span className="font-medium">

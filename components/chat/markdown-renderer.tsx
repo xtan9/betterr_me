@@ -27,7 +27,7 @@ const components: Components = {
     const isFenced = className?.startsWith("language-");
     if (isFenced) {
       return (
-        <pre className="rounded-control bg-muted/50 p-3 my-2 overflow-x-auto text-sm">
+        <pre className="rounded-control bg-muted/50 p-3 my-2 overflow-x-auto text-body">
           <code className="font-mono" {...props}>
             {children}
           </code>
@@ -36,7 +36,7 @@ const components: Components = {
     }
     return (
       <code
-        className="rounded bg-muted/50 px-1.5 py-0.5 text-sm font-mono"
+        className="rounded bg-muted/50 px-1.5 py-0.5 text-body font-mono"
         {...props}
       >
         {children}
@@ -68,7 +68,7 @@ const components: Components = {
   },
   table: ({ children }) => (
     <div className="overflow-x-auto my-2">
-      <table className="min-w-full border-collapse text-sm">{children}</table>
+      <table className="min-w-full border-collapse text-body">{children}</table>
     </div>
   ),
   th: ({ children }) => (

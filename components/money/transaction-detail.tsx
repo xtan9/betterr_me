@@ -123,7 +123,7 @@ export function TransactionDetail({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder={t("transactions.notes")}
-                  className="min-h-[60px] resize-none text-sm"
+                  className="min-h-[60px] resize-none text-body"
                 />
                 <Button
                   type="button"
@@ -148,7 +148,7 @@ export function TransactionDetail({
               <label className="mb-1 block text-xs font-medium text-muted-foreground">
                 {t("transactions.account")}
               </label>
-              <p className="text-sm">{transaction.account_id}</p>
+              <p className="text-body">{transaction.account_id}</p>
             </div>
 
             {/* Source */}
@@ -168,7 +168,7 @@ export function TransactionDetail({
                   <label className="mb-1 block text-xs font-medium text-muted-foreground">
                     {t("transactions.plaidCategory")}
                   </label>
-                  <p className="text-sm capitalize">
+                  <p className="text-body capitalize">
                     {transaction.plaid_category_primary}
                     {transaction.plaid_category_detailed &&
                       ` / ${transaction.plaid_category_detailed}`}

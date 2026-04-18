@@ -46,7 +46,7 @@ function CustomTooltip({
   const total = payload[0].payload.value;
 
   return (
-    <div className="rounded-card border bg-popover px-3 py-2 text-sm shadow-md">
+    <div className="rounded-card border bg-popover px-3 py-2 text-body shadow-md">
       <p className="font-medium">{item.name}</p>
       <p className="tabular-nums text-muted-foreground">
         {formatMoney(total)}
@@ -64,7 +64,7 @@ export function SpendingDonut({
 
   if (data.length === 0) {
     return (
-      <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-[300px] items-center justify-center text-body text-muted-foreground">
         {t("noSpendingData")}
       </div>
     );

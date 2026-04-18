@@ -105,7 +105,7 @@ export default function OAuthRedirectPage() {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <Loader2 className="mb-4 size-8 animate-spin text-money-sage" />
-      <p className="text-sm text-muted-foreground">
+      <p className="text-body text-muted-foreground">
         {t("plaid.connecting")}
       </p>
     </div>

@@ -154,7 +154,7 @@ export function AccountsList() {
       {/* Header with net worth and connect button */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t("accounts.netWorth")}
           </p>
           <p className="text-stat tabular-nums">

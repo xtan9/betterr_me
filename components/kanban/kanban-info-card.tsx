@@ -65,7 +65,7 @@ export function KanbanInfoCard({
         <div className="grid grid-cols-2 gap-x-8 gap-y-5">
           {/* Status */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            <label className="text-body font-medium text-muted-foreground uppercase tracking-wide">
               {t("detail.status")}
             </label>
             <Select
@@ -93,7 +93,7 @@ export function KanbanInfoCard({
 
           {/* Priority */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            <label className="text-body font-medium text-muted-foreground uppercase tracking-wide">
               {t("detail.priority")}
             </label>
             <Select
@@ -121,7 +121,7 @@ export function KanbanInfoCard({
 
           {/* Due Date */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            <label className="text-body font-medium text-muted-foreground uppercase tracking-wide">
               {t("detail.dueDate")}
             </label>
             <Popover key={task.id}>
@@ -150,7 +150,7 @@ export function KanbanInfoCard({
 
           {/* Project (read-only) */}
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            <label className="text-body font-medium text-muted-foreground uppercase tracking-wide">
               {t("detail.project")}
             </label>
             <p className="text-base">{projectName || "---"}</p>

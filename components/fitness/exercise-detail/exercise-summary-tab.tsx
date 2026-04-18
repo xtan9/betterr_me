@@ -66,7 +66,7 @@ export function ExerciseSummaryTab({
         </div>
 
         {alternativeNames && alternativeNames.length > 0 && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             <span className="font-medium">{t("exerciseDetail.alsoKnownAs")}:</span>{" "}
             {alternativeNames.join(", ")}
           </p>
@@ -126,7 +126,7 @@ export function ExerciseSummaryTab({
               )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
+            <p className="text-body text-muted-foreground text-center py-4">
               {t("exerciseDetail.noRecordsYet")}
             </p>
           )}
