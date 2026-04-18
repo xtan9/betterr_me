@@ -82,7 +82,7 @@ export function SignUpForm({
     <div className={cn("flex flex-col gap-section-gap", className)} {...props}>
       <Card>
         <CardHeader>
-          <CardTitle className="text-2xl">{t('title')}</CardTitle>
+          <CardTitle className="text-page-title font-semibold">{t('title')}</CardTitle>
           <CardDescription>{t('description')}</CardDescription>
         </CardHeader>
         <CardContent>
