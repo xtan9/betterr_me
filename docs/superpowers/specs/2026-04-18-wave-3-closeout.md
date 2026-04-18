@@ -21,7 +21,7 @@ Six skeleton files in the real repo (worktree copies excluded):
 
 | File | Role | Unique? |
 |---|---|---|
-| `components/layouts/page-header.tsx` (exports `PageHeaderSkeleton`) | Page-title + subtitle + actions placeholder | Already shared — 3 consumers |
+| `components/layouts/page-header.tsx` (exports `PageHeaderSkeleton`) | Page-title + subtitle + actions placeholder | Already shared — 6 consumers |
 | `components/tasks/task-detail-skeleton.tsx` | Task detail shell | Shares shell with `habit-detail-skeleton` |
 | `components/habits/habit-detail-skeleton.tsx` | Habit detail shell | Shares shell with `task-detail-skeleton` |
 | `components/tasks/tasks-page-skeleton.tsx` | List-page grid | Unique shape |
