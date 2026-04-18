@@ -39,6 +39,13 @@ describe("CardHeaderWithActions", () => {
     expect(heading).toHaveTextContent("My Section");
   });
 
+  it("applies font-display and text-section-heading to the title", () => {
+    render(<CardHeaderWithActions title="My Section" />);
+    const heading = screen.getByRole("heading", { level: 2 });
+    expect(heading).toHaveClass("font-display");
+    expect(heading).toHaveClass("text-section-heading");
+  });
+
   it("renders a plain heading when href is not provided", () => {
     render(<CardHeaderWithActions title="Plain" />);
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
@@ -55,6 +62,21 @@ describe("CardHeaderWithActions", () => {
   it("shows the hover chevron only when href is provided", () => {
     render(<CardHeaderWithActions title="Linked" href="/tasks" />);
     expect(screen.getByTestId("icon-chevron")).toBeInTheDocument();
+  });
+
+  it("applies the group class on the link so group-hover reveals the chevron", () => {
+    render(<CardHeaderWithActions title="Linked" href="/tasks" />);
+    const link = screen.getByRole("link");
+    expect(link).toHaveClass("group");
+  });
+
+  it("applies hover-reveal and reduced-motion classes on the chevron", () => {
+    render(<CardHeaderWithActions title="Linked" href="/tasks" />);
+    const chevron = screen.getByTestId("icon-chevron");
+    expect(chevron).toHaveClass("opacity-0");
+    expect(chevron).toHaveClass("group-hover:opacity-100");
+    expect(chevron).toHaveClass("transition-opacity");
+    expect(chevron).toHaveClass("motion-reduce:transition-none");
   });
 
   it("renders the actions slot", () => {
@@ -88,6 +110,7 @@ describe("CardHeaderWithActions", () => {
     expect(header).toHaveClass("flex-row");
     expect(header).toHaveClass("items-center");
     expect(header).toHaveClass("justify-between");
+    expect(header).toHaveClass("space-y-0");
     expect(header).toHaveClass("pb-4");
   });
 
