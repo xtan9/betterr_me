@@ -49,6 +49,7 @@ export function shouldTrackOnDate(frequency: HabitFrequency, date: Date): boolea
       return true;
     case "weekdays":
       return dayOfWeek >= 1 && dayOfWeek <= 5;
+    // Stryker disable next-line ConditionalExpression: falls through to "times_per_week" which also returns true — equivalent mutant
     case "weekly":
       return true;
     case "times_per_week":
