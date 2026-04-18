@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { ClipboardList, Search, PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/shared/empty-state";
 
 type EmptyStateVariant = "no_tasks" | "no_results" | "all_complete";
 
@@ -44,44 +44,26 @@ const ICON_BG_CLASS: Record<string, string> = {
 export function TaskEmptyState({ variant, onCreateTask }: TaskEmptyStateProps) {
   const t = useTranslations("tasks.empty");
   const config = VARIANT_CONFIG[variant];
-  const Icon = config.icon;
-
   const showCta = config.ctaKey && onCreateTask;
 
   return (
-    <div
-      data-testid="empty-state"
-      className={cn(
-        "flex flex-col items-center justify-center text-center py-12 px-4",
-        variant === "all_complete" &&
-          "bg-gradient-to-b from-empty-state-celebration-bg/50 to-transparent rounded-card"
-      )}
-    >
-      <div
-        className={cn(
-          "flex items-center justify-center size-16 rounded-pill mb-4",
-          ICON_BG_CLASS[variant] ?? "bg-muted"
-        )}
-      >
-        <Icon className={cn("size-8", config.iconColorClass)} />
-      </div>
-
-      <h3 className="text-section-heading text-foreground mb-2">
-        {t(config.titleKey)}
-      </h3>
-
-      <p className="text-body text-muted-foreground max-w-xs">
-        {t(config.descriptionKey)}
-      </p>
-
-      {showCta && (
-        <Button
-          onClick={onCreateTask}
-          className="mt-6 bg-primary hover:bg-primary/90"
-        >
-          {t(config.ctaKey!)}
-        </Button>
-      )}
-    </div>
+    <EmptyState
+      icon={config.icon}
+      title={t(config.titleKey)}
+      description={t(config.descriptionKey)}
+      iconColorClass={config.iconColorClass}
+      iconBgClass={ICON_BG_CLASS[variant]}
+      variant={variant === "all_complete" ? "celebration" : "default"}
+      action={
+        showCta ? (
+          <Button
+            onClick={onCreateTask}
+            className="bg-primary hover:bg-primary/90"
+          >
+            {t(config.ctaKey!)}
+          </Button>
+        ) : undefined
+      }
+    />
   );
 }
