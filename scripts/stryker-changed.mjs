@@ -46,13 +46,19 @@ console.log(
   `Running Stryker on ${changed.length} changed file(s):\n  ${changed.join("\n  ")}\n`,
 );
 
-// Pass --mutate as a comma-separated list. Stryker respects the override.
-// Each path is a validated file match (regex above), so no shell-injection
-// concern exists here — but we still avoid shell=true by using spawn with an
-// argv array.
-const child = spawn("stryker", ["run", "--mutate", changed.join(",")], {
-  stdio: "inherit",
-});
+// Resolve Stryker's bin via Node's module resolution rather than relying on
+// PATH — makes the script robust to direct `node scripts/...` invocation and
+// to package-manager PATH differences. `execPath` + resolved bin path, no
+// shell, no command-injection risk.
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const strykerBin = require.resolve("@stryker-mutator/core/bin/stryker.js");
+
+const child = spawn(
+  process.execPath,
+  [strykerBin, "run", "--mutate", changed.join(",")],
+  { stdio: "inherit" },
+);
 child.on("exit", (code) => {
   process.exit(code ?? 1);
 });

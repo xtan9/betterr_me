@@ -9,6 +9,11 @@ on:
       - "tests/helpers/mock-supabase.ts"
       - "tests/setup.ts"
       - "stryker.config.mjs"
+      # Mutation infra itself — a change here must re-run the gate to catch
+      # regressions (e.g. a broken --mutate filter that silently mutates 0 files).
+      - "scripts/stryker-changed.mjs"
+      - ".github/workflows/mutation-testing.yml"
+      - "package.json"
   schedule:
     # Mondays at 03:00 UTC — full baseline on main, catches cross-file drift
     # a per-PR changed-files run would miss.
