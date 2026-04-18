@@ -42,11 +42,16 @@ const config = {
   // Restrict the initial test run to the DB unit tests. Running the full suite
   // slows startup and pulls in tests for app/ API routes that depend on files
   // outside the mutated scope.
-  testFiles: ["tests/lib/db/**/*.test.ts"],
+  testFiles: [
+    "tests/lib/db/**/*.test.ts",
+    "tests/lib/recurring-tasks/**/*.test.ts",
+  ],
   mutate: [
     "lib/db/**/*.ts",
     "!lib/db/index.ts",
     "!lib/db/types.ts",
+    "lib/recurring-tasks/**/*.ts",
+    "!lib/recurring-tasks/index.ts",
   ],
   // checkers: ["typescript"],
   // tsconfigFile: "tsconfig.json",
