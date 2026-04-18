@@ -104,7 +104,7 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 space-y-4">
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
         <p className="text-lg font-medium text-destructive">
           {t("error.title")}
         </p>

@@ -21,7 +21,7 @@ export function CsvResultStep({
   const t = useTranslations("money.csvImport");
 
   return (
-    <div className="flex flex-col items-center space-y-4 py-8">
+    <div className="flex flex-col items-center gap-4 py-8">
       {isImporting ? (
         <>
           <Loader2 className="text-money-accent size-8 animate-spin" />
