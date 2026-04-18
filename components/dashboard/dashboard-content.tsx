@@ -279,7 +279,7 @@ export function DashboardContent({
   // Error state
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 space-y-4">
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
         <p className="text-lg font-medium text-destructive">
           {t("error.title")}
         </p>
@@ -318,7 +318,7 @@ export function DashboardContent({
 
         {/* Empty state card */}
         <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16 space-y-6">
+          <CardContent className="flex flex-col items-center justify-center py-16 gap-6">
             <div className="rounded-pill bg-primary/10 p-4">
               <Sparkles className="size-8 text-primary" />
             </div>
