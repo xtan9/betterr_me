@@ -8,7 +8,12 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './tests/setup.ts',
-    exclude: [...configDefaults.exclude, 'e2e/**', '.worktrees/**'],
+    exclude: [
+      ...configDefaults.exclude,
+      'e2e/**',
+      '.worktrees/**',
+      '.claude/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -19,6 +24,7 @@ export default defineConfig({
         '**/*.config.{js,ts,mjs}',
         '**/components/ui/**', // Exclude shadcn/ui components (third-party)
         '.next/',
+        '.claude/**',
         'coverage/',
         // Data, templates, thin wrappers, re-exports — no logic to test
         'i18n/messages/**',
