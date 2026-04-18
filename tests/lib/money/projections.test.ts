@@ -482,19 +482,7 @@ describe("computeDailySpendingRate", () => {
     ).toBe(0);
   });
 
-  it("only zero-amount transactions returns 0 (amount_cents < 0 requires strictly negative)", () => {
-    // kills the `< 0 -> <= 0` mutant: a 0 amount must NOT be counted as outflow.
-    // If the mutant were live, outflows.length > 0 and rate would be 0/days = 0,
-    // which is the same result. So we instead check a case where 0-transactions
-    // would *incorrectly* influence the result if < became <=. We combine 0 + real
-    // outflow — if 0 counts as outflow, the total stays the same but also
-    // outflows.length changes; result is unchanged. The key differentiator is
-    // a single zero-transaction case: with `<`, outflows=[] -> return 0;
-    // with `<=`, outflows=[{0}] -> totalAbs=0, rate = 0 / days = 0. Same output.
-    //
-    // So this test alone can't kill the `<= 0` mutant numerically. But we rely on
-    // "basic outflow" test above to distinguish the cases meaningfully, because
-    // the `< 0` mutant is caught when income (positive) is wrongly included.
+  it("only zero-amount transactions returns 0", () => {
     const transactions = [
       { amount_cents: 0, transaction_date: "2026-02-01" },
       { amount_cents: 0, transaction_date: "2026-02-05" },
@@ -505,14 +493,7 @@ describe("computeDailySpendingRate", () => {
   });
 
   it("income is excluded — rate computed from pure outflows only", () => {
-    // This is the crucial test for the `< 0` vs `<= 0` mutant.
-    // With `< 0`: outflows = [-5000, -5000], total=10000, days=10, rate=1000
-    // With `<= 0`: outflows = [-5000, 0, -5000, 0], total=10000, days=10, rate=1000
-    // Both yield 1000 — same rate. Need a case where income amount matters.
-    //
-    // Actually a transaction with amount_cents=0 has abs=0 so its inclusion in
-    // the sum doesn't affect totalAbsCents. The `< 0` -> `<= 0` mutant is
-    // semantically equivalent here because zero contributes zero.
+    // Positive-amount rows must not contribute to the spending rate.
     const transactions = [
       { amount_cents: -5_000, transaction_date: "2026-02-01" },
       { amount_cents: -5_000, transaction_date: "2026-02-05" },

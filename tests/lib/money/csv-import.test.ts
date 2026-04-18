@@ -203,22 +203,10 @@ describe("autoMapColumns", () => {
     expect(result.transaction_date).toBe("  date  ");
   });
 
-  it("trim kills a distinct class of bugs: '  amount  ' alone is exact match after trim, not substring", () => {
-    // Stryker mutates `.toLowerCase().trim()` -> `.toLowerCase()`.
-    // Without trim, "  amount  " is NOT an exact match for "amount" alias,
-    // but IS a substring match via Pass 2 (includes). The returned header
-    // is still "  amount  " either way, so we need an assertion that
-    // distinguishes the two paths.
-    //
-    // Strategy: a header that does NOT include any alias as substring but
-    // would match after trim. e.g. "  trans date  " includes "trans date"
-    // in Pass 2 too. Hmm — trim only matters when the raw alias appears with
-    // whitespace. Let's check: with trim, "  date  " -> "date" -> exact
-    // match on the "date" alias (Pass 1). Without trim, "  date  " is not
-    // exact-match to "date", but Pass 2 uses `.includes()` so
-    // "  date  ".includes("date") === true → still matches, same header
-    // returned. So trim is effectively equivalent here for this specific
-    // matcher. We Stryker-disable this mutant with justification below.
+  it("preserves the original header string (with whitespace) in the result", () => {
+    // Even though the normaliser trims for matching, the returned value is
+    // the original header (whitespace preserved) so the caller can refer back
+    // to the user's column heading verbatim.
     expect(autoMapColumns(["  date  "]).transaction_date).toBe("  date  ");
   });
 
