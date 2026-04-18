@@ -15,7 +15,7 @@ export default async function Page({
         <div className="flex flex-col gap-section-gap">
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">
+              <CardTitle className="text-page-title font-semibold">
                 Sorry, something went wrong.
               </CardTitle>
             </CardHeader>

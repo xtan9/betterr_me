@@ -323,7 +323,7 @@ export function DashboardContent({
               <Sparkles className="size-8 text-primary" />
             </div>
             <div className="text-center space-y-2">
-              <h2 className="text-2xl font-semibold">{t("empty.title")}</h2>
+              <h2 className="text-page-title font-semibold">{t("empty.title")}</h2>
               <p className="text-muted-foreground max-w-md">
                 {t("empty.subtitle")}
               </p>

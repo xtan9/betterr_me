@@ -52,7 +52,7 @@ export function ForgotPasswordForm({
       {success ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">{t('checkEmail')}</CardTitle>
+            <CardTitle className="text-page-title font-semibold">{t('checkEmail')}</CardTitle>
             <CardDescription>{t('instructionsSent')}</CardDescription>
           </CardHeader>
           <CardContent>
@@ -64,7 +64,7 @@ export function ForgotPasswordForm({
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">{t('title')}</CardTitle>
+            <CardTitle className="text-page-title font-semibold">{t('title')}</CardTitle>
             <CardDescription>
               {t('description')}
             </CardDescription>
