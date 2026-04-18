@@ -55,7 +55,7 @@ export function ApiKeysSection() {
     <>
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-medium">{t("title")}</h3>
+          <h3 className="text-section-heading font-medium">{t("title")}</h3>
           <p className="text-sm text-muted-foreground">{t("description")}</p>
         </div>
         <Button

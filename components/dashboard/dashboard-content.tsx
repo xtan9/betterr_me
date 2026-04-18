@@ -280,7 +280,7 @@ export function DashboardContent({
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
-        <p className="text-lg font-medium text-destructive">
+        <p className="text-section-heading font-medium text-destructive">
           {t("error.title")}
         </p>
         <Button onClick={() => mutate()} variant="outline">

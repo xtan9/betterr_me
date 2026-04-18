@@ -154,7 +154,7 @@ export function RoutinesPageContent() {
       {routines.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <LayoutTemplate className="text-muted-foreground mb-4 h-12 w-12" />
-          <h3 className="text-lg font-medium">{t("emptyTitle")}</h3>
+          <h3 className="text-section-heading font-medium">{t("emptyTitle")}</h3>
           <p className="text-muted-foreground mt-1 max-w-sm text-sm">
             {t("emptyDescription")}
           </p>

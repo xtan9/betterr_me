@@ -31,7 +31,7 @@ export function CsvResultStep({
         </>
       ) : importResult ? (
         <>
-          <p className="text-lg font-medium">
+          <p className="text-section-heading font-medium">
             {t("importSuccess", { count: importResult.imported })}
           </p>
           {importResult.duplicates_skipped > 0 && (
