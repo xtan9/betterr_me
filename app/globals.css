@@ -167,7 +167,7 @@
     --font-size-page-title: 1.5rem;
     --font-size-section-heading: 1.125rem;
     --font-size-body: 0.875rem;
-    --font-size-caption: 0.8125rem;
+    --font-size-caption: 0.75rem; /* aligned to Tailwind text-xs for adoption; previously 0.8125rem (never used) */
     --font-size-stat: 1.75rem;
 
     /* === Spacing === */
