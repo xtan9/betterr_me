@@ -46,6 +46,7 @@ export function computeMissedDays(
   createdAtStr: string,
   dataStartStr?: string,
 ): AbsenceData {
+  // Stryker disable next-line ConditionalExpression,BlockStatement: empty-string fallthrough also fails the downstream isNaN(createdDate) check and returns identical ZERO_ABSENCE — equivalent mutant
   if (!createdAtStr) {
     return { ...ZERO_ABSENCE };
   }
@@ -103,6 +104,7 @@ export function computeMissedDays(
 
       if (phase === 'counting_missed') {
         if (metTarget) {
+          // Stryker disable next-line StringLiteral: downstream only checks phase === 'counting_missed'; any non-missed value lands in the else branch — equivalent mutant
           phase = 'counting_streak';
           previousStreak++;
         } else {
@@ -141,6 +143,7 @@ export function computeMissedDays(
 
       if (phase === 'counting_missed') {
         if (completed) {
+          // Stryker disable next-line StringLiteral: downstream only checks phase === 'counting_missed'; any non-missed value lands in the else branch — equivalent mutant
           phase = 'counting_streak';
           previousStreak++;
         } else {
