@@ -94,11 +94,11 @@ export function ExerciseSummaryTab({
                   <p className="text-stat">
                     {formatWeight(records.best_weight_kg, weightUnit)}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t("exerciseDetail.bestWeight")}
                   </p>
                   {records.achieved_at && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-caption text-muted-foreground">
                       {t("exerciseDetail.achievedOn", {
                         date: new Date(records.achieved_at).toLocaleDateString(),
                       })}
@@ -109,7 +109,7 @@ export function ExerciseSummaryTab({
               {records.best_reps != null && (
                 <div className="text-center space-y-1">
                   <p className="text-stat">{records.best_reps}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t("exerciseDetail.bestReps")}
                   </p>
                 </div>
@@ -119,7 +119,7 @@ export function ExerciseSummaryTab({
                   <p className="text-stat">
                     {formatWeight(records.best_volume, weightUnit)}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t("exerciseDetail.bestVolume")}
                   </p>
                 </div>

@@ -38,7 +38,7 @@ export function EventChip({ event }: EventChipProps) {
       className={`
         flex items-center gap-1
         px-1.5 py-0.5 rounded-chip
-        text-xs truncate
+        text-caption truncate
         border-l-2
         ${
           hasCustomColor || hasDomainColor

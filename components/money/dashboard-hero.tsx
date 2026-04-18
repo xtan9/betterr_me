@@ -67,7 +67,7 @@ export function DashboardHero({
         <p className={`text-stat tabular-nums ${projectedColor}`}>
           {formatMoney(endOfMonthBalanceCents)}
         </p>
-        <p className="mt-1 text-xs italic text-muted-foreground">
+        <p className="mt-1 text-caption italic text-muted-foreground">
           {confidenceLabel === "based on confirmed income"
             ? t("confidenceConfirmed")
             : t("confidenceEstimated")}

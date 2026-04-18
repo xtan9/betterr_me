@@ -65,7 +65,7 @@ export function WorkoutHistoryCard({
           </p>
 
           {/* Bottom row: stats */}
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
             <span>{t("exercises", { count: workout.exerciseCount })}</span>
             <span className="text-border">|</span>
             <span>{t("setsCount", { count: workout.totalSets })}</span>
@@ -79,7 +79,7 @@ export function WorkoutHistoryCard({
 
           {/* Exercise names */}
           {workout.exerciseNames.length > 0 && (
-            <p className="mt-1.5 text-xs text-muted-foreground/70 truncate">
+            <p className="mt-1.5 text-caption text-muted-foreground/70 truncate">
               {workout.exerciseNames.join(", ")}
             </p>
           )}

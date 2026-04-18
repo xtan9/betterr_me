@@ -55,7 +55,7 @@ export function UpcomingBillsList({ bills }: UpcomingBillsListProps) {
           >
             <div>
               <p className="text-body font-medium">{bill.merchant_name}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {format(parseISO(bill.due_date), "MMM d")}
               </p>
             </div>

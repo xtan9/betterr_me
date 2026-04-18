@@ -170,7 +170,7 @@ export function WorkoutSetRow({
         <PopoverTrigger asChild>
           <button
             type="button"
-            className={`flex h-7 w-9 items-center justify-center rounded text-xs font-semibold ${typeConfig.color}`}
+            className={`flex h-7 w-9 items-center justify-center rounded text-caption font-semibold ${typeConfig.color}`}
           >
             {typeConfig.shortLabel || set.set_number}
             {typeConfig.shortLabel && (
@@ -186,7 +186,7 @@ export function WorkoutSetRow({
                 <button
                   key={type}
                   type="button"
-                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-accent ${
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-caption hover:bg-accent ${
                     set.set_type === type ? "bg-accent" : ""
                   }`}
                   onClick={() => handleSetTypeChange(type)}
@@ -205,7 +205,7 @@ export function WorkoutSetRow({
       </Popover>
 
       {/* Previous values */}
-      <span className="truncate text-xs text-muted-foreground">
+      <span className="truncate text-caption text-muted-foreground">
         {previousDisplay}
       </span>
 
@@ -218,7 +218,7 @@ export function WorkoutSetRow({
           onChange={(e) => setLocalWeight(e.target.value)}
           onBlur={handleWeightBlur}
           placeholder="-"
-          className="h-8 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="h-8 text-center text-caption [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
       )}
 
@@ -231,7 +231,7 @@ export function WorkoutSetRow({
           onChange={(e) => setLocalReps(e.target.value)}
           onBlur={handleRepsBlur}
           placeholder="-"
-          className="h-8 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="h-8 text-center text-caption [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
       )}
 
@@ -244,7 +244,7 @@ export function WorkoutSetRow({
           onChange={(e) => setLocalDuration(e.target.value)}
           onBlur={handleDurationBlur}
           placeholder="-"
-          className="h-8 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="h-8 text-center text-caption [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
       )}
 
@@ -257,7 +257,7 @@ export function WorkoutSetRow({
           onChange={(e) => setLocalDistance(e.target.value)}
           onBlur={handleDistanceBlur}
           placeholder="-"
-          className="h-8 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="h-8 text-center text-caption [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
       )}
 

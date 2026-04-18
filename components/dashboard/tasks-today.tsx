@@ -25,7 +25,7 @@ function ReflectionStrip({ onReflect }: ReflectionStripProps) {
 
   return (
     <div className="flex items-center gap-2 mt-1 animate-in fade-in slide-in-from-left-2 duration-300">
-      <span className="text-xs text-muted-foreground">{t("howWasIt")}</span>
+      <span className="text-caption text-muted-foreground">{t("howWasIt")}</span>
       <div className="flex gap-1">
         {(
           [
@@ -117,7 +117,7 @@ function TaskRow({
           <ReflectionStrip onReflect={onReflect} />
         ) : (
           <>
-            <div className="text-xs text-muted-foreground mt-0.5">
+            <div className="text-caption text-muted-foreground mt-0.5">
               {task.due_time
                 ? t("dueAt", { time: formatTime(task.due_time) })
                 : t("allDay")}
@@ -338,7 +338,7 @@ export function TasksToday({
             {extraTomorrow > 0 && (
               <Link
                 href="/tasks"
-                className="flex items-center justify-center gap-1 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors duration-150 motion-reduce:transition-none"
+                className="flex items-center justify-center gap-1 mt-2 text-caption text-muted-foreground hover:text-foreground transition-colors duration-150 motion-reduce:transition-none"
               >
                 {t("moreTomorrow", { count: extraTomorrow })}
                 <ChevronRight className="size-3" />

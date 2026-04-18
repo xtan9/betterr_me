@@ -112,7 +112,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
               <span className="truncate font-semibold text-destructive">
                 {tSidebar("profileError")}
               </span>
-              <span className="truncate text-xs text-muted-foreground">
+              <span className="truncate text-caption text-muted-foreground">
                 &nbsp;
               </span>
             </div>
@@ -132,7 +132,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
             </Avatar>
             <div className="grid flex-1 text-left text-body leading-tight">
               <span className="truncate font-semibold">{tSidebar("loading")}</span>
-              <span className="truncate text-xs text-muted-foreground">
+              <span className="truncate text-caption text-muted-foreground">
                 &nbsp;
               </span>
             </div>
@@ -163,7 +163,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
               <Settings className="hidden size-4 shrink-0 group-data-[collapsible=icon]:block" />
               <div className="grid flex-1 text-left text-body leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-semibold">{displayName}</span>
-                <span className="truncate text-xs text-muted-foreground">
+                <span className="truncate text-caption text-muted-foreground">
                   {displayEmail}
                 </span>
               </div>
@@ -189,7 +189,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
                 </Avatar>
                 <div className="grid flex-1 text-left text-body leading-tight">
                   <span className="truncate font-semibold">{displayName}</span>
-                  <span className="truncate text-xs text-muted-foreground">
+                  <span className="truncate text-caption text-muted-foreground">
                     {displayEmail}
                   </span>
                 </div>

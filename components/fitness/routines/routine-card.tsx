@@ -120,13 +120,13 @@ export function RoutineCard({
                 <span className="truncate text-muted-foreground">
                   {re.exercise.name}
                 </span>
-                <span className="shrink-0 text-xs text-muted-foreground/70">
+                <span className="shrink-0 text-caption text-muted-foreground/70">
                   {getTargetSummary(re)}
                 </span>
               </div>
             ))}
             {remainingCount > 0 && (
-              <p className="text-xs text-muted-foreground/70">
+              <p className="text-caption text-muted-foreground/70">
                 +{remainingCount} {t("more")}
               </p>
             )}

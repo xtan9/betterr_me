@@ -202,7 +202,7 @@ export function WorkoutHeader({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-xs"
+              className="h-7 px-2 text-caption"
               onClick={() => restTimer.adjust(-15)}
             >
               -15s
@@ -210,7 +210,7 @@ export function WorkoutHeader({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-xs"
+              className="h-7 px-2 text-caption"
               onClick={() => restTimer.adjust(15)}
             >
               +15s
@@ -218,7 +218,7 @@ export function WorkoutHeader({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-xs"
+              className="h-7 px-2 text-caption"
               onClick={restTimer.skip}
             >
               {t("skip")}
@@ -232,7 +232,7 @@ export function WorkoutHeader({
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="flex w-full items-center gap-1.5 border-t px-4 py-1.5 text-xs text-muted-foreground hover:bg-accent/50"
+            className="flex w-full items-center gap-1.5 border-t px-4 py-1.5 text-caption text-muted-foreground hover:bg-accent/50"
           >
             {notesOpen ? (
               <ChevronUp className="h-3 w-3" />

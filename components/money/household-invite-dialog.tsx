@@ -99,7 +99,7 @@ export function HouseholdInviteDialog({ onSuccess }: HouseholdInviteDialogProps)
           <div className="space-y-4">
             <p className="text-body text-muted-foreground">{t("inviteLink")}</p>
             <div className="flex items-center gap-2">
-              <Input value={inviteLink} readOnly className="text-xs" />
+              <Input value={inviteLink} readOnly className="text-caption" />
               <Button
                 variant="outline"
                 size="icon"
@@ -113,7 +113,7 @@ export function HouseholdInviteDialog({ onSuccess }: HouseholdInviteDialogProps)
                 )}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">{t("inviteExpires")}</p>
+            <p className="text-caption text-muted-foreground">{t("inviteExpires")}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

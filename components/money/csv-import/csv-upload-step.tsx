@@ -105,7 +105,7 @@ export function CsvUploadStep({
         />
         <div className="grid gap-1">
           <Label htmlFor="flip-sign">{t("flipSign")}</Label>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-caption">
             {t("flipSignHelp")}
           </p>
         </div>

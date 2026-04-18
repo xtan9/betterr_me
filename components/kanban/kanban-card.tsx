@@ -74,7 +74,7 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
             </Badge>
           )}
           {task.due_date && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1 text-caption text-muted-foreground">
               <Calendar className="size-3" />
               {task.due_date}
             </span>

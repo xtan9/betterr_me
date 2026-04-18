@@ -227,7 +227,7 @@ export const HabitCalendar = memo(function HabitCalendar({
       {/* Day labels */}
       <div className="grid grid-cols-7 gap-1 text-center">
         {dayKeys.map((day) => (
-          <div key={day} className="text-xs text-muted-foreground">
+          <div key={day} className="text-caption text-muted-foreground">
             {t(`days.${day}`)}
           </div>
         ))}
@@ -273,7 +273,7 @@ export const HabitCalendar = memo(function HabitCalendar({
       </div>
 
       {/* Legend */}
-      <div data-testid="legend" className="flex items-center gap-4 text-xs text-muted-foreground pt-2">
+      <div data-testid="legend" className="flex items-center gap-4 text-caption text-muted-foreground pt-2">
         <div className="flex items-center gap-1.5">
           <div className="size-3 rounded bg-primary" />
           <span>{t("legend.completed")}</span>

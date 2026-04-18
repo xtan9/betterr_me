@@ -105,7 +105,7 @@ export function GoalCard({ goal, onEdit, onContribute }: GoalCardProps) {
             <p className="text-body text-muted-foreground tabular-nums">
               {t("ofTarget", { target: formatMoney(goal.target_cents) })}
             </p>
-            <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+            <p className="text-caption text-muted-foreground mt-1 tabular-nums">
               {percent}% {t("complete")}
             </p>
           </div>
@@ -118,7 +118,7 @@ export function GoalCard({ goal, onEdit, onContribute }: GoalCardProps) {
 
         {/* Deadline */}
         {goal.deadline && (
-          <p className={`text-xs mb-3 ${statusToTextClass(goal.status_color)}`}>
+          <p className={`text-caption mb-3 ${statusToTextClass(goal.status_color)}`}>
             {t("dueDate", { date: format(new Date(goal.deadline), "MMM d, yyyy") })}
           </p>
         )}

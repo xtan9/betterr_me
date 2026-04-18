@@ -53,7 +53,7 @@ export function MoneySummaryCard() {
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="text-caption font-medium text-muted-foreground">
               {t("title")}
             </p>
             <div className="flex items-baseline gap-3 text-body">

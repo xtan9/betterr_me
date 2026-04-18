@@ -75,7 +75,7 @@ export function CsvMappingStep({
       {/* Mini preview of first 3 rows */}
       {parsedRows.length > 0 && (
         <div className="overflow-x-auto rounded border">
-          <table className="w-full text-xs">
+          <table className="w-full text-caption">
             <thead>
               <tr className="bg-muted/50">
                 {TARGET_FIELDS.filter((f) => columnMapping[f]).map((f) => (

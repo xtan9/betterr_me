@@ -289,7 +289,7 @@ export function TimeGrid({
             {hourLabels.map((label, hour) => (
               <div
                 key={hour}
-                className="absolute right-2 text-xs text-muted-foreground -translate-y-1/2"
+                className="absolute right-2 text-caption text-muted-foreground -translate-y-1/2"
                 style={{ top: `${hour * HOUR_HEIGHT}px` }}
               >
                 {hour > 0 ? label : ""}

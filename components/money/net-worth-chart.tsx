@@ -115,7 +115,7 @@ export function NetWorthChart() {
               key={p}
               variant="ghost"
               size="sm"
-              className={`h-7 px-2.5 text-xs ${
+              className={`h-7 px-2.5 text-caption ${
                 period === p
                   ? "bg-[hsl(var(--money-sage))] text-white hover:bg-[hsl(var(--money-sage))] hover:text-white"
                   : "bg-muted hover:bg-muted/80"
@@ -144,7 +144,7 @@ export function NetWorthChart() {
           <div className="flex h-[300px] flex-col items-center justify-center text-center">
             <TrendingUp className="size-10 text-muted-foreground mb-3" />
             <p className="text-body text-muted-foreground">{t("noData")}</p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-caption text-muted-foreground mt-1">
               {t("noDataDescription")}
             </p>
           </div>

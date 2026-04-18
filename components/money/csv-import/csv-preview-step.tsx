@@ -38,7 +38,7 @@ export function CsvPreviewStep({
       </p>
 
       {previewRows.length < mappedRows.length && (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground text-caption">
           {t("previewNote", {
             count: previewRows.length,
             total: mappedRows.length,
@@ -47,7 +47,7 @@ export function CsvPreviewStep({
       )}
 
       <div className="max-h-64 overflow-auto rounded border">
-        <table className="w-full text-xs">
+        <table className="w-full text-caption">
           <thead>
             <tr className="bg-muted/50">
               <th className="px-2 py-1 text-left">Date</th>

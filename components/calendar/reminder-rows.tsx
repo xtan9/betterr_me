@@ -192,7 +192,7 @@ export function ReminderRows({ rows, onChange, disabled }: ReminderRowsProps) {
 
           {/* Channel toggles */}
           <div className="flex items-center gap-3 ml-auto">
-            <label className="flex items-center gap-1 text-xs">
+            <label className="flex items-center gap-1 text-caption">
               <Checkbox
                 checked={row.channels.includes("push")}
                 onCheckedChange={() =>
@@ -203,7 +203,7 @@ export function ReminderRows({ rows, onChange, disabled }: ReminderRowsProps) {
               />
               {t("reminders.push")}
             </label>
-            <label className="flex items-center gap-1 text-xs">
+            <label className="flex items-center gap-1 text-caption">
               <Checkbox
                 checked={row.channels.includes("email")}
                 onCheckedChange={() =>

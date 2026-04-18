@@ -165,7 +165,7 @@ export function NetWorthAccounts({ view = "mine" }: NetWorthAccountsProps) {
                       <span className="text-muted-foreground truncate mr-2">
                         {acc.name}
                         {acc.mask && (
-                          <span className="ml-1 text-xs">
+                          <span className="ml-1 text-caption">
                             ****{acc.mask}
                           </span>
                         )}
@@ -194,7 +194,7 @@ export function NetWorthAccounts({ view = "mine" }: NetWorthAccountsProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs"
+                className="h-7 text-caption"
                 onClick={handleAddAsset}
               >
                 <Plus className="size-3 mr-1" />
@@ -203,7 +203,7 @@ export function NetWorthAccounts({ view = "mine" }: NetWorthAccountsProps) {
             </div>
 
             {netWorth?.manual_assets_cents === 0 && (
-              <p className="text-xs text-muted-foreground ml-6">
+              <p className="text-caption text-muted-foreground ml-6">
                 {t("assetClarification")}
               </p>
             )}

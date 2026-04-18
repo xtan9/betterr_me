@@ -91,7 +91,7 @@ export function TransactionFilterBar({
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {/* Date From */}
         <div>
-          <label className="mb-1 block text-xs text-muted-foreground">
+          <label className="mb-1 block text-caption text-muted-foreground">
             {t("transactions.filters.dateFrom")}
           </label>
           <Input
@@ -100,13 +100,13 @@ export function TransactionFilterBar({
             onChange={(e) =>
               onFilterChange("date_from", e.target.value || null)
             }
-            className="h-8 text-xs"
+            className="h-8 text-caption"
           />
         </div>
 
         {/* Date To */}
         <div>
-          <label className="mb-1 block text-xs text-muted-foreground">
+          <label className="mb-1 block text-caption text-muted-foreground">
             {t("transactions.filters.dateTo")}
           </label>
           <Input
@@ -115,13 +115,13 @@ export function TransactionFilterBar({
             onChange={(e) =>
               onFilterChange("date_to", e.target.value || null)
             }
-            className="h-8 text-xs"
+            className="h-8 text-caption"
           />
         </div>
 
         {/* Category */}
         <div>
-          <label className="mb-1 block text-xs text-muted-foreground">
+          <label className="mb-1 block text-caption text-muted-foreground">
             {t("transactions.filters.category")}
           </label>
           <Select
@@ -130,7 +130,7 @@ export function TransactionFilterBar({
               onFilterChange("category_id", v === "all" ? null : v)
             }
           >
-            <SelectTrigger size="sm" className="w-full text-xs">
+            <SelectTrigger size="sm" className="w-full text-caption">
               <SelectValue placeholder={t("transactions.filters.allCategories")} />
             </SelectTrigger>
             <SelectContent>
@@ -149,7 +149,7 @@ export function TransactionFilterBar({
 
         {/* Account */}
         <div>
-          <label className="mb-1 block text-xs text-muted-foreground">
+          <label className="mb-1 block text-caption text-muted-foreground">
             {t("transactions.filters.account")}
           </label>
           <Select
@@ -158,7 +158,7 @@ export function TransactionFilterBar({
               onFilterChange("account_id", v === "all" ? null : v)
             }
           >
-            <SelectTrigger size="sm" className="w-full text-xs">
+            <SelectTrigger size="sm" className="w-full text-caption">
               <SelectValue placeholder={t("transactions.filters.allAccounts")} />
             </SelectTrigger>
             <SelectContent>
@@ -178,7 +178,7 @@ export function TransactionFilterBar({
       {/* Amount range (collapsible row) */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div>
-          <label className="mb-1 block text-xs text-muted-foreground">
+          <label className="mb-1 block text-caption text-muted-foreground">
             {t("transactions.filters.amountMin")}
           </label>
           <Input
@@ -190,11 +190,11 @@ export function TransactionFilterBar({
             onChange={(e) =>
               onFilterChange("amount_min", e.target.value || null)
             }
-            className="h-8 text-xs"
+            className="h-8 text-caption"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-muted-foreground">
+          <label className="mb-1 block text-caption text-muted-foreground">
             {t("transactions.filters.amountMax")}
           </label>
           <Input
@@ -206,7 +206,7 @@ export function TransactionFilterBar({
             onChange={(e) =>
               onFilterChange("amount_max", e.target.value || null)
             }
-            className="h-8 text-xs"
+            className="h-8 text-caption"
           />
         </div>
       </div>
@@ -232,7 +232,7 @@ export function TransactionFilterBar({
               variant="ghost"
               size="sm"
               onClick={onClearAll}
-              className="h-6 px-2 text-xs"
+              className="h-6 px-2 text-caption"
             >
               {t("transactions.filters.clearAll")}
             </Button>

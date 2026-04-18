@@ -39,7 +39,7 @@ export function BudgetCategoryGrid({
                     {cat.category_name}
                   </p>
                 </div>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1 text-caption text-muted-foreground">
                   <span className="tabular-nums">
                     {formatMoney(cat.spent_cents)}
                   </span>
@@ -56,7 +56,7 @@ export function BudgetCategoryGrid({
                   )}
                 </div>
               </div>
-              <span className="text-xs text-muted-foreground tabular-nums">
+              <span className="text-caption text-muted-foreground tabular-nums">
                 {percent}%
               </span>
             </CardContent>

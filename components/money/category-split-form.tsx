@@ -132,7 +132,7 @@ export function CategorySplitForm({
     <div className="space-y-3 rounded-card border border-money-border bg-money-surface/50 p-3">
       {/* Header with original amount */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="text-caption font-medium text-muted-foreground">
           {t("transactions.splitTransaction")}
         </span>
         <span className="text-body font-semibold tabular-nums">
@@ -200,7 +200,7 @@ export function CategorySplitForm({
       </div>
 
       {/* Remaining amount indicator */}
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-caption">
         <span className="text-muted-foreground">
           {t("transactions.remaining")}
         </span>
@@ -247,7 +247,7 @@ export function CategorySplitForm({
 
       {/* Validation message */}
       {remainingCents !== 0 && enteredCents > 0 && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t("transactions.splitsMustEqual")}
         </p>
       )}

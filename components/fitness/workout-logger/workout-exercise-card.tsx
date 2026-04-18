@@ -172,7 +172,7 @@ export function WorkoutExerciseCard({
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-3" align="start">
-                  <p className="mb-2 text-xs font-medium">
+                  <p className="mb-2 text-caption font-medium">
                     {t("restTimerEdit")}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -185,7 +185,7 @@ export function WorkoutExerciseCard({
                             : "outline"
                         }
                         size="sm"
-                        className="h-7 px-2.5 text-xs"
+                        className="h-7 px-2.5 text-caption"
                         onClick={() => {
                           void onUpdateRestTimer(seconds).catch(() => toast.error(t("updateRestTimerError")));
                           setRestTimerPopoverOpen(false);
@@ -217,7 +217,7 @@ export function WorkoutExerciseCard({
           <CollapsibleTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1 text-caption text-muted-foreground hover:text-foreground"
             >
               {notesOpen ? (
                 <ChevronUp className="h-3 w-3" />
@@ -233,7 +233,7 @@ export function WorkoutExerciseCard({
               onChange={(e) => setNotesValue(e.target.value)}
               onBlur={handleNotesBlur}
               placeholder={t("exerciseNotesPlaceholder")}
-              className="mt-1 min-h-[40px] text-xs"
+              className="mt-1 min-h-[40px] text-caption"
             />
           </CollapsibleContent>
         </Collapsible>
@@ -275,7 +275,7 @@ export function WorkoutExerciseCard({
         <Button
           variant="ghost"
           size="sm"
-          className="w-full text-xs"
+          className="w-full text-caption"
           onClick={() => void onAddSet().catch(() => toast.error(t("addSetError")))}
         >
           <Plus className="mr-1 h-3 w-3" />

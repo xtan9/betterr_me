@@ -54,7 +54,7 @@ export function JournalOnThisDay({ entries }: JournalOnThisDayProps) {
               )}
               <div className="min-w-0 flex-1">
                 {periodLabel && (
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className="text-caption font-medium text-muted-foreground">
                     {periodLabel}
                   </span>
                 )}

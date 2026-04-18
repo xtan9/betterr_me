@@ -61,7 +61,7 @@ export function TransactionRow({
           {signedAmount}
         </p>
         {transaction.is_pending && (
-          <p className="text-xs text-muted-foreground">Pending</p>
+          <p className="text-caption text-muted-foreground">Pending</p>
         )}
       </div>
     </button>

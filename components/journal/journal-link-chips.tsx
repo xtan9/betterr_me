@@ -46,7 +46,7 @@ export function JournalLinkChips({ links, onRemove }: JournalLinkChipsProps) {
           <span
             key={link.id}
             className={cn(
-              "inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 text-xs font-medium",
+              "inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 text-caption font-medium",
               style,
             )}
             data-testid={`link-chip-${link.link_type}`}

@@ -53,7 +53,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
           {isPaidThisMonth && (
             <Badge
               variant="outline"
-              className="shrink-0 border-[hsl(var(--money-sage))]/30 bg-[hsl(var(--money-sage))]/10 text-[hsl(var(--money-sage))] text-xs"
+              className="shrink-0 border-[hsl(var(--money-sage))]/30 bg-[hsl(var(--money-sage))]/10 text-[hsl(var(--money-sage))] text-caption"
             >
               <Check className="mr-0.5 size-3" />
               {t("paid")}
@@ -62,7 +62,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
           {hasPriceChange && bill.previous_amount_cents !== null && (
             <Badge
               variant="outline"
-              className="shrink-0 border-[hsl(var(--money-amber))]/30 bg-[hsl(var(--money-amber))]/10 text-[hsl(var(--money-amber))] text-xs"
+              className="shrink-0 border-[hsl(var(--money-amber))]/30 bg-[hsl(var(--money-amber))]/10 text-[hsl(var(--money-amber))] text-caption"
             >
               <AlertTriangle className="mr-0.5 size-3" />
               {t("priceChange", {
@@ -71,7 +71,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-caption text-muted-foreground">
           <span>{t(frequencyKey)}</span>
           {bill.next_due_date && (
             <>
@@ -98,7 +98,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
             <Button
               variant="outline"
               size="sm"
-              className="h-7 border-[hsl(var(--money-sage))]/30 text-[hsl(var(--money-sage))] text-xs hover:bg-[hsl(var(--money-sage))]/10"
+              className="h-7 border-[hsl(var(--money-sage))]/30 text-[hsl(var(--money-sage))] text-caption hover:bg-[hsl(var(--money-sage))]/10"
               onClick={() => onStatusChange(bill.id, "confirmed")}
             >
               {t("confirm")}
@@ -106,7 +106,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs text-muted-foreground"
+              className="h-7 text-caption text-muted-foreground"
               onClick={() => onStatusChange(bill.id, "dismissed")}
             >
               {t("dismiss")}
@@ -117,7 +117,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs text-muted-foreground"
+            className="h-7 text-caption text-muted-foreground"
             onClick={() => onStatusChange(bill.id, "dismissed")}
           >
             {t("dismiss")}
@@ -127,7 +127,7 @@ export function BillRow({ bill, onStatusChange, onEdit }: BillRowProps) {
           <Button
             variant="outline"
             size="sm"
-            className="h-7 text-xs"
+            className="h-7 text-caption"
             onClick={() => onStatusChange(bill.id, "confirmed")}
           >
             {t("reconfirm")}

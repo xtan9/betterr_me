@@ -96,7 +96,7 @@ export function WorkoutResumeBanner() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-body font-medium">{t("resumeBannerTitle")}</p>
-          <p className="text-muted-foreground text-xs truncate">
+          <p className="text-muted-foreground text-caption truncate">
             {workout.title} &middot; {elapsedDisplay}
           </p>
         </div>

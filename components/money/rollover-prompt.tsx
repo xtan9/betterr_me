@@ -110,7 +110,7 @@ export function RolloverPrompt({
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground tabular-nums">
+                  <div className="text-caption text-muted-foreground tabular-nums">
                     {formatMoney(cat.allocated_cents)}{" "}
                     {isOverspent ? "overspent" : "remaining"}
                   </div>

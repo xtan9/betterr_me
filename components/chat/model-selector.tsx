@@ -22,7 +22,7 @@ export function ModelSelector({
 }: ModelSelectorProps) {
   return (
     <Select value={modelId} onValueChange={onModelChange} disabled={disabled}>
-      <SelectTrigger className="h-7 w-auto gap-1 border-none bg-transparent px-2 text-xs text-muted-foreground hover:text-foreground focus:ring-0">
+      <SelectTrigger className="h-7 w-auto gap-1 border-none bg-transparent px-2 text-caption text-muted-foreground hover:text-foreground focus:ring-0">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

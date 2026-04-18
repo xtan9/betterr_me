@@ -67,7 +67,7 @@ export function JournalOnThisDayFull({ date }: JournalOnThisDayFullProps) {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   {periodLabel && (
-                    <span className="inline-flex items-center rounded-pill bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    <span className="inline-flex items-center rounded-pill bg-muted px-2 py-0.5 text-caption font-medium text-muted-foreground">
                       {periodLabel}
                     </span>
                   )}

@@ -55,7 +55,7 @@ export async function ProfileAvatar() {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col gap-1">
             <p className="text-body font-medium leading-none">{getDisplayName()}</p>
-            <p className="text-xs leading-none text-muted-foreground">
+            <p className="text-caption leading-none text-muted-foreground">
               {user.email}
             </p>
           </div>

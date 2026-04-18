@@ -45,7 +45,7 @@ export function AllDayRow({ dates, events, onEventClick }: AllDayRowProps) {
         }}
       >
         {/* Time gutter label */}
-        <div className="flex items-start justify-end pr-2 pt-1 text-xs text-muted-foreground border-r border-border">
+        <div className="flex items-start justify-end pr-2 pt-1 text-caption text-muted-foreground border-r border-border">
           {t("timeGrid.allDay")}
         </div>
 
@@ -80,7 +80,7 @@ export function AllDayRow({ dates, events, onEventClick }: AllDayRowProps) {
               {!expanded && remaining > 0 && (
                 <button
                   type="button"
-                  className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                  className="text-caption text-muted-foreground hover:text-foreground cursor-pointer"
                   onClick={() => setExpanded(true)}
                 >
                   {t("timeGrid.allDayMore", { count: remaining })}
@@ -95,7 +95,7 @@ export function AllDayRow({ dates, events, onEventClick }: AllDayRowProps) {
       {expanded && hasOverflow && (
         <button
           type="button"
-          className="w-full text-xs text-muted-foreground hover:text-foreground py-0.5 text-center cursor-pointer"
+          className="w-full text-caption text-muted-foreground hover:text-foreground py-0.5 text-center cursor-pointer"
           onClick={() => setExpanded(false)}
         >
           {t("timeGrid.collapseAllDay")}
