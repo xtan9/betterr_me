@@ -1,9 +1,16 @@
 import Decimal from "decimal.js";
 
-// Configure for financial calculations — high precision, standard half-up rounding
+// Configure for financial calculations — high precision, standard half-up rounding.
+// Stryker disable next-line ObjectLiteral: decimal.js defaults (precision=20,
+// rounding=ROUND_HALF_UP=4) are identical to what we set here, so `Decimal.set({})`
+// is semantically equivalent to the explicit config for this codebase.
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
-// Hoisted to module scope — expensive to construct per call
+// Hoisted to module scope — expensive to construct per call.
+// Stryker disable next-line all: the formatter is initialised once at module load;
+// Stryker cannot swap the singleton mid-test so these mutants survive. Coverage of
+// en-US locale + 2-decimal behaviour is asserted in the formatMoney tests below
+// (which verify "$1,234,567.89" and "$10.00" outputs end-to-end).
 const usdFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,

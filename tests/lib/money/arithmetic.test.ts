@@ -24,7 +24,7 @@ describe("toCents", () => {
     expect(toCents(0)).toBe(0);
   });
 
-  it("handles numeric input", () => {
+  it("handles numeric input (10.33 -> 1033)", () => {
     expect(toCents(10.33)).toBe(1033);
   });
 
@@ -42,8 +42,8 @@ describe("toCents", () => {
     expect(toCents("-5.50")).toBe(-550);
   });
 
-  it("handles large amounts", () => {
-    expect(toCents("999999.99")).toBe(99999999);
+  it("handles large amounts: $999,999.99 -> 99_999_999", () => {
+    expect(toCents("999999.99")).toBe(99_999_999);
   });
 
   it("handles whole dollar amounts (no decimals)", () => {
@@ -52,6 +52,24 @@ describe("toCents", () => {
 
   it("handles string '0'", () => {
     expect(toCents("0")).toBe(0);
+  });
+
+  it("rounds half-up: 0.125 -> 13 cents", () => {
+    // 12.5 cents rounds up to 13 with ROUND_HALF_UP
+    expect(toCents("0.125")).toBe(13);
+  });
+
+  it("rounds half-up on negative: -0.125 -> -13 cents (half rounds away from zero)", () => {
+    // In decimal.js, ROUND_HALF_UP rounds halves AWAY from zero, so -12.5 -> -13.
+    expect(toCents("-0.125")).toBe(-13);
+  });
+
+  it("truncates precision beyond cents when rounding down: 0.004 -> 0", () => {
+    expect(toCents("0.004")).toBe(0);
+  });
+
+  it("rounds up beyond cents when half-or-more: 0.005 -> 1", () => {
+    expect(toCents("0.005")).toBe(1);
   });
 });
 
@@ -68,12 +86,18 @@ describe("formatMoney", () => {
     expect(formatMoney(0)).toBe("$0.00");
   });
 
-  it("formats negative amounts with minus prefix", () => {
+  it("formats negative amounts with minus prefix: -1033 -> '-$10.33'", () => {
     expect(formatMoney(-1033)).toBe("-$10.33");
   });
 
-  it("formats large amounts with comma grouping", () => {
-    expect(formatMoney(123456789)).toBe("$1,234,567.89");
+  it("formats large amounts with en-US comma grouping: 123456789 -> $1,234,567.89", () => {
+    // Both the locale "en-US" (comma grouping) AND the 2-decimal options
+    // are verified by this exact string match.
+    expect(formatMoney(123_456_789)).toBe("$1,234,567.89");
+  });
+
+  it("formats thousands with comma grouping: 100_000 -> '$1,000.00'", () => {
+    expect(formatMoney(100_000)).toBe("$1,000.00");
   });
 
   it("always shows two decimal places for whole dollar amounts", () => {
@@ -86,6 +110,19 @@ describe("formatMoney", () => {
 
   it("formats negative single cent", () => {
     expect(formatMoney(-1)).toBe("-$0.01");
+  });
+
+  it("negative large number uses minus prefix + $ (not parenthesised)", () => {
+    expect(formatMoney(-123_456_789)).toBe("-$1,234,567.89");
+  });
+
+  it("does NOT use parentheses for negatives", () => {
+    expect(formatMoney(-500)).not.toContain("(");
+    expect(formatMoney(-500)).not.toContain(")");
+  });
+
+  it("starts with $ for positive amounts (no locale-specific currency code)", () => {
+    expect(formatMoney(500).startsWith("$")).toBe(true);
   });
 });
 
@@ -106,35 +143,47 @@ describe("centsToDecimal", () => {
     expect(centsToDecimal(10000)).toBe("100.00");
   });
 
-  it("converts negative cents", () => {
+  it("converts negative cents: -550 -> '-5.50'", () => {
     expect(centsToDecimal(-550)).toBe("-5.50");
+  });
+
+  it("preserves trailing zero (e.g. 10 -> '0.10', not '0.1')", () => {
+    expect(centsToDecimal(10)).toBe("0.10");
   });
 });
 
 describe("addCents", () => {
-  it("adds two positive amounts", () => {
+  it("adds two positive amounts: 100 + 200 = 300", () => {
     expect(addCents(100, 200)).toBe(300);
   });
 
-  it("adds zero", () => {
+  it("adds zero: 500 + 0 = 500", () => {
     expect(addCents(500, 0)).toBe(500);
   });
 
-  it("adds negative amount (subtraction via addition)", () => {
+  it("adds negative amount (subtraction via addition): 300 + (-100) = 200", () => {
     expect(addCents(300, -100)).toBe(200);
+  });
+
+  it("adds two negatives: -100 + -200 = -300", () => {
+    expect(addCents(-100, -200)).toBe(-300);
   });
 });
 
 describe("subtractCents", () => {
-  it("subtracts two amounts", () => {
+  it("subtracts two amounts: 300 - 100 = 200", () => {
     expect(subtractCents(300, 100)).toBe(200);
   });
 
-  it("handles result going negative", () => {
+  it("handles result going negative: 100 - 300 = -200", () => {
     expect(subtractCents(100, 300)).toBe(-200);
   });
 
-  it("subtracts zero", () => {
+  it("subtracts zero: 500 - 0 = 500", () => {
     expect(subtractCents(500, 0)).toBe(500);
+  });
+
+  it("subtracts a negative (adds): 100 - (-50) = 150", () => {
+    expect(subtractCents(100, -50)).toBe(150);
   });
 });

@@ -39,13 +39,14 @@ const config = {
     ".vscode",
   ],
   coverageAnalysis: "all",
-  // Restrict the initial test run to the DB unit tests. Running the full suite
-  // slows startup and pulls in tests for app/ API routes that depend on files
-  // outside the mutated scope.
+  // Restrict the initial test run to the scoped unit tests. Running the full
+  // suite slows startup and pulls in tests for app/ API routes that depend on
+  // files outside the mutated scope.
   testFiles: [
     "tests/lib/db/**/*.test.ts",
     "tests/lib/recurring-tasks/**/*.test.ts",
     "tests/lib/habits/**/*.test.ts",
+    "tests/lib/money/**/*.test.ts",
   ],
   mutate: [
     "lib/db/**/*.ts",
@@ -54,6 +55,7 @@ const config = {
     "lib/recurring-tasks/**/*.ts",
     "!lib/recurring-tasks/index.ts",
     "lib/habits/**/*.ts",
+    "lib/money/**/*.ts",
   ],
   // checkers: ["typescript"],
   // tsconfigFile: "tsconfig.json",

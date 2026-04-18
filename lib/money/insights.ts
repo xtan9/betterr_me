@@ -60,7 +60,8 @@ export function computeSpendingAnomalies(
 
   for (const current of currentMonthSpending) {
     const avg = avgByCategory.get(current.category_name.toLowerCase());
-    if (!avg || avg === 0) continue; // No historical data to compare
+    // `!avg` already catches 0, null, undefined, and NaN — no historical data.
+    if (!avg) continue;
 
     const percentChange = ((current.amount_cents - avg) / avg) * 100;
 
