@@ -49,7 +49,7 @@ export function MonthDayCell({
       <div className="flex justify-start mb-0.5">
         <span
           className={`
-            text-xs font-medium inline-flex items-center justify-center
+            text-caption font-medium inline-flex items-center justify-center
             ${
               isToday
                 ? "bg-primary text-primary-foreground rounded-pill w-6 h-6"
@@ -72,7 +72,7 @@ export function MonthDayCell({
 
       {/* Overflow indicator */}
       {overflowCount > 0 && (
-        <div className="text-xs text-muted-foreground mt-0.5 px-1">
+        <div className="text-caption text-muted-foreground mt-0.5 px-1">
           {t("overflow.more", { count: overflowCount })}
         </div>
       )}

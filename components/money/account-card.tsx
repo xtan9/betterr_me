@@ -22,19 +22,19 @@ export function AccountCard({ account, syncStatus, extra }: AccountCardProps) {
         <div className="flex items-center gap-2">
           <span className="text-body font-medium">{account.name}</span>
           {account.mask && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {t("account.mask", { mask: account.mask })}
             </span>
           )}
         </div>
         {account.official_name &&
           account.official_name !== account.name && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {account.official_name}
             </span>
           )}
         {account.subtype && (
-          <span className="text-xs capitalize text-muted-foreground">
+          <span className="text-caption capitalize text-muted-foreground">
             {account.subtype}
           </span>
         )}

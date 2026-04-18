@@ -73,23 +73,23 @@ export function AbsenceCard({ habit, onDismiss, onNavigate }: AbsenceCardProps) 
         </p>
 
         {variant === "lapse" && habit.previous_streak > 0 && (
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-caption text-muted-foreground mt-0.5">
             {t(unit === 'weeks' ? "previousStreakWeeks" : "previousStreak", { days: habit.previous_streak })}
           </p>
         )}
 
         <div className="flex items-center gap-2 mt-2">
           <button
-            className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+            className="text-caption text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
             onClick={() => onNavigate(`/habits/${habit.id}`)}
           >
             {t("viewHabit")}
           </button>
           {variant === "hiatus" && (
             <>
-              <span className="text-xs text-muted-foreground">·</span>
+              <span className="text-caption text-muted-foreground">·</span>
               <button
-                className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+                className="text-caption text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
                 onClick={() => onNavigate(`/habits/${habit.id}/edit`)}
               >
                 {t("changeFrequency")}

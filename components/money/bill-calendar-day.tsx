@@ -73,7 +73,7 @@ export function BillCalendarDay({
       >
         <span
           className={cn(
-            "mb-0.5 text-xs font-medium tabular-nums",
+            "mb-0.5 text-caption font-medium tabular-nums",
             isToday && "font-bold text-[hsl(var(--money-sage))]",
             !isCurrentMonth && "text-muted-foreground"
           )}
@@ -119,7 +119,7 @@ export function BillCalendarDay({
           {bills.map((bill) => (
             <div
               key={bill.id}
-              className="flex items-center justify-between text-xs"
+              className="flex items-center justify-between text-caption"
             >
               <span className="truncate font-medium">{bill.name}</span>
               <span className="shrink-0 tabular-nums text-muted-foreground">

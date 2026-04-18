@@ -196,7 +196,7 @@ export function ChatInput({
       )}
 
       {fileError && (
-        <p className="mb-2 text-xs text-destructive">{fileError}</p>
+        <p className="mb-2 text-caption text-destructive">{fileError}</p>
       )}
 
       {images.length > 0 && (

@@ -83,7 +83,7 @@ export function TaskCard({ task, categories, onToggle, onClick, isToggling }: Ta
               >
                 {task.title}
               </h3>
-              <p className="text-xs text-muted-foreground">{category ? getCategoryDisplayName(category.name, tCat) : ""}</p>
+              <p className="text-caption text-muted-foreground">{category ? getCategoryDisplayName(category.name, tCat) : ""}</p>
             </div>
           </button>
           <Checkbox
@@ -99,7 +99,7 @@ export function TaskCard({ task, categories, onToggle, onClick, isToggling }: Ta
         <div className="flex items-center justify-between text-body">
           <div className="flex items-center gap-1.5">
             <Circle className={cn("size-2.5 fill-current", priorityColor)} />
-            <span className={cn("text-xs font-medium", priorityColor)}>
+            <span className={cn("text-caption font-medium", priorityColor)}>
               {t(`priorities.${task.priority}`)}
             </span>
           </div>
@@ -109,7 +109,7 @@ export function TaskCard({ task, categories, onToggle, onClick, isToggling }: Ta
             {task.due_date ? (
               <span
                 className={cn(
-                  "text-xs",
+                  "text-caption",
                   overdue
                     ? "text-status-error font-medium"
                     : "text-muted-foreground"
@@ -119,7 +119,7 @@ export function TaskCard({ task, categories, onToggle, onClick, isToggling }: Ta
                 {overdue && ` · ${cardT("overdue")}`}
               </span>
             ) : (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 {cardT("noDueDate")}
               </span>
             )}

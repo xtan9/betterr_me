@@ -91,7 +91,7 @@ function RoutineExerciseRow({
             {re.exercise.name}
           </span>
           {re.rest_timer_seconds > 0 && (
-            <span className="text-xs text-muted-foreground shrink-0 ml-2">
+            <span className="text-caption text-muted-foreground shrink-0 ml-2">
               {re.rest_timer_seconds}s {t("rest")}
             </span>
           )}
@@ -100,7 +100,7 @@ function RoutineExerciseRow({
         <div className="flex flex-wrap items-center gap-2">
           {/* Sets - always shown */}
           <div className="flex items-center gap-1">
-            <Label className="text-xs text-muted-foreground">
+            <Label className="text-caption text-muted-foreground">
               {t("setsLabel")}
             </Label>
             <Input
@@ -110,14 +110,14 @@ function RoutineExerciseRow({
               value={sets}
               onChange={(e) => setSets(e.target.value)}
               onBlur={() => handleBlur("target_sets", sets)}
-              className="h-7 w-14 text-xs"
+              className="h-7 w-14 text-caption"
             />
           </div>
 
           {/* Weight - if applicable */}
           {fieldConfig.showWeight && (
             <div className="flex items-center gap-1">
-              <Label className="text-xs text-muted-foreground">
+              <Label className="text-caption text-muted-foreground">
                 {weightUnit}
               </Label>
               <Input
@@ -127,7 +127,7 @@ function RoutineExerciseRow({
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
                 onBlur={() => handleBlur("target_weight_kg", weight)}
-                className="h-7 w-16 text-xs"
+                className="h-7 w-16 text-caption"
                 placeholder="0"
               />
             </div>
@@ -136,7 +136,7 @@ function RoutineExerciseRow({
           {/* Reps - if applicable */}
           {fieldConfig.showReps && (
             <div className="flex items-center gap-1">
-              <Label className="text-xs text-muted-foreground">
+              <Label className="text-caption text-muted-foreground">
                 {t("repsLabel")}
               </Label>
               <Input
@@ -145,7 +145,7 @@ function RoutineExerciseRow({
                 value={reps}
                 onChange={(e) => setReps(e.target.value)}
                 onBlur={() => handleBlur("target_reps", reps)}
-                className="h-7 w-14 text-xs"
+                className="h-7 w-14 text-caption"
                 placeholder="0"
               />
             </div>
@@ -154,7 +154,7 @@ function RoutineExerciseRow({
           {/* Duration - if applicable */}
           {fieldConfig.showDuration && (
             <div className="flex items-center gap-1">
-              <Label className="text-xs text-muted-foreground">
+              <Label className="text-caption text-muted-foreground">
                 {t("durationLabel")}
               </Label>
               <Input
@@ -163,7 +163,7 @@ function RoutineExerciseRow({
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
                 onBlur={() => handleBlur("target_duration_seconds", duration)}
-                className="h-7 w-16 text-xs"
+                className="h-7 w-16 text-caption"
                 placeholder="0s"
               />
             </div>

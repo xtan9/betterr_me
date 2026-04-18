@@ -95,7 +95,7 @@ export function CategoryOverride({
 
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-muted-foreground">
+      <label className="mb-1 block text-caption font-medium text-muted-foreground">
         {t("transactions.filters.category")}
       </label>
       <Select

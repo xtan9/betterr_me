@@ -56,7 +56,7 @@ export function KanbanColumn({
       <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-2 px-2 pb-2">
           {tasks.length === 0 ? (
-            <p className="text-xs text-muted-foreground/60 text-center py-8">
+            <p className="text-caption text-muted-foreground/60 text-center py-8">
               {t("emptyColumn")}
             </p>
           ) : (

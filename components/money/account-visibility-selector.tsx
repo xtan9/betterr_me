@@ -53,7 +53,7 @@ export function AccountVisibilitySelector({
 
   return (
     <Select value={currentVisibility} onValueChange={handleChange}>
-      <SelectTrigger size="sm" className="h-7 w-auto gap-1 text-xs">
+      <SelectTrigger size="sm" className="h-7 w-auto gap-1 text-caption">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

@@ -80,7 +80,7 @@ export function ApiKeyRow({ apiKey, onDelete }: ApiKeyRowProps) {
         <code className="text-body text-muted-foreground font-mono">
           {apiKey.key_prefix}...
         </code>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-muted-foreground">
           <span>
             {t("createdAt")}: {formatDate(apiKey.created_at)}
           </span>

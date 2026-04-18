@@ -106,7 +106,7 @@ export function ExerciseProgressChart({
     return (
       <div className="rounded-card border border-dashed p-4 text-center">
         <p className="text-body text-muted-foreground">{t("notEnoughData")}</p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-caption text-muted-foreground">
           {t("notEnoughDataDescription")}
         </p>
       </div>
@@ -116,7 +116,7 @@ export function ExerciseProgressChart({
   return (
     <div className="space-y-2 pt-2">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-medium text-muted-foreground">
+        <h4 className="text-caption font-medium text-muted-foreground">
           {t("progression")}
         </h4>
         <ToggleGroup

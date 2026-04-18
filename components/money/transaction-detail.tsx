@@ -115,7 +115,7 @@ export function TransactionDetail({
 
             {/* Notes */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              <label className="mb-1 block text-caption font-medium text-muted-foreground">
                 {t("transactions.notes")}
               </label>
               <div className="flex flex-col gap-1.5">
@@ -145,7 +145,7 @@ export function TransactionDetail({
           <div className="flex flex-col gap-field-gap">
             {/* Account */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              <label className="mb-1 block text-caption font-medium text-muted-foreground">
                 {t("transactions.account")}
               </label>
               <p className="text-body">{transaction.account_id}</p>
@@ -153,7 +153,7 @@ export function TransactionDetail({
 
             {/* Source */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              <label className="mb-1 block text-caption font-medium text-muted-foreground">
                 {t("transactions.source")}
               </label>
               <Badge variant="outline" className="capitalize">
@@ -165,7 +165,7 @@ export function TransactionDetail({
             {transaction.source === "plaid" &&
               transaction.plaid_category_primary && (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  <label className="mb-1 block text-caption font-medium text-muted-foreground">
                     {t("transactions.plaidCategory")}
                   </label>
                   <p className="text-body capitalize">
@@ -198,7 +198,7 @@ export function TransactionDetail({
                       return (
                         <span
                           key={split.id}
-                          className="inline-flex items-center gap-1.5 rounded-chip bg-muted px-2 py-0.5 text-xs"
+                          className="inline-flex items-center gap-1.5 rounded-chip bg-muted px-2 py-0.5 text-caption"
                         >
                           <CategoryBadge category={cat ?? null} />
                           <span className="tabular-nums">

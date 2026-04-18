@@ -136,7 +136,7 @@ export function HouseholdMembersList({
                 <div className="flex items-center gap-3">
                   <Avatar className="size-8">
                     <AvatarImage src={member.avatar_url ?? undefined} />
-                    <AvatarFallback className="text-xs">
+                    <AvatarFallback className="text-caption">
                       {getInitials(member.full_name, member.email)}
                     </AvatarFallback>
                   </Avatar>
@@ -146,12 +146,12 @@ export function HouseholdMembersList({
                         {member.full_name || member.email}
                       </span>
                       {isCurrentUser && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-caption text-muted-foreground">
                           {t("memberYou")}
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-caption text-muted-foreground">
                       {member.email}
                     </span>
                   </div>
@@ -217,7 +217,7 @@ export function HouseholdMembersList({
               >
                 <div>
                   <span className="text-body">{invite.email}</span>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t("inviteExpires")}
                   </p>
                 </div>

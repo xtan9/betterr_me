@@ -92,7 +92,7 @@ export function ToolCallIndicator({ toolName, state }: ToolCallIndicatorProps) {
   return (
     <div
       className={cn(
-        "flex items-center gap-1.5 text-xs text-muted-foreground py-1",
+        "flex items-center gap-1.5 text-caption text-muted-foreground py-1",
         !isRunning && "opacity-60",
       )}
     >

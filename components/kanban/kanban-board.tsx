@@ -235,7 +235,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
             )}
             title={realtimeStatus === "connected" ? t("live") : realtimeStatus === "error" ? t("disconnected") : t("connecting")}
           />
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t("taskCount", { count: tasks.length })}
           </span>
         </div>

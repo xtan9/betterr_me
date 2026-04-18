@@ -44,7 +44,7 @@ export function MonthGrid({
         {dayHeaders.map((header, i) => (
           <div
             key={i}
-            className="py-2 text-center text-xs font-medium text-muted-foreground"
+            className="py-2 text-center text-caption font-medium text-muted-foreground"
           >
             {header}
           </div>

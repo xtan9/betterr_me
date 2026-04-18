@@ -366,7 +366,7 @@ export function TasksPageContent() {
                       <h4 className="font-medium truncate text-body">
                         {template.title}
                       </h4>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-caption text-muted-foreground">
                         {describeRecurrence(template.recurrence_rule, t)}
                       </p>
                     </div>

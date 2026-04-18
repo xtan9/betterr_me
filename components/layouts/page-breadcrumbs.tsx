@@ -35,7 +35,7 @@ export function PageBreadcrumbs({
 
   return (
     <Breadcrumb className={cn("mb-2", className)}>
-      <BreadcrumbList className="text-xs sm:text-body">
+      <BreadcrumbList className="text-caption sm:text-body">
         <BreadcrumbItem>
           <BreadcrumbLink asChild>
             <Link href={SECTION_HREFS[section]}>{t(section)}</Link>

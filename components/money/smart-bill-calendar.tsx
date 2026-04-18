@@ -188,7 +188,7 @@ export function SmartBillCalendar({
         {DAY_LABELS.map((day) => (
           <div
             key={day}
-            className="py-1 text-center text-xs font-medium text-muted-foreground"
+            className="py-1 text-center text-caption font-medium text-muted-foreground"
           >
             {day}
           </div>

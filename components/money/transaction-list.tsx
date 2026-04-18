@@ -201,7 +201,7 @@ export function TransactionList() {
               <div key={group.date}>
                 {/* Sticky date header */}
                 <div className="sticky top-0 z-10 bg-background px-1 py-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <h3 className="text-caption font-semibold uppercase tracking-wider text-muted-foreground">
                     {group.label}
                   </h3>
                 </div>
@@ -245,7 +245,7 @@ export function TransactionList() {
 
           {/* Load More / Count display */}
           <div className="flex flex-col items-center gap-2 py-4">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t("transactions.showingCount", {
                 shown: transactions.length,
                 total,

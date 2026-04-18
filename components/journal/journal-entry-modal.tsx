@@ -240,7 +240,7 @@ export function JournalEntryModal({
           <button
             type="button"
             onClick={() => setPromptSheetOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 text-caption text-muted-foreground hover:text-foreground transition-colors"
           >
             <Lightbulb className="size-3.5" />
             {t("journal.prompts.trigger")}
@@ -271,7 +271,7 @@ export function JournalEntryModal({
         {entry && (
           <div className="flex-shrink-0 py-2 space-y-2" data-testid="journal-links-section">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">
+              <span className="text-caption font-medium text-muted-foreground">
                 {t("journal.links.title")}
               </span>
               <JournalLinkSelector
@@ -286,7 +286,7 @@ export function JournalEntryModal({
         )}
 
         {/* Word count footer */}
-        <div className="flex-shrink-0 pt-2 border-t text-xs text-muted-foreground">
+        <div className="flex-shrink-0 pt-2 border-t text-caption text-muted-foreground">
           {t("journal.wordCount", { count: wordCount })}
         </div>
 

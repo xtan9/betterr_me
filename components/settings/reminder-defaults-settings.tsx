@@ -201,7 +201,7 @@ export function ReminderDefaultsSettings() {
             </Select>
 
             <div className="flex items-center gap-3 ml-auto">
-              <label className="flex items-center gap-1 text-xs">
+              <label className="flex items-center gap-1 text-caption">
                 <Checkbox
                   checked={configs[sourceType].channels.includes("push")}
                   onCheckedChange={() => toggleChannel(sourceType, "push")}
@@ -209,7 +209,7 @@ export function ReminderDefaultsSettings() {
                 />
                 {t("reminderDefaults.push")}
               </label>
-              <label className="flex items-center gap-1 text-xs">
+              <label className="flex items-center gap-1 text-caption">
                 <Checkbox
                   checked={configs[sourceType].channels.includes("email")}
                   onCheckedChange={() => toggleChannel(sourceType, "email")}

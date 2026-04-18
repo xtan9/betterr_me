@@ -138,7 +138,7 @@ export function ApiKeyCreateDialog({
               disabled={isCreating}
               className="w-fit"
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-caption text-muted-foreground">
               {t("expiresNever")}
             </p>
           </div>

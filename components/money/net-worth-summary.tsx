@@ -82,13 +82,13 @@ export function NetWorthSummary({ view = "mine" }: { view?: ViewMode }) {
         {/* Assets and Liabilities side by side */}
         <div className="flex gap-8">
           <div>
-            <p className="text-xs text-muted-foreground">{t("assets")}</p>
+            <p className="text-caption text-muted-foreground">{t("assets")}</p>
             <p className="text-lg font-medium tabular-nums text-[hsl(var(--money-sage))]">
               {formatMoney(netWorth.assets_cents)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">{t("liabilities")}</p>
+            <p className="text-caption text-muted-foreground">{t("liabilities")}</p>
             <p className="text-lg font-medium tabular-nums text-muted-foreground">
               {formatMoney(netWorth.liabilities_cents)}
             </p>
@@ -97,7 +97,7 @@ export function NetWorthSummary({ view = "mine" }: { view?: ViewMode }) {
 
         {/* Manual assets note */}
         {netWorth.manual_assets_cents > 0 && (
-          <p className="text-xs text-muted-foreground mt-3">
+          <p className="text-caption text-muted-foreground mt-3">
             {t("includesManual", {
               amount: formatMoney(netWorth.manual_assets_cents),
             })}

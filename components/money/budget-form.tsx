@@ -237,7 +237,7 @@ export function BudgetForm({
                 </Select>
 
                 <div className="relative w-28 shrink-0">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-caption text-muted-foreground">
                     $
                   </span>
                   <Input
@@ -251,7 +251,7 @@ export function BudgetForm({
                 </div>
 
                 {/* Percentage of total */}
-                <span className="w-12 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+                <span className="w-12 shrink-0 text-right text-caption text-muted-foreground tabular-nums">
                   {totalAmount > 0
                     ? `${Math.round(
                         ((parseFloat(watchCategories[index]?.amount) || 0) /
@@ -321,7 +321,7 @@ export function BudgetForm({
               <Label htmlFor="rollover" className="cursor-pointer font-medium">
                 {t("rolloverEnabled")}
               </Label>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t("rolloverDescription")}
               </p>
             </div>

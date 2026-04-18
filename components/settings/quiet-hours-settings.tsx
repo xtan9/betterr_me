@@ -121,7 +121,7 @@ export function QuietHoursSettings() {
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {t("quietHours.emailNote")}
         </p>
 

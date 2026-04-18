@@ -62,7 +62,7 @@ export function WeekView({
               key={dateStr}
               className="text-center py-2 border-r border-border last:border-r-0"
             >
-              <div className="text-xs text-muted-foreground">
+              <div className="text-caption text-muted-foreground">
                 {dayFormatter.format(date)}
               </div>
               <div

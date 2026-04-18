@@ -102,7 +102,7 @@ export function SpendingDonut({
           <p className="text-lg font-bold tabular-nums">
             {formatMoney(totalCents)}
           </p>
-          <p className="text-xs text-muted-foreground">{t("spent")}</p>
+          <p className="text-caption text-muted-foreground">{t("spent")}</p>
         </div>
       </div>
     </div>

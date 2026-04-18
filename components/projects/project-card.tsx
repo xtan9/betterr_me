@@ -149,14 +149,14 @@ export function ProjectCard({
         {/* Progress section */}
         <div className="space-y-1.5">
           <Progress value={progressPercent} className="h-1.5" />
-          <p className="text-xs text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             {done}/{total} {t("done")}
           </p>
         </div>
 
         {/* Task previews */}
         {total === 0 ? (
-          <p className="text-xs text-muted-foreground italic">{t("noTasks")}</p>
+          <p className="text-caption text-muted-foreground italic">{t("noTasks")}</p>
         ) : (
           <div className="space-y-1">
             {previews.map((task) => (
@@ -170,13 +170,13 @@ export function ProjectCard({
                     STATUS_DOT_COLORS[task.status]
                   )}
                 />
-                <span className="text-xs truncate text-muted-foreground">
+                <span className="text-caption truncate text-muted-foreground">
                   {task.title}
                 </span>
               </div>
             ))}
             {remainingCount > 0 && (
-              <p className="text-xs text-muted-foreground/70 pl-4">
+              <p className="text-caption text-muted-foreground/70 pl-4">
                 +{remainingCount} {t("more")}
               </p>
             )}
@@ -187,7 +187,7 @@ export function ProjectCard({
         <Button
           variant="secondary"
           size="sm"
-          className="w-full text-xs"
+          className="w-full text-caption"
           onClick={(e) => {
             e.stopPropagation();
             router.push(`/projects/${project.id}/kanban`);

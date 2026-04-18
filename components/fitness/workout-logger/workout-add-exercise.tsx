@@ -116,7 +116,7 @@ export function WorkoutAddExercise({
               {Array.from(groupedExercises.entries()).map(
                 ([group, groupExercises]) => (
                   <section key={group}>
-                    <h3 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
+                    <h3 className="text-muted-foreground mb-2 text-caption font-semibold uppercase tracking-wider">
                       {t(`muscleGroups.${group}`)} ({groupExercises.length})
                     </h3>
                     <div className="space-y-1">
@@ -150,10 +150,10 @@ export function WorkoutAddExercise({
                                 )}
                               </div>
                               <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="text-muted-foreground text-xs">
+                                <span className="text-muted-foreground text-caption">
                                   {t(`muscleGroups.${exercise.muscle_group_primary}`)}
                                 </span>
-                                <span className="text-muted-foreground text-xs">
+                                <span className="text-muted-foreground text-caption">
                                   {t(`exerciseTypes.${exercise.exercise_type}`)}
                                 </span>
                               </div>

@@ -148,7 +148,7 @@ export function FrequencySelector({
                   disabled={disabled}
                   aria-label={dayLabel}
                   className={cn(
-                    "flex-1 text-xs",
+                    "flex-1 text-caption",
                     isSelected && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                   )}
                 >

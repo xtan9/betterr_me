@@ -167,24 +167,24 @@ export function EventQuickCreate({
         autoFocus
       />
 
-      <div className="text-xs text-muted-foreground mb-2">
+      <div className="text-caption text-muted-foreground mb-2">
         {startTime} &ndash; {endTime}
       </div>
 
       {error && (
-        <div className="text-xs text-destructive mb-2">{error}</div>
+        <div className="text-caption text-destructive mb-2">{error}</div>
       )}
 
       <div className="flex items-center justify-between">
         <button
           type="button"
-          className="text-xs text-primary hover:underline"
+          className="text-caption text-primary hover:underline"
           onClick={() => onMoreOptions(title)}
         >
           {t("quickCreate.moreOptions")}
         </button>
         {saving && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t("quickCreate.saving")}
           </span>
         )}

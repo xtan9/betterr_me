@@ -210,7 +210,7 @@ export function BillsList() {
       {/* Frequency-grouped sections */}
       {groupedBills.map((group) => (
         <div key={group.key} className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-caption font-semibold uppercase tracking-wider text-muted-foreground">
             {t(group.labelKey)}
           </h3>
           <div className="space-y-1">
@@ -230,7 +230,7 @@ export function BillsList() {
       {dismissedBills.length > 0 && (
         <Collapsible open={dismissedOpen} onOpenChange={setDismissedOpen}>
           <CollapsibleTrigger asChild>
-            <button className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+            <button className="flex items-center gap-1 text-caption font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
               {dismissedOpen ? (
                 <ChevronDown className="size-3.5" />
               ) : (

@@ -58,7 +58,7 @@ export const EventBlock = memo(function EventBlock({
       className={`
         absolute rounded-chip px-1.5 py-0.5
         border-l-2 overflow-hidden
-        text-xs text-left cursor-pointer
+        text-caption text-left cursor-pointer
         hover:opacity-80 transition-opacity
         ${hasCustomColor || hasDomainColor ? "" : "bg-[hsl(var(--calendar-event-muted))] border-l-[hsl(var(--calendar-event))]"}
         ${isCompleted ? "line-through opacity-60" : ""}

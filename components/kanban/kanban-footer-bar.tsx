@@ -34,7 +34,7 @@ export function KanbanFooterBar({
 
   return (
     <div className="flex items-center justify-between border-t bg-muted/30 px-modal-padding py-3 flex-shrink-0">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-caption text-muted-foreground">
         {isSaving ? (
           <>
             <Loader2 className="size-3 animate-spin" />

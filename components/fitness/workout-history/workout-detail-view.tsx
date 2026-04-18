@@ -91,7 +91,7 @@ function SummaryStats({
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-card border bg-card p-3 text-center">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-caption text-muted-foreground">{label}</p>
       <p className="mt-1 text-lg font-semibold">{value}</p>
     </div>
   );
@@ -135,7 +135,7 @@ function ExerciseDetailCard({
           </div>
         </div>
         {exerciseDetail.notes && (
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-caption text-muted-foreground">
             {exerciseDetail.notes}
           </p>
         )}
@@ -161,7 +161,7 @@ function ExerciseDetailCard({
         ))}
 
         {completedSets.length === 0 && (
-          <p className="py-2 text-center text-xs text-muted-foreground">
+          <p className="py-2 text-center text-caption text-muted-foreground">
             {t("setsCount", { count: 0 })}
           </p>
         )}
@@ -312,7 +312,7 @@ function SetRow({
     <div
       className={`grid ${gridClass} items-center gap-1 px-1 py-1.5 text-body rounded hover:bg-muted/50`}
     >
-      <span className="text-xs text-muted-foreground">{set.set_number}</span>
+      <span className="text-caption text-muted-foreground">{set.set_number}</span>
       {fields.showWeight && (
         <span>
           {set.weight_kg != null
@@ -345,7 +345,7 @@ function SetRow({
         )}
         {prBadges.length > 0 && (
           <span
-            className="inline-flex items-center rounded-chip bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs font-medium px-1.5 py-0.5"
+            className="inline-flex items-center rounded-chip bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-caption font-medium px-1.5 py-0.5"
             title={t("prBadgeTooltip")}
           >
             {t("prBadge")}

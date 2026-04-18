@@ -66,7 +66,7 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
             </span>
             <div className="min-w-0">
               <h3 className="font-display font-medium truncate">{habit.name}</h3>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {category ? getCategoryDisplayName(category.name, tCat) : ""}{category ? " · " : ""}{frequencyLabel}
               </p>
             </div>
@@ -93,7 +93,7 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
                 )}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">{t("card.currentStreak")}</p>
+            <p className="text-caption text-muted-foreground">{t("card.currentStreak")}</p>
           </div>
           <div className="flex-1 rounded-card border p-2 text-center">
             <span className="font-semibold text-body">
@@ -104,13 +104,13 @@ export function HabitCard({ habit, categories, onToggle, onClick, isToggling }: 
                 { count: habit.best_streak }
               )}
             </span>
-            <p className="text-xs text-muted-foreground">{t("card.bestStreak")}</p>
+            <p className="text-caption text-muted-foreground">{t("card.bestStreak")}</p>
           </div>
         </div>
 
         {/* Monthly progress bar */}
         <div className="space-y-1" data-testid="habit-monthly-progress">
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="flex justify-between text-caption text-muted-foreground">
             <span>{t("card.thisMonth", { percent: habit.monthly_completion_rate })}</span>
           </div>
           <div className="h-1.5 w-full rounded-pill bg-muted" aria-hidden="true">

@@ -62,7 +62,7 @@ export function ExerciseHistoryTab({
                   day: "numeric",
                 })}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 {t("exerciseDetail.sets", { count: entry.total_sets })}
               </p>
             </div>
@@ -72,7 +72,7 @@ export function ExerciseHistoryTab({
                   <p className="text-body font-semibold">
                     {formatWeight(entry.best_set_weight_kg, weightUnit)}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t("exerciseDetail.bestWeight")}
                   </p>
                 </div>
@@ -80,7 +80,7 @@ export function ExerciseHistoryTab({
               {entry.best_set_reps != null && (
                 <div>
                   <p className="text-body font-semibold">{entry.best_set_reps}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t("exerciseDetail.bestReps")}
                   </p>
                 </div>
@@ -90,7 +90,7 @@ export function ExerciseHistoryTab({
                   <p className="text-body font-semibold">
                     {formatWeight(entry.total_volume, weightUnit)}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-caption text-muted-foreground">
                     {t("exerciseDetail.volume")}
                   </p>
                 </div>

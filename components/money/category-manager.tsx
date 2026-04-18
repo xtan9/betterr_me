@@ -167,7 +167,7 @@ export function CategoryManager() {
           <div className="mb-4 flex flex-col gap-field-gap rounded-card border border-money-border bg-money-surface p-card-padding">
             <div className="grid gap-field-gap sm:grid-cols-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                <label className="mb-1 block text-caption font-medium text-muted-foreground">
                   {t("categories.name")}
                 </label>
                 <Input
@@ -177,7 +177,7 @@ export function CategoryManager() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                <label className="mb-1 block text-caption font-medium text-muted-foreground">
                   {t("categories.icon")}
                 </label>
                 <Input
@@ -188,7 +188,7 @@ export function CategoryManager() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                <label className="mb-1 block text-caption font-medium text-muted-foreground">
                   {t("categories.color")}
                 </label>
                 <div className="flex gap-2">

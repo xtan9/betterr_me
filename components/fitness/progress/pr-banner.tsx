@@ -53,7 +53,7 @@ export function PRBanner({
         <p className="text-body font-semibold text-amber-900 dark:text-amber-100">
           {t("newPR")}
         </p>
-        <p className="truncate text-xs text-amber-700 dark:text-amber-300">
+        <p className="truncate text-caption text-amber-700 dark:text-amber-300">
           {exerciseName} &mdash; {prMessage}
         </p>
       </div>

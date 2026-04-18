@@ -62,7 +62,7 @@ export function DayView({
       >
         <div /> {/* Time gutter spacer */}
         <div className="text-center py-2">
-          <div className="text-xs text-muted-foreground">
+          <div className="text-caption text-muted-foreground">
             {dayFormatter.format(currentDate)}
           </div>
           <div

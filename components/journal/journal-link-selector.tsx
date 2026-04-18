@@ -90,7 +90,7 @@ export function JournalLinkSelector({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1 text-caption text-muted-foreground hover:text-foreground transition-colors"
           data-testid="link-selector-trigger"
         >
           <Plus className="size-3.5" />
@@ -123,7 +123,7 @@ export function JournalLinkSelector({
 
           {filteredHabits.length > 0 && (
             <div>
-              <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
+              <p className="px-2 py-1 text-caption font-medium text-muted-foreground">
                 {t("habits")}
               </p>
               {filteredHabits.map((habit) => (
@@ -143,7 +143,7 @@ export function JournalLinkSelector({
 
           {filteredTasks.length > 0 && (
             <div>
-              <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
+              <p className="px-2 py-1 text-caption font-medium text-muted-foreground">
                 {t("tasks")}
               </p>
               {filteredTasks.map((task) => (

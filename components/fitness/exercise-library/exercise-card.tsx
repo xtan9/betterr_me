@@ -103,7 +103,7 @@ export function ExerciseCard({ exercise, onEdit, onDelete }: ExerciseCardProps) 
             ))}
           </div>
 
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-caption">
             {t(`exerciseTypes.${exercise.exercise_type}`)}
             {trackingFields.length > 0 && (
               <span className="ml-1">

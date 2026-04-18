@@ -79,7 +79,7 @@ export function CategoryPicker({ value, onChange, disabled }: CategoryPickerProp
               className="inline-block size-2.5 rounded-pill shrink-0"
               style={{ backgroundColor: bgColor }}
             />
-            <span className="text-xs">{getCategoryDisplayName(cat.name, t)}</span>
+            <span className="text-caption">{getCategoryDisplayName(cat.name, t)}</span>
           </Toggle>
         );
       })}
@@ -87,7 +87,7 @@ export function CategoryPicker({ value, onChange, disabled }: CategoryPickerProp
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" disabled={disabled} className="gap-1">
             <Plus className="size-3.5" />
-            <span className="text-xs">{t("add")}</span>
+            <span className="text-caption">{t("add")}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-64 space-y-3" align="start">
