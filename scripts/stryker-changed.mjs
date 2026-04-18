@@ -1,14 +1,17 @@
 #!/usr/bin/env node
-// Run Stryker mutation testing scoped to lib/db files changed vs origin/main.
+// Run Stryker mutation testing scoped to files changed vs origin/main.
 // Used by the per-PR CI job so PRs pay a small mutation-testing cost (~2-5
 // min) while the weekly workflow runs the full scope (~15 min).
+//
+// Scope tracks the `mutate` glob in stryker.config.mjs: lib/db/** and
+// lib/recurring-tasks/** (excluding index.ts / types.ts entry points).
 
 import { execFileSync, spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 
 const BASE_REF = process.env.STRYKER_BASE_REF || "origin/main";
-const MUTATE_SCOPE = "lib/db/**/*.ts";
+const MUTATE_SCOPE = "lib/db/**/*.ts, lib/recurring-tasks/**/*.ts";
 
 // Files Stryker is told to mutate. Intersection of (changed since base) and
 // (currently in Stryker's mutate scope). If nothing in scope changed, exit
@@ -32,8 +35,17 @@ function getChangedFiles() {
   return diffOutput
     .split("\n")
     .filter(Boolean)
-    .filter((f) => /^lib\/db\/.+\.ts$/.test(f))
-    .filter((f) => f !== "lib/db/index.ts" && f !== "lib/db/types.ts");
+    .filter(
+      (f) =>
+        /^lib\/db\/.+\.ts$/.test(f) ||
+        /^lib\/recurring-tasks\/.+\.ts$/.test(f),
+    )
+    .filter(
+      (f) =>
+        f !== "lib/db/index.ts" &&
+        f !== "lib/db/types.ts" &&
+        f !== "lib/recurring-tasks/index.ts",
+    );
 }
 
 const changed = getChangedFiles();

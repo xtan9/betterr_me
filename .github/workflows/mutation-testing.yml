@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - "lib/db/**"
+      - "lib/recurring-tasks/**"
       - "tests/lib/db/**"
+      - "tests/lib/recurring-tasks/**"
       - "tests/helpers/mock-supabase.ts"
       - "tests/setup.ts"
       - "stryker.config.mjs"
