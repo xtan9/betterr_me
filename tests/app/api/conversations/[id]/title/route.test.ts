@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // vi.hoisted mocks
-const { mockGetUser, mockGetConversation, mockUpdateConversation, mockGenerateText } = vi.hoisted(() => ({
+const { mockGetUser, mockGetConversation, mockUpdateConversation, mockGenerateText, mockCheckChatRateLimit } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockGetConversation: vi.fn(),
   mockUpdateConversation: vi.fn(),
   mockGenerateText: vi.fn(),
+  mockCheckChatRateLimit: vi.fn(),
 }));
 
 const { mockLogError } = vi.hoisted(() => ({
@@ -31,6 +32,10 @@ vi.mock('ai', () => ({
 
 vi.mock('@/lib/ai/provider', () => ({
   llmProvider: vi.fn((model: string) => `mock-model:${model}`),
+}));
+
+vi.mock('@/lib/ai/rate-limit', () => ({
+  checkChatRateLimit: mockCheckChatRateLimit,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -60,6 +65,7 @@ describe('POST /api/conversations/[id]/title', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123' } } });
     mockGetConversation.mockResolvedValue(mockConversation);
     mockGenerateText.mockResolvedValue({ text: '  Test Title  ' });
+    mockCheckChatRateLimit.mockResolvedValue({ allowed: true, minuteRemaining: 9, dayRemaining: 99 });
     mockUpdateConversation.mockResolvedValue({ ...mockConversation, title: 'Test Title' });
   });
 
@@ -84,6 +90,13 @@ describe('POST /api/conversations/[id]/title', () => {
   it('returns 400 for invalid body', async () => {
     const response = await POST(makeRequest({ userMessage: '' }), { params });
     expect(response.status).toBe(400);
+  });
+
+  it('returns 429 without generating a title when the usage quota is exhausted', async () => {
+    mockCheckChatRateLimit.mockResolvedValue({ allowed: false, reason: 'exceeded' });
+    const response = await POST(makeRequest({ userMessage: 'hi', assistantMessage: 'hello' }), { params });
+    expect(response.status).toBe(429);
+    expect(mockGenerateText).not.toHaveBeenCalled();
   });
 
   it('returns 404 if conversation not owned by user', async () => {

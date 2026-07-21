@@ -17,7 +17,7 @@ export function toChatTools(
   for (const t of tools) {
     // Use inputSchema (not parameters) — streamText accesses tool.inputSchema
     // internally, and parameters is ignored. zodSchema() converts the Zod schema
-    // to JSON Schema with type: "object" required by the Claude API.
+    // to JSON Schema with type: "object" required by the model API.
     result[t.name] = {
       description: t.description,
       inputSchema: zodSchema(t.parameters),

@@ -698,7 +698,7 @@ describe("ChatContent", () => {
   it("uses valid stored model when selecting a conversation", () => {
     mockSwrData.current = {
       conversations: [
-        { id: "conv-123", title: "Test", model: "claude-sonnet-4-6", created_at: "", updated_at: "" },
+        { id: "conv-123", title: "Test", model: "gpt-5.6-sol", created_at: "", updated_at: "" },
       ],
     };
     render(<ChatContent />);
@@ -707,7 +707,7 @@ describe("ChatContent", () => {
 
     expect(screen.getByTestId("chat-input")).toHaveAttribute(
       "data-model-id",
-      "claude-sonnet-4-6"
+      "gpt-5.6-sol"
     );
   });
 
@@ -724,7 +724,7 @@ describe("ChatContent", () => {
     // Should fall back to DEFAULT_MODEL_ID, not use the stale "claude-haiku-4-5"
     expect(screen.getByTestId("chat-input")).toHaveAttribute(
       "data-model-id",
-      "claude-haiku-4-5-20251001"
+      "gpt-5.4-mini"
     );
   });
 
@@ -740,7 +740,7 @@ describe("ChatContent", () => {
 
     expect(screen.getByTestId("chat-input")).toHaveAttribute(
       "data-model-id",
-      "claude-haiku-4-5-20251001"
+      "gpt-5.4-mini"
     );
   });
 });

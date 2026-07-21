@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
 import { createClient } from "@/lib/supabase/server";
-import { llmProvider, webSearchTool, webFetchTool, createMemoryTool } from "@/lib/ai/provider";
-import { AVAILABLE_MODELS } from "@/lib/ai/models";
+import { llmProvider, webSearchTool, createMemoryTool } from "@/lib/ai/provider";
+import { AVAILABLE_MODELS, DEFAULT_MODEL_ID } from "@/lib/ai/models";
 import { createChatTools } from "@/lib/ai/tools";
+import { checkChatRateLimit } from "@/lib/ai/rate-limit";
 import { buildIdentityMessages } from "@/lib/ai/system-prompt";
 import { log } from "@/lib/logger";
 
 export const maxDuration = 60;
+
+const MAX_REQUEST_BYTES = 256 * 1024;
+const MAX_MESSAGES = 40;
+const MAX_OUTPUT_TOKENS = 2048;
 
 export async function POST(req: Request) {
   try {
@@ -28,16 +33,43 @@ export async function POST(req: Request) {
       );
     }
 
+    const rateLimit = await checkChatRateLimit(supabase, user.id);
+    if (!rateLimit.allowed) {
+      const unavailable = rateLimit.reason === "unavailable";
+      return NextResponse.json(
+        { error: unavailable ? "AI service is temporarily unavailable." : "Chat usage limit exceeded." },
+        {
+          status: unavailable ? 503 : 429,
+          headers: unavailable ? undefined : { "Retry-After": "60" },
+        },
+      );
+    }
+
+    let rawBody: string;
+    try {
+      const contentLength = Number(req.headers.get("content-length") || "0");
+      if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
+        return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+      }
+      rawBody = await req.text();
+      if (new TextEncoder().encode(rawBody).byteLength > MAX_REQUEST_BYTES) {
+        return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+      }
+    } catch (error) {
+      log.warn("POST /api/chat: failed to read request body", { error: String(error) });
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 },
+      );
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let body: any;
     try {
-      body = await req.json();
+      body = JSON.parse(rawBody);
     } catch (error) {
       log.warn("POST /api/chat: invalid JSON body", { error: String(error) });
-      return NextResponse.json(
-        { error: "Invalid JSON in request body" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
     }
 
     const messages = body.messages;
@@ -59,10 +91,14 @@ export async function POST(req: Request) {
       );
     }
 
+    const configuredDefault = process.env.LLM_MODEL;
+    const defaultModel = configuredDefault && validModelIds.includes(configuredDefault)
+      ? configuredDefault
+      : DEFAULT_MODEL_ID;
     const modelId =
       typeof requestedModel === "string" && validModelIds.includes(requestedModel)
         ? requestedModel
-        : process.env.LLM_MODEL || "claude-haiku-4-5-20251001";
+        : defaultModel;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
@@ -71,9 +107,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (messages.length > 100) {
+    if (messages.length > MAX_MESSAGES) {
       return NextResponse.json(
-        { error: "Too many messages (max 100)" },
+        { error: `Too many messages (max ${MAX_MESSAGES})` },
         { status: 400 },
       );
     }
@@ -101,9 +137,12 @@ export async function POST(req: Request) {
       model: llmProvider(modelId),
       messages: [...buildIdentityMessages({ date, timezone }), ...modelMessages],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: { ...tools, web_search: webSearchTool, web_fetch: webFetchTool, memory: createMemoryTool(supabase, user.id) } as any,
-      stopWhen: stepCountIs(5),
-      maxOutputTokens: parseInt(process.env.LLM_MAX_TOKENS || "4096", 10),
+      tools: { ...tools, web_search: webSearchTool, memory: createMemoryTool(supabase, user.id) } as any,
+      stopWhen: stepCountIs(3),
+      maxOutputTokens: Math.min(
+        MAX_OUTPUT_TOKENS,
+        Math.max(1, Number.parseInt(process.env.LLM_MAX_TOKENS || String(MAX_OUTPUT_TOKENS), 10) || MAX_OUTPUT_TOKENS),
+      ),
       abortSignal: req.signal,
       onError({ error }) {
         log.error("LLM stream error", error, { userId: user.id });

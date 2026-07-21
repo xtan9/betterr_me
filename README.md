@@ -10,7 +10,7 @@ A personal productivity and finance web app — track habits, tasks, workouts, f
 - **Workouts** — exercise tracking with routines and custom exercises
 - **Money** — transactions, budgets, recurring bills, savings goals, net worth tracking, bank integration (Plaid)
 - **Calendar** — unified calendar view with reminders and push notifications
-- **AI Chat** — conversational AI assistant powered by Claude, with conversation persistence and auto-generated titles
+- **AI Chat** — conversational AI assistant powered by OpenAI through a private gateway, with conversation persistence and auto-generated titles
 - **Dashboard** — overview with insights across all domains
 - **Admin** — admin dashboard for system management (role-based access)
 - **i18n** — English, Simplified Chinese, Traditional Chinese
@@ -25,7 +25,7 @@ A personal productivity and finance web app — track habits, tasks, workouts, f
 | UI | [shadcn/ui](https://ui.shadcn.com) + [Radix UI](https://www.radix-ui.com) + [Tailwind CSS 3](https://tailwindcss.com) |
 | Forms | react-hook-form + zod |
 | Data fetching | SWR (client), fetch (server) |
-| AI | [Vercel AI SDK](https://sdk.vercel.ai) + Claude via [llm-gateway](https://github.com/xtan9/llm-gateway) proxy |
+| AI | [Vercel AI SDK](https://sdk.vercel.ai) + OpenAI via [llm-gateway](https://github.com/xtan9/llm-gateway) proxy |
 | i18n | next-intl (en, zh, zh-TW) |
 | Theming | next-themes (class-based dark mode) |
 | Email | Resend |
