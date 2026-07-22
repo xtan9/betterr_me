@@ -31,6 +31,10 @@ const { mockCreateChatTools } = vi.hoisted(() => ({
   mockCreateChatTools: vi.fn().mockResolvedValue({}),
 }));
 
+const { mockCheckChatRateLimit } = vi.hoisted(() => ({
+  mockCheckChatRateLimit: vi.fn(),
+}));
+
 vi.mock('ai', () => ({
   streamText: mockStreamText,
   convertToModelMessages: mockConvertToModelMessages,
@@ -44,8 +48,11 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/ai/provider', () => ({
   llmProvider: vi.fn((model: string) => `mock-model:${model}`),
   webSearchTool: { type: 'provider-defined', id: 'web_search' },
-  webFetchTool: { type: 'provider-defined', id: 'web_fetch' },
   createMemoryTool: vi.fn(() => ({ type: 'provider-defined', id: 'memory' })),
+}));
+
+vi.mock('@/lib/ai/rate-limit', () => ({
+  checkChatRateLimit: mockCheckChatRateLimit,
 }));
 
 vi.mock('@/lib/ai/tools', () => ({
@@ -82,6 +89,11 @@ describe('POST /api/chat', () => {
     process.env.LLM_API_KEY = 'test-key';
 
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123', email: 'test@example.com' } } });
+    mockCheckChatRateLimit.mockResolvedValue({
+      allowed: true,
+      minuteRemaining: 9,
+      dayRemaining: 99,
+    });
     mockCreateClient.mockResolvedValue({
       auth: { getUser: mockGetUser },
     });
@@ -114,13 +126,39 @@ describe('POST /api/chat', () => {
     expect(response.status).toBe(400);
   });
 
-  it('should return 400 for too many messages (over 100)', async () => {
-    const messages = Array.from({ length: 101 }, (_, i) => ({
+  it('should return 400 for too many messages (over 40)', async () => {
+    const messages = Array.from({ length: 41 }, (_, i) => ({
       id: `m${i}`, role: i % 2 === 0 ? 'user' : 'assistant', parts: [{ type: 'text', text: `msg ${i}` }],
     }));
     const req = makeRequest({ messages });
     const response = await POST(req);
     expect(response.status).toBe(400);
+  });
+
+  it('should return 429 when the per-user usage quota is exceeded', async () => {
+    mockCheckChatRateLimit.mockResolvedValue({ allowed: false, reason: 'exceeded' });
+    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
+    const response = await POST(req);
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('60');
+    expect(mockStreamText).not.toHaveBeenCalled();
+  });
+
+  it('should fail closed when the quota service is unavailable', async () => {
+    mockCheckChatRateLimit.mockResolvedValue({ allowed: false, reason: 'unavailable' });
+    const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
+    const response = await POST(req);
+    expect(response.status).toBe(503);
+    expect(mockStreamText).not.toHaveBeenCalled();
+  });
+
+  it('should reject request bodies larger than 256 KiB before model conversion', async () => {
+    const req = makeRequest({
+      messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'x'.repeat(270_000) }] }],
+    });
+    const response = await POST(req);
+    expect(response.status).toBe(413);
+    expect(mockConvertToModelMessages).not.toHaveBeenCalled();
   });
 
   it('should return 400 for invalid JSON', async () => {
@@ -155,6 +193,7 @@ describe('POST /api/chat', () => {
     );
     // Verify identity messages are prepended before user messages
     const callArgs = mockStreamText.mock.calls[0][0];
+    expect(callArgs.maxOutputTokens).toBe(2048);
     expect(callArgs.messages[0]).toEqual(
       expect.objectContaining({ role: 'user', content: [{ type: 'text', text: 'Hi, who are you?' }] }),
     );

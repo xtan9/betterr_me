@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ConversationsDB } from "@/lib/db";
 import { llmProvider } from "@/lib/ai/provider";
 import { DEFAULT_MODEL_ID } from "@/lib/ai/models";
+import { checkChatRateLimit } from "@/lib/ai/rate-limit";
 import { titleRequestSchema } from "@/lib/validations/chat";
 import { log } from "@/lib/logger";
 
@@ -34,6 +35,18 @@ export async function POST(
       return NextResponse.json(
         { error: "AI service is not configured." },
         { status: 503 },
+      );
+    }
+
+    const rateLimit = await checkChatRateLimit(supabase, user.id);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: rateLimit.reason === "unavailable"
+            ? "AI service is temporarily unavailable."
+            : "Chat usage limit exceeded.",
+        },
+        { status: rateLimit.reason === "unavailable" ? 503 : 429 },
       );
     }
 

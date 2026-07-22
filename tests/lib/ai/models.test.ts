@@ -13,8 +13,8 @@ describe("models", () => {
     }
   });
 
-  it("DEFAULT_MODEL_ID is claude-haiku-4-5-20251001", () => {
-    expect(DEFAULT_MODEL_ID).toBe("claude-haiku-4-5-20251001");
+  it("uses the low-cost OpenAI model by default", () => {
+    expect(DEFAULT_MODEL_ID).toBe("gpt-5.4-mini");
   });
 
   it("default model exists in the available models list", () => {
@@ -23,9 +23,9 @@ describe("models", () => {
   });
 
   it("getModelById returns the correct model", () => {
-    const model = getModelById("claude-opus-4-6");
+    const model = getModelById("gpt-5.6-sol");
     expect(model).toBeDefined();
-    expect(model!.label).toBe("Opus 4.6");
+    expect(model!.label).toBe("GPT-5.6 Sol");
   });
 
   it("getModelById returns undefined for unknown model", () => {

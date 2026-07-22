@@ -1,33 +1,36 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
+import { tool } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import { ChatMemoriesDB } from "@/lib/db/chat-memories";
 import { log } from "@/lib/logger";
 
-const anthropic = createAnthropic({
+const openai = createOpenAI({
   baseURL: process.env.LLM_BASE_URL || "https://llm.betterr.me/v1",
-  // CLIProxyAPI uses Bearer auth, not x-api-key header
-  authToken: process.env.LLM_API_KEY ?? "",
+  apiKey: process.env.LLM_API_KEY ?? "",
 });
-// Note: Empty authToken is guarded at the route level (503 if LLM_API_KEY not set).
+// Note: Empty apiKey is guarded at the route level (503 if LLM_API_KEY not set).
 
-export const llmProvider = anthropic;
+export const llmProvider = openai;
 
-// Anthropic built-in web search tool — gives the model real-time web access
-export const webSearchTool = anthropic.tools.webSearch_20250305({
-  maxUses: 5,
+export const webSearchTool = openai.tools.webSearch({
+  searchContextSize: "medium",
 });
 
-// Anthropic built-in web fetch tool — retrieves content from specific URLs
-export const webFetchTool = anthropic.tools.webFetch_20250910({
-  maxUses: 3,
-});
-
-// Anthropic built-in memory tool — remembers user preferences across conversations
 export function createMemoryTool(supabase: SupabaseClient, userId: string) {
   const db = new ChatMemoriesDB(supabase);
-  return anthropic.tools.memory_20250818({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    execute: async (action: any) => {
+  return tool({
+    description: "Read and update the signed-in user's persistent memories.",
+    inputSchema: z.object({
+      command: z.enum(["view", "create", "str_replace", "insert", "delete", "rename"]),
+      path: z.string().min(1).max(512),
+      file_text: z.string().max(50_000).optional(),
+      old_str: z.string().max(50_000).optional(),
+      new_str: z.string().max(50_000).optional(),
+      new_path: z.string().min(1).max(512).optional(),
+      insert_line: z.number().int().min(0).max(50_000).optional(),
+    }),
+    execute: async (action) => {
       try {
         switch (action.command) {
           case "view": {
@@ -71,6 +74,7 @@ export function createMemoryTool(supabase: SupabaseClient, userId: string) {
             return `Deleted ${action.path}`;
           }
           case "rename": {
+            if (!action.new_path) return "new_path is required for rename.";
             const toRename = await db.get(userId, action.path);
             if (!toRename) return `File not found: ${action.path}`;
             await db.rename(userId, action.path, action.new_path);
