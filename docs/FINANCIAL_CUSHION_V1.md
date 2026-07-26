@@ -86,6 +86,7 @@ result recovery against the real app.
 
 Manual smoke: on the disposable database, run the feature reset followed by
 the exact psql command for finance_cushion_rls.sql from the PR capability map.
+This is the same database contract exercised by the pull-request workflow.
 
 ## Rollout and rollback
 
