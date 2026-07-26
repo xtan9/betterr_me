@@ -46,22 +46,29 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.109.1
-      - name: Start clean local Supabase and retain sanitized evidence
+      - name: Start clean local Supabase and prove database readiness
         run: bash scripts/collect-financial-safety-ci-evidence.sh
       - name: Prove cross-household writes are denied
-        run: >-
-          psql postgresql://postgres:postgres@localhost:54322/postgres
-          -v ON_ERROR_STOP=1
-          -f supabase/tests/financial_safety_cushion_isolation.sql
-      - name: Upload compact Gate 1 evidence
+        run: |
+          psql "$FINANCIAL_SAFETY_DB_URL" -v ON_ERROR_STOP=1 \
+            -f supabase/tests/financial_safety_cushion_isolation.sql \
+            | tee ci-evidence/postcondition.sql.out
+      - name: Publish compact Gate 1 evidence to job summary
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: financial-safety-gate-1-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ci-evidence/
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 9
+        run: |
+          {
+            echo '## Financial Safety Gate 1 DB isolation evidence'
+            echo '```text'
+            for evidence in ci-evidence/*; do
+              [ -f "$evidence" ] || continue
+              echo "== ${evidence#ci-evidence/} =="
+              cat "$evidence"
+            done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Stop local Supabase
+        if: ${{ always() }}
+        run: supabase stop --no-backup || true
 
   financial-safety-local-production-smoke:
     runs-on: ubuntu-latest
