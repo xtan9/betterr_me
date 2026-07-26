@@ -125,7 +125,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Build tools (async — resolves householdId for money tools)
+    // Build tools for the authenticated user.
     const tools = await createChatTools({
       userId: user.id,
       supabase,

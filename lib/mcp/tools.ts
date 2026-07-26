@@ -2,7 +2,6 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpTools } from "@/lib/ai/tools";
 import type { ToolContext } from "@/lib/ai/tools/types";
-import { log } from "@/lib/logger";
 
 // ---------------------------------------------------------------------------
 // Service-role Supabase client (lazy singleton — avoids build-time crash
@@ -46,16 +45,6 @@ export function registerTools(server: McpServer): void {
     // This is server-side only; the chat path uses client-supplied local date.
     const now = new Date();
     const today = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
-
-    // Resolve household for money tools
-    let _householdId: string | undefined;
-    try {
-    } catch (error) {
-      log.info("[mcp] Household not available — money tools will have limited functionality", {
-        error: error instanceof Error ? error.message : JSON.stringify(error),
-        userId,
-      });
-    }
 
     return {
       userId,

@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { log } from "@/lib/logger";
 import type { ToolDefinition, ToolContext } from "./types";
 import { habitTools } from "./habits";
 import { taskTools } from "./tasks";
@@ -37,14 +36,6 @@ export async function createChatTools({
   date: string;
   timezone: string;
 }) {
-  let _householdId: string | undefined;
-  try {
-  } catch (error) {
-    log.info("[chat] Household not available — money tools will have limited functionality", {
-      error: error instanceof Error ? error.message : JSON.stringify(error),
-    });
-  }
-
   const ctx: ToolContext = { userId, supabase, date, timezone };
   return toChatTools(getAllTools(), ctx);
 }
