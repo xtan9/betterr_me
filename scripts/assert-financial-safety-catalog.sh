@@ -7,8 +7,8 @@ set -euo pipefail
 : "${FINANCIAL_SAFETY_DB_URL:?FINANCIAL_SAFETY_DB_URL is required}"
 evidence_dir="${FINANCIAL_SAFETY_EVIDENCE_DIR:-ci-evidence}"
 mkdir -p "$evidence_dir"
-migration="supabase/migrations/20260726000002_grant_financial_safety_post_signup_baseline.sql"
-rpc_migration="supabase/migrations/20260726000003_initialize_my_household_rpc.sql"
+migration="supabase/migrations/20260726000003_grant_financial_safety_post_signup_baseline.sql"
+rpc_migration="supabase/migrations/20260726000004_initialize_my_household_rpc.sql"
 
 expected_grants="$evidence_dir/expected-approved-grants.txt"
 actual_grants="$evidence_dir/actual-approved-grants.txt"
