@@ -4,7 +4,7 @@ const channelSchema = z.enum(["push", "email"]);
 
 export const reminderCreateSchema = z
   .object({
-    source_type: z.enum(["calendar_event", "task", "habit", "bill"]),
+    source_type: z.enum(["calendar_event", "task", "habit"]),
     source_id: z.string().uuid("source_id must be a valid UUID"),
     reminder_type: z.enum(["relative", "absolute"]),
     relative_minutes: z.number().int().optional().nullable(),

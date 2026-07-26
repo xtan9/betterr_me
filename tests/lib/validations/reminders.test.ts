@@ -52,14 +52,6 @@ describe('reminderCreateSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('should accept source_type "bill"', () => {
-    const result = reminderCreateSchema.safeParse({
-      ...validRelative,
-      source_type: 'bill',
-    });
-    expect(result.success).toBe(true);
-  });
-
   it('should reject invalid source_type', () => {
     const result = reminderCreateSchema.safeParse({
       ...validRelative,

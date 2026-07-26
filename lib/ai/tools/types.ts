@@ -6,7 +6,6 @@ export interface ToolContext {
   supabase: SupabaseClient;
   date: string; // YYYY-MM-DD, user's local date
   timezone: string; // e.g. "America/Toronto"
-  householdId?: string; // resolved once, used by money tools
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

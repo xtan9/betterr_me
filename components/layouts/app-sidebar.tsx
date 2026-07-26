@@ -9,7 +9,6 @@ import {
   ListChecks,
   BookOpen,
   Dumbbell,
-  Wallet,
   CalendarDays,
   MessageSquare,
   PanelLeftClose,
@@ -71,12 +70,6 @@ const mainNavItems = [
     icon: Dumbbell,
     labelKey: "workouts",
     match: (p: string) => p.startsWith("/workouts"),
-  },
-  {
-    href: "/money",
-    icon: Wallet,
-    labelKey: "money",
-    match: (p: string) => p.startsWith("/money"),
   },
   {
     href: "/calendar",

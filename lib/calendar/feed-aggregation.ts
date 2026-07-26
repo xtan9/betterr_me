@@ -1,11 +1,11 @@
 /**
  * Cross-domain feed aggregation.
  *
- * Normalizes tasks, habits, bills, and workouts into CalendarFeedItem[]
+ * Normalizes tasks, habits, and workouts into CalendarFeedItem[]
  * so the calendar can render all domains uniformly.
  */
 
-import type { Task, Habit, HabitLog, RecurringBill, Workout } from "@/lib/db/types";
+import type { Task, Habit, HabitLog, Workout } from "@/lib/db/types";
 import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarFeedItem, DomainCalendarEvent, FeedDomain } from "./feed-types";
 import { shouldTrackOnDate } from "@/lib/habits/format";
@@ -118,39 +118,6 @@ export function normalizeHabits(
 }
 
 /**
- * Normalize recurring bills into feed items.
- * Only includes active, non-dismissed bills with a next_due_date in range.
- */
-export function normalizeBills(
-  bills: RecurringBill[],
-  startDate: string,
-  endDate: string,
-): CalendarFeedItem[] {
-  return bills
-    .filter(
-      (b) =>
-        b.is_active &&
-        b.user_status !== "dismissed" &&
-        b.next_due_date !== null &&
-        b.next_due_date >= startDate &&
-        b.next_due_date <= endDate,
-    )
-    .map((b) => ({
-      id: `bills:${b.id}`,
-      domain: "bills" as FeedDomain,
-      sourceId: b.id,
-      title: b.name,
-      date: b.next_due_date!,
-      startTime: null,
-      endTime: null,
-      allDay: true,
-      completed: false,
-      actions: ["dismiss_bill" as const],
-      meta: { amountCents: b.amount_cents, frequency: b.frequency },
-    }));
-}
-
-/**
  * Normalize completed workouts into feed items.
  * Uses the started_at date as the calendar date.
  */
@@ -211,15 +178,14 @@ export function aggregateFeedItems(
       if (!a.allDay && b.allDay) return 1;
       // Then by start time
       if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
-      // Then by domain order: events, tasks, habits, bills, workouts
+      // Then by domain order: events, tasks, habits, workouts
       const domainOrder: Record<string, number> = {
         events: 0,
         tasks: 1,
         habits: 2,
-        bills: 3,
-        workouts: 4,
+        workouts: 3,
       };
-      return (domainOrder[a.domain] ?? 5) - (domainOrder[b.domain] ?? 5);
+      return (domainOrder[a.domain] ?? 4) - (domainOrder[b.domain] ?? 4);
     });
 }
 

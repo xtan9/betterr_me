@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     const source_type = searchParams.get("source_type");
     const source_id = searchParams.get("source_id");
 
-    const validSourceTypes = ["calendar_event", "task", "habit", "bill"] as const;
+    const validSourceTypes = ["calendar_event", "task", "habit"] as const;
 
     if (!source_type || !source_id) {
       return NextResponse.json(

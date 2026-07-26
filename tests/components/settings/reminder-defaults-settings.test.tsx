@@ -62,21 +62,18 @@ describe("ReminderDefaultsSettings", () => {
     expect(
       screen.getByText("reminderDefaults.sourceType.habit")
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("reminderDefaults.sourceType.bill")
-    ).toBeInTheDocument();
   });
 
   it("shows default values when no user defaults exist", () => {
     mockSWRData = { defaults: [] };
     render(<ReminderDefaultsSettings />);
 
-    // 4 source type sections should be rendered
+    // 3 retained source type sections should be rendered
     const pushCheckboxes = screen.getAllByLabelText(/push$/);
-    expect(pushCheckboxes).toHaveLength(4);
+    expect(pushCheckboxes).toHaveLength(3);
 
     const emailCheckboxes = screen.getAllByLabelText(/email$/);
-    expect(emailCheckboxes).toHaveLength(4);
+    expect(emailCheckboxes).toHaveLength(3);
   });
 
   it("shows user saved defaults when they exist", () => {
@@ -103,8 +100,8 @@ describe("ReminderDefaultsSettings", () => {
     render(<ReminderDefaultsSettings />);
 
     // Each source type has push and email
-    expect(screen.getAllByText("reminderDefaults.push")).toHaveLength(4);
-    expect(screen.getAllByText("reminderDefaults.email")).toHaveLength(4);
+    expect(screen.getAllByText("reminderDefaults.push")).toHaveLength(3);
+    expect(screen.getAllByText("reminderDefaults.email")).toHaveLength(3);
   });
 
   it("clicking save calls PUT /api/reminder-defaults for dirty types", async () => {

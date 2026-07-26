@@ -21,10 +21,6 @@ const TOOL_LABELS: Record<string, string> = {
   getTodayJournal: "Reading journal",
   getRecentJournal: "Reading recent journal entries",
   createJournalEntry: "Writing journal entry",
-  getRecentTransactions: "Looking up transactions",
-  getBudgetStatus: "Checking budget",
-  getSpendingSummary: "Analyzing spending",
-  addTransaction: "Adding transaction",
   getRecentWorkouts: "Looking up workouts",
   getActiveWorkout: "Checking active workout",
   getProjects: "Looking up projects",
@@ -58,16 +54,6 @@ const TOOL_LABELS: Record<string, string> = {
   deleteReminder: "Deleting reminder",
   // Journal
   deleteJournalEntry: "Deleting journal entry",
-  // Money
-  updateTransaction: "Updating transaction",
-  getAccounts: "Looking up accounts",
-  getSavingsGoals: "Looking up savings goals",
-  createSavingsGoal: "Creating savings goal",
-  updateSavingsGoal: "Updating savings goal",
-  deleteSavingsGoal: "Deleting savings goal",
-  addSavingsContribution: "Adding to savings",
-  getRecurringBills: "Looking up recurring bills",
-  getSpendingTrends: "Analyzing spending trends",
   // Workouts
   startWorkout: "Starting workout",
   completeWorkout: "Completing workout",

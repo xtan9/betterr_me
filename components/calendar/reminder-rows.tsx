@@ -39,7 +39,6 @@ export const SMART_DEFAULTS: Record<
   calendar_event: { relativeMinutes: 15, channels: ["push"] },
   task: { relativeMinutes: 60, channels: ["push"] },
   habit: { relativeMinutes: 480, channels: ["push"] },
-  bill: { relativeMinutes: 4320, channels: ["push", "email"] },
 };
 
 interface ReminderRowsProps {

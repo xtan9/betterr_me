@@ -18,7 +18,6 @@ export interface ActionResult {
  * Actions:
  * - toggle_task: POST /api/tasks/[id]/toggle
  * - toggle_habit: POST /api/habits/[id]/toggle with { date }
- * - dismiss_bill: PATCH /api/money/bills/[id] with { user_status: "dismissed" }
  * - navigate_workout: client-side navigation to /workouts/[id]
  *
  * @param onMutated Callback fired after a successful mutation so the caller can refetch data.
@@ -68,28 +67,6 @@ export function useCalendarActions(onMutated?: () => void) {
     [onMutated],
   );
 
-  const dismissBill = useCallback(
-    async (billId: string): Promise<ActionResult> => {
-      try {
-        const res = await fetch(`/api/money/bills/${billId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_status: "dismissed" }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          return { success: false, error: body?.error || "Failed to dismiss bill" };
-        }
-        onMutated?.();
-        return { success: true };
-      } catch (err) {
-        console.error("Failed to dismiss bill:", err);
-        return { success: false, error: "Network error" };
-      }
-    },
-    [onMutated],
-  );
-
   const navigateWorkout = useCallback(
     (workoutId: string) => {
       router.push(`/workouts/${workoutId}`);
@@ -112,8 +89,6 @@ export function useCalendarActions(onMutated?: () => void) {
         case "toggle_habit":
           if (!date) return { success: false, error: "Date is required to toggle a habit" };
           return toggleHabit(sourceId, date);
-        case "dismiss_bill":
-          return dismissBill(sourceId);
         case "navigate_workout":
           navigateWorkout(sourceId);
           return { success: true };
@@ -121,8 +96,8 @@ export function useCalendarActions(onMutated?: () => void) {
           return { success: false, error: `Unknown action: ${action}` };
       }
     },
-    [toggleTask, toggleHabit, dismissBill, navigateWorkout],
+    [toggleTask, toggleHabit, navigateWorkout],
   );
 
-  return { dispatch, toggleTask, toggleHabit, dismissBill, navigateWorkout };
+  return { dispatch, toggleTask, toggleHabit, navigateWorkout };
 }

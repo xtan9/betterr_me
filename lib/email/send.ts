@@ -11,15 +11,13 @@ const ACTION_URLS: Record<ReminderSourceType, (date?: string) => string> = {
   calendar_event: (date) => `/calendar${date ? `?date=${date}` : ''}`,
   task: () => '/tasks',
   habit: () => '/habits',
-  bill: () => '/money/bills',
 };
 
 export interface ReminderEmailPayload {
   sourceType: ReminderSourceType;
   itemName: string;
-  date?: string;      // YYYY-MM-DD for event/task/bill dates
+  date?: string;      // YYYY-MM-DD for event/task dates
   time?: string;      // HH:MM for event/task times
-  amount?: string;    // For bill amounts (formatted string like "$50.00")
 }
 
 export interface SendReminderEmailResult {
@@ -87,16 +85,6 @@ export async function sendReminderEmail(
       case 'habit':
         templateProps = {
           habitName: payload.itemName,
-          actionUrl,
-          unsubscribeUrl,
-          locale,
-        };
-        break;
-      case 'bill':
-        templateProps = {
-          billName: payload.itemName,
-          amount: payload.amount,
-          dueDate: payload.date || '',
           actionUrl,
           unsubscribeUrl,
           locale,

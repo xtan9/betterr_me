@@ -78,8 +78,11 @@ jobs:
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        # Retain large browser output only when an operator explicitly enables it.
+        # The release gate retains a compact, sanitized manifest in CI instead.
+        if: ${{ failure() && vars.RETAIN_LARGE_E2E_ARTIFACTS == 'true' }}
         with:
           name: playwright-report
           path: playwright-report/
-          retention-days: 30
+          retention-days: 1
+          compression-level: 9
