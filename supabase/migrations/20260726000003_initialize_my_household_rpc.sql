@@ -34,7 +34,8 @@ BEGIN
     RETURN existing_household_id;
   END IF;
 
-  INSERT INTO public.households (name) VALUES ('My Household') RETURNING id INTO new_household_id;
+  new_household_id := gen_random_uuid();
+  INSERT INTO public.households (id, name) VALUES (new_household_id, 'My Household');
   INSERT INTO public.household_members (household_id, user_id, role)
   VALUES (new_household_id, caller_id, 'owner');
   RETURN new_household_id;
