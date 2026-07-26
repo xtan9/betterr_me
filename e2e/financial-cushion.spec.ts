@@ -3,8 +3,9 @@ import { expect, test } from "@playwright/test";
 test.describe("Financial Safety Cushion", () => {
   test("creates, saves, and reloads an authenticated cushion", async ({ page }) => {
     const response = await page.goto("/finance/cushion");
+    const navigationUrl = new URL(page.url());
     console.log(
-      `[cushion] navigation status=${response?.status() ?? "none"} url=${page.url()} headings=${JSON.stringify(
+      `[cushion] origin=${navigationUrl.origin} navigation status=${response?.status() ?? "none"} url=${navigationUrl.pathname} headings=${JSON.stringify(
         await page.getByRole("heading").allTextContents(),
       )}`,
     );
