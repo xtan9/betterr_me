@@ -19,7 +19,11 @@ inputs:
     required: true
   vercel-automation-bypass-secret:
     description: Vercel Deployment Protection bypass secret for authenticated Preview tests
-    required: true
+    required: false
+  require-vercel-automation-bypass-secret:
+    description: Whether this caller requires Vercel Deployment Protection bypass access
+    required: false
+    default: "false"
 
 outputs:
   has-secrets:
@@ -39,12 +43,18 @@ runs:
         E2E_PASSWORD: ${{ inputs.e2e-password }}
         PREVIEW_URL: ${{ inputs.preview-url }}
         VERCEL_AUTOMATION_BYPASS_SECRET: ${{ inputs.vercel-automation-bypass-secret }}
+        REQUIRE_VERCEL_AUTOMATION_BYPASS_SECRET: ${{ inputs.require-vercel-automation-bypass-secret }}
       run: |
         if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || \
-           [ -z "$E2E_EMAIL" ] || [ -z "$E2E_PASSWORD" ] || [ -z "$PREVIEW_URL" ] || \
-           [ -z "$VERCEL_AUTOMATION_BYPASS_SECRET" ]; then
+           [ -z "$E2E_EMAIL" ] || [ -z "$E2E_PASSWORD" ] || [ -z "$PREVIEW_URL" ]; then
           echo "::error::Authenticated E2E secrets are required; refusing to skip this release gate."
           exit 1
-        else
-          echo "has-secrets=true" >> "$GITHUB_OUTPUT"
         fi
+
+        if [ "$REQUIRE_VERCEL_AUTOMATION_BYPASS_SECRET" = "true" ] && \
+           [ -z "$VERCEL_AUTOMATION_BYPASS_SECRET" ]; then
+          echo "::error::Vercel Deployment Protection bypass access is required; refusing to skip this release gate."
+          exit 1
+        fi
+
+        echo "has-secrets=true" >> "$GITHUB_OUTPUT"

@@ -27,6 +27,7 @@ jobs:
           e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
           preview-url: ${{ secrets.E2E_PREVIEW_URL }}
           vercel-automation-bypass-secret: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          require-vercel-automation-bypass-secret: "true"
 
   e2e-tests:
     needs: check-secrets
