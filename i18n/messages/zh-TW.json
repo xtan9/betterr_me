@@ -5,6 +5,7 @@
       "signIn": "登入",
       "signOut": "登出",
       "dashboard": "儀表板",
+      "finance": "財務",
       "habits": "習慣",
       "settings": "設定",
       "tasks": "任務",
@@ -1391,6 +1392,59 @@
     "addExerciseError": "新增動作失敗",
     "updateExerciseError": "更新動作失敗",
     "removeExerciseError": "移除動作失敗"
+  },
+  "financeCushion": {
+    "title": "財務安全緩衝",
+    "subtitle": "清楚了解可用資金可以涵蓋必要支出的時間。",
+    "disclaimer": {
+      "title": "規劃工具，不是財務建議",
+      "description": "此估算只使用你輸入的金額。它是規劃參考，不是建議、保證或專業財務意見。"
+    },
+    "inputs": {
+      "title": "你的輸入",
+      "description": "請輸入收入中斷情況下的必要支出，以及近期可以使用的資金。金額使用你輸入的貨幣。",
+      "liquidResources": "立即可用的流動資金",
+      "liquidResourcesHelp": "現金、支票帳戶、儲蓄和你會依靠的其他短期資金。",
+      "essentialExpenses": "每月必要支出",
+      "essentialExpensesHelp": "住房、水電、食品、照護、保險、最低債務還款和其他必要支出。",
+      "continuingIncome": "每月仍會繼續的收入",
+      "continuingIncomeHelp": "如果計畫所有目前收入都會停止，請輸入 0。不要計入不確定的收入。"
+    },
+    "save": "儲存緩衝計畫",
+    "saving": "儲存中…",
+    "saved": "你的緩衝計畫已儲存。",
+    "saveError": "無法儲存緩衝計畫，請重試。",
+    "validation": {
+      "invalid": "請輸入有效的非負金額，並確保每月必要支出至少為 1。"
+    },
+    "results": {
+      "title": "你的規劃參考",
+      "description": "計算基於你儲存的輸入。",
+      "planningSignal": "預計必要支出涵蓋時間",
+      "months": "{months} 個月",
+      "sixPlus": "6 個月以上",
+      "progressLabel": "與六個月規劃門檻相比的涵蓋進度",
+      "state": "規劃範圍",
+      "monthlyShortfall": "每月缺口",
+      "liquidResources": "流動資金",
+      "guidance": "下面的範圍是規劃溝通門檻。生活情況變化時，請重新檢查輸入。",
+      "empty": "輸入金額後即可查看透明的緩衝估算。在你選擇儲存前，不會儲存任何內容。"
+    },
+    "states": {
+      "title": "規劃範圍",
+      "urgent": {
+        "label": "少於 3 個月",
+        "description": "收入中斷情境下的緩衝較小。請重新檢查假設和優先事項。"
+      },
+      "building": {
+        "label": "3–6 個月",
+        "description": "正在形成的緩衝。請持續確認計畫是否符合必要支出。"
+      },
+      "stronger": {
+        "label": "6 個月以上",
+        "description": "相對於輸入的每月缺口，這是較強的緩衝，但仍然只是估算。"
+      }
+    }
   },
   "calendar": {
     "title": "日曆",

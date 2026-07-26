@@ -100,11 +100,11 @@ describe("AppSidebar", () => {
     });
   });
 
-  it("renders logo link + 6 nav items as links", () => {
+  it("renders logo link + 8 nav items as links", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(8); // 1 logo + 7 nav
+    expect(links).toHaveLength(9); // 1 logo + 8 nav
   });
 
   it("renders correct hrefs for logo and all nav items", () => {
@@ -113,18 +113,20 @@ describe("AppSidebar", () => {
     const links = screen.getAllByRole("link");
     expect(links[0]).toHaveAttribute("href", "/dashboard"); // logo
     expect(links[1]).toHaveAttribute("href", "/dashboard");
-    expect(links[2]).toHaveAttribute("href", "/habits");
-    expect(links[3]).toHaveAttribute("href", "/tasks");
-    expect(links[4]).toHaveAttribute("href", "/journal");
-    expect(links[5]).toHaveAttribute("href", "/workouts");
-    expect(links[6]).toHaveAttribute("href", "/calendar");
-    expect(links[7]).toHaveAttribute("href", "/chat");
+    expect(links[2]).toHaveAttribute("href", "/finance/cushion");
+    expect(links[3]).toHaveAttribute("href", "/habits");
+    expect(links[4]).toHaveAttribute("href", "/tasks");
+    expect(links[5]).toHaveAttribute("href", "/journal");
+    expect(links[6]).toHaveAttribute("href", "/workouts");
+    expect(links[7]).toHaveAttribute("href", "/calendar");
+    expect(links[8]).toHaveAttribute("href", "/chat");
   });
 
   it("renders i18n translation keys as labels", () => {
     render(<AppSidebar {...defaultProps} />);
 
     expect(screen.getByText("dashboard")).toBeInTheDocument();
+    expect(screen.getByText("finance")).toBeInTheDocument();
     expect(screen.getByText("habits")).toBeInTheDocument();
     expect(screen.getByText("tasks")).toBeInTheDocument();
     expect(screen.getByText("journal")).toBeInTheDocument();
@@ -283,9 +285,9 @@ describe("AppSidebar", () => {
       render(<AppSidebar {...defaultProps} />);
 
       const links = screen.getAllByRole("link");
-      // logo=0, dashboard=1, habits=2, tasks=3, journal=4, workouts=5, calendar=6, chat=7
-      expect(links[6]).toHaveAttribute("href", "/calendar");
-      expect(links[7]).toHaveAttribute("href", "/chat");
+      // logo=0, dashboard=1, finance=2, habits=3, tasks=4, journal=5, workouts=6, calendar=7, chat=8
+      expect(links[7]).toHaveAttribute("href", "/calendar");
+      expect(links[8]).toHaveAttribute("href", "/chat");
     });
   });
 
