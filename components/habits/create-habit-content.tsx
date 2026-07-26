@@ -37,7 +37,11 @@ export function CreateHabitContent() {
 
       // Revalidate caches so dashboard and habits list show the new habit
       mutate("/api/dashboard");
-      mutate("/api/habits?with_today=true");
+      mutate(
+        (key) =>
+          typeof key === "string" &&
+          key.startsWith("/api/habits?with_today=true"),
+      );
       revalidateSidebarCounts();
 
       toast.success(t("toast.createSuccess"));

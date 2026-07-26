@@ -22,6 +22,13 @@ export default defineConfig({
 
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
+    ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+      ? {
+          extraHTTPHeaders: {
+            'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+          },
+        }
+      : {}),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -102,7 +109,7 @@ export default defineConfig({
   /* Start server before running tests.
    * CI uses production build (pnpm start) for realistic testing.
    * Local dev uses pnpm dev with server reuse for faster iteration. */
-  webServer: {
+  webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
     command: process.env.CI ? 'pnpm start' : 'pnpm dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,

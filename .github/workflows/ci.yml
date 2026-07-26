@@ -32,6 +32,21 @@ jobs:
       - name: Test
         run: pnpm test:run
 
+  financial-safety-db-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start local Supabase and apply migrations
+        run: supabase start && supabase db reset --local
+      - name: Prove cross-household writes are denied
+        run: >-
+          psql postgresql://postgres:postgres@localhost:54322/postgres
+          -v ON_ERROR_STOP=1
+          -f supabase/tests/financial_safety_cushion_isolation.sql
+
   check-migrations:
     runs-on: ubuntu-latest
 

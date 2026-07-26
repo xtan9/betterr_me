@@ -29,8 +29,7 @@ for (const { locale, navLabels } of localeExpectations) {
     await page.context().addCookies([{
       name: 'locale',
       value: locale,
-      domain: 'localhost',
-      path: '/',
+      url: new URL('/', process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000').toString(),
     }]);
 
     await page.goto('/dashboard');
