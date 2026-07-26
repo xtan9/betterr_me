@@ -11,6 +11,7 @@ import {
   Dumbbell,
   CalendarDays,
   MessageSquare,
+  ShieldCheck,
   PanelLeftClose,
   PanelLeft,
   Shield,
@@ -46,6 +47,12 @@ const mainNavItems = [
     icon: Home,
     labelKey: "dashboard",
     match: (p: string) => p === "/dashboard",
+  },
+  {
+    href: "/finance/cushion",
+    icon: ShieldCheck,
+    labelKey: "finance",
+    match: (p: string) => p.startsWith("/finance"),
   },
   {
     href: "/habits",

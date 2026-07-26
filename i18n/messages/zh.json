@@ -5,6 +5,7 @@
       "signIn": "登录",
       "signOut": "退出登录",
       "dashboard": "仪表板",
+      "finance": "财务",
       "habits": "习惯",
       "settings": "设置",
       "tasks": "任务",
@@ -1391,6 +1392,59 @@
     "addExerciseError": "添加动作失败",
     "updateExerciseError": "更新动作失败",
     "removeExerciseError": "删除动作失败"
+  },
+  "financeCushion": {
+    "title": "财务安全缓冲",
+    "subtitle": "清楚了解可用资金可以覆盖必要支出的时间。",
+    "disclaimer": {
+      "title": "规划工具，不是财务建议",
+      "description": "此估算仅使用你输入的金额。它是规划参考，不是建议、保证或专业财务意见。"
+    },
+    "inputs": {
+      "title": "你的输入",
+      "description": "请输入收入中断情况下的必要开支，以及近期可以使用的资金。金额使用你输入的货币。",
+      "liquidResources": "立即可用的流动资金",
+      "liquidResourcesHelp": "现金、支票账户、储蓄和你会依靠的其他短期资金。",
+      "essentialExpenses": "每月必要开支",
+      "essentialExpensesHelp": "住房、水电、食品、照护、保险、最低债务还款和其他必要支出。",
+      "continuingIncome": "每月仍会继续的收入",
+      "continuingIncomeHelp": "如果计划所有当前收入都会停止，请输入 0。不要计入不确定的收入。"
+    },
+    "save": "保存缓冲计划",
+    "saving": "保存中…",
+    "saved": "你的缓冲计划已保存。",
+    "saveError": "无法保存缓冲计划，请重试。",
+    "validation": {
+      "invalid": "请输入有效的非负金额，并确保每月必要开支至少为 1。"
+    },
+    "results": {
+      "title": "你的规划参考",
+      "description": "计算基于你保存的输入。",
+      "planningSignal": "预计必要开支覆盖时间",
+      "months": "{months} 个月",
+      "sixPlus": "6 个月以上",
+      "progressLabel": "与六个月规划阈值相比的覆盖进度",
+      "state": "规划范围",
+      "monthlyShortfall": "每月缺口",
+      "liquidResources": "流动资金",
+      "guidance": "下面的范围是规划沟通阈值。生活情况变化时，请重新检查输入。",
+      "empty": "输入金额后即可查看透明的缓冲估算。在你选择保存前，不会保存任何内容。"
+    },
+    "states": {
+      "title": "规划范围",
+      "urgent": {
+        "label": "少于 3 个月",
+        "description": "收入中断情景下的缓冲较小。请重新检查假设和优先事项。"
+      },
+      "building": {
+        "label": "3–6 个月",
+        "description": "正在形成的缓冲。请持续确认计划是否符合必要开支。"
+      },
+      "stronger": {
+        "label": "6 个月以上",
+        "description": "相对于输入的每月缺口，这是更强的缓冲，但仍然只是估算。"
+      }
+    }
   },
   "calendar": {
     "title": "日历",

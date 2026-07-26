@@ -5,6 +5,7 @@
       "signIn": "Sign In",
       "signOut": "Sign Out",
       "dashboard": "Dashboard",
+      "finance": "Finance",
       "habits": "Habits",
       "settings": "Settings",
       "tasks": "Tasks",
@@ -1391,6 +1392,59 @@
     "addExerciseError": "Failed to add exercise",
     "updateExerciseError": "Failed to update exercise",
     "removeExerciseError": "Failed to remove exercise"
+  },
+  "financeCushion": {
+    "title": "Financial Safety Cushion",
+    "subtitle": "A clear planning view of how long your liquid resources may cover essential costs.",
+    "disclaimer": {
+      "title": "Planning tool, not financial advice",
+      "description": "This estimate uses only the amounts you enter. It is a planning signal, not a recommendation, promise, or professional financial advice."
+    },
+    "inputs": {
+      "title": "Your inputs",
+      "description": "Use interruption-mode essential costs and resources you could access soon. Amounts stay in the currency you enter.",
+      "liquidResources": "Immediately available liquid resources",
+      "liquidResourcesHelp": "Cash, checking, savings, and other short-term resources you would count on.",
+      "essentialExpenses": "Essential monthly expenses",
+      "essentialExpensesHelp": "Housing, utilities, food, care, insurance, minimum debt payments, and other required costs.",
+      "continuingIncome": "Monthly income that would continue",
+      "continuingIncomeHelp": "Enter 0 if you are planning for all current income to stop. Do not include uncertain income."
+    },
+    "save": "Save cushion",
+    "saving": "Saving...",
+    "saved": "Your cushion is saved.",
+    "saveError": "We could not save your cushion. Please try again.",
+    "validation": {
+      "invalid": "Enter valid non-negative amounts and at least one unit of essential monthly expenses."
+    },
+    "results": {
+      "title": "Your planning signal",
+      "description": "The calculation is based on your saved inputs.",
+      "planningSignal": "Estimated essential-cost coverage",
+      "months": "{months} months",
+      "sixPlus": "6+ months",
+      "progressLabel": "Coverage compared with the six-month planning threshold",
+      "state": "Planning range",
+      "monthlyShortfall": "Monthly shortfall",
+      "liquidResources": "Liquid resources",
+      "guidance": "The ranges below are communication thresholds for planning. Revisit your inputs when your circumstances change.",
+      "empty": "Add your amounts to see a transparent cushion estimate. Nothing is saved until you choose Save cushion."
+    },
+    "states": {
+      "title": "Planning ranges",
+      "urgent": {
+        "label": "Less than 3 months",
+        "description": "A smaller buffer for an interruption scenario. Review assumptions and priorities."
+      },
+      "building": {
+        "label": "3–6 months",
+        "description": "A developing buffer. Keep checking whether the plan still matches your essentials."
+      },
+      "stronger": {
+        "label": "6+ months",
+        "description": "A stronger cushion against the entered monthly shortfall. It is still an estimate."
+      }
+    }
   },
   "calendar": {
     "title": "Calendar",
