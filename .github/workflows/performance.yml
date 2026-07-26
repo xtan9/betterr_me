@@ -21,6 +21,7 @@ jobs:
           e2e-email: ${{ secrets.E2E_TEST_EMAIL }}
           e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
           preview-url: ${{ secrets.E2E_PREVIEW_URL }}
+          require-preview-url: "true"
 
   lighthouse:
     needs: check-secrets

@@ -13,6 +13,10 @@ concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  deployments: read
+
 jobs:
   check-secrets:
     runs-on: ubuntu-latest
@@ -26,6 +30,7 @@ jobs:
           e2e-email: ${{ secrets.E2E_TEST_EMAIL }}
           e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
           preview-url: ${{ secrets.E2E_PREVIEW_URL }}
+          require-preview-url: ${{ github.event_name != 'pull_request' }}
           vercel-automation-bypass-secret: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           require-vercel-automation-bypass-secret: "true"
 
@@ -39,11 +44,77 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
       E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
-      PLAYWRIGHT_BASE_URL: ${{ secrets.E2E_PREVIEW_URL }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve exact PR preview deployment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          STATIC_PREVIEW_URL: ${{ secrets.E2E_PREVIEW_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            printf 'PLAYWRIGHT_BASE_URL=%s\n' "$STATIC_PREVIEW_URL" >> "$GITHUB_ENV"
+            echo "Using configured preview URL for $GITHUB_EVENT_NAME: $STATIC_PREVIEW_URL"
+            exit 0
+          fi
+
+          if [ -z "$PR_HEAD_SHA" ]; then
+            echo "::error::The pull request head SHA is missing; refusing to use an unbound preview URL."
+            exit 1
+          fi
+
+          api_root="repos/${GITHUB_REPOSITORY}"
+          for attempt in $(seq 1 30); do
+            deployments="$(gh api \
+              --header 'Accept: application/vnd.github+json' \
+              "${api_root}/deployments?sha=${PR_HEAD_SHA}&environment=Preview&per_page=100")"
+            deployment_ids="$(jq -r --arg sha "$PR_HEAD_SHA" '
+              [ .[] | select(.sha == $sha and .environment == "Preview") ]
+              | sort_by(.created_at)
+              | reverse
+              | .[].id
+            ' <<< "$deployments")"
+
+            while IFS= read -r deployment_id; do
+              [ -n "$deployment_id" ] || continue
+
+              statuses="$(gh api \
+                --header 'Accept: application/vnd.github+json' \
+                "${api_root}/deployments/${deployment_id}/statuses?per_page=100")"
+              successful_status="$(jq -r '
+                [ .[] | select(.state == "success" and (.target_url // "") != "") ]
+                | sort_by(.created_at)
+                | if length == 0 then empty else .[-1] | [.id, .target_url] | @tsv end
+              ' <<< "$statuses")"
+
+              [ -n "$successful_status" ] || continue
+              IFS=$'\t' read -r status_id preview_url <<< "$successful_status"
+              if ! [[ "$preview_url" =~ ^https://[^[:space:]]+$ ]]; then
+                echo "::warning::Ignoring deployment ${deployment_id} status ${status_id} with an invalid HTTPS target."
+                continue
+              fi
+
+              printf 'PLAYWRIGHT_BASE_URL=%s\n' "$preview_url" >> "$GITHUB_ENV"
+              echo "Resolved exact PR preview deployment:"
+              echo "  deployment_id=${deployment_id}"
+              echo "  deployment_sha=${PR_HEAD_SHA}"
+              echo "  deployment_status_id=${status_id}"
+              echo "  preview_url=${preview_url}"
+              exit 0
+            done <<< "$deployment_ids"
+
+            echo "Waiting for a successful Preview deployment for ${PR_HEAD_SHA} (attempt ${attempt}/30)."
+            sleep 20
+          done
+
+          echo "::error::No successful Preview deployment with an HTTPS target was found for ${PR_HEAD_SHA}."
+          exit 1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
