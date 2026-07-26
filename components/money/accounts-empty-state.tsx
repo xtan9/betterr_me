@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { PenLine, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { PlaidLinkButton } from "@/components/money/plaid-link-button";
 import { ManualTransactionDialog } from "@/components/money/manual-transaction-dialog";
 import type { KeyedMutator } from "swr";
@@ -41,6 +42,10 @@ export function AccountsEmptyState({ mutate }: AccountsEmptyStateProps) {
           {t("accounts.manualEntry")}
         </Button>
       </div>
+
+      <Button className="mt-3" variant="secondary" asChild>
+        <Link href="/money/safety-cushion">Calculate your cushion</Link>
+      </Button>
 
       <ManualTransactionDialog
         open={manualDialogOpen}

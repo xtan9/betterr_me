@@ -84,6 +84,12 @@ export function MoneyDashboard({ viewMode }: MoneyDashboardProps) {
         hasConfirmedIncome={dashboard.has_confirmed_income}
       />
 
+      <section className="rounded-card border border-money-border bg-money-surface p-5">
+        <h2 className="text-lg font-semibold text-money-sage-foreground">Financial Safety Cushion</h2>
+        <p className="mt-1 text-sm text-muted-foreground">See how long essential costs could be covered if income stops. Start manually—no bank connection required.</p>
+        <Button className="mt-4" asChild><Link href="/money/safety-cushion">Calculate your cushion</Link></Button>
+      </section>
+
       {/* 2. Income confirmation — only when needs_confirmation is true */}
       {dashboard.income_status.needs_confirmation &&
         dashboard.income_status.detected && (
