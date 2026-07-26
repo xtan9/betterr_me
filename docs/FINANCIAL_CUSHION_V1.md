@@ -50,6 +50,12 @@ production Supabase credentials or `E2E_PREVIEW_URL` for authenticated PR
 browser traffic. Main and scheduled runs retain the configured production
 Preview path.
 
+The disposable path also runs
+`supabase/tests/e2e_local_authenticated_grants.sql`. This is a test-only
+privilege fixture for the retained user-journey tables whose hosted grants are
+not recreated by the local reset; it is not a migration and is never applied
+to production.
+
 ## Data boundary
 
 Migration
