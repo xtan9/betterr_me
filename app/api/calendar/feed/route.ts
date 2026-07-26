@@ -7,11 +7,10 @@ import {
   normalizeEvents,
   normalizeTasks,
   normalizeHabits,
-  normalizeBills,
   normalizeWorkouts,
 } from "@/lib/calendar/feed-aggregation";
 import type { CalendarFeedItem } from "@/lib/calendar/feed-types";
-import type { Task, Habit, HabitLog, RecurringBill, Workout } from "@/lib/db/types";
+import type { Task, Habit, HabitLog, Workout } from "@/lib/db/types";
 
 /**
  * GET /api/calendar/feed
@@ -58,7 +57,7 @@ export async function GET(request: NextRequest) {
     const enabledLayers = new Set(layersParam.split(",").filter(Boolean));
 
     // Validate layers parameter
-    const validLayers = new Set(["events", "tasks", "habits", "bills", "workouts"]);
+    const validLayers = new Set(["events", "tasks", "habits", "workouts"]);
     const invalidLayers = [...enabledLayers].filter((l) => !validLayers.has(l));
     if (invalidLayers.length > 0) {
       return NextResponse.json(
@@ -125,36 +124,6 @@ export async function GET(request: NextRequest) {
           return normalizeHabits(
             (habits as Habit[]) || [],
             (logs as HabitLog[]) || [],
-            startDate,
-            endDate,
-          );
-        })(),
-      );
-    }
-
-    if (enabledLayers.has("bills")) {
-      requestedLayers.push("bills");
-      promises.push(
-        (async () => {
-          // Bills require household — attempt to resolve, return empty if none
-          const { data: membership } = await supabase
-            .from("household_members")
-            .select("household_id")
-            .eq("user_id", user.id)
-            .single();
-
-          if (!membership) return [];
-
-          const { data: bills, error } = await supabase
-            .from("recurring_bills")
-            .select("*")
-            .eq("household_id", membership.household_id)
-            .eq("is_active", true)
-            .neq("user_status", "dismissed");
-          if (error) throw error;
-
-          return normalizeBills(
-            (bills as RecurringBill[]) || [],
             startDate,
             endDate,
           );

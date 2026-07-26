@@ -50,7 +50,6 @@ vi.mock("next-intl", () => ({
         nextMonth: "Next month",
         openMenu: "Open menu",
         delete: "Delete",
-        editBill: "Edit Bill",
         removeCategory: "Remove category",
         memberRemove: "Remove",
         inviteCopyLink: "Copy invite link",
@@ -95,19 +94,6 @@ vi.mock("@/lib/hooks/use-categories", () => ({
     categories: [],
     error: undefined,
     isLoading: false,
-    mutate: vi.fn(),
-  }),
-}));
-
-// Mock useMoneyCategories (used by budget-form)
-vi.mock("@/lib/hooks/use-money-categories", () => ({
-  useMoneyCategories: () => ({
-    categories: [
-      { id: "cat-1", name: "Groceries", icon: null, color: "#6b9080" },
-      { id: "cat-2", name: "Dining", icon: null, color: "#a4c3b2" },
-    ],
-    isLoading: false,
-    error: undefined,
     mutate: vi.fn(),
   }),
 }));
@@ -266,36 +252,6 @@ describe("Accessibility - HabitRow", () => {
   });
 });
 
-describe("Accessibility - BillCalendar icon buttons", () => {
-  it("month navigation buttons have accessible names", async () => {
-    const { BillCalendar } = await import("@/components/money/bill-calendar");
-    const { container } = render(<BillCalendar bills={[]} />);
-    const prev = container.querySelector('button[aria-label="Previous month"]');
-    const next = container.querySelector('button[aria-label="Next month"]');
-    expect(prev).toBeTruthy();
-    expect(next).toBeTruthy();
-  });
-});
-
-describe("Accessibility - SmartBillCalendar icon buttons", () => {
-  it("month navigation buttons have accessible names", async () => {
-    const { SmartBillCalendar } = await import(
-      "@/components/money/smart-bill-calendar"
-    );
-    const { container } = render(
-      <SmartBillCalendar
-        bills={[]}
-        dailyBalances={[]}
-        dailySpendingRateCents={0}
-      />
-    );
-    const prev = container.querySelector('button[aria-label="Previous month"]');
-    const next = container.querySelector('button[aria-label="Next month"]');
-    expect(prev).toBeTruthy();
-    expect(next).toBeTruthy();
-  });
-});
-
 describe("Accessibility - ApiKeyRow icon button", () => {
   it("delete button has accessible name", async () => {
     const { ApiKeyRow } = await import("@/components/settings/api-key-row");
@@ -314,136 +270,6 @@ describe("Accessibility - ApiKeyRow icon button", () => {
     );
     expect(
       container.querySelector('button[aria-label="Delete"]')
-    ).toBeTruthy();
-  });
-});
-
-describe("Accessibility - BillRow icon button", () => {
-  it("edit button has accessible name", async () => {
-    const { BillRow } = await import("@/components/money/bill-row");
-    const bill = {
-      id: "b1",
-      household_id: "h1",
-      plaid_stream_id: null,
-      account_id: null,
-      name: "Internet",
-      description: null,
-      amount_cents: 5000,
-      frequency: "MONTHLY" as const,
-      next_due_date: "2026-05-01",
-      user_status: "pending" as const,
-      is_active: true,
-      plaid_status: null,
-      category_primary: null,
-      previous_amount_cents: null,
-      source: "manual" as const,
-      created_at: "2026-04-01T00:00:00Z",
-      updated_at: "2026-04-01T00:00:00Z",
-    };
-    const { container } = render(
-      <BillRow bill={bill} onStatusChange={vi.fn()} onEdit={vi.fn()} />
-    );
-    expect(
-      container.querySelector('button[aria-label="Edit Bill"]')
-    ).toBeTruthy();
-  });
-});
-
-describe("Accessibility - HouseholdMembersList icon button", () => {
-  it("remove member button has accessible name when owner views another member", async () => {
-    const { HouseholdMembersList } = await import(
-      "@/components/money/household-members-list"
-    );
-    const members = [
-      {
-        id: "m1",
-        household_id: "h1",
-        user_id: "owner-id",
-        role: "owner" as const,
-        created_at: "2026-04-01T00:00:00Z",
-        email: "owner@example.com",
-        full_name: "Owner",
-        avatar_url: null,
-      },
-      {
-        id: "m2",
-        household_id: "h1",
-        user_id: "member-id",
-        role: "member" as const,
-        created_at: "2026-04-02T00:00:00Z",
-        email: "member@example.com",
-        full_name: "Member",
-        avatar_url: null,
-      },
-    ];
-    const { container } = render(
-      <HouseholdMembersList
-        members={members}
-        invitations={[]}
-        isOwner={true}
-        currentUserId="owner-id"
-        onMutate={vi.fn()}
-      />
-    );
-    expect(
-      container.querySelector('button[aria-label="Remove"]')
-    ).toBeTruthy();
-  });
-});
-
-describe("Accessibility - BudgetForm icon button", () => {
-  it("remove category button has accessible name when multiple categories exist", async () => {
-    const { BudgetForm } = await import("@/components/money/budget-form");
-    const budget = {
-      id: "b1",
-      household_id: "h1",
-      month: "2026-04-01",
-      total_cents: 100000,
-      rollover_enabled: false,
-      owner_id: null,
-      is_shared: false,
-      created_at: "2026-04-01T00:00:00Z",
-      updated_at: "2026-04-01T00:00:00Z",
-      total_allocated_cents: 80000,
-      total_spent_cents: 0,
-      categories: [
-        {
-          id: "bc1",
-          budget_id: "b1",
-          category_id: "cat-1",
-          allocated_cents: 40000,
-          rollover_cents: 0,
-          created_at: "2026-04-01T00:00:00Z",
-          spent_cents: 0,
-          category_name: "Groceries",
-          category_icon: null,
-          category_color: "#6b9080",
-        },
-        {
-          id: "bc2",
-          budget_id: "b1",
-          category_id: "cat-2",
-          allocated_cents: 40000,
-          rollover_cents: 0,
-          created_at: "2026-04-01T00:00:00Z",
-          spent_cents: 0,
-          category_name: "Dining",
-          category_icon: null,
-          category_color: "#a4c3b2",
-        },
-      ],
-    };
-    const { container } = render(
-      <BudgetForm
-        mode="edit"
-        budget={budget}
-        month="2026-04"
-        onSuccess={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
-    expect(
-      container.querySelector('button[aria-label="Remove category"]')
     ).toBeTruthy();
   });
 });

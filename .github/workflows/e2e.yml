@@ -13,12 +13,17 @@ concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  deployments: read
+
 jobs:
   check-secrets:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Require authenticated E2E secrets
+      - name: Require authenticated E2E secrets outside pull requests
+        if: ${{ github.event_name != 'pull_request' }}
         uses: ./.github/actions/check-secrets
         with:
           supabase-url: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -26,24 +31,141 @@ jobs:
           e2e-email: ${{ secrets.E2E_TEST_EMAIL }}
           e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
           preview-url: ${{ secrets.E2E_PREVIEW_URL }}
+          require-preview-url: ${{ github.event_name != 'pull_request' }}
           vercel-automation-bypass-secret: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           require-vercel-automation-bypass-secret: "true"
+      - name: Confirm isolated pull-request verification contract
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "Pull-request E2E uses a disposable local Supabase database."
+          echo "Production Supabase secrets and E2E_PREVIEW_URL are not used for authenticated PR browser traffic."
 
   e2e-tests:
     needs: check-secrets
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
-      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
-      PLAYWRIGHT_BASE_URL: ${{ secrets.E2E_PREVIEW_URL }}
-      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact pull-request checkout
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "$actual_sha" = "$PR_HEAD_SHA"
+          echo "Checked out exact pull-request head: $actual_sha"
+
+      - name: Use configured preview deployment for non-pull-request E2E
+        if: ${{ github.event_name != 'pull_request' }}
+        shell: bash
+        env:
+          STATIC_PREVIEW_URL: ${{ secrets.E2E_PREVIEW_URL }}
+        run: |
+          set -euo pipefail
+          printf 'PLAYWRIGHT_BASE_URL=%s\n' "$STATIC_PREVIEW_URL" >> "$GITHUB_ENV"
+          echo "Using configured preview URL for $GITHUB_EVENT_NAME: $STATIC_PREVIEW_URL"
+
+      - name: Resolve exact PR preview deployment
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$PR_HEAD_SHA" ]; then
+            echo "::error::The pull request head SHA is missing; refusing to use an unbound preview URL."
+            exit 1
+          fi
+
+          api_root="repos/${GITHUB_REPOSITORY}"
+          for attempt in $(seq 1 30); do
+            deployments="$(gh api \
+              --header 'Accept: application/vnd.github+json' \
+              "${api_root}/deployments?sha=${PR_HEAD_SHA}&environment=Preview&per_page=100")"
+            deployment_ids="$(jq -r --arg sha "$PR_HEAD_SHA" '
+              [ .[] | select(.sha == $sha and .environment == "Preview") ]
+              | sort_by(.created_at)
+              | reverse
+              | .[].id
+            ' <<< "$deployments")"
+
+            while IFS= read -r deployment_id; do
+              [ -n "$deployment_id" ] || continue
+
+              statuses="$(gh api \
+                --header 'Accept: application/vnd.github+json' \
+                "${api_root}/deployments/${deployment_id}/statuses?per_page=100")"
+              successful_status="$(jq -r '
+                [ .[] | select(.state == "success" and (.target_url // "") != "") ]
+                | sort_by(.created_at)
+                | if length == 0 then empty else .[-1] | [.id, .target_url] | @tsv end
+              ' <<< "$statuses")"
+
+              [ -n "$successful_status" ] || continue
+              IFS=$'\t' read -r status_id preview_url <<< "$successful_status"
+              if ! [[ "$preview_url" =~ ^https://[^[:space:]]+$ ]]; then
+                echo "::warning::Ignoring deployment ${deployment_id} status ${status_id} with an invalid HTTPS target."
+                continue
+              fi
+
+              printf 'PR_PREVIEW_URL=%s\n' "$preview_url" >> "$GITHUB_ENV"
+              printf 'PR_PREVIEW_DEPLOYMENT_ID=%s\n' "$deployment_id" >> "$GITHUB_ENV"
+              echo "Resolved exact PR preview deployment:"
+              echo "  deployment_id=${deployment_id}"
+              echo "  deployment_sha=${PR_HEAD_SHA}"
+              echo "  deployment_status_id=${status_id}"
+              echo "  preview_url=${preview_url}"
+              echo "  authenticated_e2e_database=disposable_local_supabase"
+              exit 0
+            done <<< "$deployment_ids"
+
+            echo "Waiting for a successful Preview deployment for ${PR_HEAD_SHA} (attempt ${attempt}/30)."
+            sleep 20
+          done
+
+          echo "::error::No successful Preview deployment with an HTTPS target was found for ${PR_HEAD_SHA}."
+          exit 1
+
+      - name: Setup disposable Supabase for pull-request E2E
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.1
+
+      - name: Start disposable Supabase for pull-request E2E
+        if: ${{ github.event_name == 'pull_request' }}
+        run: supabase start
+
+      - name: Reset disposable database with feature migration
+        if: ${{ github.event_name == 'pull_request' }}
+        run: supabase db reset --local --yes --no-seed
+
+      - name: Install PostgreSQL client for pull-request RLS gate
+        if: ${{ github.event_name == 'pull_request' }}
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
+      - name: Prepare disposable authenticated E2E table grants
+        if: ${{ github.event_name == 'pull_request' }}
+        run: >-
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          -v ON_ERROR_STOP=1
+          -f supabase/tests/e2e_local_authenticated_grants.sql
+
+      - name: Execute two-user finance cushion RLS fixture
+        if: ${{ github.event_name == 'pull_request' }}
+        run: >-
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          -v ON_ERROR_STOP=1
+          -f supabase/tests/finance_cushion_rls.sql
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -57,6 +179,62 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure disposable Supabase E2E target
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'PLAYWRIGHT_BASE_URL=\n' >> "$GITHUB_ENV"
+          export NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$NEXT_PUBLIC_SUPABASE_URL" >> "$GITHUB_ENV"
+          anon_key="$(supabase status --output env | sed -n 's/^ANON_KEY=//p' | sed 's/^"//; s/"$//')"
+          test -n "$anon_key"
+          export NEXT_PUBLIC_SUPABASE_ANON_KEY="$anon_key"
+          printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$NEXT_PUBLIC_SUPABASE_ANON_KEY" >> "$GITHUB_ENV"
+          export E2E_TEST_EMAIL="cushion-e2e@example.test"
+          printf 'E2E_TEST_EMAIL=%s\n' "$E2E_TEST_EMAIL" >> "$GITHUB_ENV"
+          export E2E_TEST_PASSWORD="Cushion-E2E-local-2026!"
+          printf 'E2E_TEST_PASSWORD=%s\n' "$E2E_TEST_PASSWORD" >> "$GITHUB_ENV"
+          node --input-type=module <<'NODE'
+          import { createClient } from '@supabase/supabase-js';
+
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          );
+          const { data, error } = await supabase.auth.signUp({
+            email: process.env.E2E_TEST_EMAIL,
+            password: process.env.E2E_TEST_PASSWORD,
+          });
+          if (error && !/already registered/i.test(error.message)) {
+            throw error;
+          }
+          if (!data?.user) {
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+              email: process.env.E2E_TEST_EMAIL,
+              password: process.env.E2E_TEST_PASSWORD,
+            });
+            if (signInError) throw signInError;
+          }
+          NODE
+
+      - name: Configure production-backed E2E target
+        if: ${{ github.event_name != 'pull_request' }}
+        shell: bash
+        env:
+          PROD_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          PROD_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          PROD_E2E_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          PROD_E2E_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          VERCEL_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$PROD_SUPABASE_URL" >> "$GITHUB_ENV"
+          printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$PROD_SUPABASE_ANON_KEY" >> "$GITHUB_ENV"
+          printf 'E2E_TEST_EMAIL=%s\n' "$PROD_E2E_EMAIL" >> "$GITHUB_ENV"
+          printf 'E2E_TEST_PASSWORD=%s\n' "$PROD_E2E_PASSWORD" >> "$GITHUB_ENV"
+          printf 'VERCEL_AUTOMATION_BYPASS_SECRET=%s\n' "$VERCEL_BYPASS_SECRET" >> "$GITHUB_ENV"
+
       - name: Install Playwright browsers
         run: |
           if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
@@ -69,17 +247,117 @@ jobs:
         run: pnpm build
 
       - name: Run E2E tests
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            pnpm test:e2e
-          else
-            pnpm test:e2e:chromium
-          fi
+        run: pnpm test:e2e:chromium
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        # Retain large browser output only when an operator explicitly enables it.
+        # The release gate retains a compact, sanitized manifest in CI instead.
+        if: ${{ failure() && vars.RETAIN_LARGE_E2E_ARTIFACTS == 'true' }}
         with:
           name: playwright-report
           path: playwright-report/
-          retention-days: 30
+          retention-days: 1
+          compression-level: 9
+
+      - name: Stop disposable Supabase
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        run: supabase stop --no-backup
+
+  local-financial-cushion:
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.1
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Reset local database with feature migration
+        run: supabase db reset --local --yes --no-seed
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
+      - name: Prepare disposable authenticated E2E table grants
+        run: >-
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          -v ON_ERROR_STOP=1
+          -f supabase/tests/e2e_local_authenticated_grants.sql
+
+      - name: Execute two-user finance cushion RLS fixture
+        run: >-
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          -v ON_ERROR_STOP=1
+          -f supabase/tests/finance_cushion_rls.sql
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure local authenticated E2E account
+        shell: bash
+        run: |
+          export NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" >> "$GITHUB_ENV"
+          anon_key="$(supabase status --output env | sed -n 's/^ANON_KEY=//p' | sed 's/^"//; s/"$//')"
+          test -n "$anon_key"
+          export NEXT_PUBLIC_SUPABASE_ANON_KEY="$anon_key"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon_key" >> "$GITHUB_ENV"
+          export E2E_TEST_EMAIL="cushion-e2e@example.test"
+          echo "E2E_TEST_EMAIL=cushion-e2e@example.test" >> "$GITHUB_ENV"
+          export E2E_TEST_PASSWORD="Cushion-E2E-local-2026!"
+          echo "E2E_TEST_PASSWORD=Cushion-E2E-local-2026!" >> "$GITHUB_ENV"
+          node --input-type=module <<'NODE'
+          import { createClient } from '@supabase/supabase-js';
+
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          );
+          const { data, error } = await supabase.auth.signUp({
+            email: process.env.E2E_TEST_EMAIL,
+            password: process.env.E2E_TEST_PASSWORD,
+          });
+          if (error && !/already registered/i.test(error.message)) {
+            throw error;
+          }
+          if (!data?.user) {
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+              email: process.env.E2E_TEST_EMAIL,
+              password: process.env.E2E_TEST_PASSWORD,
+            });
+            if (signInError) throw signInError;
+          }
+          NODE
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Run local authenticated Cushion E2E
+        run: pnpm exec playwright test e2e/financial-cushion.spec.ts --project=chromium --workers=1 --retries=0
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup

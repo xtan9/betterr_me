@@ -9,9 +9,9 @@ import {
   ListChecks,
   BookOpen,
   Dumbbell,
-  Wallet,
   CalendarDays,
   MessageSquare,
+  ShieldCheck,
   PanelLeftClose,
   PanelLeft,
   Shield,
@@ -49,6 +49,12 @@ const mainNavItems = [
     match: (p: string) => p === "/dashboard",
   },
   {
+    href: "/finance/cushion",
+    icon: ShieldCheck,
+    labelKey: "finance",
+    match: (p: string) => p.startsWith("/finance"),
+  },
+  {
     href: "/habits",
     icon: ClipboardList,
     labelKey: "habits",
@@ -71,12 +77,6 @@ const mainNavItems = [
     icon: Dumbbell,
     labelKey: "workouts",
     match: (p: string) => p.startsWith("/workouts"),
-  },
-  {
-    href: "/money",
-    icon: Wallet,
-    labelKey: "money",
-    match: (p: string) => p.startsWith("/money"),
   },
   {
     href: "/calendar",

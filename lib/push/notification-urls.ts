@@ -8,8 +8,7 @@
 export type NotificationSourceType =
   | "calendar_event"
   | "task"
-  | "habit"
-  | "bill";
+  | "habit";
 
 export function getNotificationUrl(
   sourceType: NotificationSourceType,
@@ -22,8 +21,6 @@ export function getNotificationUrl(
       return "/tasks";
     case "habit":
       return "/habits";
-    case "bill":
-      return "/money/bills";
     default:
       return "/dashboard";
   }

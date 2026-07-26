@@ -21,6 +21,7 @@ jobs:
           e2e-email: ${{ secrets.E2E_TEST_EMAIL }}
           e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
           preview-url: ${{ secrets.E2E_PREVIEW_URL }}
+          require-preview-url: "true"
 
   lighthouse:
     needs: check-secrets
@@ -80,13 +81,5 @@ jobs:
         uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: './lighthouserc.js'
-          uploadArtifacts: true
-          temporaryPublicStorage: true
-
-      - name: Upload bundle analysis
-        uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() && steps.check-secrets.outputs.skip != 'true' }}
-        with:
-          name: bundle-analysis
-          path: .next/analyze/
-          retention-days: 30
+          uploadArtifacts: false
+          temporaryPublicStorage: false

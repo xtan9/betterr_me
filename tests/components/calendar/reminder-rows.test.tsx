@@ -236,12 +236,6 @@ describe("SMART_DEFAULTS", () => {
     });
   });
 
-  it("has correct defaults for bill", () => {
-    expect(SMART_DEFAULTS.bill).toEqual({
-      relativeMinutes: 4320,
-      channels: ["push", "email"],
-    });
-  });
 });
 
 describe("RELATIVE_PRESETS", () => {

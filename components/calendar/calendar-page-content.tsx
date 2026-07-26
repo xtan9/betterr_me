@@ -88,7 +88,7 @@ export function CalendarPageContent() {
 
   // --- Layer state (lifted from sidebar) ---
   const [enabledLayers, setEnabledLayers] = useState<Set<string>>(
-    new Set(["events", "tasks", "habits", "bills", "workouts"]),
+    new Set(["events", "tasks", "habits", "workouts"]),
   );
 
   const toggleLayer = useCallback((key: string) => {

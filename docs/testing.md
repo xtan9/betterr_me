@@ -2,7 +2,7 @@
 
 Rules for writing tests in this repo. These exist so tests actually catch bugs rather than just executing lines — mutation testing (`pnpm mutation-test`) verifies the bar.
 
-The target is **≥85% mutation score per file**. Current Stryker scope is `lib/db/**` and `lib/money/**` (break threshold = 85 per `stryker.config.mjs`). Phase 5 expansion to `lib/recurring-tasks/**` and `lib/habits/**` is still pending — see the [foundation spec](./superpowers/specs/2026-04-17-mutation-testing-foundation-design.md). Tests that only assert "was called" or "returns a shape" inflate coverage without catching regressions and will let mutants survive.
+The target is **≥85% mutation score per file**. Current Stryker scope is `lib/db/**`, `lib/recurring-tasks/**`, and `lib/habits/**` (break threshold = 85 per `stryker.config.mjs`). Tests that only assert "was called" or "returns a shape" inflate coverage without catching regressions and will let mutants survive.
 
 ## The five rules
 
@@ -80,12 +80,12 @@ If a helper is pure (no I/O, no time, no global state), import the real one. Stu
 
 ```ts
 // Bad — invented contract, test doesn't catch formula regressions
-vi.mock("@/lib/money/projections", () => ({
-  getDangerZoneStatus: (b, r) => b < r ? "danger" : "safe",
+vi.mock("@/lib/habits/format", () => ({
+  formatFrequency: () => "Every day",
 }));
 
 // Good — runs the real function
-import { getDangerZoneStatus } from "@/lib/money/projections";
+import { formatFrequency } from "@/lib/habits/format";
 // ... tests naturally exercise production logic
 ```
 

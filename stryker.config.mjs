@@ -46,7 +46,6 @@ const config = {
     "tests/lib/db/**/*.test.ts",
     "tests/lib/recurring-tasks/**/*.test.ts",
     "tests/lib/habits/**/*.test.ts",
-    "tests/lib/money/**/*.test.ts",
   ],
   mutate: [
     "lib/db/**/*.ts",
@@ -55,7 +54,6 @@ const config = {
     "lib/recurring-tasks/**/*.ts",
     "!lib/recurring-tasks/index.ts",
     "lib/habits/**/*.ts",
-    "lib/money/**/*.ts",
   ],
   // checkers: ["typescript"],
   // tsconfigFile: "tsconfig.json",

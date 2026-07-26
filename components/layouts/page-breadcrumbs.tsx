@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/breadcrumb";
 import { cn } from "@/lib/utils";
 
-type Section = "habits" | "tasks" | "settings";
+type Section = "finance" | "habits" | "tasks" | "settings";
 
 const SECTION_HREFS: Record<Section, string> = {
+  finance: "/finance/cushion",
   habits: "/habits",
   tasks: "/tasks",
   settings: "/dashboard/settings",

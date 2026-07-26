@@ -16,7 +16,11 @@ inputs:
     required: true
   preview-url:
     description: Authenticated Preview URL for the exact commit under test
-    required: true
+    required: false
+  require-preview-url:
+    description: Whether this caller requires a configured preview URL
+    required: false
+    default: "false"
   vercel-automation-bypass-secret:
     description: Vercel Deployment Protection bypass secret for authenticated Preview tests
     required: false
@@ -42,11 +46,18 @@ runs:
         E2E_EMAIL: ${{ inputs.e2e-email }}
         E2E_PASSWORD: ${{ inputs.e2e-password }}
         PREVIEW_URL: ${{ inputs.preview-url }}
+        REQUIRE_PREVIEW_URL: ${{ inputs.require-preview-url }}
         VERCEL_AUTOMATION_BYPASS_SECRET: ${{ inputs.vercel-automation-bypass-secret }}
         REQUIRE_VERCEL_AUTOMATION_BYPASS_SECRET: ${{ inputs.require-vercel-automation-bypass-secret }}
       run: |
+        missing_preview_url=false
+        if [ "$REQUIRE_PREVIEW_URL" = "true" ] && [ -z "$PREVIEW_URL" ]; then
+          missing_preview_url=true
+        fi
+
         if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ] || \
-           [ -z "$E2E_EMAIL" ] || [ -z "$E2E_PASSWORD" ] || [ -z "$PREVIEW_URL" ]; then
+           [ -z "$E2E_EMAIL" ] || [ -z "$E2E_PASSWORD" ] || \
+           [ "$missing_preview_url" = "true" ]; then
           echo "::error::Authenticated E2E secrets are required; refusing to skip this release gate."
           exit 1
         fi

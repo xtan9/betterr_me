@@ -6,7 +6,7 @@ import { log } from "@/lib/logger";
 import { z } from "zod";
 
 const reminderDefaultUpsertSchema = z.object({
-  source_type: z.enum(["calendar_event", "task", "habit", "bill"]),
+  source_type: z.enum(["calendar_event", "task", "habit"]),
   relative_minutes: z.number().int().positive("relative_minutes must be positive"),
   channels: z.array(z.enum(["push", "email"])).min(1, "At least one channel is required"),
 });

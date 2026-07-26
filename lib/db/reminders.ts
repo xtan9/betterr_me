@@ -32,6 +32,7 @@ export class RemindersDB {
       .from('reminders')
       .select('*')
       .eq('status', 'pending')
+      .in('source_type', ['calendar_event', 'task', 'habit'])
       .lte('fire_at', beforeTime)
       .order('fire_at', { ascending: true });
     if (error) throw error;

@@ -29,7 +29,6 @@ import { MotivationMessage } from "./motivation-message";
 import { WeeklyInsightCard } from "./weekly-insight-card";
 import type { WeeklyInsight } from "@/lib/db/insights";
 import { MilestoneCards } from "@/components/habits/milestone-card";
-import { MoneySummaryCard } from "@/components/dashboard/money-summary-card";
 import { AbsenceCard } from "./absence-card";
 import { WorkoutStatsWidget } from "./workout-stats-widget";
 import { toast } from "sonner";
@@ -411,9 +410,6 @@ export function DashboardContent({
       {data.stats.total_habits > 0 && !dismissedMotivation && (
         <MotivationMessage stats={data.stats} topStreakHabit={topStreakHabit} onDismiss={handleDismissMotivation} />
       )}
-
-      {/* Money Summary — spending pulse, renders null if no accounts */}
-      <MoneySummaryCard />
 
       {/* Absence Recovery Cards — habits with missed scheduled days */}
       {absenceHabits.length > 0 && (

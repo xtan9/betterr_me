@@ -270,58 +270,6 @@ describe("GET /api/calendar/feed", () => {
     expect(body.partialFailures).toEqual(["habits"]);
   });
 
-  it("returns empty bills when user has no household", async () => {
-    // household_members.single returns null
-    mockFromHandlers.household_members = createMockQuery({ data: [], error: null });
-
-    const req = new NextRequest(
-      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=bills",
-    );
-    const res = await GET(req);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.items).toEqual([]);
-    expect(body.partialFailures).toBeUndefined();
-  });
-
-  it("fetches bills when user has a household", async () => {
-    mockFromHandlers.household_members = createMockQuery({
-      data: [{ household_id: "hh-1" }],
-      error: null,
-    });
-    mockFromHandlers.recurring_bills = createMockQuery({
-      data: [],
-      error: null,
-    });
-
-    const req = new NextRequest(
-      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=bills",
-    );
-    const res = await GET(req);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.partialFailures).toBeUndefined();
-  });
-
-  it("reports partial failure when bills query errors", async () => {
-    mockFromHandlers.household_members = createMockQuery({
-      data: [{ household_id: "hh-1" }],
-      error: null,
-    });
-    mockFromHandlers.recurring_bills = createMockQuery({
-      data: null,
-      error: { message: "boom" },
-    });
-
-    const req = new NextRequest(
-      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=bills",
-    );
-    const res = await GET(req);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.partialFailures).toEqual(["bills"]);
-  });
-
   it("fetches workouts when workouts layer enabled", async () => {
     mockFromHandlers.workouts = createMockQuery({
       data: [],

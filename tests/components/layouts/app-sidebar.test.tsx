@@ -100,7 +100,7 @@ describe("AppSidebar", () => {
     });
   });
 
-  it("renders logo link + 6 nav items as links", () => {
+  it("renders logo link + 8 nav items as links", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
@@ -113,11 +113,11 @@ describe("AppSidebar", () => {
     const links = screen.getAllByRole("link");
     expect(links[0]).toHaveAttribute("href", "/dashboard"); // logo
     expect(links[1]).toHaveAttribute("href", "/dashboard");
-    expect(links[2]).toHaveAttribute("href", "/habits");
-    expect(links[3]).toHaveAttribute("href", "/tasks");
-    expect(links[4]).toHaveAttribute("href", "/journal");
-    expect(links[5]).toHaveAttribute("href", "/workouts");
-    expect(links[6]).toHaveAttribute("href", "/money");
+    expect(links[2]).toHaveAttribute("href", "/finance/cushion");
+    expect(links[3]).toHaveAttribute("href", "/habits");
+    expect(links[4]).toHaveAttribute("href", "/tasks");
+    expect(links[5]).toHaveAttribute("href", "/journal");
+    expect(links[6]).toHaveAttribute("href", "/workouts");
     expect(links[7]).toHaveAttribute("href", "/calendar");
     expect(links[8]).toHaveAttribute("href", "/chat");
   });
@@ -126,11 +126,11 @@ describe("AppSidebar", () => {
     render(<AppSidebar {...defaultProps} />);
 
     expect(screen.getByText("dashboard")).toBeInTheDocument();
+    expect(screen.getByText("finance")).toBeInTheDocument();
     expect(screen.getByText("habits")).toBeInTheDocument();
     expect(screen.getByText("tasks")).toBeInTheDocument();
     expect(screen.getByText("journal")).toBeInTheDocument();
     expect(screen.getByText("workouts")).toBeInTheDocument();
-    expect(screen.getByText("money")).toBeInTheDocument();
   });
 
   it("renders flat nav without group labels", () => {
@@ -173,22 +173,6 @@ describe("AppSidebar", () => {
 
     const activeLink = screen.getByRole("link", { current: "page" });
     expect(activeLink).toHaveAttribute("href", "/tasks");
-  });
-
-  it("renders Money nav item with correct label and link", () => {
-    render(<AppSidebar {...defaultProps} />);
-
-    const moneyLink = screen.getByRole("link", { name: /money/i });
-    expect(moneyLink).toBeInTheDocument();
-    expect(moneyLink).toHaveAttribute("href", "/money");
-  });
-
-  it("highlights money link for nested money routes", () => {
-    mockPathname.mockReturnValue("/money/accounts");
-    render(<AppSidebar {...defaultProps} />);
-
-    const activeLink = screen.getByRole("link", { current: "page" });
-    expect(activeLink).toHaveAttribute("href", "/money");
   });
 
   it("has only one active nav item at a time", () => {
@@ -301,7 +285,7 @@ describe("AppSidebar", () => {
       render(<AppSidebar {...defaultProps} />);
 
       const links = screen.getAllByRole("link");
-      // logo=0, dashboard=1, habits=2, tasks=3, journal=4, workouts=5, money=6, calendar=7, chat=8
+      // logo=0, dashboard=1, finance=2, habits=3, tasks=4, journal=5, workouts=6, calendar=7, chat=8
       expect(links[7]).toHaveAttribute("href", "/calendar");
       expect(links[8]).toHaveAttribute("href", "/chat");
     });
