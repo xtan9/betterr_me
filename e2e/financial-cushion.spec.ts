@@ -5,7 +5,7 @@ test.describe("Financial Safety Cushion", () => {
     const response = await page.goto("/finance/cushion");
     const navigationUrl = new URL(page.url());
     console.log(
-      `[cushion] origin=${navigationUrl.origin} navigation status=${response?.status() ?? "none"} url=${navigationUrl.pathname} headings=${JSON.stringify(
+      `[cushion] host=${navigationUrl.hostname} navigation status=${response?.status() ?? "none"} url=${navigationUrl.pathname} headings=${JSON.stringify(
         await page.getByRole("heading").allTextContents(),
       )}`,
     );
