@@ -17,8 +17,10 @@ export default defineConfig({
   reporter: process.env.CI ? 'html' : 'list',
   timeout: process.env.CI ? 60000 : 30000,
   updateSnapshots: 'missing',
-  globalSetup: './e2e/global-setup.ts',
-  globalTeardown: './e2e/global-teardown.ts',
+  // The Financial Safety gate owns its synthetic user and local Supabase
+  // lifecycle. It must not load the shared remote-preview setup.
+  globalSetup: process.env.FINANCIAL_SAFETY_LOCAL_E2E ? undefined : './e2e/global-setup.ts',
+  globalTeardown: process.env.FINANCIAL_SAFETY_LOCAL_E2E ? undefined : './e2e/global-teardown.ts',
 
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
@@ -34,6 +36,11 @@ export default defineConfig({
   },
 
   projects: [
+    {
+      name: 'financial-safety-local',
+      testMatch: /financial-safety\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
     // Auth setup — runs once, saves session for all browser projects
     {
       name: 'setup',
