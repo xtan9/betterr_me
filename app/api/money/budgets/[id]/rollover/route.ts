@@ -30,7 +30,7 @@ export async function POST(
 
     const { id: fromBudgetId } = await params;
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     // Verify source budget belongs to this household and get its month
     const { data: sourceBudget, error: lookupError } = await supabase

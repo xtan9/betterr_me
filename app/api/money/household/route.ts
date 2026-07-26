@@ -20,7 +20,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const householdsDB = new HouseholdsDB(supabase);
 
     const [role, members] = await Promise.all([

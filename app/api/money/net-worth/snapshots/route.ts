@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const snapshotsDB = new NetWorthSnapshotsDB(supabase);
 
     const today = new Date();

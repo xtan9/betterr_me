@@ -8,6 +8,7 @@ set -euo pipefail
 evidence_dir="${FINANCIAL_SAFETY_EVIDENCE_DIR:-ci-evidence}"
 mkdir -p "$evidence_dir"
 migration="supabase/migrations/20260726000002_grant_financial_safety_post_signup_baseline.sql"
+rpc_migration="supabase/migrations/20260726000003_initialize_my_household_rpc.sql"
 
 expected_grants="$evidence_dir/expected-approved-grants.txt"
 actual_grants="$evidence_dir/actual-approved-grants.txt"
@@ -55,3 +56,16 @@ if grep -q $'^households\tSELECT$' "$evidence_dir/authenticated-grants.tsv"; the
   echo "households SELECT grant is prohibited" >&2
   exit 1
 fi
+
+psql "$FINANCIAL_SAFETY_DB_URL" -At -F $'\t' -v ON_ERROR_STOP=1 <<'SQL' > "$evidence_dir/initialize-my-household-catalog.tsv"
+SELECT pg_get_userbyid(p.proowner), p.prosecdef::text, p.proconfig::text,
+  has_function_privilege('public', p.oid, 'EXECUTE')::text,
+  has_function_privilege('anon', p.oid, 'EXECUTE')::text,
+  has_function_privilege('authenticated', p.oid, 'EXECUTE')::text
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname = 'initialize_my_household' AND p.pronargs = 0;
+SQL
+grep -qx $'postgres\tfalse\t{search_path=pg_catalog, public}\tfalse\tfalse\ttrue' "$evidence_dir/initialize-my-household-catalog.tsv"
+grep -qx 'ALTER FUNCTION public.initialize_my_household() OWNER TO postgres;' "$rpc_migration"
+grep -qx 'REVOKE ALL ON FUNCTION public.initialize_my_household() FROM PUBLIC;' "$rpc_migration"
+grep -qx 'GRANT EXECUTE ON FUNCTION public.initialize_my_household() TO authenticated;' "$rpc_migration"

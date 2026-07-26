@@ -29,7 +29,7 @@ export async function GET(
     }
 
     const { id } = await params;
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     // Verify goal belongs to household
     const { error: lookupError } = await supabase
@@ -96,7 +96,7 @@ export async function POST(
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     // Verify goal belongs to household
     const { error: lookupError } = await supabase

@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     const page = request.nextUrl.searchParams.get("page") as InsightPage | null;
     const now = new Date();
@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     // Insert dismissed insight (ON CONFLICT DO NOTHING for idempotency)
     const { error: insertError } = await supabase

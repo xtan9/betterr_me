@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const categoriesDB = new CategoriesDB(supabase);
     await categoriesDB.hide(householdId, parsed.data.category_id);
 
@@ -73,7 +73,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const categoriesDB = new CategoriesDB(supabase);
     await categoriesDB.unhide(householdId, parsed.data.category_id);
 

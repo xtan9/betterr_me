@@ -20,7 +20,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const merchantRulesDB = new MerchantRulesDB(supabase);
     const rules = await merchantRulesDB.getByHousehold(householdId);
 
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const merchantRulesDB = new MerchantRulesDB(supabase);
     const rule = await merchantRulesDB.create({
       household_id: householdId,

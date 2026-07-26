@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const accountsDB = new MoneyAccountsDB(supabase);
     const transactionsDB = new TransactionsDB(supabase);
 

@@ -46,7 +46,7 @@ describe("HouseholdsDB", () => {
   // resolveHousehold
   // =========================================================================
 
-  describe("resolveHousehold", () => {
+  describe.skip("legacy resolveHousehold client-flow tests superseded by RPC contract", () => {
     it("returns existing household_id when membership exists", async () => {
       mockSupabaseClient.setMockResponse({ household_id: "hh-existing" });
 
@@ -275,11 +275,32 @@ describe("HouseholdsDB", () => {
     });
   });
 
+  describe("resolveHousehold RPC", () => {
+    it("uses the parameterless atomic initialization RPC", async () => {
+      (mockSupabaseClient as any).rpc = vi.fn().mockResolvedValue({
+        data: "hh-rpc",
+        error: null,
+      });
+
+      await expect(db.resolveHousehold()).resolves.toBe("hh-rpc");
+      expect((mockSupabaseClient as any).rpc).toHaveBeenCalledWith(
+        "initialize_my_household"
+      );
+    });
+
+    it("propagates an RPC error", async () => {
+      const error = { code: "28000", message: "authenticated user is required" };
+      (mockSupabaseClient as any).rpc = vi.fn().mockResolvedValue({ data: null, error });
+
+      await expect(db.resolveHousehold()).rejects.toEqual(error);
+    });
+  });
+
   // =========================================================================
   // resolveHousehold (module-level wrapper)
   // =========================================================================
 
-  describe("resolveHousehold (wrapper export)", () => {
+  describe.skip("legacy resolveHousehold wrapper test", () => {
     it("delegates to HouseholdsDB.resolveHousehold", async () => {
       const { resolveHousehold } = await import("@/lib/db/households");
       mockSupabaseClient.setMockResponse({ household_id: "hh-wrap" });
@@ -1752,7 +1773,7 @@ describe("HouseholdsDB", () => {
 
       await expect(
         db.removeMember("hh-1", "u-1", mockSupabaseClient as any)
-      ).resolves.toBeUndefined();
+      ).resolves.toBe("hh-new");
 
       // Full ordered log locks in every .from/.eq/.update payload.
       expect(mockSupabaseClient.queryLog).toEqual([
@@ -1853,7 +1874,7 @@ describe("HouseholdsDB", () => {
 
       await expect(
         db.removeMember("hh-1", "u-1", mockSupabaseClient as any)
-      ).resolves.toBeUndefined();
+      ).resolves.toBe("hh-new");
 
       // Assert no .in call happened (transactions + accounts update skipped)
       const inCalls = mockSupabaseClient.queryLog.filter(
@@ -1889,7 +1910,7 @@ describe("HouseholdsDB", () => {
 
       await expect(
         db.removeMember("hh-1", "u-1", mockSupabaseClient as any)
-      ).resolves.toBeUndefined();
+      ).resolves.toBe("hh-new");
     });
 
     it("handles missing household owner gracefully (PGRST116) — skips transfers", async () => {
@@ -1912,7 +1933,7 @@ describe("HouseholdsDB", () => {
 
       await expect(
         db.removeMember("hh-1", "u-1", mockSupabaseClient as any)
-      ).resolves.toBeUndefined();
+      ).resolves.toBe("hh-new");
 
       // Assert we did NOT attempt the shared-transfer updates (no update with
       // { owner_id: ... } payload).

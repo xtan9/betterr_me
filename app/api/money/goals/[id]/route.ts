@@ -31,7 +31,7 @@ export async function GET(
     }
 
     const { id } = await params;
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     // Fetch goal and verify ownership
     const { data: goal, error: goalError } = await supabase
@@ -99,7 +99,7 @@ export async function PATCH(
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     // Verify ownership
     const { error: lookupError } = await supabase
@@ -170,7 +170,7 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     // Verify ownership
     const { error: lookupError } = await supabase

@@ -24,7 +24,7 @@ export async function DELETE(
 
     const { id } = await params;
 
-    await resolveHousehold(supabase, user.id);
+    await resolveHousehold(supabase);
     const merchantRulesDB = new MerchantRulesDB(supabase);
     await merchantRulesDB.delete(id);
 

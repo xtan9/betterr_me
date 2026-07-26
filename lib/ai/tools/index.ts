@@ -42,7 +42,7 @@ export async function createChatTools({
 }) {
   let householdId: string | undefined;
   try {
-    householdId = await resolveHousehold(supabase, userId);
+    householdId = await resolveHousehold(supabase);
   } catch (error) {
     log.info("[chat] Household not available — money tools will have limited functionality", {
       error: error instanceof Error ? error.message : JSON.stringify(error),

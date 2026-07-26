@@ -23,7 +23,7 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const adminClient = createAdminClient();
     const connectionsDB = new BankConnectionsDB(adminClient);
     const billsDB = new RecurringBillsDB(adminClient);

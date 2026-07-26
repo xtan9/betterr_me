@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const billsDB = new RecurringBillsDB(supabase);
 
     const view = (request.nextUrl.searchParams.get("view") || "mine") as ViewMode;
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const billsDB = new RecurringBillsDB(supabase);
 
     // Convert dollar amount to negative cents (bills are expenses)

@@ -65,10 +65,7 @@ describe("GET /api/money/household", () => {
     expect(data.role).toBe("owner");
     expect(data.members).toEqual([]);
     expect(data.invitations).toEqual([]);
-    expect(mockResolveHousehold).toHaveBeenCalledWith(
-      expect.anything(),
-      "user-123"
-    );
+    expect(mockResolveHousehold).toHaveBeenCalledWith(expect.anything());
   });
 
   it("should return 401 if not authenticated", async () => {

@@ -24,7 +24,7 @@ export async function DELETE(
     }
 
     const { id: targetUserId } = await params;
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const householdsDB = new HouseholdsDB(supabase);
 
     // Verify current user is owner

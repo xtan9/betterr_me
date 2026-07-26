@@ -27,7 +27,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const goalsDB = new SavingsGoalsDB(supabase);
 
     const goals = await goalsDB.getByHousehold(householdId);
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const goalsDB = new SavingsGoalsDB(supabase);
 
     const goal = await goalsDB.create({

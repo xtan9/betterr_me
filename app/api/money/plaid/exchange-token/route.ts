@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const adminClient = createAdminClient();
 
     const result = await exchangeAndStore(

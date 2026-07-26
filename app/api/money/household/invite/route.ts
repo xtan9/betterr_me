@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const householdsDB = new HouseholdsDB(supabase);
 
     // Verify user is owner
@@ -114,7 +114,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const householdsDB = new HouseholdsDB(supabase);
 
     // Verify user is owner

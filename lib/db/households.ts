@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { randomUUID } from "crypto";
 import type {
   HouseholdInvitation,
   HouseholdMemberWithProfile,
@@ -16,60 +15,14 @@ export class HouseholdsDB {
   constructor(private supabase: SupabaseClient) {}
 
   /**
-   * Resolve the household_id for a given user.
-   * If the user has no household, creates one and adds them as owner.
+   * Resolve the authenticated caller's household.
+   * The database RPC owns identity derivation and atomic initialization.
    */
-  async resolveHousehold(userId: string): Promise<string> {
-    // Check for existing membership
-    const { data: membership, error: selectError } = await this.supabase
-      .from("household_members")
-      .select("household_id")
-      .eq("user_id", userId)
-      .single();
-
-    if (membership) return membership.household_id;
-
-    // PGRST116 = "not found" -- expected for first-time users
-    if (selectError && selectError.code !== "PGRST116") {
-      throw selectError;
-    }
-
-    // Create household + membership
-    // Do not request INSERT ... RETURNING here. The existing households SELECT
-    // policy correctly requires a membership, which does not exist until the
-    // following insert succeeds.
-    const householdId = randomUUID();
-    const { error: insertError } = await this.supabase
-      .from("households")
-      .insert({ id: householdId, name: "My Household" });
-
-    if (insertError) throw insertError;
-
-    const { error: memberError } = await this.supabase
-      .from("household_members")
-      .insert({ household_id: householdId, user_id: userId, role: "owner" });
-
-    if (memberError) {
-      // 23505 = unique_violation -- race condition: another request already
-      // created a membership. Delete the orphaned household and retry lookup.
-      if (memberError.code === "23505") {
-        // Best-effort cleanup of the orphaned household (may be blocked by RLS)
-        await this.supabase
-          .from("households")
-          .delete()
-          .eq("id", householdId);
-        const { data: retry, error: retryError } = await this.supabase
-          .from("household_members")
-          .select("household_id")
-          .eq("user_id", userId)
-          .single();
-        if (retryError) throw retryError;
-        if (retry) return retry.household_id;
-      }
-      throw memberError;
-    }
-
-    return householdId;
+  async resolveHousehold(): Promise<string> {
+    const { data, error } = await this.supabase.rpc("initialize_my_household");
+    if (error) throw error;
+    if (!data) throw new Error("initialize_my_household returned no household ID");
+    return data;
   }
 
   /**
@@ -506,7 +459,7 @@ export class HouseholdsDB {
     householdId: string,
     userId: string,
     adminClient: SupabaseClient
-  ): Promise<void> {
+  ): Promise<string> {
     // 1. Create new household for departing member
     const { data: newHousehold, error: createError } = await adminClient
       .from("households")
@@ -617,6 +570,7 @@ export class HouseholdsDB {
       .eq("household_id", householdId)
       .eq("user_id", userId);
     if (memberError) throw memberError;
+    return newHouseholdId;
   }
 
   /**
@@ -655,12 +609,11 @@ export class HouseholdsDB {
 
 /**
  * Backward compatibility wrapper.
- * Existing code uses `resolveHousehold(supabase, userId)` as a standalone function.
+ * Existing code uses `resolveHousehold(supabase)` as a standalone function.
  */
 export async function resolveHousehold(
-  supabase: SupabaseClient,
-  userId: string
+  supabase: SupabaseClient
 ): Promise<string> {
   const db = new HouseholdsDB(supabase);
-  return db.resolveHousehold(userId);
+  return db.resolveHousehold();
 }

@@ -51,7 +51,7 @@ export function registerTools(server: McpServer): void {
     let householdId: string | undefined;
     try {
       const { resolveHousehold } = await import("@/lib/db/households");
-      householdId = await resolveHousehold(supabase, userId);
+      householdId = await resolveHousehold(supabase);
     } catch (error) {
       log.info("[mcp] Household not available — money tools will have limited functionality", {
         error: error instanceof Error ? error.message : JSON.stringify(error),

@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const budgetsDB = new BudgetsDB(supabase);
     const searchParams = request.nextUrl.searchParams;
     const view = (searchParams.get("view") || "mine") as ViewMode;

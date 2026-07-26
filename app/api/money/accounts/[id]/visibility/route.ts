@@ -38,7 +38,7 @@ export async function PATCH(
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const accountsDB = new MoneyAccountsDB(supabase);
 
     // Verify account belongs to this household

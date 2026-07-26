@@ -35,7 +35,7 @@ export async function PATCH(
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const categoriesDB = new CategoriesDB(supabase);
 
     // Verify category exists and is not a system category
@@ -88,7 +88,7 @@ export async function DELETE(
 
     const { id } = await params;
 
-    await resolveHousehold(supabase, user.id);
+    await resolveHousehold(supabase);
     const categoriesDB = new CategoriesDB(supabase);
 
     // CategoriesDB.delete already verifies is_system = false and throws if system

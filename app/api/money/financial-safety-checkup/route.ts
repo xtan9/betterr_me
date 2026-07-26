@@ -13,7 +13,7 @@ async function currentHousehold() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { supabase, householdId: null };
-  return { supabase, householdId: await resolveHousehold(supabase, user.id) };
+  return { supabase, householdId: await resolveHousehold(supabase) };
 }
 
 export async function GET() {

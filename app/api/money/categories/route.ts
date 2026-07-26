@@ -20,7 +20,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const categoriesDB = new CategoriesDB(supabase);
     const categories = await categoriesDB.getVisible(householdId);
 
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const categoriesDB = new CategoriesDB(supabase);
     const category = await categoriesDB.create({
       name: parsed.data.name,

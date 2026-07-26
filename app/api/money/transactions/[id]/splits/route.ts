@@ -25,7 +25,7 @@ export async function GET(
 
     const { id } = await params;
 
-    await resolveHousehold(supabase, user.id);
+    await resolveHousehold(supabase);
     const splitsDB = new TransactionSplitsDB(supabase);
     const splits = await splitsDB.getByTransaction(id);
 
@@ -70,7 +70,7 @@ export async function POST(
       );
     }
 
-    await resolveHousehold(supabase, user.id);
+    await resolveHousehold(supabase);
 
     // Verify transaction exists
     const transactionsDB = new TransactionsDB(supabase);
@@ -139,7 +139,7 @@ export async function DELETE(
 
     const { id } = await params;
 
-    await resolveHousehold(supabase, user.id);
+    await resolveHousehold(supabase);
     const splitsDB = new TransactionSplitsDB(supabase);
     await splitsDB.deleteByTransaction(id);
 

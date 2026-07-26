@@ -26,7 +26,7 @@ export async function GET(
 
     const { id } = await params;
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const budgetsDB = new BudgetsDB(supabase);
 
     // Look up the budget to get its month, then use getByMonth for full data
@@ -90,7 +90,7 @@ export async function PUT(
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     // Verify budget belongs to this household and check ownership
     const { data: budgetData, error: lookupError } = await supabase
@@ -168,7 +168,7 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     // Verify budget belongs to this household and check ownership
     const { data: budgetData, error: lookupError } = await supabase

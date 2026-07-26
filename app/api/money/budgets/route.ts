@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const budgetsDB = new BudgetsDB(supabase);
 
     const month = request.nextUrl.searchParams.get("month");
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const budgetsDB = new BudgetsDB(supabase);
 
     // Convert dollar amounts to cents

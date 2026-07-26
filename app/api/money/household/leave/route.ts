@@ -20,7 +20,7 @@ export async function POST(_request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
     const householdsDB = new HouseholdsDB(supabase);
 
     // Verify current user is NOT owner (owner can't leave)

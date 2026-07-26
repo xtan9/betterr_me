@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Resolve household
-    const householdId = await resolveHousehold(supabase, user.id);
+    const householdId = await resolveHousehold(supabase);
 
     // Build account name map
     const accountsDB = new MoneyAccountsDB(supabase);

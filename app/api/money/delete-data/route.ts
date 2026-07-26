@@ -96,18 +96,18 @@ export async function POST(request: NextRequest) {
 
     // Resolve household
     const householdsDB = new HouseholdsDB(supabase);
-    const householdId = await householdsDB.resolveHousehold(user.id);
+    const householdId = await householdsDB.resolveHousehold();
     const memberCount = await householdsDB.getMemberCount(householdId);
 
     const adminClient = createAdminClient();
 
     if (memberCount > 1) {
       // Multi-member: leave household first, then delete the new solo household
-      await householdsDB.removeMember(householdId, user.id, adminClient);
-
-      // Resolve the new solo household created by removeMember
-      const adminHouseholdsDB = new HouseholdsDB(adminClient);
-      const newHouseholdId = await adminHouseholdsDB.resolveHousehold(user.id);
+      const newHouseholdId = await householdsDB.removeMember(
+        householdId,
+        user.id,
+        adminClient
+      );
 
       // Revoke Plaid tokens on the new household (user's connections moved there)
       await revokeAllPlaidTokens(newHouseholdId, adminClient);

@@ -26,7 +26,7 @@ export async function GET(
 
     const { id } = await params;
 
-    await resolveHousehold(supabase, user.id);
+    await resolveHousehold(supabase);
     const transactionsDB = new TransactionsDB(supabase);
     const transaction = await transactionsDB.getById(id);
 
@@ -87,7 +87,7 @@ export async function PATCH(
       );
     }
 
-    await resolveHousehold(supabase, user.id);
+    await resolveHousehold(supabase);
     const transactionsDB = new TransactionsDB(supabase);
 
     let transaction;
