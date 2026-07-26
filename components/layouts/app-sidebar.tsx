@@ -130,7 +130,9 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
   const tSidebar = useTranslations("common.sidebar");
   const { habitsIncomplete, tasksDue, error } = useSidebarCounts();
   const { data: profileData } = useSWR("/api/profile", fetcher, { keepPreviousData: true });
+  const { data: controlPlaneData } = useSWR("/api/control-plane", fetcher, { shouldRetryOnError: false });
   const isAdmin = profileData?.profile?.role === "admin";
+  const hasControlPlaneAccess = Boolean(controlPlaneData);
 
   const badgeCounts: Record<string, number> = error
     ? {}
@@ -204,6 +206,22 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
                   )}
                 </SidebarMenuItem>
               ))}
+              {hasControlPlaneAccess && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith("/control-plane")}
+                    tooltip="Control Plane"
+                    className={navButtonClassName}
+                    style={navButtonStyle}
+                  >
+                    <Link href="/control-plane">
+                      <NavIconContainer icon={Shield} />
+                      <span>Control Plane</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
