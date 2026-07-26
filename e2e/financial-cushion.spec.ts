@@ -2,7 +2,14 @@ import { expect, test } from "@playwright/test";
 
 test.describe("Financial Safety Cushion", () => {
   test("creates, saves, and reloads an authenticated cushion", async ({ page }) => {
-    await page.goto("/finance/cushion");
+    const response = await page.goto("/finance/cushion");
+    console.log(
+      `[cushion] navigation status=${response?.status() ?? "none"} url=${page.url()} headings=${JSON.stringify(
+        await page.getByRole("heading").allTextContents(),
+      )}`,
+    );
+
+    await expect(page).toHaveURL(/\/finance\/cushion\/?$/);
 
     await expect(
       page.getByRole("heading", { name: "Financial Safety Cushion" }),

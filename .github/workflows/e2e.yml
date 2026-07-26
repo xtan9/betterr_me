@@ -69,12 +69,7 @@ jobs:
         run: pnpm build
 
       - name: Run E2E tests
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            pnpm test:e2e
-          else
-            pnpm test:e2e:chromium -- --grep-invert "Financial Safety Cushion"
-          fi
+        run: pnpm test:e2e:chromium
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
@@ -105,6 +100,15 @@ jobs:
 
       - name: Reset local database with feature migration
         run: supabase db reset --local --yes --no-seed
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
+      - name: Execute two-user finance cushion RLS fixture
+        run: >-
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          -v ON_ERROR_STOP=1
+          -f supabase/tests/finance_cushion_rls.sql
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
