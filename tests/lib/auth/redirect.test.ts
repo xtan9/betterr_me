@@ -53,6 +53,12 @@ describe("getSafeRedirectPath", () => {
         "/dashboard/settings",
       );
     });
+
+    it("allows the public Household Runway return path", () => {
+      expect(getSafeRedirectPath("/finance/cushion")).toBe(
+        "/finance/cushion",
+      );
+    });
   });
 
   describe("prefix match allowlist", () => {

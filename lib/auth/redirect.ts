@@ -10,6 +10,7 @@ const ALLOWED_REDIRECT_PATHS = [
   "/dashboard",
   "/habits",
   "/tasks",
+  "/finance/cushion",
   "/dashboard/settings",
 ];
 

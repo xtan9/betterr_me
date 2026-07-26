@@ -86,6 +86,38 @@ begin
   ) <> 3 then
     raise exception 'expected exactly three finance_cushions policies';
   end if;
+
+  if not exists (
+    select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = 'finance_cushion_snapshots' and c.relrowsecurity
+  ) then
+    raise exception 'finance_cushion_snapshots RLS is not enabled';
+  end if;
+
+  if has_table_privilege('anon', 'public.finance_cushion_snapshots', 'SELECT')
+     or has_table_privilege('anon', 'public.finance_cushion_snapshots', 'INSERT')
+     or has_table_privilege('authenticated', 'public.finance_cushion_snapshots', 'UPDATE')
+     or has_table_privilege('authenticated', 'public.finance_cushion_snapshots', 'DELETE') then
+    raise exception 'snapshot append-only privileges are incorrect';
+  end if;
+
+  if not has_table_privilege('authenticated', 'public.finance_cushion_snapshots', 'SELECT')
+     or not has_table_privilege('authenticated', 'public.finance_cushion_snapshots', 'INSERT') then
+    raise exception 'authenticated snapshot privileges are missing';
+  end if;
+
+  if not exists (
+    select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname = 'finance_cushion_events' and c.relrowsecurity
+  ) then
+    raise exception 'finance_cushion_events RLS is not enabled';
+  end if;
+
+  if not has_table_privilege('anon', 'public.finance_cushion_events', 'INSERT')
+     or has_table_privilege('anon', 'public.finance_cushion_events', 'SELECT')
+     or has_table_privilege('authenticated', 'public.finance_cushion_events', 'SELECT') then
+    raise exception 'event table must be write-only for app roles';
+  end if;
 end
 $$;
 
@@ -128,6 +160,23 @@ values (
   30000,
   0
 );
+
+insert into public.finance_cushion_snapshots (
+  plan_id, user_id, action_id, trigger, scenario, months_covered,
+  sustainable, result, model_version
+)
+select
+  id,
+  user_id,
+  '30000000-0000-0000-0000-000000000002',
+  'completed',
+  'current',
+  2,
+  false,
+  '{"months_covered": 2}'::jsonb,
+  '2.0.0'
+from public.finance_cushions
+where user_id = '20000000-0000-0000-0000-000000000002';
 
 -- User B sees and updates B's row.
 do $$
@@ -217,10 +266,70 @@ begin
   ) then
     raise exception 'user A cannot read own cushion';
   end if;
+
+  if exists (
+    select 1 from public.finance_cushion_snapshots
+    where user_id = '20000000-0000-0000-0000-000000000002'
+  ) then
+    raise exception 'user A can read user B snapshot';
+  end if;
+
+  insert into public.finance_cushion_snapshots (
+    plan_id, user_id, action_id, trigger, scenario, months_covered,
+    sustainable, result, model_version
+  )
+  select
+    id,
+    user_id,
+    '30000000-0000-0000-0000-000000000001',
+    'completed',
+    'current',
+    4,
+    false,
+    '{"months_covered": 4}'::jsonb,
+    '2.0.0'
+  from public.finance_cushions
+  where user_id = '20000000-0000-0000-0000-000000000001';
+end
+$$;
+
+reset role;
+
+set local role anon;
+
+insert into public.finance_cushion_events (
+  action_id, session_id, event_name, step_id, locale, attribution
+)
+values (
+  '40000000-0000-0000-0000-000000000001',
+  '40000000-0000-0000-0000-000000000002',
+  'started',
+  'welcome',
+  'en',
+  '{"campaign": "youtube", "video": "runway"}'::jsonb
+);
+
+do $$
+begin
+  begin
+    insert into public.finance_cushion_events (
+      action_id, session_id, event_name, attribution
+    )
+    values (
+      '40000000-0000-0000-0000-000000000003',
+      '40000000-0000-0000-0000-000000000004',
+      'completed',
+      '{"income": "must-not-be-recorded"}'::jsonb
+    );
+    raise exception 'financial amount key was accepted in analytics';
+  exception
+    when check_violation then
+      null;
+  end;
 end
 $$;
 
 reset role;
 rollback;
 
-\echo 'PASS: finance_cushions has authenticated-only access and two-user RLS isolation'
+\echo 'PASS: runway plans, append-only snapshots, and amount-free events enforce RLS'
