@@ -3,7 +3,6 @@
 create schema if not exists control_plane;
 
 revoke all on schema control_plane from public, anon, authenticated;
-grant usage on schema control_plane to authenticated;
 
 create type control_plane.member_role as enum ('manager', 'agent', 'reviewer');
 create type control_plane.work_status as enum ('backlog', 'active_sprint', 'done');
@@ -247,8 +246,78 @@ alter default privileges in schema control_plane revoke all on tables from publi
 alter default privileges in schema control_plane revoke all on sequences from public, anon, authenticated;
 alter default privileges in schema control_plane revoke all on functions from public, anon, authenticated;
 
-grant execute on function control_plane.list_members() to authenticated;
-grant execute on function control_plane.list_work_items() to authenticated;
-grant execute on function control_plane.create_work_item(text, uuid, timestamptz, text[], text[]) to authenticated;
-grant execute on function control_plane.assign_work_item(uuid, uuid, timestamptz) to authenticated;
-grant execute on function control_plane.transition_work_item(uuid, control_plane.work_status) to authenticated;
+-- Only these public-schema wrappers are exposed through PostgREST. They have
+-- primitive signatures so callers never need USAGE on control_plane or its types.
+create function public.control_plane_list_members()
+returns table(user_id uuid, display_name text, role text)
+language sql stable security definer
+set search_path = pg_catalog
+as $$
+  select m.user_id, m.display_name, m.role::text
+  from control_plane.list_members() m;
+$$;
+
+create function public.control_plane_list_work_items()
+returns table(
+  id uuid, title text, assignee_id uuid, status text,
+  lease_expires_at timestamptz, created_at timestamptz, updated_at timestamptz
+)
+language sql stable security definer
+set search_path = pg_catalog
+as $$
+  select w.id, w.title, w.assignee_id, w.status::text,
+         w.lease_expires_at, w.created_at, w.updated_at
+  from control_plane.list_work_items() w;
+$$;
+
+create function public.control_plane_create_work_item(
+  p_title text, p_assignee_id uuid default null, p_lease_expires_at timestamptz default null,
+  p_blockers text[] default '{}', p_evidence_urls text[] default '{}'
+)
+returns table(id uuid, title text, assignee_id uuid, status text, lease_expires_at timestamptz, created_at timestamptz, updated_at timestamptz)
+language sql security definer
+set search_path = pg_catalog
+as $$
+  select w.id, w.title, w.assignee_id, w.status::text,
+         w.lease_expires_at, w.created_at, w.updated_at
+  from control_plane.create_work_item(p_title, p_assignee_id, p_lease_expires_at, p_blockers, p_evidence_urls) w;
+$$;
+
+create function public.control_plane_assign_work_item(
+  p_work_item_id uuid, p_assignee_id uuid default null, p_lease_expires_at timestamptz default null
+)
+returns table(id uuid, title text, assignee_id uuid, status text, lease_expires_at timestamptz, created_at timestamptz, updated_at timestamptz)
+language sql security definer
+set search_path = pg_catalog
+as $$
+  select w.id, w.title, w.assignee_id, w.status::text,
+         w.lease_expires_at, w.created_at, w.updated_at
+  from control_plane.assign_work_item(p_work_item_id, p_assignee_id, p_lease_expires_at) w;
+$$;
+
+create function public.control_plane_transition_work_item(p_work_item_id uuid, p_to_status text)
+returns table(id uuid, title text, assignee_id uuid, status text, lease_expires_at timestamptz, created_at timestamptz, updated_at timestamptz)
+language plpgsql security definer
+set search_path = pg_catalog
+as $$
+begin
+  if p_to_status not in ('backlog', 'active_sprint', 'done') then
+    raise exception 'invalid work status' using errcode = '23514';
+  end if;
+  return query
+    select w.id, w.title, w.assignee_id, w.status::text,
+           w.lease_expires_at, w.created_at, w.updated_at
+    from control_plane.transition_work_item(p_work_item_id, p_to_status::control_plane.work_status) w;
+end;
+$$;
+
+revoke all on function public.control_plane_list_members() from public, anon, authenticated;
+revoke all on function public.control_plane_list_work_items() from public, anon, authenticated;
+revoke all on function public.control_plane_create_work_item(text, uuid, timestamptz, text[], text[]) from public, anon, authenticated;
+revoke all on function public.control_plane_assign_work_item(uuid, uuid, timestamptz) from public, anon, authenticated;
+revoke all on function public.control_plane_transition_work_item(uuid, text) from public, anon, authenticated;
+grant execute on function public.control_plane_list_members() to authenticated;
+grant execute on function public.control_plane_list_work_items() to authenticated;
+grant execute on function public.control_plane_create_work_item(text, uuid, timestamptz, text[], text[]) to authenticated;
+grant execute on function public.control_plane_assign_work_item(uuid, uuid, timestamptz) to authenticated;
+grant execute on function public.control_plane_transition_work_item(uuid, text) to authenticated;

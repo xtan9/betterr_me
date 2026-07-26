@@ -336,8 +336,14 @@ describe("JournalEntryModal", () => {
 
     render(<JournalEntryModal {...defaultProps} />);
 
-    // The date "2026-02-23" should be formatted as readable date
-    expect(screen.getByText(/February/)).toBeInTheDocument();
+    // Match the user's runtime locale rather than assuming the test host is English.
+    const expectedDate = new Date(2026, 1, 23).toLocaleDateString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    expect(screen.getByText(expectedDate)).toBeInTheDocument();
   });
 
   // Prompt integration tests
