@@ -24,13 +24,67 @@ do $$ begin
   if exists (select 1 from information_schema.schemata where schema_name = 'control_plane') then raise exception 'control_plane visible through information_schema'; end if;
 end $$;
 
--- All private tables use RLS and authenticated has no table/sequence/function grants there.
-do $$ declare t text; begin
+-- All private objects use RLS and no application role (including PUBLIC) has
+-- a private-schema/table/sequence/function privilege. Check each privilege
+-- independently: PostgreSQL's has_*_privilege accepts one privilege per call.
+do $$ declare t text; s text; p record; grantee text; privilege text; begin
+  foreach grantee in array array['anon', 'authenticated'] loop
+    if has_schema_privilege(grantee, 'control_plane', 'USAGE')
+      or has_schema_privilege(grantee, 'control_plane', 'CREATE') then
+      raise exception '% has control_plane schema privilege', grantee;
+    end if;
+  end loop;
+  if exists (
+    select 1 from pg_namespace n cross join lateral aclexplode(coalesce(n.nspacl, acldefault('n', n.nspowner))) a
+    where n.nspname = 'control_plane' and a.grantee = 0
+  ) then raise exception 'PUBLIC has control_plane schema privilege'; end if;
   foreach t in array array['members','work_items','work_item_blockers','work_item_evidence','audit_events'] loop
     if not (select relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='control_plane' and c.relname=t) then raise exception 'RLS missing on %', t; end if;
-    if has_table_privilege(current_user, format('control_plane.%I', t), 'select,insert,update,delete') then raise exception 'table privilege leaked on %', t; end if;
+    foreach grantee in array array['anon', 'authenticated'] loop
+      foreach privilege in array array['SELECT', 'INSERT', 'UPDATE', 'DELETE'] loop
+        if has_table_privilege(grantee, format('control_plane.%I', t), privilege) then
+          raise exception '% table % privilege leaked on %', privilege, grantee, t;
+        end if;
+      end loop;
+    end loop;
+    if exists (
+      select 1 from pg_class c cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'control_plane' and c.relname = t and a.grantee = 0
+    ) then raise exception 'PUBLIC table privilege leaked on %', t; end if;
   end loop;
-  if exists (select 1 from information_schema.role_routine_grants where grantee='authenticated' and routine_schema='control_plane') then raise exception 'control_plane routine grant leaked'; end if;
+  for s in select c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='control_plane' and c.relkind='S' loop
+    foreach grantee in array array['anon', 'authenticated'] loop
+      foreach privilege in array array['USAGE', 'SELECT', 'UPDATE'] loop
+        if has_sequence_privilege(grantee, format('control_plane.%I', s), privilege) then
+          raise exception '% sequence % privilege leaked on %', privilege, grantee, s;
+        end if;
+      end loop;
+    end loop;
+    if exists (
+      select 1 from pg_class c cross join lateral aclexplode(coalesce(c.relacl, acldefault('S', c.relowner))) a
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'control_plane' and c.relname = s and a.grantee = 0
+    ) then raise exception 'PUBLIC sequence privilege leaked on %', s; end if;
+  end loop;
+  for p in select p.oid, p.proname, p.proowner, p.proacl from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='control_plane' loop
+    foreach grantee in array array['anon', 'authenticated'] loop
+      if has_function_privilege(grantee, p.oid, 'EXECUTE') then raise exception '% function privilege leaked on %', grantee, p.proname; end if;
+    end loop;
+    if exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE') then
+      raise exception 'PUBLIC function privilege leaked on %', p.proname;
+    end if;
+  end loop;
+  for p in select p.oid, p.proname, p.proowner, p.proacl from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('control_plane_list_members','control_plane_list_work_items','control_plane_create_work_item','control_plane_assign_work_item','control_plane_transition_work_item') loop
+    if not has_function_privilege('authenticated', p.oid, 'EXECUTE') then raise exception 'authenticated missing allowed public RPC execute: %', p.proname; end if;
+    if has_function_privilege('anon', p.oid, 'EXECUTE') then raise exception 'anon public RPC execute leaked: %', p.proname; end if;
+    if exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE') then
+      raise exception 'PUBLIC public RPC execute leaked: %', p.proname;
+    end if;
+  end loop;
+  if (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('control_plane_list_members','control_plane_list_work_items','control_plane_create_work_item','control_plane_assign_work_item','control_plane_transition_work_item')) <> 5 then
+    raise exception 'expected exactly five public control-plane RPCs';
+  end if;
 end $$;
 
 -- Unauthenticated and ordinary customers are denied every public RPC and all direct CRUD.
@@ -65,14 +119,19 @@ end $$;
 
 -- Each manager mutation locks/changes the item and adds exactly one correct audit event.
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
-do $$ declare created record; assigned record; transitioned record; begin
+do $$ declare created record; assigned record; transitioned record; manager_id uuid := '10000000-0000-0000-0000-000000000001'; agent_id uuid := '10000000-0000-0000-0000-000000000002'; begin
   select * into created from public.control_plane_create_work_item('Audited work', '10000000-0000-0000-0000-000000000002', null, array['Awaiting review'], array['https://example.test/evidence']);
-  if (select count(*) from control_plane.audit_events where work_item_id=created.id and action='work_item.created') <> 1 then raise exception 'create audit incorrect'; end if;
+  if not exists (select 1 from control_plane.audit_events where work_item_id=created.id and actor_id=manager_id and action='work_item.created' and payload = jsonb_build_object('title', 'Audited work', 'assignee_id', agent_id, 'blocker_count', 1, 'evidence_count', 1)) then raise exception 'create audit actor/payload incorrect'; end if;
+  if (select count(*) from control_plane.audit_events where work_item_id=created.id and action='work_item.created') <> 1 then raise exception 'create audit count incorrect'; end if;
   if (select count(*) from control_plane.work_item_blockers where work_item_id=created.id) <> 1 or (select count(*) from control_plane.work_item_evidence where work_item_id=created.id) <> 1 then raise exception 'related create rows missing'; end if;
-  select * into assigned from public.control_plane_assign_work_item(created.id, '10000000-0000-0000-0000-000000000002');
-  if assigned.assignee_id <> '10000000-0000-0000-0000-000000000002'::uuid or (select count(*) from control_plane.audit_events where work_item_id=created.id and action='work_item.assigned') <> 1 then raise exception 'assign/audit incorrect'; end if;
+  select * into assigned from public.control_plane_assign_work_item(created.id, agent_id);
+  if assigned.assignee_id <> agent_id then raise exception 'assignment incorrect'; end if;
+  if not exists (select 1 from control_plane.audit_events where work_item_id=created.id and actor_id=manager_id and action='work_item.assigned' and payload = jsonb_build_object('assignee_id', agent_id, 'lease_expires_at', null)) then raise exception 'assign audit actor/payload incorrect'; end if;
+  if (select count(*) from control_plane.audit_events where work_item_id=created.id and action='work_item.assigned') <> 1 then raise exception 'assign audit count incorrect'; end if;
   select * into transitioned from public.control_plane_transition_work_item(created.id, 'active_sprint');
-  if transitioned.status <> 'active_sprint' or (select count(*) from control_plane.audit_events where work_item_id=created.id and action='work_item.transitioned') <> 1 then raise exception 'transition/audit incorrect'; end if;
+  if transitioned.status <> 'active_sprint' then raise exception 'transition incorrect'; end if;
+  if not exists (select 1 from control_plane.audit_events where work_item_id=created.id and actor_id=manager_id and action='work_item.transitioned' and payload = jsonb_build_object('to', 'active_sprint')) then raise exception 'transition audit actor/payload incorrect'; end if;
+  if (select count(*) from control_plane.audit_events where work_item_id=created.id and action='work_item.transitioned') <> 1 then raise exception 'transition audit count incorrect'; end if;
 end $$;
 do $$ begin perform public.control_plane_create_work_item('disabled', '10000000-0000-0000-0000-000000000005'); raise exception 'disabled assignee accepted'; exception when check_violation then null; end $$;
 do $$ begin perform public.control_plane_create_work_item('wrong-role', '10000000-0000-0000-0000-000000000003'); raise exception 'reviewer assignee accepted'; exception when check_violation then null; end $$;
