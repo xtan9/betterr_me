@@ -100,19 +100,19 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON financial_safety_return_touches TO authe
 GRANT SELECT, INSERT, UPDATE, DELETE ON financial_safety_funnel_events TO authenticated;
 
 CREATE POLICY "Household members manage their financial safety checkups" ON financial_safety_checkups FOR ALL TO authenticated
-  USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = (SELECT auth.uid())))
-  WITH CHECK (household_id IN (SELECT household_id FROM household_members WHERE user_id = (SELECT auth.uid())));
+  USING (household_id IN (SELECT get_my_household_ids()))
+  WITH CHECK (household_id IN (SELECT get_my_household_ids()));
 
 CREATE POLICY "Household members read their financial safety return touches" ON financial_safety_return_touches FOR SELECT TO authenticated
-  USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = (SELECT auth.uid())));
+  USING (household_id IN (SELECT get_my_household_ids()));
 CREATE POLICY "Household members append their financial safety return touches" ON financial_safety_return_touches FOR INSERT TO authenticated
-  WITH CHECK (household_id IN (SELECT household_id FROM household_members WHERE user_id = (SELECT auth.uid())));
+  WITH CHECK (household_id IN (SELECT get_my_household_ids()));
 CREATE POLICY "Financial safety return touches are immutable" ON financial_safety_return_touches FOR UPDATE TO authenticated
   USING (false);
 
 CREATE POLICY "Household members read their financial safety funnel events" ON financial_safety_funnel_events FOR SELECT TO authenticated
-  USING (household_id IN (SELECT household_id FROM household_members WHERE user_id = (SELECT auth.uid())));
+  USING (household_id IN (SELECT get_my_household_ids()));
 CREATE POLICY "Household members append their financial safety funnel events" ON financial_safety_funnel_events FOR INSERT TO authenticated
-  WITH CHECK (household_id IN (SELECT household_id FROM household_members WHERE user_id = (SELECT auth.uid())));
+  WITH CHECK (household_id IN (SELECT get_my_household_ids()));
 CREATE POLICY "Financial safety funnel events are immutable" ON financial_safety_funnel_events FOR UPDATE TO authenticated
   USING (false);
