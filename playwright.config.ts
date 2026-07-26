@@ -102,7 +102,7 @@ export default defineConfig({
   /* Start server before running tests.
    * CI uses production build (pnpm start) for realistic testing.
    * Local dev uses pnpm dev with server reuse for faster iteration. */
-  webServer: {
+  webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
     command: process.env.CI ? 'pnpm start' : 'pnpm dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
