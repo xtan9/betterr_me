@@ -19,3 +19,16 @@ Release rule: every row must have an implemented file and runnable test before r
 ## Existing safe foundation
 
 `supabase/migrations/20260726000001_financial_safety_cushion_contract.sql` is deployed on production and remains the persistence/RLS contract. `lib/money/financial-safety-cushion.ts` supplies the bounded 12-month, explainable simulation. No destructive schema change is planned without a separate data-safety review.
+
+## Remaining-capability execution plan
+
+| Milestone | Directly responsible owner | Exact completion checkpoint |
+| --- | --- | --- |
+| Draft entry and save/resume | Theo Browne | Complete: rebased slice plus focused test evidence by 2026-07-25 18:00 PDT. |
+| Four-step guided flow and household-aware scenarios | Matt Loftus | 2026-07-27 18:00 PDT: all four steps runnable locally, including manual-only, resume, partner gating, and save-as-you-go tests. |
+| Result, curve, confidence, saved completed state, and Review/update | Gaurav Jawla | 2026-07-28 18:00 PDT: deterministic result fixtures and accessible rendered result attached to PR #468. |
+| Persistence, attribution, first/return touch, funnel, and 30-completion reporting | Bailey Johnson and Tingying Ding | 2026-07-29 18:00 PDT: API/RLS/event contract and reporting-query evidence attached to PR #468. |
+| Full traceability, independent QA, exact-SHA authenticated Preview | Jeffery Zhang and Elsa | 2026-07-30 18:00 PDT: every table row implemented and tested; preview journey and gate evidence recorded. |
+| Controlled production promotion and synthetic-data smoke | Theo Browne | Production candidate: 2026-07-31, after independent approval, exact-head gates, and the required deployed-SHA/login/card/check-up/saved-result/isolation smoke all pass. |
+
+The July 31 date is a production target, not a launch claim. Any missed evidence checkpoint moves the date; no partial capability is eligible for approval.
