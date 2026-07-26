@@ -9,6 +9,37 @@ evidence_dir="${FINANCIAL_SAFETY_EVIDENCE_DIR:-ci-evidence}"
 mkdir -p "$evidence_dir"
 migration="supabase/migrations/20260726000003_grant_financial_safety_post_signup_baseline.sql"
 rpc_migration="supabase/migrations/20260726000004_initialize_my_household_rpc.sql"
+failure_context=''
+stderr_log="$evidence_dir/catalog-stderr.sanitized.log"
+
+sanitize_stderr() {
+  sed -E \
+    -e 's/(postgres(ql)?:\/\/)[^[:space:]@]+@/\1[REDACTED]@/g' \
+    -e 's/(api[_-]?key|token|secret|password)[=:][^[:space:]]+/\1=[REDACTED]/Ig'
+}
+
+exec 3>&2
+exec 2> >(sanitize_stderr | tee "$stderr_log" >&3)
+
+report_failure() {
+  status=$?
+  [ "$status" -ne 0 ] || return
+  printf 'financial safety catalog assertion failed: %s\n' "${failure_context:-unclassified command failure}" >&3
+
+  for evidence in \
+    "$evidence_dir/grant-diff.txt" \
+    "$evidence_dir/catalog-snapshot.tsv" \
+    "$evidence_dir/authenticated-grants.tsv" \
+    "$evidence_dir/initialize-my-household-catalog.tsv"; do
+    if [ -f "$evidence" ]; then
+      printf '%s\n' "--- $evidence ---" >&3
+      cat "$evidence" >&3
+    fi
+  done
+
+  exit "$status"
+}
+trap report_failure EXIT
 
 expected_grants="$evidence_dir/expected-approved-grants.txt"
 actual_grants="$evidence_dir/actual-approved-grants.txt"
@@ -22,14 +53,17 @@ GRANT INSERT ON TABLE public.households TO authenticated;
 GRANT INSERT ON TABLE public.household_members TO authenticated;
 EOF
 
+failure_context="approved-grants migration path: $migration"
 grep -E '^GRANT ' "$migration" > "$actual_grants"
 diff -u "$expected_grants" "$actual_grants" > "$evidence_dir/grant-diff.txt"
 
 if grep -Eiq '^[[:space:]]*(ALTER[[:space:]]+POLICY|CREATE[[:space:]]+POLICY|DROP[[:space:]]+POLICY|DISABLE[[:space:]]+ROW[[:space:]]+LEVEL[[:space:]]+SECURITY|ALTER[[:space:]]+TABLE|ALTER[[:space:]]+ROLE|GRANT[[:space:]]+.*[[:space:]]+TO[[:space:]]+(service_role|anon))' "$migration"; then
+  failure_context="prohibited policy/RLS/owner/role assertion: $migration"
   echo "prohibited policy/RLS/owner/role statement found" >&2
   exit 1
 fi
 
+failure_context='catalog snapshot query'
 psql "$FINANCIAL_SAFETY_DB_URL" -At -F $'\t' -v ON_ERROR_STOP=1 <<'SQL' > "$evidence_dir/catalog-snapshot.tsv"
 SELECT 'policy', tablename, policyname, cmd, COALESCE(qual, ''), COALESCE(with_check, '')
 FROM pg_policies
@@ -44,6 +78,7 @@ FROM pg_auth_members m JOIN pg_roles parent ON parent.oid = m.roleid JOIN pg_rol
 ORDER BY 1, 2, 3;
 SQL
 
+failure_context='authenticated grants catalog query'
 psql "$FINANCIAL_SAFETY_DB_URL" -At -F $'\t' -v ON_ERROR_STOP=1 <<'SQL' > "$evidence_dir/authenticated-grants.tsv"
 SELECT table_name, privilege_type
 FROM information_schema.role_table_grants
@@ -53,10 +88,12 @@ ORDER BY table_name, privilege_type;
 SQL
 
 if grep -q $'^households\tSELECT$' "$evidence_dir/authenticated-grants.tsv"; then
+  failure_context='prohibited households SELECT grant assertion'
   echo "households SELECT grant is prohibited" >&2
   exit 1
 fi
 
+failure_context='initialize_my_household catalog query'
 psql "$FINANCIAL_SAFETY_DB_URL" -At -F $'\t' -v ON_ERROR_STOP=1 <<'SQL' > "$evidence_dir/initialize-my-household-catalog.tsv"
 SELECT pg_get_userbyid(p.proowner), p.prosecdef::text, p.proconfig::text,
   has_function_privilege('public', p.oid, 'EXECUTE')::text,
@@ -65,7 +102,11 @@ SELECT pg_get_userbyid(p.proowner), p.prosecdef::text, p.proconfig::text,
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND p.proname = 'initialize_my_household' AND p.pronargs = 0;
 SQL
+failure_context='initialize_my_household catalog assertion'
 grep -qx $'postgres\tfalse\t{search_path=pg_catalog, public}\tfalse\tfalse\ttrue' "$evidence_dir/initialize-my-household-catalog.tsv"
+failure_context="initialize_my_household owner assertion: $rpc_migration"
 grep -qx 'ALTER FUNCTION public.initialize_my_household() OWNER TO postgres;' "$rpc_migration"
+failure_context="initialize_my_household PUBLIC revoke assertion: $rpc_migration"
 grep -qx 'REVOKE ALL ON FUNCTION public.initialize_my_household() FROM PUBLIC;' "$rpc_migration"
+failure_context="initialize_my_household authenticated execute assertion: $rpc_migration"
 grep -qx 'GRANT EXECUTE ON FUNCTION public.initialize_my_household() TO authenticated;' "$rpc_migration"
