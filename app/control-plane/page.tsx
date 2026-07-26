@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { forbidden, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ControlPlaneContent } from "@/components/control-plane/control-plane-content";
 import type { ControlPlaneMember, ControlPlaneWorkItem } from "@/lib/control-plane/types";
@@ -13,9 +13,10 @@ export default async function ControlPlanePage() {
   ]);
 
   // The RPC independently requires an enabled control-plane member. Do not
-  // turn an authorization failure into an empty, misleading dashboard.
+  // turn an authorization failure into an empty, misleading dashboard or a
+  // server error. The segment's forbidden page is deliberately non-enumerating.
   if (membersResult.error || workItemsResult.error) {
-    throw new Error("Unable to load Control Plane data");
+    forbidden();
   }
 
   return (

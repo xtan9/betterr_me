@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
     ];
   },
   experimental: {
+    authInterrupts: true,
     optimizePackageImports: [
       'lucide-react',
       'radix-ui',
