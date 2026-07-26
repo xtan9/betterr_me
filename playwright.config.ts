@@ -4,6 +4,15 @@ import { STORAGE_STATE } from './e2e/constants';
 
 dotenv.config({ path: '.env.local' });
 
+const financialSafetyProjectSelected = process.argv.some(
+  (argument, index) =>
+    argument === '--project=financial-safety-local' ||
+    (argument === '--project' && process.argv[index + 1] === 'financial-safety-local'),
+);
+const runFinancialSafetyLocal =
+  process.env.FINANCIAL_SAFETY_LOCAL_E2E === '1' && financialSafetyProjectSelected;
+const financialSafetySpec = /financial-safety\.spec\.ts/;
+
 /**
  * Playwright configuration for E2E testing
  * Covers QA-001 through QA-003 (E2E tests), QA-006 (cross-browser), QA-007 (mobile responsive)
@@ -38,7 +47,10 @@ export default defineConfig({
   projects: [
     {
       name: 'financial-safety-local',
-      testMatch: /financial-safety\.spec\.ts/,
+      testMatch: financialSafetySpec,
+      // This synthetic-user test is enabled only by its isolated local-smoke
+      // command, which supplies both the local-stack flag and this project.
+      testIgnore: runFinancialSafetyLocal ? undefined : financialSafetySpec,
       use: { ...devices['Desktop Chrome'] },
     },
     // Auth setup — runs once, saves session for all browser projects
@@ -63,17 +75,19 @@ export default defineConfig({
     {
       name: 'chromium',
       dependencies: ['setup'],
-      testIgnore: [/visual-regression\.spec\.ts/, /financial-safety\.spec\.ts/],
+      testIgnore: [/visual-regression\.spec\.ts/, financialSafetySpec],
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
     },
     {
       name: 'firefox',
       dependencies: ['setup'],
+      testIgnore: financialSafetySpec,
       use: { ...devices['Desktop Firefox'], storageState: STORAGE_STATE },
     },
     {
       name: 'webkit',
       dependencies: ['setup'],
+      testIgnore: financialSafetySpec,
       use: { ...devices['Desktop Safari'], storageState: STORAGE_STATE },
     },
 
@@ -81,11 +95,13 @@ export default defineConfig({
     {
       name: 'mobile-chrome',
       dependencies: ['setup'],
+      testIgnore: financialSafetySpec,
       use: { ...devices['Pixel 5'], storageState: STORAGE_STATE },
     },
     {
       name: 'mobile-safari',
       dependencies: ['setup'],
+      testIgnore: financialSafetySpec,
       use: { ...devices['iPhone 12'], storageState: STORAGE_STATE },
     },
 
@@ -93,6 +109,7 @@ export default defineConfig({
     {
       name: 'tablet',
       dependencies: ['setup'],
+      testIgnore: financialSafetySpec,
       use: {
         ...devices['iPad (gen 7)'],
         storageState: STORAGE_STATE,
@@ -103,6 +120,7 @@ export default defineConfig({
     {
       name: 'mobile-small',
       dependencies: ['setup'],
+      testIgnore: financialSafetySpec,
       use: {
         viewport: { width: 375, height: 667 },
         userAgent: devices['iPhone SE'].userAgent,

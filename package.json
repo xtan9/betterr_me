@@ -9,7 +9,7 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=visual-regression --project=chromium --project=firefox --project=webkit --project=mobile-chrome --project=mobile-safari --project=tablet --project=mobile-small",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:chromium": "playwright test --project=chromium",
     "test:e2e:firefox": "playwright test --project=firefox",
