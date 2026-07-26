@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ControlPlaneContent } from "@/components/control-plane/control-plane-content";
+import { ControlPlaneAccessDenied } from "@/components/control-plane/control-plane-access-denied";
+import { SidebarShell } from "@/components/layouts/sidebar-shell";
 import type { ControlPlaneMember, ControlPlaneWorkItem } from "@/lib/control-plane/types";
 
 export default async function ControlPlanePage() {
@@ -14,14 +16,21 @@ export default async function ControlPlanePage() {
 
   // The RPC independently requires an enabled control-plane member. Do not
   // turn an authorization failure into an empty, misleading dashboard.
-  if (membersResult.error || workItemsResult.error) {
-    throw new Error("Unable to load Control Plane data");
+  if (membersResult.error?.code === "42501" || workItemsResult.error?.code === "42501") {
+    return <ControlPlaneAccessDenied />;
   }
+  if (membersResult.error || workItemsResult.error) throw new Error("Unable to load Control Plane data");
+
+  const members = membersResult.data as ControlPlaneMember[];
+  const canManage = members.some((member) => member.user_id === user.id && member.role === "manager");
 
   return (
-    <ControlPlaneContent
-      initialMembers={membersResult.data as ControlPlaneMember[]}
-      initialWorkItems={workItemsResult.data as ControlPlaneWorkItem[]}
-    />
+    <SidebarShell>
+      <ControlPlaneContent
+        canManage={canManage}
+        initialMembers={members}
+        initialWorkItems={workItemsResult.data as ControlPlaneWorkItem[]}
+      />
+    </SidebarShell>
   );
 }
