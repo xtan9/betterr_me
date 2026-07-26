@@ -11,7 +11,6 @@ const ACTION_URLS: Record<ReminderSourceType, (date?: string) => string> = {
   calendar_event: (date) => `/calendar${date ? `?date=${date}` : ''}`,
   task: () => '/tasks',
   habit: () => '/habits',
-  bill: () => '/money/bills',
 };
 
 export interface ReminderEmailPayload {
@@ -87,16 +86,6 @@ export async function sendReminderEmail(
       case 'habit':
         templateProps = {
           habitName: payload.itemName,
-          actionUrl,
-          unsubscribeUrl,
-          locale,
-        };
-        break;
-      case 'bill':
-        templateProps = {
-          billName: payload.itemName,
-          amount: payload.amount,
-          dueDate: payload.date || '',
           actionUrl,
           unsubscribeUrl,
           locale,

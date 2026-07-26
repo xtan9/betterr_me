@@ -104,7 +104,7 @@ describe("AppSidebar", () => {
     render(<AppSidebar {...defaultProps} />);
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(9); // 1 logo + 8 nav
+    expect(links).toHaveLength(8); // 1 logo + 7 nav
   });
 
   it("renders correct hrefs for logo and all nav items", () => {
@@ -117,9 +117,8 @@ describe("AppSidebar", () => {
     expect(links[3]).toHaveAttribute("href", "/tasks");
     expect(links[4]).toHaveAttribute("href", "/journal");
     expect(links[5]).toHaveAttribute("href", "/workouts");
-    expect(links[6]).toHaveAttribute("href", "/money");
-    expect(links[7]).toHaveAttribute("href", "/calendar");
-    expect(links[8]).toHaveAttribute("href", "/chat");
+    expect(links[6]).toHaveAttribute("href", "/calendar");
+    expect(links[7]).toHaveAttribute("href", "/chat");
   });
 
   it("renders i18n translation keys as labels", () => {
@@ -130,7 +129,6 @@ describe("AppSidebar", () => {
     expect(screen.getByText("tasks")).toBeInTheDocument();
     expect(screen.getByText("journal")).toBeInTheDocument();
     expect(screen.getByText("workouts")).toBeInTheDocument();
-    expect(screen.getByText("money")).toBeInTheDocument();
   });
 
   it("renders flat nav without group labels", () => {
@@ -173,22 +171,6 @@ describe("AppSidebar", () => {
 
     const activeLink = screen.getByRole("link", { current: "page" });
     expect(activeLink).toHaveAttribute("href", "/tasks");
-  });
-
-  it("renders Money nav item with correct label and link", () => {
-    render(<AppSidebar {...defaultProps} />);
-
-    const moneyLink = screen.getByRole("link", { name: /money/i });
-    expect(moneyLink).toBeInTheDocument();
-    expect(moneyLink).toHaveAttribute("href", "/money");
-  });
-
-  it("highlights money link for nested money routes", () => {
-    mockPathname.mockReturnValue("/money/accounts");
-    render(<AppSidebar {...defaultProps} />);
-
-    const activeLink = screen.getByRole("link", { current: "page" });
-    expect(activeLink).toHaveAttribute("href", "/money");
   });
 
   it("has only one active nav item at a time", () => {
@@ -301,9 +283,9 @@ describe("AppSidebar", () => {
       render(<AppSidebar {...defaultProps} />);
 
       const links = screen.getAllByRole("link");
-      // logo=0, dashboard=1, habits=2, tasks=3, journal=4, workouts=5, money=6, calendar=7, chat=8
-      expect(links[7]).toHaveAttribute("href", "/calendar");
-      expect(links[8]).toHaveAttribute("href", "/chat");
+      // logo=0, dashboard=1, habits=2, tasks=3, journal=4, workouts=5, calendar=6, chat=7
+      expect(links[6]).toHaveAttribute("href", "/calendar");
+      expect(links[7]).toHaveAttribute("href", "/chat");
     });
   });
 

@@ -1255,7 +1255,7 @@ export type CalendarEventUpdate = Partial<Omit<CalendarEvent, 'id' | 'user_id' |
 // REMINDERS
 // =============================================================================
 
-export type ReminderSourceType = 'calendar_event' | 'task' | 'habit' | 'bill';
+export type ReminderSourceType = 'calendar_event' | 'task' | 'habit';
 export type ReminderType = 'relative' | 'absolute';
 export type ReminderChannel = 'push' | 'email';
 export type ReminderStatus = 'pending' | 'sent' | 'failed' | 'snoozed';

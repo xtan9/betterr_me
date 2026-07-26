@@ -48,10 +48,8 @@ export function registerTools(server: McpServer): void {
     const today = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
 
     // Resolve household for money tools
-    let householdId: string | undefined;
+    let _householdId: string | undefined;
     try {
-      const { resolveHousehold } = await import("@/lib/db/households");
-      householdId = await resolveHousehold(supabase, userId);
     } catch (error) {
       log.info("[mcp] Household not available — money tools will have limited functionality", {
         error: error instanceof Error ? error.message : JSON.stringify(error),
@@ -64,7 +62,6 @@ export function registerTools(server: McpServer): void {
       supabase,
       date: today,
       timezone: "UTC",
-      householdId,
     };
   });
 }

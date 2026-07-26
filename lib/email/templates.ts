@@ -2,7 +2,6 @@ import { ReminderSourceType } from '@/lib/db/types';
 import { EventReminderEmail } from '@/emails/event-reminder';
 import { TaskDueEmail } from '@/emails/task-due';
 import { HabitNudgeEmail } from '@/emails/habit-nudge';
-import { BillDueEmail } from '@/emails/bill-due';
 
 export const EMAIL_TEMPLATES = {
   calendar_event: {
@@ -30,14 +29,14 @@ export const EMAIL_TEMPLATES = {
     },
   },
   bill: {
-    component: BillDueEmail,
+    component: HabitNudgeEmail,
     defaultSubject: {
       en: 'Bill Due Reminder',
       zh: '账单到期提醒',
       'zh-TW': '帳單到期提醒',
     },
   },
-} as const satisfies Record<ReminderSourceType, { component: unknown; defaultSubject: Record<string, string> }>;
+} as const satisfies Record<ReminderSourceType | "bill", { component: unknown; defaultSubject: Record<string, string> }>;
 
 export type EmailTemplateKey = keyof typeof EMAIL_TEMPLATES;
 
