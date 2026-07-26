@@ -15,7 +15,7 @@ test.describe('Financial Safety Cushion local production smoke', () => {
     await page.goto('/auth/login');
     await page.getByLabel(/email/i).fill(email);
     await page.getByLabel(/^password$/i).fill(password);
-    await page.getByRole('button', { name: /log in|sign in/i }).click();
+    await page.getByRole('button', { name: /login/i }).click();
     await page.waitForURL('/dashboard');
 
     await page.goto('/money/safety-cushion');

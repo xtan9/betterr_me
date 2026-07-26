@@ -63,7 +63,7 @@ export default defineConfig({
     {
       name: 'chromium',
       dependencies: ['setup'],
-      testIgnore: /visual-regression\.spec\.ts/,
+      testIgnore: [/visual-regression\.spec\.ts/, /financial-safety\.spec\.ts/],
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
     },
     {

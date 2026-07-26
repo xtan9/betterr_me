@@ -92,6 +92,17 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Run isolated local production-mode partial Gate 1 smoke
         run: bash scripts/run-financial-safety-local-e2e.sh
+      - name: Retain Financial Safety smoke failure artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: financial-safety-local-smoke-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 1
+          compression-level: 9
 
   check-migrations:
     runs-on: ubuntu-latest
