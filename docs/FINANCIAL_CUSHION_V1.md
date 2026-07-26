@@ -84,6 +84,9 @@ The authenticated browser proof is
 e2e/financial-cushion.spec.ts. It covers create, save, reload, and persisted
 result recovery against the real app.
 
+Manual smoke: on the disposable database, run the feature reset followed by
+the exact psql command for finance_cushion_rls.sql from the PR capability map.
+
 ## Rollout and rollback
 
 1. Run the full CI suite, build, deterministic calculation tests, the
