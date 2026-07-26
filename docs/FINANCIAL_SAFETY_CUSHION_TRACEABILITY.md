@@ -1,7 +1,7 @@
 # Financial Safety Cushion V1 Traceability
 
-Status: active corrective-delivery baseline  
-Source: [Approved V1 PRD](https://app.notion.com/p/3a82db745b2981f68db4e3300eecf5c2)  
+Status: active corrective-delivery baseline
+Source: [Approved V1 PRD](https://app.notion.com/p/3a82db745b2981f68db4e3300eecf5c2)
 Release rule: every row must have an implemented file and runnable test before review.
 
 | Approved capability | Planned implementation | Required runnable evidence |
