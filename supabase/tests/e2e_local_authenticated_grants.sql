@@ -21,7 +21,9 @@ begin
     'habit_graduations',
     'categories',
     'recurring_tasks',
-    'projects'
+    'projects',
+    'journal_entries',
+    'workouts'
   ] loop
     if to_regclass(format('public.%I', table_name)) is not null then
       execute format(
