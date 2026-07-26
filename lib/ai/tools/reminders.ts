@@ -20,12 +20,12 @@ export function reminderTools(): ToolDefinition[] {
     {
       name: "createReminder",
       description:
-        "Create a reminder linked to an existing task, calendar event, habit, or bill. The reminder fires a push notification at the specified time.",
+        "Create a reminder linked to an existing task, calendar event, or habit. The reminder fires a push notification at the specified time.",
       parameters: z.object({
         sourceType: z
           .enum(["calendar_event", "task", "habit"])
           .describe("Type of item this reminder is for"),
-        sourceId: z.string().describe("ID of the task, event, habit, or bill"),
+        sourceId: z.string().describe("ID of the task, event, or habit"),
         fireAt: z
           .string()
           .describe(

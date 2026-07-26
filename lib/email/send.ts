@@ -16,9 +16,8 @@ const ACTION_URLS: Record<ReminderSourceType, (date?: string) => string> = {
 export interface ReminderEmailPayload {
   sourceType: ReminderSourceType;
   itemName: string;
-  date?: string;      // YYYY-MM-DD for event/task/bill dates
+  date?: string;      // YYYY-MM-DD for event/task dates
   time?: string;      // HH:MM for event/task times
-  amount?: string;    // For bill amounts (formatted string like "$50.00")
 }
 
 export interface SendReminderEmailResult {

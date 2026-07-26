@@ -411,8 +411,6 @@ export function DashboardContent({
         <MotivationMessage stats={data.stats} topStreakHabit={topStreakHabit} onDismiss={handleDismissMotivation} />
       )}
 
-      {/* Money Summary — spending pulse, renders null if no accounts */}
-
       {/* Absence Recovery Cards — habits with missed scheduled days */}
       {absenceHabits.length > 0 && (
         <div className="flex flex-col gap-card-gap">

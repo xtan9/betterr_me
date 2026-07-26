@@ -1,7 +1,7 @@
 /**
  * Cross-domain feed aggregation.
  *
- * Normalizes tasks, habits, bills, and workouts into CalendarFeedItem[]
+ * Normalizes tasks, habits, and workouts into CalendarFeedItem[]
  * so the calendar can render all domains uniformly.
  */
 
@@ -118,10 +118,6 @@ export function normalizeHabits(
 }
 
 /**
- * Normalize recurring bills into feed items.
- * Only includes active, non-dismissed bills with a next_due_date in range.
- */
-/**
  * Normalize completed workouts into feed items.
  * Uses the started_at date as the calendar date.
  */
@@ -182,7 +178,7 @@ export function aggregateFeedItems(
       if (!a.allDay && b.allDay) return 1;
       // Then by start time
       if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
-      // Then by domain order: events, tasks, habits, bills, workouts
+      // Then by domain order: events, tasks, habits, workouts
       const domainOrder: Record<string, number> = {
         events: 0,
         tasks: 1,

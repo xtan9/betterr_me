@@ -1,6 +1,6 @@
 # BetterR.Me
 
-A personal productivity and finance web app — track habits, tasks, workouts, finances, journal entries, and chat with an AI assistant. Built with Next.js 16 and Supabase.
+A personal productivity web app — track habits, tasks, workouts, journal entries, and chat with an AI assistant. Built with Next.js 16 and Supabase.
 
 ## Features
 
@@ -8,7 +8,6 @@ A personal productivity and finance web app — track habits, tasks, workouts, f
 - **Tasks** — task management with recurring tasks and project grouping
 - **Journal** — journaling with cross-entry linking
 - **Workouts** — exercise tracking with routines and custom exercises
-- **Money** — transactions, budgets, recurring bills, savings goals, net worth tracking, bank integration (Plaid)
 - **Calendar** — unified calendar view with reminders and push notifications
 - **AI Chat** — conversational AI assistant powered by OpenAI through a private gateway, with conversation persistence and auto-generated titles
 - **Dashboard** — overview with insights across all domains
@@ -29,7 +28,6 @@ A personal productivity and finance web app — track habits, tasks, workouts, f
 | i18n | next-intl (en, zh, zh-TW) |
 | Theming | next-themes (class-based dark mode) |
 | Email | Resend |
-| Banking | Plaid |
 | Push | Web Push (VAPID) |
 | Testing | Vitest + Testing Library + vitest-axe + Playwright |
 | Package manager | pnpm |

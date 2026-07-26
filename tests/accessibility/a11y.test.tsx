@@ -50,7 +50,6 @@ vi.mock("next-intl", () => ({
         nextMonth: "Next month",
         openMenu: "Open menu",
         delete: "Delete",
-        editBill: "Edit Bill",
         removeCategory: "Remove category",
         memberRemove: "Remove",
         inviteCopyLink: "Copy invite link",

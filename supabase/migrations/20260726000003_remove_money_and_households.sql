@@ -6,6 +6,25 @@ DROP POLICY "Users can view own and household member profiles" ON public.profile
 CREATE POLICY "Users can view own profile" ON public.profiles
   FOR SELECT USING (auth.uid() = id);
 
+-- Retire legacy bill reminder state before tightening the retained reminder
+-- contract. This is forward-only: old bill rows are Money data covered by the
+-- approved deletion, and all future rows are limited to retained sources.
+DELETE FROM public.reminder_defaults WHERE source_type = 'bill';
+DELETE FROM public.reminders WHERE source_type = 'bill';
+
+ALTER TABLE public.reminders DROP CONSTRAINT reminders_source_type_check;
+ALTER TABLE public.reminders
+  ADD CONSTRAINT reminders_source_type_check
+  CHECK (source_type IN ('calendar_event', 'task', 'habit'));
+
+ALTER TABLE public.reminder_defaults DROP CONSTRAINT reminder_defaults_source_type_check;
+ALTER TABLE public.reminder_defaults
+  ADD CONSTRAINT reminder_defaults_source_type_check
+  CHECK (source_type IN ('calendar_event', 'task', 'habit'));
+
+COMMENT ON TABLE public.reminders IS 'Source-agnostic reminders for calendar events, tasks, and habits';
+COMMENT ON TABLE public.reminder_defaults IS 'Per-user smart default reminder settings by retained source type';
+
 -- This retained policy references household_members. Remove it explicitly
 -- before the RESTRICT drop so a future dependency still stops this migration.
 DROP POLICY "Users can view their households" ON public.households;

@@ -18,7 +18,6 @@ export interface ActionResult {
  * Actions:
  * - toggle_task: POST /api/tasks/[id]/toggle
  * - toggle_habit: POST /api/habits/[id]/toggle with { date }
- * - dismiss_bill: PATCH /api/money/bills/[id] with { user_status: "dismissed" }
  * - navigate_workout: client-side navigation to /workouts/[id]
  *
  * @param onMutated Callback fired after a successful mutation so the caller can refetch data.

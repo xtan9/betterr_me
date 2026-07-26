@@ -60,16 +60,6 @@
     --section-personal-muted: 160 55% 93%;
     --section-work: 215 75% 55%;
     --section-work-muted: 215 75% 95%;
-    /* === Calm Finance tokens === */
-    --money-sage: 155 25% 55%;
-    --money-sage-light: 155 20% 92%;
-    --money-sage-foreground: 155 30% 25%;
-    --money-amber: 35 60% 55%;
-    --money-amber-light: 35 40% 92%;
-    --money-amber-foreground: 35 50% 30%;
-    --money-surface: 155 10% 98%;
-    --money-border: 155 15% 88%;
-
     /* === Category colors === */
     --category-health: 350 80% 55%;
     --category-health-muted: 350 80% 95%;
@@ -81,17 +71,6 @@
     --category-productivity-muted: 40 85% 95%;
     --category-other: 215 15% 55%;
     --category-other-muted: 215 15% 95%;
-
-    /* === Calm Finance tokens === */
-    --money-sage: 155 25% 55%;
-    --money-sage-light: 155 20% 92%;
-    --money-sage-foreground: 155 30% 25%;
-    --money-amber: 35 60% 55%;
-    --money-amber-light: 35 40% 92%;
-    --money-amber-foreground: 35 50% 30%;
-    --money-surface: 155 10% 98%;
-    --money-border: 155 15% 88%;
-    --money-caution: 15 65% 55%;
 
     /* === Category colors === */
     --category-health: 350 80% 55%;
@@ -155,8 +134,6 @@
     --calendar-task-muted: 215 75% 93%;
     --calendar-habit: 40 85% 55%;
     --calendar-habit-muted: 40 85% 93%;
-    --calendar-bill: 0 72% 55%;
-    --calendar-bill-muted: 0 72% 93%;
     --calendar-workout: 270 60% 55%;
     --calendar-workout-muted: 270 60% 93%;
 
@@ -258,16 +235,6 @@
     --section-personal-muted: 160 30% 18%;
     --section-work: 215 60% 60%;
     --section-work-muted: 215 35% 18%;
-    /* === Calm Finance tokens === */
-    --money-sage: 155 20% 50%;
-    --money-sage-light: 155 15% 16%;
-    --money-sage-foreground: 155 25% 75%;
-    --money-amber: 35 50% 55%;
-    --money-amber-light: 35 30% 16%;
-    --money-amber-foreground: 35 40% 70%;
-    --money-surface: 155 8% 15%;
-    --money-border: 155 10% 22%;
-
     /* === Category colors === */
     --category-health: 350 65% 60%;
     --category-health-muted: 350 40% 18%;
@@ -279,17 +246,6 @@
     --category-productivity-muted: 40 40% 18%;
     --category-other: 215 10% 55%;
     --category-other-muted: 215 10% 18%;
-
-    /* === Calm Finance tokens === */
-    --money-sage: 155 20% 50%;
-    --money-sage-light: 155 15% 16%;
-    --money-sage-foreground: 155 25% 75%;
-    --money-amber: 35 50% 55%;
-    --money-amber-light: 35 30% 16%;
-    --money-amber-foreground: 35 40% 70%;
-    --money-surface: 155 8% 15%;
-    --money-border: 155 10% 22%;
-    --money-caution: 15 55% 45%;
 
     /* === Category colors === */
     --category-health: 350 65% 60%;
@@ -353,8 +309,6 @@
     --calendar-task-muted: 215 35% 18%;
     --calendar-habit: 40 70% 60%;
     --calendar-habit-muted: 40 40% 18%;
-    --calendar-bill: 0 60% 55%;
-    --calendar-bill-muted: 0 35% 18%;
     --calendar-workout: 270 50% 60%;
     --calendar-workout-muted: 270 30% 18%;
 

@@ -1,7 +1,7 @@
 /**
  * Cross-domain calendar feed types.
  *
- * Each domain (events, tasks, habits, bills, workouts) is normalized
+ * Each domain (events, tasks, habits, workouts) is normalized
  * into CalendarFeedItem so the calendar can render them uniformly.
  */
 
@@ -40,7 +40,7 @@ export interface CalendarFeedItem {
   domain: FeedDomain;
   /** Original ID in the source table (task.id, habit.id, etc.). */
   sourceId: string;
-  /** Display title (task title, habit name, bill name, workout title). */
+  /** Display title (task title, habit name, workout title). */
   title: string;
   /** Date this item appears on (YYYY-MM-DD). */
   date: string;
@@ -54,7 +54,7 @@ export interface CalendarFeedItem {
   completed: boolean;
   /** Available inline actions for this item. */
   actions: FeedAction[];
-  /** Optional metadata for rendering (e.g., bill amount, workout duration). */
+  /** Optional metadata for rendering (e.g., workout duration). */
   meta?: Record<string, unknown>;
 }
 

@@ -144,6 +144,28 @@ describe("GET /api/cron/dispatch-reminders", () => {
     });
   });
 
+  it("retires unsupported legacy reminder sources without dispatching", async () => {
+    const reminder = mockReminder({ source_type: "bill" });
+    mockGetPendingReminders.mockResolvedValue([reminder]);
+
+    const res = await GET(createRequest());
+    const body = await res.json();
+
+    expect(body).toEqual({
+      dispatched: 0,
+      failed: 1,
+      skipped_quiet_hours: 0,
+    });
+    expect(mockGetProfile).not.toHaveBeenCalled();
+    expect(mockSendPushNotification).not.toHaveBeenCalled();
+    expect(mockSendReminderEmail).not.toHaveBeenCalled();
+    expect(mockUpdateReminderStatus).toHaveBeenCalledWith(
+      "user-1",
+      "rem-1",
+      "failed",
+    );
+  });
+
   it("dispatches push and email for reminder with both channels", async () => {
     const reminder = mockReminder();
     const profile = mockProfile();

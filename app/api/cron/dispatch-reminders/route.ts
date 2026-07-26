@@ -11,6 +11,7 @@ import { log } from "@/lib/logger";
 
 /** Max age (ms) before a pending reminder is considered stale and marked failed */
 const MAX_STALE_MS = 4 * 60 * 60 * 1000; // 4 hours
+const SUPPORTED_REMINDER_SOURCE_TYPES = new Set(["calendar_event", "task", "habit"]);
 
 function secureCompare(a: string, b: string): boolean {
   const key = "cron-auth-compare";
@@ -66,6 +67,23 @@ export async function GET(request: NextRequest) {
 
     for (const reminder of pending) {
       try {
+        // Retire legacy rows defensively if they are encountered before the
+        // forward migration has run in a deployment environment.
+        if (!SUPPORTED_REMINDER_SOURCE_TYPES.has(reminder.source_type)) {
+          await remindersDB.updateReminderStatus(
+            reminder.user_id,
+            reminder.id,
+            "failed",
+          );
+          failed++;
+          log.warn("Unsupported reminder source retired", {
+            reminderId: reminder.id,
+            userId: reminder.user_id,
+            sourceType: reminder.source_type,
+          });
+          continue;
+        }
+
         // Check staleness: skip reminders whose fire_at is too old
         const fireAtAge = Date.now() - new Date(reminder.fire_at).getTime();
 

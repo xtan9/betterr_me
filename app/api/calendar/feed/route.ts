@@ -131,7 +131,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-          // Bills require household — attempt to resolve, return empty if none
     if (enabledLayers.has("workouts")) {
       requestedLayers.push("workouts");
       promises.push(

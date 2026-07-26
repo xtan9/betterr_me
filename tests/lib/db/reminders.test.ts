@@ -172,6 +172,11 @@ describe("RemindersDB", () => {
         { table: "reminders", method: "from", args: ["reminders"] },
         { table: "reminders", method: "select", args: ["*"] },
         { table: "reminders", method: "eq", args: ["status", "pending"] },
+        {
+          table: "reminders",
+          method: "in",
+          args: ["source_type", ["calendar_event", "task", "habit"]],
+        },
         { table: "reminders", method: "lte", args: ["fire_at", BEFORE] },
         {
           table: "reminders",
