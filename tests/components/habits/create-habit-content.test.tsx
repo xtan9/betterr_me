@@ -157,8 +157,15 @@ describe('CreateHabitContent', () => {
 
     await waitFor(() => {
       expect(mockGlobalMutate).toHaveBeenCalledWith('/api/dashboard');
-      expect(mockGlobalMutate).toHaveBeenCalledWith('/api/habits?with_today=true');
+      expect(mockGlobalMutate).toHaveBeenCalledWith(expect.any(Function));
     });
+
+    const habitsCacheMatcher = mockGlobalMutate.mock.calls.find(
+      ([key]) => typeof key === 'function',
+    )?.[0] as (key: unknown) => boolean;
+
+    expect(habitsCacheMatcher('/api/habits?with_today=true&date=2026-07-26')).toBe(true);
+    expect(habitsCacheMatcher('/api/dashboard')).toBe(false);
   });
 
   it('shows error toast on API failure', async () => {
