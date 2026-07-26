@@ -22,7 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Require authenticated E2E secrets
+      - name: Require authenticated E2E secrets outside pull requests
+        if: ${{ github.event_name != 'pull_request' }}
         uses: ./.github/actions/check-secrets
         with:
           supabase-url: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -33,36 +34,52 @@ jobs:
           require-preview-url: ${{ github.event_name != 'pull_request' }}
           vercel-automation-bypass-secret: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           require-vercel-automation-bypass-secret: "true"
+      - name: Confirm isolated pull-request verification contract
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "Pull-request E2E uses a disposable local Supabase database."
+          echo "Production Supabase secrets and E2E_PREVIEW_URL are not used for authenticated PR browser traffic."
 
   e2e-tests:
     needs: check-secrets
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
-      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
-      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact pull-request checkout
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          test "$actual_sha" = "$PR_HEAD_SHA"
+          echo "Checked out exact pull-request head: $actual_sha"
+
+      - name: Use configured preview deployment for non-pull-request E2E
+        if: ${{ github.event_name != 'pull_request' }}
+        shell: bash
+        env:
+          STATIC_PREVIEW_URL: ${{ secrets.E2E_PREVIEW_URL }}
+        run: |
+          set -euo pipefail
+          printf 'PLAYWRIGHT_BASE_URL=%s\n' "$STATIC_PREVIEW_URL" >> "$GITHUB_ENV"
+          echo "Using configured preview URL for $GITHUB_EVENT_NAME: $STATIC_PREVIEW_URL"
 
       - name: Resolve exact PR preview deployment
+        if: ${{ github.event_name == 'pull_request' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          STATIC_PREVIEW_URL: ${{ secrets.E2E_PREVIEW_URL }}
         run: |
           set -euo pipefail
-
-          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
-            printf 'PLAYWRIGHT_BASE_URL=%s\n' "$STATIC_PREVIEW_URL" >> "$GITHUB_ENV"
-            echo "Using configured preview URL for $GITHUB_EVENT_NAME: $STATIC_PREVIEW_URL"
-            exit 0
-          fi
 
           if [ -z "$PR_HEAD_SHA" ]; then
             echo "::error::The pull request head SHA is missing; refusing to use an unbound preview URL."
@@ -100,12 +117,14 @@ jobs:
                 continue
               fi
 
-              printf 'PLAYWRIGHT_BASE_URL=%s\n' "$preview_url" >> "$GITHUB_ENV"
+              printf 'PR_PREVIEW_URL=%s\n' "$preview_url" >> "$GITHUB_ENV"
+              printf 'PR_PREVIEW_DEPLOYMENT_ID=%s\n' "$deployment_id" >> "$GITHUB_ENV"
               echo "Resolved exact PR preview deployment:"
               echo "  deployment_id=${deployment_id}"
               echo "  deployment_sha=${PR_HEAD_SHA}"
               echo "  deployment_status_id=${status_id}"
               echo "  preview_url=${preview_url}"
+              echo "  authenticated_e2e_database=disposable_local_supabase"
               exit 0
             done <<< "$deployment_ids"
 
@@ -115,6 +134,31 @@ jobs:
 
           echo "::error::No successful Preview deployment with an HTTPS target was found for ${PR_HEAD_SHA}."
           exit 1
+
+      - name: Setup disposable Supabase for pull-request E2E
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.1
+
+      - name: Start disposable Supabase for pull-request E2E
+        if: ${{ github.event_name == 'pull_request' }}
+        run: supabase start
+
+      - name: Reset disposable database with feature migration
+        if: ${{ github.event_name == 'pull_request' }}
+        run: supabase db reset --local --yes --no-seed
+
+      - name: Install PostgreSQL client for pull-request RLS gate
+        if: ${{ github.event_name == 'pull_request' }}
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
+      - name: Execute two-user finance cushion RLS fixture
+        if: ${{ github.event_name == 'pull_request' }}
+        run: >-
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          -v ON_ERROR_STOP=1
+          -f supabase/tests/finance_cushion_rls.sql
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -127,6 +171,62 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Configure disposable Supabase E2E target
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'PLAYWRIGHT_BASE_URL=\n' >> "$GITHUB_ENV"
+          export NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$NEXT_PUBLIC_SUPABASE_URL" >> "$GITHUB_ENV"
+          anon_key="$(supabase status --output env | sed -n 's/^ANON_KEY=//p' | sed 's/^"//; s/"$//')"
+          test -n "$anon_key"
+          export NEXT_PUBLIC_SUPABASE_ANON_KEY="$anon_key"
+          printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$NEXT_PUBLIC_SUPABASE_ANON_KEY" >> "$GITHUB_ENV"
+          export E2E_TEST_EMAIL="cushion-e2e@example.test"
+          printf 'E2E_TEST_EMAIL=%s\n' "$E2E_TEST_EMAIL" >> "$GITHUB_ENV"
+          export E2E_TEST_PASSWORD="Cushion-E2E-local-2026!"
+          printf 'E2E_TEST_PASSWORD=%s\n' "$E2E_TEST_PASSWORD" >> "$GITHUB_ENV"
+          node --input-type=module <<'NODE'
+          import { createClient } from '@supabase/supabase-js';
+
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          );
+          const { data, error } = await supabase.auth.signUp({
+            email: process.env.E2E_TEST_EMAIL,
+            password: process.env.E2E_TEST_PASSWORD,
+          });
+          if (error && !/already registered/i.test(error.message)) {
+            throw error;
+          }
+          if (!data?.user) {
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+              email: process.env.E2E_TEST_EMAIL,
+              password: process.env.E2E_TEST_PASSWORD,
+            });
+            if (signInError) throw signInError;
+          }
+          NODE
+
+      - name: Configure production-backed E2E target
+        if: ${{ github.event_name != 'pull_request' }}
+        shell: bash
+        env:
+          PROD_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          PROD_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          PROD_E2E_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          PROD_E2E_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          VERCEL_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$PROD_SUPABASE_URL" >> "$GITHUB_ENV"
+          printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$PROD_SUPABASE_ANON_KEY" >> "$GITHUB_ENV"
+          printf 'E2E_TEST_EMAIL=%s\n' "$PROD_E2E_EMAIL" >> "$GITHUB_ENV"
+          printf 'E2E_TEST_PASSWORD=%s\n' "$PROD_E2E_PASSWORD" >> "$GITHUB_ENV"
+          printf 'VERCEL_AUTOMATION_BYPASS_SECRET=%s\n' "$VERCEL_BYPASS_SECRET" >> "$GITHUB_ENV"
 
       - name: Install Playwright browsers
         run: |
@@ -153,6 +253,10 @@ jobs:
           retention-days: 1
           compression-level: 9
 
+      - name: Stop disposable Supabase
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        run: supabase stop --no-backup
+
   local-financial-cushion:
     if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
@@ -160,6 +264,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1

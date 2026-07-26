@@ -33,6 +33,23 @@ unbounded number. Planning states use exact cent comparisons:
 The state is a communication threshold for planning, not a recommendation or
 personal-finance judgment. The UI repeats that it is not financial advice.
 
+## Preview database boundary
+
+The Vercel Preview deployment is currently connected to the production
+Supabase project. The feature migration is intentionally applied by the
+main-only database-migration workflow, so the production-backed Preview cannot
+serve authenticated Cushion requests before the pull request is merged.
+
+Pull-request E2E therefore uses a separate verification path. The workflow
+checks out the exact pull-request head SHA, resolves and records the successful
+Vercel Preview deployment for that SHA, then runs authenticated browser traffic
+against a disposable local Supabase database. It resets the feature migrations,
+executes `supabase/tests/finance_cushion_rls.sql`, builds the application from
+that exact checkout, and runs the full Chromium suite. It does not use
+production Supabase credentials or `E2E_PREVIEW_URL` for authenticated PR
+browser traffic. Main and scheduled runs retain the configured production
+Preview path.
+
 ## Data boundary
 
 Migration
@@ -63,12 +80,14 @@ result recovery against the real app.
 
 ## Rollout and rollback
 
-1. Run the full CI suite, build, deterministic calculation tests, and the
-   rollback-only RLS fixture.
-2. Apply the additive migration through the existing database-migration
+1. Run the full CI suite, build, deterministic calculation tests, the
+   rollback-only RLS fixture, and the isolated pull-request Chromium suite.
+2. Merge only after independent engineering review and QA approval, then apply
+   the additive migration through the existing main-only database-migration
    workflow.
-3. Run the authenticated browser flow against the deployed app and retain the
-   exact commit and workflow run IDs.
+3. Run the authenticated browser flow against the deployed app after the
+   migration succeeds and retain the exact commit, deployment, and workflow
+   run IDs.
 4. Verify the production table, policies, and API responses without reading
    another user's data.
 
