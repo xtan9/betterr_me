@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 import type {
   HouseholdInvitation,
   HouseholdMemberWithProfile,
@@ -34,17 +35,19 @@ export class HouseholdsDB {
     }
 
     // Create household + membership
-    const { data: household, error: insertError } = await this.supabase
+    // Do not request INSERT ... RETURNING here. The existing households SELECT
+    // policy correctly requires a membership, which does not exist until the
+    // following insert succeeds.
+    const householdId = randomUUID();
+    const { error: insertError } = await this.supabase
       .from("households")
-      .insert({ name: "My Household" })
-      .select("id")
-      .single();
+      .insert({ id: householdId, name: "My Household" });
 
     if (insertError) throw insertError;
 
     const { error: memberError } = await this.supabase
       .from("household_members")
-      .insert({ household_id: household.id, user_id: userId, role: "owner" });
+      .insert({ household_id: householdId, user_id: userId, role: "owner" });
 
     if (memberError) {
       // 23505 = unique_violation -- race condition: another request already
@@ -54,7 +57,7 @@ export class HouseholdsDB {
         await this.supabase
           .from("households")
           .delete()
-          .eq("id", household.id);
+          .eq("id", householdId);
         const { data: retry, error: retryError } = await this.supabase
           .from("household_members")
           .select("household_id")
@@ -66,7 +69,7 @@ export class HouseholdsDB {
       throw memberError;
     }
 
-    return household.id;
+    return householdId;
   }
 
   /**

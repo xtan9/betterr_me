@@ -94,17 +94,12 @@ describe("HouseholdsDB", () => {
         data: null,
         error: { code: "PGRST116" },
       });
-      // 2. insert household -> returns new id
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: { id: "hh-new" },
-        error: null,
-      });
-      // 3. insert membership succeeds (awaited)
-      queueThenResponses([{ data: null, error: null }]);
+      // 2. household insert and 3. membership insert both succeed.
+      queueThenResponses([{ data: null, error: null }, { data: null, error: null }]);
 
       const result = await db.resolveHousehold("user-1");
 
-      expect(result).toBe("hh-new");
+      expect(result).toEqual(expect.any(String));
 
       // Full-log assertion — critical here because .from("household_members")
       // and .eq("user_id", userId) appear multiple times across phases, and
@@ -120,15 +115,18 @@ describe("HouseholdsDB", () => {
         { table: "household_members", method: "eq", args: ["user_id", "user-1"] },
         // Phase 2: INSERT household
         { table: "households", method: "from", args: ["households"] },
-        { table: "households", method: "insert", args: [{ name: "My Household" }] },
-        { table: "households", method: "select", args: ["id"] },
+        {
+          table: "households",
+          method: "insert",
+          args: [{ id: expect.any(String), name: "My Household" }],
+        },
         // Phase 3: INSERT membership
         { table: "household_members", method: "from", args: ["household_members"] },
         {
           table: "household_members",
           method: "insert",
           args: [
-            { household_id: "hh-new", user_id: "user-1", role: "owner" },
+            { household_id: expect.any(String), user_id: "user-1", role: "owner" },
           ],
         },
       ]);
@@ -139,10 +137,7 @@ describe("HouseholdsDB", () => {
         data: null,
         error: { code: "PGRST116" },
       });
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: null,
-        error: { code: "500", message: "insert fail" },
-      });
+      queueThenResponses([{ data: null, error: { code: "500", message: "insert fail" } }]);
 
       await expect(db.resolveHousehold("user-1")).rejects.toEqual({
         code: "500",
@@ -156,18 +151,14 @@ describe("HouseholdsDB", () => {
         data: null,
         error: { code: "PGRST116" },
       });
-      // 2. household insert -> succeeds
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: { id: "hh-orphan" },
-        error: null,
-      });
-      // 4. retry membership lookup -> returns winning household_id
+      // 3. retry membership lookup -> returns winning household_id
       mockSupabaseClient.single.mockResolvedValueOnce({
         data: { household_id: "hh-winner" },
         error: null,
       });
       // 3. member insert -> 23505 conflict, then delete orphan (awaited)
       queueThenResponses([
+        { data: null, error: null }, // insert household
         { data: null, error: { code: "23505" } },
         { data: null, error: null }, // delete orphan household
       ]);
@@ -186,21 +177,20 @@ describe("HouseholdsDB", () => {
         { table: "household_members", method: "eq", args: ["user_id", "user-1"] },
         // Phase 2: INSERT households
         { table: "households", method: "from", args: ["households"] },
-        { table: "households", method: "insert", args: [{ name: "My Household" }] },
-        { table: "households", method: "select", args: ["id"] },
+        { table: "households", method: "insert", args: [{ id: expect.any(String), name: "My Household" }] },
         // Phase 3: INSERT household_members (23505 race)
         { table: "household_members", method: "from", args: ["household_members"] },
         {
           table: "household_members",
           method: "insert",
           args: [
-            { household_id: "hh-orphan", user_id: "user-1", role: "owner" },
+            { household_id: expect.any(String), user_id: "user-1", role: "owner" },
           ],
         },
         // Cleanup orphan households row
         { table: "households", method: "from", args: ["households"] },
         { table: "households", method: "delete", args: [] },
-        { table: "households", method: "eq", args: ["id", "hh-orphan"] },
+        { table: "households", method: "eq", args: ["id", expect.any(String)] },
         // Retry SELECT membership
         { table: "household_members", method: "from", args: ["household_members"] },
         { table: "household_members", method: "select", args: ["household_id"] },
@@ -218,16 +208,13 @@ describe("HouseholdsDB", () => {
         data: null,
         error: { code: "PGRST116" },
       });
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: { id: "hh-orphan" },
-        error: null,
-      });
       // Retry lookup succeeds but returns no data (neither row nor error).
       mockSupabaseClient.single.mockResolvedValueOnce({
         data: null,
         error: null,
       });
       queueThenResponses([
+        { data: null, error: null }, // insert household
         { data: null, error: { code: "23505" } },
         { data: null, error: null }, // delete orphan
       ]);
@@ -243,14 +230,11 @@ describe("HouseholdsDB", () => {
         error: { code: "PGRST116" },
       });
       mockSupabaseClient.single.mockResolvedValueOnce({
-        data: { id: "hh-orphan" },
-        error: null,
-      });
-      mockSupabaseClient.single.mockResolvedValueOnce({
         data: null,
         error: { code: "500", message: "retry fail" },
       });
       queueThenResponses([
+        { data: null, error: null }, // insert household
         { data: null, error: { code: "23505" } },
         { data: null, error: null }, // delete orphan
       ]);

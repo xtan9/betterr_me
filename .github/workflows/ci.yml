@@ -53,6 +53,8 @@ jobs:
           psql "$FINANCIAL_SAFETY_DB_URL" -v ON_ERROR_STOP=1 \
             -f supabase/tests/financial_safety_cushion_isolation.sql \
             | tee ci-evidence/postcondition.sql.out
+      - name: Capture privilege-only catalog evidence
+        run: bash scripts/assert-financial-safety-catalog.sh
       - name: Publish compact Gate 1 evidence to job summary
         if: ${{ always() }}
         run: |
