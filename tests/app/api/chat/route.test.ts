@@ -226,6 +226,19 @@ describe('POST /api/chat', () => {
               otherProvider: { cacheKey: 'keep-me' },
             },
           },
+          {
+            type: 'tool-get_tasks',
+            toolCallId: 'call-1',
+            state: 'output-available',
+            input: {},
+            output: { tasks: [] },
+            callProviderMetadata: {
+              openai: { itemId: 'fc_ephemeral', namespace: 'functions' },
+            },
+            resultProviderMetadata: {
+              openai: { itemId: 'fr_ephemeral', status: 'completed' },
+            },
+          },
         ],
       },
       { id: 'm3', role: 'user', parts: [{ type: 'text', text: 'Follow up' }] },
@@ -245,6 +258,19 @@ describe('POST /api/chat', () => {
             providerMetadata: {
               openai: { reasoningEncryptedContent: 'encrypted-reasoning' },
               otherProvider: { cacheKey: 'keep-me' },
+            },
+          },
+          {
+            type: 'tool-get_tasks',
+            toolCallId: 'call-1',
+            state: 'output-available',
+            input: {},
+            output: { tasks: [] },
+            callProviderMetadata: {
+              openai: { namespace: 'functions' },
+            },
+            resultProviderMetadata: {
+              openai: { status: 'completed' },
             },
           },
         ],

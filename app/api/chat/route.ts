@@ -14,6 +14,28 @@ const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_MESSAGES = 40;
 const MAX_OUTPUT_TOKENS = 2048;
 
+function removeEphemeralOpenAIItemId(metadata: unknown): unknown {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return metadata;
+  }
+
+  const openai = (metadata as Record<string, unknown>).openai;
+  if (
+    !openai ||
+    typeof openai !== "object" ||
+    Array.isArray(openai) ||
+    !Object.hasOwn(openai, "itemId")
+  ) {
+    return metadata;
+  }
+
+  const { itemId: _itemId, ...openaiMetadata } = openai as Record<string, unknown>;
+  return {
+    ...metadata,
+    openai: openaiMetadata,
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -127,20 +149,23 @@ export async function POST(req: Request) {
         parts: message.parts.map((part: unknown) => {
           if (!part || typeof part !== "object") return part;
           const content = part as Record<string, unknown>;
-          const providerMetadata = content.providerMetadata;
-          if (!providerMetadata || typeof providerMetadata !== "object") return part;
+          const metadataKeys = [
+            "providerMetadata",
+            "callProviderMetadata",
+            "resultProviderMetadata",
+          ] as const;
+          let sanitizedPart: Record<string, unknown> | null = null;
 
-          const openai = (providerMetadata as Record<string, unknown>).openai;
-          if (!openai || typeof openai !== "object" || !("itemId" in openai)) return part;
+          for (const key of metadataKeys) {
+            const metadata = content[key];
+            const sanitizedMetadata = removeEphemeralOpenAIItemId(metadata);
+            if (sanitizedMetadata !== metadata) {
+              sanitizedPart ??= { ...content };
+              sanitizedPart[key] = sanitizedMetadata;
+            }
+          }
 
-          const { itemId: _itemId, ...openaiMetadata } = openai as Record<string, unknown>;
-          return {
-            ...content,
-            providerMetadata: {
-              ...providerMetadata,
-              openai: openaiMetadata,
-            },
-          };
+          return sanitizedPart ?? part;
         }),
       };
     });
