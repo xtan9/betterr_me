@@ -71,7 +71,7 @@ function runway(overrides?: Partial<HouseholdRunwayAnswers>) {
   return Object.assign(answers, overrides);
 }
 
-describe("version 3 monthly simulation", () => {
+describe("version 4 monthly simulation", () => {
   it("covers five months with $30,000 and a $6,000 burn", () => {
     const result = simulateHouseholdRunway(
       runway(),
@@ -98,16 +98,13 @@ describe("version 3 monthly simulation", () => {
     expect(JSON.stringify(result)).not.toMatch(/NaN|Infinity/);
   });
 
-  it("adds confirmed funds in the selected month and temporary income only for its duration", () => {
+  it("keeps one-time funds in What-if instead of the baseline interview", () => {
     const answers = runway();
     answers.available_cash.cents = 0;
-    answers.confirmed_funds = [{ id: "severance", amount_cents: 600_000, arrives_month: 2, confidence: "confirmed" }];
-    answers.temporary_income = { monthly_cents: 600_000, remaining_months: 2, confidence: "confirmed" };
-    const result = simulateHouseholdRunway(answers, "current");
-    expect(result.months[0].confirmed_funds_cents).toBe(0);
-    expect(result.months[1].confirmed_funds_cents).toBe(600_000);
-    expect(result.months[2].temporary_income_cents).toBe(0);
-    expect(result.months_covered).toBe(3);
+    const result = simulateHouseholdRunway(answers, "current", { expected_unconfirmed_funds_cents: 600_000 });
+    expect(result.months[0].one_time_funds_cents).toBe(600_000);
+    expect(result.months[1].one_time_funds_cents).toBe(0);
+    expect(result.months_covered).toBe(1);
   });
 
   it("includes accessible investments at 100% and excludes other assets", () => {
@@ -133,6 +130,7 @@ describe("version 3 monthly simulation", () => {
     expect(normalizeExpenseToMonthly(120_000, "quarterly")).toBe(40_000);
     const answers = runway();
     answers.expense_mode = "guided";
+    answers.expense_category_modes = { housing: "itemized", food: "itemized" };
     answers.expense_items = [
       { id: "tax", category: "housing", type: "property_tax", current_amount_cents: 1_200_000, interruption_amount_cents: 1_200_000, frequency: "annual", confidence: "confirmed" },
       { id: "food", category: "food", type: "groceries", current_amount_cents: 100_000, interruption_amount_cents: 70_000, frequency: "monthly", confidence: "confirmed" },
@@ -169,6 +167,15 @@ describe("adaptive scenarios", () => {
 });
 
 describe("estimates, drafts, and migration", () => {
+  it("separates 2026 US federal, state, Social Security, and Medicare estimates", () => {
+    const estimate = estimateMonthlyTakeHome({ country: "US", region: "CA", amountCents: 12_000_000, period: "annual", filingStatus: "single" });
+    expect(estimate.annual_federal_income_tax_cents).toBe(1_757_000);
+    expect(estimate.annual_state_income_tax_cents).toBe(623_400);
+    expect(estimate.annual_social_security_cents).toBe(744_000);
+    expect(estimate.annual_medicare_cents).toBe(174_000);
+    expect(estimate.state_is_rough_estimate).toBe(true);
+  });
+
   it.each([["US", "CA"], ["CA", "QC"], ["CN", "BJ"], ["TW", "TPE"]] as const)(
     "returns a transparent %s estimate",
     (country, region) => {
@@ -176,6 +183,7 @@ describe("estimates, drafts, and migration", () => {
       expect(estimate.monthly_take_home_cents).toBeGreaterThan(0);
       expect(estimate.monthly_gross_cents - estimate.monthly_estimated_deductions_cents).toBe(estimate.monthly_take_home_cents);
       expect(estimate.rule_version).toContain(country.toLowerCase());
+      expect(estimate.annual_federal_income_tax_cents).toBeGreaterThanOrEqual(0);
     },
   );
 
@@ -184,6 +192,14 @@ describe("estimates, drafts, and migration", () => {
     const envelope = createDraftEnvelope(runway(), "assets", false, now);
     expect(parseDraftEnvelope(JSON.stringify(envelope), now)?.step_id).toBe("assets");
     expect(parseDraftEnvelope(JSON.stringify(envelope), new Date("2026-08-26T00:00:00.000Z"))).toBeNull();
+  });
+
+  it("maps removed version 3 steps forward and drops old baseline inflows", () => {
+    const oldAnswers = { ...runway(), schema_version: 3, confirmed_funds: [{ id: "old", amount_cents: 100_000, arrives_month: 2, confidence: "confirmed" }], temporary_income: { monthly_cents: 50_000, remaining_months: 2, confidence: "confirmed" } };
+    const parsed = parseDraftEnvelope(JSON.stringify({ version: 3, expires_at: "2026-08-01T00:00:00.000Z", step_id: "confirmedFunds", completed: false, answers: oldAnswers }), new Date("2026-07-26T00:00:00.000Z"));
+    expect(parsed?.step_id).toBe("assets");
+    expect(parsed?.answers).not.toHaveProperty("confirmed_funds");
+    expect(parsed?.answers).not.toHaveProperty("temporary_income");
   });
 
   it("migrates version 2 totals, investments, retirement, income, and region", () => {
@@ -198,7 +214,7 @@ describe("estimates, drafts, and migration", () => {
       expenses: { housing: { current_cents: 60_000, interruption_cents: 50_000, confidence: "confirmed" } },
       temporary_income: null,
     });
-    expect(migrated).toMatchObject({ schema_version: 3, region: "CA", expense_mode: "quick" });
+    expect(migrated).toMatchObject({ schema_version: 4, region: "CA", expense_mode: "quick" });
     expect(migrated?.assets.liquid_investments.cents).toBe(200_000);
     expect(migrated?.assets.retirement_tax_deferred.confidence).toBe("needs_review");
     expect(migrated?.other_income_sources).toHaveLength(1);

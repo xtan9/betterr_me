@@ -24,6 +24,12 @@ const income = z
     entered_amount_cents: cents,
     entered_period: z.enum(["monthly", "annual"]),
     entered_as: z.enum(["net", "gross"]),
+    gross_amount_cents: cents,
+    gross_period: z.enum(["monthly", "annual"]),
+    net_amount_cents: cents,
+    net_period: z.enum(["monthly", "annual"]),
+    tax_filing_status: z.enum(["single", "married_joint", "married_separate", "head_household"]),
+    annual_other_deductions_cents: cents,
     take_home_source: z.enum(["estimated", "user_confirmed"]),
     confidence,
     estimate_rule_version: z.string().max(80).optional(),
@@ -34,7 +40,7 @@ const expenseCategory = z.enum(EXPENSE_CATEGORIES);
 
 export const householdRunwayAnswersSchema = z
   .object({
-    schema_version: z.literal(3),
+    schema_version: z.literal(4),
     country: z.enum(["US", "CA", "CN", "TW"]),
     region: z.string().trim().min(1).max(20),
     currency: z.enum(["USD", "CAD", "CNY", "TWD"]),
@@ -73,18 +79,6 @@ export const householdRunwayAnswersSchema = z
       )
       .max(20),
     available_cash: money,
-    confirmed_funds: z
-      .array(
-        z
-          .object({
-            id: z.string().min(1).max(100),
-            amount_cents: cents,
-            arrives_month: z.number().int().min(1).max(120),
-            confidence: z.literal("confirmed"),
-          })
-          .strict(),
-      )
-      .max(20),
     assets: z
       .object({
         liquid_investments: money,
@@ -113,6 +107,12 @@ export const householdRunwayAnswersSchema = z
       )
       .max(100),
     completed_expense_categories: z.array(expenseCategory).max(10),
+    expense_category_modes: z.record(z.string(), z.enum(["subtotal", "itemized"])),
+    expense_category_subtotals: z.record(z.string(), z.object({
+      current_monthly_cents: cents,
+      interruption_monthly_cents: cents,
+      confidence,
+    }).strict()),
     quick_expenses: z
       .object({
         current_monthly_cents: cents,
@@ -120,14 +120,6 @@ export const householdRunwayAnswersSchema = z
         confidence,
       })
       .strict(),
-    temporary_income: z
-      .object({
-        monthly_cents: cents,
-        remaining_months: z.number().int().min(1).max(120),
-        confidence,
-      })
-      .strict()
-      .nullable(),
     extreme_access: z
       .object({
         illiquid_investments_cents: cents,

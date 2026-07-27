@@ -23,7 +23,7 @@ function validAnswers() {
 
 const answers = validAnswers();
 const result = simulateHouseholdRunway(answers, "current", undefined, new Date("2026-07-26"));
-const savedCushion = toFinanceCushionView({ id: "cushion-a", user_id: user.id, liquid_resources_cents: result.starting_resources_cents, monthly_essential_expenses_cents: result.interruption_expenses_cents, monthly_continuing_income_cents: result.continuing_monthly_income_cents, answers, latest_result: result, model_version: "3.0.0", status: "completed", created_at: "2026-07-26T00:00:00.000Z", updated_at: "2026-07-26T00:00:00.000Z" });
+const savedCushion = toFinanceCushionView({ id: "cushion-a", user_id: user.id, liquid_resources_cents: result.starting_resources_cents, monthly_essential_expenses_cents: result.interruption_expenses_cents, monthly_continuing_income_cents: result.continuing_monthly_income_cents, answers, latest_result: result, model_version: "4.0.0", status: "completed", created_at: "2026-07-26T00:00:00.000Z", updated_at: "2026-07-26T00:00:00.000Z" });
 
 describe("/api/finance/cushion", () => {
   beforeEach(() => {

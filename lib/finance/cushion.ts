@@ -1,7 +1,14 @@
 import { normalizeLegacyRegion } from "@/lib/finance/runway-regions";
+import {
+  estimateRegionalTakeHome,
+  estimateUsTakeHome,
+  type TakeHomeEstimateBreakdown,
+  type TaxFilingStatus,
+} from "@/lib/finance/runway-tax";
+export type { TakeHomeEstimateBreakdown, TaxFilingStatus } from "@/lib/finance/runway-tax";
 
-export const RUNWAY_MODEL_VERSION = "3.0.0";
-export const RUNWAY_DRAFT_VERSION = 3;
+export const RUNWAY_MODEL_VERSION = "4.0.0";
+export const RUNWAY_DRAFT_VERSION = 4;
 export const RUNWAY_DRAFT_STORAGE_KEY = "betterr.household-runway.v2";
 export const RUNWAY_DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -13,11 +20,9 @@ export const RUNWAY_STEP_IDS = [
   "partnerIncome",
   "otherIncome",
   "cash",
-  "confirmedFunds",
   "assets",
   "expenses",
   "reductions",
-  "temporaryIncome",
   "review",
   "result",
 ] as const;
@@ -85,18 +90,6 @@ export interface MoneyAnswer {
   confidence: InputConfidence;
 }
 
-export interface TakeHomeEstimateBreakdown {
-  annual_gross_cents: number;
-  monthly_gross_cents: number;
-  base_deduction_rate: number;
-  regional_adjustment_rate: number;
-  effective_deduction_rate: number;
-  annual_estimated_deductions_cents: number;
-  monthly_estimated_deductions_cents: number;
-  monthly_take_home_cents: number;
-  rule_version: string;
-}
-
 export interface IncomeAnswer {
   employment: EmploymentStatus;
   monthly_take_home_cents: number;
@@ -104,6 +97,12 @@ export interface IncomeAnswer {
   entered_amount_cents: number;
   entered_period: "monthly" | "annual";
   entered_as: "net" | "gross";
+  gross_amount_cents: number;
+  gross_period: "monthly" | "annual";
+  net_amount_cents: number;
+  net_period: "monthly" | "annual";
+  tax_filing_status: TaxFilingStatus;
+  annual_other_deductions_cents: number;
   take_home_source: "estimated" | "user_confirmed";
   confidence: InputConfidence;
   estimate_rule_version?: string;
@@ -117,13 +116,6 @@ export interface RecurringIncomeSource {
   label?: string;
   monthly_cents: number;
   confidence: InputConfidence;
-}
-
-export interface ConfirmedFund {
-  id: string;
-  amount_cents: number;
-  arrives_month: number;
-  confidence: "confirmed";
 }
 
 export interface RunwayAssets {
@@ -151,9 +143,10 @@ export interface QuickExpenses {
   confidence: InputConfidence;
 }
 
-export interface TemporaryIncome {
-  monthly_cents: number;
-  remaining_months: number;
+export type ExpenseCategoryMode = "subtotal" | "itemized";
+export interface ExpenseCategorySubtotal {
+  current_monthly_cents: number;
+  interruption_monthly_cents: number;
   confidence: InputConfidence;
 }
 
@@ -164,7 +157,7 @@ export interface ExtremeAccessAmounts {
 }
 
 export interface HouseholdRunwayAnswers {
-  schema_version: 3;
+  schema_version: 4;
   country: RunwayCountry;
   region: string;
   currency: RunwayCurrency;
@@ -175,14 +168,14 @@ export interface HouseholdRunwayAnswers {
   partner: IncomeAnswer | null;
   other_income_sources: RecurringIncomeSource[];
   available_cash: MoneyAnswer;
-  confirmed_funds: ConfirmedFund[];
   assets: RunwayAssets;
   housing_tenure: HousingTenure;
   expense_mode: ExpenseMode;
   expense_items: ExpenseLineItem[];
   completed_expense_categories: ExpenseCategory[];
+  expense_category_modes: Partial<Record<ExpenseCategory, ExpenseCategoryMode>>;
+  expense_category_subtotals: Partial<Record<ExpenseCategory, ExpenseCategorySubtotal>>;
   quick_expenses: QuickExpenses;
-  temporary_income: TemporaryIncome | null;
   extreme_access: ExtremeAccessAmounts;
   updated_at: string;
 }
@@ -196,8 +189,7 @@ export interface RunwayMonth {
   month: number;
   opening_balance_cents: number;
   continuing_income_cents: number;
-  confirmed_funds_cents: number;
-  temporary_income_cents: number;
+  one_time_funds_cents: number;
   essential_outflow_cents: number;
   shortfall_cents: number;
   closing_balance_cents: number;
@@ -238,6 +230,12 @@ function defaultIncome(): IncomeAnswer {
     entered_amount_cents: 0,
     entered_period: "annual",
     entered_as: "gross",
+    gross_amount_cents: 0,
+    gross_period: "annual",
+    net_amount_cents: 0,
+    net_period: "monthly",
+    tax_filing_status: "single",
+    annual_other_deductions_cents: 0,
     take_home_source: "estimated",
     confidence: "estimated",
   };
@@ -247,7 +245,7 @@ export function createDefaultRunwayAnswers(
   now = new Date(),
 ): HouseholdRunwayAnswers {
   return {
-    schema_version: 3,
+    schema_version: 4,
     country: "US",
     region: "",
     currency: "USD",
@@ -258,7 +256,6 @@ export function createDefaultRunwayAnswers(
     partner: null,
     other_income_sources: [],
     available_cash: { ...ZERO_MONEY },
-    confirmed_funds: [],
     assets: {
       liquid_investments: { ...ZERO_MONEY },
       illiquid_investments: { ...ZERO_MONEY },
@@ -270,12 +267,13 @@ export function createDefaultRunwayAnswers(
     expense_mode: "guided",
     expense_items: [],
     completed_expense_categories: [],
+    expense_category_modes: {},
+    expense_category_subtotals: {},
     quick_expenses: {
       current_monthly_cents: 0,
       interruption_monthly_cents: 0,
       confidence: "skipped",
     },
-    temporary_income: null,
     extreme_access: {
       illiquid_investments_cents: 0,
       retirement_tax_deferred_cents: 0,
@@ -289,77 +287,20 @@ export function currencyForCountry(country: RunwayCountry): RunwayCurrency {
   return { US: "USD", CA: "CAD", CN: "CNY", TW: "TWD" }[country] as RunwayCurrency;
 }
 
-const NO_STATE_INCOME_TAX = new Set([
-  "AK",
-  "FL",
-  "NV",
-  "NH",
-  "SD",
-  "TN",
-  "TX",
-  "WA",
-  "WY",
-]);
-const HIGH_STATE_TAX = new Set(["CA", "DC", "HI", "NJ", "NY", "OR"]);
-
 export function estimateMonthlyTakeHome(input: {
   country: RunwayCountry;
   region: string;
   amountCents: number;
   period: "monthly" | "annual";
+  filingStatus?: TaxFilingStatus;
+  selfEmployed?: boolean;
+  annualOtherDeductionsCents?: number;
 }): TakeHomeEstimateBreakdown {
   const annualGrossCents =
     input.period === "annual" ? input.amountCents : input.amountCents * 12;
-  const annualGross = annualGrossCents / 100;
-  const brackets: Record<RunwayCountry, Array<[number, number]>> = {
-    US: [
-      [60_000, 0.2],
-      [150_000, 0.28],
-      [Number.POSITIVE_INFINITY, 0.34],
-    ],
-    CA: [
-      [70_000, 0.22],
-      [160_000, 0.3],
-      [Number.POSITIVE_INFINITY, 0.36],
-    ],
-    CN: [
-      [200_000, 0.15],
-      [500_000, 0.22],
-      [Number.POSITIVE_INFINITY, 0.28],
-    ],
-    TW: [
-      [1_000_000, 0.1],
-      [2_500_000, 0.16],
-      [Number.POSITIVE_INFINITY, 0.22],
-    ],
-  };
-  const baseRate =
-    brackets[input.country].find(([limit]) => annualGross <= limit)?.[1] ?? 0.25;
-  let regionAdjustment = 0;
-  if (input.country === "US") {
-    regionAdjustment = NO_STATE_INCOME_TAX.has(input.region)
-      ? 0
-      : HIGH_STATE_TAX.has(input.region)
-        ? 0.05
-        : 0.03;
-  } else if (input.country === "CA") {
-    regionAdjustment = input.region === "QC" ? 0.04 : 0.025;
-  }
-  const effectiveRate = Math.min(0.5, baseRate + regionAdjustment);
-  const annualDeductions = Math.round(annualGrossCents * effectiveRate);
-  const monthlyGross = Math.round(annualGrossCents / 12);
-  const monthlyDeductions = Math.round(annualDeductions / 12);
-  return {
-    annual_gross_cents: annualGrossCents,
-    monthly_gross_cents: monthlyGross,
-    base_deduction_rate: baseRate,
-    regional_adjustment_rate: regionAdjustment,
-    effective_deduction_rate: effectiveRate,
-    annual_estimated_deductions_cents: annualDeductions,
-    monthly_estimated_deductions_cents: monthlyDeductions,
-    monthly_take_home_cents: Math.max(0, monthlyGross - monthlyDeductions),
-    rule_version: `take-home-${input.country.toLowerCase()}-2026.2`,
-  };
+  return input.country === "US"
+    ? estimateUsTakeHome({ annualGrossCents, region: input.region, filingStatus: input.filingStatus ?? "single", selfEmployed: input.selfEmployed, annualOtherDeductionsCents: input.annualOtherDeductionsCents })
+    : estimateRegionalTakeHome({ country: input.country, annualGrossCents, region: input.region });
 }
 
 function hasIncome(income: IncomeAnswer | null) {
@@ -422,35 +363,29 @@ export function normalizeExpenseToMonthly(
   return amountCents;
 }
 
-export function expenseTotals(answers: HouseholdRunwayAnswers) {
+export function expenseTotals(answers: HouseholdRunwayAnswers): { current: number; interruption: number } {
   if (answers.expense_mode === "quick") {
     return {
       current: answers.quick_expenses.current_monthly_cents,
       interruption: answers.quick_expenses.interruption_monthly_cents,
     };
   }
-  return answers.expense_items.reduce(
-    (totals, item) => ({
-      current:
-        totals.current +
-        normalizeExpenseToMonthly(item.current_amount_cents, item.frequency),
-      interruption:
-        totals.interruption +
-        normalizeExpenseToMonthly(
-          item.interruption_amount_cents,
-          item.frequency,
-        ),
-    }),
-    { current: 0, interruption: 0 },
-  );
+  return EXPENSE_CATEGORIES.reduce((totals, category) => {
+    const categoryTotals = expenseCategoryTotals(answers, category);
+    return { current: totals.current + categoryTotals.current, interruption: totals.interruption + categoryTotals.interruption };
+  }, { current: 0, interruption: 0 });
 }
 
 export function expenseCategoryTotals(
   answers: HouseholdRunwayAnswers,
   category: ExpenseCategory,
-) {
+): { current: number; interruption: number } {
   if (answers.expense_mode === "quick")
-    return category === "other" ? expenseTotals(answers) : { current: 0, interruption: 0 };
+    return category === "other" ? { current: answers.quick_expenses.current_monthly_cents, interruption: answers.quick_expenses.interruption_monthly_cents } : { current: 0, interruption: 0 };
+  if (answers.expense_category_modes[category] === "subtotal") {
+    const subtotal = answers.expense_category_subtotals[category];
+    return { current: subtotal?.current_monthly_cents ?? 0, interruption: subtotal?.interruption_monthly_cents ?? subtotal?.current_monthly_cents ?? 0 };
+  }
   return answers.expense_items
     .filter((item) => item.category === category)
     .reduce(
@@ -564,41 +499,31 @@ export function simulateHouseholdRunway(
 
   for (let month = 1; month <= 120; month += 1) {
     const opening = balance;
-    const confirmedFunds =
-      answers.confirmed_funds
-        .filter((fund) => fund.arrives_month === month)
-        .reduce((sum, fund) => sum + fund.amount_cents, 0) +
-      (month === 1 ? adjust.expected_unconfirmed_funds_cents : 0);
-    const temporaryIncome =
-      answers.temporary_income &&
-      month <= answers.temporary_income.remaining_months
-        ? answers.temporary_income.monthly_cents
-        : 0;
+    const oneTimeFunds = month === 1 ? adjust.expected_unconfirmed_funds_cents : 0;
     const available =
-      opening + continuingIncome + confirmedFunds + temporaryIncome;
+      opening + continuingIncome + oneTimeFunds;
     const closing = available - essential;
     months.push({
       month,
       opening_balance_cents: opening,
       continuing_income_cents: continuingIncome,
-      confirmed_funds_cents: confirmedFunds,
-      temporary_income_cents: temporaryIncome,
+      one_time_funds_cents: oneTimeFunds,
       essential_outflow_cents: essential,
       shortfall_cents: Math.max(
         0,
-        essential - continuingIncome - temporaryIncome,
+        essential - continuingIncome,
       ),
       closing_balance_cents: Math.max(0, closing),
     });
     if (essential > 0 && closing < 0) {
       const monthlyShortfall = Math.max(
         1,
-        essential - continuingIncome - temporaryIncome,
+        essential - continuingIncome,
       );
       monthsCovered =
         month -
         1 +
-        Math.min(1, Math.max(0, (opening + confirmedFunds) / monthlyShortfall));
+        Math.min(1, Math.max(0, (opening + oneTimeFunds) / monthlyShortfall));
       break;
     }
     balance = Math.max(0, closing);
@@ -664,6 +589,12 @@ function legacyIncome(value: unknown): IncomeAnswer {
     entered_amount_cents: Number(income.entered_amount_cents) || 0,
     entered_period: income.entered_period === "monthly" ? "monthly" : "annual",
     entered_as: enteredAs,
+    gross_amount_cents: enteredAs === "gross" ? Number(income.entered_amount_cents) || 0 : 0,
+    gross_period: income.entered_period === "monthly" ? "monthly" : "annual",
+    net_amount_cents: enteredAs === "net" ? Number(income.entered_amount_cents) || 0 : monthly,
+    net_period: income.entered_period === "annual" && enteredAs === "net" ? "annual" : "monthly",
+    tax_filing_status: "single",
+    annual_other_deductions_cents: 0,
     take_home_source:
       enteredAs === "net" || reviewed ? "user_confirmed" : "estimated",
     confidence: (income.confidence as InputConfidence) ?? "estimated",
@@ -688,8 +619,8 @@ export function migrateRunwayAnswers(
 ): HouseholdRunwayAnswers | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
-  if (raw.schema_version === 3) return raw as unknown as HouseholdRunwayAnswers;
-  if (raw.schema_version !== 2) return null;
+  if (raw.schema_version === 4) return raw as unknown as HouseholdRunwayAnswers;
+  if (raw.schema_version !== 2 && raw.schema_version !== 3) return null;
   const country = (["US", "CA", "CN", "TW"].includes(String(raw.country))
     ? raw.country
     : "US") as RunwayCountry;
@@ -697,16 +628,18 @@ export function migrateRunwayAnswers(
     string,
     { current_cents?: number; interruption_cents?: number; confidence?: InputConfidence }
   >;
-  const current = Object.values(legacyExpenses).reduce(
+  const priorQuick = (raw.quick_expenses ?? {}) as Record<string, unknown>;
+  const current = raw.schema_version === 3 ? Number(priorQuick.current_monthly_cents) || 0 : Object.values(legacyExpenses).reduce(
     (sum, item) => sum + (Number(item.current_cents) || 0),
     0,
   );
-  const interruption = Object.values(legacyExpenses).reduce(
+  const interruption = raw.schema_version === 3 ? Number(priorQuick.interruption_monthly_cents) || current : Object.values(legacyExpenses).reduce(
     (sum, item) => sum + (Number(item.interruption_cents) || 0),
     0,
   );
   const other = legacyMoney(raw.other_monthly_income);
-  const retirement = legacyMoney(raw.retirement_accounts);
+  const oldAssets = (raw.assets ?? {}) as Record<string, unknown>;
+  const retirement = raw.schema_version === 3 ? legacyMoney(oldAssets.retirement_tax_deferred) : legacyMoney(raw.retirement_accounts);
   return {
     ...createDefaultRunwayAnswers(now),
     country,
@@ -717,8 +650,9 @@ export function migrateRunwayAnswers(
     has_support_obligations: Boolean(raw.has_support_obligations),
     mine: legacyIncome(raw.mine),
     partner: raw.partner ? legacyIncome(raw.partner) : null,
-    other_income_sources:
-      other.cents > 0
+    other_income_sources: raw.schema_version === 3 && Array.isArray(raw.other_income_sources)
+      ? raw.other_income_sources as RecurringIncomeSource[]
+      : other.cents > 0
         ? [
             {
               id: "legacy-other-income",
@@ -730,33 +664,36 @@ export function migrateRunwayAnswers(
           ]
         : [],
     available_cash: legacyMoney(raw.available_cash),
-    confirmed_funds: Array.isArray(raw.confirmed_funds)
-      ? (raw.confirmed_funds as ConfirmedFund[])
-      : [],
     assets: {
-      liquid_investments: legacyMoney(raw.taxable_investments),
-      illiquid_investments: { ...ZERO_MONEY },
-      home_equity: legacyMoney(raw.home_equity),
+      liquid_investments: legacyMoney(raw.schema_version === 3 ? oldAssets.liquid_investments : raw.taxable_investments),
+      illiquid_investments: legacyMoney(oldAssets.illiquid_investments),
+      home_equity: legacyMoney(raw.schema_version === 3 ? oldAssets.home_equity : raw.home_equity),
       retirement_tax_deferred: {
         ...retirement,
         confidence: retirement.cents > 0 ? "needs_review" : retirement.confidence,
       },
-      retirement_tax_free: { ...ZERO_MONEY },
+      retirement_tax_free: legacyMoney(oldAssets.retirement_tax_free),
     },
-    expense_mode: "quick",
+    housing_tenure: raw.schema_version === 3 && ["rent", "own", "other"].includes(String(raw.housing_tenure)) ? raw.housing_tenure as HousingTenure : null,
+    expense_mode: raw.schema_version === 3 && raw.expense_mode === "guided" ? "guided" : "quick",
+    expense_items: raw.schema_version === 3 && Array.isArray(raw.expense_items) ? raw.expense_items as ExpenseLineItem[] : [],
+    completed_expense_categories: raw.schema_version === 3 && Array.isArray(raw.completed_expense_categories) ? raw.completed_expense_categories as ExpenseCategory[] : [],
+    expense_category_modes: raw.schema_version === 3 && Array.isArray(raw.expense_items)
+      ? Object.fromEntries((raw.expense_items as ExpenseLineItem[]).map((item) => [item.category, "itemized"]))
+      : {},
+    expense_category_subtotals: {},
     quick_expenses: {
       current_monthly_cents: current,
       interruption_monthly_cents: interruption,
       confidence: current > 0 ? "needs_review" : "skipped",
     },
-    temporary_income: raw.temporary_income as TemporaryIncome | null,
     updated_at:
       typeof raw.updated_at === "string" ? raw.updated_at : now.toISOString(),
   };
 }
 
 export interface RunwayDraftEnvelope {
-  version: 3;
+  version: 4;
   expires_at: string;
   step_id: RunwayStepId;
   completed: boolean;
@@ -786,12 +723,13 @@ export function parseDraftEnvelope(
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (new Date(String(parsed.expires_at)) <= now) return null;
-    if (parsed.version === 3) {
+    if (parsed.version === 4 || parsed.version === 3) {
       const answers = migrateRunwayAnswers(parsed.answers, now);
-      const stepId = parsed.step_id as RunwayStepId;
+      const legacyStepId = String(parsed.step_id);
+      const stepId = (legacyStepId === "confirmedFunds" ? "assets" : legacyStepId === "temporaryIncome" ? "review" : legacyStepId) as RunwayStepId;
       if (!answers || !RUNWAY_STEP_IDS.includes(stepId)) return null;
       return {
-        version: 3,
+        version: 4,
         expires_at: String(parsed.expires_at),
         step_id: stepId,
         completed: Boolean(parsed.completed),
@@ -808,7 +746,7 @@ export function parseDraftEnvelope(
       const stepId: RunwayStepId =
         legacyId === "welcome" ? "location" : legacyId;
       return {
-        version: 3,
+        version: 4,
         expires_at: String(parsed.expires_at),
         step_id: stepId,
         completed: Boolean(parsed.completed),

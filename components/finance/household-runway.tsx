@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -64,9 +65,7 @@ import {
 
 const OPTIONAL_STEPS = new Set<RunwayStepId>([
   "otherIncome",
-  "confirmedFunds",
   "assets",
-  "temporaryIncome",
 ]);
 const EMPTY_ADJUSTMENTS: RunwayAdjustments = {
   expense_reduction_cents: 0,
@@ -191,6 +190,12 @@ function employmentIncome(
       : (existing?.entered_amount_cents ?? 0),
     entered_period: existing?.entered_period ?? "annual",
     entered_as: existing?.entered_as ?? "gross",
+    gross_amount_cents: existing?.gross_amount_cents ?? 0,
+    gross_period: existing?.gross_period ?? "annual",
+    net_amount_cents: existing?.net_amount_cents ?? 0,
+    net_period: existing?.net_period ?? "monthly",
+    tax_filing_status: existing?.tax_filing_status ?? "single",
+    annual_other_deductions_cents: existing?.annual_other_deductions_cents ?? 0,
     take_home_source: existing?.take_home_source ?? "estimated",
     confidence: notWorking ? "confirmed" : (existing?.confidence ?? "estimated"),
     estimate_rule_version: existing?.estimate_rule_version,
@@ -397,12 +402,17 @@ export function HouseholdRunway({
           ? current.mine
           : (current.partner ?? employmentIncome("employed"));
       const next = { ...base, ...patch };
-      if (next.entered_as === "gross" && next.entered_amount_cents > 0) {
+      next.entered_amount_cents = next.entered_as === "gross" ? next.gross_amount_cents : next.net_amount_cents;
+      next.entered_period = next.entered_as === "gross" ? next.gross_period : next.net_period;
+      if (next.entered_as === "gross" && next.gross_amount_cents > 0) {
         const estimate = estimateMonthlyTakeHome({
           country: current.country,
           region: current.region,
-          amountCents: next.entered_amount_cents,
-          period: next.entered_period,
+          amountCents: next.gross_amount_cents,
+          period: next.gross_period,
+          filingStatus: next.tax_filing_status,
+          selfEmployed: next.employment === "self_employed",
+          annualOtherDeductionsCents: next.annual_other_deductions_cents,
         });
         next.estimated_monthly_take_home_cents = estimate.monthly_take_home_cents;
         next.estimate_rule_version = estimate.rule_version;
@@ -413,9 +423,9 @@ export function HouseholdRunway({
         }
       } else if (next.entered_as === "net") {
         next.monthly_take_home_cents =
-          next.entered_period === "annual"
-            ? Math.round(next.entered_amount_cents / 12)
-            : next.entered_amount_cents;
+          next.net_period === "annual"
+            ? Math.round(next.net_amount_cents / 12)
+            : next.net_amount_cents;
         next.estimated_monthly_take_home_cents = 0;
         next.take_home_source = "user_confirmed";
         next.confidence = "confirmed";
@@ -493,9 +503,7 @@ export function HouseholdRunway({
         candidate === "partnerIncome" &&
         (!answers.partner ||
           ["unemployed", "not_working"].includes(answers.partner.employment));
-      const skipReductions =
-        candidate === "reductions" && answers.expense_mode === "quick";
-      if (!skipMine && !skipPartner && !skipReductions) break;
+      if (!skipMine && !skipPartner) break;
       index += direction;
     }
     return RUNWAY_STEP_IDS[
@@ -859,7 +867,7 @@ function InterviewShell({
   const index = RUNWAY_STEP_IDS.indexOf(stepId);
   const isCategory = stepId === "expenses" && activeExpenseCategory;
   return (
-    <section className="mx-auto min-h-[calc(100vh-65px)] max-w-4xl px-5 py-8 sm:py-10">
+    <section className="mx-auto min-h-[calc(100vh-65px)] max-w-4xl px-5 py-8 pb-28 sm:py-10">
       <div className="mb-5 flex items-center justify-between text-xs text-slate-400">
         <span>{isCategory ? t(`expenseCategories.${activeExpenseCategory}`) : t(`steps.${stepId}.eyebrow`)}</span>
         <span>
@@ -868,15 +876,15 @@ function InterviewShell({
           })}
         </span>
       </div>
-      <div className="grid h-[calc(100dvh-145px)] min-h-[500px] max-h-[650px] grid-rows-[minmax(0,1fr)_auto] rounded-3xl border border-black/5 bg-white shadow-[0_24px_80px_-45px_rgba(15,23,42,.4)] dark:border-white/10 dark:bg-white/[.04]">
-        <div className="overflow-y-auto overscroll-contain p-6 sm:p-10">{children}</div>
+      <div className="grid min-h-[620px] grid-rows-[1fr_auto] rounded-3xl border border-black/5 bg-white shadow-[0_24px_80px_-45px_rgba(15,23,42,.4)] dark:border-white/10 dark:bg-white/[.04] sm:h-[680px]">
+        <div className="p-6 sm:p-10">{children}</div>
         <div>
           {error ? (
             <p role="alert" className="mx-6 mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300 sm:mx-10">
               {error}
             </p>
           ) : null}
-          <div className="flex min-h-20 items-center justify-between gap-3 rounded-b-3xl border-t bg-white/95 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-white/10 dark:bg-[#171a17]/95 sm:px-10">
+          {typeof document !== "undefined" ? createPortal(<div className="fixed inset-x-0 bottom-0 z-[1000] mx-auto flex min-h-20 w-full max-w-4xl isolate items-center justify-between gap-3 border-t bg-white/95 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-12px_30px_-24px_rgba(15,23,42,.45)] backdrop-blur dark:border-white/10 dark:bg-[#171a17]/95 sm:rounded-t-2xl sm:px-10">
             <Button variant="ghost" onClick={onBack}>
               <ArrowLeft />
               {t("actions.back")}
@@ -899,7 +907,7 @@ function InterviewShell({
                 </Button>
               )}
             </div>
-          </div>
+          </div>, document.body) : null}
         </div>
       </div>
       <button
@@ -1107,42 +1115,6 @@ function StepContent({
         </div>
       </>
     );
-  if (step === "confirmedFunds") {
-    const fund = answers.confirmed_funds[0];
-    return (
-      <>
-        {title}
-        <div className="mt-7 grid gap-5 sm:grid-cols-2">
-          <MoneyField
-            label={t("fields.confirmedAmount")}
-            currency={answers.currency}
-            value={fund?.amount_cents ?? 0}
-            onChange={(value) =>
-              update({
-                confirmed_funds: value
-                  ? [{ id: fund?.id ?? newId("fund"), amount_cents: value, arrives_month: fund?.arrives_month ?? 1, confidence: "confirmed" }]
-                  : [],
-              })
-            }
-          />
-          <label>
-            <span className="mb-2 block text-sm font-medium">{t("fields.arrivalMonth")}</span>
-            <input
-              type="number"
-              min={1}
-              max={120}
-              className="h-12 w-full rounded-xl border bg-transparent px-3"
-              value={fund?.arrives_month ?? 1}
-              onChange={(event) =>
-                fund && update({ confirmed_funds: [{ ...fund, arrives_month: Math.max(1, Number(event.target.value) || 1) }] })
-              }
-            />
-          </label>
-        </div>
-        <InfoBox>{t("fields.confirmedHelp")}</InfoBox>
-      </>
-    );
-  }
   if (step === "assets")
     return <AssetsStep title={title} t={t} answers={answers} update={update} />;
   if (step === "expenses")
@@ -1153,35 +1125,6 @@ function StepContent({
     );
   if (step === "reductions")
     return <ReductionStep title={title} t={t} locale={locale} answers={answers} update={update} />;
-  if (step === "temporaryIncome")
-    return (
-      <>
-        {title}
-        <div className="mt-7 grid gap-5 sm:grid-cols-2">
-          <MoneyField
-            label={t("fields.temporaryIncome")}
-            currency={answers.currency}
-            value={answers.temporary_income?.monthly_cents ?? 0}
-            onChange={(value) =>
-              update({ temporary_income: value ? { monthly_cents: value, remaining_months: answers.temporary_income?.remaining_months ?? 1, confidence: "confirmed" } : null })
-            }
-          />
-          <label>
-            <span className="mb-2 block text-sm font-medium">{t("fields.remainingMonths")}</span>
-            <input
-              type="number"
-              min={1}
-              max={120}
-              className="h-12 w-full rounded-xl border bg-transparent px-3"
-              value={answers.temporary_income?.remaining_months ?? 1}
-              onChange={(event) =>
-                answers.temporary_income && update({ temporary_income: { ...answers.temporary_income, remaining_months: Math.max(1, Number(event.target.value) || 1) } })
-              }
-            />
-          </label>
-        </div>
-      </>
-    );
   if (step === "review")
     return <ReviewStep title={title} t={t} locale={locale} answers={answers} />;
   return null;
@@ -1319,15 +1262,17 @@ function ExpenseHub({
         <button className="mt-4 text-sm font-semibold text-emerald-700 underline" onClick={() => update({ expense_mode: "guided" })}>
           {t("expenses.useGuided")}
         </button>
-        <div className="mt-7 grid gap-5 sm:grid-cols-2">
-          <MoneyField label={t("expenses.currentTotal")} currency={answers.currency} value={answers.quick_expenses.current_monthly_cents} onChange={(value) => update({ quick_expenses: { ...answers.quick_expenses, current_monthly_cents: value, confidence: "confirmed" } })} />
-          <MoneyField label={t("expenses.interruptionTotal")} currency={answers.currency} value={answers.quick_expenses.interruption_monthly_cents} onChange={(value) => update({ quick_expenses: { ...answers.quick_expenses, interruption_monthly_cents: value, confidence: "confirmed" } })} />
+        <div className="mt-7 max-w-md">
+          <MoneyField label={t("expenses.currentTotal")} currency={answers.currency} value={answers.quick_expenses.current_monthly_cents} onChange={(value) => update({ quick_expenses: { ...answers.quick_expenses, current_monthly_cents: value, interruption_monthly_cents: answers.quick_expenses.interruption_monthly_cents || value, confidence: "confirmed" } })} />
         </div>
       </>
     );
   return (
     <>
       {title}
+      <div className="mt-6 rounded-2xl border bg-slate-50 p-4 dark:bg-white/5">
+        <MoneyField label={t("expenses.currentTotal")} currency={answers.currency} value={totals.current} help={t("expenses.totalSwitchHelp")} onChange={(value) => update({ expense_mode: "quick", quick_expenses: { ...answers.quick_expenses, current_monthly_cents: value, interruption_monthly_cents: answers.quick_expenses.interruption_monthly_cents || value, confidence: "confirmed" } })} />
+      </div>
       <div className="mt-5 flex items-center justify-between gap-4">
         <p className="text-sm font-medium">{t("expenses.runningTotal", { amount: formatCents(totals.current, locale, answers.currency) })}</p>
         <button className="text-sm font-semibold text-emerald-700 underline" onClick={() => update({ expense_mode: "quick" })}>
@@ -1364,6 +1309,12 @@ function ExpenseCategoryEditor({
   answers: HouseholdRunwayAnswers;
   update: (patch: Partial<HouseholdRunwayAnswers>) => void;
 }) {
+  const subtotal = answers.expense_category_subtotals[category] ?? { current_monthly_cents: 0, interruption_monthly_cents: 0, confidence: "skipped" as const };
+  const updateSubtotal = (patch: Partial<typeof subtotal>) => update({
+    expense_category_subtotals: { ...answers.expense_category_subtotals, [category]: { ...subtotal, ...patch, confidence: "confirmed" } },
+    expense_category_modes: { ...answers.expense_category_modes, [category]: "subtotal" },
+    completed_expense_categories: Array.from(new Set([...answers.completed_expense_categories, category])),
+  });
   const housingTypes =
     answers.housing_tenure === "own"
       ? ["mortgage", "property_tax", "homeowners_insurance", "hoa", "home_maintenance"]
@@ -1398,6 +1349,10 @@ function ExpenseCategoryEditor({
         {t(`expenseCategories.${category}`)}
       </h1>
       <p className="mt-3 text-slate-500">{t(`expenses.categoryHelp.${category}`)}</p>
+      <div className="mt-6 rounded-2xl border p-4">
+        <MoneyField label={t("expenses.categoryTotal")} currency={answers.currency} value={subtotal.current_monthly_cents} onChange={(value) => updateSubtotal({ current_monthly_cents: value, interruption_monthly_cents: subtotal.interruption_monthly_cents || value })} />
+        <details className="mt-4 max-h-[55vh] overflow-auto rounded-xl border p-3" onToggle={(event) => { if ((event.currentTarget as HTMLDetailsElement).open) update({ expense_category_modes: { ...answers.expense_category_modes, [category]: "itemized" } }); }}>
+          <summary className="cursor-pointer font-semibold">{t("expenses.itemizeInstead")}</summary>
       {category === "housing" ? (
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           {(["rent", "own", "other"] as const).map((tenure) => (
@@ -1426,6 +1381,8 @@ function ExpenseCategoryEditor({
           })}
         </div>
       ) : null}
+        </details>
+      </div>
     </>
   );
 }
@@ -1448,11 +1405,13 @@ function ReductionStep({
     <>
       {title}
       <div className="mt-5 grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 dark:bg-white/5">
-        <SummaryValue label={t("expenses.todayTotal")} value={formatCents(totals.current, locale, answers.currency)} />
-        <SummaryValue label={t("expenses.afterTotal")} value={formatCents(totals.interruption, locale, answers.currency)} />
+        <SummaryValue label={t("expenses.currentTotal")} value={formatCents(totals.current, locale, answers.currency)} />
+        <SummaryValue label={t("expenses.afterInterruption")} value={formatCents(totals.interruption, locale, answers.currency)} />
       </div>
       <div className="mt-5 space-y-3">
-        {answers.expense_items.filter((item) => item.current_amount_cents > 0).map((item) => (
+        {answers.expense_mode === "quick" ? <div className="rounded-2xl border p-4"><MoneyField label={t("expenses.afterInterruption")} currency={answers.currency} value={answers.quick_expenses.interruption_monthly_cents || answers.quick_expenses.current_monthly_cents} onChange={(value) => update({ quick_expenses: { ...answers.quick_expenses, interruption_monthly_cents: Math.min(value, answers.quick_expenses.current_monthly_cents), confidence: "confirmed" } })} /></div> : null}
+        {answers.expense_mode === "guided" ? EXPENSE_CATEGORIES.filter((category) => answers.expense_category_modes[category] === "subtotal" && (answers.expense_category_subtotals[category]?.current_monthly_cents ?? 0) > 0).map((category) => { const subtotal = answers.expense_category_subtotals[category]!; return <div key={category} className="grid items-end gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_220px]"><div><p className="font-medium">{t(`expenseCategories.${category}`)}</p><p className="mt-1 text-xs text-slate-500">{formatCents(subtotal.current_monthly_cents, locale, answers.currency)}</p></div><MoneyField label={t("expenses.afterInterruption")} currency={answers.currency} value={subtotal.interruption_monthly_cents} onChange={(value) => update({ expense_category_subtotals: { ...answers.expense_category_subtotals, [category]: { ...subtotal, interruption_monthly_cents: Math.min(value, subtotal.current_monthly_cents) } } })} /></div>; }) : null}
+        {answers.expense_items.filter((item) => answers.expense_category_modes[item.category] === "itemized" && item.current_amount_cents > 0).map((item) => (
           <div key={item.id} className="grid items-end gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_220px]">
             <div>
               <p className="font-medium">{t(`expenseItems.${item.type}`)}</p>
@@ -1512,20 +1471,20 @@ function IncomeEditor({
   if (income.employment === "unemployed" || income.employment === "not_working")
     return <InfoBox>{t("income.notAsked")}</InfoBox>;
   const estimate =
-    income.entered_as === "gross" && income.entered_amount_cents > 0
-      ? estimateMonthlyTakeHome({ country: answers.country, region: answers.region, amountCents: income.entered_amount_cents, period: income.entered_period })
+    income.entered_as === "gross" && income.gross_amount_cents > 0
+      ? estimateMonthlyTakeHome({ country: answers.country, region: answers.region, amountCents: income.gross_amount_cents, period: income.gross_period, filingStatus: income.tax_filing_status, selfEmployed: income.employment === "self_employed", annualOtherDeductionsCents: income.annual_other_deductions_cents })
       : null;
   return (
     <div className="mt-7">
       <div className="mb-5 grid gap-3 sm:grid-cols-2">
-        <ChoiceCard selected={income.entered_as === "gross"} title={t("income.gross")} onClick={() => income.entered_as !== "gross" && onChange({ entered_as: "gross", entered_amount_cents: 0, monthly_take_home_cents: 0, estimated_monthly_take_home_cents: 0, take_home_source: "estimated", confidence: "estimated" })} />
-        <ChoiceCard selected={income.entered_as === "net"} title={t("income.net")} onClick={() => income.entered_as !== "net" && onChange({ entered_as: "net", entered_amount_cents: 0, monthly_take_home_cents: 0, estimated_monthly_take_home_cents: 0, take_home_source: "user_confirmed", confidence: "confirmed" })} />
+        <ChoiceCard selected={income.entered_as === "gross"} title={t("income.gross")} onClick={() => income.entered_as !== "gross" && onChange({ entered_as: "gross", take_home_source: "estimated", confidence: "estimated" })} />
+        <ChoiceCard selected={income.entered_as === "net"} title={t("income.net")} onClick={() => income.entered_as !== "net" && onChange({ entered_as: "net", take_home_source: "user_confirmed", confidence: "confirmed" })} />
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
-        <MoneyField label={t("income.amount")} currency={answers.currency} value={income.entered_amount_cents} onChange={(value) => onChange({ entered_amount_cents: value, take_home_source: income.entered_as === "gross" ? "estimated" : "user_confirmed" })} />
+        <MoneyField label={t("income.amount")} currency={answers.currency} value={income.entered_as === "gross" ? income.gross_amount_cents : income.net_amount_cents} onChange={(value) => onChange(income.entered_as === "gross" ? { gross_amount_cents: value, take_home_source: "estimated" } : { net_amount_cents: value, take_home_source: "user_confirmed" })} />
         <label>
           <span className="mb-2 block text-sm font-medium">{t("income.period")}</span>
-          <select className="h-12 w-full rounded-xl border bg-transparent px-3" value={income.entered_period} onChange={(event) => onChange({ entered_period: event.target.value as IncomeAnswer["entered_period"], take_home_source: income.entered_as === "gross" ? "estimated" : "user_confirmed" })}>
+          <select className="h-12 w-full rounded-xl border bg-transparent px-3" value={income.entered_as === "gross" ? income.gross_period : income.net_period} onChange={(event) => onChange(income.entered_as === "gross" ? { gross_period: event.target.value as IncomeAnswer["gross_period"], take_home_source: "estimated" } : { net_period: event.target.value as IncomeAnswer["net_period"], take_home_source: "user_confirmed" })}>
             <option value="annual">{t("income.annual")}</option>
             <option value="monthly">{t("income.monthly")}</option>
           </select>
@@ -1550,11 +1509,14 @@ function IncomeEditor({
               <dt>{t("income.enteredGross")}</dt><dd>{formatCents(income.entered_amount_cents, locale, answers.currency)} · {t(`income.${income.entered_period}`)}</dd>
               <dt>{t("income.annualGross")}</dt><dd>{formatCents(estimate.annual_gross_cents, locale, answers.currency)}</dd>
               <dt>{t("income.monthlyGross")}</dt><dd>{formatCents(estimate.monthly_gross_cents, locale, answers.currency)}</dd>
-              <dt>{t("income.baseRate")}</dt><dd>{Math.round(estimate.base_deduction_rate * 100)}%</dd>
-              <dt>{t("income.regionRate")}</dt><dd>{Math.round(estimate.regional_adjustment_rate * 100)}%</dd>
+              <dt>{t("income.federalTax")}</dt><dd>{formatCents(estimate.annual_federal_income_tax_cents, locale, answers.currency)}</dd>
+              <dt>{t("income.stateTax")}</dt><dd>{formatCents(estimate.annual_state_income_tax_cents, locale, answers.currency)}</dd>
+              <dt>{t("income.socialSecurity")}</dt><dd>{formatCents(estimate.annual_social_security_cents, locale, answers.currency)}</dd>
+              <dt>{t("income.medicare")}</dt><dd>{formatCents(estimate.annual_medicare_cents, locale, answers.currency)}</dd>
               <dt>{t("income.monthlyDeductions")}</dt><dd>{formatCents(estimate.monthly_estimated_deductions_cents, locale, answers.currency)}</dd>
-              <dt>{t("income.ruleVersion")}</dt><dd>{estimate.rule_version}</dd>
+              <dt>{t("income.ruleVersion", { version: estimate.rule_version })}</dt><dd>{estimate.federal_rule_version}</dd>
             </dl>
+            {answers.country === "US" ? <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-2 block text-xs font-medium">{t("income.filingStatus")}</span><select className="h-10 w-full rounded-lg border bg-transparent px-2" value={income.tax_filing_status} onChange={(event) => onChange({ tax_filing_status: event.target.value as IncomeAnswer["tax_filing_status"], take_home_source: "estimated" })}>{(["single", "married_joint", "married_separate", "head_household"] as const).map((status) => <option key={status} value={status}>{t(`income.filingStatuses.${status}`)}</option>)}</select></label><MoneyField label={t("income.otherDeductions")} currency={answers.currency} value={income.annual_other_deductions_cents} onChange={(value) => onChange({ annual_other_deductions_cents: value, take_home_source: "estimated" })} /></div> : null}
             <p className="mt-3 text-xs text-slate-500">{t("income.estimateDisclaimer")}</p>
           </details>
         </div>
@@ -1674,7 +1636,7 @@ function MoneyField({
       <span className="mb-2 flex items-center justify-between gap-3 text-sm font-medium"><span>{label}</span><span className="text-xs font-normal text-slate-400">{currency}</span></span>
       <span className="flex h-12 items-center rounded-xl border bg-white px-3 focus-within:ring-2 focus-within:ring-emerald-500 dark:bg-transparent">
         <span className="mr-2 text-slate-400">{currencySymbol(currency)}</span>
-        <input aria-label={label} inputMode="decimal" type="number" min="0" step="0.01" className="h-full min-w-0 flex-1 bg-transparent outline-none" value={dollars(value)} placeholder="0" onChange={(event) => onChange(cents(event.target.value))} />
+        <input aria-label={label} inputMode="decimal" type="text" className="h-full min-w-0 flex-1 bg-transparent outline-none" value={dollars(value)} placeholder="0" onChange={(event) => { if (/^\d*(?:\.\d{0,2})?$/.test(event.target.value.replace(/,/g, ""))) onChange(cents(event.target.value)); }} />
       </span>
       {help ? <span className="mt-2 block text-xs leading-5 text-slate-500">{help}</span> : null}
     </label>
@@ -1845,17 +1807,36 @@ function ResultExperience({
 }
 
 function BalanceChart({ t, locale, currency, simulation }: { t: ReturnType<typeof useTranslations>; locale: string; currency: HouseholdRunwayAnswers["currency"]; simulation: RunwaySimulation }) {
-  const points = simulation.months.slice(0, Math.max(12, Math.min(120, Math.ceil((simulation.months_covered ?? 12) + 1))));
+  const desiredMonths = Math.max(12, Math.min(120, Math.ceil((simulation.months_covered ?? 12) + 1)));
+  const points = simulation.months.slice(0, desiredMonths);
+  while (points.length < desiredMonths) {
+    const month = points.length + 1;
+    points.push({ month, opening_balance_cents: 0, continuing_income_cents: simulation.continuing_monthly_income_cents, one_time_funds_cents: 0, essential_outflow_cents: simulation.interruption_expenses_cents, shortfall_cents: Math.max(0, simulation.interruption_expenses_cents - simulation.continuing_monthly_income_cents), closing_balance_cents: 0 });
+  }
   const max = Math.max(1, simulation.starting_resources_cents, ...points.map((point) => point.opening_balance_cents));
   const line = [{ month: 0, value: simulation.starting_resources_cents }, ...points.map((point) => ({ month: point.month, value: point.closing_balance_cents }))];
-  const width = 600;
-  const height = 250;
-  const path = line.map((point, index) => `${index ? "L" : "M"} ${(point.month / Math.max(1, line.length - 1)) * width} ${height - (point.value / max) * (height - 20)}`).join(" ");
+  const width = 640;
+  const height = 280;
+  const margin = { left: 72, right: 16, top: 14, bottom: 38 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const lastMonth = Math.max(1, line.at(-1)?.month ?? 1);
+  const x = (month: number) => margin.left + (month / lastMonth) * plotWidth;
+  const y = (value: number) => margin.top + plotHeight - (value / max) * plotHeight;
+  const path = line.map((point, index) => `${index ? "L" : "M"} ${x(point.month)} ${y(point.value)}`).join(" ");
+  const xTicks = Array.from(new Set([0, Math.round(lastMonth / 2), lastMonth]));
+  const yTicks = [0, Math.round(max / 2), max];
   return (
     <div className="rounded-3xl bg-[#0d2b20] p-6 text-white">
       <div className="grid grid-cols-3 gap-3 text-center"><SummaryValue label={t("result.resources")} value={formatCents(simulation.starting_resources_cents, locale, currency)} /><SummaryValue label={t("result.income")} value={formatCents(simulation.continuing_monthly_income_cents, locale, currency)} /><SummaryValue label={t("result.expenses")} value={formatCents(simulation.interruption_expenses_cents, locale, currency)} /></div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="mt-5 h-64 w-full" role="img" aria-label={t("chart.aria")}><path d={`${path} L ${width} ${height} L 0 ${height} Z`} fill="#34d399" opacity=".15" /><path d={path} fill="none" stroke="#34d399" strokeWidth="5" vectorEffect="non-scaling-stroke" /></svg>
-      <details className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70"><summary className="cursor-pointer font-medium text-white">{t("chart.tableTitle")}</summary><div className="mt-3 max-h-48 overflow-auto"><table className="w-full text-left"><thead><tr><th>{t("chart.month")}</th><th>{t("chart.inflows")}</th><th>{t("chart.outflows")}</th><th>{t("chart.closing")}</th></tr></thead><tbody>{points.map((month) => <tr key={month.month} className="border-t border-white/10"><td className="py-2">{month.month}</td><td>{formatCents(month.continuing_income_cents + month.confirmed_funds_cents + month.temporary_income_cents, locale, currency)}</td><td>{formatCents(month.essential_outflow_cents, locale, currency)}</td><td>{formatCents(month.closing_balance_cents, locale, currency)}</td></tr>)}</tbody></table></div></details>
+      <svg viewBox={`0 0 ${width} ${height}`} className="mt-5 h-64 w-full" role="img" aria-label={t("chart.aria")}>
+        {yTicks.map((tick) => <g key={tick}><line x1={margin.left} x2={width - margin.right} y1={y(tick)} y2={y(tick)} stroke="white" opacity=".14" /><text x={margin.left - 8} y={y(tick) + 4} textAnchor="end" fill="white" opacity=".72" fontSize="12">{formatCents(tick, locale, currency)}</text></g>)}
+        <line x1={margin.left} x2={margin.left} y1={margin.top} y2={margin.top + plotHeight} stroke="white" opacity=".45" />
+        <line x1={margin.left} x2={width - margin.right} y1={margin.top + plotHeight} y2={margin.top + plotHeight} stroke="white" opacity=".45" />
+        {xTicks.map((tick) => <g key={tick}><line x1={x(tick)} x2={x(tick)} y1={margin.top + plotHeight} y2={margin.top + plotHeight + 5} stroke="white" opacity=".6" /><text x={x(tick)} y={height - 10} textAnchor="middle" fill="white" opacity=".72" fontSize="12">{t("chart.monthTick", { month: tick })}</text></g>)}
+        <path d={`${path} L ${x(lastMonth)} ${margin.top + plotHeight} L ${margin.left} ${margin.top + plotHeight} Z`} fill="#34d399" opacity=".15" /><path d={path} fill="none" stroke="#34d399" strokeWidth="5" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <details className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70"><summary className="cursor-pointer font-medium text-white">{t("chart.tableTitle")}</summary><div className="mt-3 max-h-48 overflow-auto"><table className="w-full text-left"><thead><tr><th>{t("chart.month")}</th><th>{t("chart.inflows")}</th><th>{t("chart.outflows")}</th><th>{t("chart.closing")}</th></tr></thead><tbody>{points.map((month) => <tr key={month.month} className="border-t border-white/10"><td className="py-2">{month.month}</td><td>{formatCents(month.continuing_income_cents + month.one_time_funds_cents, locale, currency)}</td><td>{formatCents(month.essential_outflow_cents, locale, currency)}</td><td>{formatCents(month.closing_balance_cents, locale, currency)}</td></tr>)}</tbody></table></div></details>
     </div>
   );
 }
