@@ -14,6 +14,28 @@ const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_MESSAGES = 40;
 const MAX_OUTPUT_TOKENS = 2048;
 
+function removeEphemeralOpenAIItemId(metadata: unknown): unknown {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return metadata;
+  }
+
+  const openai = (metadata as Record<string, unknown>).openai;
+  if (
+    !openai ||
+    typeof openai !== "object" ||
+    Array.isArray(openai) ||
+    !Object.hasOwn(openai, "itemId")
+  ) {
+    return metadata;
+  }
+
+  const { itemId: _itemId, ...openaiMetadata } = openai as Record<string, unknown>;
+  return {
+    ...metadata,
+    openai: openaiMetadata,
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -114,9 +136,43 @@ export async function POST(req: Request) {
       );
     }
 
+    // OpenAI item IDs returned with streamed UI parts are ephemeral because
+    // our provider does not persist responses. Preserve the remaining metadata
+    // (including encrypted reasoning content) for follow-up turns.
+    const messagesWithoutEphemeralItemIds = messages.map((message) => {
+      if (!message || typeof message !== "object" || !Array.isArray(message.parts)) {
+        return message;
+      }
+
+      return {
+        ...message,
+        parts: message.parts.map((part: unknown) => {
+          if (!part || typeof part !== "object") return part;
+          const content = part as Record<string, unknown>;
+          const metadataKeys = [
+            "providerMetadata",
+            "callProviderMetadata",
+            "resultProviderMetadata",
+          ] as const;
+          let sanitizedPart: Record<string, unknown> | null = null;
+
+          for (const key of metadataKeys) {
+            const metadata = content[key];
+            const sanitizedMetadata = removeEphemeralOpenAIItemId(metadata);
+            if (sanitizedMetadata !== metadata) {
+              sanitizedPart ??= { ...content };
+              sanitizedPart[key] = sanitizedMetadata;
+            }
+          }
+
+          return sanitizedPart ?? part;
+        }),
+      };
+    });
+
     let modelMessages;
     try {
-      modelMessages = await convertToModelMessages(messages);
+      modelMessages = await convertToModelMessages(messagesWithoutEphemeralItemIds);
     } catch (err) {
       log.warn("POST /api/chat: invalid message format", { error: String(err) });
       return NextResponse.json(

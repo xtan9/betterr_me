@@ -208,6 +208,77 @@ describe('POST /api/chat', () => {
     expect(callArgs.system).toBeUndefined();
   });
 
+  it('strips ephemeral OpenAI item IDs while preserving follow-up metadata', async () => {
+    const messages = [
+      { id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] },
+      {
+        id: 'm2',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'text',
+            text: 'Hi there',
+            providerMetadata: {
+              openai: {
+                itemId: 'msg_ephemeral',
+                reasoningEncryptedContent: 'encrypted-reasoning',
+              },
+              otherProvider: { cacheKey: 'keep-me' },
+            },
+          },
+          {
+            type: 'tool-get_tasks',
+            toolCallId: 'call-1',
+            state: 'output-available',
+            input: {},
+            output: { tasks: [] },
+            callProviderMetadata: {
+              openai: { itemId: 'fc_ephemeral', namespace: 'functions' },
+            },
+            resultProviderMetadata: {
+              openai: { itemId: 'fr_ephemeral', status: 'completed' },
+            },
+          },
+        ],
+      },
+      { id: 'm3', role: 'user', parts: [{ type: 'text', text: 'Follow up' }] },
+    ];
+
+    await POST(makeRequest({ messages }));
+
+    expect(mockConvertToModelMessages).toHaveBeenCalledWith([
+      messages[0],
+      {
+        id: 'm2',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'text',
+            text: 'Hi there',
+            providerMetadata: {
+              openai: { reasoningEncryptedContent: 'encrypted-reasoning' },
+              otherProvider: { cacheKey: 'keep-me' },
+            },
+          },
+          {
+            type: 'tool-get_tasks',
+            toolCallId: 'call-1',
+            state: 'output-available',
+            input: {},
+            output: { tasks: [] },
+            callProviderMetadata: {
+              openai: { namespace: 'functions' },
+            },
+            resultProviderMetadata: {
+              openai: { status: 'completed' },
+            },
+          },
+        ],
+      },
+      messages[2],
+    ]);
+  });
+
   it('should use toUIMessageStreamResponse with correct headers', async () => {
     const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
     const response = await POST(req);
