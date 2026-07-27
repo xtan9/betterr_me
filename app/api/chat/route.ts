@@ -114,10 +114,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // Provider metadata returned with streamed UI parts can contain ephemeral
-    // response item IDs. Our provider does not persist those items, so sending
-    // the IDs back on a later turn makes OpenAI reject the conversation.
-    const messagesWithoutProviderMetadata = messages.map((message) => {
+    // OpenAI item IDs returned with streamed UI parts are ephemeral because
+    // our provider does not persist responses. Preserve the remaining metadata
+    // (including encrypted reasoning content) for follow-up turns.
+    const messagesWithoutEphemeralItemIds = messages.map((message) => {
       if (!message || typeof message !== "object" || !Array.isArray(message.parts)) {
         return message;
       }
@@ -126,15 +126,28 @@ export async function POST(req: Request) {
         ...message,
         parts: message.parts.map((part: unknown) => {
           if (!part || typeof part !== "object") return part;
-          const { providerMetadata: _providerMetadata, ...content } = part as Record<string, unknown>;
-          return content;
+          const content = part as Record<string, unknown>;
+          const providerMetadata = content.providerMetadata;
+          if (!providerMetadata || typeof providerMetadata !== "object") return part;
+
+          const openai = (providerMetadata as Record<string, unknown>).openai;
+          if (!openai || typeof openai !== "object" || !("itemId" in openai)) return part;
+
+          const { itemId: _itemId, ...openaiMetadata } = openai as Record<string, unknown>;
+          return {
+            ...content,
+            providerMetadata: {
+              ...providerMetadata,
+              openai: openaiMetadata,
+            },
+          };
         }),
       };
     });
 
     let modelMessages;
     try {
-      modelMessages = await convertToModelMessages(messagesWithoutProviderMetadata);
+      modelMessages = await convertToModelMessages(messagesWithoutEphemeralItemIds);
     } catch (err) {
       log.warn("POST /api/chat: invalid message format", { error: String(err) });
       return NextResponse.json(

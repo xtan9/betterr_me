@@ -208,7 +208,7 @@ describe('POST /api/chat', () => {
     expect(callArgs.system).toBeUndefined();
   });
 
-  it('strips ephemeral provider metadata before converting follow-up messages', async () => {
+  it('strips ephemeral OpenAI item IDs while preserving follow-up metadata', async () => {
     const messages = [
       { id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] },
       {
@@ -218,7 +218,13 @@ describe('POST /api/chat', () => {
           {
             type: 'text',
             text: 'Hi there',
-            providerMetadata: { openai: { itemId: 'msg_ephemeral' } },
+            providerMetadata: {
+              openai: {
+                itemId: 'msg_ephemeral',
+                reasoningEncryptedContent: 'encrypted-reasoning',
+              },
+              otherProvider: { cacheKey: 'keep-me' },
+            },
           },
         ],
       },
@@ -232,7 +238,16 @@ describe('POST /api/chat', () => {
       {
         id: 'm2',
         role: 'assistant',
-        parts: [{ type: 'text', text: 'Hi there' }],
+        parts: [
+          {
+            type: 'text',
+            text: 'Hi there',
+            providerMetadata: {
+              openai: { reasoningEncryptedContent: 'encrypted-reasoning' },
+              otherProvider: { cacheKey: 'keep-me' },
+            },
+          },
+        ],
       },
       messages[2],
     ]);
