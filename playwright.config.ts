@@ -34,6 +34,16 @@ export default defineConfig({
   },
 
   projects: [
+    {
+      name: 'runway-public-desktop',
+      testMatch: /financial-cushion\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'runway-public-mobile',
+      testMatch: /financial-cushion\.spec\.ts/,
+      use: { ...devices['Pixel 5'], viewport: { width: 390, height: 844 } },
+    },
     // Auth setup — runs once, saves session for all browser projects
     {
       name: 'setup',

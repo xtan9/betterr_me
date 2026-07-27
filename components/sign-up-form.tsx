@@ -15,20 +15,21 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useTranslations } from 'next-intl';
+import { useTranslations } from "next-intl";
 
 export function SignUpForm({
+  nextPath = "/dashboard",
   className,
   ...props
-}: React.ComponentPropsWithoutRef<"div">) {
+}: React.ComponentPropsWithoutRef<"div"> & { nextPath?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const t = useTranslations('auth.signUp');
-  const errorT = useTranslations('auth.errors');
+  const t = useTranslations("auth.signUp");
+  const errorT = useTranslations("auth.errors");
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +38,7 @@ export function SignUpForm({
     setError(null);
 
     if (password !== repeatPassword) {
-      setError(t('passwordsDoNotMatch'));
+      setError(t("passwordsDoNotMatch"));
       setIsLoading(false);
       return;
     }
@@ -47,13 +48,13 @@ export function SignUpForm({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
         },
       });
       if (error) throw error;
       router.push("/auth/sign-up-success");
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : errorT('generic'));
+      setError(error instanceof Error ? error.message : errorT("generic"));
     } finally {
       setIsLoading(false);
     }
@@ -66,14 +67,14 @@ export function SignUpForm({
 
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+        },
       });
       if (error) throw error;
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : errorT('generic'));
+      setError(error instanceof Error ? error.message : errorT("generic"));
       setIsLoading(false);
     }
   };
@@ -82,18 +83,20 @@ export function SignUpForm({
     <div className={cn("flex flex-col gap-section-gap", className)} {...props}>
       <Card>
         <CardHeader>
-          <CardTitle className="text-page-title font-semibold">{t('title')}</CardTitle>
-          <CardDescription>{t('description')}</CardDescription>
+          <CardTitle className="text-page-title font-semibold">
+            {t("title")}
+          </CardTitle>
+          <CardDescription>{t("description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-field-gap">
               <div className="grid gap-2">
-                <Label htmlFor="email">{t('email')}</Label>
+                <Label htmlFor="email">{t("email")}</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder={t('emailPlaceholder')}
+                  placeholder={t("emailPlaceholder")}
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -101,7 +104,7 @@ export function SignUpForm({
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password">{t('password')}</Label>
+                  <Label htmlFor="password">{t("password")}</Label>
                 </div>
                 <Input
                   id="password"
@@ -113,7 +116,7 @@ export function SignUpForm({
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="repeat-password">{t('repeatPassword')}</Label>
+                  <Label htmlFor="repeat-password">{t("repeatPassword")}</Label>
                 </div>
                 <Input
                   id="repeat-password"
@@ -125,7 +128,7 @@ export function SignUpForm({
               </div>
               {error && <p className="text-body text-status-error">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? t('creatingAccount') : t('signUpButton')}
+                {isLoading ? t("creatingAccount") : t("signUpButton")}
               </Button>
 
               <div className="relative">
@@ -134,7 +137,7 @@ export function SignUpForm({
                 </div>
                 <div className="relative flex justify-center text-caption uppercase">
                   <span className="bg-background px-2 text-muted-foreground">
-                    {t('orContinueWith')}
+                    {t("orContinueWith")}
                   </span>
                 </div>
               </div>
@@ -165,13 +168,23 @@ export function SignUpForm({
                   />
                   <path d="M1 1h22v22H1z" fill="none" />
                 </svg>
-                {t('continueWithGoogle')}
+                {t("continueWithGoogle")}
               </Button>
             </div>
             <div className="mt-4 text-center text-body">
-              {t('haveAccount')}{" "}
-              <Link href="/auth/login" className="underline underline-offset-4">
-                {t('login')}
+              {t("haveAccount")}{" "}
+              <Link
+                href={
+                  nextPath === "/dashboard"
+                    ? "/auth/login"
+                    : {
+                        pathname: "/auth/login",
+                        query: { next: nextPath },
+                      }
+                }
+                className="underline underline-offset-4"
+              >
+                {t("login")}
               </Link>
             </div>
           </form>

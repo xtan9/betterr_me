@@ -15,19 +15,20 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useTranslations } from 'next-intl';
+import { useTranslations } from "next-intl";
 
 export function LoginForm({
+  nextPath = "/dashboard",
   className,
   ...props
-}: React.ComponentPropsWithoutRef<"div">) {
+}: React.ComponentPropsWithoutRef<"div"> & { nextPath?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const t = useTranslations('auth.login');
-  const errorT = useTranslations('auth.errors');
+  const t = useTranslations("auth.login");
+  const errorT = useTranslations("auth.errors");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,11 +42,10 @@ export function LoginForm({
         password,
       });
       if (error) throw error;
-      // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push("/dashboard");
-          } catch (error: unknown) {
-        setError(error instanceof Error ? error.message : errorT('generic'));
-      } finally {
+      router.push(nextPath);
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : errorT("generic"));
+    } finally {
       setIsLoading(false);
     }
   };
@@ -57,14 +57,14 @@ export function LoginForm({
 
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+        },
       });
       if (error) throw error;
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : errorT('generic'));
+      setError(error instanceof Error ? error.message : errorT("generic"));
       setIsLoading(false);
     }
   };
@@ -73,20 +73,20 @@ export function LoginForm({
     <div className={cn("flex flex-col gap-section-gap", className)} {...props}>
       <Card>
         <CardHeader>
-          <CardTitle className="text-page-title font-semibold">{t('title')}</CardTitle>
-          <CardDescription>
-            {t('description')}
-          </CardDescription>
+          <CardTitle className="text-page-title font-semibold">
+            {t("title")}
+          </CardTitle>
+          <CardDescription>{t("description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}>
             <div className="flex flex-col gap-field-gap">
               <div className="grid gap-2">
-                <Label htmlFor="email">{t('email')}</Label>
+                <Label htmlFor="email">{t("email")}</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder={t('emailPlaceholder')}
+                  placeholder={t("emailPlaceholder")}
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -94,12 +94,12 @@ export function LoginForm({
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password">{t('password')}</Label>
+                  <Label htmlFor="password">{t("password")}</Label>
                   <Link
                     href="/auth/forgot-password"
                     className="ml-auto inline-block text-body underline-offset-4 hover:underline"
                   >
-                    {t('forgotPassword')}
+                    {t("forgotPassword")}
                   </Link>
                 </div>
                 <Input
@@ -110,9 +110,13 @@ export function LoginForm({
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
-              {error && <p role="alert" className="text-body text-status-error">{error}</p>}
+              {error && (
+                <p role="alert" className="text-body text-status-error">
+                  {error}
+                </p>
+              )}
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? t('loggingIn') : t('loginButton')}
+                {isLoading ? t("loggingIn") : t("loginButton")}
               </Button>
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -120,7 +124,7 @@ export function LoginForm({
                 </div>
                 <div className="relative flex justify-center text-caption uppercase">
                   <span className="bg-background px-2 text-muted-foreground">
-                    {t('orContinueWith')}
+                    {t("orContinueWith")}
                   </span>
                 </div>
               </div>
@@ -151,16 +155,23 @@ export function LoginForm({
                   />
                   <path d="M1 1h22v22H1z" fill="none" />
                 </svg>
-                {t('continueWithGoogle')}
+                {t("continueWithGoogle")}
               </Button>
             </div>
             <div className="mt-4 text-center text-body">
-              {t('noAccount')}{" "}
+              {t("noAccount")}{" "}
               <Link
-                href="/auth/sign-up"
+                href={
+                  nextPath === "/dashboard"
+                    ? "/auth/sign-up"
+                    : {
+                        pathname: "/auth/sign-up",
+                        query: { next: nextPath },
+                      }
+                }
                 className="underline underline-offset-4"
               >
-                {t('signUp')}
+                {t("signUp")}
               </Link>
             </div>
           </form>

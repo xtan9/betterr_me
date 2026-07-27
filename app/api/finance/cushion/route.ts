@@ -1,78 +1,90 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getFinanceCushion, saveFinanceCushion } from "@/lib/finance/repository";
+import {
+  appendRunwaySnapshot,
+  getFinanceCushion,
+  getRunwaySnapshots,
+  saveHouseholdRunwayPlan,
+} from "@/lib/finance/repository";
+import {
+  availableScenarios,
+  simulateHouseholdRunway,
+} from "@/lib/finance/cushion";
 import { validateRequestBody } from "@/lib/validations/api";
-import { financeCushionInputSchema } from "@/lib/validations/finance-cushion";
+import { financeCushionPlanSchema } from "@/lib/validations/finance-cushion";
 import { log } from "@/lib/logger";
 
-async function getAuthenticatedContext() {
+async function authenticated() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   return user ? { supabase, user } : null;
 }
 
-/** GET /api/finance/cushion — read only the signed-in user's saved inputs. */
 export async function GET() {
   try {
-    const context = await getAuthenticatedContext();
-    if (!context) {
+    const context = await authenticated();
+    if (!context)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const cushion = await getFinanceCushion(
-      context.supabase,
-      context.user.id,
-    );
-    return NextResponse.json({ cushion });
+    const [cushion, snapshots] = await Promise.all([
+      getFinanceCushion(context.supabase, context.user.id),
+      getRunwaySnapshots(context.supabase, context.user.id),
+    ]);
+    return NextResponse.json({ cushion, snapshots });
   } catch (error) {
-    log.error("GET /api/finance/cushion error", error);
+    log.error("[household-runway] GET failed", error);
     return NextResponse.json(
-      { error: "Failed to fetch cushion" },
+      { error: "Failed to fetch runway" },
       { status: 500 },
     );
   }
 }
 
-/**
- * POST /api/finance/cushion — create or replace the signed-in user's inputs.
- * The user id always comes from the verified session; it is not an input.
- */
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
-    const context = await getAuthenticatedContext();
-    if (!context) {
+    const context = await authenticated();
+    if (!context)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const validation = validateRequestBody(
       await request.json(),
-      financeCushionInputSchema,
+      financeCushionPlanSchema,
     );
     if (!validation.success) return validation.response;
-
-    const input = {
-      ...validation.data,
-      monthly_continuing_income_cents:
-        validation.data.monthly_continuing_income_cents ?? 0,
-    };
-
-    const cushion = await saveFinanceCushion(
+    const scenario = availableScenarios(validation.data.answers)[0].id;
+    const result = simulateHouseholdRunway(validation.data.answers, scenario);
+    const cushion = await saveHouseholdRunwayPlan(
       context.supabase,
       context.user.id,
-      input,
+      {
+        answers: validation.data.answers,
+        result,
+        status: validation.data.status,
+        attribution: validation.data.attribution ?? {},
+      },
     );
-    return NextResponse.json({ cushion });
+    if (
+      validation.data.create_snapshot &&
+      validation.data.snapshot_action_id &&
+      validation.data.snapshot_trigger
+    ) {
+      await appendRunwaySnapshot(context.supabase, {
+        planId: cushion.id,
+        userId: context.user.id,
+        actionId: validation.data.snapshot_action_id,
+        trigger: validation.data.snapshot_trigger,
+        result,
+      });
+    }
+    const snapshots = await getRunwaySnapshots(context.supabase, context.user.id);
+    return NextResponse.json({ cushion, snapshots });
   } catch (error) {
-    log.error("POST /api/finance/cushion error", error);
+    log.error("[household-runway] PUT failed", error);
     return NextResponse.json(
-      { error: "Failed to save cushion" },
+      { error: "Failed to save runway" },
       { status: 500 },
     );
   }
 }
 
-// Keep the resource idempotent for clients that use HTTP PUT semantics.
-export const PUT = POST;
+export const POST = PUT;
