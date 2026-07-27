@@ -208,6 +208,36 @@ describe('POST /api/chat', () => {
     expect(callArgs.system).toBeUndefined();
   });
 
+  it('strips ephemeral provider metadata before converting follow-up messages', async () => {
+    const messages = [
+      { id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] },
+      {
+        id: 'm2',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'text',
+            text: 'Hi there',
+            providerMetadata: { openai: { itemId: 'msg_ephemeral' } },
+          },
+        ],
+      },
+      { id: 'm3', role: 'user', parts: [{ type: 'text', text: 'Follow up' }] },
+    ];
+
+    await POST(makeRequest({ messages }));
+
+    expect(mockConvertToModelMessages).toHaveBeenCalledWith([
+      messages[0],
+      {
+        id: 'm2',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Hi there' }],
+      },
+      messages[2],
+    ]);
+  });
+
   it('should use toUIMessageStreamResponse with correct headers', async () => {
     const req = makeRequest({ messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
     const response = await POST(req);

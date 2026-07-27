@@ -114,9 +114,27 @@ export async function POST(req: Request) {
       );
     }
 
+    // Provider metadata returned with streamed UI parts can contain ephemeral
+    // response item IDs. Our provider does not persist those items, so sending
+    // the IDs back on a later turn makes OpenAI reject the conversation.
+    const messagesWithoutProviderMetadata = messages.map((message) => {
+      if (!message || typeof message !== "object" || !Array.isArray(message.parts)) {
+        return message;
+      }
+
+      return {
+        ...message,
+        parts: message.parts.map((part: unknown) => {
+          if (!part || typeof part !== "object") return part;
+          const { providerMetadata: _providerMetadata, ...content } = part as Record<string, unknown>;
+          return content;
+        }),
+      };
+    });
+
     let modelMessages;
     try {
-      modelMessages = await convertToModelMessages(messages);
+      modelMessages = await convertToModelMessages(messagesWithoutProviderMetadata);
     } catch (err) {
       log.warn("POST /api/chat: invalid message format", { error: String(err) });
       return NextResponse.json(
