@@ -323,7 +323,7 @@ begin
     );
     raise exception 'financial amount key was accepted in analytics';
   exception
-    when check_violation then
+    when check_violation or insufficient_privilege then
       null;
   end;
 end
