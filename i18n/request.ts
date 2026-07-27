@@ -1,5 +1,6 @@
 import { getRequestConfig } from 'next-intl/server';
 import { cookies, headers } from 'next/headers';
+import { householdRunwayMessages } from './household-runway-messages';
 
 export type Locale = 'en' | 'zh' | 'zh-TW';
 
@@ -44,9 +45,35 @@ async function getLocale(): Promise<Locale> {
 
 export default getRequestConfig(async () => {
   const locale = await getLocale();
+  const messages = (await import(`./messages/${locale}.json`)).default;
 
   return {
     locale,
-    messages: (await import(`./messages/${locale}.json`)).default
+    messages: {
+      ...messages,
+      householdRunway: deepMerge(
+        messages.householdRunway,
+        householdRunwayMessages[locale],
+      ),
+    },
   };
-}); 
+});
+
+function deepMerge(
+  base: Record<string, unknown>,
+  override: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const existing = result[key];
+    result[key] =
+      value && typeof value === 'object' && !Array.isArray(value) &&
+      existing && typeof existing === 'object' && !Array.isArray(existing)
+        ? deepMerge(
+            existing as Record<string, unknown>,
+            value as Record<string, unknown>,
+          )
+        : value;
+  }
+  return result;
+}

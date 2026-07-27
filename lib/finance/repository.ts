@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   FINANCE_CUSHION_COLUMNS,
+  RUNWAY_MODEL_VERSION,
   toFinanceCushionView,
   type FinanceCushionRecord,
   type FinanceCushionView,
@@ -48,7 +49,7 @@ export async function saveHouseholdRunwayPlan(
         ...legacy,
         answers: input.answers,
         latest_result: input.result,
-        model_version: "2.0.0",
+        model_version: RUNWAY_MODEL_VERSION,
         status: input.status,
         country: input.answers.country,
         region: input.answers.region,
@@ -85,7 +86,7 @@ export async function appendRunwaySnapshot(
       months_covered: input.result.months_covered,
       sustainable: input.result.sustainable,
       result: input.result,
-      model_version: "2.0.0",
+      model_version: RUNWAY_MODEL_VERSION,
     },
     { onConflict: "plan_id,action_id", ignoreDuplicates: true },
   );

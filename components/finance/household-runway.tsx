@@ -1,62 +1,68 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowLeft,
   ArrowRight,
   Check,
-  ChevronDown,
   Download,
-  Info,
   LockKeyhole,
+  Plus,
   RefreshCcw,
-  ShieldCheck,
-  Sparkles,
   Trash2,
-  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { HouseholdRunwayLanding } from "@/components/finance/household-runway-landing";
 import {
   EXPENSE_CATEGORIES,
   RUNWAY_DRAFT_STORAGE_KEY,
+  RUNWAY_MODEL_VERSION,
+  RUNWAY_STEP_IDS,
   availableScenarios,
   createDefaultRunwayAnswers,
   createDraftEnvelope,
   currencyForCountry,
   estimateMonthlyTakeHome,
+  expenseCategoryTotals,
+  expenseTotals,
   formatCents,
   highestLeverageActions,
+  monthlyIncomeTotal,
+  normalizeExpenseToMonthly,
   parseDraftEnvelope,
   simulateHouseholdRunway,
   type EmploymentStatus,
   type ExpenseCategory,
+  type ExpenseFrequency,
+  type ExpenseLineItem,
   type HouseholdRunwayAnswers,
   type IncomeAnswer,
+  type InputConfidence,
+  type MoneyAnswer,
+  type RecurringIncomeSource,
+  type RecurringIncomeType,
   type RunwayAdjustments,
   type RunwayCountry,
   type RunwayScenario,
   type RunwaySimulation,
+  type RunwayStepId,
 } from "@/lib/finance/cushion";
+import {
+  RUNWAY_REGIONS,
+  normalizeRunwayLocale,
+  runwayRegionLabel,
+} from "@/lib/finance/runway-regions";
 
-const STEP_IDS = [
-  "welcome",
-  "location",
-  "household",
-  "employment",
-  "myIncome",
-  "partnerIncome",
-  "otherIncome",
-  "cash",
-  "confirmedFunds",
-  "assets",
-  "expenses",
-  "temporaryIncome",
-  "review",
-  "result",
-] as const;
-const OPTIONAL_STEPS = new Set([
+const OPTIONAL_STEPS = new Set<RunwayStepId>([
   "otherIncome",
   "confirmedFunds",
   "assets",
@@ -66,15 +72,81 @@ const EMPTY_ADJUSTMENTS: RunwayAdjustments = {
   expense_reduction_cents: 0,
   added_cash_cents: 0,
   added_monthly_income_cents: 0,
-  investment_access_percent: 70,
   expected_unconfirmed_funds_cents: 0,
-  include_retirement: false,
+  usable_illiquid_investments_cents: 0,
+  usable_retirement_tax_deferred_cents: 0,
+  usable_retirement_tax_free_cents: 0,
 };
 const RUNWAY_ANALYTICS_SESSION_KEY =
   "betterr.household-runway.analytics-session";
 const RUNWAY_IMPORT_ACTION_KEY = "betterr.household-runway.import-action";
 
-type StepId = (typeof STEP_IDS)[number];
+const OTHER_INCOME_TYPES: Exclude<RecurringIncomeType, "other">[] = [
+  "rental_net",
+  "side_business",
+  "dividends_interest",
+  "support",
+  "pension_benefits",
+];
+
+const ASSET_KEYS = [
+  "liquid_investments",
+  "illiquid_investments",
+  "home_equity",
+  "retirement_tax_deferred",
+  "retirement_tax_free",
+] as const;
+type AssetKey = (typeof ASSET_KEYS)[number];
+
+const EXPENSE_ITEM_TYPES: Record<
+  ExpenseCategory,
+  Array<{ type: string; frequencies?: ExpenseFrequency[] }>
+> = {
+  housing: [],
+  utilities: [
+    { type: "electricity" },
+    { type: "home_gas" },
+    { type: "water_trash" },
+    { type: "internet" },
+    { type: "phone" },
+  ],
+  transportation: [
+    { type: "vehicle_payment" },
+    { type: "car_insurance" },
+    { type: "fuel_charging" },
+    { type: "parking_tolls" },
+    { type: "vehicle_maintenance" },
+    { type: "public_transit" },
+  ],
+  food: [{ type: "groceries" }, { type: "essential_meals" }],
+  healthcare: [
+    { type: "health_premium" },
+    { type: "prescriptions" },
+    { type: "necessary_care" },
+  ],
+  insurance: [
+    { type: "life_insurance" },
+    { type: "disability_insurance" },
+    { type: "other_insurance" },
+  ],
+  childcare: [
+    { type: "childcare" },
+    { type: "tuition" },
+    { type: "child_essentials" },
+  ],
+  debt: [
+    { type: "credit_card_minimum" },
+    { type: "student_loan" },
+    { type: "personal_loan" },
+    { type: "other_debt" },
+  ],
+  support: [
+    { type: "parent_support" },
+    { type: "child_support" },
+    { type: "other_support" },
+  ],
+  other: [{ type: "other_commitment" }],
+};
 
 interface HouseholdRunwayProps {
   initialAnswers: HouseholdRunwayAnswers | null;
@@ -91,252 +163,36 @@ function cents(value: string) {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : 0;
 }
 
+function newId(prefix: string) {
+  return `${prefix}-${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
+}
+
 function currencySymbol(currency: string) {
   return { USD: "$", CAD: "CA$", CNY: "¥", TWD: "NT$" }[
     currency as "USD" | "CAD" | "CNY" | "TWD"
   ];
 }
 
-function MoneyField({
-  label,
-  value,
-  currency,
-  help,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: number;
-  currency: string;
-  help?: string;
-  onChange: (value: number) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-2 flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
-        {label}
-        <span className="text-xs font-normal text-slate-400">{currency}</span>
-      </span>
-      <span className="flex h-12 items-center rounded-xl border border-slate-200 bg-white px-3 shadow-sm transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15 dark:border-white/10 dark:bg-white/5">
-        <span className="mr-2 text-xs text-slate-400">
-          {currencySymbol(currency)}
-        </span>
-        <input
-          aria-label={label}
-          className="min-w-0 flex-1 bg-transparent text-lg font-medium tabular-nums outline-none disabled:opacity-50"
-          inputMode="decimal"
-          min="0"
-          step="0.01"
-          type="number"
-          value={dollars(value)}
-          disabled={disabled}
-          placeholder="0"
-          onChange={(event) => onChange(cents(event.target.value))}
-        />
-      </span>
-      {help ? (
-        <span className="mt-1.5 block text-xs leading-5 text-slate-400">
-          {help}
-        </span>
-      ) : null}
-    </label>
-  );
-}
-
-function ChoiceCard({
-  selected,
-  title,
-  description,
-  onClick,
-}: {
-  selected: boolean;
-  title: string;
-  description?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={`rounded-2xl border p-4 text-left transition ${selected ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/10 dark:bg-emerald-500/10" : "border-slate-200 bg-white hover:border-slate-300 dark:border-white/10 dark:bg-white/[.03]"}`}
-    >
-      <span className="flex items-center justify-between gap-3 text-sm font-semibold">
-        {title}
-        {selected ? <Check className="h-4 w-4 text-emerald-600" /> : null}
-      </span>
-      {description ? (
-        <span className="mt-1.5 block text-xs leading-5 text-slate-500 dark:text-slate-400">
-          {description}
-        </span>
-      ) : null}
-    </button>
-  );
-}
-
-function RunwayChart({
-  simulation,
-  currency,
-  locale,
-  t,
-}: {
-  simulation: RunwaySimulation;
-  currency: HouseholdRunwayAnswers["currency"];
-  locale: string;
-  t: ReturnType<typeof useTranslations>;
-}) {
-  const horizon = Math.max(
-    12,
-    Math.min(60, Math.ceil((simulation.months_covered ?? 12) + 1)),
-  );
-  const points = simulation.months.filter((month) => month.month <= horizon);
-  const width = 700;
-  const height = 220;
-  const max = Math.max(
-    1,
-    simulation.starting_resources_cents,
-    ...points.map((point) => point.opening_balance_cents),
-  );
-  const path =
-    points.length === 0
-      ? ""
-      : [
-          `M0,${(height - (simulation.starting_resources_cents / max) * (height - 18)).toFixed(1)}`,
-          ...points.map((point) => {
-            const x = (point.month / horizon) * width;
-            const y =
-              height - (point.closing_balance_cents / max) * (height - 18);
-            return `L${x.toFixed(1)},${Math.max(8, y).toFixed(1)}`;
-          }),
-        ].join(" ");
-  const ticks = [
-    0,
-    Math.round(horizon / 3),
-    Math.round((horizon * 2) / 3),
-    horizon,
-  ];
-  return (
-    <div>
-      <div
-        className="relative h-60"
-        role="img"
-        aria-label={t("chart.aria")}
-      >
-        <div className="absolute inset-x-0 top-0 flex h-[220px] flex-col justify-between">
-          {[0, 1, 2, 3].map((line) => (
-            <i key={line} className="border-t border-dashed border-white/15" />
-          ))}
-        </div>
-        <svg
-          className="absolute inset-x-0 top-0 h-[220px] w-full"
-          viewBox={`0 0 ${width} ${height}`}
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <defs>
-            <linearGradient id="runwayArea" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0" stopColor="#34d399" stopOpacity=".35" />
-              <stop offset="1" stopColor="#34d399" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {path ? (
-            <>
-              <path
-                d={`${path} L${width},${height} L0,${height} Z`}
-                fill="url(#runwayArea)"
-              />
-              <path
-                d={path}
-                fill="none"
-                stroke="#34d399"
-                strokeWidth="4"
-                vectorEffect="non-scaling-stroke"
-              />
-            </>
-          ) : null}
-        </svg>
-        <div className="absolute inset-x-0 bottom-0 flex justify-between text-[10px] text-white/50">
-          {ticks.map((tick) => (
-            <span key={tick}>
-              {tick === 0
-                ? t("chart.now")
-                : t("chart.monthShort", { month: tick })}
-            </span>
-          ))}
-        </div>
-      </div>
-      <details className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">
-        <summary className="cursor-pointer font-medium text-white">
-          {t("chart.tableTitle")}
-        </summary>
-        <div className="mt-3 max-h-48 overflow-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr>
-                <th className="pb-2">{t("chart.month")}</th>
-                <th>{t("chart.inflows")}</th>
-                <th>{t("chart.outflows")}</th>
-                <th>{t("chart.closing")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {points.map((month) => (
-                <tr key={month.month} className="border-t border-white/10">
-                  <td className="py-2">{month.month}</td>
-                  <td>
-                    {formatCents(
-                      month.continuing_income_cents +
-                        month.confirmed_funds_cents +
-                        month.temporary_income_cents,
-                      locale,
-                      currency,
-                    )}
-                  </td>
-                  <td>
-                    {formatCents(
-                      month.essential_outflow_cents,
-                      locale,
-                      currency,
-                    )}
-                  </td>
-                  <td>
-                    {formatCents(month.closing_balance_cents, locale, currency)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
-    </div>
-  );
-}
-
 function employmentIncome(
   status: EmploymentStatus,
   existing?: IncomeAnswer,
 ): IncomeAnswer {
+  const notWorking = status === "unemployed" || status === "not_working";
   return {
     employment: status,
-    monthly_take_home_cents:
-      status === "unemployed" || status === "not_working"
-        ? 0
-        : (existing?.monthly_take_home_cents ?? 0),
-    entered_amount_cents:
-      status === "unemployed" || status === "not_working"
-        ? 0
-        : (existing?.entered_amount_cents ?? 0),
+    monthly_take_home_cents: notWorking
+      ? 0
+      : (existing?.monthly_take_home_cents ?? 0),
+    estimated_monthly_take_home_cents: notWorking
+      ? 0
+      : (existing?.estimated_monthly_take_home_cents ?? 0),
+    entered_amount_cents: notWorking
+      ? 0
+      : (existing?.entered_amount_cents ?? 0),
     entered_period: existing?.entered_period ?? "annual",
     entered_as: existing?.entered_as ?? "gross",
-    confidence:
-      status === "unemployed" || status === "not_working"
-        ? "confirmed"
-        : (existing?.confidence ?? "estimated"),
-    take_home_reviewed:
-      status === "unemployed" || status === "not_working"
-        ? true
-        : (existing?.take_home_reviewed ?? false),
+    take_home_source: existing?.take_home_source ?? "estimated",
+    confidence: notWorking ? "confirmed" : (existing?.confidence ?? "estimated"),
     estimate_rule_version: existing?.estimate_rule_version,
   };
 }
@@ -351,47 +207,108 @@ export function HouseholdRunway({
   const [answers, setAnswers] = useState<HouseholdRunwayAnswers>(
     () => initialAnswers ?? createDefaultRunwayAnswers(),
   );
-  const [step, setStep] = useState(initialAnswers ? STEP_IDS.length - 1 : 0);
-  const [hydrated, setHydrated] = useState(false);
+  const [stepId, setStepId] = useState<RunwayStepId>(
+    initialAnswers ? "result" : "location",
+  );
   const [completed, setCompleted] = useState(Boolean(initialAnswers));
+  const [hydrated, setHydrated] = useState(false);
+  const [hasLocalDraft, setHasLocalDraft] = useState(false);
+  const [interviewStarted, setInterviewStarted] = useState(isAuthenticated);
   const [error, setError] = useState("");
-  const [detailedExpenses, setDetailedExpenses] = useState(false);
+  const [activeExpenseCategory, setActiveExpenseCategory] =
+    useState<ExpenseCategory | null>(null);
   const [scenario, setScenario] = useState<RunwayScenario>(() =>
     initialAnswers ? availableScenarios(initialAnswers)[0].id : "mine_stops",
   );
   const [adjustments, setAdjustments] = useState<RunwayAdjustments>(() => ({
     ...EMPTY_ADJUSTMENTS,
-    investment_access_percent: initialAnswers?.investment_access_percent ?? 70,
+    usable_illiquid_investments_cents:
+      initialAnswers?.extreme_access.illiquid_investments_cents ?? 0,
+    usable_retirement_tax_deferred_cents:
+      initialAnswers?.extreme_access.retirement_tax_deferred_cents ?? 0,
+    usable_retirement_tax_free_cents:
+      initialAnswers?.extreme_access.retirement_tax_free_cents ?? 0,
   }));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(hasSavedPlan);
+  const landingTracked = useRef(false);
 
   useEffect(() => {
+    let hydrationFrame: number | null = null;
+    const syncUrlMode = () => {
+      const started = new URLSearchParams(window.location.search).get("start") === "1";
+      setInterviewStarted(isAuthenticated || started);
+    };
     const draft = parseDraftEnvelope(
       window.localStorage.getItem(RUNWAY_DRAFT_STORAGE_KEY),
     );
-    if (draft) {
+    if (draft && !initialAnswers) {
       setAnswers(draft.answers);
-      setStep(Math.min(draft.step, STEP_IDS.length - 1));
+      setStepId(draft.step_id);
       setCompleted(draft.completed);
       setScenario(availableScenarios(draft.answers)[0].id);
+      setHasLocalDraft(true);
       setAdjustments((current) => ({
         ...current,
-        investment_access_percent: draft.answers.investment_access_percent,
+        usable_illiquid_investments_cents:
+          draft.answers.extreme_access.illiquid_investments_cents,
+        usable_retirement_tax_deferred_cents:
+          draft.answers.extreme_access.retirement_tax_deferred_cents,
+        usable_retirement_tax_free_cents:
+          draft.answers.extreme_access.retirement_tax_free_cents,
       }));
     }
-    setHydrated(true);
-  }, []);
+    syncUrlMode();
+    window.addEventListener("popstate", syncUrlMode);
+    if (draft) {
+      // Commit restored answers before enabling autosave so a locale reload
+      // can never overwrite the draft with the component defaults.
+      hydrationFrame = window.requestAnimationFrame(() => setHydrated(true));
+    } else {
+      setHydrated(true);
+    }
+    return () => {
+      window.removeEventListener("popstate", syncUrlMode);
+      if (hydrationFrame !== null) window.cancelAnimationFrame(hydrationFrame);
+    };
+  }, [initialAnswers, isAuthenticated]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || (!interviewStarted && !hasLocalDraft)) return;
     window.localStorage.setItem(
       RUNWAY_DRAFT_STORAGE_KEY,
-      JSON.stringify(createDraftEnvelope(answers, step, completed)),
+      JSON.stringify(createDraftEnvelope(answers, stepId, completed)),
     );
-  }, [answers, completed, hydrated, step]);
+    setHasLocalDraft(true);
+  }, [answers, completed, hasLocalDraft, hydrated, interviewStarted, stepId]);
 
-  const stepId = STEP_IDS[step];
+  useEffect(() => {
+    const flushDraft = () => {
+      if (!interviewStarted && !hasLocalDraft) return;
+      window.localStorage.setItem(
+        RUNWAY_DRAFT_STORAGE_KEY,
+        JSON.stringify(createDraftEnvelope(answers, stepId, completed)),
+      );
+    };
+    window.addEventListener("betterr:before-locale-change", flushDraft);
+    return () =>
+      window.removeEventListener("betterr:before-locale-change", flushDraft);
+  }, [answers, completed, hasLocalDraft, interviewStarted, stepId]);
+
+  const showLanding = hydrated && !isAuthenticated && !interviewStarted;
+  useEffect(() => {
+    if (showLanding && !landingTracked.current) {
+      landingTracked.current = true;
+      trackRunwayEvent("landing_view", "landing");
+    }
+  }, [showLanding]);
+
+  useEffect(() => {
+    if (!hydrated || showLanding || stepId === "result") return;
+    const heading = document.getElementById("runway-question-heading");
+    heading?.focus({ preventScroll: true });
+  }, [hydrated, showLanding, stepId]);
+
   const scenarios = useMemo(() => availableScenarios(answers), [answers]);
   const baseline = useMemo(
     () => simulateHouseholdRunway(answers, scenario),
@@ -399,25 +316,43 @@ export function HouseholdRunway({
   );
   const preview = useMemo(
     () => simulateHouseholdRunway(answers, scenario, adjustments),
-    [answers, adjustments, scenario],
+    [adjustments, answers, scenario],
   );
   const currentLifestyle = useMemo(() => {
-    const currentExpenseAnswers: HouseholdRunwayAnswers = {
-      ...answers,
-      expenses: Object.fromEntries(
-        EXPENSE_CATEGORIES.map((category) => [
-          category,
-          {
-            ...answers.expenses[category],
-            interruption_cents: answers.expenses[category].current_cents,
+    const totals = expenseTotals(answers);
+    if (answers.expense_mode === "quick") {
+      return simulateHouseholdRunway(
+        {
+          ...answers,
+          quick_expenses: {
+            ...answers.quick_expenses,
+            interruption_monthly_cents: totals.current,
           },
-        ]),
-      ) as HouseholdRunwayAnswers["expenses"],
-    };
-    return simulateHouseholdRunway(currentExpenseAnswers, scenario);
+        },
+        scenario,
+      );
+    }
+    return simulateHouseholdRunway(
+      {
+        ...answers,
+        expense_items: answers.expense_items.map((item) => ({
+          ...item,
+          interruption_amount_cents: item.current_amount_cents,
+        })),
+      },
+      scenario,
+    );
   }, [answers, scenario]);
   const extreme = useMemo(
-    () => simulateHouseholdRunway(answers, scenario, { include_retirement: true }),
+    () =>
+      simulateHouseholdRunway(answers, scenario, {
+        usable_illiquid_investments_cents:
+          answers.extreme_access.illiquid_investments_cents,
+        usable_retirement_tax_deferred_cents:
+          answers.extreme_access.retirement_tax_deferred_cents,
+        usable_retirement_tax_free_cents:
+          answers.extreme_access.retirement_tax_free_cents,
+      }),
     [answers, scenario],
   );
   const scenarioResults = useMemo(
@@ -432,23 +367,25 @@ export function HouseholdRunway({
     () => highestLeverageActions(answers, preview),
     [answers, preview],
   );
-  const totalCurrent = EXPENSE_CATEGORIES.reduce(
-    (sum, key) => sum + answers.expenses[key].current_cents,
-    0,
-  );
-  const totalInterruption = EXPENSE_CATEGORIES.reduce(
-    (sum, key) => sum + answers.expenses[key].interruption_cents,
-    0,
-  );
 
   const update = (patch: Partial<HouseholdRunwayAnswers>) => {
     setSaved(false);
-    setAnswers((current) => ({
-      ...current,
-      ...patch,
-      updated_at: new Date().toISOString(),
-    }));
+    setAnswers((current) => {
+      const next = {
+        ...current,
+        ...patch,
+        updated_at: new Date().toISOString(),
+      };
+      if (typeof window !== "undefined" && interviewStarted) {
+        window.localStorage.setItem(
+          RUNWAY_DRAFT_STORAGE_KEY,
+          JSON.stringify(createDraftEnvelope(next, stepId, completed)),
+        );
+      }
+      return next;
+    });
   };
+
   const updateIncome = (
     person: "mine" | "partner",
     patch: Partial<IncomeAnswer>,
@@ -467,48 +404,107 @@ export function HouseholdRunway({
           amountCents: next.entered_amount_cents,
           period: next.entered_period,
         });
-        next.monthly_take_home_cents = estimate.monthlyTakeHomeCents;
-        next.estimate_rule_version = estimate.ruleVersion;
-        next.confidence = "estimated";
-        next.take_home_reviewed = patch.take_home_reviewed ?? false;
+        next.estimated_monthly_take_home_cents = estimate.monthly_take_home_cents;
+        next.estimate_rule_version = estimate.rule_version;
+        if (patch.take_home_source !== "user_confirmed" && patch.monthly_take_home_cents === undefined) {
+          next.monthly_take_home_cents = estimate.monthly_take_home_cents;
+          next.take_home_source = "estimated";
+          next.confidence = "estimated";
+        }
       } else if (next.entered_as === "net") {
         next.monthly_take_home_cents =
           next.entered_period === "annual"
             ? Math.round(next.entered_amount_cents / 12)
             : next.entered_amount_cents;
+        next.estimated_monthly_take_home_cents = 0;
+        next.take_home_source = "user_confirmed";
         next.confidence = "confirmed";
-        next.take_home_reviewed = true;
         delete next.estimate_rule_version;
       }
-      return {
+      const updated = {
         ...current,
         [person]: next,
         updated_at: new Date().toISOString(),
       };
+      if (typeof window !== "undefined" && interviewStarted) {
+        window.localStorage.setItem(
+          RUNWAY_DRAFT_STORAGE_KEY,
+          JSON.stringify(createDraftEnvelope(updated, stepId, completed)),
+        );
+      }
+      return updated;
     });
   };
-  const updateExpense = (
-    category: ExpenseCategory,
-    patch: Partial<HouseholdRunwayAnswers["expenses"][ExpenseCategory]>,
-  ) => {
+
+  const startInterview = (fresh = false) => {
+    if (fresh) {
+      const reset = createDefaultRunwayAnswers();
+      setAnswers(reset);
+      setStepId("location");
+      setCompleted(false);
+      setHasLocalDraft(false);
+      setAdjustments({ ...EMPTY_ADJUSTMENTS });
+      window.localStorage.removeItem(RUNWAY_DRAFT_STORAGE_KEY);
+      window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
+    }
+    const params = new URLSearchParams(window.location.search);
+    params.set("start", "1");
+    window.history.pushState({}, "", `${window.location.pathname}?${params}`);
+    setInterviewStarted(true);
+    trackRunwayEvent("started", fresh ? "new" : hasLocalDraft ? "resume" : "new");
+  };
+
+  const confirmStartOver = () => {
+    if (window.confirm(t("landing.startOverConfirm"))) startInterview(true);
+  };
+
+  const clearDraft = () => {
+    if (!window.confirm(t("actions.clearConfirm"))) return;
+    window.localStorage.removeItem(RUNWAY_DRAFT_STORAGE_KEY);
+    window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
+    const reset = createDefaultRunwayAnswers();
+    setAnswers(reset);
+    setStepId("location");
+    setCompleted(false);
     setSaved(false);
-    setAnswers((current) => ({
-      ...current,
-      expenses: {
-        ...current.expenses,
-        [category]: {
-          ...current.expenses[category],
-          ...patch,
-          confidence: "confirmed",
-        },
-      },
-      updated_at: new Date().toISOString(),
-    }));
+    setHasLocalDraft(false);
+    setAdjustments({ ...EMPTY_ADJUSTMENTS });
+    if (!isAuthenticated) {
+      const params = new URLSearchParams(window.location.search);
+      params.delete("start");
+      const query = params.toString();
+      window.history.pushState(
+        {},
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}`,
+      );
+      setInterviewStarted(false);
+    }
+  };
+
+  const adjacentStep = (current: RunwayStepId, direction: 1 | -1) => {
+    let index = RUNWAY_STEP_IDS.indexOf(current) + direction;
+    while (index > 0 && index < RUNWAY_STEP_IDS.length - 1) {
+      const candidate = RUNWAY_STEP_IDS[index];
+      const skipMine =
+        candidate === "myIncome" &&
+        ["unemployed", "not_working"].includes(answers.mine.employment);
+      const skipPartner =
+        candidate === "partnerIncome" &&
+        (!answers.partner ||
+          ["unemployed", "not_working"].includes(answers.partner.employment));
+      const skipReductions =
+        candidate === "reductions" && answers.expense_mode === "quick";
+      if (!skipMine && !skipPartner && !skipReductions) break;
+      index += direction;
+    }
+    return RUNWAY_STEP_IDS[
+      Math.max(0, Math.min(RUNWAY_STEP_IDS.length - 1, index))
+    ];
   };
 
   const validateStep = () => {
-    if (stepId === "location" && !answers.region.trim())
-      return t("validation.region");
+    if (stepId === "location" && !answers.region) return t("validation.region");
     if (
       stepId === "myIncome" &&
       ["employed", "self_employed"].includes(answers.mine.employment) &&
@@ -516,44 +512,19 @@ export function HouseholdRunway({
     )
       return t("validation.income");
     if (
-      stepId === "myIncome" &&
-      answers.mine.entered_as === "gross" &&
-      !answers.mine.take_home_reviewed
-    )
-      return t("validation.reviewEstimate");
-    if (
       stepId === "partnerIncome" &&
       answers.partner &&
       ["employed", "self_employed"].includes(answers.partner.employment) &&
       answers.partner.monthly_take_home_cents <= 0
     )
       return t("validation.income");
-    if (
-      stepId === "partnerIncome" &&
-      answers.partner?.entered_as === "gross" &&
-      !answers.partner.take_home_reviewed
-    )
-      return t("validation.reviewEstimate");
-    if (stepId === "expenses" && totalInterruption <= 0)
+    if (stepId === "expenses" && expenseTotals(answers).current <= 0)
+      return t("validation.expensesCurrent");
+    if (stepId === "reductions" && expenseTotals(answers).interruption <= 0)
       return t("validation.expenses");
     return "";
   };
-  const adjacentStep = (current: number, direction: 1 | -1) => {
-    let candidate = current + direction;
-    while (candidate > 0 && candidate < STEP_IDS.length - 1) {
-      const candidateId = STEP_IDS[candidate];
-      const skipMineIncome =
-        candidateId === "myIncome" &&
-        ["unemployed", "not_working"].includes(answers.mine.employment);
-      const skipPartnerIncome =
-        candidateId === "partnerIncome" &&
-        (!answers.partner ||
-          ["unemployed", "not_working"].includes(answers.partner.employment));
-      if (!skipMineIncome && !skipPartnerIncome) break;
-      candidate += direction;
-    }
-    return Math.max(0, Math.min(STEP_IDS.length - 1, candidate));
-  };
+
   const next = () => {
     const issue = validateStep();
     if (issue) {
@@ -561,150 +532,179 @@ export function HouseholdRunway({
       return;
     }
     setError("");
-    if (stepId === "welcome") trackRunwayEvent("started", stepId);
     if (stepId === "review") {
       setCompleted(true);
       setScenario(scenarios[0].id);
       trackRunwayEvent("completed", stepId);
     }
-    setStep((current) => adjacentStep(current, 1));
+    setStepId(adjacentStep(stepId, 1));
   };
+
   const skip = () => {
     setError("");
     trackRunwayEvent("skipped", stepId);
-    setStep((current) => adjacentStep(current, 1));
-  };
-  const clearDraft = () => {
-    window.localStorage.removeItem(RUNWAY_DRAFT_STORAGE_KEY);
-    window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
-    const reset = createDefaultRunwayAnswers();
-    setAnswers(reset);
-    setStep(0);
-    setCompleted(false);
-    setSaved(false);
-    setAdjustments({ ...EMPTY_ADJUSTMENTS });
-  };
-
-  const applyWhatIf = () => {
-    let remainingReduction = adjustments.expense_reduction_cents;
-    const expenses = { ...answers.expenses };
-    const ordered = [...EXPENSE_CATEGORIES].sort(
-      (a, b) => expenses[b].interruption_cents - expenses[a].interruption_cents,
-    );
-    for (const key of ordered) {
-      const reduction = Math.min(
-        remainingReduction,
-        expenses[key].interruption_cents,
-      );
-      expenses[key] = {
-        ...expenses[key],
-        interruption_cents: expenses[key].interruption_cents - reduction,
-      };
-      remainingReduction -= reduction;
-      if (remainingReduction <= 0) break;
-    }
-    update({
-      available_cash: {
-        cents: answers.available_cash.cents + adjustments.added_cash_cents,
-        confidence: "confirmed",
-      },
-      other_monthly_income: {
-        cents:
-          answers.other_monthly_income.cents +
-          adjustments.added_monthly_income_cents,
-        confidence: "confirmed",
-      },
-      investment_access_percent: adjustments.investment_access_percent,
-      expenses,
-    });
-    trackRunwayEvent("result_interaction", "what_if_apply");
-    setAdjustments({
-      ...EMPTY_ADJUSTMENTS,
-      investment_access_percent: adjustments.investment_access_percent,
-    });
+    setStepId(adjacentStep(stepId, 1));
   };
 
   const savePlan = async () => {
+    if (!isAuthenticated) return;
     setSaving(true);
     setError("");
     try {
-      const existingActionId = window.localStorage.getItem(
-        RUNWAY_IMPORT_ACTION_KEY,
-      );
-      const snapshotActionId = existingActionId ?? crypto.randomUUID();
-      if (!existingActionId)
-        window.localStorage.setItem(
-          RUNWAY_IMPORT_ACTION_KEY,
-          snapshotActionId,
-        );
+      let actionId = window.localStorage.getItem(RUNWAY_IMPORT_ACTION_KEY);
+      if (!actionId) {
+        actionId = crypto.randomUUID();
+        window.localStorage.setItem(RUNWAY_IMPORT_ACTION_KEY, actionId);
+      }
       const response = await fetch("/api/finance/cushion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           answers,
           status: "completed",
-          attribution: getAttribution(),
+          attribution: attribution(),
           create_snapshot: true,
-          snapshot_action_id: snapshotActionId,
+          snapshot_action_id: actionId,
           snapshot_trigger: hasSavedPlan ? "updated" : "imported",
         }),
       });
-      if (!response.ok) throw new Error(t("save.error"));
-      setSaved(true);
+      if (!response.ok) throw new Error("save failed");
       window.localStorage.removeItem(RUNWAY_DRAFT_STORAGE_KEY);
       window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
-    } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : t("save.error"),
-      );
+      setSaved(true);
+    } catch {
+      setError(t("save.error"));
     } finally {
       setSaving(false);
     }
   };
 
+  const applyWhatIf = () => {
+    setAnswers((current) => {
+      const next = {
+        ...current,
+        available_cash: {
+          cents: current.available_cash.cents + adjustments.added_cash_cents,
+          confidence: "confirmed" as InputConfidence,
+        },
+        extreme_access: {
+          illiquid_investments_cents:
+            adjustments.usable_illiquid_investments_cents,
+          retirement_tax_deferred_cents:
+            adjustments.usable_retirement_tax_deferred_cents,
+          retirement_tax_free_cents:
+            adjustments.usable_retirement_tax_free_cents,
+        },
+        updated_at: new Date().toISOString(),
+      };
+      if (adjustments.added_monthly_income_cents > 0) {
+        next.other_income_sources = [
+          ...current.other_income_sources,
+          {
+            id: newId("what-if-income"),
+            type: "other" as const,
+            label: t("whatIf.appliedIncome"),
+            monthly_cents: adjustments.added_monthly_income_cents,
+            confidence: "confirmed" as const,
+          },
+        ];
+      }
+      if (adjustments.expense_reduction_cents > 0) {
+        if (current.expense_mode === "quick") {
+          next.quick_expenses = {
+            ...current.quick_expenses,
+            interruption_monthly_cents: Math.max(
+              0,
+              current.quick_expenses.interruption_monthly_cents -
+                adjustments.expense_reduction_cents,
+            ),
+          };
+        } else {
+          let remaining = adjustments.expense_reduction_cents;
+          next.expense_items = [...current.expense_items]
+            .sort(
+              (a, b) =>
+                normalizeExpenseToMonthly(
+                  b.interruption_amount_cents,
+                  b.frequency,
+                ) -
+                normalizeExpenseToMonthly(
+                  a.interruption_amount_cents,
+                  a.frequency,
+                ),
+            )
+            .map((item) => {
+              if (remaining <= 0) return item;
+              const monthly = normalizeExpenseToMonthly(
+                item.interruption_amount_cents,
+                item.frequency,
+              );
+              const reduction = Math.min(monthly, remaining);
+              remaining -= reduction;
+              const factor = item.frequency === "annual" ? 12 : item.frequency === "quarterly" ? 3 : 1;
+              return {
+                ...item,
+                interruption_amount_cents: Math.max(
+                  0,
+                  item.interruption_amount_cents - reduction * factor,
+                ),
+              };
+            });
+        }
+      }
+      return next;
+    });
+    setSaved(false);
+    setAdjustments({
+      ...EMPTY_ADJUSTMENTS,
+      usable_illiquid_investments_cents:
+        adjustments.usable_illiquid_investments_cents,
+      usable_retirement_tax_deferred_cents:
+        adjustments.usable_retirement_tax_deferred_cents,
+      usable_retirement_tax_free_cents:
+        adjustments.usable_retirement_tax_free_cents,
+    });
+  };
+
   const download = () => {
-    const resultLine = (result: RunwaySimulation) =>
-      result.sustainable
-        ? "continuing income covers essential expenses"
-        : `${result.months_covered?.toFixed(1) ?? "—"} months${result.depletion_date ? ` (estimated depletion ${result.depletion_date})` : ""}`;
+    const reportActions = [
+      actions.cashGapCents > 0
+        ? `${t("actionsPlan.cashTarget", { months: actions.targetMonths })}: ${formatCents(actions.cashGapCents, locale, answers.currency)}`
+        : null,
+      actions.largestReducibleCategory
+        ? `${t("actionsPlan.largest")}: ${t(`expenseCategories.${actions.largestReducibleCategory.category}`)} (${formatCents(actions.largestReducibleCategory.reducible, locale, answers.currency)})`
+        : null,
+      answers.expense_mode === "quick"
+        ? t("precision.expenses")
+        : answers.mine.take_home_source === "estimated" ||
+            answers.partner?.take_home_source === "estimated"
+          ? t("precision.takeHome")
+          : t("precision.complete"),
+    ].filter(Boolean);
     const content = [
       "BetterR.me Household Runway",
+      `Model: ${RUNWAY_MODEL_VERSION}`,
+      `Location: ${answers.country} · ${runwayRegionLabel(answers.country, answers.region, locale) ?? answers.region}`,
+      `Cash: ${formatCents(answers.available_cash.cents, locale, answers.currency)}`,
+      `Liquid investments: ${formatCents(answers.assets.liquid_investments.cents, locale, answers.currency)}`,
+      `Continuing monthly income: ${formatCents(monthlyIncomeTotal(answers), locale, answers.currency)}`,
+      `Current monthly expenses: ${formatCents(expenseTotals(answers).current, locale, answers.currency)}`,
+      `Interruption monthly expenses: ${formatCents(expenseTotals(answers).interruption, locale, answers.currency)}`,
       "",
-      primarySentence(preview, t),
-      "",
-      "APPLICABLE INCOME INTERRUPTION SCENARIOS",
-      ...scenarioResults.map(
-        ({ scenario: scenarioId, result }) =>
-          `${t(`scenarios.${scenarioId}`)}: ${resultLine(result)}`,
+      "Scenarios",
+      ...scenarioResults.map(({ scenario: itemScenario, result }) =>
+        `${t(`scenarios.${itemScenario}`)}: ${result.sustainable ? t("comparison.sustainable") : `${(result.months_covered ?? 0).toFixed(1)} ${t("whatIf.months")}`}`,
       ),
       "",
-      "PLAN COMPARISON",
-      `Current lifestyle: ${resultLine(currentLifestyle)}`,
-      `Interruption plan: ${resultLine(baseline)}`,
-      `Extreme mode (retirement at 30% haircut): ${resultLine(extreme)}`,
+      "Assumptions",
+      "Easy-to-withdraw investments are included at 100%.",
+      `Excluded assets: ${formatCents(baseline.excluded_assets_cents, locale, answers.currency)}`,
+      "Confirmed funds arrive only in the entered month; temporary income ends after its entered duration.",
       "",
-      "INPUT SUMMARY",
-      `Starting resources: ${formatCents(preview.starting_resources_cents, locale, answers.currency)}`,
-      `Continuing monthly income: ${formatCents(preview.continuing_monthly_income_cents, locale, answers.currency)}`,
-      `Interruption monthly expenses: ${formatCents(preview.interruption_expenses_cents, locale, answers.currency)}`,
-      `Excluded assets: ${formatCents(preview.excluded_assets_cents, locale, answers.currency)}`,
+      "Priority actions",
+      ...reportActions.slice(0, 3).map((action, index) => `${index + 1}. ${action}`),
       "",
-      "ASSUMPTIONS",
-      `Country / region / currency: ${answers.country} / ${answers.region} / ${answers.currency}`,
-      `Taxable investment access: ${answers.investment_access_percent}%`,
-      "Confirmed future money is added only in its stated arrival month.",
-      "Retirement and home equity are excluded from the main answer.",
-      "",
-      "HIGHEST-LEVERAGE ACTIONS",
-      `Next target: ${actions.targetMonths} months`,
-      `Additional cash needed: ${formatCents(actions.cashGapCents, locale, answers.currency)}`,
-      ...(actions.largestReducibleCategory
-        ? [
-            `Largest reducible category: ${t(`expenseCategories.${actions.largestReducibleCategory.category}`)} (${formatCents(actions.largestReducibleCategory.reducible, locale, answers.currency)})`,
-          ]
-        : []),
-      "",
-      "Educational scenario estimate only; not tax, investment, legal, or financial advice.",
+      "Educational scenario estimate only; not tax, investment, legal, eligibility, or financial advice.",
     ].join("\n");
     const url = URL.createObjectURL(
       new Blob([content], { type: "text/plain;charset=utf-8" }),
@@ -716,20 +716,22 @@ export function HouseholdRunway({
     URL.revokeObjectURL(url);
   };
 
+  if (!hydrated) {
+    return <main className="min-h-screen bg-[#f5f6f2] dark:bg-[#101310]" />;
+  }
+
   return (
     <main className="min-h-screen bg-[#f5f6f2] text-slate-950 dark:bg-[#101310] dark:text-white">
-      <header className="border-b border-black/5 bg-[#f5f6f2]/90 backdrop-blur dark:border-white/10 dark:bg-[#101310]/90">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-          <Link href="/" className="font-display text-xl font-bold">
-            BetterR<span className="text-emerald-600">.me</span>
-          </Link>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <LockKeyhole className="h-3.5 w-3.5" />
-            {t("privacy.local")}
-          </div>
-        </div>
-      </header>
-      {stepId === "result" ? (
+      <RunwayHeader t={t} />
+      {showLanding ? (
+        <HouseholdRunwayLanding
+          t={t}
+          hasDraft={hasLocalDraft}
+          draftCompleted={completed}
+          onPrimary={() => startInterview(false)}
+          onStartOver={confirmStartOver}
+        />
+      ) : stepId === "result" ? (
         <ResultExperience
           t={t}
           locale={locale}
@@ -751,10 +753,15 @@ export function HouseholdRunway({
           onReset={() =>
             setAdjustments({
               ...EMPTY_ADJUSTMENTS,
-              investment_access_percent: answers.investment_access_percent,
+              usable_illiquid_investments_cents:
+                answers.extreme_access.illiquid_investments_cents,
+              usable_retirement_tax_deferred_cents:
+                answers.extreme_access.retirement_tax_deferred_cents,
+              usable_retirement_tax_free_cents:
+                answers.extreme_access.retirement_tax_free_cents,
             })
           }
-          onEdit={() => setStep(STEP_IDS.indexOf("review"))}
+          onEdit={() => setStepId("review")}
           onDownload={download}
           isAuthenticated={isAuthenticated}
           saved={saved}
@@ -763,148 +770,194 @@ export function HouseholdRunway({
           error={error}
         />
       ) : (
-        <section className="mx-auto flex min-h-[calc(100vh-65px)] max-w-3xl flex-col px-5 py-8 sm:justify-center sm:py-12">
-          {stepId !== "welcome" ? (
-            <div className="mb-8 flex items-center justify-between text-xs text-slate-400">
-              <span>{t(`steps.${stepId}.eyebrow`)}</span>
-              <span>
-                {t("progress.remaining", {
-                  minutes: Math.max(
-                    1,
-                    Math.ceil((STEP_IDS.length - step - 2) * 0.15),
-                  ),
-                })}
-              </span>
-            </div>
-          ) : null}
-          <div className="rounded-3xl border border-black/5 bg-white p-6 shadow-[0_24px_80px_-45px_rgba(15,23,42,.4)] dark:border-white/10 dark:bg-white/[.04] sm:p-10">
-            <StepContent
-              step={stepId}
-              t={t}
-              answers={answers}
-              update={update}
-              updateIncome={updateIncome}
-              updateExpense={updateExpense}
-              detailedExpenses={detailedExpenses}
-              setDetailedExpenses={setDetailedExpenses}
-              totalCurrent={totalCurrent}
-              totalInterruption={totalInterruption}
-            />
-            {error ? (
-              <p
-                role="alert"
-                className="mt-5 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300"
-              >
-                {error}
-              </p>
-            ) : null}
-            <div className="mt-8 flex items-center justify-between gap-3">
-              <div>
-                {step > 0 ? (
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setError("");
-                      setStep((current) => adjacentStep(current, -1));
-                    }}
-                  >
-                    <ArrowLeft />
-                    {t("actions.back")}
-                  </Button>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-2">
-                {OPTIONAL_STEPS.has(stepId) ? (
-                  <Button variant="ghost" onClick={skip}>
-                    {t("actions.skip")}
-                  </Button>
-                ) : null}
-                <Button onClick={next}>
-                  {stepId === "welcome"
-                    ? t("actions.start")
-                    : stepId === "review"
-                      ? t("actions.reveal")
-                      : t("actions.continue")}
-                  <ArrowRight />
-                </Button>
-              </div>
-            </div>
-          </div>
-          {step > 0 ? (
-            <button
-              onClick={clearDraft}
-              className="mx-auto mt-6 flex items-center gap-2 text-xs text-slate-400 hover:text-slate-700 dark:hover:text-white"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              {t("actions.clear")}
-            </button>
-          ) : null}
-        </section>
+        <InterviewShell
+          t={t}
+          stepId={stepId}
+          error={error}
+          activeExpenseCategory={activeExpenseCategory}
+          onBack={() => {
+            setError("");
+            if (activeExpenseCategory) {
+              update({
+                completed_expense_categories: Array.from(
+                  new Set([
+                    ...answers.completed_expense_categories,
+                    activeExpenseCategory,
+                  ]),
+                ),
+              });
+              setActiveExpenseCategory(null);
+            } else if (stepId === "location" && !isAuthenticated) {
+              window.history.back();
+            } else {
+              setStepId(adjacentStep(stepId, -1));
+            }
+          }}
+          onSkip={OPTIONAL_STEPS.has(stepId) ? skip : undefined}
+          onContinue={next}
+          onClear={clearDraft}
+          continueLabel={stepId === "review" ? t("actions.reveal") : t("actions.continue")}
+        >
+          <StepContent
+            step={stepId}
+            t={t}
+            locale={locale}
+            answers={answers}
+            update={update}
+            updateIncome={updateIncome}
+            activeExpenseCategory={activeExpenseCategory}
+            setActiveExpenseCategory={setActiveExpenseCategory}
+          />
+        </InterviewShell>
       )}
     </main>
+  );
+}
+
+function RunwayHeader({ t }: { t: ReturnType<typeof useTranslations> }) {
+  return (
+    <header className="border-b border-black/5 bg-[#f5f6f2]/90 backdrop-blur dark:border-white/10 dark:bg-[#101310]/90">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
+        <Link href="/" className="font-display text-xl font-bold">
+          BetterR<span className="text-emerald-600">.me</span>
+        </Link>
+        <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 text-xs text-slate-500 sm:flex">
+            <LockKeyhole className="h-3.5 w-3.5" />
+            {t("privacy.local")}
+          </div>
+          <LanguageSwitcher showLabel />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function InterviewShell({
+  t,
+  stepId,
+  error,
+  activeExpenseCategory,
+  onBack,
+  onSkip,
+  onContinue,
+  onClear,
+  continueLabel,
+  children,
+}: {
+  t: ReturnType<typeof useTranslations>;
+  stepId: RunwayStepId;
+  error: string;
+  activeExpenseCategory: ExpenseCategory | null;
+  onBack: () => void;
+  onSkip?: () => void;
+  onContinue: () => void;
+  onClear: () => void;
+  continueLabel: string;
+  children: ReactNode;
+}) {
+  const index = RUNWAY_STEP_IDS.indexOf(stepId);
+  const isCategory = stepId === "expenses" && activeExpenseCategory;
+  return (
+    <section className="mx-auto min-h-[calc(100vh-65px)] max-w-4xl px-5 py-8 sm:py-10">
+      <div className="mb-5 flex items-center justify-between text-xs text-slate-400">
+        <span>{isCategory ? t(`expenseCategories.${activeExpenseCategory}`) : t(`steps.${stepId}.eyebrow`)}</span>
+        <span>
+          {t("progress.remaining", {
+            minutes: Math.max(1, Math.ceil((RUNWAY_STEP_IDS.length - index - 2) * 0.2)),
+          })}
+        </span>
+      </div>
+      <div className="grid h-[calc(100dvh-145px)] min-h-[500px] max-h-[650px] grid-rows-[minmax(0,1fr)_auto] rounded-3xl border border-black/5 bg-white shadow-[0_24px_80px_-45px_rgba(15,23,42,.4)] dark:border-white/10 dark:bg-white/[.04]">
+        <div className="overflow-y-auto overscroll-contain p-6 sm:p-10">{children}</div>
+        <div>
+          {error ? (
+            <p role="alert" className="mx-6 mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300 sm:mx-10">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex min-h-20 items-center justify-between gap-3 rounded-b-3xl border-t bg-white/95 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-white/10 dark:bg-[#171a17]/95 sm:px-10">
+            <Button variant="ghost" onClick={onBack}>
+              <ArrowLeft />
+              {t("actions.back")}
+            </Button>
+            <div className="flex items-center gap-2">
+              {!isCategory && onSkip ? (
+                <Button variant="ghost" onClick={onSkip}>
+                  {t("actions.skip")}
+                </Button>
+              ) : null}
+              {isCategory ? (
+                <Button onClick={onBack}>
+                  <Check />
+                  {t("expenses.saveCategory")}
+                </Button>
+              ) : (
+                <Button onClick={onContinue}>
+                  {continueLabel}
+                  <ArrowRight />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      <button
+        onClick={onClear}
+        className="mx-auto mt-5 flex items-center gap-2 text-xs text-slate-400 hover:text-slate-700 dark:hover:text-white"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        {t("actions.clear")}
+      </button>
+    </section>
+  );
+}
+
+function StepTitle({
+  step,
+  t,
+}: {
+  step: RunwayStepId;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  return (
+    <>
+      <h1
+        id="runway-question-heading"
+        tabIndex={-1}
+        className="font-display text-3xl font-semibold tracking-[-.035em] outline-none sm:text-4xl"
+      >
+        {t(`steps.${step}.title`)}
+      </h1>
+      <p className="mt-3 max-w-2xl leading-7 text-slate-500 dark:text-slate-300">
+        {t(`steps.${step}.description`)}
+      </p>
+    </>
   );
 }
 
 function StepContent({
   step,
   t,
+  locale,
   answers,
   update,
   updateIncome,
-  updateExpense,
-  detailedExpenses,
-  setDetailedExpenses,
-  totalCurrent,
-  totalInterruption,
+  activeExpenseCategory,
+  setActiveExpenseCategory,
 }: {
-  step: StepId;
+  step: RunwayStepId;
   t: ReturnType<typeof useTranslations>;
+  locale: string;
   answers: HouseholdRunwayAnswers;
   update: (patch: Partial<HouseholdRunwayAnswers>) => void;
-  updateIncome: (
-    person: "mine" | "partner",
-    patch: Partial<IncomeAnswer>,
-  ) => void;
-  updateExpense: (
-    category: ExpenseCategory,
-    patch: Partial<HouseholdRunwayAnswers["expenses"][ExpenseCategory]>,
-  ) => void;
-  detailedExpenses: boolean;
-  setDetailedExpenses: (value: boolean) => void;
-  totalCurrent: number;
-  totalInterruption: number;
+  updateIncome: (person: "mine" | "partner", patch: Partial<IncomeAnswer>) => void;
+  activeExpenseCategory: ExpenseCategory | null;
+  setActiveExpenseCategory: (category: ExpenseCategory | null) => void;
 }) {
-  const confirmedFund = answers.confirmed_funds[0];
-  const title = (
-    <>
-      <h1 className="font-display text-3xl font-semibold tracking-[-.035em] sm:text-4xl">
-        {t(`steps.${step}.title`)}
-      </h1>
-      <p className="mt-3 max-w-xl leading-7 text-slate-500 dark:text-slate-300">
-        {t(`steps.${step}.description`)}
-      </p>
-    </>
-  );
-  if (step === "welcome")
-    return (
-      <div className="text-center">
-        <div className="mx-auto mb-6 grid h-14 w-14 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
-          <ShieldCheck />
-        </div>
-        {title}
-        <div className="mx-auto mt-8 grid max-w-lg gap-3 text-left sm:grid-cols-3">
-          {["private", "fast", "explainable"].map((key) => (
-            <div
-              key={key}
-              className="rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5"
-            >
-              {t(`welcome.${key}`)}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  if (step === "location")
+  const title = <StepTitle step={step} t={t} />;
+  if (step === "location") {
+    const regionLocale = normalizeRunwayLocale(locale);
     return (
       <>
         {title}
@@ -915,44 +968,50 @@ function StepContent({
               selected={answers.country === country}
               title={t(`countries.${country}`)}
               onClick={() =>
-                update({ country, currency: currencyForCountry(country) })
+                update({
+                  country,
+                  region: country === answers.country ? answers.region : "",
+                  currency: currencyForCountry(country),
+                })
               }
             />
           ))}
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              {t("fields.region")}
-            </span>
-            <input
+          <label>
+            <span className="mb-2 block text-sm font-medium">{t("fields.region")}</span>
+            <select
+              aria-label={t("fields.region")}
               className="h-12 w-full rounded-xl border bg-transparent px-3"
               value={answers.region}
               onChange={(event) => update({ region: event.target.value })}
-            />
+            >
+              <option value="">{t("fields.selectRegion")}</option>
+              {RUNWAY_REGIONS[answers.country].map((region) => (
+                <option key={region.code} value={region.code}>
+                  {region.labels[regionLocale]}
+                </option>
+              ))}
+            </select>
           </label>
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">
-              {t("fields.currency")}
-            </span>
+          <label>
+            <span className="mb-2 block text-sm font-medium">{t("fields.currency")}</span>
             <select
               className="h-12 w-full rounded-xl border bg-transparent px-3"
               value={answers.currency}
               onChange={(event) =>
-                update({
-                  currency: event.target
-                    .value as HouseholdRunwayAnswers["currency"],
-                })
+                update({ currency: event.target.value as HouseholdRunwayAnswers["currency"] })
               }
             >
-              {["USD", "CAD", "CNY", "TWD"].map((value) => (
-                <option key={value}>{value}</option>
+              {(["USD", "CAD", "CNY", "TWD"] as const).map((currency) => (
+                <option key={currency}>{currency}</option>
               ))}
             </select>
           </label>
         </div>
       </>
     );
+  }
   if (step === "household")
     return (
       <>
@@ -976,19 +1035,15 @@ function StepContent({
           />
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <ChoiceCard
-            selected={answers.has_children}
-            title={t("household.children")}
-            onClick={() => update({ has_children: !answers.has_children })}
+          <CheckCard
+            checked={answers.has_children}
+            label={t("household.children")}
+            onChange={(checked) => update({ has_children: checked })}
           />
-          <ChoiceCard
-            selected={answers.has_support_obligations}
-            title={t("household.support")}
-            onClick={() =>
-              update({
-                has_support_obligations: !answers.has_support_obligations,
-              })
-            }
+          <CheckCard
+            checked={answers.has_support_obligations}
+            label={t("household.support")}
+            onChange={(checked) => update({ has_support_obligations: checked })}
           />
         </div>
       </>
@@ -1001,22 +1056,15 @@ function StepContent({
           t={t}
           label={t("employment.me")}
           value={answers.mine.employment}
-          onChange={(employment) =>
-            update({ mine: employmentIncome(employment, answers.mine) })
-          }
+          onChange={(employment) => update({ mine: employmentIncome(employment, answers.mine) })}
         />
-        {answers.partner ? (
+        {answers.shares_finances && answers.partner ? (
           <EmploymentPicker
             t={t}
             label={t("employment.partner")}
             value={answers.partner.employment}
             onChange={(employment) =>
-              update({
-                partner: employmentIncome(
-                  employment,
-                  answers.partner ?? undefined,
-                ),
-              })
+              update({ partner: employmentIncome(employment, answers.partner ?? undefined) })
             }
           />
         ) : null}
@@ -1026,341 +1074,108 @@ function StepContent({
     return (
       <>
         {title}
-        <IncomeEditor
-          t={t}
-          answers={answers}
-          income={answers.mine}
-          onChange={(patch) => updateIncome("mine", patch)}
-        />
+        <IncomeEditor t={t} locale={locale} answers={answers} income={answers.mine} onChange={(patch) => updateIncome("mine", patch)} />
       </>
     );
   if (step === "partnerIncome")
-    return answers.partner ? (
+    return (
       <>
         {title}
-        <IncomeEditor
-          t={t}
-          answers={answers}
-          income={answers.partner}
-          onChange={(patch) => updateIncome("partner", patch)}
-        />
-      </>
-    ) : (
-      <>
-        {title}
-        <p className="mt-6 rounded-2xl bg-slate-50 p-5 text-sm text-slate-500 dark:bg-white/5">
-          {t("income.noPartner")}
-        </p>
+        {answers.partner ? (
+          <IncomeEditor t={t} locale={locale} answers={answers} income={answers.partner} onChange={(patch) => updateIncome("partner", patch)} />
+        ) : (
+          <InfoBox>{t("income.noPartner")}</InfoBox>
+        )}
       </>
     );
   if (step === "otherIncome")
     return (
-      <>
-        {title}
-        <div className="mt-7">
-          <MoneyField
-            label={t("fields.otherIncome")}
-            help={t("fields.otherIncomeHelp")}
-            currency={answers.currency}
-            value={answers.other_monthly_income.cents}
-            onChange={(value) =>
-              update({
-                other_monthly_income: {
-                  cents: value,
-                  confidence: value ? "confirmed" : "skipped",
-                },
-              })
-            }
-          />
-        </div>
-      </>
+      <OtherIncomeStep title={title} t={t} locale={locale} answers={answers} update={update} />
     );
   if (step === "cash")
     return (
       <>
         {title}
-        <div className="mt-7">
+        <div className="mt-7 max-w-md">
           <MoneyField
             label={t("fields.availableCash")}
-            help={t("fields.availableCashHelp")}
             currency={answers.currency}
             value={answers.available_cash.cents}
-            onChange={(value) =>
-              update({
-                available_cash: { cents: value, confidence: "confirmed" },
-              })
-            }
+            help={t("fields.availableCashHelp")}
+            onChange={(value) => update({ available_cash: { cents: value, confidence: "confirmed" } })}
           />
         </div>
       </>
     );
-  if (step === "confirmedFunds")
-    return (
-      <>
-        {title}
-        <div className="mt-7 grid gap-4 sm:grid-cols-2">
-          <MoneyField
-            label={t("fields.confirmedAmount")}
-            currency={answers.currency}
-            value={confirmedFund?.amount_cents ?? 0}
-            onChange={(value) =>
-              update({
-                confirmed_funds: value
-                  ? [
-                      {
-                        id: confirmedFund?.id ?? crypto.randomUUID(),
-                        amount_cents: value,
-                        arrives_month: confirmedFund?.arrives_month ?? 1,
-                        confidence: "confirmed",
-                      },
-                    ]
-                  : [],
-              })
-            }
-          />
-          <label>
-            <span className="mb-2 block text-sm font-medium">
-              {t("fields.arrivalMonth")}
-            </span>
-            <input
-              aria-label={t("fields.arrivalMonth")}
-              type="number"
-              min="1"
-              max="120"
-              className="h-12 w-full rounded-xl border bg-transparent px-3"
-              value={confirmedFund?.arrives_month ?? 1}
-              onChange={(event) =>
-                confirmedFund &&
-                update({
-                  confirmed_funds: [
-                    {
-                      ...confirmedFund,
-                      arrives_month: Math.max(
-                        1,
-                        Number(event.target.value) || 1,
-                      ),
-                    },
-                  ],
-                })
-              }
-            />
-          </label>
-        </div>
-        <p className="mt-4 flex gap-2 text-xs leading-5 text-slate-400">
-          <Info className="h-4 w-4 shrink-0" />
-          {t("fields.confirmedHelp")}
-        </p>
-      </>
-    );
-  if (step === "assets")
+  if (step === "confirmedFunds") {
+    const fund = answers.confirmed_funds[0];
     return (
       <>
         {title}
         <div className="mt-7 grid gap-5 sm:grid-cols-2">
           <MoneyField
-            label={t("fields.investments")}
+            label={t("fields.confirmedAmount")}
             currency={answers.currency}
-            value={answers.taxable_investments.cents}
+            value={fund?.amount_cents ?? 0}
             onChange={(value) =>
               update({
-                taxable_investments: {
-                  cents: value,
-                  confidence: value ? "confirmed" : "skipped",
-                },
+                confirmed_funds: value
+                  ? [{ id: fund?.id ?? newId("fund"), amount_cents: value, arrives_month: fund?.arrives_month ?? 1, confidence: "confirmed" }]
+                  : [],
               })
             }
           />
-          <MoneyField
-            label={t("fields.retirement")}
-            currency={answers.currency}
-            value={answers.retirement_accounts.cents}
-            onChange={(value) =>
-              update({
-                retirement_accounts: {
-                  cents: value,
-                  confidence: value ? "confirmed" : "skipped",
-                },
-              })
-            }
-          />
-          <MoneyField
-            label={t("fields.homeEquity")}
-            currency={answers.currency}
-            value={answers.home_equity.cents}
-            onChange={(value) =>
-              update({
-                home_equity: {
-                  cents: value,
-                  confidence: value ? "confirmed" : "skipped",
-                },
-              })
-            }
-          />
-        </div>
-        <div className="mt-5 rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
-          <label className="flex justify-between text-sm font-medium">
-            <span>{t("fields.investmentAccess")}</span>
-            <span className="text-emerald-600">
-              {answers.investment_access_percent}%
-            </span>
-          </label>
-          <input
-            aria-label={t("fields.investmentAccess")}
-            type="range"
-            min="0"
-            max="100"
-            step="5"
-            className="mt-3 w-full accent-emerald-600"
-            value={answers.investment_access_percent}
-            onChange={(event) =>
-              update({ investment_access_percent: Number(event.target.value) })
-            }
-          />
-        </div>
-      </>
-    );
-  if (step === "expenses")
-    return (
-      <>
-        {title}
-        <button
-          className="mt-6 flex items-center gap-2 text-sm font-semibold text-emerald-700"
-          onClick={() => setDetailedExpenses(!detailedExpenses)}
-        >
-          {detailedExpenses
-            ? t("expenses.useTotals")
-            : t("expenses.addDetails")}
-          <ChevronDown
-            className={`h-4 w-4 ${detailedExpenses ? "rotate-180" : ""}`}
-          />
-        </button>
-        {detailedExpenses ? (
-          <div className="mt-5">
-            <div className="mb-2 grid grid-cols-[1fr_110px_110px] gap-2 text-xs text-slate-400">
-              <span>{t("expenses.category")}</span>
-              <span>{t("expenses.current")}</span>
-              <span>{t("expenses.interruption")}</span>
-            </div>
-            {EXPENSE_CATEGORIES.map((category) => (
-              <div
-                key={category}
-                className="grid grid-cols-[1fr_110px_110px] items-center gap-2 border-t py-3"
-              >
-                <span className="text-sm">
-                  {t(`expenseCategories.${category}`)}
-                </span>
-                <input
-                  aria-label={`${t(`expenseCategories.${category}`)} ${t("expenses.current")}`}
-                  type="number"
-                  min="0"
-                  className="h-10 rounded-lg border bg-transparent px-2"
-                  value={dollars(answers.expenses[category].current_cents)}
-                  onChange={(event) =>
-                    updateExpense(category, {
-                      current_cents: cents(event.target.value),
-                    })
-                  }
-                />
-                <input
-                  aria-label={`${t(`expenseCategories.${category}`)} ${t("expenses.interruption")}`}
-                  type="number"
-                  min="0"
-                  className="h-10 rounded-lg border bg-transparent px-2"
-                  value={dollars(answers.expenses[category].interruption_cents)}
-                  onChange={(event) =>
-                    updateExpense(category, {
-                      interruption_cents: cents(event.target.value),
-                    })
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-5 grid gap-5 sm:grid-cols-2">
-            <MoneyField
-              label={t("expenses.currentTotal")}
-              currency={answers.currency}
-              value={totalCurrent}
-              onChange={(value) => {
-                const reset = Object.fromEntries(
-                  EXPENSE_CATEGORIES.map((key) => [
-                    key,
-                    {
-                      current_cents: 0,
-                      interruption_cents: 0,
-                      confidence: "skipped",
-                    },
-                  ]),
-                ) as HouseholdRunwayAnswers["expenses"];
-                reset.other = {
-                  ...reset.other,
-                  current_cents: value,
-                  interruption_cents: Math.min(value, totalInterruption),
-                  confidence: "confirmed",
-                };
-                update({ expenses: reset });
-              }}
-            />
-            <MoneyField
-              label={t("expenses.interruptionTotal")}
-              currency={answers.currency}
-              value={totalInterruption}
-              onChange={(value) =>
-                updateExpense("other", {
-                  current_cents: Math.max(totalCurrent, value),
-                  interruption_cents: value,
-                })
+          <label>
+            <span className="mb-2 block text-sm font-medium">{t("fields.arrivalMonth")}</span>
+            <input
+              type="number"
+              min={1}
+              max={120}
+              className="h-12 w-full rounded-xl border bg-transparent px-3"
+              value={fund?.arrives_month ?? 1}
+              onChange={(event) =>
+                fund && update({ confirmed_funds: [{ ...fund, arrives_month: Math.max(1, Number(event.target.value) || 1) }] })
               }
             />
-          </div>
-        )}
+          </label>
+        </div>
+        <InfoBox>{t("fields.confirmedHelp")}</InfoBox>
       </>
     );
+  }
+  if (step === "assets")
+    return <AssetsStep title={title} t={t} answers={answers} update={update} />;
+  if (step === "expenses")
+    return activeExpenseCategory ? (
+      <ExpenseCategoryEditor category={activeExpenseCategory} t={t} answers={answers} update={update} />
+    ) : (
+      <ExpenseHub title={title} t={t} locale={locale} answers={answers} update={update} onOpen={setActiveExpenseCategory} />
+    );
+  if (step === "reductions")
+    return <ReductionStep title={title} t={t} locale={locale} answers={answers} update={update} />;
   if (step === "temporaryIncome")
     return (
       <>
         {title}
-        <div className="mt-7 grid gap-4 sm:grid-cols-2">
+        <div className="mt-7 grid gap-5 sm:grid-cols-2">
           <MoneyField
             label={t("fields.temporaryIncome")}
             currency={answers.currency}
             value={answers.temporary_income?.monthly_cents ?? 0}
             onChange={(value) =>
-              update({
-                temporary_income: value
-                  ? {
-                      monthly_cents: value,
-                      remaining_months:
-                        answers.temporary_income?.remaining_months ?? 1,
-                      confidence: "confirmed",
-                    }
-                  : null,
-              })
+              update({ temporary_income: value ? { monthly_cents: value, remaining_months: answers.temporary_income?.remaining_months ?? 1, confidence: "confirmed" } : null })
             }
           />
           <label>
-            <span className="mb-2 block text-sm font-medium">
-              {t("fields.remainingMonths")}
-            </span>
+            <span className="mb-2 block text-sm font-medium">{t("fields.remainingMonths")}</span>
             <input
-              aria-label={t("fields.remainingMonths")}
               type="number"
-              min="1"
-              max="120"
+              min={1}
+              max={120}
               className="h-12 w-full rounded-xl border bg-transparent px-3"
               value={answers.temporary_income?.remaining_months ?? 1}
               onChange={(event) =>
-                answers.temporary_income &&
-                update({
-                  temporary_income: {
-                    ...answers.temporary_income,
-                    remaining_months: Math.max(
-                      1,
-                      Number(event.target.value) || 1,
-                    ),
-                  },
-                })
+                answers.temporary_income && update({ temporary_income: { ...answers.temporary_income, remaining_months: Math.max(1, Number(event.target.value) || 1) } })
               }
             />
           </label>
@@ -1368,109 +1183,384 @@ function StepContent({
       </>
     );
   if (step === "review")
+    return <ReviewStep title={title} t={t} locale={locale} answers={answers} />;
+  return null;
+}
+
+function OtherIncomeStep({
+  title,
+  t,
+  locale,
+  answers,
+  update,
+}: {
+  title: ReactNode;
+  t: ReturnType<typeof useTranslations>;
+  locale: string;
+  answers: HouseholdRunwayAnswers;
+  update: (patch: Partial<HouseholdRunwayAnswers>) => void;
+}) {
+  const setSource = (type: RecurringIncomeType, enabled: boolean) => {
+    const existing = answers.other_income_sources.find((source) => source.type === type);
+    update({
+      other_income_sources: enabled
+        ? existing
+          ? answers.other_income_sources
+          : [...answers.other_income_sources, { id: newId(type), type, monthly_cents: 0, confidence: "confirmed" }]
+        : answers.other_income_sources.filter((source) => source.id !== existing?.id),
+    });
+  };
+  const updateSource = (id: string, patch: Partial<RecurringIncomeSource>) =>
+    update({ other_income_sources: answers.other_income_sources.map((source) => source.id === id ? { ...source, ...patch } : source) });
+  return (
+    <>
+      {title}
+      <p className="mt-5 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
+        {t("otherIncome.continuingOnly")}
+      </p>
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        {OTHER_INCOME_TYPES.map((type) => {
+          const source = answers.other_income_sources.find((item) => item.type === type);
+          return (
+            <ToggleMoneyCard
+              key={type}
+              title={t(`otherIncome.types.${type}`)}
+              description={t(`otherIncome.help.${type}`)}
+              enabled={Boolean(source)}
+              currency={answers.currency}
+              value={source?.monthly_cents ?? 0}
+              onEnabled={(enabled) => setSource(type, enabled)}
+              onChange={(value) => source && updateSource(source.id, { monthly_cents: value, confidence: "confirmed" })}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-5 space-y-3">
+        {answers.other_income_sources.filter((source) => source.type === "other").map((source) => (
+          <div key={source.id} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_1fr_auto]">
+            <label>
+              <span className="mb-1 block text-xs text-slate-500">{t("otherIncome.customLabel")}</span>
+              <input className="h-11 w-full rounded-xl border bg-transparent px-3" value={source.label ?? ""} onChange={(event) => updateSource(source.id, { label: event.target.value })} />
+            </label>
+            <MoneyField label={t("otherIncome.monthlyAmount")} currency={answers.currency} value={source.monthly_cents} onChange={(value) => updateSource(source.id, { monthly_cents: value, confidence: "confirmed" })} />
+            <Button variant="ghost" size="icon" aria-label={t("otherIncome.remove")} onClick={() => update({ other_income_sources: answers.other_income_sources.filter((item) => item.id !== source.id) })}>
+              <Trash2 />
+            </Button>
+          </div>
+        ))}
+        <Button variant="outline" onClick={() => update({ other_income_sources: [...answers.other_income_sources, { id: newId("other-income"), type: "other", label: "", monthly_cents: 0, confidence: "confirmed" }] })}>
+          <Plus />
+          {t("otherIncome.addOther")}
+        </Button>
+      </div>
+      <p className="mt-6 font-medium">{t("otherIncome.total", { amount: formatCents(monthlyIncomeTotal(answers), locale, answers.currency) })}</p>
+    </>
+  );
+}
+
+function AssetsStep({
+  title,
+  t,
+  answers,
+  update,
+}: {
+  title: ReactNode;
+  t: ReturnType<typeof useTranslations>;
+  answers: HouseholdRunwayAnswers;
+  update: (patch: Partial<HouseholdRunwayAnswers>) => void;
+}) {
+  const updateAsset = (key: AssetKey, value: MoneyAnswer) =>
+    update({ assets: { ...answers.assets, [key]: value } });
+  return (
+    <>
+      {title}
+      <div className="mt-7 grid gap-4 sm:grid-cols-2">
+        {ASSET_KEYS.map((key) => {
+          const asset = answers.assets[key];
+          return (
+            <ToggleMoneyCard
+              key={key}
+              title={t(`assets.${key}.title`)}
+              description={t(`assets.${key}.description`, { country: t(`countries.${answers.country}`) })}
+              badge={t(`assets.${key}.${key === "liquid_investments" ? "included" : "excluded"}`)}
+              enabled={asset.confidence !== "skipped"}
+              currency={answers.currency}
+              value={asset.cents}
+              onEnabled={(enabled) => updateAsset(key, { cents: enabled ? asset.cents : 0, confidence: enabled ? "confirmed" : "skipped" })}
+              onChange={(value) => updateAsset(key, { cents: value, confidence: "confirmed" })}
+            />
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function ExpenseHub({
+  title,
+  t,
+  locale,
+  answers,
+  update,
+  onOpen,
+}: {
+  title: ReactNode;
+  t: ReturnType<typeof useTranslations>;
+  locale: string;
+  answers: HouseholdRunwayAnswers;
+  update: (patch: Partial<HouseholdRunwayAnswers>) => void;
+  onOpen: (category: ExpenseCategory) => void;
+}) {
+  const totals = expenseTotals(answers);
+  if (answers.expense_mode === "quick")
     return (
       <>
         {title}
-        <div className="mt-7 grid gap-3">
-          <ReviewRow
-            label={t("review.location")}
-            value={`${t(`countries.${answers.country}`)} · ${answers.region} · ${answers.currency}`}
-            status="confirmed"
-            t={t}
-          />
-          <ReviewRow
-            label={t("review.household")}
-            value={
-              answers.partner ? t("review.twoAdults") : t("review.oneAdult")
-            }
-            status="confirmed"
-            t={t}
-          />
-          <ReviewRow
-            label={t("review.cash")}
-            value={formatCents(
-              answers.available_cash.cents,
-              "en",
-              answers.currency,
-            )}
-            status={answers.available_cash.confidence}
-            t={t}
-          />
-          <ReviewRow
-            label={t("review.expenses")}
-            value={`${formatCents(totalCurrent, "en", answers.currency)} → ${formatCents(totalInterruption, "en", answers.currency)}`}
-            status={totalInterruption ? "confirmed" : "skipped"}
-            t={t}
-          />
-          <ReviewRow
-            label={t("review.income")}
-            value={formatCents(
-              answers.mine.monthly_take_home_cents +
-                (answers.partner?.monthly_take_home_cents ?? 0),
-              "en",
-              answers.currency,
-            )}
-            status={answers.mine.confidence}
-            t={t}
-          />
-          <ReviewRow
-            label={t("review.otherIncome")}
-            value={formatCents(
-              answers.other_monthly_income.cents,
-              "en",
-              answers.currency,
-            )}
-            status={answers.other_monthly_income.confidence}
-            t={t}
-          />
-          <ReviewRow
-            label={t("review.confirmedFunds")}
-            value={formatCents(
-              answers.confirmed_funds.reduce(
-                (sum, fund) => sum + fund.amount_cents,
-                0,
-              ),
-              "en",
-              answers.currency,
-            )}
-            status={answers.confirmed_funds.length ? "confirmed" : "skipped"}
-            t={t}
-          />
-          <ReviewRow
-            label={t("review.investments")}
-            value={formatCents(
-              answers.taxable_investments.cents,
-              "en",
-              answers.currency,
-            )}
-            status={answers.taxable_investments.confidence}
-            t={t}
-          />
-          <ReviewRow
-            label={t("review.lastResort")}
-            value={`${formatCents(answers.retirement_accounts.cents, "en", answers.currency)} · ${formatCents(answers.home_equity.cents, "en", answers.currency)}`}
-            status={
-              answers.retirement_accounts.confidence === "skipped" &&
-              answers.home_equity.confidence === "skipped"
-                ? "skipped"
-                : "confirmed"
-            }
-            t={t}
-          />
-          <ReviewRow
-            label={t("review.temporaryIncome")}
-            value={formatCents(
-              answers.temporary_income?.monthly_cents ?? 0,
-              "en",
-              answers.currency,
-            )}
-            status={answers.temporary_income?.confidence ?? "skipped"}
-            t={t}
-          />
+        <button className="mt-4 text-sm font-semibold text-emerald-700 underline" onClick={() => update({ expense_mode: "guided" })}>
+          {t("expenses.useGuided")}
+        </button>
+        <div className="mt-7 grid gap-5 sm:grid-cols-2">
+          <MoneyField label={t("expenses.currentTotal")} currency={answers.currency} value={answers.quick_expenses.current_monthly_cents} onChange={(value) => update({ quick_expenses: { ...answers.quick_expenses, current_monthly_cents: value, confidence: "confirmed" } })} />
+          <MoneyField label={t("expenses.interruptionTotal")} currency={answers.currency} value={answers.quick_expenses.interruption_monthly_cents} onChange={(value) => update({ quick_expenses: { ...answers.quick_expenses, interruption_monthly_cents: value, confidence: "confirmed" } })} />
         </div>
       </>
     );
-  return title;
+  return (
+    <>
+      {title}
+      <div className="mt-5 flex items-center justify-between gap-4">
+        <p className="text-sm font-medium">{t("expenses.runningTotal", { amount: formatCents(totals.current, locale, answers.currency) })}</p>
+        <button className="text-sm font-semibold text-emerald-700 underline" onClick={() => update({ expense_mode: "quick" })}>
+          {t("expenses.useTotals")}
+        </button>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        {EXPENSE_CATEGORIES.map((category) => {
+          const subtotal = expenseCategoryTotals(answers, category).current;
+          const complete = answers.completed_expense_categories.includes(category);
+          return (
+            <button key={category} onClick={() => onOpen(category)} className="flex min-h-24 items-center justify-between gap-4 rounded-2xl border p-4 text-left transition hover:border-emerald-400">
+              <div>
+                <p className="font-semibold">{t(`expenseCategories.${category}`)}</p>
+                <p className="mt-1 text-xs text-slate-500">{complete ? t("expenses.complete") : t("expenses.notStarted")}</p>
+              </div>
+              <span className="font-medium">{formatCents(subtotal, locale, answers.currency)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function ExpenseCategoryEditor({
+  category,
+  t,
+  answers,
+  update,
+}: {
+  category: ExpenseCategory;
+  t: ReturnType<typeof useTranslations>;
+  answers: HouseholdRunwayAnswers;
+  update: (patch: Partial<HouseholdRunwayAnswers>) => void;
+}) {
+  const housingTypes =
+    answers.housing_tenure === "own"
+      ? ["mortgage", "property_tax", "homeowners_insurance", "hoa", "home_maintenance"]
+      : answers.housing_tenure === "rent"
+        ? ["rent", "renters_insurance", "building_parking"]
+        : ["other_housing"];
+  const types = category === "housing" ? housingTypes.map((type) => ({ type })) : EXPENSE_ITEM_TYPES[category];
+  const updateItem = (type: string, patch: Partial<ExpenseLineItem>) => {
+    const existing = answers.expense_items.find((item) => item.category === category && item.type === type);
+    const item: ExpenseLineItem = existing ?? {
+      id: newId(`expense-${type}`),
+      category,
+      type,
+      current_amount_cents: 0,
+      interruption_amount_cents: 0,
+      frequency: "monthly",
+      confidence: "confirmed",
+    };
+    const next = { ...item, ...patch };
+    if (!existing && patch.current_amount_cents !== undefined)
+      next.interruption_amount_cents = patch.current_amount_cents;
+    update({
+      expense_items: existing
+        ? answers.expense_items.map((candidate) => candidate.id === existing.id ? next : candidate)
+        : [...answers.expense_items, next],
+      completed_expense_categories: Array.from(new Set([...answers.completed_expense_categories, category])),
+    });
+  };
+  return (
+    <>
+      <h1 id="runway-question-heading" tabIndex={-1} className="font-display text-3xl font-semibold tracking-[-.035em] outline-none sm:text-4xl">
+        {t(`expenseCategories.${category}`)}
+      </h1>
+      <p className="mt-3 text-slate-500">{t(`expenses.categoryHelp.${category}`)}</p>
+      {category === "housing" ? (
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          {(["rent", "own", "other"] as const).map((tenure) => (
+            <ChoiceCard key={tenure} selected={answers.housing_tenure === tenure} title={t(`expenses.tenure.${tenure}`)} onClick={() => update({ housing_tenure: tenure, expense_items: answers.expense_items.filter((item) => item.category !== "housing"), completed_expense_categories: answers.completed_expense_categories.filter((item) => item !== "housing") })} />
+          ))}
+        </div>
+      ) : null}
+      {category === "housing" && answers.housing_tenure === "own" ? (
+        <InfoBox>{t("expenses.escrowWarning")}</InfoBox>
+      ) : null}
+      {category !== "housing" || answers.housing_tenure ? (
+        <div className="mt-6 space-y-4">
+          {types.map(({ type }) => {
+            const item = answers.expense_items.find((candidate) => candidate.category === category && candidate.type === type);
+            return (
+              <div key={type} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_170px]">
+                <MoneyField label={t(`expenseItems.${type}`)} currency={answers.currency} value={item?.current_amount_cents ?? 0} onChange={(value) => updateItem(type, { current_amount_cents: value, confidence: "confirmed" })} />
+                <label>
+                  <span className="mb-2 block text-sm font-medium">{t("expenses.frequency")}</span>
+                  <select aria-label={`${t(`expenseItems.${type}`)} · ${t("expenses.frequency")}`} className="h-12 w-full rounded-xl border bg-transparent px-3" value={item?.frequency ?? "monthly"} onChange={(event) => updateItem(type, { frequency: event.target.value as ExpenseFrequency })}>
+                    {(["monthly", "quarterly", "annual"] as const).map((frequency) => <option key={frequency} value={frequency}>{t(`expenses.frequencies.${frequency}`)}</option>)}
+                  </select>
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function ReductionStep({
+  title,
+  t,
+  locale,
+  answers,
+  update,
+}: {
+  title: ReactNode;
+  t: ReturnType<typeof useTranslations>;
+  locale: string;
+  answers: HouseholdRunwayAnswers;
+  update: (patch: Partial<HouseholdRunwayAnswers>) => void;
+}) {
+  const totals = expenseTotals(answers);
+  return (
+    <>
+      {title}
+      <div className="mt-5 grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 dark:bg-white/5">
+        <SummaryValue label={t("expenses.todayTotal")} value={formatCents(totals.current, locale, answers.currency)} />
+        <SummaryValue label={t("expenses.afterTotal")} value={formatCents(totals.interruption, locale, answers.currency)} />
+      </div>
+      <div className="mt-5 space-y-3">
+        {answers.expense_items.filter((item) => item.current_amount_cents > 0).map((item) => (
+          <div key={item.id} className="grid items-end gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_220px]">
+            <div>
+              <p className="font-medium">{t(`expenseItems.${item.type}`)}</p>
+              <p className="mt-1 text-xs text-slate-500">{t("expenses.currentEntered", { amount: formatCents(item.current_amount_cents, locale, answers.currency), frequency: t(`expenses.frequencies.${item.frequency}`) })}</p>
+            </div>
+            <MoneyField label={t("expenses.afterInterruption")} currency={answers.currency} value={item.interruption_amount_cents} onChange={(value) => update({ expense_items: answers.expense_items.map((candidate) => candidate.id === item.id ? { ...candidate, interruption_amount_cents: Math.min(value, candidate.current_amount_cents) } : candidate) })} />
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ReviewStep({
+  title,
+  t,
+  locale,
+  answers,
+}: {
+  title: ReactNode;
+  t: ReturnType<typeof useTranslations>;
+  locale: string;
+  answers: HouseholdRunwayAnswers;
+}) {
+  const totals = expenseTotals(answers);
+  const excluded = answers.assets.illiquid_investments.cents + answers.assets.home_equity.cents + answers.assets.retirement_tax_deferred.cents + answers.assets.retirement_tax_free.cents;
+  return (
+    <>
+      {title}
+      <div className="mt-7 grid gap-3 sm:grid-cols-2">
+        <ReviewRow label={t("review.location")} value={`${t(`countries.${answers.country}`)} · ${runwayRegionLabel(answers.country, answers.region, locale) ?? t("confidence.needs_review")} · ${answers.currency}`} status={answers.region ? "confirmed" : "needs_review"} t={t} />
+        <ReviewRow label={t("review.household")} value={t(answers.partner ? "review.twoAdults" : "review.oneAdult")} status="confirmed" t={t} />
+        <ReviewRow label={t("review.cash")} value={formatCents(answers.available_cash.cents, locale, answers.currency)} status={answers.available_cash.confidence} t={t} />
+        <ReviewRow label={t("review.expenses")} value={`${formatCents(totals.current, locale, answers.currency)} → ${formatCents(totals.interruption, locale, answers.currency)}`} status={answers.expense_mode === "quick" ? answers.quick_expenses.confidence : "confirmed"} t={t} />
+        <ReviewRow label={t("review.income")} value={formatCents(answers.mine.monthly_take_home_cents + (answers.partner?.monthly_take_home_cents ?? 0), locale, answers.currency)} status={answers.mine.confidence === "estimated" || answers.partner?.confidence === "estimated" ? "estimated" : "confirmed"} t={t} />
+        <ReviewRow label={t("review.otherIncome")} value={formatCents(monthlyIncomeTotal(answers), locale, answers.currency)} status={answers.other_income_sources.length ? "confirmed" : "skipped"} t={t} />
+        <ReviewRow label={t("review.investments")} value={formatCents(answers.assets.liquid_investments.cents, locale, answers.currency)} status={answers.assets.liquid_investments.confidence} t={t} />
+        <ReviewRow label={t("review.lastResort")} value={formatCents(excluded, locale, answers.currency)} status={excluded ? "confirmed" : "skipped"} t={t} />
+      </div>
+    </>
+  );
+}
+
+function IncomeEditor({
+  t,
+  locale,
+  answers,
+  income,
+  onChange,
+}: {
+  t: ReturnType<typeof useTranslations>;
+  locale: string;
+  answers: HouseholdRunwayAnswers;
+  income: IncomeAnswer;
+  onChange: (patch: Partial<IncomeAnswer>) => void;
+}) {
+  if (income.employment === "unemployed" || income.employment === "not_working")
+    return <InfoBox>{t("income.notAsked")}</InfoBox>;
+  const estimate =
+    income.entered_as === "gross" && income.entered_amount_cents > 0
+      ? estimateMonthlyTakeHome({ country: answers.country, region: answers.region, amountCents: income.entered_amount_cents, period: income.entered_period })
+      : null;
+  return (
+    <div className="mt-7">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2">
+        <ChoiceCard selected={income.entered_as === "gross"} title={t("income.gross")} onClick={() => income.entered_as !== "gross" && onChange({ entered_as: "gross", entered_amount_cents: 0, monthly_take_home_cents: 0, estimated_monthly_take_home_cents: 0, take_home_source: "estimated", confidence: "estimated" })} />
+        <ChoiceCard selected={income.entered_as === "net"} title={t("income.net")} onClick={() => income.entered_as !== "net" && onChange({ entered_as: "net", entered_amount_cents: 0, monthly_take_home_cents: 0, estimated_monthly_take_home_cents: 0, take_home_source: "user_confirmed", confidence: "confirmed" })} />
+      </div>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <MoneyField label={t("income.amount")} currency={answers.currency} value={income.entered_amount_cents} onChange={(value) => onChange({ entered_amount_cents: value, take_home_source: income.entered_as === "gross" ? "estimated" : "user_confirmed" })} />
+        <label>
+          <span className="mb-2 block text-sm font-medium">{t("income.period")}</span>
+          <select className="h-12 w-full rounded-xl border bg-transparent px-3" value={income.entered_period} onChange={(event) => onChange({ entered_period: event.target.value as IncomeAnswer["entered_period"], take_home_source: income.entered_as === "gross" ? "estimated" : "user_confirmed" })}>
+            <option value="annual">{t("income.annual")}</option>
+            <option value="monthly">{t("income.monthly")}</option>
+          </select>
+        </label>
+      </div>
+      {estimate ? (
+        <div className="mt-5 rounded-2xl bg-emerald-50 p-5 dark:bg-emerald-500/10">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">{t("income.estimate")}</p>
+          <p className="mt-2 text-2xl font-semibold">{formatCents(estimate.monthly_take_home_cents, locale, answers.currency)} <span className="text-sm font-normal">/ {t("income.month")}</span></p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button size="sm" variant={income.take_home_source === "estimated" ? "default" : "outline"} onClick={() => onChange({ monthly_take_home_cents: estimate.monthly_take_home_cents, estimated_monthly_take_home_cents: estimate.monthly_take_home_cents, take_home_source: "estimated", confidence: "estimated", estimate_rule_version: estimate.rule_version })}>{t("income.useEstimate")}</Button>
+            <Button size="sm" variant={income.take_home_source === "user_confirmed" ? "default" : "outline"} onClick={() => onChange({ take_home_source: "user_confirmed", confidence: "confirmed", monthly_take_home_cents: income.monthly_take_home_cents || estimate.monthly_take_home_cents })}>{t("income.enterActual")}</Button>
+          </div>
+          {income.take_home_source === "user_confirmed" ? (
+            <div className="mt-4 max-w-sm">
+              <MoneyField label={t("income.actualMonthly")} currency={answers.currency} value={income.monthly_take_home_cents} onChange={(value) => onChange({ monthly_take_home_cents: value, take_home_source: "user_confirmed", confidence: "confirmed" })} />
+            </div>
+          ) : null}
+          <details className="mt-5 rounded-xl border border-emerald-200 p-3 text-sm dark:border-emerald-500/20">
+            <summary className="cursor-pointer font-semibold">{t("income.howCalculated")}</summary>
+            <dl className="mt-3 grid grid-cols-[1fr_auto] gap-2 text-slate-600 dark:text-slate-300">
+              <dt>{t("income.enteredGross")}</dt><dd>{formatCents(income.entered_amount_cents, locale, answers.currency)} · {t(`income.${income.entered_period}`)}</dd>
+              <dt>{t("income.annualGross")}</dt><dd>{formatCents(estimate.annual_gross_cents, locale, answers.currency)}</dd>
+              <dt>{t("income.monthlyGross")}</dt><dd>{formatCents(estimate.monthly_gross_cents, locale, answers.currency)}</dd>
+              <dt>{t("income.baseRate")}</dt><dd>{Math.round(estimate.base_deduction_rate * 100)}%</dd>
+              <dt>{t("income.regionRate")}</dt><dd>{Math.round(estimate.regional_adjustment_rate * 100)}%</dd>
+              <dt>{t("income.monthlyDeductions")}</dt><dd>{formatCents(estimate.monthly_estimated_deductions_cents, locale, answers.currency)}</dd>
+              <dt>{t("income.ruleVersion")}</dt><dd>{estimate.rule_version}</dd>
+            </dl>
+            <p className="mt-3 text-xs text-slate-500">{t("income.estimateDisclaimer")}</p>
+          </details>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function EmploymentPicker({
@@ -1486,168 +1576,132 @@ function EmploymentPicker({
 }) {
   return (
     <div className="mt-7">
-      <h2 className="mb-3 text-sm font-semibold">{label}</h2>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {(
-          [
-            "employed",
-            "self_employed",
-            "unemployed",
-            "not_working",
-          ] as EmploymentStatus[]
-        ).map((status) => (
-          <ChoiceCard
-            key={status}
-            selected={value === status}
-            title={t(`employment.${status}`)}
-            onClick={() => onChange(status)}
-          />
+      <p className="mb-3 font-medium">{label}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {(["employed", "self_employed", "unemployed", "not_working"] as EmploymentStatus[]).map((status) => (
+          <ChoiceCard key={status} selected={value === status} title={t(`employment.${status}`)} onClick={() => onChange(status)} />
         ))}
       </div>
     </div>
   );
 }
 
-function IncomeEditor({
-  t,
-  answers,
-  income,
+function ChoiceCard({
+  selected,
+  title,
+  description,
+  onClick,
+}: {
+  selected: boolean;
+  title: string;
+  description?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" aria-pressed={selected} onClick={onClick} className={`rounded-2xl border p-4 text-left transition ${selected ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500 dark:bg-emerald-500/10" : "hover:border-slate-400"}`}>
+      <span className="flex items-center justify-between gap-3 font-medium">{title}{selected ? <Check className="h-4 w-4 text-emerald-600" /> : null}</span>
+      {description ? <span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span> : null}
+    </button>
+  );
+}
+
+function CheckCard({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3 rounded-2xl border p-4">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span className="font-medium">{label}</span>
+    </label>
+  );
+}
+
+function ToggleMoneyCard({
+  title,
+  description,
+  badge,
+  enabled,
+  currency,
+  value,
+  onEnabled,
   onChange,
 }: {
-  t: ReturnType<typeof useTranslations>;
-  answers: HouseholdRunwayAnswers;
-  income: IncomeAnswer;
-  onChange: (patch: Partial<IncomeAnswer>) => void;
+  title: string;
+  description: string;
+  badge?: string;
+  enabled: boolean;
+  currency: string;
+  value: number;
+  onEnabled: (enabled: boolean) => void;
+  onChange: (value: number) => void;
 }) {
-  if (income.employment === "unemployed" || income.employment === "not_working")
-    return (
-      <div className="mt-7 rounded-2xl bg-slate-50 p-5 text-sm leading-6 text-slate-500 dark:bg-white/5">
-        {t("income.notAsked")}
-      </div>
-    );
+  const t = useTranslations("householdRunway");
   return (
-    <div className="mt-7">
-      <div className="mb-5 grid gap-3 sm:grid-cols-2">
-        <ChoiceCard
-          selected={income.entered_as === "gross"}
-          title={t("income.gross")}
-          onClick={() =>
-            income.entered_as !== "gross" &&
-            onChange({
-              entered_as: "gross",
-              entered_amount_cents: 0,
-              monthly_take_home_cents: 0,
-              take_home_reviewed: false,
-            })
-          }
-        />
-        <ChoiceCard
-          selected={income.entered_as === "net"}
-          title={t("income.net")}
-          onClick={() =>
-            income.entered_as !== "net" &&
-            onChange({
-              entered_as: "net",
-              entered_amount_cents: 0,
-              monthly_take_home_cents: 0,
-              take_home_reviewed: true,
-            })
-          }
-        />
+    <div role="group" aria-label={title} className={`rounded-2xl border p-4 ${enabled ? "border-emerald-400 bg-emerald-50/40 dark:bg-emerald-500/5" : ""}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold">{title}</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+        </div>
+        {badge ? <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500 dark:bg-white/10">{badge}</span> : null}
       </div>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <MoneyField
-          label={t("income.amount")}
-          currency={answers.currency}
-          value={income.entered_amount_cents}
-          onChange={(value) => onChange({ entered_amount_cents: value })}
-        />
-        <label>
-          <span className="mb-2 block text-sm font-medium">
-            {t("income.period")}
-          </span>
-          <select
-            className="h-12 w-full rounded-xl border bg-transparent px-3"
-            value={income.entered_period}
-            onChange={(event) =>
-              onChange({
-                entered_period: event.target
-                  .value as IncomeAnswer["entered_period"],
-              })
-            }
-          >
-            <option value="annual">{t("income.annual")}</option>
-            <option value="monthly">{t("income.monthly")}</option>
-          </select>
-        </label>
+      <div className="mt-4 flex gap-2">
+        <Button type="button" size="sm" variant={enabled ? "default" : "outline"} onClick={() => onEnabled(true)}>{t("answers.yes")}</Button>
+        <Button type="button" size="sm" variant={!enabled ? "default" : "outline"} onClick={() => onEnabled(false)}>{t("answers.no")}</Button>
       </div>
-      {income.entered_as === "gross" && income.monthly_take_home_cents > 0 ? (
-        <div className="mt-5 rounded-2xl bg-emerald-50 p-4 dark:bg-emerald-500/10">
-          <p className="text-xs text-emerald-700 dark:text-emerald-300">
-            {t("income.estimate")}
-          </p>
-          <p className="mt-1 text-2xl font-semibold">
-            {formatCents(
-              income.monthly_take_home_cents,
-              "en",
-              answers.currency,
-            )}{" "}
-            <span className="text-sm font-normal">/ {t("income.month")}</span>
-          </p>
-          <button
-            className="mt-2 text-xs font-semibold underline disabled:no-underline disabled:opacity-70"
-            disabled={income.take_home_reviewed}
-            onClick={() => onChange({ take_home_reviewed: true })}
-          >
-            {income.take_home_reviewed
-              ? t("income.estimateReviewed")
-              : t("income.confirmEstimate")}
-          </button>
+      {enabled ? (
+        <div className="mt-4">
+          <MoneyField label={title} currency={currency} value={value} onChange={onChange} />
         </div>
       ) : null}
     </div>
   );
 }
 
-function ReviewRow({
+function MoneyField({
   label,
   value,
-  status,
-  t,
+  currency,
+  help,
+  onChange,
 }: {
   label: string;
-  value: string;
-  status: string;
-  t: ReturnType<typeof useTranslations>;
+  value: number;
+  currency: string;
+  help?: string;
+  onChange: (value: number) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl border p-4">
-      <div>
-        <p className="text-xs text-slate-400">{label}</p>
-        <p className="mt-1 font-medium">{value}</p>
-      </div>
-      <span
-        className={`rounded-full px-2.5 py-1 text-[11px] ${status === "confirmed" ? "bg-emerald-100 text-emerald-700" : status === "estimated" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}
-      >
-        {t(`confidence.${status}`)}
+    <label className="block">
+      <span className="mb-2 flex items-center justify-between gap-3 text-sm font-medium"><span>{label}</span><span className="text-xs font-normal text-slate-400">{currency}</span></span>
+      <span className="flex h-12 items-center rounded-xl border bg-white px-3 focus-within:ring-2 focus-within:ring-emerald-500 dark:bg-transparent">
+        <span className="mr-2 text-slate-400">{currencySymbol(currency)}</span>
+        <input aria-label={label} inputMode="decimal" type="number" min="0" step="0.01" className="h-full min-w-0 flex-1 bg-transparent outline-none" value={dollars(value)} placeholder="0" onChange={(event) => onChange(cents(event.target.value))} />
       </span>
+      {help ? <span className="mt-2 block text-xs leading-5 text-slate-500">{help}</span> : null}
+    </label>
+  );
+}
+
+function InfoBox({ children }: { children: ReactNode }) {
+  return <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-500 dark:bg-white/5">{children}</div>;
+}
+
+function ReviewRow({ label, value, status, t }: { label: string; value: string; status: InputConfidence | "complete"; t: ReturnType<typeof useTranslations> }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-2xl border p-4">
+      <div><p className="text-xs text-slate-400">{label}</p><p className="mt-1 font-medium">{value}</p></div>
+      <span className={`rounded-full px-2.5 py-1 text-[11px] ${status === "confirmed" || status === "complete" ? "bg-emerald-100 text-emerald-700" : status === "estimated" || status === "needs_review" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{t(`confidence.${status}`)}</span>
     </div>
   );
 }
 
-function primarySentence(
-  simulation: RunwaySimulation,
-  t: ReturnType<typeof useTranslations>,
-) {
+function SummaryValue({ label, value }: { label: string; value: string }) {
+  return <div><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-lg font-semibold">{value}</p></div>;
+}
+
+function primarySentence(simulation: RunwaySimulation, t: ReturnType<typeof useTranslations>) {
   if (simulation.sustainable) return t("result.sustainable");
-  if (!simulation.depletion_date)
-    return t("result.primaryOver", {
-      months: simulation.months_covered?.toFixed(0) ?? "120",
-    });
-  return t("result.primary", {
-    months: (simulation.months_covered ?? 0).toFixed(1),
-    date: simulation.depletion_date ?? "—",
-  });
+  if (!simulation.depletion_date) return t("result.primaryOver", { months: simulation.months_covered?.toFixed(0) ?? "120" });
+  return t("result.primary", { months: (simulation.months_covered ?? 0).toFixed(1), date: simulation.depletion_date });
 }
 
 function ResultExperience({
@@ -1679,13 +1733,13 @@ function ResultExperience({
   answers: HouseholdRunwayAnswers;
   scenarios: RunwayScenario[];
   scenario: RunwayScenario;
-  setScenario: (value: RunwayScenario) => void;
+  setScenario: (scenario: RunwayScenario) => void;
   baseline: RunwaySimulation;
   preview: RunwaySimulation;
   currentLifestyle: RunwaySimulation;
   extreme: RunwaySimulation;
   adjustments: RunwayAdjustments;
-  setAdjustments: (value: RunwayAdjustments) => void;
+  setAdjustments: (adjustments: RunwayAdjustments) => void;
   actions: ReturnType<typeof highestLeverageActions>;
   onApply: () => void;
   onReset: () => void;
@@ -1697,464 +1751,124 @@ function ResultExperience({
   onSave: () => void;
   error: string;
 }) {
+  const hasAdjustment = Object.values(adjustments).some((value) => value > 0);
   const delta =
     preview.months_covered !== null && baseline.months_covered !== null
       ? preview.months_covered - baseline.months_covered
       : null;
-  const hasAdjustments =
-    adjustments.expense_reduction_cents > 0 ||
-    adjustments.added_cash_cents > 0 ||
-    adjustments.added_monthly_income_cents > 0 ||
-    adjustments.expected_unconfirmed_funds_cents > 0 ||
-    adjustments.include_retirement ||
-    adjustments.investment_access_percent !==
-      answers.investment_access_percent;
-  const guidance =
-    preview.months_covered === null || preview.months_covered >= 6
-      ? "stronger"
-      : preview.months_covered >= 3
-        ? "limited"
-        : "urgent";
-  const precisionQuestions = [
-    answers.available_cash.confidence === "skipped"
-      ? t("precision.cash")
-      : null,
-    answers.mine.confidence === "estimated" ||
-    answers.partner?.confidence === "estimated"
-      ? t("precision.takeHome")
-      : null,
-    EXPENSE_CATEGORIES.filter(
-      (category) => answers.expenses[category].confidence === "skipped",
-    ).length > 3
-      ? t("precision.expenses")
-      : null,
-  ]
-    .filter((question): question is string => Boolean(question))
-    .slice(0, 2);
   return (
-    <section className="mx-auto max-w-6xl px-5 py-10 sm:py-14">
-      <div className="mb-8">
-        <p className="text-xs font-bold uppercase tracking-[.18em] text-emerald-600">
-          {t("result.eyebrow")}
-        </p>
-        <h1 className="mt-3 max-w-4xl font-display text-4xl font-semibold leading-tight tracking-[-.04em] sm:text-5xl">
-          <span className="mb-2 block font-sans text-sm font-semibold tracking-normal text-slate-500">
-            {t("result.scenarioLead", { scenario: t(`scenarios.${scenario}`) })}
-          </span>
-          {primarySentence(preview, t)}
-        </h1>
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-            {t(`guidance.${guidance}`)}
-          </span>
-          <span className="text-xs text-slate-400">
-            {t(`confidence.${preview.confidence}`)} · {t("result.model")}
-          </span>
-        </div>
+    <section className="mx-auto max-w-6xl px-5 py-12">
+      <p className="text-xs font-semibold uppercase tracking-[.22em] text-emerald-700">{t("result.eyebrow")}</p>
+      <p className="mt-4 text-slate-500">{t("result.scenarioLead", { scenario: t(`scenarios.${scenario}`) })}</p>
+      <h1 className="mt-2 max-w-5xl font-display text-3xl font-semibold tracking-[-.04em] sm:text-6xl">{primarySentence(preview, t)}</h1>
+      <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
+        <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">{t(`guidance.${preview.sustainable || (preview.months_covered ?? 0) >= 6 ? "stronger" : (preview.months_covered ?? 0) >= 3 ? "limited" : "urgent"}`)}</span>
+        <span className="text-slate-400">{t(`confidence.${preview.confidence}`)} · {t("result.model", { version: RUNWAY_MODEL_VERSION })}</span>
+        {hasAdjustment && delta !== null ? <span className="font-semibold text-emerald-700">{delta >= 0 ? "+" : ""}{delta.toFixed(1)} {t("whatIf.months")}</span> : null}
       </div>
-      <div
-        className="mb-6 flex flex-wrap gap-2"
-        role="tablist"
-        aria-label={t("result.scenarios")}
-      >
-        {scenarios.map((item) => (
-          <button
-            key={item}
-            role="tab"
-            aria-selected={scenario === item}
-            onClick={() => setScenario(item)}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${scenario === item ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "border bg-white dark:bg-white/5"}`}
-          >
-            {t(`scenarios.${item}`)}
-          </button>
-        ))}
+      <div role="tablist" aria-label={t("result.scenarios")} className="mt-8 flex flex-wrap gap-2">
+        {scenarios.map((item) => <button key={item} role="tab" aria-selected={item === scenario} onClick={() => setScenario(item)} className={`rounded-full border px-4 py-2 text-sm font-medium ${item === scenario ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950" : "bg-white dark:bg-white/5"}`}>{t(`scenarios.${item}`)}</button>)}
       </div>
-      <div className="grid gap-6 lg:grid-cols-[1.25fr_.75fr]">
-        <div className="rounded-3xl bg-[#11261c] p-6 text-white shadow-xl sm:p-8">
-          <div className="grid grid-cols-3 gap-3 border-b border-white/10 pb-5 text-center">
-            <Metric
-              label={t("result.resources")}
-              value={formatCents(
-                preview.starting_resources_cents,
-                locale,
-                answers.currency,
-              )}
-            />
-            <Metric
-              label={t("result.income")}
-              value={formatCents(
-                preview.continuing_monthly_income_cents,
-                locale,
-                answers.currency,
-              )}
-            />
-            <Metric
-              label={t("result.expenses")}
-              value={formatCents(
-                preview.interruption_expenses_cents,
-                locale,
-                answers.currency,
-              )}
-            />
-          </div>
-          <RunwayChart
-            simulation={preview}
-            currency={answers.currency}
-            locale={locale}
-            t={t}
-          />
-        </div>
-        <div className="space-y-5">
-          <div className="rounded-3xl border bg-white p-6 dark:bg-white/[.04]">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">{t("why.title")}</h2>
-              <button
-                onClick={onEdit}
-                className="text-xs font-semibold text-emerald-700"
-              >
-                {t("actions.review")}
-              </button>
-            </div>
-            <div className="mt-5 space-y-3 text-sm">
-              <Breakdown
-                label={t("why.cash")}
-                value={formatCents(
-                  answers.available_cash.cents,
-                  locale,
-                  answers.currency,
-                )}
-              />
-              <Breakdown
-                label={t("why.investments")}
-                value={formatCents(
-                  Math.round(
-                    (answers.taxable_investments.cents *
-                      adjustments.investment_access_percent) /
-                      100,
-                  ),
-                  locale,
-                  answers.currency,
-                )}
-              />
-              <Breakdown
-                label={t("why.reducible")}
-                value={formatCents(
-                  preview.reducible_expenses_cents,
-                  locale,
-                  answers.currency,
-                )}
-              />
-              <Breakdown
-                label={t("why.excluded")}
-                value={formatCents(
-                  preview.excluded_assets_cents,
-                  locale,
-                  answers.currency,
-                )}
-              />
-              {precisionQuestions.length > 0 ? (
-                <div className="border-t pt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    {t("precision.title")}
-                  </p>
-                  <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-500">
-                    {precisionQuestions.map((question) => (
-                      <li key={question}>• {question}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
-          </div>
-          <div className="rounded-3xl border bg-white p-6 dark:bg-white/[.04]">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-emerald-600" />
-              <h2 className="text-lg font-semibold">
-                {t("actionsPlan.title")}
-              </h2>
-            </div>
-            <div className="mt-5 space-y-4 text-sm">
-              {actions.cashGapCents > 0 ? (
-                <p>
-                  <strong>
-                    {t("actionsPlan.cashTarget", {
-                      months: actions.targetMonths,
-                    })}
-                  </strong>
-                  <br />
-                  <span className="text-slate-500">
-                    {formatCents(
-                      actions.cashGapCents,
-                      locale,
-                      answers.currency,
-                    )}
-                  </span>
-                </p>
-              ) : null}
-              {actions.largestReducibleCategory ? (
-                <p>
-                  <strong>{t("actionsPlan.largest")}</strong>
-                  <br />
-                  <span className="text-slate-500">
-                    {t(
-                      `expenseCategories.${actions.largestReducibleCategory.category}`,
-                    )}{" "}
-                    ·{" "}
-                    {formatCents(
-                      actions.largestReducibleCategory.reducible,
-                      locale,
-                      answers.currency,
-                    )}
-                  </span>
-                </p>
-              ) : null}
-              <p className="text-xs leading-5 text-slate-400">
-                {t(`regionalActions.${answers.country}`)}
-              </p>
-            </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_.65fr]">
+        <BalanceChart t={t} locale={locale} currency={answers.currency} simulation={preview} />
+        <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
+          <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">{t("why.title")}</h2><button className="text-xs font-semibold text-emerald-700" onClick={onEdit}>{t("actions.review")}</button></div>
+          <div className="mt-5 space-y-4 text-sm">
+            <ResultLine label={t("why.cash")} value={formatCents(answers.available_cash.cents, locale, answers.currency)} />
+            <ResultLine label={t("why.investments")} value={formatCents(answers.assets.liquid_investments.cents, locale, answers.currency)} />
+            <ResultLine label={t("why.reducible")} value={formatCents(preview.reducible_expenses_cents, locale, answers.currency)} />
+            <ResultLine label={t("why.excluded")} value={formatCents(preview.excluded_assets_cents, locale, answers.currency)} />
           </div>
         </div>
       </div>
-      <div className="mt-6 rounded-3xl border bg-white p-6 dark:bg-white/[.04] sm:p-8">
-        <div>
-          <h2 className="text-xl font-semibold">{t("comparison.title")}</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {t("comparison.description")}
-          </p>
-        </div>
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          <ComparisonCard
-            label={t("comparison.current")}
-            simulation={currentLifestyle}
-            t={t}
-          />
-          <ComparisonCard
-            label={t("comparison.interruption")}
-            simulation={baseline}
-            emphasized
-            t={t}
-          />
-          <ComparisonCard
-            label={t("comparison.extreme")}
-            simulation={extreme}
-            help={t("comparison.extremeHelp")}
-            t={t}
-          />
-        </div>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <ComparisonCard title={t("comparison.current")} simulation={currentLifestyle} t={t} />
+        <ComparisonCard title={t("comparison.interruption")} simulation={baseline} t={t} featured />
+        <ComparisonCard title={t("comparison.extreme")} simulation={extreme} t={t} />
       </div>
-      <div className="mt-6 rounded-3xl border bg-white p-6 dark:bg-white/[.04] sm:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold">{t("whatIf.title")}</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              {t("whatIf.description")}
-            </p>
-          </div>
-          {hasAdjustments && delta !== null ? (
-            <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">
-              {delta >= 0 ? "+" : ""}
-              {delta.toFixed(1)} {t("whatIf.months")}
-            </span>
-          ) : null}
+      <div className="mt-6 rounded-3xl border bg-white p-6 dark:bg-white/5 sm:p-8">
+        <h2 className="text-xl font-semibold">{t("whatIf.title")}</h2>
+        <p className="mt-1 text-sm text-slate-500">{t("whatIf.description")}</p>
+        <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <MoneyField label={t("whatIf.reduceExpenses")} currency={answers.currency} value={adjustments.expense_reduction_cents} onChange={(value) => setAdjustments({ ...adjustments, expense_reduction_cents: Math.min(value, baseline.interruption_expenses_cents) })} />
+          <MoneyField label={t("whatIf.addCash")} currency={answers.currency} value={adjustments.added_cash_cents} onChange={(value) => setAdjustments({ ...adjustments, added_cash_cents: value })} />
+          <MoneyField label={t("whatIf.addIncome")} currency={answers.currency} value={adjustments.added_monthly_income_cents} onChange={(value) => setAdjustments({ ...adjustments, added_monthly_income_cents: value })} />
+          <MoneyField label={t("whatIf.expectedFunds")} help={t("whatIf.expectedFundsHelp")} currency={answers.currency} value={adjustments.expected_unconfirmed_funds_cents} onChange={(value) => setAdjustments({ ...adjustments, expected_unconfirmed_funds_cents: value })} />
+          <MoneyField label={t("whatIf.useIlliquid")} currency={answers.currency} value={adjustments.usable_illiquid_investments_cents} onChange={(value) => setAdjustments({ ...adjustments, usable_illiquid_investments_cents: Math.min(value, answers.assets.illiquid_investments.cents) })} />
         </div>
-        <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          <MoneyField
-            label={t("whatIf.reduceExpenses")}
-            currency={answers.currency}
-            value={adjustments.expense_reduction_cents}
-            onChange={(value) =>
-              setAdjustments({ ...adjustments, expense_reduction_cents: value })
-            }
-          />
-          <MoneyField
-            label={t("whatIf.addCash")}
-            currency={answers.currency}
-            value={adjustments.added_cash_cents}
-            onChange={(value) =>
-              setAdjustments({ ...adjustments, added_cash_cents: value })
-            }
-          />
-          <MoneyField
-            label={t("whatIf.addIncome")}
-            currency={answers.currency}
-            value={adjustments.added_monthly_income_cents}
-            onChange={(value) =>
-              setAdjustments({
-                ...adjustments,
-                added_monthly_income_cents: value,
-              })
-            }
-          />
-          <MoneyField
-            label={t("whatIf.expectedFunds")}
-            currency={answers.currency}
-            value={adjustments.expected_unconfirmed_funds_cents}
-            onChange={(value) =>
-              setAdjustments({
-                ...adjustments,
-                expected_unconfirmed_funds_cents: value,
-              })
-            }
-          />
-          <label className="block">
-            <span className="mb-2 flex justify-between text-sm font-medium">
-              <span>{t("whatIf.investmentAccess")}</span>
-              <span>{adjustments.investment_access_percent}%</span>
-            </span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              className="w-full accent-emerald-600"
-              value={adjustments.investment_access_percent}
-              onChange={(event) =>
-                setAdjustments({
-                  ...adjustments,
-                  investment_access_percent: Number(event.target.value),
-                })
-              }
-            />
-          </label>
-          <label className="flex items-center gap-3 rounded-2xl border p-4 text-sm">
-            <input
-              type="checkbox"
-              checked={adjustments.include_retirement}
-              onChange={(event) =>
-                setAdjustments({
-                  ...adjustments,
-                  include_retirement: event.target.checked,
-                })
-              }
-            />
-            <span>
-              {t("whatIf.retirement")}
-              <small className="mt-1 block text-slate-400">
-                {t("whatIf.retirementHelp")}
-              </small>
-            </span>
-          </label>
-        </div>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Button onClick={onApply}>{t("actions.apply")}</Button>
-          <Button variant="outline" onClick={onReset}>
-            <RefreshCcw />
-            {t("actions.reset")}
-          </Button>
-        </div>
-      </div>
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        <details className="rounded-3xl border bg-white p-6 dark:bg-white/[.04]">
-          <summary className="cursor-pointer font-semibold">
-            {t("method.title")}
-          </summary>
-          <div className="mt-4 space-y-3 text-sm leading-6 text-slate-500">
-            <p>{t("method.formula")}</p>
-            <p>{t("method.excluded")}</p>
-            <p>
-              {t("method.updated", {
-                date: new Date(answers.updated_at).toLocaleDateString(locale),
-              })}
-            </p>
-            <p>{t("method.disclaimer")}</p>
+        <details className="mt-5 rounded-2xl border p-4">
+          <summary className="cursor-pointer font-semibold">{t("comparison.extreme")}</summary>
+          <p className="mt-2 text-xs leading-5 text-slate-500">{t("whatIf.retirementHelp")}</p>
+          <div className="mt-4 grid gap-5 md:grid-cols-2">
+            <MoneyField label={t("whatIf.useDeferred")} currency={answers.currency} value={adjustments.usable_retirement_tax_deferred_cents} onChange={(value) => setAdjustments({ ...adjustments, usable_retirement_tax_deferred_cents: Math.min(value, answers.assets.retirement_tax_deferred.cents) })} />
+            <MoneyField label={t("whatIf.useTaxFree")} currency={answers.currency} value={adjustments.usable_retirement_tax_free_cents} onChange={(value) => setAdjustments({ ...adjustments, usable_retirement_tax_free_cents: Math.min(value, answers.assets.retirement_tax_free.cents) })} />
           </div>
         </details>
-        <div className="rounded-3xl border bg-white p-6 dark:bg-white/[.04]">
-          <h2 className="font-semibold">{t("save.title")}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            {t("save.description")}
-          </p>
-          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Button variant="outline" onClick={onDownload}>
-              <Download />
-              {t("actions.download")}
-            </Button>
-            {isAuthenticated ? (
-              <Button onClick={onSave} disabled={saving || saved}>
-                {saved
-                  ? t("save.saved")
-                  : saving
-                    ? t("save.saving")
-                    : t("save.button")}
-              </Button>
-            ) : (
-              <Button asChild>
-                <Link
-                  href="/auth/sign-up?next=/finance/cushion"
-                  onClick={() =>
-                    trackRunwayEvent("registration_clicked", "result")
-                  }
-                >
-                  <Users />
-                  {t("save.createAccount")}
-                </Link>
-              </Button>
-            )}
+        <div className="mt-6 flex gap-2"><Button onClick={onApply}>{t("actions.apply")}</Button><Button variant="outline" onClick={onReset}><RefreshCcw />{t("actions.reset")}</Button></div>
+      </div>
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
+          <h2 className="font-semibold">{t("actionsPlan.title")}</h2>
+          <div className="mt-4 space-y-3 text-sm">
+            {actions.cashGapCents > 0 ? <ResultLine label={t("actionsPlan.cashTarget", { months: actions.targetMonths })} value={formatCents(actions.cashGapCents, locale, answers.currency)} /> : null}
+            {actions.largestReducibleCategory ? <ResultLine label={t("actionsPlan.largest")} value={`${t(`expenseCategories.${actions.largestReducibleCategory.category}`)} · ${formatCents(actions.largestReducibleCategory.reducible, locale, answers.currency)}`} /> : null}
           </div>
         </div>
+        <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
+          <h2 className="font-semibold">{t("save.title")}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">{t("save.description")}</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button variant="outline" onClick={onDownload}><Download />{t("actions.download")}</Button>
+            {isAuthenticated ? <Button onClick={onSave} disabled={saving || saved}>{saved ? t("save.saved") : saving ? t("save.saving") : t("save.button")}</Button> : <Button asChild onClick={() => trackRunwayEvent("registration_clicked", "result")}><Link href="/auth/sign-up?next=/finance/cushion">{t("save.createAccount")}</Link></Button>}
+          </div>
+          {error ? <p role="alert" className="mt-3 text-sm text-red-600">{error}</p> : null}
+        </div>
       </div>
-      <p className="mx-auto mt-8 max-w-2xl text-center text-xs leading-5 text-slate-400">
-        {t("method.disclaimer")}
-      </p>
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
+          <h2 className="font-semibold">{t("regional.title")}</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-500">{t(`regionalActions.${answers.country}`)}</p>
+        </div>
+        <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
+          <h2 className="font-semibold">{t("precision.title")}</h2>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-500">
+            {answers.available_cash.confidence !== "confirmed" ? <li>{t("precision.cash")}</li> : null}
+            {answers.mine.take_home_source === "estimated" || answers.partner?.take_home_source === "estimated" ? <li>{t("precision.takeHome")}</li> : null}
+            {answers.expense_mode === "quick" ? <li>{t("precision.expenses")}</li> : null}
+            {preview.confidence === "complete" ? <li>{t("precision.complete")}</li> : null}
+          </ul>
+        </div>
+      </div>
+      <details className="mt-6 rounded-3xl border bg-white p-6 dark:bg-white/5"><summary className="cursor-pointer font-semibold">{t("method.title")}</summary><p className="mt-4 text-sm leading-6 text-slate-500">{t("method.formula")}</p><p className="mt-2 text-sm leading-6 text-slate-500">{t("method.excluded")}</p><p className="mt-2 text-xs text-slate-400">{t("method.disclaimer")}</p></details>
     </section>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function BalanceChart({ t, locale, currency, simulation }: { t: ReturnType<typeof useTranslations>; locale: string; currency: HouseholdRunwayAnswers["currency"]; simulation: RunwaySimulation }) {
+  const points = simulation.months.slice(0, Math.max(12, Math.min(120, Math.ceil((simulation.months_covered ?? 12) + 1))));
+  const max = Math.max(1, simulation.starting_resources_cents, ...points.map((point) => point.opening_balance_cents));
+  const line = [{ month: 0, value: simulation.starting_resources_cents }, ...points.map((point) => ({ month: point.month, value: point.closing_balance_cents }))];
+  const width = 600;
+  const height = 250;
+  const path = line.map((point, index) => `${index ? "L" : "M"} ${(point.month / Math.max(1, line.length - 1)) * width} ${height - (point.value / max) * (height - 20)}`).join(" ");
   return (
-    <div>
-      <p className="text-[11px] text-white/50">{label}</p>
-      <p className="mt-1 text-sm font-semibold tabular-nums sm:text-base">
-        {value}
-      </p>
-    </div>
-  );
-}
-function Breakdown({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-medium tabular-nums">{value}</span>
+    <div className="rounded-3xl bg-[#0d2b20] p-6 text-white">
+      <div className="grid grid-cols-3 gap-3 text-center"><SummaryValue label={t("result.resources")} value={formatCents(simulation.starting_resources_cents, locale, currency)} /><SummaryValue label={t("result.income")} value={formatCents(simulation.continuing_monthly_income_cents, locale, currency)} /><SummaryValue label={t("result.expenses")} value={formatCents(simulation.interruption_expenses_cents, locale, currency)} /></div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="mt-5 h-64 w-full" role="img" aria-label={t("chart.aria")}><path d={`${path} L ${width} ${height} L 0 ${height} Z`} fill="#34d399" opacity=".15" /><path d={path} fill="none" stroke="#34d399" strokeWidth="5" vectorEffect="non-scaling-stroke" /></svg>
+      <details className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70"><summary className="cursor-pointer font-medium text-white">{t("chart.tableTitle")}</summary><div className="mt-3 max-h-48 overflow-auto"><table className="w-full text-left"><thead><tr><th>{t("chart.month")}</th><th>{t("chart.inflows")}</th><th>{t("chart.outflows")}</th><th>{t("chart.closing")}</th></tr></thead><tbody>{points.map((month) => <tr key={month.month} className="border-t border-white/10"><td className="py-2">{month.month}</td><td>{formatCents(month.continuing_income_cents + month.confirmed_funds_cents + month.temporary_income_cents, locale, currency)}</td><td>{formatCents(month.essential_outflow_cents, locale, currency)}</td><td>{formatCents(month.closing_balance_cents, locale, currency)}</td></tr>)}</tbody></table></div></details>
     </div>
   );
 }
 
-function ComparisonCard({
-  label,
-  simulation,
-  help,
-  emphasized,
-  t,
-}: {
-  label: string;
-  simulation: RunwaySimulation;
-  help?: string;
-  emphasized?: boolean;
-  t: ReturnType<typeof useTranslations>;
-}) {
-  const value = simulation.sustainable
-    ? t("comparison.sustainable")
-    : simulation.depletion_date
-      ? t("comparison.months", {
-          months: simulation.months_covered?.toFixed(1) ?? "—",
-        })
-      : t("comparison.over", { months: simulation.months_covered ?? 120 });
-  return (
-    <div
-      className={`rounded-2xl border p-5 ${emphasized ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10" : "border-slate-200 dark:border-white/10"}`}
-    >
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {label}
-      </p>
-      <p className="mt-2 text-xl font-semibold">{value}</p>
-      {help ? (
-        <p className="mt-2 text-xs leading-5 text-slate-400">{help}</p>
-      ) : null}
-    </div>
-  );
+function ResultLine({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-center justify-between gap-4"><span className="text-slate-500">{label}</span><span className="font-medium">{value}</span></div>;
 }
-function getAttribution() {
+
+function ComparisonCard({ title, simulation, t, featured = false }: { title: string; simulation: RunwaySimulation; t: ReturnType<typeof useTranslations>; featured?: boolean }) {
+  return <div className={`rounded-2xl border p-5 ${featured ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10" : "bg-white dark:bg-white/5"}`}><p className="text-sm text-slate-500">{title}</p><p className="mt-2 text-2xl font-semibold">{simulation.sustainable ? t("comparison.sustainable") : t("comparison.months", { months: (simulation.months_covered ?? 0).toFixed(1) })}</p></div>;
+}
+
+function attribution() {
   if (typeof window === "undefined") return {};
   const params = new URLSearchParams(window.location.search);
   return {
@@ -2166,32 +1880,23 @@ function getAttribution() {
   };
 }
 
-function trackRunwayEvent(
-  eventName:
-    | "started"
-    | "skipped"
-    | "completed"
-    | "result_interaction"
-    | "registration_clicked",
-  stepId?: string,
-) {
+function trackRunwayEvent(eventName: string, stepId?: string) {
   if (typeof window === "undefined") return;
-  let sessionId = window.localStorage.getItem(RUNWAY_ANALYTICS_SESSION_KEY);
+  let sessionId = window.sessionStorage.getItem(RUNWAY_ANALYTICS_SESSION_KEY);
   if (!sessionId) {
     sessionId = crypto.randomUUID();
-    window.localStorage.setItem(RUNWAY_ANALYTICS_SESSION_KEY, sessionId);
+    window.sessionStorage.setItem(RUNWAY_ANALYTICS_SESSION_KEY, sessionId);
   }
   void fetch("/api/finance/cushion/events", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    keepalive: true,
     body: JSON.stringify({
       action_id: crypto.randomUUID(),
       session_id: sessionId,
       event_name: eventName,
       step_id: stepId,
       locale: document.documentElement.lang,
-      attribution: getAttribution(),
+      attribution: attribution(),
     }),
   }).catch(() => undefined);
 }

@@ -12,33 +12,50 @@ export const metadata: Metadata = {
   title: "Household Runway | BetterR.me",
   description:
     "See how long your household could cover essential costs if one or both incomes stopped, why, and which realistic change helps most.",
+  alternates: { canonical: "/finance/cushion" },
+  openGraph: {
+    title: "Household Runway | BetterR.me",
+    description:
+      "A private, no-account household income-interruption stress test.",
+    type: "website",
+    url: "/finance/cushion",
+  },
 };
 
 function migrateLegacy(
   record: Awaited<ReturnType<typeof getFinanceCushion>>,
 ): HouseholdRunwayAnswers | null {
   if (!record) return null;
-  if (record.answers?.schema_version === 2) return record.answers;
+  if (record.answers) return record.answers;
   const answers = createDefaultRunwayAnswers(new Date(record.updated_at));
-  answers.region = "Needs review";
   answers.available_cash = {
     cents: record.liquid_resources_cents,
     confidence: "confirmed",
   };
-  answers.other_monthly_income = {
-    cents: record.monthly_continuing_income_cents,
-    confidence: "confirmed",
-  };
+  if (record.monthly_continuing_income_cents > 0) {
+    answers.other_income_sources = [
+      {
+        id: "legacy-continuing-income",
+        type: "other",
+        label: "Previous continuing income",
+        monthly_cents: record.monthly_continuing_income_cents,
+        confidence: "needs_review",
+      },
+    ];
+  }
   answers.mine = {
     ...answers.mine,
     employment: "unemployed",
     entered_amount_cents: 0,
     monthly_take_home_cents: 0,
+    estimated_monthly_take_home_cents: 0,
+    take_home_source: "user_confirmed",
     confidence: "confirmed",
   };
-  answers.expenses.other = {
-    current_cents: record.monthly_essential_expenses_cents,
-    interruption_cents: record.monthly_essential_expenses_cents,
+  answers.expense_mode = "quick";
+  answers.quick_expenses = {
+    current_monthly_cents: record.monthly_essential_expenses_cents,
+    interruption_monthly_cents: record.monthly_essential_expenses_cents,
     confidence: "confirmed",
   };
   return answers;

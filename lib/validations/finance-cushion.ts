@@ -1,9 +1,15 @@
 import { z } from "zod";
 import { EXPENSE_CATEGORIES } from "@/lib/finance/cushion";
+import { RUNWAY_REGIONS } from "@/lib/finance/runway-regions";
 
 export const MAX_CUSHION_AMOUNT_CENTS = 100_000_000_000;
 const cents = z.number().finite().int().min(0).max(MAX_CUSHION_AMOUNT_CENTS);
-const confidence = z.enum(["confirmed", "estimated", "skipped"]);
+const confidence = z.enum([
+  "confirmed",
+  "estimated",
+  "needs_review",
+  "skipped",
+]);
 const money = z.object({ cents, confidence }).strict();
 const income = z
   .object({
@@ -14,30 +20,58 @@ const income = z
       "not_working",
     ]),
     monthly_take_home_cents: cents,
+    estimated_monthly_take_home_cents: cents,
     entered_amount_cents: cents,
     entered_period: z.enum(["monthly", "annual"]),
     entered_as: z.enum(["net", "gross"]),
+    take_home_source: z.enum(["estimated", "user_confirmed"]),
     confidence,
-    take_home_reviewed: z.boolean(),
     estimate_rule_version: z.string().max(80).optional(),
+    take_home_reviewed: z.boolean().optional(),
   })
   .strict();
-const expense = z
-  .object({ current_cents: cents, interruption_cents: cents, confidence })
-  .strict();
+const expenseCategory = z.enum(EXPENSE_CATEGORIES);
 
 export const householdRunwayAnswersSchema = z
   .object({
-    schema_version: z.literal(2),
+    schema_version: z.literal(3),
     country: z.enum(["US", "CA", "CN", "TW"]),
-    region: z.string().trim().min(1).max(100),
+    region: z.string().trim().min(1).max(20),
     currency: z.enum(["USD", "CAD", "CNY", "TWD"]),
     shares_finances: z.boolean(),
     has_children: z.boolean(),
     has_support_obligations: z.boolean(),
     mine: income,
     partner: income.nullable(),
-    other_monthly_income: money,
+    other_income_sources: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(100),
+            type: z.enum([
+              "rental_net",
+              "side_business",
+              "dividends_interest",
+              "support",
+              "pension_benefits",
+              "other",
+            ]),
+            label: z.string().trim().max(100).optional(),
+            monthly_cents: cents,
+            confidence,
+          })
+          .strict()
+          .superRefine((source, context) => {
+            if (source.type === "other" && !source.label) {
+              context.addIssue({
+                code: "custom",
+                message: "Custom income needs a label",
+                path: ["label"],
+              });
+            }
+          }),
+      )
+      .max(20),
     available_cash: money,
     confirmed_funds: z
       .array(
@@ -51,16 +85,40 @@ export const householdRunwayAnswersSchema = z
           .strict(),
       )
       .max(20),
-    taxable_investments: money,
-    investment_access_percent: z.number().int().min(0).max(100),
-    retirement_accounts: money,
-    home_equity: money,
-    expenses: z
-      .object(
-        Object.fromEntries(
-          EXPENSE_CATEGORIES.map((key) => [key, expense]),
-        ) as Record<(typeof EXPENSE_CATEGORIES)[number], typeof expense>,
+    assets: z
+      .object({
+        liquid_investments: money,
+        illiquid_investments: money,
+        home_equity: money,
+        retirement_tax_deferred: money,
+        retirement_tax_free: money,
+      })
+      .strict(),
+    housing_tenure: z.enum(["rent", "own", "other"]).nullable(),
+    expense_mode: z.enum(["guided", "quick"]),
+    expense_items: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(100),
+            category: expenseCategory,
+            type: z.string().min(1).max(80),
+            label: z.string().trim().max(100).optional(),
+            current_amount_cents: cents,
+            interruption_amount_cents: cents,
+            frequency: z.enum(["monthly", "quarterly", "annual"]),
+            confidence,
+          })
+          .strict(),
       )
+      .max(100),
+    completed_expense_categories: z.array(expenseCategory).max(10),
+    quick_expenses: z
+      .object({
+        current_monthly_cents: cents,
+        interruption_monthly_cents: cents,
+        confidence,
+      })
       .strict(),
     temporary_income: z
       .object({
@@ -70,9 +128,55 @@ export const householdRunwayAnswersSchema = z
       })
       .strict()
       .nullable(),
+    extreme_access: z
+      .object({
+        illiquid_investments_cents: cents,
+        retirement_tax_deferred_cents: cents,
+        retirement_tax_free_cents: cents,
+      })
+      .strict(),
     updated_at: z.string().datetime(),
   })
-  .strict();
+  .strict()
+  .superRefine((answers, context) => {
+    if (
+      !RUNWAY_REGIONS[answers.country].some(
+        (region) => region.code === answers.region,
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Region is not valid for the selected country",
+        path: ["region"],
+      });
+    }
+    const caps = [
+      [
+        answers.extreme_access.illiquid_investments_cents,
+        answers.assets.illiquid_investments.cents,
+        "illiquid_investments_cents",
+      ],
+      [
+        answers.extreme_access.retirement_tax_deferred_cents,
+        answers.assets.retirement_tax_deferred.cents,
+        "retirement_tax_deferred_cents",
+      ],
+      [
+        answers.extreme_access.retirement_tax_free_cents,
+        answers.assets.retirement_tax_free.cents,
+        "retirement_tax_free_cents",
+      ],
+    ] as const;
+    for (const [usable, balance, field] of caps) {
+      if (usable > balance) {
+        context.addIssue({
+          code: "custom",
+          message: "Usable amount cannot exceed the entered balance",
+          path: ["extreme_access", field],
+        });
+      }
+    }
+  });
 
 const attributionSchema = z
   .object({
@@ -112,6 +216,7 @@ export const financeCushionEventSchema = z
     action_id: z.string().uuid(),
     session_id: z.string().uuid(),
     event_name: z.enum([
+      "landing_view",
       "started",
       "skipped",
       "completed",

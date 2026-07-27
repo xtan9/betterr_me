@@ -70,7 +70,7 @@ create table public.finance_cushion_events (
   action_id uuid not null unique,
   session_id uuid not null,
   event_name text not null check (event_name in (
-    'started', 'skipped', 'completed', 'result_interaction', 'registration_clicked'
+    'landing_view', 'started', 'skipped', 'completed', 'result_interaction', 'registration_clicked'
   )),
   step_id text,
   locale text,
@@ -92,7 +92,7 @@ create policy "Visitors can append allowlisted finance cushion events"
   for insert
   to anon, authenticated
   with check (
-    event_name in ('started', 'skipped', 'completed', 'result_interaction', 'registration_clicked')
+    event_name in ('landing_view', 'started', 'skipped', 'completed', 'result_interaction', 'registration_clicked')
     and char_length(coalesce(step_id, '')) <= 64
     and char_length(coalesce(locale, '')) <= 16
     and not (attribution ?| array['salary', 'income', 'assets', 'expenses', 'result', 'months'])

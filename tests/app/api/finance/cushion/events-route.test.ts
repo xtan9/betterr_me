@@ -51,6 +51,25 @@ describe("amount-free Household Runway analytics", () => {
     );
   });
 
+  it("accepts an amount-free anonymous landing view", async () => {
+    const response = await POST(
+      request({
+        action_id: "74a303ae-1ba3-4ab5-beb9-5317eb94c791",
+        session_id: "cbeb17f5-8687-4ce7-b43a-49e8f15f0c42",
+        event_name: "landing_view",
+        step_id: "landing",
+        locale: "zh-TW",
+        attribution: { campaign: "youtube", cta: "description" },
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ event_name: "landing_view", step_id: "landing" }),
+      expect.any(Object),
+    );
+  });
+
   it("rejects financial values and unknown event fields", async () => {
     const response = await POST(
       request({
