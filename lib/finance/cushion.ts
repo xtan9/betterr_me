@@ -5,6 +5,16 @@ import {
   type TakeHomeEstimateBreakdown,
   type TaxFilingStatus,
 } from "@/lib/finance/runway-tax";
+import {
+  EXPENSE_CATEGORIES,
+  EXPENSE_ITEM_TYPES,
+  isExpenseItemType,
+  type ExpenseCategory,
+  type ExpenseItemType,
+} from "@/lib/finance/runway-expenses";
+import { householdRunwayAnswersSchema } from "@/lib/validations/finance-cushion";
+export { EXPENSE_CATEGORIES } from "@/lib/finance/runway-expenses";
+export type { ExpenseCategory } from "@/lib/finance/runway-expenses";
 export type { TakeHomeEstimateBreakdown, TaxFilingStatus } from "@/lib/finance/runway-tax";
 
 export const RUNWAY_MODEL_VERSION = "4.0.0";
@@ -60,31 +70,6 @@ export type RecurringIncomeType =
   | "support"
   | "pension_benefits"
   | "other";
-export type ExpenseCategory =
-  | "housing"
-  | "utilities"
-  | "transportation"
-  | "food"
-  | "healthcare"
-  | "insurance"
-  | "childcare"
-  | "debt"
-  | "support"
-  | "other";
-
-export const EXPENSE_CATEGORIES = [
-  "housing",
-  "utilities",
-  "transportation",
-  "food",
-  "healthcare",
-  "insurance",
-  "childcare",
-  "debt",
-  "support",
-  "other",
-] as const satisfies readonly ExpenseCategory[];
-
 export interface MoneyAnswer {
   cents: number;
   confidence: InputConfidence;
@@ -129,7 +114,7 @@ export interface RunwayAssets {
 export interface ExpenseLineItem {
   id: string;
   category: ExpenseCategory;
-  type: string;
+  type: ExpenseItemType;
   label?: string;
   current_amount_cents: number;
   interruption_amount_cents: number;
@@ -208,6 +193,16 @@ export interface RunwaySimulation {
   excluded_assets_cents: number;
   months: RunwayMonth[];
   confidence: "complete" | "estimated" | "needs_review";
+}
+
+export interface RunwaySnapshotSummary {
+  id: string;
+  trigger: "completed" | "updated" | "imported";
+  scenario: RunwayScenario;
+  months_covered: number | null;
+  sustainable: boolean;
+  model_version: string;
+  created_at: string;
 }
 
 export interface RunwayAdjustments {
@@ -401,13 +396,122 @@ export function expenseCategoryTotals(
     );
 }
 
+export function withCurrentLifestyleExpenses(
+  answers: HouseholdRunwayAnswers,
+): HouseholdRunwayAnswers {
+  if (answers.expense_mode === "quick") {
+    return {
+      ...answers,
+      quick_expenses: {
+        ...answers.quick_expenses,
+        interruption_monthly_cents: answers.quick_expenses.current_monthly_cents,
+      },
+    };
+  }
+  return {
+    ...answers,
+    expense_items: answers.expense_items.map((item) => ({
+      ...item,
+      interruption_amount_cents: item.current_amount_cents,
+    })),
+    expense_category_subtotals: Object.fromEntries(
+      Object.entries(answers.expense_category_subtotals).map(([category, subtotal]) => [
+        category,
+        subtotal
+          ? { ...subtotal, interruption_monthly_cents: subtotal.current_monthly_cents }
+          : subtotal,
+      ]),
+    ),
+  };
+}
+
+export function applyExpenseReduction(
+  answers: HouseholdRunwayAnswers,
+  requestedReductionCents: number,
+): HouseholdRunwayAnswers {
+  let remaining = Math.max(0, requestedReductionCents);
+  if (remaining === 0) return answers;
+  if (answers.expense_mode === "quick") {
+    return {
+      ...answers,
+      quick_expenses: {
+        ...answers.quick_expenses,
+        interruption_monthly_cents: Math.max(
+          0,
+          answers.quick_expenses.interruption_monthly_cents - remaining,
+        ),
+      },
+    };
+  }
+
+  const candidates = [
+    ...EXPENSE_CATEGORIES.flatMap((category) => {
+      if (answers.expense_category_modes[category] !== "subtotal") return [];
+      const subtotal = answers.expense_category_subtotals[category];
+      return subtotal
+        ? [{ kind: "subtotal" as const, id: category, monthly: subtotal.interruption_monthly_cents }]
+        : [];
+    }),
+    ...answers.expense_items
+      .filter((item) => answers.expense_category_modes[item.category] === "itemized")
+      .map((item) => ({
+        kind: "item" as const,
+        id: item.id,
+        monthly: normalizeExpenseToMonthly(item.interruption_amount_cents, item.frequency),
+      })),
+  ].sort((a, b) => b.monthly - a.monthly);
+
+  const reductions = new Map<string, number>();
+  for (const candidate of candidates) {
+    if (remaining <= 0) break;
+    const reduction = Math.min(candidate.monthly, remaining);
+    reductions.set(`${candidate.kind}:${candidate.id}`, reduction);
+    remaining -= reduction;
+  }
+
+  return {
+    ...answers,
+    expense_category_subtotals: Object.fromEntries(
+      Object.entries(answers.expense_category_subtotals).map(([category, subtotal]) => {
+        const reduction = reductions.get(`subtotal:${category}`) ?? 0;
+        return [
+          category,
+          subtotal
+            ? {
+                ...subtotal,
+                interruption_monthly_cents: Math.max(
+                  0,
+                  subtotal.interruption_monthly_cents - reduction,
+                ),
+              }
+            : subtotal,
+        ];
+      }),
+    ),
+    expense_items: answers.expense_items.map((item) => {
+      const monthlyReduction = reductions.get(`item:${item.id}`) ?? 0;
+      const factor = item.frequency === "annual" ? 12 : item.frequency === "quarterly" ? 3 : 1;
+      return monthlyReduction === 0
+        ? item
+        : {
+            ...item,
+            interruption_amount_cents: Math.max(
+              0,
+              item.interruption_amount_cents - monthlyReduction * factor,
+            ),
+          };
+    }),
+  };
+}
+
 function addMonthsFraction(start: Date, months: number) {
+  if (!Number.isFinite(months) || months > 3_000_000) return null;
   const whole = Math.floor(months);
   const fraction = months - whole;
   const result = new Date(start);
   result.setMonth(result.getMonth() + whole);
   result.setDate(result.getDate() + Math.round(fraction * 30.4375));
-  return result.toISOString().slice(0, 10);
+  return Number.isNaN(result.getTime()) ? null : result.toISOString().slice(0, 10);
 }
 
 function confidenceForAnswers(
@@ -491,50 +595,44 @@ export function simulateHouseholdRunway(
       answers.assets.retirement_tax_deferred.cents - usableDeferred,
     ) +
     Math.max(0, answers.assets.retirement_tax_free.cents - usableTaxFree);
-  const months: RunwayMonth[] = [];
-  let balance = startingResources;
-  let monthsCovered: number | null = null;
   const sustainableWithoutTemporary =
     essential === 0 || continuingIncome >= essential;
-
-  for (let month = 1; month <= 120; month += 1) {
-    const opening = balance;
+  const monthlyShortfall = Math.max(0, essential - continuingIncome);
+  const monthlyNet = continuingIncome - essential;
+  const effectiveResources = Math.max(
+    0,
+    startingResources + adjust.expected_unconfirmed_funds_cents,
+  );
+  const monthsCovered = sustainableWithoutTemporary
+    ? null
+    : effectiveResources / Math.max(1, monthlyShortfall);
+  const finalMonth = monthsCovered === null ? 12 : Math.max(12, Math.ceil(monthsCovered));
+  const monthIndexes = projectionMonthIndexes(finalMonth);
+  const months: RunwayMonth[] = monthIndexes.map((month) => {
     const oneTimeFunds = month === 1 ? adjust.expected_unconfirmed_funds_cents : 0;
-    const available =
-      opening + continuingIncome + oneTimeFunds;
-    const closing = available - essential;
-    months.push({
+    const opening = Math.max(
+      0,
+      startingResources +
+        (month > 1 ? adjust.expected_unconfirmed_funds_cents : 0) +
+        monthlyNet * (month - 1),
+    );
+    return {
       month,
       opening_balance_cents: opening,
       continuing_income_cents: continuingIncome,
       one_time_funds_cents: oneTimeFunds,
       essential_outflow_cents: essential,
-      shortfall_cents: Math.max(
-        0,
-        essential - continuingIncome,
-      ),
-      closing_balance_cents: Math.max(0, closing),
-    });
-    if (essential > 0 && closing < 0) {
-      const monthlyShortfall = Math.max(
-        1,
-        essential - continuingIncome,
-      );
-      monthsCovered =
-        month -
-        1 +
-        Math.min(1, Math.max(0, (opening + oneTimeFunds) / monthlyShortfall));
-      break;
-    }
-    balance = Math.max(0, closing);
-  }
+      shortfall_cents: monthlyShortfall,
+      closing_balance_cents: Math.max(0, effectiveResources + monthlyNet * month),
+    };
+  });
 
   return {
     scenario,
     sustainable: sustainableWithoutTemporary,
-    months_covered: sustainableWithoutTemporary ? null : (monthsCovered ?? 120),
+    months_covered: monthsCovered,
     depletion_date:
-      sustainableWithoutTemporary || monthsCovered === null
+      monthsCovered === null
         ? null
         : addMonthsFraction(startDate, monthsCovered),
     starting_resources_cents: startingResources,
@@ -546,6 +644,19 @@ export function simulateHouseholdRunway(
     months,
     confidence: confidenceForAnswers(answers, essential),
   };
+}
+
+function projectionMonthIndexes(finalMonth: number) {
+  if (finalMonth <= 240) {
+    return Array.from({ length: finalMonth }, (_, index) => index + 1);
+  }
+  const indexes = new Set<number>(Array.from({ length: 12 }, (_, index) => index + 1));
+  const sampleCount = 48;
+  for (let index = 1; index <= sampleCount; index += 1) {
+    indexes.add(Math.max(1, Math.round((finalMonth * index) / sampleCount)));
+  }
+  indexes.add(finalMonth);
+  return [...indexes].sort((a, b) => a - b);
 }
 
 export function highestLeverageActions(
@@ -613,13 +724,36 @@ function legacyMoney(value: unknown): MoneyAnswer {
   };
 }
 
-export function migrateRunwayAnswers(
+function validateCurrentRunwayAnswers(
   value: unknown,
-  now = new Date(),
+  allowIncompleteRegion: boolean,
 ): HouseholdRunwayAnswers | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
-  if (raw.schema_version === 4) return raw as unknown as HouseholdRunwayAnswers;
+  const allowEmptyRegion = allowIncompleteRegion && raw.region === "";
+  const country = (["US", "CA", "CN", "TW"].includes(String(raw.country))
+    ? raw.country
+    : "US") as RunwayCountry;
+  const parsed = householdRunwayAnswersSchema.safeParse(
+    allowEmptyRegion
+      ? { ...raw, region: country === "US" ? "AL" : country === "CA" ? "AB" : country === "CN" ? "BJ" : "TPE" }
+      : raw,
+  );
+  return parsed.success
+    ? ({ ...parsed.data, region: allowEmptyRegion ? "" : parsed.data.region } as HouseholdRunwayAnswers)
+    : null;
+}
+
+export function migrateRunwayAnswers(
+  value: unknown,
+  now = new Date(),
+  options: { allowIncompleteRegion?: boolean } = {},
+): HouseholdRunwayAnswers | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  if (raw.schema_version === 4) {
+    return validateCurrentRunwayAnswers(raw, Boolean(options.allowIncompleteRegion));
+  }
   if (raw.schema_version !== 2 && raw.schema_version !== 3) return null;
   const country = (["US", "CA", "CN", "TW"].includes(String(raw.country))
     ? raw.country
@@ -640,7 +774,7 @@ export function migrateRunwayAnswers(
   const other = legacyMoney(raw.other_monthly_income);
   const oldAssets = (raw.assets ?? {}) as Record<string, unknown>;
   const retirement = raw.schema_version === 3 ? legacyMoney(oldAssets.retirement_tax_deferred) : legacyMoney(raw.retirement_accounts);
-  return {
+  const migrated: HouseholdRunwayAnswers = {
     ...createDefaultRunwayAnswers(now),
     country,
     region: normalizeLegacyRegion(country, String(raw.region ?? "")),
@@ -676,7 +810,19 @@ export function migrateRunwayAnswers(
     },
     housing_tenure: raw.schema_version === 3 && ["rent", "own", "other"].includes(String(raw.housing_tenure)) ? raw.housing_tenure as HousingTenure : null,
     expense_mode: raw.schema_version === 3 && raw.expense_mode === "guided" ? "guided" : "quick",
-    expense_items: raw.schema_version === 3 && Array.isArray(raw.expense_items) ? raw.expense_items as ExpenseLineItem[] : [],
+    expense_items: raw.schema_version === 3 && Array.isArray(raw.expense_items)
+      ? (raw.expense_items as Array<Record<string, unknown>>).map((item) => {
+          const category = EXPENSE_CATEGORIES.includes(item.category as ExpenseCategory)
+            ? (item.category as ExpenseCategory)
+            : "other";
+          const fallback = EXPENSE_ITEM_TYPES[category][0] ?? "other_commitment";
+          return {
+            ...item,
+            category,
+            type: isExpenseItemType(item.type) ? item.type : fallback,
+          } as ExpenseLineItem;
+        })
+      : [],
     completed_expense_categories: raw.schema_version === 3 && Array.isArray(raw.completed_expense_categories) ? raw.completed_expense_categories as ExpenseCategory[] : [],
     expense_category_modes: raw.schema_version === 3 && Array.isArray(raw.expense_items)
       ? Object.fromEntries((raw.expense_items as ExpenseLineItem[]).map((item) => [item.category, "itemized"]))
@@ -690,6 +836,7 @@ export function migrateRunwayAnswers(
     updated_at:
       typeof raw.updated_at === "string" ? raw.updated_at : now.toISOString(),
   };
+  return validateCurrentRunwayAnswers(migrated, true);
 }
 
 export interface RunwayDraftEnvelope {
@@ -724,7 +871,9 @@ export function parseDraftEnvelope(
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (new Date(String(parsed.expires_at)) <= now) return null;
     if (parsed.version === 4 || parsed.version === 3) {
-      const answers = migrateRunwayAnswers(parsed.answers, now);
+      const answers = migrateRunwayAnswers(parsed.answers, now, {
+        allowIncompleteRegion: true,
+      });
       const legacyStepId = String(parsed.step_id);
       const stepId = (legacyStepId === "confirmedFunds" ? "assets" : legacyStepId === "temporaryIncome" ? "review" : legacyStepId) as RunwayStepId;
       if (!answers || !RUNWAY_STEP_IDS.includes(stepId)) return null;
@@ -737,7 +886,9 @@ export function parseDraftEnvelope(
       };
     }
     if (parsed.version === 2) {
-      const answers = migrateRunwayAnswers(parsed.answers, now);
+      const answers = migrateRunwayAnswers(parsed.answers, now, {
+        allowIncompleteRegion: true,
+      });
       if (!answers) return null;
       const legacyStep = Number(parsed.step) || 0;
       const legacyId = LEGACY_V2_STEP_IDS[

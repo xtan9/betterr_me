@@ -7,6 +7,7 @@ import {
   type FinanceCushionView,
   type HouseholdRunwayAnswers,
   type RunwaySimulation,
+  type RunwaySnapshotSummary,
 } from "@/lib/finance/cushion";
 
 export async function getFinanceCushion(
@@ -96,7 +97,7 @@ export async function appendRunwaySnapshot(
 export async function getRunwaySnapshots(
   supabase: SupabaseClient,
   userId: string,
-) {
+): Promise<RunwaySnapshotSummary[]> {
   const { data, error } = await supabase
     .from("finance_cushion_snapshots")
     .select(
@@ -106,5 +107,5 @@ export async function getRunwaySnapshots(
     .order("created_at", { ascending: false })
     .limit(24);
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as RunwaySnapshotSummary[];
 }

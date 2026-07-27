@@ -76,6 +76,10 @@ test("completes the quick interview, edits take-home pay, and previews What-if w
   await expect(page.getByText("+1.0 months", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reset" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("5.0 months");
+  await page.getByRole("textbox", { name: "Add accessible cash" }).fill("870000");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("150.0 months");
+  await expect(page.getByText("Month 150", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Reset" }).click();
   await expect(page.getByRole("link", { name: "Create account to save" })).toHaveAttribute("href", "/auth/sign-up?next=/finance/cushion");
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

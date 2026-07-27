@@ -75,7 +75,20 @@ create table public.finance_cushion_events (
   step_id text,
   locale text,
   attribution jsonb not null default '{}'::jsonb
-    check (jsonb_typeof(attribution) = 'object'),
+    check (
+      jsonb_typeof(attribution) = 'object'
+      and attribution - array['video', 'campaign', 'cta', 'landing_variant', 'language']::text[] = '{}'::jsonb
+      and (not (attribution ? 'video') or jsonb_typeof(attribution -> 'video') = 'string')
+      and (not (attribution ? 'campaign') or jsonb_typeof(attribution -> 'campaign') = 'string')
+      and (not (attribution ? 'cta') or jsonb_typeof(attribution -> 'cta') = 'string')
+      and (not (attribution ? 'landing_variant') or jsonb_typeof(attribution -> 'landing_variant') = 'string')
+      and (not (attribution ? 'language') or jsonb_typeof(attribution -> 'language') = 'string')
+      and char_length(coalesce(attribution ->> 'video', '')) <= 120
+      and char_length(coalesce(attribution ->> 'campaign', '')) <= 120
+      and char_length(coalesce(attribution ->> 'cta', '')) <= 120
+      and char_length(coalesce(attribution ->> 'landing_variant', '')) <= 120
+      and char_length(coalesce(attribution ->> 'language', '')) <= 20
+    ),
   created_at timestamptz not null default now()
 );
 
@@ -85,18 +98,67 @@ create index finance_cushion_events_reporting_idx
 alter table public.finance_cushion_events enable row level security;
 
 revoke all on table public.finance_cushion_events from public, anon, authenticated;
-grant insert on table public.finance_cushion_events to anon, authenticated;
 
-create policy "Visitors can append allowlisted finance cushion events"
-  on public.finance_cushion_events
-  for insert
-  to anon, authenticated
-  with check (
-    event_name in ('landing_view', 'started', 'skipped', 'completed', 'result_interaction', 'registration_clicked')
-    and char_length(coalesce(step_id, '')) <= 64
-    and char_length(coalesce(locale, '')) <= 16
-    and not (attribution ?| array['salary', 'income', 'assets', 'expenses', 'result', 'months'])
-  );
+create table public.finance_cushion_event_rate_limits (
+  client_key text primary key check (char_length(client_key) = 64),
+  window_started_at timestamptz not null default now(),
+  event_count integer not null default 0 check (event_count >= 0)
+);
+
+alter table public.finance_cushion_event_rate_limits enable row level security;
+revoke all on table public.finance_cushion_event_rate_limits from public, anon, authenticated;
+
+create or replace function public.record_finance_cushion_event(
+  p_client_key text,
+  p_action_id uuid,
+  p_session_id uuid,
+  p_event_name text,
+  p_step_id text,
+  p_locale text,
+  p_attribution jsonb
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  allowed boolean;
+begin
+  insert into public.finance_cushion_event_rate_limits as limits (
+    client_key, window_started_at, event_count
+  )
+  values (p_client_key, now(), 1)
+  on conflict (client_key) do update
+  set
+    window_started_at = case
+      when limits.window_started_at <= now() - interval '1 minute' then now()
+      else limits.window_started_at
+    end,
+    event_count = case
+      when limits.window_started_at <= now() - interval '1 minute' then 1
+      else limits.event_count + 1
+    end
+  returning event_count <= 60 into allowed;
+
+  if not allowed then
+    return false;
+  end if;
+
+  insert into public.finance_cushion_events (
+    action_id, session_id, event_name, step_id, locale, attribution
+  )
+  values (
+    p_action_id, p_session_id, p_event_name, p_step_id, p_locale, p_attribution
+  )
+  on conflict (action_id) do nothing;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.record_finance_cushion_event(text, uuid, uuid, text, text, text, jsonb) from public, anon, authenticated;
+grant execute on function public.record_finance_cushion_event(text, uuid, uuid, text, text, text, jsonb) to service_role;
 
 comment on table public.finance_cushion_events is
-  'Write-only, amount-free Household Runway funnel analytics. Reporting uses the service role.';
+  'Server-only, amount-free Household Runway funnel analytics. App roles have no direct access.';

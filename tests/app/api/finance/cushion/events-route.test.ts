@@ -1,13 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/finance/cushion/events/route";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/utils", () => ({ hasEnvVars: true }));
 
-const upsert = vi.fn();
-const from = vi.fn(() => ({ upsert }));
+const rpc = vi.fn();
 
 function request(body: unknown) {
   return new NextRequest("http://localhost:3000/api/finance/cushion/events", {
@@ -20,8 +19,8 @@ function request(body: unknown) {
 describe("amount-free Household Runway analytics", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    upsert.mockResolvedValue({ error: null });
-    vi.mocked(createClient).mockResolvedValue({ from } as never);
+    rpc.mockResolvedValue({ data: true, error: null });
+    vi.mocked(createAdminClient).mockReturnValue({ rpc } as never);
   });
 
   it("accepts only funnel metadata and writes an idempotent event", async () => {
@@ -41,13 +40,9 @@ describe("amount-free Household Runway analytics", () => {
     );
 
     expect(response.status).toBe(204);
-    expect(from).toHaveBeenCalledWith("finance_cushion_events");
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ event_name: "skipped", step_id: "assets" }),
-      {
-        onConflict: "action_id",
-        ignoreDuplicates: true,
-      },
+    expect(rpc).toHaveBeenCalledWith(
+      "record_finance_cushion_event",
+      expect.objectContaining({ p_event_name: "skipped", p_step_id: "assets" }),
     );
   });
 
@@ -64,9 +59,9 @@ describe("amount-free Household Runway analytics", () => {
     );
 
     expect(response.status).toBe(204);
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ event_name: "landing_view", step_id: "landing" }),
-      expect.any(Object),
+    expect(rpc).toHaveBeenCalledWith(
+      "record_finance_cushion_event",
+      expect.objectContaining({ p_event_name: "landing_view", p_step_id: "landing" }),
     );
   });
 
@@ -81,6 +76,16 @@ describe("amount-free Household Runway analytics", () => {
     );
 
     expect(response.status).toBe(400);
-    expect(from).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("returns 429 when the shared database limiter rejects the event", async () => {
+    rpc.mockResolvedValue({ data: false, error: null });
+    const response = await POST(request({
+      action_id: "74a303ae-1ba3-4ab5-beb9-5317eb94c792",
+      session_id: "cbeb17f5-8687-4ce7-b43a-49e8f15f0c42",
+      event_name: "landing_view",
+    }));
+    expect(response.status).toBe(429);
   });
 });

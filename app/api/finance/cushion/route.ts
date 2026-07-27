@@ -76,7 +76,8 @@ export async function PUT(request: NextRequest) {
         result,
       });
     }
-    return NextResponse.json({ cushion });
+    const snapshots = await getRunwaySnapshots(context.supabase, context.user.id);
+    return NextResponse.json({ cushion, snapshots });
   } catch (error) {
     log.error("[household-runway] PUT failed", error);
     return NextResponse.json(

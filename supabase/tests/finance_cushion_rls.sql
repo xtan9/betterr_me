@@ -113,10 +113,17 @@ begin
     raise exception 'finance_cushion_events RLS is not enabled';
   end if;
 
-  if not has_table_privilege('anon', 'public.finance_cushion_events', 'INSERT')
+  if has_table_privilege('anon', 'public.finance_cushion_events', 'INSERT')
      or has_table_privilege('anon', 'public.finance_cushion_events', 'SELECT')
+     or has_table_privilege('authenticated', 'public.finance_cushion_events', 'INSERT')
      or has_table_privilege('authenticated', 'public.finance_cushion_events', 'SELECT') then
-    raise exception 'event table must be write-only for app roles';
+    raise exception 'event table must not be directly accessible to app roles';
+  end if;
+
+  if has_table_privilege('anon', 'public.finance_cushion_event_rate_limits', 'SELECT')
+     or has_table_privilege('anon', 'public.finance_cushion_event_rate_limits', 'INSERT')
+     or has_function_privilege('anon', 'public.record_finance_cushion_event(text,uuid,uuid,text,text,text,jsonb)', 'EXECUTE') then
+    raise exception 'event limiter must only be accessible to the server role';
   end if;
 end
 $$;
@@ -297,18 +304,6 @@ reset role;
 
 set local role anon;
 
-insert into public.finance_cushion_events (
-  action_id, session_id, event_name, step_id, locale, attribution
-)
-values (
-  '40000000-0000-0000-0000-000000000001',
-  '40000000-0000-0000-0000-000000000002',
-  'landing_view',
-  'landing',
-  'en',
-  '{"campaign": "youtube", "video": "runway"}'::jsonb
-);
-
 do $$
 begin
   begin
@@ -321,7 +316,7 @@ begin
       'completed',
       '{"income": "must-not-be-recorded"}'::jsonb
     );
-    raise exception 'financial amount key was accepted in analytics';
+    raise exception 'direct analytics insert was accepted';
   exception
     when check_violation or insufficient_privilege then
       null;

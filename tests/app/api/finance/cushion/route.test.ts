@@ -40,8 +40,10 @@ describe("/api/finance/cushion", () => {
 
   it("reads the current plan and history for its owner", async () => {
     vi.mocked(getFinanceCushion).mockResolvedValue(savedCushion);
+    vi.mocked(getRunwaySnapshots).mockResolvedValue([{ id: "snapshot-a", trigger: "imported", scenario: "current", months_covered: 5, sustainable: false, model_version: "4.0.0", created_at: "2026-07-26T00:00:00.000Z" }]);
     const response = await GET();
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ snapshots: [{ id: "snapshot-a" }] });
     expect(getFinanceCushion).toHaveBeenCalledWith(mockSupabase, user.id);
     expect(getRunwaySnapshots).toHaveBeenCalledWith(mockSupabase, user.id);
   });
@@ -51,6 +53,7 @@ describe("/api/finance/cushion", () => {
     const request = new NextRequest("http://localhost:3000/api/finance/cushion", { method: "PUT", body: JSON.stringify({ answers, status: "completed", attribution: { campaign: "youtube" }, create_snapshot: true, snapshot_action_id: "74a303ae-1ba3-4ab5-beb9-5317eb94c790", snapshot_trigger: "imported" }), headers: { "content-type": "application/json" } });
     const response = await PUT(request);
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ snapshots: [] });
     expect(saveHouseholdRunwayPlan).toHaveBeenCalledWith(mockSupabase, user.id, expect.objectContaining({ answers, result: expect.objectContaining({ months_covered: 5 }) }));
     expect(appendRunwaySnapshot).toHaveBeenCalledWith(mockSupabase, expect.objectContaining({ planId: "cushion-a", userId: user.id }));
   });

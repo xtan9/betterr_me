@@ -1,6 +1,10 @@
 import { z } from "zod";
-import { EXPENSE_CATEGORIES } from "@/lib/finance/cushion";
 import { RUNWAY_REGIONS } from "@/lib/finance/runway-regions";
+import {
+  EXPENSE_CATEGORIES,
+  EXPENSE_ITEM_TYPES,
+  EXPENSE_ITEM_TYPE_VALUES,
+} from "@/lib/finance/runway-expenses";
 
 export const MAX_CUSHION_AMOUNT_CENTS = 100_000_000_000;
 const cents = z.number().finite().int().min(0).max(MAX_CUSHION_AMOUNT_CENTS);
@@ -96,7 +100,7 @@ export const householdRunwayAnswersSchema = z
           .object({
             id: z.string().min(1).max(100),
             category: expenseCategory,
-            type: z.string().min(1).max(80),
+            type: z.enum(EXPENSE_ITEM_TYPE_VALUES),
             label: z.string().trim().max(100).optional(),
             current_amount_cents: cents,
             interruption_amount_cents: cents,
@@ -168,6 +172,15 @@ export const householdRunwayAnswersSchema = z
         });
       }
     }
+    answers.expense_items.forEach((item, index) => {
+      if (!(EXPENSE_ITEM_TYPES[item.category] as readonly string[]).includes(item.type)) {
+        context.addIssue({
+          code: "custom",
+          message: "Expense type does not belong to its category",
+          path: ["expense_items", index, "type"],
+        });
+      }
+    });
   });
 
 const attributionSchema = z

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   availableScenarios,
+  applyExpenseReduction,
   calculateCushion,
   createDefaultRunwayAnswers,
   createDraftEnvelope,
@@ -11,6 +12,7 @@ import {
   parseDollarsToCents,
   parseDraftEnvelope,
   simulateHouseholdRunway,
+  withCurrentLifestyleExpenses,
   type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
 
@@ -89,6 +91,41 @@ describe("version 4 monthly simulation", () => {
     expect(simulateHouseholdRunway(answers, "current").months_covered).toBe(15);
   });
 
+  it("calculates and projects a finite runway beyond 120 months", () => {
+    const answers = runway();
+    answers.available_cash.cents = 90_000_000;
+    const result = simulateHouseholdRunway(
+      answers,
+      "current",
+      undefined,
+      new Date("2026-07-26"),
+    );
+    expect(result.months_covered).toBe(150);
+    expect(result.depletion_date).toBe("2039-01-26");
+    expect(result.months.at(-1)).toMatchObject({
+      month: 150,
+      closing_balance_cents: 0,
+    });
+  });
+
+  it("keeps an ultra-long numeric runway without overflowing its date or projection", () => {
+    const answers = runway();
+    answers.available_cash.cents = 100_000_000_000;
+    answers.quick_expenses = {
+      current_monthly_cents: 1,
+      interruption_monthly_cents: 1,
+      confidence: "confirmed",
+    };
+    const result = simulateHouseholdRunway(answers, "current");
+    expect(result.months_covered).toBe(100_000_000_000);
+    expect(result.depletion_date).toBeNull();
+    expect(result.months.at(-1)).toMatchObject({
+      month: 100_000_000_000,
+      closing_balance_cents: 0,
+    });
+    expect(result.months.length).toBeLessThanOrEqual(61);
+  });
+
   it("does not emit Infinity when income covers expenses", () => {
     const answers = runway();
     answers.other_income_sources = [{ id: "rent", type: "rental_net", monthly_cents: 600_000, confidence: "confirmed" }];
@@ -96,6 +133,14 @@ describe("version 4 monthly simulation", () => {
     expect(result.sustainable).toBe(true);
     expect(result.months_covered).toBeNull();
     expect(JSON.stringify(result)).not.toMatch(/NaN|Infinity/);
+  });
+
+  it("projects a growing balance when continuing income exceeds expenses", () => {
+    const answers = runway();
+    answers.other_income_sources = [{ id: "rent", type: "rental_net", monthly_cents: 700_000, confidence: "confirmed" }];
+    const result = simulateHouseholdRunway(answers, "current");
+    expect(result.months[0].closing_balance_cents).toBe(3_100_000);
+    expect(result.months.at(-1)?.closing_balance_cents).toBe(4_200_000);
   });
 
   it("keeps one-time funds in What-if instead of the baseline interview", () => {
@@ -136,6 +181,59 @@ describe("version 4 monthly simulation", () => {
       { id: "food", category: "food", type: "groceries", current_amount_cents: 100_000, interruption_amount_cents: 70_000, frequency: "monthly", confidence: "confirmed" },
     ];
     expect(expenseTotals(answers)).toEqual({ current: 200_000, interruption: 170_000 });
+  });
+
+  it("applies What-if reductions to category subtotals and itemized costs", () => {
+    const answers = runway();
+    answers.expense_mode = "guided";
+    answers.expense_category_modes = { housing: "subtotal", food: "itemized" };
+    answers.expense_category_subtotals = {
+      housing: {
+        current_monthly_cents: 400_000,
+        interruption_monthly_cents: 350_000,
+        confidence: "confirmed",
+      },
+    };
+    answers.expense_items = [{
+      id: "food",
+      category: "food",
+      type: "groceries",
+      current_amount_cents: 100_000,
+      interruption_amount_cents: 90_000,
+      frequency: "monthly",
+      confidence: "confirmed",
+    }];
+    const reduced = applyExpenseReduction(answers, 400_000);
+    expect(expenseTotals(reduced).interruption).toBe(40_000);
+    expect(reduced.expense_category_subtotals.housing?.interruption_monthly_cents).toBe(0);
+    expect(reduced.expense_items[0].interruption_amount_cents).toBe(40_000);
+    expect(expenseTotals(answers).interruption).toBe(440_000);
+  });
+
+  it("restores subtotal and itemized costs for the current-lifestyle comparison", () => {
+    const answers = runway();
+    answers.expense_mode = "guided";
+    answers.expense_category_modes = { housing: "subtotal", food: "itemized" };
+    answers.expense_category_subtotals = {
+      housing: {
+        current_monthly_cents: 400_000,
+        interruption_monthly_cents: 250_000,
+        confidence: "confirmed",
+      },
+    };
+    answers.expense_items = [{
+      id: "food",
+      category: "food",
+      type: "groceries",
+      current_amount_cents: 100_000,
+      interruption_amount_cents: 60_000,
+      frequency: "monthly",
+      confidence: "confirmed",
+    }];
+    expect(expenseTotals(withCurrentLifestyleExpenses(answers))).toEqual({
+      current: 500_000,
+      interruption: 500_000,
+    });
   });
 
   it("caps explicit extreme-mode amounts and never mutates baseline answers", () => {
@@ -194,12 +292,39 @@ describe("estimates, drafts, and migration", () => {
     expect(parseDraftEnvelope(JSON.stringify(envelope), new Date("2026-08-26T00:00:00.000Z"))).toBeNull();
   });
 
+  it("restores an in-progress location draft before a region is selected", () => {
+    const now = new Date("2026-07-26T00:00:00.000Z");
+    const envelope = createDraftEnvelope(createDefaultRunwayAnswers(now), "location", false, now);
+    expect(parseDraftEnvelope(JSON.stringify(envelope), now)?.answers.region).toBe("");
+  });
+
+  it("discards malformed current-version drafts instead of trusting their shape", () => {
+    const now = new Date("2026-07-26T00:00:00.000Z");
+    const malformed = {
+      version: 4,
+      expires_at: "2026-08-01T00:00:00.000Z",
+      step_id: "result",
+      completed: true,
+      answers: { schema_version: 4, country: "US" },
+    };
+    expect(parseDraftEnvelope(JSON.stringify(malformed), now)).toBeNull();
+  });
+
   it("maps removed version 3 steps forward and drops old baseline inflows", () => {
     const oldAnswers = { ...runway(), schema_version: 3, confirmed_funds: [{ id: "old", amount_cents: 100_000, arrives_month: 2, confidence: "confirmed" }], temporary_income: { monthly_cents: 50_000, remaining_months: 2, confidence: "confirmed" } };
     const parsed = parseDraftEnvelope(JSON.stringify({ version: 3, expires_at: "2026-08-01T00:00:00.000Z", step_id: "confirmedFunds", completed: false, answers: oldAnswers }), new Date("2026-07-26T00:00:00.000Z"));
     expect(parsed?.step_id).toBe("assets");
     expect(parsed?.answers).not.toHaveProperty("confirmed_funds");
     expect(parsed?.answers).not.toHaveProperty("temporary_income");
+  });
+
+  it("discards malformed nested version 3 data after migration", () => {
+    const oldAnswers = {
+      ...runway(),
+      schema_version: 3,
+      other_income_sources: [{ id: "broken", type: "other" }],
+    };
+    expect(migrateRunwayAnswers(oldAnswers)).toBeNull();
   });
 
   it("migrates version 2 totals, investments, retirement, income, and region", () => {

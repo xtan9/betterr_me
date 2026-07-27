@@ -14,23 +14,21 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  Download,
   LockKeyhole,
   Plus,
-  RefreshCcw,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { HouseholdRunwayLanding } from "@/components/finance/household-runway-landing";
+import { MoneyField } from "@/components/finance/runway-money-field";
+import { ResultExperience } from "@/components/finance/household-runway-result";
 import {
   EXPENSE_CATEGORIES,
-  RUNWAY_DRAFT_STORAGE_KEY,
   RUNWAY_MODEL_VERSION,
   RUNWAY_STEP_IDS,
   availableScenarios,
   createDefaultRunwayAnswers,
-  createDraftEnvelope,
   currencyForCountry,
   estimateMonthlyTakeHome,
   expenseCategoryTotals,
@@ -38,9 +36,9 @@ import {
   formatCents,
   highestLeverageActions,
   monthlyIncomeTotal,
-  normalizeExpenseToMonthly,
-  parseDraftEnvelope,
+  applyExpenseReduction,
   simulateHouseholdRunway,
+  withCurrentLifestyleExpenses,
   type EmploymentStatus,
   type ExpenseCategory,
   type ExpenseFrequency,
@@ -54,9 +52,22 @@ import {
   type RunwayAdjustments,
   type RunwayCountry,
   type RunwayScenario,
-  type RunwaySimulation,
+  type RunwaySnapshotSummary,
   type RunwayStepId,
 } from "@/lib/finance/cushion";
+import {
+  EXPENSE_ITEM_TYPES,
+  type ExpenseItemType,
+} from "@/lib/finance/runway-expenses";
+import {
+  clearRunwayDraft,
+  persistRunwayDraft,
+  readRunwayDraft,
+} from "@/lib/finance/runway-draft-client";
+import {
+  runwayAttribution,
+  trackRunwayEvent,
+} from "@/lib/finance/runway-analytics-client";
 import {
   RUNWAY_REGIONS,
   normalizeRunwayLocale,
@@ -76,8 +87,6 @@ const EMPTY_ADJUSTMENTS: RunwayAdjustments = {
   usable_retirement_tax_deferred_cents: 0,
   usable_retirement_tax_free_cents: 0,
 };
-const RUNWAY_ANALYTICS_SESSION_KEY =
-  "betterr.household-runway.analytics-session";
 const RUNWAY_IMPORT_ACTION_KEY = "betterr.household-runway.import-action";
 
 const OTHER_INCOME_TYPES: Exclude<RecurringIncomeType, "other">[] = [
@@ -97,79 +106,15 @@ const ASSET_KEYS = [
 ] as const;
 type AssetKey = (typeof ASSET_KEYS)[number];
 
-const EXPENSE_ITEM_TYPES: Record<
-  ExpenseCategory,
-  Array<{ type: string; frequencies?: ExpenseFrequency[] }>
-> = {
-  housing: [],
-  utilities: [
-    { type: "electricity" },
-    { type: "home_gas" },
-    { type: "water_trash" },
-    { type: "internet" },
-    { type: "phone" },
-  ],
-  transportation: [
-    { type: "vehicle_payment" },
-    { type: "car_insurance" },
-    { type: "fuel_charging" },
-    { type: "parking_tolls" },
-    { type: "vehicle_maintenance" },
-    { type: "public_transit" },
-  ],
-  food: [{ type: "groceries" }, { type: "essential_meals" }],
-  healthcare: [
-    { type: "health_premium" },
-    { type: "prescriptions" },
-    { type: "necessary_care" },
-  ],
-  insurance: [
-    { type: "life_insurance" },
-    { type: "disability_insurance" },
-    { type: "other_insurance" },
-  ],
-  childcare: [
-    { type: "childcare" },
-    { type: "tuition" },
-    { type: "child_essentials" },
-  ],
-  debt: [
-    { type: "credit_card_minimum" },
-    { type: "student_loan" },
-    { type: "personal_loan" },
-    { type: "other_debt" },
-  ],
-  support: [
-    { type: "parent_support" },
-    { type: "child_support" },
-    { type: "other_support" },
-  ],
-  other: [{ type: "other_commitment" }],
-};
-
 interface HouseholdRunwayProps {
   initialAnswers: HouseholdRunwayAnswers | null;
   isAuthenticated: boolean;
   hasSavedPlan: boolean;
-}
-
-function dollars(cents: number) {
-  return cents === 0 ? "" : String(cents / 100);
-}
-
-function cents(value: string) {
-  const parsed = Number(value.replace(/,/g, ""));
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : 0;
+  initialSnapshots: RunwaySnapshotSummary[];
 }
 
 function newId(prefix: string) {
   return `${prefix}-${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
-}
-
-function currencySymbol(currency: string) {
-  return { USD: "$", CAD: "CA$", CNY: "¥", TWD: "NT$" }[
-    currency as "USD" | "CAD" | "CNY" | "TWD"
-  ];
 }
 
 function employmentIncome(
@@ -206,6 +151,7 @@ export function HouseholdRunway({
   initialAnswers,
   isAuthenticated,
   hasSavedPlan,
+  initialSnapshots,
 }: HouseholdRunwayProps) {
   const t = useTranslations("householdRunway");
   const locale = useLocale();
@@ -218,6 +164,9 @@ export function HouseholdRunway({
   const [completed, setCompleted] = useState(Boolean(initialAnswers));
   const [hydrated, setHydrated] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
+  const [snapshots, setSnapshots] = useState(initialSnapshots);
+  const [planExists, setPlanExists] = useState(hasSavedPlan);
+  const [draftSynced, setDraftSynced] = useState(false);
   const [interviewStarted, setInterviewStarted] = useState(isAuthenticated);
   const [error, setError] = useState("");
   const [activeExpenseCategory, setActiveExpenseCategory] =
@@ -244,9 +193,7 @@ export function HouseholdRunway({
       const started = new URLSearchParams(window.location.search).get("start") === "1";
       setInterviewStarted(isAuthenticated || started);
     };
-    const draft = parseDraftEnvelope(
-      window.localStorage.getItem(RUNWAY_DRAFT_STORAGE_KEY),
-    );
+    const draft = readRunwayDraft();
     if (draft && !initialAnswers) {
       setAnswers(draft.answers);
       setStepId(draft.step_id);
@@ -279,26 +226,20 @@ export function HouseholdRunway({
   }, [initialAnswers, isAuthenticated]);
 
   useEffect(() => {
-    if (!hydrated || (!interviewStarted && !hasLocalDraft)) return;
-    window.localStorage.setItem(
-      RUNWAY_DRAFT_STORAGE_KEY,
-      JSON.stringify(createDraftEnvelope(answers, stepId, completed)),
-    );
+    if (draftSynced || !hydrated || (!interviewStarted && !hasLocalDraft)) return;
+    persistRunwayDraft(answers, stepId, completed);
     setHasLocalDraft(true);
-  }, [answers, completed, hasLocalDraft, hydrated, interviewStarted, stepId]);
+  }, [answers, completed, draftSynced, hasLocalDraft, hydrated, interviewStarted, stepId]);
 
   useEffect(() => {
     const flushDraft = () => {
-      if (!interviewStarted && !hasLocalDraft) return;
-      window.localStorage.setItem(
-        RUNWAY_DRAFT_STORAGE_KEY,
-        JSON.stringify(createDraftEnvelope(answers, stepId, completed)),
-      );
+      if (draftSynced || (!interviewStarted && !hasLocalDraft)) return;
+      persistRunwayDraft(answers, stepId, completed);
     };
     window.addEventListener("betterr:before-locale-change", flushDraft);
     return () =>
       window.removeEventListener("betterr:before-locale-change", flushDraft);
-  }, [answers, completed, hasLocalDraft, interviewStarted, stepId]);
+  }, [answers, completed, draftSynced, hasLocalDraft, interviewStarted, stepId]);
 
   const showLanding = hydrated && !isAuthenticated && !interviewStarted;
   useEffect(() => {
@@ -323,31 +264,10 @@ export function HouseholdRunway({
     () => simulateHouseholdRunway(answers, scenario, adjustments),
     [adjustments, answers, scenario],
   );
-  const currentLifestyle = useMemo(() => {
-    const totals = expenseTotals(answers);
-    if (answers.expense_mode === "quick") {
-      return simulateHouseholdRunway(
-        {
-          ...answers,
-          quick_expenses: {
-            ...answers.quick_expenses,
-            interruption_monthly_cents: totals.current,
-          },
-        },
-        scenario,
-      );
-    }
-    return simulateHouseholdRunway(
-      {
-        ...answers,
-        expense_items: answers.expense_items.map((item) => ({
-          ...item,
-          interruption_amount_cents: item.current_amount_cents,
-        })),
-      },
-      scenario,
-    );
-  }, [answers, scenario]);
+  const currentLifestyle = useMemo(
+    () => simulateHouseholdRunway(withCurrentLifestyleExpenses(answers), scenario),
+    [answers, scenario],
+  );
   const extreme = useMemo(
     () =>
       simulateHouseholdRunway(answers, scenario, {
@@ -375,6 +295,7 @@ export function HouseholdRunway({
 
   const update = (patch: Partial<HouseholdRunwayAnswers>) => {
     setSaved(false);
+    setDraftSynced(false);
     setAnswers((current) => {
       const next = {
         ...current,
@@ -382,10 +303,7 @@ export function HouseholdRunway({
         updated_at: new Date().toISOString(),
       };
       if (typeof window !== "undefined" && interviewStarted) {
-        window.localStorage.setItem(
-          RUNWAY_DRAFT_STORAGE_KEY,
-          JSON.stringify(createDraftEnvelope(next, stepId, completed)),
-        );
+        persistRunwayDraft(next, stepId, completed);
       }
       return next;
     });
@@ -396,6 +314,7 @@ export function HouseholdRunway({
     patch: Partial<IncomeAnswer>,
   ) => {
     setSaved(false);
+    setDraftSynced(false);
     setAnswers((current) => {
       const base =
         person === "mine"
@@ -437,10 +356,7 @@ export function HouseholdRunway({
         updated_at: new Date().toISOString(),
       };
       if (typeof window !== "undefined" && interviewStarted) {
-        window.localStorage.setItem(
-          RUNWAY_DRAFT_STORAGE_KEY,
-          JSON.stringify(createDraftEnvelope(updated, stepId, completed)),
-        );
+        persistRunwayDraft(updated, stepId, completed);
       }
       return updated;
     });
@@ -453,8 +369,9 @@ export function HouseholdRunway({
       setStepId("location");
       setCompleted(false);
       setHasLocalDraft(false);
+      setDraftSynced(false);
       setAdjustments({ ...EMPTY_ADJUSTMENTS });
-      window.localStorage.removeItem(RUNWAY_DRAFT_STORAGE_KEY);
+      clearRunwayDraft();
       window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
     }
     const params = new URLSearchParams(window.location.search);
@@ -470,7 +387,7 @@ export function HouseholdRunway({
 
   const clearDraft = () => {
     if (!window.confirm(t("actions.clearConfirm"))) return;
-    window.localStorage.removeItem(RUNWAY_DRAFT_STORAGE_KEY);
+    clearRunwayDraft();
     window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
     const reset = createDefaultRunwayAnswers();
     setAnswers(reset);
@@ -570,14 +487,21 @@ export function HouseholdRunway({
         body: JSON.stringify({
           answers,
           status: "completed",
-          attribution: attribution(),
+          attribution: runwayAttribution(),
           create_snapshot: true,
           snapshot_action_id: actionId,
-          snapshot_trigger: hasSavedPlan ? "updated" : "imported",
+          snapshot_trigger: planExists ? "updated" : "imported",
         }),
       });
       if (!response.ok) throw new Error("save failed");
-      window.localStorage.removeItem(RUNWAY_DRAFT_STORAGE_KEY);
+      const payload = (await response.json()) as {
+        snapshots?: RunwaySnapshotSummary[];
+      };
+      if (payload.snapshots) setSnapshots(payload.snapshots);
+      clearRunwayDraft();
+      setHasLocalDraft(false);
+      setDraftSynced(true);
+      setPlanExists(true);
       window.localStorage.removeItem(RUNWAY_IMPORT_ACTION_KEY);
       setSaved(true);
     } catch {
@@ -588,6 +512,7 @@ export function HouseholdRunway({
   };
 
   const applyWhatIf = () => {
+    setDraftSynced(false);
     setAnswers((current) => {
       const next = {
         ...current,
@@ -618,47 +543,7 @@ export function HouseholdRunway({
         ];
       }
       if (adjustments.expense_reduction_cents > 0) {
-        if (current.expense_mode === "quick") {
-          next.quick_expenses = {
-            ...current.quick_expenses,
-            interruption_monthly_cents: Math.max(
-              0,
-              current.quick_expenses.interruption_monthly_cents -
-                adjustments.expense_reduction_cents,
-            ),
-          };
-        } else {
-          let remaining = adjustments.expense_reduction_cents;
-          next.expense_items = [...current.expense_items]
-            .sort(
-              (a, b) =>
-                normalizeExpenseToMonthly(
-                  b.interruption_amount_cents,
-                  b.frequency,
-                ) -
-                normalizeExpenseToMonthly(
-                  a.interruption_amount_cents,
-                  a.frequency,
-                ),
-            )
-            .map((item) => {
-              if (remaining <= 0) return item;
-              const monthly = normalizeExpenseToMonthly(
-                item.interruption_amount_cents,
-                item.frequency,
-              );
-              const reduction = Math.min(monthly, remaining);
-              remaining -= reduction;
-              const factor = item.frequency === "annual" ? 12 : item.frequency === "quarterly" ? 3 : 1;
-              return {
-                ...item,
-                interruption_amount_cents: Math.max(
-                  0,
-                  item.interruption_amount_cents - reduction * factor,
-                ),
-              };
-            });
-        }
+        Object.assign(next, applyExpenseReduction(next, adjustments.expense_reduction_cents));
       }
       return next;
     });
@@ -707,7 +592,7 @@ export function HouseholdRunway({
       "Assumptions",
       "Easy-to-withdraw investments are included at 100%.",
       `Excluded assets: ${formatCents(baseline.excluded_assets_cents, locale, answers.currency)}`,
-      "Confirmed funds arrive only in the entered month; temporary income ends after its entered duration.",
+      "What-if changes stay out of the saved baseline until you explicitly apply them.",
       "",
       "Priority actions",
       ...reportActions.slice(0, 3).map((action, index) => `${index + 1}. ${action}`),
@@ -776,6 +661,7 @@ export function HouseholdRunway({
           saving={saving}
           onSave={savePlan}
           error={error}
+          snapshots={snapshots}
         />
       ) : (
         <InterviewShell
@@ -1315,14 +1201,14 @@ function ExpenseCategoryEditor({
     expense_category_modes: { ...answers.expense_category_modes, [category]: "subtotal" },
     completed_expense_categories: Array.from(new Set([...answers.completed_expense_categories, category])),
   });
-  const housingTypes =
+  const housingTypes: ExpenseItemType[] =
     answers.housing_tenure === "own"
       ? ["mortgage", "property_tax", "homeowners_insurance", "hoa", "home_maintenance"]
       : answers.housing_tenure === "rent"
         ? ["rent", "renters_insurance", "building_parking"]
         : ["other_housing"];
-  const types = category === "housing" ? housingTypes.map((type) => ({ type })) : EXPENSE_ITEM_TYPES[category];
-  const updateItem = (type: string, patch: Partial<ExpenseLineItem>) => {
+  const types: readonly ExpenseItemType[] = category === "housing" ? housingTypes : EXPENSE_ITEM_TYPES[category];
+  const updateItem = (type: ExpenseItemType, patch: Partial<ExpenseLineItem>) => {
     const existing = answers.expense_items.find((item) => item.category === category && item.type === type);
     const item: ExpenseLineItem = existing ?? {
       id: newId(`expense-${type}`),
@@ -1365,7 +1251,7 @@ function ExpenseCategoryEditor({
       ) : null}
       {category !== "housing" || answers.housing_tenure ? (
         <div className="mt-6 space-y-4">
-          {types.map(({ type }) => {
+          {types.map((type) => {
             const item = answers.expense_items.find((candidate) => candidate.category === category && candidate.type === type);
             return (
               <div key={type} className="grid gap-3 rounded-2xl border p-4 sm:grid-cols-[1fr_170px]">
@@ -1590,7 +1476,7 @@ function ToggleMoneyCard({
   description: string;
   badge?: string;
   enabled: boolean;
-  currency: string;
+  currency: HouseholdRunwayAnswers["currency"];
   value: number;
   onEnabled: (enabled: boolean) => void;
   onChange: (value: number) => void;
@@ -1618,31 +1504,6 @@ function ToggleMoneyCard({
   );
 }
 
-function MoneyField({
-  label,
-  value,
-  currency,
-  help,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  currency: string;
-  help?: string;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-2 flex items-center justify-between gap-3 text-sm font-medium"><span>{label}</span><span className="text-xs font-normal text-slate-400">{currency}</span></span>
-      <span className="flex h-12 items-center rounded-xl border bg-white px-3 focus-within:ring-2 focus-within:ring-emerald-500 dark:bg-transparent">
-        <span className="mr-2 text-slate-400">{currencySymbol(currency)}</span>
-        <input aria-label={label} inputMode="decimal" type="text" className="h-full min-w-0 flex-1 bg-transparent outline-none" value={dollars(value)} placeholder="0" onChange={(event) => { if (/^\d*(?:\.\d{0,2})?$/.test(event.target.value.replace(/,/g, ""))) onChange(cents(event.target.value)); }} />
-      </span>
-      {help ? <span className="mt-2 block text-xs leading-5 text-slate-500">{help}</span> : null}
-    </label>
-  );
-}
-
 function InfoBox({ children }: { children: ReactNode }) {
   return <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-500 dark:bg-white/5">{children}</div>;
 }
@@ -1658,226 +1519,4 @@ function ReviewRow({ label, value, status, t }: { label: string; value: string; 
 
 function SummaryValue({ label, value }: { label: string; value: string }) {
   return <div><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-lg font-semibold">{value}</p></div>;
-}
-
-function primarySentence(simulation: RunwaySimulation, t: ReturnType<typeof useTranslations>) {
-  if (simulation.sustainable) return t("result.sustainable");
-  if (!simulation.depletion_date) return t("result.primaryOver", { months: simulation.months_covered?.toFixed(0) ?? "120" });
-  return t("result.primary", { months: (simulation.months_covered ?? 0).toFixed(1), date: simulation.depletion_date });
-}
-
-function ResultExperience({
-  t,
-  locale,
-  answers,
-  scenarios,
-  scenario,
-  setScenario,
-  baseline,
-  preview,
-  currentLifestyle,
-  extreme,
-  adjustments,
-  setAdjustments,
-  actions,
-  onApply,
-  onReset,
-  onEdit,
-  onDownload,
-  isAuthenticated,
-  saved,
-  saving,
-  onSave,
-  error,
-}: {
-  t: ReturnType<typeof useTranslations>;
-  locale: string;
-  answers: HouseholdRunwayAnswers;
-  scenarios: RunwayScenario[];
-  scenario: RunwayScenario;
-  setScenario: (scenario: RunwayScenario) => void;
-  baseline: RunwaySimulation;
-  preview: RunwaySimulation;
-  currentLifestyle: RunwaySimulation;
-  extreme: RunwaySimulation;
-  adjustments: RunwayAdjustments;
-  setAdjustments: (adjustments: RunwayAdjustments) => void;
-  actions: ReturnType<typeof highestLeverageActions>;
-  onApply: () => void;
-  onReset: () => void;
-  onEdit: () => void;
-  onDownload: () => void;
-  isAuthenticated: boolean;
-  saved: boolean;
-  saving: boolean;
-  onSave: () => void;
-  error: string;
-}) {
-  const hasAdjustment = Object.values(adjustments).some((value) => value > 0);
-  const delta =
-    preview.months_covered !== null && baseline.months_covered !== null
-      ? preview.months_covered - baseline.months_covered
-      : null;
-  return (
-    <section className="mx-auto max-w-6xl px-5 py-12">
-      <p className="text-xs font-semibold uppercase tracking-[.22em] text-emerald-700">{t("result.eyebrow")}</p>
-      <p className="mt-4 text-slate-500">{t("result.scenarioLead", { scenario: t(`scenarios.${scenario}`) })}</p>
-      <h1 className="mt-2 max-w-5xl font-display text-3xl font-semibold tracking-[-.04em] sm:text-6xl">{primarySentence(preview, t)}</h1>
-      <div className="mt-5 flex flex-wrap items-center gap-3 text-sm">
-        <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">{t(`guidance.${preview.sustainable || (preview.months_covered ?? 0) >= 6 ? "stronger" : (preview.months_covered ?? 0) >= 3 ? "limited" : "urgent"}`)}</span>
-        <span className="text-slate-400">{t(`confidence.${preview.confidence}`)} · {t("result.model", { version: RUNWAY_MODEL_VERSION })}</span>
-        {hasAdjustment && delta !== null ? <span className="font-semibold text-emerald-700">{delta >= 0 ? "+" : ""}{delta.toFixed(1)} {t("whatIf.months")}</span> : null}
-      </div>
-      <div role="tablist" aria-label={t("result.scenarios")} className="mt-8 flex flex-wrap gap-2">
-        {scenarios.map((item) => <button key={item} role="tab" aria-selected={item === scenario} onClick={() => setScenario(item)} className={`rounded-full border px-4 py-2 text-sm font-medium ${item === scenario ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950" : "bg-white dark:bg-white/5"}`}>{t(`scenarios.${item}`)}</button>)}
-      </div>
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_.65fr]">
-        <BalanceChart t={t} locale={locale} currency={answers.currency} simulation={preview} />
-        <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
-          <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">{t("why.title")}</h2><button className="text-xs font-semibold text-emerald-700" onClick={onEdit}>{t("actions.review")}</button></div>
-          <div className="mt-5 space-y-4 text-sm">
-            <ResultLine label={t("why.cash")} value={formatCents(answers.available_cash.cents, locale, answers.currency)} />
-            <ResultLine label={t("why.investments")} value={formatCents(answers.assets.liquid_investments.cents, locale, answers.currency)} />
-            <ResultLine label={t("why.reducible")} value={formatCents(preview.reducible_expenses_cents, locale, answers.currency)} />
-            <ResultLine label={t("why.excluded")} value={formatCents(preview.excluded_assets_cents, locale, answers.currency)} />
-          </div>
-        </div>
-      </div>
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <ComparisonCard title={t("comparison.current")} simulation={currentLifestyle} t={t} />
-        <ComparisonCard title={t("comparison.interruption")} simulation={baseline} t={t} featured />
-        <ComparisonCard title={t("comparison.extreme")} simulation={extreme} t={t} />
-      </div>
-      <div className="mt-6 rounded-3xl border bg-white p-6 dark:bg-white/5 sm:p-8">
-        <h2 className="text-xl font-semibold">{t("whatIf.title")}</h2>
-        <p className="mt-1 text-sm text-slate-500">{t("whatIf.description")}</p>
-        <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          <MoneyField label={t("whatIf.reduceExpenses")} currency={answers.currency} value={adjustments.expense_reduction_cents} onChange={(value) => setAdjustments({ ...adjustments, expense_reduction_cents: Math.min(value, baseline.interruption_expenses_cents) })} />
-          <MoneyField label={t("whatIf.addCash")} currency={answers.currency} value={adjustments.added_cash_cents} onChange={(value) => setAdjustments({ ...adjustments, added_cash_cents: value })} />
-          <MoneyField label={t("whatIf.addIncome")} currency={answers.currency} value={adjustments.added_monthly_income_cents} onChange={(value) => setAdjustments({ ...adjustments, added_monthly_income_cents: value })} />
-          <MoneyField label={t("whatIf.expectedFunds")} help={t("whatIf.expectedFundsHelp")} currency={answers.currency} value={adjustments.expected_unconfirmed_funds_cents} onChange={(value) => setAdjustments({ ...adjustments, expected_unconfirmed_funds_cents: value })} />
-          <MoneyField label={t("whatIf.useIlliquid")} currency={answers.currency} value={adjustments.usable_illiquid_investments_cents} onChange={(value) => setAdjustments({ ...adjustments, usable_illiquid_investments_cents: Math.min(value, answers.assets.illiquid_investments.cents) })} />
-        </div>
-        <details className="mt-5 rounded-2xl border p-4">
-          <summary className="cursor-pointer font-semibold">{t("comparison.extreme")}</summary>
-          <p className="mt-2 text-xs leading-5 text-slate-500">{t("whatIf.retirementHelp")}</p>
-          <div className="mt-4 grid gap-5 md:grid-cols-2">
-            <MoneyField label={t("whatIf.useDeferred")} currency={answers.currency} value={adjustments.usable_retirement_tax_deferred_cents} onChange={(value) => setAdjustments({ ...adjustments, usable_retirement_tax_deferred_cents: Math.min(value, answers.assets.retirement_tax_deferred.cents) })} />
-            <MoneyField label={t("whatIf.useTaxFree")} currency={answers.currency} value={adjustments.usable_retirement_tax_free_cents} onChange={(value) => setAdjustments({ ...adjustments, usable_retirement_tax_free_cents: Math.min(value, answers.assets.retirement_tax_free.cents) })} />
-          </div>
-        </details>
-        <div className="mt-6 flex gap-2"><Button onClick={onApply}>{t("actions.apply")}</Button><Button variant="outline" onClick={onReset}><RefreshCcw />{t("actions.reset")}</Button></div>
-      </div>
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
-          <h2 className="font-semibold">{t("actionsPlan.title")}</h2>
-          <div className="mt-4 space-y-3 text-sm">
-            {actions.cashGapCents > 0 ? <ResultLine label={t("actionsPlan.cashTarget", { months: actions.targetMonths })} value={formatCents(actions.cashGapCents, locale, answers.currency)} /> : null}
-            {actions.largestReducibleCategory ? <ResultLine label={t("actionsPlan.largest")} value={`${t(`expenseCategories.${actions.largestReducibleCategory.category}`)} · ${formatCents(actions.largestReducibleCategory.reducible, locale, answers.currency)}`} /> : null}
-          </div>
-        </div>
-        <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
-          <h2 className="font-semibold">{t("save.title")}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">{t("save.description")}</p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Button variant="outline" onClick={onDownload}><Download />{t("actions.download")}</Button>
-            {isAuthenticated ? <Button onClick={onSave} disabled={saving || saved}>{saved ? t("save.saved") : saving ? t("save.saving") : t("save.button")}</Button> : <Button asChild onClick={() => trackRunwayEvent("registration_clicked", "result")}><Link href="/auth/sign-up?next=/finance/cushion">{t("save.createAccount")}</Link></Button>}
-          </div>
-          {error ? <p role="alert" className="mt-3 text-sm text-red-600">{error}</p> : null}
-        </div>
-      </div>
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
-          <h2 className="font-semibold">{t("regional.title")}</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-500">{t(`regionalActions.${answers.country}`)}</p>
-        </div>
-        <div className="rounded-3xl border bg-white p-6 dark:bg-white/5">
-          <h2 className="font-semibold">{t("precision.title")}</h2>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-500">
-            {answers.available_cash.confidence !== "confirmed" ? <li>{t("precision.cash")}</li> : null}
-            {answers.mine.take_home_source === "estimated" || answers.partner?.take_home_source === "estimated" ? <li>{t("precision.takeHome")}</li> : null}
-            {answers.expense_mode === "quick" ? <li>{t("precision.expenses")}</li> : null}
-            {preview.confidence === "complete" ? <li>{t("precision.complete")}</li> : null}
-          </ul>
-        </div>
-      </div>
-      <details className="mt-6 rounded-3xl border bg-white p-6 dark:bg-white/5"><summary className="cursor-pointer font-semibold">{t("method.title")}</summary><p className="mt-4 text-sm leading-6 text-slate-500">{t("method.formula")}</p><p className="mt-2 text-sm leading-6 text-slate-500">{t("method.excluded")}</p><p className="mt-2 text-xs text-slate-400">{t("method.disclaimer")}</p></details>
-    </section>
-  );
-}
-
-function BalanceChart({ t, locale, currency, simulation }: { t: ReturnType<typeof useTranslations>; locale: string; currency: HouseholdRunwayAnswers["currency"]; simulation: RunwaySimulation }) {
-  const desiredMonths = Math.max(12, Math.min(120, Math.ceil((simulation.months_covered ?? 12) + 1)));
-  const points = simulation.months.slice(0, desiredMonths);
-  while (points.length < desiredMonths) {
-    const month = points.length + 1;
-    points.push({ month, opening_balance_cents: 0, continuing_income_cents: simulation.continuing_monthly_income_cents, one_time_funds_cents: 0, essential_outflow_cents: simulation.interruption_expenses_cents, shortfall_cents: Math.max(0, simulation.interruption_expenses_cents - simulation.continuing_monthly_income_cents), closing_balance_cents: 0 });
-  }
-  const max = Math.max(1, simulation.starting_resources_cents, ...points.map((point) => point.opening_balance_cents));
-  const line = [{ month: 0, value: simulation.starting_resources_cents }, ...points.map((point) => ({ month: point.month, value: point.closing_balance_cents }))];
-  const width = 640;
-  const height = 280;
-  const margin = { left: 72, right: 16, top: 14, bottom: 38 };
-  const plotWidth = width - margin.left - margin.right;
-  const plotHeight = height - margin.top - margin.bottom;
-  const lastMonth = Math.max(1, line.at(-1)?.month ?? 1);
-  const x = (month: number) => margin.left + (month / lastMonth) * plotWidth;
-  const y = (value: number) => margin.top + plotHeight - (value / max) * plotHeight;
-  const path = line.map((point, index) => `${index ? "L" : "M"} ${x(point.month)} ${y(point.value)}`).join(" ");
-  const xTicks = Array.from(new Set([0, Math.round(lastMonth / 2), lastMonth]));
-  const yTicks = [0, Math.round(max / 2), max];
-  return (
-    <div className="rounded-3xl bg-[#0d2b20] p-6 text-white">
-      <div className="grid grid-cols-3 gap-3 text-center"><SummaryValue label={t("result.resources")} value={formatCents(simulation.starting_resources_cents, locale, currency)} /><SummaryValue label={t("result.income")} value={formatCents(simulation.continuing_monthly_income_cents, locale, currency)} /><SummaryValue label={t("result.expenses")} value={formatCents(simulation.interruption_expenses_cents, locale, currency)} /></div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="mt-5 h-64 w-full" role="img" aria-label={t("chart.aria")}>
-        {yTicks.map((tick) => <g key={tick}><line x1={margin.left} x2={width - margin.right} y1={y(tick)} y2={y(tick)} stroke="white" opacity=".14" /><text x={margin.left - 8} y={y(tick) + 4} textAnchor="end" fill="white" opacity=".72" fontSize="12">{formatCents(tick, locale, currency)}</text></g>)}
-        <line x1={margin.left} x2={margin.left} y1={margin.top} y2={margin.top + plotHeight} stroke="white" opacity=".45" />
-        <line x1={margin.left} x2={width - margin.right} y1={margin.top + plotHeight} y2={margin.top + plotHeight} stroke="white" opacity=".45" />
-        {xTicks.map((tick) => <g key={tick}><line x1={x(tick)} x2={x(tick)} y1={margin.top + plotHeight} y2={margin.top + plotHeight + 5} stroke="white" opacity=".6" /><text x={x(tick)} y={height - 10} textAnchor="middle" fill="white" opacity=".72" fontSize="12">{t("chart.monthTick", { month: tick })}</text></g>)}
-        <path d={`${path} L ${x(lastMonth)} ${margin.top + plotHeight} L ${margin.left} ${margin.top + plotHeight} Z`} fill="#34d399" opacity=".15" /><path d={path} fill="none" stroke="#34d399" strokeWidth="5" vectorEffect="non-scaling-stroke" />
-      </svg>
-      <details className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70"><summary className="cursor-pointer font-medium text-white">{t("chart.tableTitle")}</summary><div className="mt-3 max-h-48 overflow-auto"><table className="w-full text-left"><thead><tr><th>{t("chart.month")}</th><th>{t("chart.inflows")}</th><th>{t("chart.outflows")}</th><th>{t("chart.closing")}</th></tr></thead><tbody>{points.map((month) => <tr key={month.month} className="border-t border-white/10"><td className="py-2">{month.month}</td><td>{formatCents(month.continuing_income_cents + month.one_time_funds_cents, locale, currency)}</td><td>{formatCents(month.essential_outflow_cents, locale, currency)}</td><td>{formatCents(month.closing_balance_cents, locale, currency)}</td></tr>)}</tbody></table></div></details>
-    </div>
-  );
-}
-
-function ResultLine({ label, value }: { label: string; value: string }) {
-  return <div className="flex items-center justify-between gap-4"><span className="text-slate-500">{label}</span><span className="font-medium">{value}</span></div>;
-}
-
-function ComparisonCard({ title, simulation, t, featured = false }: { title: string; simulation: RunwaySimulation; t: ReturnType<typeof useTranslations>; featured?: boolean }) {
-  return <div className={`rounded-2xl border p-5 ${featured ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10" : "bg-white dark:bg-white/5"}`}><p className="text-sm text-slate-500">{title}</p><p className="mt-2 text-2xl font-semibold">{simulation.sustainable ? t("comparison.sustainable") : t("comparison.months", { months: (simulation.months_covered ?? 0).toFixed(1) })}</p></div>;
-}
-
-function attribution() {
-  if (typeof window === "undefined") return {};
-  const params = new URLSearchParams(window.location.search);
-  return {
-    video: params.get("video") ?? undefined,
-    campaign: params.get("campaign") ?? undefined,
-    cta: params.get("cta") ?? undefined,
-    landing_variant: params.get("variant") ?? undefined,
-    language: document.documentElement.lang,
-  };
-}
-
-function trackRunwayEvent(eventName: string, stepId?: string) {
-  if (typeof window === "undefined") return;
-  let sessionId = window.sessionStorage.getItem(RUNWAY_ANALYTICS_SESSION_KEY);
-  if (!sessionId) {
-    sessionId = crypto.randomUUID();
-    window.sessionStorage.setItem(RUNWAY_ANALYTICS_SESSION_KEY, sessionId);
-  }
-  void fetch("/api/finance/cushion/events", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action_id: crypto.randomUUID(),
-      session_id: sessionId,
-      event_name: eventName,
-      step_id: stepId,
-      locale: document.documentElement.lang,
-      attribution: attribution(),
-    }),
-  }).catch(() => undefined);
 }

@@ -105,7 +105,8 @@ const en = {
     credit_card_minimum: "Credit card minimums", student_loan: "Student loans", personal_loan: "Personal loans", other_debt: "Other minimum debt payments", parent_support: "Parent support", child_support: "Child support", other_support: "Other support", other_commitment: "Other required commitment",
   },
   result: { model: "Monthly cash-flow model v{version}" },
-  chart: { monthTick: "Month {month}" },
+  history: { title: "Runway history", description: "See how your saved runway has changed over time." },
+  chart: { monthTick: "Month {month}", checkpointTableTitle: "Accessible projection checkpoints", checkpointHelp: "Very long runways are shown as selected month checkpoints; the final row is the estimated depletion month." },
   whatIf: { useIlliquid: "Usable hard-to-withdraw investments", useDeferred: "Usable tax-deferred retirement", useTaxFree: "Usable tax-free-qualified retirement", appliedIncome: "Additional dependable income", expectedFundsHelp: "Preview only. It cannot be applied to the baseline until the amount and arrival are confirmed.", retirementHelp: "Extreme mode uses only the amount you say would actually be available. Consider taxes, penalties, account rules, and timing before entering it." },
   regional: { title: "Local first steps" },
   precision: { complete: "Your core inputs are confirmed. Revisit them whenever income, cash, or commitments change." },
@@ -114,6 +115,8 @@ const en = {
 
 const zh = {
   ...en,
+  chart: { ...en.chart, checkpointTableTitle: "可访问的预测检查点", checkpointHelp: "对于很长的跑道，这里显示选定月份的检查点；最后一行是预计耗尽月份。" },
+  history: { title: "跑道历史", description: "查看已保存的家庭跑道如何随时间变化。" },
   answers: { yes: "有", no: "没有" },
   landing: { ...en.landing, eyebrow: "私密的 90 秒家庭压力测试", title: "如果收入中断，你的家庭还能撑多久？", description: "模拟收入中断，查看可动用资金何时耗尽，并找出最能延长缓冲期的改变。", cta: "计算我的家庭跑道", resume: "继续上次检查", viewResult: "查看我的结果", startOver: "重新开始", startNew: "开始新的检查", startOverConfirm: "开始新的检查？保存在此设备上的答案将被清除。", fast: "核心问题约 90 秒", noAccount: "无需注册", local: "选择保存前，答案只留在此浏览器", exampleAria: "三万美元按每月六千美元支出可维持五个月的示意余额曲线", example: "示意案例", exampleScenario: "假设家庭收入今天停止", explainable: "没有评分，也没有黑箱", fiveMonths: "5 个月", exampleMath: "$30,000 可用资金 ÷ $6,000 必要支出", exampleChart: "逐月预测清楚显示余额降至零。", cash: "可动用资金", costs: "必要支出", income: "持续收入", benefitRunway: "看清跑道", benefitRunwayBody: "查看适用情景、可覆盖月数和预计耗尽日期。", benefitWhy: "理解原因", benefitWhyBody: "所有纳入的收入、支出和资产都清楚可解释。", benefitAction: "找到下一步", benefitActionBody: "测试现实改变，并准确看到每项能增加多少时间。", disclaimer: "仅为教育性规划估算，不构成税务、法律、投资、福利或财务建议。" },
   steps: { ...en.steps, reductions: { eyebrow: "11 · 中断计划", title: "哪些支出可以现实地改变？", description: "所有项目默认保持不变。只调整确实能削减或暂停的支出。" }, assets: { eyebrow: "09 · 其他资源", title: "家庭还有哪些资源？", description: "按真实可用性分类；退休金和房屋净值不会被悄悄当成现金。" }, expenses: { eyebrow: "10 · 每月承诺", title: "建立家庭必要月支出", description: "使用分类引导制定更有用的计划；如果已知道总额，也可快速填写。" } },
@@ -135,6 +138,8 @@ const zh = {
 
 const zhTW = {
   ...zh,
+  chart: { ...zh.chart, checkpointTableTitle: "可存取的預測檢查點", checkpointHelp: "對於很長的跑道，這裡顯示選定月份的檢查點；最後一行是預計耗盡月份。" },
+  history: { title: "跑道歷史", description: "查看已儲存的家庭跑道如何隨時間變化。" },
   answers: { yes: "有", no: "沒有" },
   landing: { ...zh.landing, eyebrow: "私密的 90 秒家庭壓力測試", title: "如果收入中斷，你的家庭還能撐多久？", description: "模擬收入中斷，查看可動用資金何時耗盡，並找出最能延長緩衝期的改變。", cta: "計算我的家庭跑道", resume: "繼續上次檢查", viewResult: "查看我的結果", startOver: "重新開始", startNew: "開始新的檢查", startOverConfirm: "開始新的檢查？儲存在此裝置上的答案將被清除。", fast: "核心問題約 90 秒", noAccount: "無需註冊", local: "選擇儲存前，答案只留在此瀏覽器", explainable: "沒有評分，也沒有黑箱", fiveMonths: "5 個月", exampleChart: "逐月預測清楚顯示餘額降至零。", cash: "可動用資金", costs: "必要支出", income: "持續收入", benefitRunway: "看清跑道", benefitRunwayBody: "查看適用情境、可涵蓋月數和預計耗盡日期。", benefitWhy: "理解原因", benefitWhyBody: "所有納入的收入、支出和資產都清楚可解釋。", benefitAction: "找到下一步", benefitActionBody: "測試現實改變，並準確看到每項能增加多少時間。", disclaimer: "僅為教育性規劃估算，不構成稅務、法律、投資、福利或財務建議。" },
   fields: { selectRegion: "選擇州、省或地區" },

@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
-import { getFinanceCushion } from "@/lib/finance/repository";
+import {
+  getFinanceCushion,
+  getRunwaySnapshots,
+} from "@/lib/finance/repository";
 import {
   createDefaultRunwayAnswers,
   type HouseholdRunwayAnswers,
@@ -68,6 +71,7 @@ export default async function FinanceCushionPage() {
         initialAnswers={null}
         isAuthenticated={false}
         hasSavedPlan={false}
+        initialSnapshots={[]}
       />
     );
   }
@@ -75,12 +79,18 @@ export default async function FinanceCushionPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const cushion = user ? await getFinanceCushion(supabase, user.id) : null;
+  const [cushion, snapshots] = user
+    ? await Promise.all([
+        getFinanceCushion(supabase, user.id),
+        getRunwaySnapshots(supabase, user.id),
+      ])
+    : [null, []];
   return (
     <HouseholdRunway
       initialAnswers={migrateLegacy(cushion)}
       isAuthenticated={Boolean(user)}
       hasSavedPlan={Boolean(cushion)}
+      initialSnapshots={snapshots}
     />
   );
 }
