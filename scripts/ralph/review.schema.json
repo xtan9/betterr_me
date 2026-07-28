@@ -17,7 +17,19 @@
     },
     "blockerKind": {
       "type": "string",
-      "enum": ["none", "code", "requirements", "infrastructure", "safety"]
+      "enum": [
+        "none",
+        "code",
+        "requirements",
+        "infrastructure",
+        "security",
+        "safety"
+      ]
+    },
+    "evidenceReviewed": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
     },
     "summary": {
       "type": "string"
@@ -28,6 +40,7 @@
     "blockingFindings",
     "repairable",
     "blockerKind",
+    "evidenceReviewed",
     "summary"
   ],
   "additionalProperties": false

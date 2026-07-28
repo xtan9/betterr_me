@@ -18,6 +18,7 @@ import {
   evaluateIteration,
   findNewTypeScriptDiagnostics,
   isIssueActive,
+  independentReviewClassificationContract,
   neutralizeClosingKeywords,
   preserveExternalFailureKind,
   selectNextLiveIssue,
@@ -32,6 +33,7 @@ import {
   testVerificationFailureKind,
   transitionIssue,
   validateQueueState,
+  vitestVerificationArguments,
   workerResultFailureKind,
 } from "../../scripts/ralph/queue.mjs";
 import {
@@ -406,6 +408,8 @@ describe("Ralph durable state and policy", () => {
     expect(shouldParkIssueFailure("typecheck")).toBe(true);
     expect(shouldParkIssueFailure("review")).toBe(true);
     expect(shouldParkIssueFailure("review-nonrepairable")).toBe(true);
+    expect(shouldParkIssueFailure("review-security-nonrepairable")).toBe(true);
+    expect(shouldParkIssueFailure("review-safety")).toBe(true);
     expect(shouldParkIssueFailure("ambiguous")).toBe(true);
     expect(shouldParkIssueFailure("worker-blocked")).toBe(true);
     expect(shouldParkIssueFailure("command")).toBe(false);
@@ -448,15 +452,36 @@ describe("Ralph durable state and policy", () => {
       fs.readFileSync(path.resolve("scripts/ralph/review.schema.json"), "utf8"),
     );
 
-    expect(schema.required).toContain("blockerKind");
+    expect(schema.required).toEqual([
+      "status",
+      "blockingFindings",
+      "repairable",
+      "blockerKind",
+      "evidenceReviewed",
+      "summary",
+    ]);
+    expect(schema.properties.evidenceReviewed).toEqual({
+      type: "array",
+      items: { type: "string", minLength: 1 },
+      minItems: 1,
+    });
     expect(schema.properties.blockerKind.enum).toEqual([
       "none",
       "code",
       "requirements",
       "infrastructure",
+      "security",
       "safety",
     ]);
     expect(schema.allOf).toBeUndefined();
+  });
+
+  it("requires evidence before a reviewer can call work unrepairable", () => {
+    const contract = independentReviewClassificationContract();
+
+    expect(contract).toBe(`Before classifying a requirement as ambiguous or a finding as unrepairable, search the repository's authoritative design, policy, and domain documentation, including applicable AGENTS.md instructions and docs linked from them. A detail omitted from the issue is not ambiguous when established repository policy resolves it.
+List every issue, design, policy, and implementation source consulted in evidenceReviewed. For status=findings with blockerKind=requirements or repairable=false, cite the exact repository paths and the unresolved decision in blockingFindings and summary. Passing reviews are exempt because they have no unresolved decision and must keep blockingFindings empty. Do not use repairable=false merely because the issue itself omits a detail, because the first repair is not obvious, or because the defect is security-sensitive.
+Reserve repairable=false for a genuine unresolved product decision with materially different valid outcomes, forbidden scope, secrets or controller-integrity risk, missing infrastructure, or a repair that necessarily exceeds the approved ticket scope. A concrete defect with an established repository policy is repairable.`);
   });
 
   it("labels a failed-attempt pull request as draft recovery work", () => {
@@ -648,8 +673,9 @@ describe("Ralph durable state and policy", () => {
     expect(shouldRepairFailure("tests", 0, 2)).toBe(true);
     expect(shouldRepairFailure("typecheck", 1, 2)).toBe(true);
     expect(shouldRepairFailure("review", 2, 2)).toBe(false);
+    expect(shouldRepairFailure("review-security", 2, 5)).toBe(true);
+    expect(shouldRepairFailure("review-security", 5, 5)).toBe(false);
     expect(shouldRepairFailure("review-safety", 2, 5)).toBe(true);
-    expect(shouldRepairFailure("review-safety", 5, 5)).toBe(false);
     expect(shouldRepairFailure("ambiguous", 0, 2)).toBe(false);
     expect(shouldRepairFailure("unsafe-scope", 0, 2)).toBe(false);
     expect(shouldRepairFailure("network", 0, 2)).toBe(false);
@@ -690,6 +716,15 @@ describe("Ralph durable state and policy", () => {
     );
   });
 
+  it("bounds full-suite Vitest concurrency for stable unattended verification", () => {
+    expect(vitestVerificationArguments("/deps/vitest/vitest.mjs")).toEqual([
+      "/deps/vitest/vitest.mjs",
+      "run",
+      "--reporter=json",
+      "--maxWorkers=4",
+    ]);
+  });
+
   it("repairs only review findings explicitly classified as safe to repair", () => {
     expect(reviewFailureKind({ blockerKind: "code", repairable: true })).toBe(
       "review",
@@ -704,12 +739,19 @@ describe("Ralph durable state and policy", () => {
       reviewFailureKind({ blockerKind: "infrastructure", repairable: false }),
     ).toBe("infrastructure");
     expect(
-      reviewFailureKind({ blockerKind: "safety", repairable: false }),
-    ).toBe("safety");
+      reviewFailureKind({ blockerKind: "security", repairable: false }),
+    ).toBe("review-security-nonrepairable");
     expect(
-      reviewFailureKind({ blockerKind: "safety", repairable: true }),
-    ).toBe("review-safety");
-    expect(shouldParkIssueFailure("review-safety")).toBe(false);
+      reviewFailureKind({ blockerKind: "security", repairable: true }),
+    ).toBe("review-security");
+    expect(reviewFailureKind({ blockerKind: "safety", repairable: false })).toBe(
+      "safety",
+    );
+    expect(reviewFailureKind({ blockerKind: "safety", repairable: true })).toBe(
+      "safety",
+    );
+    expect(shouldParkIssueFailure("review-security-nonrepairable")).toBe(true);
+    expect(shouldParkIssueFailure("safety")).toBe(false);
     expect(reviewFailureKind({})).toBe("safety");
   });
 

@@ -117,6 +117,13 @@ dependency-blocking until a human repairs and merges it. Content that fails the
 controller's secret, path, symlink, or history checks is never published; its
 local checkout is retained and the whole run stops.
 
+Independent-review product-security findings are ticket-local: repairable
+findings use the bounded repair loop, while non-repairable findings may be
+published only as a blocked draft after the controller's content and path
+safety checks pass. The queue then continues with an unrelated ready issue.
+Safety findings—including secret detection, forbidden scope or paths, unsafe
+links or history, and controller-integrity failures—still stop the entire run.
+
 ## Recovery
 
 Durable state, prompts, verification logs, PR metadata, and summaries live
