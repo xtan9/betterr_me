@@ -95,9 +95,9 @@ Only transient network and rate-limit failures are retried, with a bounded
 attempt count and backoff. Tests, review findings, ambiguity, conflicts, and
 policy denials are never retried automatically.
 
-The claim lease must be more than one hour longer than the longest configured
-stage timeout. Invalid combinations fail during argument validation, before a
-GitHub write.
+The claim lease must be more than one hour longer than the longest cumulative
+span between ownership checks. Invalid combinations fail during argument
+validation, before a GitHub write.
 
 ## Kill switch
 

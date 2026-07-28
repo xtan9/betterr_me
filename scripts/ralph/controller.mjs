@@ -98,15 +98,14 @@ function parseArguments(argv) {
   if (options.issueLimit > 100) {
     throw new Error("issueLimit cannot exceed 100");
   }
-  const longestStageSeconds = Math.max(
-    options.implementationTimeoutSeconds,
-    options.verificationTimeoutSeconds,
-    options.reviewTimeoutSeconds,
-    options.checkTimeoutSeconds,
+  const longestOwnershipSpanSeconds = Math.max(
+    options.implementationTimeoutSeconds + options.verificationTimeoutSeconds,
+    2 * options.verificationTimeoutSeconds + options.reviewTimeoutSeconds,
+    options.checkTimeoutSeconds + options.reviewTimeoutSeconds,
   );
-  if (options.claimLeaseHours * 3600 <= longestStageSeconds + 3600) {
+  if (options.claimLeaseHours * 3600 <= longestOwnershipSpanSeconds + 3600) {
     throw new Error(
-      "claim lease must exceed the longest stage timeout by more than one hour",
+      "claim lease must exceed the longest ownership span by more than one hour",
     );
   }
   return { command, options };
@@ -761,7 +760,11 @@ async function getLiveIssue(issueNumber, controllerOptions) {
   };
 }
 
-async function reconcileRemoteCompletions(state, controllerOptions) {
+async function reconcileRemoteCompletions(
+  state,
+  controllerOptions,
+  persist = true,
+) {
   let fetchedMain = false;
   for (const issue of queue) {
     if (state.completed.includes(issue.issueNumber)) continue;
@@ -825,13 +828,27 @@ async function reconcileRemoteCompletions(state, controllerOptions) {
     ]);
     status(`Rebuilding completed state for issue #${issue.issueNumber}.`);
     const completed = [...state.completed, issue.issueNumber];
-    state = moveIssue({ ...state, completed }, issue.issueNumber, "merged", {
+    const mergedPatch = {
       prNumber: merged.number,
       prUrl: merged.url,
       mergeCommit: merged.mergeCommit.oid,
       mergedAt: merged.mergedAt,
       stopReason: null,
-    });
+    };
+    state = persist
+      ? moveIssue(
+          { ...state, completed },
+          issue.issueNumber,
+          "merged",
+          mergedPatch,
+        )
+      : transitionIssue(
+          { ...state, completed },
+          issue.issueNumber,
+          "merged",
+          mergedPatch,
+          new Date().toISOString(),
+        );
   }
   return state;
 }
@@ -1309,6 +1326,12 @@ async function implementIssue(state, issue, controllerOptions) {
       stopReason: result.summary,
     });
   }
+  if (!result.testsPassed || !result.reviewCompleted) {
+    throw Object.assign(
+      new Error("worker did not complete its required tests and self-review"),
+      { stopReason: result.summary },
+    );
+  }
   if (!changes) {
     throw new Error("worker reported completion without an uncommitted diff");
   }
@@ -1468,7 +1491,8 @@ async function commitAndPush(state, issue, controllerOptions) {
     const commitSubject = (
       await git(["-C", worktreePath, "show", "-s", "--format=%s", commit])
     ).stdout.trim();
-    if (!commitSubject.includes(`#${number}`)) {
+    const issueReference = new RegExp(`(^|\\D)#${number}(?!\\d)`);
+    if (!issueReference.test(commitSubject)) {
       throw new Error("implementation commit subject does not reference the issue");
     }
     const count = Number(
@@ -2078,9 +2102,10 @@ async function processOne(state, actor, controllerOptions) {
 async function dryRun(controllerOptions) {
   await preflight(controllerOptions);
   const actor = await getActor(controllerOptions);
-  const state = fs.existsSync(statePath)
+  let state = fs.existsSync(statePath)
     ? loadState("DryRun", false)
     : initialState("DryRun");
+  state = await reconcileRemoteCompletions(state, controllerOptions, false);
   const selection = await selectIssue(state, actor, controllerOptions);
   if (selection.status === "selected" && selection.recovering) {
     await assertClaimOwnership(
