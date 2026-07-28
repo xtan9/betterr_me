@@ -1,5 +1,3 @@
-import crypto from "node:crypto";
-
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -10,6 +8,8 @@ import {
   REFRESH_TOKEN_EXPIRY_DAYS,
 } from "@/lib/mcp/refresh-token";
 import { signMcpToken } from "@/lib/mcp/token";
+import { createAuthorizationCodeExchanger } from "@/lib/oauth/authorization-code";
+import { createSupabaseAuthorizationCodeStore } from "@/lib/oauth/supabase-authorization-code-store";
 
 
 
@@ -132,13 +132,16 @@ async function handleRefreshToken(
   const newExpiresAt = new Date(
     Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
+  const clientId = storedToken.client_id || storedToken.user_id;
 
   // Insert new token first (safer — if this fails, old token still valid)
   const { error: insertError } = await serviceClient
     .from("oauth_refresh_tokens")
     .insert({
       token_hash: newTokenHash,
+      client_id: clientId,
       user_id: storedToken.user_id,
+      scopes: storedToken.scopes,
       expires_at: newExpiresAt,
     });
 
@@ -171,7 +174,11 @@ async function handleRefreshToken(
   }
 
   // --- Issue new access token ---
-  const accessToken = await signMcpToken(storedToken.user_id);
+  const accessToken = await signMcpToken(
+    storedToken.user_id,
+    clientId,
+    storedToken.scopes,
+  );
 
   // --- Opportunistic cleanup ---
   await cleanupExpiredTokens(serviceClient);
@@ -181,6 +188,7 @@ async function handleRefreshToken(
     token_type: "bearer",
     expires_in: 3600,
     refresh_token: newRawToken,
+    scope: storedToken.scopes.join(" "),
   });
 }
 
@@ -195,7 +203,7 @@ export async function POST(request: NextRequest) {
       return oauthError("invalid_request", "Could not parse request body");
     }
 
-    const { grant_type, code, code_verifier, redirect_uri } = body;
+    const { grant_type, code, code_verifier, redirect_uri, client_id } = body;
 
     // --- Validate grant_type ---
 
@@ -229,82 +237,54 @@ export async function POST(request: NextRequest) {
       return oauthError("invalid_request", "redirect_uri is required");
     }
 
-    // --- Look up authorization code ---
-
-    const codeHash = crypto
-      .createHash("sha256")
-      .update(code)
-      .digest("hex");
-
-    // Atomically claim the code (prevents TOCTOU race condition).
-    // UPDATE ... WHERE used = false returns the row only if unclaimed.
-    const { data: storedCode, error: claimError } = await serviceClient
-      .from("oauth_codes")
-      .update({ used: true })
-      .eq("code_hash", codeHash)
-      .eq("used", false)
-      .select("*")
-      .single();
-
-    if (claimError || !storedCode) {
-      return oauthError("invalid_grant", "Authorization code not found or already used");
+    if (!client_id) {
+      return oauthError("invalid_request", "client_id is required");
     }
 
-    // --- Validate code ---
-
-    if (new Date(storedCode.expires_at) < new Date()) {
-      return oauthError("invalid_grant", "Authorization code expired");
+    const exchanger = createAuthorizationCodeExchanger({
+      store: createSupabaseAuthorizationCodeStore(serviceClient),
+      issueCredentials: async ({ clientId, userId, scopes }) => {
+        const accessToken = await signMcpToken(userId, clientId, scopes);
+        const rawRefreshToken = generateRefreshToken();
+        const refreshTokenHash = hashToken(rawRefreshToken);
+        const refreshExpiresAt = new Date(
+          Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+        ).toISOString();
+        const { error } = await serviceClient
+          .from("oauth_refresh_tokens")
+          .insert({
+            token_hash: refreshTokenHash,
+            client_id: clientId,
+            user_id: userId,
+            scopes,
+            expires_at: refreshExpiresAt,
+          });
+        if (error) throw new Error("Failed to issue refresh token", { cause: error });
+        await cleanupExpiredTokens(serviceClient);
+        return {
+          accessToken,
+          tokenType: "bearer" as const,
+          expiresIn: 3600,
+          refreshToken: rawRefreshToken,
+          scope: scopes.join(" "),
+        };
+      },
+    });
+    const result = await exchanger.exchange({
+      code,
+      clientId: client_id,
+      redirectUri: redirect_uri,
+      codeVerifier: code_verifier,
+    });
+    if (!result.ok) {
+      return oauthError("invalid_grant", result.error);
     }
-
-    if (storedCode.redirect_uri !== redirect_uri) {
-      return oauthError("invalid_grant", "redirect_uri mismatch");
-    }
-
-    // --- PKCE verification ---
-
-    const expectedChallenge = crypto
-      .createHash("sha256")
-      .update(code_verifier)
-      .digest("base64url");
-
-    if (expectedChallenge !== storedCode.code_challenge) {
-      return oauthError("invalid_grant", "PKCE verification failed");
-    }
-
-    // --- Issue access token ---
-
-    const accessToken = await signMcpToken(storedCode.user_id);
-
-    // --- Issue refresh token ---
-    const rawRefreshToken = generateRefreshToken();
-    const refreshTokenHash = hashToken(rawRefreshToken);
-    const refreshExpiresAt = new Date(
-      Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
-    ).toISOString();
-
-    const { error: refreshInsertError } = await serviceClient
-      .from("oauth_refresh_tokens")
-      .insert({
-        token_hash: refreshTokenHash,
-        user_id: storedCode.user_id,
-        expires_at: refreshExpiresAt,
-      });
-
-    if (refreshInsertError) {
-      log.error("[oauth] Failed to store refresh token", refreshInsertError, {
-        userId: storedCode.user_id,
-      });
-      return oauthError("server_error", "Failed to issue refresh token", 500);
-    }
-
-    // --- Opportunistic cleanup of old tokens ---
-    await cleanupExpiredTokens(serviceClient);
-
     return NextResponse.json({
-      access_token: accessToken,
-      token_type: "bearer",
-      expires_in: 3600,
-      refresh_token: rawRefreshToken,
+      access_token: result.credentials.accessToken,
+      token_type: result.credentials.tokenType,
+      expires_in: result.credentials.expiresIn,
+      refresh_token: result.credentials.refreshToken,
+      scope: result.credentials.scope,
     });
   } catch (error) {
     log.error("POST /api/oauth/token error", error);
