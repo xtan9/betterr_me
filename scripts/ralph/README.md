@@ -34,7 +34,10 @@ a PR for human review.
 - WSL2 Ubuntu must contain Linux Node 24 and Codex 0.145.0, with Codex reading
   the existing Windows login through `CODEX_HOME=/mnt/c/Users/steve/.codex`.
 - A Linux dependency tree matching `pnpm-lock.yaml` must exist read-only at
-  `/var/lib/betterr-me-ralph/deps-source/node_modules`.
+  `/var/lib/betterr-me-ralph/deps-source/node_modules`, with its root-owned
+  content fingerprint at `/var/lib/betterr-me-ralph/deps.content.sha256`.
+- Immutable copies of the `implement`, `tdd`, and `code-review` skills must
+  exist below `/var/lib/betterr-me-ralph/worker-home/.agents/skills`.
 - The authenticated GitHub account must be allowed to assign issues, push
   branches, create PRs, read branch protection, and merge normally.
 
@@ -91,6 +94,10 @@ Implementation, verification, review, and required-check waits are bounded.
 Only transient network and rate-limit failures are retried, with a bounded
 attempt count and backoff. Tests, review findings, ambiguity, conflicts, and
 policy denials are never retried automatically.
+
+The claim lease must be more than one hour longer than the longest configured
+stage timeout. Invalid combinations fail during argument validation, before a
+GitHub write.
 
 ## Kill switch
 
