@@ -302,6 +302,18 @@ export function shouldRepairFailure(
   );
 }
 
+export function testVerificationFailureKind(failureKind) {
+  return ["timeout", "kill-switch", "network", "rate-limit"].includes(
+    failureKind,
+  )
+    ? failureKind
+    : "tests";
+}
+
+export function reviewFailureKind(review) {
+  return review?.repairable === true ? "review" : "review-nonrepairable";
+}
+
 export function buildOvernightSummary(state) {
   const summary = {
     runId: state.runId,

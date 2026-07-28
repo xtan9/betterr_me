@@ -16,8 +16,10 @@ import {
   selectNextLiveIssueStatus,
   selectNextIssue,
   selectRecoveryBase,
+  reviewFailureKind,
   shouldRepairFailure,
   shouldRetry,
+  testVerificationFailureKind,
   transitionIssue,
   validateQueueState,
 } from "../../scripts/ralph/queue.mjs";
@@ -396,6 +398,20 @@ describe("Ralph durable state and policy", () => {
     expect(shouldRepairFailure("ambiguous", 0, 2)).toBe(false);
     expect(shouldRepairFailure("unsafe-scope", 0, 2)).toBe(false);
     expect(shouldRepairFailure("network", 0, 2)).toBe(false);
+  });
+
+  it("maps ordinary test exits to repairable findings without hiding interruptions", () => {
+    expect(testVerificationFailureKind("command")).toBe("tests");
+    expect(testVerificationFailureKind(undefined)).toBe("tests");
+    expect(testVerificationFailureKind("timeout")).toBe("timeout");
+    expect(testVerificationFailureKind("kill-switch")).toBe("kill-switch");
+    expect(testVerificationFailureKind("network")).toBe("network");
+  });
+
+  it("repairs only review findings explicitly classified as safe to repair", () => {
+    expect(reviewFailureKind({ repairable: true })).toBe("review");
+    expect(reviewFailureKind({ repairable: false })).toBe("review-nonrepairable");
+    expect(reviewFailureKind({})).toBe("review-nonrepairable");
   });
 
   it("builds a durable final summary from issue states", () => {

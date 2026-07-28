@@ -12,10 +12,13 @@
         "type": "string"
       }
     },
+    "repairable": {
+      "type": "boolean"
+    },
     "summary": {
       "type": "string"
     }
   },
-  "required": ["status", "blockingFindings", "summary"],
+  "required": ["status", "blockingFindings", "repairable", "summary"],
   "additionalProperties": false
 }
