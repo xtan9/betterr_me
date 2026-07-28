@@ -20,13 +20,15 @@ reflogs, unrelated history, or writable metadata.
 - `DryRun` performs authentication and live eligibility checks but makes no
   issue, branch, worktree, PR, or merge change.
 - `PrOnly` is the default. It pushes each successful issue to a linked PR,
-  parks that issue for human review, and continues with another unrelated issue
-  on the ready dependency frontier. Dependents remain blocked until their PR is
-  actually merged.
+  waits for required checks, repairs check failures within the shared bounded
+  repair budget, then parks the green PR for human review and continues with
+  another unrelated issue on the ready dependency frontier. Dependents remain
+  blocked until their PR is actually merged.
 - `AutoMerge` waits for required GitHub checks and required review approvals.
   It merges without bypass only when the diff is classified low risk, the PR is
-  conflict-free, and every gate passes. High-risk work is parked at a PR while
-  the single worker continues through unrelated ready issues.
+  conflict-free, and every gate passes. High-risk work must still pass required
+  checks (including bounded check-failure repairs) before it is parked for a
+  human merge while the single worker continues through unrelated ready issues.
 
 Automatic merging uses a narrow allowlist. Only pure calendar/reminder domain
 modules, their validations, and their focused tests may qualify as low risk.
@@ -108,8 +110,12 @@ claim race deterministically.
 
 The active worker uses one reusable `worktrees/current` checkout. Before each
 new issue the controller fetches and branches from the latest `origin/main`.
-Once a commit is safely published to a PR, or once its PR is merged, the local
-worktree, issue branch, and sanitized Git view are removed. A repair-exhausted
+Before publishing, the controller synthesizes the candidate merge with the
+latest `origin/main`, rejects conflicts, and checks the merged tree for duplicate
+migration timestamps. The issue checkout remains available while required PR
+checks run so a failed check can use the same bounded repair loop. Once a PR is
+green and parked for a human, or once it is merged, the local worktree, issue
+branch, and sanitized Git view are removed. A repair-exhausted
 issue with a safe diff
 is committed and pushed to a clearly marked draft failed-attempt PR before the
 local checkout is removed. The draft records the failed gate and remains
@@ -140,14 +146,16 @@ merged SHA instead of starting duplicate work.
 
 Implementation, verification, review, and required-check waits are bounded.
 Transient network and rate-limit failures use a bounded retry count and
-backoff. Concrete test, TypeScript, and independent-review findings may use up
-to `MaximumRepairAttempts` genuinely fresh, isolated repair sessions before
-the issue fails. Every repair is re-run through the complete verification and
-review gates. Ambiguity, unsafe scope, conflicts, ownership failures, and
-policy denials are never repaired or retried automatically. A failed or
-human-gated issue does not unblock its dependents, but it also does not prevent
-the controller from selecting an unrelated ready issue. Controller,
-infrastructure, timeout, and kill-switch failures still stop the whole run.
+backoff. Concrete test, TypeScript, independent-review, required-PR-check, and
+full-suite timeout findings may use up to `MaximumRepairAttempts` genuinely
+fresh, isolated repair sessions before the issue is parked. Every repair is
+re-run through the complete local verification, independent review, and PR-check
+gates. The default full-suite timeout is 3600 seconds. Ambiguity, unsafe scope,
+conflicts, ownership failures, and policy denials are never repaired or retried
+automatically. A failed or human-gated issue does not unblock its dependents,
+but it also does not prevent the controller from selecting an unrelated ready
+issue. Controller, infrastructure, non-test timeout, and kill-switch failures
+still stop the whole run.
 
 The claim lease must be more than one hour longer than the longest cumulative
 span between ownership checks. Invalid combinations fail during argument

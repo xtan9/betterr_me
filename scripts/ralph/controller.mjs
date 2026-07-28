@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  DEFAULT_VERIFICATION_TIMEOUT_SECONDS,
   analyzeTypeScriptRun,
   buildFailedAttemptPullRequestBody,
   buildOvernightSummary,
@@ -16,6 +17,7 @@ import {
   externalRepairDisposition,
   externalVerificationReceiptMatches,
   failureDisposition,
+  findDuplicateMigrationPrefixes,
   findNewTypeScriptDiagnostics,
   frameInertData,
   independentReviewClassificationContract,
@@ -24,6 +26,7 @@ import {
   issueStageAtLeast,
   neutralizeClosingKeywords,
   preserveExternalFailureKind,
+  pullRequestCheckDisposition,
   reviewFailureKind,
   selectNextLiveIssueStatus,
   selectRecoveryBase,
@@ -103,7 +106,7 @@ function parseArguments(argv) {
     mode: "PrOnly",
     issueLimit: 24,
     implementationTimeoutSeconds: 7200,
-    verificationTimeoutSeconds: 900,
+    verificationTimeoutSeconds: DEFAULT_VERIFICATION_TIMEOUT_SECONDS,
     reviewTimeoutSeconds: 1800,
     checkTimeoutSeconds: 3600,
     pollSeconds: 30,
@@ -1542,7 +1545,14 @@ function assertWorkerCompletion(result, issueNumber, workerLabel) {
   }
 }
 
-async function repairIssue(state, issue, failure, attempt, controllerOptions) {
+async function repairIssue(
+  state,
+  issue,
+  failure,
+  attempt,
+  controllerOptions,
+  { stage = "implemented", expectedHead } = {},
+) {
   const number = issue.issueNumber;
   let issueState = state.issues[String(number)];
   const worktreePath = issueState.worktreePath;
@@ -1554,20 +1564,30 @@ async function repairIssue(state, issue, failure, attempt, controllerOptions) {
   );
   const logPrefix = path.join(issueLogRoot, `${timestamp}-repair-${attempt}`);
 
-  state = moveIssue(state, number, "implemented", {
+  const repairBase = expectedHead ?? issueState.baseSha;
+  const refreshWorkerGitView =
+    Boolean(expectedHead) && issueState.prRepairBaseSha !== repairBase;
+  state = moveIssue(state, number, stage, {
     repairAttempts: attempt,
     lastRepairFailureKind: failure.failureKind,
+    lastRepairStopReason: failure.stopReason ?? failure.message,
     lastRepairStartedAt: new Date().toISOString(),
+    ...(expectedHead
+      ? { prRepairBaseSha: repairBase, prRepairWorkerCompletedAt: null }
+      : {}),
   });
   issueState = state.issues[String(number)];
   status(
     `Starting fresh isolated repair ${attempt} of ${controllerOptions.maximumRepairAttempts} for issue #${number}.`,
   );
+  if (refreshWorkerGitView) {
+    removeSanitizedWorkerGitView(workerGitRoot, number);
+  }
   await installControllerDependencyLink(worktreePath);
   const gitContext = await resolveWorkerGitContext(
     number,
     worktreePath,
-    issueState.baseSha,
+    repairBase,
   );
   await isolatedCodex(
     workerCodexArguments({
@@ -1591,7 +1611,7 @@ async function repairIssue(state, issue, failure, attempt, controllerOptions) {
   }
   const result = readJson(resultPath);
   const head = (await git(["-C", worktreePath, "rev-parse", "HEAD"])).stdout.trim();
-  if (head !== issueState.baseSha) {
+  if (head !== repairBase) {
     throw new Error("repair worker changed Git history; controller refuses it");
   }
   const changes = (
@@ -1604,11 +1624,14 @@ async function repairIssue(state, issue, failure, attempt, controllerOptions) {
       { failureKind: "worker-blocked" },
     );
   }
-  return moveIssue(state, number, "implemented", {
+  return moveIssue(state, number, stage, {
     implementationSummary: result.summary,
     workerTestsPassed: result.testsPassed,
     workerReviewCompleted: result.reviewCompleted,
     lastRepairCompletedAt: new Date().toISOString(),
+    ...(expectedHead
+      ? { prRepairWorkerCompletedAt: new Date().toISOString() }
+      : {}),
   });
 }
 
@@ -1699,10 +1722,80 @@ async function implementIssue(state, issue, controllerOptions) {
   });
 }
 
-async function verifyIssue(state, issue, controllerOptions) {
+async function assertCandidateMergeSafe(
+  worktreePath,
+  baseSha,
+  stagedTree,
+  controllerOptions,
+) {
+  await runTransient(
+    "git.exe",
+    ["-C", repositoryRoot, "fetch", "origin", "--prune"],
+    controllerOptions,
+    { timeoutSeconds: 120 },
+  );
+  const candidateCommit = (
+    await git(["-C", worktreePath, "commit-tree", stagedTree, "-p", baseSha], {
+      input: "Ralph candidate merge preflight\n",
+      timeoutSeconds: 30,
+    })
+  ).stdout.trim();
+  const merge = await runProcess(
+    "git.exe",
+    [
+      "-C",
+      worktreePath,
+      "merge-tree",
+      "--write-tree",
+      `origin/${baseBranch}`,
+      candidateCommit,
+    ],
+    { timeoutSeconds: 120 },
+  );
+  if (merge.code !== 0) {
+    throw Object.assign(
+      new Error("candidate change conflicts with the latest remote main"),
+      { failureKind: "merge-conflict" },
+    );
+  }
+  const mergedTree = merge.stdout.trim().split(/\r?\n/, 1)[0];
+  if (!/^[0-9a-f]{40,64}$/i.test(mergedTree)) {
+    throw new Error("git merge-tree did not return a candidate tree");
+  }
+  const migrationPaths = (
+    await git([
+      "-C",
+      worktreePath,
+      "ls-tree",
+      "-r",
+      "--name-only",
+      mergedTree,
+      "--",
+      "supabase/migrations",
+    ])
+  ).stdout
+    .split(/\r?\n/)
+    .filter(Boolean);
+  const duplicatePrefixes = findDuplicateMigrationPrefixes(migrationPaths);
+  if (duplicatePrefixes.length > 0) {
+    throw Object.assign(
+      new Error(
+        `candidate merge has duplicate migration timestamps: ${duplicatePrefixes.join(", ")}`,
+      ),
+      { failureKind: "tests" },
+    );
+  }
+}
+
+async function verifyIssue(
+  state,
+  issue,
+  controllerOptions,
+  { force = false, stage = "verified" } = {},
+) {
   const number = issue.issueNumber;
   const issueState = state.issues[String(number)];
-  if (stageAtLeast(issueState, "verified")) return state;
+  if (!force && stageAtLeast(issueState, "verified")) return state;
   const worktreePath = issueState.worktreePath;
   const timestamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
   const issueLogRoot = path.join(stateRoot, "logs", `issue-${number}`);
@@ -1710,7 +1803,16 @@ async function verifyIssue(state, issue, controllerOptions) {
   await removeControllerDependencyLink(worktreePath);
   await git(["-C", worktreePath, "add", "--all"]);
   const changedFiles = (
-    await git(["-C", worktreePath, "diff", "--cached", "--name-only", "-z"])
+    await git([
+      "-C",
+      worktreePath,
+      "diff",
+      "--cached",
+      "--name-only",
+      "-z",
+      issueState.baseSha,
+      "--",
+    ])
   ).stdout
     .split("\0")
     .filter(Boolean);
@@ -1730,6 +1832,12 @@ async function verifyIssue(state, issue, controllerOptions) {
       { failureKind: "safety" },
     );
   }
+  await assertCandidateMergeSafe(
+    worktreePath,
+    issueState.baseSha,
+    stagedTree,
+    controllerOptions,
+  );
   await installControllerDependencyLink(worktreePath);
 
   status(`Running the full Vitest suite for issue #${number}.`);
@@ -1852,7 +1960,7 @@ ${diffBlock.framed}`;
   }
   status(`Independent review passed for issue #${number}.`);
 
-  return moveIssue(state, number, "verified", {
+  return moveIssue(state, number, stage, {
     changedFiles,
     risk,
     stagedTree,
@@ -1944,6 +2052,165 @@ async function commitAndPush(state, issue, controllerOptions) {
     state = moveIssue(state, number, "pushed", {});
   }
   return state;
+}
+
+async function amendAndPushPullRequestRepair(
+  state,
+  issue,
+  controllerOptions,
+) {
+  const number = issue.issueNumber;
+  const issueState = state.issues[String(number)];
+  const worktreePath = issueState.worktreePath;
+  const previousCommit = issueState.commit;
+  const head = (
+    await git(["-C", worktreePath, "rev-parse", "HEAD"])
+  ).stdout.trim();
+  if (head !== previousCommit) {
+    throw new Error("pull-request repair head changed outside the controller");
+  }
+  const stagedTree = (
+    await git(["-C", worktreePath, "write-tree"])
+  ).stdout.trim();
+  if (stagedTree !== issueState.stagedTree) {
+    throw new Error("pull-request repair tree no longer matches verification");
+  }
+  const commitMessage = (
+    await git(["-C", worktreePath, "show", "-s", "--format=%B", previousCommit])
+  ).stdout;
+  const commit = (
+    await git(
+      ["-C", worktreePath, "commit-tree", stagedTree, "-p", issueState.baseSha],
+      { input: commitMessage, timeoutSeconds: 30 },
+    )
+  ).stdout.trim();
+  const parent = (
+    await git(["-C", worktreePath, "rev-parse", `${commit}^`])
+  ).stdout.trim();
+  if (parent !== issueState.baseSha) {
+    throw new Error("repaired pull-request commit changed its approved base");
+  }
+  const count = Number(
+    (
+      await git([
+        "-C",
+        worktreePath,
+        "rev-list",
+        "--count",
+        `${issueState.baseSha}..${commit}`,
+      ])
+    ).stdout.trim(),
+  );
+  if (count !== 1) {
+    throw new Error(`expected one repaired implementation commit, found ${count}`);
+  }
+  state = moveIssue(state, number, "pr-repairing", {
+    pendingPrRepair: { previousCommit, commit },
+  });
+  await git(["-C", worktreePath, "reset", "--hard", commit]);
+  try {
+    await runTransient(
+      "git.exe",
+      [
+        "-C",
+        worktreePath,
+        "push",
+        `--force-with-lease=refs/heads/${issueState.branch}:${previousCommit}`,
+        "origin",
+        `${commit}:refs/heads/${issueState.branch}`,
+      ],
+      controllerOptions,
+      { timeoutSeconds: 300 },
+    );
+  } catch (error) {
+    error.failureKind = "pending-pr-repair";
+    throw error;
+  }
+  return moveIssue(state, number, "pr-repairing", {
+    commit,
+    pendingPrRepair: null,
+    lastPrRepairPushedAt: new Date().toISOString(),
+  });
+}
+
+async function reconcilePendingPullRequestRepair(
+  state,
+  issue,
+  controllerOptions,
+) {
+  const number = issue.issueNumber;
+  const issueState = state.issues[String(number)];
+  const pending = issueState.pendingPrRepair;
+  if (!pending) return state;
+  const head = (
+    await git(["-C", issueState.worktreePath, "rev-parse", "HEAD"])
+  ).stdout.trim();
+  if (head === pending.previousCommit) {
+    const stagedTree = (
+      await git(["-C", issueState.worktreePath, "write-tree"])
+    ).stdout.trim();
+    const pendingTree = (
+      await git([
+        "-C",
+        issueState.worktreePath,
+        "rev-parse",
+        `${pending.commit}^{tree}`,
+      ])
+    ).stdout.trim();
+    if (stagedTree !== pendingTree) {
+      throw Object.assign(
+        new Error("pending pull-request repair tree changed before recovery"),
+        { failureKind: "safety" },
+      );
+    }
+    await git([
+      "-C",
+      issueState.worktreePath,
+      "reset",
+      "--hard",
+      pending.commit,
+    ]);
+  } else if (head !== pending.commit) {
+    throw Object.assign(
+      new Error("pending pull-request repair worktree head changed"),
+      { failureKind: "safety" },
+    );
+  }
+  const remoteHead = (
+    await git([
+      "-C",
+      repositoryRoot,
+      "ls-remote",
+      "--heads",
+      "origin",
+      `refs/heads/${issueState.branch}`,
+    ])
+  ).stdout.trim().split(/\s+/)[0];
+  if (remoteHead === pending.previousCommit) {
+    await runTransient(
+      "git.exe",
+      [
+        "-C",
+        issueState.worktreePath,
+        "push",
+        `--force-with-lease=refs/heads/${issueState.branch}:${pending.previousCommit}`,
+        "origin",
+        `${pending.commit}:refs/heads/${issueState.branch}`,
+      ],
+      controllerOptions,
+      { timeoutSeconds: 300 },
+    );
+  } else if (remoteHead !== pending.commit) {
+    throw Object.assign(
+      new Error("remote pull-request head does not match pending repair state"),
+      { failureKind: "safety" },
+    );
+  }
+  return moveIssue(state, number, "pr-repairing", {
+    commit: pending.commit,
+    pendingPrRepair: null,
+    lastPrRepairPushedAt: new Date().toISOString(),
+  });
 }
 
 async function finalizeMergedPullRequest(
@@ -2407,7 +2674,15 @@ async function waitForRequiredChecks(prNumber, policy, controllerOptions) {
     }
     const buckets = checks.map((check) => String(check.bucket).toLowerCase());
     if (buckets.some((bucket) => ["fail", "cancel"].includes(bucket))) {
-      return { passed: false, reason: "a required PR check failed or was cancelled" };
+      const failedChecks = checks
+        .filter((check) =>
+          ["fail", "cancel"].includes(String(check.bucket).toLowerCase()),
+        )
+        .map((check) => `${check.name} (${check.state})`);
+      return {
+        passed: false,
+        reason: `required PR checks failed or were cancelled: ${failedChecks.join(", ")}`,
+      };
     }
     if (checks.length > 0 && buckets.every((bucket) => ["pass", "skipping"].includes(bucket))) {
       return { passed: true };
@@ -2425,6 +2700,36 @@ async function waitForRequiredChecks(prNumber, policy, controllerOptions) {
   }
   throw Object.assign(new Error("timed out waiting for required PR checks"), {
     failureKind: "timeout",
+  });
+}
+
+async function waitForPullRequestHead(
+  prNumber,
+  expectedCommit,
+  controllerOptions,
+) {
+  const deadline = Date.now() + controllerOptions.checkTimeoutSeconds * 1000;
+  while (Date.now() < deadline) {
+    ensureNotStopped();
+    const pr = await ghJson(
+      [
+        "pr",
+        "view",
+        String(prNumber),
+        "--repo",
+        repository,
+        "--json",
+        "headRefOid",
+      ],
+      controllerOptions,
+    );
+    if (pr.headRefOid === expectedCommit) return;
+    await new Promise((resolve) =>
+      setTimeout(resolve, controllerOptions.pollSeconds * 1000),
+    );
+  }
+  throw Object.assign(new Error("timed out waiting for repaired PR head"), {
+    failureKind: "check-poll",
   });
 }
 
@@ -2496,18 +2801,12 @@ async function waitAndMaybeMerge(state, issue, actor, controllerOptions) {
     status(`Reconciling already-merged PR #${issueState.prNumber}.`);
     return finalizeMergedPullRequest(state, issue, existingPr, controllerOptions);
   }
-  if (controllerOptions.mode === "PrOnly") {
-    return moveIssue(state, number, "manual-review", {
-      stopReason: "PR-only mode; pull request is ready for human review",
-    });
-  }
-  if (issueState.risk.level !== "low") {
-    return moveIssue(state, number, "manual-review", {
-      stopReason: `automatic merge denied: ${issueState.risk.reasons.join("; ")}`,
-    });
-  }
-
   const policy = await requiredPullRequestPolicy(controllerOptions);
+  await waitForPullRequestHead(
+    issueState.prNumber,
+    issueState.commit,
+    controllerOptions,
+  );
   status(`Waiting for required checks on PR #${issueState.prNumber}.`);
   const checks = await waitForRequiredChecks(
     issueState.prNumber,
@@ -2515,14 +2814,30 @@ async function waitAndMaybeMerge(state, issue, actor, controllerOptions) {
     controllerOptions,
   );
   if (!checks.passed) {
-    return moveIssue(state, number, "manual-review", {
+    throw Object.assign(new Error(checks.reason), {
+      failureKind: "pr-checks",
       stopReason: checks.reason,
     });
   }
   status(`Required checks passed on PR #${issueState.prNumber}.`);
-  if (issueState.stage !== "manual-review") {
+  if (!stageAtLeast(issueState, "checks-passed")) {
     state = moveIssue(state, number, "checks-passed", {});
     issueState = state.issues[String(number)];
+  }
+
+  const checkDisposition = pullRequestCheckDisposition({
+    checksPassed: true,
+    completedRepairAttempts: issueState.repairAttempts ?? 0,
+    maximumRepairAttempts: controllerOptions.maximumRepairAttempts,
+    mode: controllerOptions.mode,
+    risk: issueState.risk.level,
+  });
+  if (checkDisposition === "awaiting-human") {
+    const stopReason =
+      controllerOptions.mode === "PrOnly"
+        ? "PR-only mode; required checks passed and the pull request is ready for human review"
+        : `required checks passed; automatic merge denied: ${issueState.risk.reasons.join("; ")}`;
+    return moveIssue(state, number, "manual-review", { stopReason });
   }
 
   status(`Waiting for required review gates on PR #${issueState.prNumber}.`);
@@ -2599,6 +2914,90 @@ async function waitAndMaybeMerge(state, issue, actor, controllerOptions) {
   return finalizeMergedPullRequest(state, issue, mergedPr, controllerOptions);
 }
 
+async function completePullRequestLifecycle(
+  state,
+  issue,
+  actor,
+  controllerOptions,
+  initialFailure = null,
+) {
+  const number = issue.issueNumber;
+  let pendingPullRequestFailure = initialFailure;
+  for (;;) {
+    if (!pendingPullRequestFailure) {
+      try {
+        state = await waitAndMaybeMerge(
+          state,
+          issue,
+          actor,
+          controllerOptions,
+        );
+        break;
+      } catch (error) {
+        pendingPullRequestFailure = error;
+      }
+    }
+    state = readJson(statePath);
+    const issueState = state.issues[String(number)];
+    const repairAttempts = issueState.repairAttempts ?? 0;
+    const disposition = pullRequestCheckDisposition({
+      checksPassed: false,
+      completedRepairAttempts: repairAttempts,
+      maximumRepairAttempts: controllerOptions.maximumRepairAttempts,
+      mode: controllerOptions.mode,
+      risk: issueState.risk.level,
+    });
+    const repairAllowed =
+      disposition === "repair" &&
+      !issueState.externalVerifiedTreeSha &&
+      shouldRepairFailure(
+        pendingPullRequestFailure.failureKind,
+        repairAttempts,
+        controllerOptions.maximumRepairAttempts,
+      );
+    if (!repairAllowed) {
+      if (shouldParkIssueFailure(pendingPullRequestFailure.failureKind)) {
+        state = moveIssue(state, number, "manual-review", {
+          stopReason:
+            pendingPullRequestFailure.stopReason ??
+            pendingPullRequestFailure.message,
+        });
+        break;
+      }
+      throw pendingPullRequestFailure;
+    }
+    state = await assertClaimOwnership(state, issue, actor, controllerOptions);
+    const expectedHead = issueState.commit;
+    state = await repairIssue(
+      state,
+      issue,
+      pendingPullRequestFailure,
+      repairAttempts + 1,
+      controllerOptions,
+      { stage: "pr-repairing", expectedHead },
+    );
+    state = await assertClaimOwnership(state, issue, actor, controllerOptions);
+    try {
+      state = await verifyIssue(state, issue, controllerOptions, {
+        force: true,
+        stage: "pr-repairing",
+      });
+      state = await amendAndPushPullRequestRepair(
+        state,
+        issue,
+        controllerOptions,
+      );
+      pendingPullRequestFailure = null;
+    } catch (error) {
+      pendingPullRequestFailure = error;
+    }
+  }
+  if (state.issues[String(number)]?.worktreePath) {
+    state = await releasePublishedCheckout(state, issue);
+  }
+  return state;
+}
+
 async function processOne(state, actor, controllerOptions) {
   ensureNotStopped();
   state = await reconcileRemoteCompletions(state, controllerOptions);
@@ -2628,6 +3027,14 @@ async function processOne(state, actor, controllerOptions) {
     state = moveIssue(state, number, "selected", { baseSha });
   }
   let issueState = state.issues[String(number)];
+  if (issueState.pendingPrRepair) {
+    state = await reconcilePendingPullRequestRepair(
+      state,
+      issue,
+      controllerOptions,
+    );
+    issueState = state.issues[String(number)];
+  }
   if (issueState.stage === "failure-publishing") {
     state = await publishFailedAttempt(state, issue, actor, controllerOptions);
     return { state, status: "failed", issue };
@@ -2680,6 +3087,53 @@ async function processOne(state, actor, controllerOptions) {
   }
 
   try {
+    if (issueState.stage === "pr-repairing") {
+      state = await assertClaimOwnership(state, issue, actor, controllerOptions);
+      issueState = state.issues[String(number)];
+      const changes = (
+        await git(["-C", issueState.worktreePath, "status", "--porcelain"])
+      ).stdout.trim();
+      let recoveryFailure = null;
+      if (changes && issueState.prRepairWorkerCompletedAt) {
+        try {
+          state = await verifyIssue(state, issue, controllerOptions, {
+            force: true,
+            stage: "pr-repairing",
+          });
+          state = await amendAndPushPullRequestRepair(
+            state,
+            issue,
+            controllerOptions,
+          );
+        } catch (error) {
+          recoveryFailure = error;
+        }
+      } else if (!issueState.prRepairWorkerCompletedAt) {
+        recoveryFailure = Object.assign(
+          new Error(
+            issueState.lastRepairStopReason ??
+              "interrupted pull-request repair requires a fresh repair worker",
+          ),
+          {
+            failureKind: issueState.lastRepairFailureKind ?? "pr-checks",
+            stopReason: issueState.lastRepairStopReason,
+          },
+        );
+      }
+      state = await completePullRequestLifecycle(
+        state,
+        issue,
+        actor,
+        controllerOptions,
+        recoveryFailure,
+      );
+      issueState = state.issues[String(number)];
+      return {
+        state,
+        status: issueState.stage === "merged" ? "merged" : "awaiting-human",
+        issue,
+      };
+    }
     state = await claimIssue(state, issue, actor, controllerOptions);
     state = await assertClaimOwnership(state, issue, actor, controllerOptions);
     state = await ensureWorktree(state, issue, controllerOptions);
@@ -2882,8 +3336,12 @@ async function processOne(state, actor, controllerOptions) {
     state = await commitAndPush(state, issue, controllerOptions);
     state = await assertClaimOwnership(state, issue, actor, controllerOptions);
     state = await ensurePullRequest(state, issue, controllerOptions);
-    state = await releasePublishedCheckout(state, issue);
-    state = await waitAndMaybeMerge(state, issue, actor, controllerOptions);
+    state = await completePullRequestLifecycle(
+      state,
+      issue,
+      actor,
+      controllerOptions,
+    );
   } catch (error) {
     state = readJson(statePath);
     let current = state.issues[String(number)];

@@ -3,7 +3,7 @@ param(
     [ValidateSet("DryRun", "PrOnly", "AutoMerge")]
     [string]$Mode = "PrOnly",
     [ValidateRange(60, 86400)][int]$ImplementationTimeoutSeconds = 7200,
-    [ValidateRange(60, 7200)][int]$VerificationTimeoutSeconds = 900,
+    [ValidateRange(60, 7200)][int]$VerificationTimeoutSeconds = 3600,
     [ValidateRange(60, 7200)][int]$ReviewTimeoutSeconds = 1800,
     [ValidateRange(60, 14400)][int]$CheckTimeoutSeconds = 3600,
     [ValidateRange(5, 300)][int]$PollSeconds = 30,
