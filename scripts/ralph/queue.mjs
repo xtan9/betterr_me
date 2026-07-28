@@ -314,7 +314,15 @@ export function shouldRepairFailure(
   maximumRepairAttempts,
 ) {
   return (
-    ["tests", "typecheck", "review", "review-safety"].includes(failureKind) &&
+    [
+      "tests",
+      "typecheck",
+      "review",
+      "review-security",
+      // Backward compatibility for durable gates created before security and
+      // controller-safety findings were split into separate kinds.
+      "review-safety",
+    ].includes(failureKind) &&
     completedRepairAttempts < maximumRepairAttempts
   );
 }
@@ -325,6 +333,10 @@ export function shouldParkIssueFailure(failureKind) {
     "typecheck",
     "review",
     "review-nonrepairable",
+    "review-security-nonrepairable",
+    // Legacy repairable product-security gates used this name. Under the old
+    // contract, secrets and non-repairable safety findings mapped to `safety`.
+    "review-safety",
     "ambiguous",
     "worker-blocked",
   ].includes(failureKind);
@@ -374,7 +386,8 @@ export function externalVerificationReceiptMatches(gate, receipt, treeSha) {
 }
 
 export function preserveExternalFailureKind(gate, failureKind) {
-  return gate && ["review-safety", "safety"].includes(gate.failureKind)
+  return gate &&
+    ["review-security", "review-safety", "safety"].includes(gate.failureKind)
     ? gate.failureKind
     : failureKind;
 }
@@ -443,11 +456,24 @@ export function testVerificationFailureKind(error) {
   return error?.failureKind ?? "command";
 }
 
+export function vitestVerificationArguments(vitestPath) {
+  return [vitestPath, "run", "--reporter=json", "--maxWorkers=4"];
+}
+
+export function independentReviewClassificationContract() {
+  return `Before classifying a requirement as ambiguous or a finding as unrepairable, search the repository's authoritative design, policy, and domain documentation, including applicable AGENTS.md instructions and docs linked from them. A detail omitted from the issue is not ambiguous when established repository policy resolves it.
+List every issue, design, policy, and implementation source consulted in evidenceReviewed. For status=findings with blockerKind=requirements or repairable=false, cite the exact repository paths and the unresolved decision in blockingFindings and summary. Passing reviews are exempt because they have no unresolved decision and must keep blockingFindings empty. Do not use repairable=false merely because the issue itself omits a detail, because the first repair is not obvious, or because the defect is security-sensitive.
+Reserve repairable=false for a genuine unresolved product decision with materially different valid outcomes, forbidden scope, secrets or controller-integrity risk, missing infrastructure, or a repair that necessarily exceeds the approved ticket scope. A concrete defect with an established repository policy is repairable.`;
+}
+
 export function reviewFailureKind(review) {
   if (review?.blockerKind === "infrastructure") return "infrastructure";
-  if (review?.blockerKind === "safety") {
-    return review.repairable === true ? "review-safety" : "safety";
+  if (review?.blockerKind === "security") {
+    return review.repairable === true
+      ? "review-security"
+      : "review-security-nonrepairable";
   }
+  if (review?.blockerKind === "safety") return "safety";
   if (review?.blockerKind === "requirements") return "ambiguous";
   if (review?.blockerKind === "code") {
     return review.repairable === true ? "review" : "review-nonrepairable";
