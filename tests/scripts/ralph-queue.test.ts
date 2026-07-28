@@ -343,11 +343,12 @@ describe("Ralph durable state and policy", () => {
     ).toBe("ambiguous");
     expect(
       workerResultFailureKind({ blockerKind: "safety", ambiguous: true }),
-    ).toBe("ambiguous");
+    ).toBe("safety");
     expect(
       workerResultFailureKind({ blockerKind: "none", ambiguous: false }),
     ).toBe("worker-blocked");
     expect(shouldParkIssueFailure("infrastructure")).toBe(false);
+    expect(shouldParkIssueFailure("safety")).toBe(false);
   });
 
   it("requires workers to report a structured blocker kind", () => {

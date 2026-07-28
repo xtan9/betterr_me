@@ -336,10 +336,8 @@ export function shouldContinueQueue(status) {
 
 export function workerResultFailureKind(result) {
   if (result?.blockerKind === "infrastructure") return "infrastructure";
-  if (
-    result?.ambiguous ||
-    ["requirements", "safety"].includes(result?.blockerKind)
-  ) {
+  if (result?.blockerKind === "safety") return "safety";
+  if (result?.ambiguous || result?.blockerKind === "requirements") {
     return "ambiguous";
   }
   return "worker-blocked";
