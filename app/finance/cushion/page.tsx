@@ -9,6 +9,7 @@ import {
   type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
 import { HouseholdRunway } from "@/components/finance/household-runway";
+import { SidebarShell } from "@/components/layouts/sidebar-shell";
 import { hasEnvVars } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -85,7 +86,7 @@ export default async function FinanceCushionPage() {
         getRunwaySnapshots(supabase, user.id),
       ])
     : [null, []];
-  return (
+  const runway = (
     <HouseholdRunway
       initialAnswers={migrateLegacy(cushion)}
       isAuthenticated={Boolean(user)}
@@ -93,4 +94,5 @@ export default async function FinanceCushionPage() {
       initialSnapshots={snapshots}
     />
   );
+  return user ? <SidebarShell>{runway}</SidebarShell> : runway;
 }

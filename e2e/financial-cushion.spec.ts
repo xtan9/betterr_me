@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+test.describe("anonymous Household Runway", () => {
 test.beforeEach(async ({ context }, testInfo) => {
   test.skip(
     !testInfo.project.name.startsWith("runway-public"),
@@ -181,4 +182,26 @@ test("uses guided income, asset, housing, and transportation cards", async ({ pa
 
   expect(await page.getByText("$6,000", { exact: true }).count()).toBeGreaterThanOrEqual(2);
   await expect(page.getByText("$100,000", { exact: true })).toBeVisible();
+});
+
+});
+
+test.describe("authenticated Household Runway", () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(
+      testInfo.project.name !== "chromium",
+      "Authenticated shell is covered by the desktop Chromium project",
+    );
+  });
+
+  test("keeps the BetterR sidebar and removes the public header", async ({ page }) => {
+    await page.goto("/finance/cushion");
+
+    await expect(page.locator('[data-sidebar="sidebar"]')).toBeVisible();
+    const financeLink = page.locator('a[href="/finance/cushion"]');
+    await expect(financeLink).toBeVisible();
+    await expect(financeLink).toHaveAttribute("data-active", "true");
+    await expect(page.locator('[data-runway-presentation="authenticated"]')).toBeVisible();
+    await expect(page.getByTestId("runway-public-header")).toHaveCount(0);
+  });
 });
