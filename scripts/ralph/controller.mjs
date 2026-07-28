@@ -46,9 +46,14 @@ import {
   isolatedCodexFilesystemConfig,
   isolatedCodexReadablePaths,
   removeSanitizedWorkerGitView,
+  workerCodexModelArguments,
   workerGitEnvironment,
   workerGitSmokeCommand,
 } from "./worker-isolation.mjs";
+import {
+  createCodexJsonlRenderer,
+  formatControllerStatus,
+} from "./live-output.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "..", "..");
@@ -67,6 +72,7 @@ const stateRoot = path.join(
 const statePath = path.join(stateRoot, "state.json");
 const summaryJsonPath = path.join(stateRoot, "overnight-summary.json");
 const summaryMarkdownPath = path.join(stateRoot, "overnight-summary.md");
+const liveLogPath = path.join(stateRoot, "live.log");
 const stopPath = path.join(stateRoot, "STOP");
 const lockPath = path.join(stateRoot, "runner.lock");
 const worktreeRoot = path.join(stateRoot, "worktrees");
@@ -79,8 +85,14 @@ const wslProcessWrapper = windowsToWslPath(
 );
 const queue = JSON.parse(fs.readFileSync(queuePath, "utf8"));
 
+function writeLiveLine(line) {
+  process.stderr.write(`${line}\n`);
+  fs.mkdirSync(stateRoot, { recursive: true });
+  fs.appendFileSync(liveLogPath, `${line}\n`, "utf8");
+}
+
 function status(message) {
-  process.stderr.write(`[ralph] ${message}\n`);
+  writeLiveLine(formatControllerStatus(message, collectSensitiveValues()));
 }
 
 function parseArguments(argv) {
@@ -221,6 +233,7 @@ function runProcess(command, args, options = {}) {
     observeKillSwitch = true,
     environment = process.env,
     onTerminate,
+    codexLiveContext,
   } = options;
   ensureNotStopped();
 
@@ -234,12 +247,23 @@ function runProcess(command, args, options = {}) {
       stdio: ["pipe", "pipe", "pipe"],
     });
     const stdoutLog = logPrefix
-      ? fs.createWriteStream(`${logPrefix}-stdout.log`)
+      ? fs.createWriteStream(
+          codexLiveContext
+            ? `${logPrefix}-events.jsonl`
+            : `${logPrefix}-stdout.log`,
+        )
       : null;
     const stderrLog = logPrefix
       ? fs.createWriteStream(`${logPrefix}-stderr.log`)
       : null;
     let terminationReason = null;
+    const codexRenderer = codexLiveContext
+      ? createCodexJsonlRenderer({
+          ...codexLiveContext,
+          sensitiveValues: collectSensitiveValues(),
+          writeLine: writeLiveLine,
+        })
+      : null;
 
     const terminate = (reason) => {
       if (terminationReason) return;
@@ -254,6 +278,7 @@ function runProcess(command, args, options = {}) {
     child.stdout.on("data", (chunk) => {
       stdout.push(chunk);
       stdoutLog?.write(chunk);
+      codexRenderer?.write(chunk);
     });
     child.stderr.on("data", (chunk) => {
       stderr.push(chunk);
@@ -275,6 +300,7 @@ function runProcess(command, args, options = {}) {
     child.on("close", (code) => {
       clearTimeout(timeout);
       if (stopWatcher) clearInterval(stopWatcher);
+      codexRenderer?.end();
       stdoutLog?.end();
       stderrLog?.end();
       const result = {
@@ -1227,13 +1253,13 @@ function collectSensitiveValues() {
   const values = new Set();
   const sensitiveName = /token|secret|password|credential|api_?key/i;
   for (const [name, value] of Object.entries(process.env)) {
-    if (sensitiveName.test(name) && value && value.length >= 16) values.add(value);
+    if (sensitiveName.test(name) && value && value.length >= 8) values.add(value);
   }
   const authPath = path.join(process.env.USERPROFILE ?? "", ".codex", "auth.json");
   if (fs.existsSync(authPath)) {
     try {
       const visit = (value, key = "") => {
-        if (typeof value === "string" && sensitiveName.test(key) && value.length >= 16) {
+        if (typeof value === "string" && sensitiveName.test(key) && value.length >= 8) {
           values.add(value);
         } else if (value && typeof value === "object") {
           for (const [childKey, child] of Object.entries(value)) visit(child, childKey);
@@ -1354,7 +1380,9 @@ function workerCodexArguments({
   return [
     "exec",
     "--ephemeral",
+    "--json",
     "--ignore-user-config",
+    ...workerCodexModelArguments({ readOnly }),
     "-c",
     "approval_policy=\"never\"",
     ...restrictedProfileArguments(
@@ -1553,6 +1581,7 @@ async function repairIssue(state, issue, failure, attempt, controllerOptions) {
       timeoutSeconds: controllerOptions.implementationTimeoutSeconds,
       logPrefix,
       gitEnvironment: gitContext.environment,
+      codexLiveContext: { issueNumber: number, phase: `repair ${attempt}` },
     },
   );
   if (!fs.existsSync(resultPath)) {
@@ -1640,6 +1669,7 @@ async function implementIssue(state, issue, controllerOptions) {
       timeoutSeconds: controllerOptions.implementationTimeoutSeconds,
       logPrefix,
       gitEnvironment: gitContext.environment,
+      codexLiveContext: { issueNumber: number, phase: "implementation" },
     },
   );
   if (!fs.existsSync(resultPath)) {
@@ -1716,6 +1746,7 @@ async function verifyIssue(state, issue, controllerOptions) {
     error.failureKind = testVerificationFailureKind(error);
     throw error;
   }
+  status(`Full Vitest suite passed for issue #${number}.`);
 
   status(`Comparing TypeScript diagnostics for issue #${number}.`);
   const before = readJson(issueState.baselinePath);
@@ -1731,6 +1762,7 @@ async function verifyIssue(state, issue, controllerOptions) {
       { failureKind: "typecheck" },
     );
   }
+  status(`TypeScript diagnostics passed for issue #${number}.`);
 
   const reviewResultPath = path.join(
     issueLogRoot,
@@ -1782,6 +1814,7 @@ ${diffBlock.framed}`;
       input: reviewPrompt,
       timeoutSeconds: controllerOptions.reviewTimeoutSeconds,
       logPrefix: path.join(issueLogRoot, `${timestamp}-independent-review`),
+      codexLiveContext: { issueNumber: number, phase: "independent review" },
     },
   );
   const review = readJson(reviewResultPath);
@@ -1814,6 +1847,7 @@ ${diffBlock.framed}`;
   if (treeAfterReview !== stagedTree || unstaged.code !== 0 || untracked.length > 0) {
     throw new Error("verified staged manifest changed during tests or review");
   }
+  status(`Independent review passed for issue #${number}.`);
 
   return moveIssue(state, number, "verified", {
     changedFiles,
@@ -2482,6 +2516,7 @@ async function waitAndMaybeMerge(state, issue, actor, controllerOptions) {
       stopReason: checks.reason,
     });
   }
+  status(`Required checks passed on PR #${issueState.prNumber}.`);
   if (issueState.stage !== "manual-review") {
     state = moveIssue(state, number, "checks-passed", {});
     issueState = state.issues[String(number)];
@@ -2498,6 +2533,7 @@ async function waitAndMaybeMerge(state, issue, actor, controllerOptions) {
       stopReason: review.reason,
     });
   }
+  status(`Required review gates passed on PR #${issueState.prNumber}.`);
   const pr = review.pr;
   const gate = evaluateMergeGate({
     mode: controllerOptions.mode,
@@ -3020,6 +3056,16 @@ async function main() {
       status(`Iteration ${iteration} of ${iterations} in ${options.mode} mode.`);
       const result = await processOne(state, actor, options);
       state = result.state;
+      const issueNumber = result.issue?.issueNumber;
+      const durableReason = issueNumber
+        ? state.issues[String(issueNumber)]?.stopReason
+        : null;
+      const outcomeReason = result.reason ?? durableReason;
+      status(
+        issueNumber
+          ? `Issue #${issueNumber} outcome: ${result.status}${outcomeReason ? ` (${outcomeReason})` : ""}.`
+          : `Queue outcome: ${result.status}${outcomeReason ? ` (${outcomeReason})` : ""}.`,
+      );
       if (!shouldContinueQueue(result.status)) {
         stopReason =
           result.status === "queue-complete"
@@ -3038,6 +3084,7 @@ async function main() {
       );
     }
     if (!stopReason) stopReason = `reached issue limit ${iterations}`;
+    status(`Run finished: ${stopReason}.`);
   } catch (error) {
     stopReason = error.message;
     throw error;
@@ -3049,6 +3096,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  process.stderr.write(`[ralph] STOPPED: ${error.message}\n`);
+  status(`STOPPED: ${error.message}`);
   process.exitCode = 1;
 });
