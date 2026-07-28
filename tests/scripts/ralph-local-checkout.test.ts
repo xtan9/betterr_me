@@ -7,6 +7,7 @@ import path from "node:path";
 import {
   cleanupIssueCheckout,
   parkFailedIssueCheckout,
+  recoverPreservationCommit,
 } from "../../scripts/ralph/local-checkout.mjs";
 
 const temporaryRoots: string[] = [];
@@ -106,6 +107,20 @@ describe("Ralph local checkout lifecycle", () => {
         { cwd: repositoryRoot },
       ).status,
     ).toBe(1);
+
+    await expect(
+      cleanupIssueCheckout({
+        repositoryRoot,
+        worktreeRoot,
+        issueNumber: 101,
+        issueState: {
+          branch: "codex/issue-101",
+          worktreePath,
+          commit,
+        },
+        git,
+      }),
+    ).resolves.toEqual({ worktreeRemoved: false, branchDeleted: false });
   });
 
   it("moves an uncommitted failed attempt out of the reusable worker slot", async () => {
@@ -138,5 +153,52 @@ describe("Ralph local checkout lifecycle", () => {
     expect(fs.readFileSync(path.join(parkedPath, "attempt.txt"), "utf8")).toBe(
       "recover me\n",
     );
+
+    await expect(
+      parkFailedIssueCheckout({
+        repositoryRoot,
+        worktreeRoot,
+        issueNumber: 101,
+        issueState: {
+          branch: "codex/issue-101",
+          worktreePath,
+        },
+        git,
+      }),
+    ).resolves.toBe(parkedPath);
+  });
+
+  it("recovers a preservation commit made just before a controller crash", async () => {
+    const { worktreeRoot, git, checked } = createRepository();
+    const worktreePath = path.join(worktreeRoot, "current");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    const baseSha = checked(["rev-parse", "main"]);
+    checked([
+      "worktree",
+      "add",
+      "-b",
+      "codex/issue-101",
+      worktreePath,
+      "main",
+    ]);
+    fs.writeFileSync(path.join(worktreePath, "attempt.txt"), "recover me\n");
+    checked(["-C", worktreePath, "add", "--all"]);
+    checked([
+      "-C",
+      worktreePath,
+      "commit",
+      "-m",
+      "wip: preserve failed issue #101",
+    ]);
+    const failureCommit = checked(["-C", worktreePath, "rev-parse", "HEAD"]);
+
+    await expect(
+      recoverPreservationCommit({
+        worktreePath,
+        baseSha,
+        expectedSubject: "wip: preserve failed issue #101",
+        git,
+      }),
+    ).resolves.toEqual({ failureCommit, changedFiles: ["attempt.txt"] });
   });
 });

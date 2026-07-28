@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   analyzeTypeScriptRun,
+  buildFailedAttemptPullRequestBody,
   buildOvernightSummary,
   chooseClaimWinner,
   classifyChangeRisk,
@@ -28,11 +29,13 @@ import {
   testVerificationFailureKind,
   transitionIssue,
   validateQueueState,
+  workerResultFailureKind,
 } from "./queue.mjs";
 import {
   activeIssueWorktreePath,
   cleanupIssueCheckout,
   parkFailedIssueCheckout,
+  recoverPreservationCommit,
 } from "./local-checkout.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -856,19 +859,9 @@ async function reconcileRemoteCompletions(
     ]);
     status(`Rebuilding completed state for issue #${issue.issueNumber}.`);
     const issueState = state.issues[String(issue.issueNumber)];
-    let cleanup = { worktreeRemoved: false, branchDeleted: false };
-    if (persist) {
-      if (issueState?.worktreePath && fs.existsSync(issueState.worktreePath)) {
-        await removeControllerDependencyLink(issueState.worktreePath);
-      }
-      cleanup = await cleanupIssueCheckout({
-        repositoryRoot,
-        worktreeRoot,
-        issueNumber: issue.issueNumber,
-        issueState,
-        git,
-      });
-    }
+    const cleanup = persist
+      ? await localCheckoutCleanupPatch(issue.issueNumber, issueState)
+      : { worktreeRemoved: false, branchDeleted: false };
     const completed = [...state.completed, issue.issueNumber];
     const mergedPatch = {
       prNumber: merged.number,
@@ -1213,6 +1206,49 @@ async function assertStagedContentSafe(worktreePath, baseSha, changedFiles) {
   }
 }
 
+function assertFailureSnapshotPathsSafe(changedFiles) {
+  const forbidden = changedFiles.find((file) => {
+    const normalized = file.replaceAll("\\", "/").toLowerCase();
+    return (
+      normalized === "agents.md" ||
+      normalized.startsWith(".github/") ||
+      normalized.startsWith("scripts/ralph/") ||
+      /(^|\/)\.env(?:\.|$)/.test(normalized) ||
+      /(^|\/)(?:package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/.test(
+        normalized,
+      ) ||
+      /\.(?:pem|key|p12|pfx)$/.test(normalized)
+    );
+  });
+  if (forbidden) {
+    throw Object.assign(
+      new Error(`failed-attempt publication rejected forbidden path ${forbidden}`),
+      { failureKind: "unsafe-failure-snapshot" },
+    );
+  }
+}
+
+function redactFailureSummary(value) {
+  let redacted = String(value ?? "Automated verification did not complete.").slice(
+    0,
+    4000,
+  );
+  for (const sensitiveValue of collectSensitiveValues()) {
+    redacted = redacted.replaceAll(sensitiveValue, "[REDACTED]");
+  }
+  return redacted
+    .replace(
+      /-----BEGIN ((?:RSA |EC |OPENSSH )?PRIVATE KEY)-----[\s\S]*?-----END \1-----/g,
+      "[REDACTED]",
+    )
+    .replace(
+      /github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}/g,
+      "[REDACTED]",
+    )
+    .replace(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#/gi, "references #")
+    .replaceAll("@", "@\u200b");
+}
+
 async function runTypeScript(worktreePath, timeoutSeconds, logPrefix) {
   const compiler = `${wslDependencyRoot}/typescript/lib/tsc.js`;
   const result = await runWslSandboxed(
@@ -1294,7 +1330,10 @@ Implementation contract:
 - Run targeted tests. Run the relevant typecheck/tests before reporting completion.
 - Invoke $code-review for a self-review and address blocking findings.
 - Leave the intended changes uncommitted for the controller to verify and commit.
-- If requirements are ambiguous, infrastructure is missing, or safety is uncertain, set ambiguous=true and stop.
+- Report blockerKind=requirements and ambiguous=true when requirements are ambiguous.
+- Report blockerKind=infrastructure and ambiguous=true when required local/controller infrastructure is missing.
+- Report blockerKind=safety and ambiguous=true when safety is uncertain.
+- Report blockerKind=none and ambiguous=false only for a completed implementation.
 
 <ticket-data>
 ${ticketData}
@@ -1341,7 +1380,10 @@ Repair contract:
 - Invoke $tdd for behavior changes and keep the approved public test seam.
 - Run the targeted tests and relevant typecheck before reporting completion.
 - Invoke $code-review for a self-review and address blocking findings.
-- If requirements are ambiguous, the finding cannot be safely repaired, infrastructure is missing, or safety is uncertain, set ambiguous=true and stop.
+- Report blockerKind=requirements and ambiguous=true when requirements are ambiguous.
+- Report blockerKind=infrastructure and ambiguous=true when required local/controller infrastructure is missing.
+- Report blockerKind=safety and ambiguous=true when the finding cannot be safely repaired or safety is uncertain.
+- Report blockerKind=none and ambiguous=false only for a completed repair.
 
 <ticket-data>
 ${ticketData}
@@ -1352,6 +1394,33 @@ ${validationFailure}
 </validation-failure>
 
 Return only the required structured result. status=completed requires the finding to be repaired, targeted tests passing, self-review complete, and a deliberate uncommitted diff.`;
+}
+
+function assertWorkerCompletion(result, issueNumber, workerLabel) {
+  const failureKind = workerResultFailureKind(result);
+  if (
+    result.status !== "completed" ||
+    result.issueNumber !== issueNumber ||
+    result.ambiguous ||
+    result.blockerKind !== "none"
+  ) {
+    const message =
+      failureKind === "infrastructure"
+        ? `${workerLabel} reported missing infrastructure`
+        : failureKind === "ambiguous"
+          ? `${workerLabel} reported an issue-level blocker`
+          : `${workerLabel} reported ${result.status}`;
+    throw Object.assign(new Error(message), {
+      stopReason: result.summary,
+      failureKind,
+    });
+  }
+  if (!result.testsPassed || !result.reviewCompleted) {
+    throw Object.assign(
+      new Error(`${workerLabel} did not complete its required tests and self-review`),
+      { stopReason: result.summary, failureKind: "worker-blocked" },
+    );
+  }
 }
 
 async function repairIssue(state, issue, failure, attempt, controllerOptions) {
@@ -1401,24 +1470,7 @@ async function repairIssue(state, issue, failure, attempt, controllerOptions) {
   const changes = (
     await git(["-C", worktreePath, "status", "--porcelain"])
   ).stdout.trim();
-  if (result.ambiguous) {
-    throw Object.assign(new Error("repair worker found ambiguous requirements"), {
-      stopReason: result.summary,
-      failureKind: "ambiguous",
-    });
-  }
-  if (result.status !== "completed" || result.issueNumber !== number) {
-    throw Object.assign(new Error(`repair worker reported ${result.status}`), {
-      stopReason: result.summary,
-      failureKind: "worker-blocked",
-    });
-  }
-  if (!result.testsPassed || !result.reviewCompleted) {
-    throw Object.assign(
-      new Error("repair worker did not complete its required tests and self-review"),
-      { stopReason: result.summary, failureKind: "worker-blocked" },
-    );
-  }
+  assertWorkerCompletion(result, number, "repair worker");
   if (!changes) {
     throw Object.assign(
       new Error("repair worker reported completion without an uncommitted diff"),
@@ -1498,24 +1550,7 @@ async function implementIssue(state, issue, controllerOptions) {
   const changes = (
     await git(["-C", worktreePath, "status", "--porcelain"])
   ).stdout.trim();
-  if (result.ambiguous) {
-    throw Object.assign(new Error("worker found ambiguous requirements"), {
-      stopReason: result.summary,
-      failureKind: "ambiguous",
-    });
-  }
-  if (result.status !== "completed" || result.issueNumber !== number) {
-    throw Object.assign(new Error(`worker reported ${result.status}`), {
-      stopReason: result.summary,
-      failureKind: "worker-blocked",
-    });
-  }
-  if (!result.testsPassed || !result.reviewCompleted) {
-    throw Object.assign(
-      new Error("worker did not complete its required tests and self-review"),
-      { stopReason: result.summary, failureKind: "worker-blocked" },
-    );
-  }
+  assertWorkerCompletion(result, number, "worker");
   if (!changes) {
     throw Object.assign(
       new Error("worker reported completion without an uncommitted diff"),
@@ -1781,16 +1816,7 @@ async function finalizeMergedPullRequest(
     mergedPr.mergeCommit.oid,
     `origin/${baseBranch}`,
   ]);
-  if (issueState?.worktreePath && fs.existsSync(issueState.worktreePath)) {
-    await removeControllerDependencyLink(issueState.worktreePath);
-  }
-  const cleanup = await cleanupIssueCheckout({
-    repositoryRoot,
-    worktreeRoot,
-    issueNumber: number,
-    issueState,
-    git,
-  });
+  const cleanup = await localCheckoutCleanupPatch(number, issueState);
   const completed = state.completed.includes(number)
     ? state.completed
     : [...state.completed, number];
@@ -1805,19 +1831,23 @@ async function finalizeMergedPullRequest(
   return state;
 }
 
-async function releasePublishedCheckout(state, issue) {
-  const number = issue.issueNumber;
-  const issueState = state.issues[String(number)];
+async function localCheckoutCleanupPatch(issueNumber, issueState) {
   if (issueState?.worktreePath && fs.existsSync(issueState.worktreePath)) {
     await removeControllerDependencyLink(issueState.worktreePath);
   }
-  const cleanup = await cleanupIssueCheckout({
+  return cleanupIssueCheckout({
     repositoryRoot,
     worktreeRoot,
-    issueNumber: number,
+    issueNumber,
     issueState,
     git,
   });
+}
+
+async function releasePublishedCheckout(state, issue) {
+  const number = issue.issueNumber;
+  const issueState = state.issues[String(number)];
+  const cleanup = await localCheckoutCleanupPatch(number, issueState);
   return moveIssue(state, number, issueState.stage, {
     worktreePath: null,
     localCheckoutCleanedAt: new Date().toISOString(),
@@ -1825,12 +1855,27 @@ async function releasePublishedCheckout(state, issue) {
   });
 }
 
-async function preserveFailedCheckout(state, issue, previousStage) {
+async function preserveFailedCheckout(state, issue, previousStage, stopReason) {
   const number = issue.issueNumber;
-  const issueState = state.issues[String(number)];
-  if (!issueState?.worktreePath) return state;
-  if (previousStage && issueStageAtLeast({ stage: previousStage }, "pushed")) {
-    return releasePublishedCheckout(state, issue);
+  let issueState = state.issues[String(number)];
+  if (issueState.stage !== "parking") {
+    state = moveIssue(state, number, "parking", {
+      parkingFromStage: previousStage,
+      stopReason,
+    });
+    issueState = state.issues[String(number)];
+  }
+  const sourceStage = issueState.parkingFromStage;
+  if (!issueState.worktreePath) {
+    return moveIssue(state, number, "failed", {
+      stopReason: issueState.stopReason,
+    });
+  }
+  if (sourceStage && issueStageAtLeast({ stage: sourceStage }, "pushed")) {
+    state = await releasePublishedCheckout(state, issue);
+    return moveIssue(state, number, "failed", {
+      stopReason: state.issues[String(number)].stopReason,
+    });
   }
   if (fs.existsSync(issueState.worktreePath)) {
     await removeControllerDependencyLink(issueState.worktreePath);
@@ -1845,6 +1890,194 @@ async function preserveFailedCheckout(state, issue, previousStage) {
   return moveIssue(state, number, "failed", {
     worktreePath: parkedPath,
     parkedAt: new Date().toISOString(),
+    stopReason: issueState.stopReason,
+  });
+}
+
+async function publishFailedAttempt(
+  state,
+  issue,
+  actor,
+  controllerOptions,
+  failure = {},
+) {
+  const number = issue.issueNumber;
+  let issueState = state.issues[String(number)];
+  if (issueState.stage !== "failure-publishing") {
+    state = moveIssue(state, number, "failure-publishing", {
+      failedFromStage: issueState.stage,
+      failureKind: failure.failureKind ?? "worker-blocked",
+      stopReason: failure.stopReason ?? failure.message ?? issueState.stopReason,
+      failurePublishingStartedAt: new Date().toISOString(),
+    });
+    issueState = state.issues[String(number)];
+  }
+  state = await assertClaimOwnership(state, issue, actor, controllerOptions);
+  issueState = state.issues[String(number)];
+
+  if (!issueState.failureCommit) {
+    const worktreePath = issueState.worktreePath;
+    if (!worktreePath || !fs.existsSync(worktreePath)) {
+      throw new Error(`failed-attempt worktree is missing for issue #${number}`);
+    }
+    await removeControllerDependencyLink(worktreePath);
+    await git(["-C", worktreePath, "add", "--all"]);
+    const commitSubject = `wip: preserve failed issue #${number}`;
+    const recoveredCommit = await recoverPreservationCommit({
+      worktreePath,
+      baseSha: issueState.baseSha,
+      expectedSubject: commitSubject,
+      git,
+    });
+    const changedFiles = recoveredCommit?.changedFiles ??
+      (
+        await git([
+          "-C",
+          worktreePath,
+          "diff",
+          "--cached",
+          "--name-only",
+          "-z",
+        ])
+      ).stdout
+        .split("\0")
+        .filter(Boolean);
+    if (changedFiles.length === 0) {
+      state = await releasePublishedCheckout(state, issue);
+      return moveIssue(state, number, "failed", {
+        stopReason: issueState.stopReason,
+        failureKind: issueState.failureKind,
+        failureDraft: false,
+      });
+    }
+    await git(["-C", worktreePath, "diff", "--cached", "--check"]);
+    assertFailureSnapshotPathsSafe(changedFiles);
+    await assertStagedContentSafe(worktreePath, issueState.baseSha, changedFiles);
+    const head = (
+      await git(["-C", worktreePath, "rev-parse", "HEAD"])
+    ).stdout.trim();
+    if (head !== issueState.baseSha) {
+      throw new Error("failed-attempt branch history changed before publication");
+    }
+    if (!recoveredCommit) {
+      await git(["-C", worktreePath, "commit", "-m", commitSubject]);
+    }
+    const failureCommit = recoveredCommit?.failureCommit ??
+      (
+        await git(["-C", worktreePath, "rev-parse", "HEAD"])
+      ).stdout.trim();
+    state = moveIssue(state, number, "failure-publishing", {
+      commit: failureCommit,
+      failureCommit,
+      failureChangedFiles: changedFiles,
+    });
+    issueState = state.issues[String(number)];
+  }
+
+  if (!issueState.failurePushedAt) {
+    status(`Pushing failed-attempt branch for issue #${number}.`);
+    await runTransient(
+      "git.exe",
+      [
+        "-C",
+        issueState.worktreePath,
+        "push",
+        "--set-upstream",
+        "origin",
+        issueState.branch,
+      ],
+      controllerOptions,
+      { timeoutSeconds: 300 },
+    );
+    state = moveIssue(state, number, "failure-publishing", {
+      failurePushedAt: new Date().toISOString(),
+    });
+    issueState = state.issues[String(number)];
+  }
+
+  const existing = await ghJson(
+    [
+      "pr",
+      "list",
+      "--repo",
+      repository,
+      "--state",
+      "all",
+      "--head",
+      issueState.branch,
+      "--json",
+      "number,url,headRefOid,state,isDraft",
+    ],
+    controllerOptions,
+  );
+  let pullRequest = existing[0];
+  if (!pullRequest) {
+    const bodyPath = path.join(
+      stateRoot,
+      "logs",
+      `issue-${number}`,
+      "failed-pull-request-body.md",
+    );
+    fs.mkdirSync(path.dirname(bodyPath), { recursive: true });
+    fs.writeFileSync(
+      bodyPath,
+      buildFailedAttemptPullRequestBody({
+        issueNumber: number,
+        issueUrl: issue.url,
+        failureKind: issueState.failureKind,
+        failureSummary: redactFailureSummary(issueState.stopReason),
+        repairAttempts: issueState.repairAttempts ?? 0,
+      }),
+    );
+    status(`Creating a draft failed-attempt PR for issue #${number}.`);
+    const created = await gh(
+      [
+        "pr",
+        "create",
+        "--draft",
+        "--repo",
+        repository,
+        "--base",
+        baseBranch,
+        "--head",
+        issueState.branch,
+        "--title",
+        `draft: ${issue.title} (#${number})`,
+        "--body-file",
+        bodyPath,
+      ],
+      controllerOptions,
+    );
+    const url = created.stdout.trim().split(/\r?\n/).at(-1);
+    pullRequest = await ghJson(
+      [
+        "pr",
+        "view",
+        url,
+        "--repo",
+        repository,
+        "--json",
+        "number,url,headRefOid,state,isDraft",
+      ],
+      controllerOptions,
+    );
+  }
+  if (
+    pullRequest.state !== "OPEN" ||
+    pullRequest.isDraft !== true ||
+    pullRequest.headRefOid !== issueState.failureCommit
+  ) {
+    throw new Error("failed-attempt PR does not match the preserved draft commit");
+  }
+  state = moveIssue(state, number, "failure-publishing", {
+    prNumber: pullRequest.number,
+    prUrl: pullRequest.url,
+    failureDraft: true,
+  });
+  state = await releasePublishedCheckout(state, issue);
+  return moveIssue(state, number, "failed", {
+    failurePublishedAt: new Date().toISOString(),
+    stopReason: state.issues[String(number)].stopReason,
   });
 }
 
@@ -2225,6 +2458,19 @@ async function processOne(state, actor, controllerOptions) {
     state = moveIssue(state, number, "selected", { baseSha });
   }
   let issueState = state.issues[String(number)];
+  if (issueState.stage === "failure-publishing") {
+    state = await publishFailedAttempt(state, issue, actor, controllerOptions);
+    return { state, status: "failed", issue };
+  }
+  if (issueState.stage === "parking") {
+    state = await preserveFailedCheckout(
+      state,
+      issue,
+      issueState.parkingFromStage,
+      issueState.stopReason,
+    );
+    return { state, status: "failed", issue };
+  }
   if (issueState.stage === "failed") {
     throw new Error(
       `issue #${number} is in failed state: ${issueState.stopReason ?? "unknown failure"}`,
@@ -2394,11 +2640,13 @@ async function processOne(state, actor, controllerOptions) {
       return { state, status: "awaiting-human", issue };
     }
     if (shouldParkIssueFailure(error.failureKind)) {
-      const previousStage = current?.stage;
-      state = moveIssue(state, number, "failed", {
-        stopReason: error.stopReason ?? error.message,
-      });
-      state = await preserveFailedCheckout(state, issue, previousStage);
+      state = await publishFailedAttempt(
+        state,
+        issue,
+        actor,
+        controllerOptions,
+        error,
+      );
       return { state, status: "failed", issue };
     }
     state = moveIssue(state, number, current.stage, {

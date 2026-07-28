@@ -82,9 +82,12 @@ claim race deterministically.
 The active worker uses one reusable `worktrees/current` checkout. Before each
 new issue the controller fetches and branches from the latest `origin/main`.
 Once a commit is safely published to a PR, or once its PR is merged, the local
-worktree and issue branch are removed. An uncommitted failed attempt is the one
-exception: it is moved to `worktrees/parked/issue-N` so continuing the queue
-cannot destroy recovery work.
+worktree and issue branch are removed. A repair-exhausted issue with a safe diff
+is committed and pushed to a clearly marked draft failed-attempt PR before the
+local checkout is removed. The draft records the failed gate and remains
+dependency-blocking until a human repairs and merges it. Content that fails the
+controller's secret, path, symlink, or history checks is never published; its
+local checkout is retained and the whole run stops.
 
 ## Recovery
 

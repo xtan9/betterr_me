@@ -30,6 +30,7 @@ async function localBranchExists(repositoryRoot, branch, git) {
       repositoryRoot,
       "show-ref",
       "--verify",
+      "--quiet",
       `refs/heads/${branch}`,
     ]);
     return true;
@@ -41,6 +42,51 @@ async function localBranchExists(repositoryRoot, branch, git) {
 
 export function activeIssueWorktreePath(worktreeRoot) {
   return path.join(worktreeRoot, "current");
+}
+
+export async function recoverPreservationCommit({
+  worktreePath,
+  baseSha,
+  expectedSubject,
+  git,
+}) {
+  const head = (
+    await git(["-C", worktreePath, "rev-parse", "HEAD"])
+  ).stdout.trim();
+  if (head === baseSha) return null;
+
+  const status = (
+    await git(["-C", worktreePath, "status", "--porcelain"])
+  ).stdout.trim();
+  const parent = (
+    await git(["-C", worktreePath, "rev-parse", `${head}^`])
+  ).stdout.trim();
+  const subject = (
+    await git(["-C", worktreePath, "log", "-1", "--format=%s"])
+  ).stdout.trim();
+  if (status || parent !== baseSha || subject !== expectedSubject) {
+    throw new Error(
+      "failed-attempt branch history changed outside the preservation transaction",
+    );
+  }
+
+  const changedFiles = (
+    await git([
+      "-C",
+      worktreePath,
+      "diff",
+      "--name-only",
+      "-z",
+      baseSha,
+      head,
+    ])
+  ).stdout
+    .split("\0")
+    .filter(Boolean);
+  if (changedFiles.length === 0) {
+    throw new Error("preservation commit contains no changes");
+  }
+  return { failureCommit: head, changedFiles };
 }
 
 export async function cleanupIssueCheckout({

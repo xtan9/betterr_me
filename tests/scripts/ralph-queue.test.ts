@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import {
   analyzeTypeScriptRun,
   buildOvernightSummary,
+  buildFailedAttemptPullRequestBody,
   chooseClaimWinner,
   classifyChangeRisk,
   evaluateMergeGate,
@@ -27,6 +28,7 @@ import {
   testVerificationFailureKind,
   transitionIssue,
   validateQueueState,
+  workerResultFailureKind,
 } from "../../scripts/ralph/queue.mjs";
 
 const queue = [
@@ -306,6 +308,8 @@ describe("Ralph durable state and policy", () => {
   it("treats only resumable stages as active work", () => {
     expect(isIssueActive({ stage: "implementing" })).toBe(true);
     expect(isIssueActive({ stage: "interrupted" })).toBe(true);
+    expect(isIssueActive({ stage: "failure-publishing" })).toBe(true);
+    expect(isIssueActive({ stage: "parking" })).toBe(true);
     expect(isIssueActive({ stage: "manual-review" })).toBe(false);
     expect(isIssueActive({ stage: "failed" })).toBe(false);
     expect(isIssueActive({ stage: "merged" })).toBe(false);
@@ -328,6 +332,51 @@ describe("Ralph durable state and policy", () => {
     expect(shouldParkIssueFailure("worker-blocked")).toBe(true);
     expect(shouldParkIssueFailure("command")).toBe(false);
     expect(shouldParkIssueFailure("kill-switch")).toBe(false);
+  });
+
+  it("distinguishes missing infrastructure from issue-level worker blockers", () => {
+    expect(
+      workerResultFailureKind({ blockerKind: "infrastructure", ambiguous: true }),
+    ).toBe("infrastructure");
+    expect(
+      workerResultFailureKind({ blockerKind: "requirements", ambiguous: true }),
+    ).toBe("ambiguous");
+    expect(
+      workerResultFailureKind({ blockerKind: "safety", ambiguous: true }),
+    ).toBe("ambiguous");
+    expect(
+      workerResultFailureKind({ blockerKind: "none", ambiguous: false }),
+    ).toBe("worker-blocked");
+    expect(shouldParkIssueFailure("infrastructure")).toBe(false);
+  });
+
+  it("requires workers to report a structured blocker kind", () => {
+    const schema = JSON.parse(
+      fs.readFileSync(path.resolve("scripts/ralph/result.schema.json"), "utf8"),
+    );
+
+    expect(schema.required).toContain("blockerKind");
+    expect(schema.properties.blockerKind.enum).toEqual([
+      "none",
+      "requirements",
+      "infrastructure",
+      "safety",
+    ]);
+  });
+
+  it("labels a failed-attempt pull request as draft recovery work", () => {
+    const body = buildFailedAttemptPullRequestBody({
+      issueNumber: 101,
+      issueUrl: "https://github.com/example/repo/issues/101",
+      failureKind: "review",
+      failureSummary: "Independent review found a blocking defect.",
+      repairAttempts: 2,
+    });
+
+    expect(body).toContain("Draft failed attempt — do not merge");
+    expect(body).toContain("Independent review found a blocking defect.");
+    expect(body).toContain("Repair attempts: **2**");
+    expect(body).toContain("Closes #101");
   });
 
   it("rejects duplicate or dependency-incomplete progress", () => {
@@ -371,6 +420,26 @@ describe("Ralph durable state and policy", () => {
     expect(() =>
       transitionIssue(claimed, 101, "selected", {}, "2026-07-28T06:03:00Z"),
     ).toThrow("cannot move issue #101 backward");
+  });
+
+  it("allows a repaired failed-attempt PR to become merged", () => {
+    const failed = transitionIssue(
+      { version: 2, completed: [], issues: {} },
+      101,
+      "failed",
+      { prNumber: 601, failureDraft: true },
+      "2026-07-28T06:00:00Z",
+    );
+
+    expect(
+      transitionIssue(
+        failed,
+        101,
+        "merged",
+        { mergeCommit: "abc" },
+        "2026-07-28T07:00:00Z",
+      ).issues["101"],
+    ).toMatchObject({ stage: "merged", mergeCommit: "abc" });
   });
 
   it("keeps the recorded base when recovering an existing worktree", () => {

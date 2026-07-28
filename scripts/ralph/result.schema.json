@@ -18,6 +18,10 @@
     "ambiguous": {
       "type": "boolean"
     },
+    "blockerKind": {
+      "type": "string",
+      "enum": ["none", "requirements", "infrastructure", "safety"]
+    },
     "summary": {
       "type": "string"
     }
@@ -28,6 +32,7 @@
     "testsPassed",
     "reviewCompleted",
     "ambiguous",
+    "blockerKind",
     "summary"
   ],
   "additionalProperties": false

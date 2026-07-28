@@ -162,8 +162,10 @@ export const ISSUE_STAGES = [
   "pr-open",
   "checks-passed",
   "manual-review",
-  "merged",
+  "failure-publishing",
+  "parking",
   "failed",
+  "merged",
 ];
 
 export function isIssueParked(issueState) {
@@ -330,6 +332,50 @@ export function shouldParkIssueFailure(failureKind) {
 
 export function shouldContinueQueue(status) {
   return ["merged", "awaiting-human", "failed"].includes(status);
+}
+
+export function workerResultFailureKind(result) {
+  if (result?.blockerKind === "infrastructure") return "infrastructure";
+  if (
+    result?.ambiguous ||
+    ["requirements", "safety"].includes(result?.blockerKind)
+  ) {
+    return "ambiguous";
+  }
+  return "worker-blocked";
+}
+
+export function buildFailedAttemptPullRequestBody({
+  issueNumber,
+  issueUrl,
+  failureKind,
+  failureSummary,
+  repairAttempts,
+}) {
+  return `## Status
+
+**Draft failed attempt — do not merge.** Ralph preserved this branch for supervised recovery after an automated gate stopped the issue.
+
+## Issue
+
+${issueUrl}
+
+## Failure
+
+- Gate: **${failureKind}**
+- Repair attempts: **${repairAttempts}**
+
+${failureSummary}
+
+## Recovery
+
+- [ ] Address the blocking finding.
+- [ ] Run the full required test and typecheck gates.
+- [ ] Complete independent review.
+- [ ] Mark this PR ready only after every gate passes.
+
+Closes #${issueNumber}
+`;
 }
 
 export function testVerificationFailureKind(error) {
