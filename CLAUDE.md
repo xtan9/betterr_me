@@ -147,6 +147,20 @@ vi.mock("@/lib/db", () => ({ HabitsDB: class { getUserHabits = mockFn; } }));
 - Auth helper: `e2e/helpers/auth.ts` (`login()`, `ensureAuthenticated()`)
 - E2E test data prefixed with `E2E Test -` for cleanup in global teardown
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in this repository's GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the five default canonical labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Domain documentation uses a single-context layout. See `docs/agents/domain.md`.
+
 ## Coding Conventions
 
 - **Files:** kebab-case. **Components:** PascalCase. **DB classes:** PascalCase + `DB` suffix
