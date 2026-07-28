@@ -3,6 +3,28 @@ import { recurrenceRuleSchema } from "./recurring-task";
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const timeRegex = /^\d{2}:\d{2}(:\d{2})?$/;
+const eventReminderSchema = z
+  .object({
+    reminder_type: z.enum(["relative", "absolute"]),
+    relative_minutes: z.number().int().optional().nullable(),
+    absolute_time: z
+      .string()
+      .datetime("Must be a valid ISO datetime")
+      .optional()
+      .nullable(),
+    channels: z.array(z.enum(["push", "email"])).min(1),
+  })
+  .refine(
+    (reminder) =>
+      reminder.reminder_type !== "relative" ||
+      reminder.relative_minutes != null,
+    { message: "relative_minutes is required for relative reminders" },
+  )
+  .refine(
+    (reminder) =>
+      reminder.reminder_type !== "absolute" || Boolean(reminder.absolute_time),
+    { message: "absolute_time is required for absolute reminders" },
+  );
 
 export const calendarEventCreateSchema = z
   .object({
@@ -41,6 +63,7 @@ export const calendarEventCreateSchema = z
       .regex(dateRegex, "Must be YYYY-MM-DD")
       .optional()
       .nullable(),
+    reminders: z.array(eventReminderSchema).optional().default([]),
   })
   .refine(
     (data) => {

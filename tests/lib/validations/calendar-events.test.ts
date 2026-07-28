@@ -215,6 +215,20 @@ describe('calendarEventCreateSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('should reject a non-ISO timestamp for an absolute reminder', () => {
+    const result = calendarEventCreateSchema.safeParse({
+      ...validMinimal,
+      reminders: [{
+        reminder_type: 'absolute',
+        relative_minutes: null,
+        absolute_time: 'tomorrow morning',
+        channels: ['push'],
+      }],
+    });
+
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('calendarEventUpdateSchema', () => {

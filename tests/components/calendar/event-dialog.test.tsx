@@ -175,7 +175,7 @@ describe("EventDialog", () => {
   });
 
   it("submits current reminderRows state, not stale initial state (REMN-01 stale closure fix)", async () => {
-    // Mock: event save returns an event id, reminder POST succeeds
+    // Mock the atomic event/reminder save.
     mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
       if (typeof url === "string" && url.includes("/api/reminders") && (!opts || !opts.method || opts.method === "GET")) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ reminders: [] }) });
@@ -185,10 +185,6 @@ describe("EventDialog", () => {
           ok: true,
           json: () => Promise.resolve({ event: { id: "new-evt-1" } }),
         });
-      }
-      // Reminder POST
-      if (typeof url === "string" && url === "/api/reminders" && opts?.method === "POST") {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
@@ -213,19 +209,26 @@ describe("EventDialog", () => {
       );
     });
 
-    // After event is created, reminder POST should be called with the smart default reminder
+    // The event request owns the smart-default reminder.
     await waitFor(() => {
-      const reminderPostCalls = mockFetch.mock.calls.filter(
-        ([url, opts]: [string, RequestInit | undefined]) =>
-          url === "/api/reminders" && opts?.method === "POST",
+      const eventPost = mockFetch.mock.calls.find(
+        ([url, opts]) =>
+          url === "/api/calendar-events" && opts?.method === "POST",
       );
-      expect(reminderPostCalls.length).toBeGreaterThanOrEqual(1);
+      expect(eventPost).toBeDefined();
 
-      // Verify the reminder data includes the smart default values
-      const body = JSON.parse(reminderPostCalls[0][1]?.body as string);
-      expect(body.source_type).toBe("calendar_event");
-      expect(body.source_id).toBe("new-evt-1");
-      expect(body.reminder_type).toBe("relative");
+      const body = JSON.parse(eventPost![1]?.body as string);
+      expect(body.reminders).toEqual([
+        expect.objectContaining({
+          reminder_type: "relative",
+          relative_minutes: 15,
+        }),
+      ]);
+      expect(
+        mockFetch.mock.calls.some(
+          ([url, opts]) => url === "/api/reminders" && opts?.method === "POST",
+        ),
+      ).toBe(false);
     });
   });
 
@@ -276,7 +279,7 @@ describe("EventDialog", () => {
 
     // Verify no reminder POST/PATCH/DELETE calls were made (only the initial GET)
     const reminderCalls = mockFetch.mock.calls.filter(
-      ([url, opts]: [string, RequestInit | undefined]) =>
+      ([url, opts]) =>
         typeof url === "string" &&
         url.includes("/api/reminders") &&
         opts?.method && opts.method !== "GET",
@@ -456,7 +459,7 @@ describe("EventDialog", () => {
 
     await waitFor(() => {
       const eventCall = mockFetch.mock.calls.find(
-        ([url, opts]: [string, RequestInit | undefined]) =>
+        ([url, opts]) =>
           url === "/api/calendar-events" && opts?.method === "POST",
       );
       expect(eventCall).toBeDefined();
@@ -518,7 +521,7 @@ describe("EventDialog", () => {
 
     await waitFor(() => {
       const patchReminder = mockFetch.mock.calls.find(
-        ([url, opts]: [string, RequestInit | undefined]) =>
+        ([url, opts]) =>
           typeof url === "string" && url.includes("/api/reminders/rem-1") && opts?.method === "PATCH",
       );
       expect(patchReminder).toBeDefined();

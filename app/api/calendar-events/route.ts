@@ -7,6 +7,7 @@ import { expandEventsForRange } from '@/lib/calendar/recurrence';
 import { log } from '@/lib/logger';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import type { CalendarEventInsert } from '@/lib/db/types';
+import { SchedulingLifecycle } from '@/lib/scheduling/create';
 
 /**
  * GET /api/calendar-events
@@ -83,8 +84,6 @@ export async function POST(request: NextRequest) {
     // Ensure user profile exists (required by FK constraint)
     await ensureProfile(supabase, user);
 
-    const db = new CalendarEventsDB(supabase);
-
     // Build insert data from validated fields
     const insertData: Omit<CalendarEventInsert, 'user_id'> = {
       title: validation.data.title.trim(),
@@ -113,8 +112,16 @@ export async function POST(request: NextRequest) {
       insertData.original_date = validation.data.original_date ?? null;
     }
 
-    const event = await db.createEvent(user.id, insertData);
-    return NextResponse.json({ event }, { status: 201 });
+    const lifecycle = new SchedulingLifecycle(supabase);
+    const outcome = await lifecycle.create(user.id, {
+      event: insertData,
+      reminders: (validation.data.reminders ?? []).map((reminder) => ({
+        ...reminder,
+        relative_minutes: reminder.relative_minutes ?? null,
+        absolute_time: reminder.absolute_time ?? null,
+      })),
+    });
+    return NextResponse.json(outcome, { status: 201 });
   } catch (error) {
     log.error('POST /api/calendar-events error', error);
     return NextResponse.json({ error: 'Failed to create calendar event' }, { status: 500 });

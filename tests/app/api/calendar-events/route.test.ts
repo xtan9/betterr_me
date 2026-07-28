@@ -28,10 +28,14 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/db', () => ({
   CalendarEventsDB: class {
     getUserEvents = mockGetUserEvents;
-    createEvent = mockCreateEvent;
   },
 }));
 
+vi.mock('@/lib/scheduling/create', () => ({
+  SchedulingLifecycle: class {
+    create = mockCreateEvent;
+  },
+}));
 vi.mock('@/lib/calendar/recurrence', () => ({
   expandEventsForRange: mockExpandEventsForRange,
 }));
@@ -208,7 +212,7 @@ describe('POST /api/calendar-events', () => {
   });
 
   it('should create event with valid payload', async () => {
-    mockCreateEvent.mockResolvedValue(mockEvent);
+    mockCreateEvent.mockResolvedValue({ event: mockEvent, reminders: [] });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events', {
       method: 'POST',
@@ -225,21 +229,21 @@ describe('POST /api/calendar-events', () => {
 
     expect(response.status).toBe(201);
     expect(data.event).toEqual(mockEvent);
-    expect(mockCreateEvent).toHaveBeenCalledWith(
-      'user-123',
-      expect.objectContaining({
+    expect(mockCreateEvent).toHaveBeenCalledWith('user-123', {
+      event: expect.objectContaining({
         title: 'Test Event',
         start_date: '2026-04-01',
         start_time: '10:00:00',
         end_date: '2026-04-01',
         end_time: '11:00:00',
-      })
-    );
+      }),
+      reminders: [],
+    });
   });
 
   it('should create all-day event (no start_time/end_time)', async () => {
     const allDayEvent = { ...mockEvent, start_time: null, end_time: null };
-    mockCreateEvent.mockResolvedValue(allDayEvent);
+    mockCreateEvent.mockResolvedValue({ event: allDayEvent, reminders: [] });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events', {
       method: 'POST',
@@ -255,13 +259,13 @@ describe('POST /api/calendar-events', () => {
     expect(response.status).toBe(201);
     expect(data.event.start_time).toBeNull();
     expect(data.event.end_time).toBeNull();
-    expect(mockCreateEvent).toHaveBeenCalledWith(
-      'user-123',
-      expect.objectContaining({
+    expect(mockCreateEvent).toHaveBeenCalledWith('user-123', {
+      event: expect.objectContaining({
         start_time: null,
         end_time: null,
-      })
-    );
+      }),
+      reminders: [],
+    });
   });
 
   it('should create event with recurrence fields', async () => {
@@ -272,7 +276,7 @@ describe('POST /api/calendar-events', () => {
       recurrence_rule: recurrenceRule,
       end_type: 'never',
     };
-    mockCreateEvent.mockResolvedValue(recurringEvent);
+    mockCreateEvent.mockResolvedValue({ event: recurringEvent, reminders: [] });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events', {
       method: 'POST',
@@ -292,14 +296,14 @@ describe('POST /api/calendar-events', () => {
 
     expect(response.status).toBe(201);
     expect(data.event.is_recurring).toBe(true);
-    expect(mockCreateEvent).toHaveBeenCalledWith(
-      'user-123',
-      expect.objectContaining({
+    expect(mockCreateEvent).toHaveBeenCalledWith('user-123', {
+      event: expect.objectContaining({
         is_recurring: true,
         recurrence_rule: recurrenceRule,
         end_type: 'never',
-      })
-    );
+      }),
+      reminders: [],
+    });
   });
 
   it('should create exception record with recurring_event_id', async () => {
@@ -309,7 +313,7 @@ describe('POST /api/calendar-events', () => {
       recurring_event_id: '550e8400-e29b-41d4-a716-446655440099',
       original_date: '2026-04-08',
     };
-    mockCreateEvent.mockResolvedValue(exceptionEvent);
+    mockCreateEvent.mockResolvedValue({ event: exceptionEvent, reminders: [] });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events', {
       method: 'POST',
@@ -328,14 +332,14 @@ describe('POST /api/calendar-events', () => {
 
     expect(response.status).toBe(201);
     expect(data.event.is_exception).toBe(true);
-    expect(mockCreateEvent).toHaveBeenCalledWith(
-      'user-123',
-      expect.objectContaining({
+    expect(mockCreateEvent).toHaveBeenCalledWith('user-123', {
+      event: expect.objectContaining({
         is_exception: true,
         recurring_event_id: '550e8400-e29b-41d4-a716-446655440099',
         original_date: '2026-04-08',
-      })
-    );
+      }),
+      reminders: [],
+    });
   });
 
   it('should return 500 on DB error', async () => {
@@ -357,7 +361,7 @@ describe('POST /api/calendar-events', () => {
   });
 
   it('should call ensureProfile before creating event', async () => {
-    mockCreateEvent.mockResolvedValue(mockEvent);
+    mockCreateEvent.mockResolvedValue({ event: mockEvent, reminders: [] });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events', {
       method: 'POST',

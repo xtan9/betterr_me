@@ -145,6 +145,17 @@ export function EventDialog({
           description: values.description || null,
           color: values.color || null,
         };
+        if (!isEditing) {
+          payload.reminders = reminderRows.map((row) => ({
+            reminder_type: row.reminderType,
+            relative_minutes: row.relativeMinutes,
+            absolute_time:
+              row.reminderType === "absolute" && row.absoluteTime
+                ? new Date(row.absoluteTime).toISOString()
+                : null,
+            channels: row.channels,
+          }));
+        }
 
         const url = isEditing
           ? `/api/calendar-events/${event!.id}`
@@ -178,10 +189,10 @@ export function EventDialog({
           toast.warning(t("eventDialog.reminderSaveWarning"));
         }
 
-        // Save reminders if we have an event ID
-        // Skip reminder persistence if the initial load failed — avoids deleting
-        // reminders we couldn't fetch (silent data destruction).
-        if (eventId && !reminderLoadFailed) {
+        // Editing retains the existing reminder API. Creation has already
+        // persisted every requested reminder in the event transaction.
+        // Skip edits if the initial load failed to avoid silent deletion.
+        if (isEditing && eventId && !reminderLoadFailed) {
           const startDateTime = values.is_all_day
             ? `${values.start_date}T00:00:00Z`
             : values.start_time
