@@ -291,6 +291,17 @@ export function shouldRetry(failureKind, attempt, maximumAttempts) {
   );
 }
 
+export function shouldRepairFailure(
+  failureKind,
+  completedRepairAttempts,
+  maximumRepairAttempts,
+) {
+  return (
+    ["tests", "typecheck", "review"].includes(failureKind) &&
+    completedRepairAttempts < maximumRepairAttempts
+  );
+}
+
 export function buildOvernightSummary(state) {
   const summary = {
     runId: state.runId,

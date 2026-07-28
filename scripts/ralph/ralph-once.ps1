@@ -8,6 +8,7 @@ param(
     [ValidateRange(60, 14400)][int]$CheckTimeoutSeconds = 3600,
     [ValidateRange(5, 300)][int]$PollSeconds = 30,
     [ValidateRange(1, 10)][int]$MaximumTransientAttempts = 3,
+    [ValidateRange(1, 5)][int]$MaximumRepairAttempts = 2,
     [ValidateRange(1, 168)][int]$ClaimLeaseHours = 24,
     [switch]$DryRun
 )
@@ -31,6 +32,7 @@ $node = (Get-Command node.exe -ErrorAction Stop).Source
     --check-timeout-seconds $CheckTimeoutSeconds `
     --poll-seconds $PollSeconds `
     --maximum-transient-attempts $MaximumTransientAttempts `
+    --maximum-repair-attempts $MaximumRepairAttempts `
     --claim-lease-hours $ClaimLeaseHours
 
 if ($LASTEXITCODE -ne 0) {

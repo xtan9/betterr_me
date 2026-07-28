@@ -91,9 +91,12 @@ the same command reconciles the recorded branch, worktree, commit, PR, and
 merged SHA instead of starting duplicate work.
 
 Implementation, verification, review, and required-check waits are bounded.
-Only transient network and rate-limit failures are retried, with a bounded
-attempt count and backoff. Tests, review findings, ambiguity, conflicts, and
-policy denials are never retried automatically.
+Transient network and rate-limit failures use a bounded retry count and
+backoff. Concrete test, TypeScript, and independent-review findings may use up
+to `MaximumRepairAttempts` genuinely fresh, isolated repair sessions before
+the issue fails. Every repair is re-run through the complete verification and
+review gates. Ambiguity, unsafe scope, conflicts, ownership failures, and
+policy denials are never repaired or retried automatically.
 
 The claim lease must be more than one hour longer than the longest cumulative
 span between ownership checks. Invalid combinations fail during argument

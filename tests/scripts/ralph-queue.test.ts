@@ -16,6 +16,7 @@ import {
   selectNextLiveIssueStatus,
   selectNextIssue,
   selectRecoveryBase,
+  shouldRepairFailure,
   shouldRetry,
   transitionIssue,
   validateQueueState,
@@ -386,6 +387,15 @@ describe("Ralph durable state and policy", () => {
     expect(shouldRetry("tests", 1, 3)).toBe(false);
     expect(shouldRetry("review", 1, 3)).toBe(false);
     expect(shouldRetry("ambiguous", 1, 3)).toBe(false);
+  });
+
+  it("uses bounded fresh repair attempts only for concrete verification findings", () => {
+    expect(shouldRepairFailure("tests", 0, 2)).toBe(true);
+    expect(shouldRepairFailure("typecheck", 1, 2)).toBe(true);
+    expect(shouldRepairFailure("review", 2, 2)).toBe(false);
+    expect(shouldRepairFailure("ambiguous", 0, 2)).toBe(false);
+    expect(shouldRepairFailure("unsafe-scope", 0, 2)).toBe(false);
+    expect(shouldRepairFailure("network", 0, 2)).toBe(false);
   });
 
   it("builds a durable final summary from issue states", () => {
