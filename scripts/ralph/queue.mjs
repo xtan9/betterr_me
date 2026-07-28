@@ -334,6 +334,22 @@ export function shouldContinueQueue(status) {
   return ["merged", "awaiting-human", "failed"].includes(status);
 }
 
+export function externalRepairDisposition(
+  request,
+  completedRepairAttempts,
+  maximumRepairAttempts,
+) {
+  if (!request) return "none";
+  if (request.controllerManagedExternalGate !== true) return "unsafe";
+  return shouldRepairFailure(
+    request.failureKind,
+    completedRepairAttempts,
+    maximumRepairAttempts,
+  )
+    ? "repair"
+    : "exhausted";
+}
+
 export function workerResultFailureKind(result) {
   if (result?.blockerKind === "infrastructure") return "infrastructure";
   if (result?.blockerKind === "safety") return "safety";

@@ -10,6 +10,7 @@ import {
   chooseClaimWinner,
   classifyChangeRisk,
   evaluateMergeGate,
+  externalRepairDisposition,
   failureDisposition,
   frameInertData,
   evaluateIteration,
@@ -322,6 +323,24 @@ describe("Ralph durable state and policy", () => {
     expect(shouldContinueQueue("failed")).toBe(true);
     expect(shouldContinueQueue("interrupted")).toBe(false);
     expect(shouldContinueQueue("queue-blocked")).toBe(false);
+  });
+
+  it("accepts only bounded controller-owned external repair requests", () => {
+    const request = {
+      controllerManagedExternalGate: true,
+      failureKind: "review-safety",
+    };
+
+    expect(externalRepairDisposition(null, 3, 5)).toBe("none");
+    expect(externalRepairDisposition(request, 3, 5)).toBe("repair");
+    expect(externalRepairDisposition(request, 5, 5)).toBe("exhausted");
+    expect(
+      externalRepairDisposition(
+        { ...request, controllerManagedExternalGate: false },
+        3,
+        5,
+      ),
+    ).toBe("unsafe");
   });
 
   it("parks issue-level failures but stops for controller failures", () => {

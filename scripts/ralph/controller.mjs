@@ -12,6 +12,7 @@ import {
   chooseClaimWinner,
   classifyChangeRisk,
   evaluateMergeGate,
+  externalRepairDisposition,
   failureDisposition,
   findNewTypeScriptDiagnostics,
   frameInertData,
@@ -1361,6 +1362,8 @@ function repairPrompt(issue, failure, attempt) {
       kind: failure.failureKind,
       details: String(failure.stopReason ?? failure.message).slice(0, 12000),
       repairAttempt: attempt,
+      controllerManagedExternalGate:
+        failure.controllerManagedExternalGate === true,
     },
     null,
     2,
@@ -1380,6 +1383,7 @@ Repair contract:
 - Invoke $tdd for behavior changes and keep the approved public test seam.
 - Run the targeted tests and relevant typecheck before reporting completion.
 - Invoke $code-review for a self-review and address blocking findings.
+- When controllerManagedExternalGate=true, the controller deliberately owns and will rerun that exact external gate. Do not attempt to access it from the sandbox, and do not report missing infrastructure merely because that gate or Git metadata is unavailable. Run every applicable test available inside the worktree and review the repaired files directly.
 - Report blockerKind=requirements and ambiguous=true when requirements are ambiguous.
 - Report blockerKind=infrastructure and ambiguous=true when required local/controller infrastructure is missing.
 - Report blockerKind=safety and ambiguous=true when the finding cannot be safely repaired or safety is uncertain.
@@ -2534,6 +2538,63 @@ async function processOne(state, actor, controllerOptions) {
     state = await implementIssue(state, issue, controllerOptions);
     state = await assertClaimOwnership(state, issue, actor, controllerOptions);
     for (;;) {
+      const pendingExternalRepair =
+        state.issues[String(number)]?.pendingExternalRepair;
+      if (pendingExternalRepair) {
+        const repairAttempts =
+          state.issues[String(number)]?.repairAttempts ?? 0;
+        const disposition = externalRepairDisposition(
+          pendingExternalRepair,
+          repairAttempts,
+          controllerOptions.maximumRepairAttempts,
+        );
+        if (disposition === "unsafe") {
+          throw Object.assign(
+            new Error("external repair request is missing its controller gate"),
+            { failureKind: "safety" },
+          );
+        }
+        if (disposition === "exhausted") {
+          throw Object.assign(
+            new Error("external repair request exhausted its repair budget"),
+            pendingExternalRepair,
+          );
+        }
+        state = moveIssue(state, number, "implemented", {
+          pendingExternalRepair: null,
+        });
+        state = await repairIssue(
+          state,
+          issue,
+          Object.assign(
+            new Error(pendingExternalRepair.stopReason),
+            pendingExternalRepair,
+          ),
+          repairAttempts + 1,
+          controllerOptions,
+        );
+        state = moveIssue(state, number, "implemented", {
+          awaitingExternalVerification: {
+            failureKind: pendingExternalRepair.failureKind,
+            stopReason: pendingExternalRepair.stopReason,
+            requestedAt: new Date().toISOString(),
+          },
+        });
+        return {
+          state,
+          status: "awaiting-external-verification",
+          reason: "controller-managed external verification is required",
+          issue,
+        };
+      }
+      if (state.issues[String(number)]?.awaitingExternalVerification) {
+        return {
+          state,
+          status: "awaiting-external-verification",
+          reason: "controller-managed external verification is required",
+          issue,
+        };
+      }
       try {
         state = await verifyIssue(state, issue, controllerOptions);
         break;
