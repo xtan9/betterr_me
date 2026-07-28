@@ -376,6 +376,13 @@ Closes #${issueNumber}
 `;
 }
 
+export function neutralizeClosingKeywords(value) {
+  return String(value).replace(
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(?=(?:[\w.-]+\/[\w.-]+)?#\d+)/gi,
+    "references ",
+  );
+}
+
 export function testVerificationFailureKind(error) {
   if (["timeout", "kill-switch"].includes(error?.failureKind)) {
     return error.failureKind;

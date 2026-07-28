@@ -30,5 +30,38 @@
     "blockerKind",
     "summary"
   ],
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "pass" } } },
+      "then": {
+        "properties": {
+          "blockingFindings": { "maxItems": 0 },
+          "repairable": { "const": false },
+          "blockerKind": { "const": "none" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "findings" } } },
+      "then": {
+        "properties": {
+          "blockingFindings": { "minItems": 1 },
+          "blockerKind": {
+            "enum": ["code", "requirements", "infrastructure", "safety"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "blockerKind": {
+            "enum": ["requirements", "infrastructure", "safety"]
+          }
+        }
+      },
+      "then": { "properties": { "repairable": { "const": false } } }
+    }
+  ],
   "additionalProperties": false
 }

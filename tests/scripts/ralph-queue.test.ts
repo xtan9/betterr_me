@@ -16,6 +16,7 @@ import {
   findNewTypeScriptDiagnostics,
   isolatedCodexReadablePaths,
   isIssueActive,
+  neutralizeClosingKeywords,
   selectNextLiveIssue,
   selectNextLiveIssueStatus,
   selectNextIssue,
@@ -365,6 +366,17 @@ describe("Ralph durable state and policy", () => {
     ]);
   });
 
+  it("requires independent review pass results to be internally consistent", () => {
+    const schema = JSON.parse(
+      fs.readFileSync(path.resolve("scripts/ralph/review.schema.json"), "utf8"),
+    );
+
+    expect(schema.required).toContain("blockerKind");
+    expect(schema.allOf).toHaveLength(3);
+    expect(schema.allOf[0].then.properties.blockerKind.const).toBe("none");
+    expect(schema.allOf[0].then.properties.repairable.const).toBe(false);
+  });
+
   it("labels a failed-attempt pull request as draft recovery work", () => {
     const body = buildFailedAttemptPullRequestBody({
       issueNumber: 101,
@@ -378,6 +390,16 @@ describe("Ralph durable state and policy", () => {
     expect(body).toContain("Independent review found a blocking defect.");
     expect(body).toContain("Repair attempts: **2**");
     expect(body).toContain("Closes #101");
+  });
+
+  it("neutralizes local and cross-repository issue-closing keywords", () => {
+    expect(
+      neutralizeClosingKeywords(
+        "Fixes #101; resolves example/elsewhere#202; ordinary fix remains.",
+      ),
+    ).toBe(
+      "references #101; references example/elsewhere#202; ordinary fix remains.",
+    );
   });
 
   it("rejects duplicate or dependency-incomplete progress", () => {

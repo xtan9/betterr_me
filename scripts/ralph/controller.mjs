@@ -19,6 +19,7 @@ import {
   isIssueActive,
   isIssueParked,
   issueStageAtLeast,
+  neutralizeClosingKeywords,
   reviewFailureKind,
   selectNextLiveIssueStatus,
   selectRecoveryBase,
@@ -1236,7 +1237,7 @@ function redactFailureSummary(value) {
   for (const sensitiveValue of collectSensitiveValues()) {
     redacted = redacted.replaceAll(sensitiveValue, "[REDACTED]");
   }
-  return redacted
+  return neutralizeClosingKeywords(redacted
     .replace(
       /-----BEGIN ((?:RSA |EC |OPENSSH )?PRIVATE KEY)-----[\s\S]*?-----END \1-----/g,
       "[REDACTED]",
@@ -1244,8 +1245,7 @@ function redactFailureSummary(value) {
     .replace(
       /github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}/g,
       "[REDACTED]",
-    )
-    .replace(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#/gi, "references #")
+    ))
     .replaceAll("@", "@\u200b");
 }
 
@@ -1676,7 +1676,9 @@ ${diffBlock.framed}`;
   if (
     review.status !== "pass" ||
     !Array.isArray(review.blockingFindings) ||
-    review.blockingFindings.length > 0
+    review.blockingFindings.length > 0 ||
+    review.blockerKind !== "none" ||
+    review.repairable !== false
   ) {
     throw Object.assign(new Error("independent review returned blocking findings"), {
       stopReason: review.blockingFindings?.join("; ") || review.summary,
@@ -1985,7 +1987,7 @@ async function publishFailedAttempt(
         "push",
         "--set-upstream",
         "origin",
-        issueState.branch,
+        `${issueState.failureCommit}:refs/heads/${issueState.branch}`,
       ],
       controllerOptions,
       { timeoutSeconds: 300 },
@@ -1994,6 +1996,20 @@ async function publishFailedAttempt(
       failurePushedAt: new Date().toISOString(),
     });
     issueState = state.issues[String(number)];
+  }
+
+  const remoteFailureCommit = (
+    await git([
+      "-C",
+      repositoryRoot,
+      "ls-remote",
+      "--heads",
+      "origin",
+      `refs/heads/${issueState.branch}`,
+    ])
+  ).stdout.trim().split(/\s+/)[0];
+  if (remoteFailureCommit !== issueState.failureCommit) {
+    throw new Error("remote failed-attempt branch does not match the preserved commit");
   }
 
   const existing = await ghJson(
