@@ -15,6 +15,9 @@
     "reviewCompleted": {
       "type": "boolean"
     },
+    "ambiguous": {
+      "type": "boolean"
+    },
     "summary": {
       "type": "string"
     }
@@ -24,6 +27,7 @@
     "issueNumber",
     "testsPassed",
     "reviewCompleted",
+    "ambiguous",
     "summary"
   ],
   "additionalProperties": false

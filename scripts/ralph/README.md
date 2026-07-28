@@ -1,113 +1,112 @@
-# Architecture Ralph loop
+# Betterr.me GitHub Ralph controller
 
-This is a bounded, fail-safe Codex loop for implementing GitHub issues
-[#481–#504](https://github.com/xtan9/betterr_me/issues?q=is%3Aissue+label%3Aready-for-agent+created%3A%3E%3D2026-07-27).
-It follows the approved dependency graph, starts a fresh ephemeral Codex context
-for one issue at a time, and keeps successful work on the shared
-`codex/ralph-architecture` integration branch.
+This controller processes the approved architecture queue one issue at a time.
+For every issue it reconciles live GitHub state, claims the issue, creates an
+isolated branch and worktree from the latest `origin/main`, starts a fresh
+ephemeral Codex worker, independently verifies the result, and opens a linked
+pull request.
 
-The queue snapshot is local and immutable during a run. Ralph does not update,
-close, label, push, or merge anything on GitHub.
+The implementation worker has no GitHub role. It runs without network access,
+with a filtered command environment, cannot write outside its issue worktree,
+and is instructed to leave the diff uncommitted. The controller—running outside
+that worktree—alone owns state, commits, pushes, PRs, checks, and merges.
 
-## Safety contract
+## Modes
 
-An iteration advances only when all of these are true:
+- `DryRun` performs authentication and live eligibility checks but makes no
+  issue, branch, worktree, PR, or merge change.
+- `PrOnly` is the default. It claims and implements one issue, pushes it, opens
+  a linked PR, writes the summary, and stops for a human.
+- `AutoMerge` waits for required GitHub checks and required review approvals.
+  It merges without bypass only when the diff is classified low risk, the PR is
+  conflict-free, and every gate passes. High-risk work always stops at a PR.
 
-- Codex reports the selected issue complete.
-- The implementation reports tests and code review complete.
-- An independent full Vitest run passes after the commit.
-- The commit introduces no TypeScript diagnostics beyond the captured baseline.
-- A separate ephemeral Codex review reports no blocking findings.
-- Exactly one new commit was created.
-- The commit directly extends the prior integration-branch commit.
-- The commit message references the selected issue number.
-- The worktree is clean.
-
-Any failed command, malformed result, dirty worktree, ambiguous ticket, missing
-infrastructure, or failed success gate stops the loop. Local progress and logs
-live under `.ralph-state/`, which Git ignores.
-
-Implementation, verification, and review stages have default time limits of
-120, 15, and 30 minutes respectively. The launchers stop the timed-out process
-tree rather than allowing one hung stage to consume the whole night. These can
-be overridden with the corresponding `*TimeoutSeconds` parameters.
-
-Codex runs with `--ephemeral --sandbox workspace-write`. It does not use the
-dangerous approval/sandbox bypass flag.
+Automatic merging is denied for controller, CI, dependency-manifest,
+authentication/authorization, credential, migration, destructive-data,
+finance/payment, middleware, and environment/configuration changes.
 
 ## Prerequisites
 
-- Start on `codex/ralph-architecture` with a clean worktree.
-- Ensure `codex --version` and `codex login status` succeed.
-- Keep dependencies installed in `node_modules`.
-- Review `architecture-queue.json`; it is the approved offline snapshot of the
-  issue descriptions, blockers, acceptance criteria, and TDD seams.
+- The controller checkout must be clean.
+- `git`, `gh`, `node`, and `codex` must be installed and authenticated.
+- Dependencies must be installed in the controller checkout's `node_modules`.
+- The authenticated GitHub account must be allowed to assign issues, push
+  branches, create PRs, read branch protection, and merge normally.
 
-The runnable Vitest baseline is green. The full TypeScript check currently
-reports pre-existing diagnostics in older test files, so each iteration must
-distinguish that baseline from new diagnostics and may not introduce errors in
-its changed scope.
+Repository policy normally routes issue operations through the GitHub issue
+connector. That connector is unavailable to a standalone overnight process, so
+this controller uses the authenticated GitHub CLI as an explicit fallback for
+live reads and the claim assignment/comment. The worker never receives that
+authority.
 
-## Supervised shakeout
-
-Run a dry preflight first. This validates Codex authentication, the branch,
-clean worktree, tools, queue, progress, and next issue without starting an
-agent or changing repository state:
+## Supervised proving run
 
 ```powershell
-.\scripts\ralph\ralph-once.ps1 -DryRun
+.\scripts\ralph\ralph-once.ps1 -Mode DryRun
+.\scripts\ralph\ralph-once.ps1 -Mode PrOnly
 ```
 
-Then run one implementation while watching it:
+Inspect the first PR and the durable summary before enabling automatic merge.
+
+## Sequential run
+
+PR-only (default and recommended while proving the controller):
 
 ```powershell
-.\scripts\ralph\ralph-once.ps1
+.\scripts\ralph\afk-ralph.ps1 -Iterations 24 -Mode PrOnly
 ```
 
-Inspect the resulting commit and run another supervised iteration. Matt
-Pocock's Ralph guidance recommends building confidence with human-in-the-loop
-runs before switching to AFK mode.
-
-## Overnight run
-
-After two successful supervised iterations:
+Limited automatic merge:
 
 ```powershell
-.\scripts\ralph\afk-ralph.ps1 -Iterations 24
+.\scripts\ralph\afk-ralph.ps1 -Iterations 24 -Mode AutoMerge
 ```
 
-The iteration limit bounds runtime and spend. Re-running the same command is
-safe: selection resumes from `.ralph-state/progress.json` after confirming its
-last completed commit is still an ancestor of the integration branch. A completed queue
-returns `queue-complete` without invoking Codex.
+There is exactly one controller process and one implementation worker at a
+time. A process lock prevents a second local controller. A time-limited GitHub
+claim comment plus assignment exposes ownership across hosts and resolves a
+claim race deterministically.
 
-To perform only the AFK launcher's preflight:
+## Recovery
+
+Durable state, prompts, verification logs, PR metadata, and summaries live
+outside every worker at:
+
+```text
+%LOCALAPPDATA%\betterr-me-ralph\xtan9_betterr_me
+```
+
+State advances atomically through selection, claim, worktree creation,
+implementation, verification, commit, push, PR, checks, and merge. Re-running
+the same command reconciles the recorded branch, worktree, commit, PR, and
+merged SHA instead of starting duplicate work.
+
+Implementation, verification, review, and required-check waits are bounded.
+Only transient network and rate-limit failures are retried, with a bounded
+attempt count and backoff. Tests, review findings, ambiguity, conflicts, and
+policy denials are never retried automatically.
+
+## Kill switch
+
+Create this file to stop the active child process tree and prevent the next
+stage from starting:
 
 ```powershell
-.\scripts\ralph\afk-ralph.ps1 -Iterations 24 -DryRun
+New-Item -ItemType File "$env:LOCALAPPDATA\betterr-me-ralph\xtan9_betterr_me\STOP"
 ```
 
-## Monitoring and recovery
-
-Each invocation writes its prompt, stdout, stderr, structured result, and gate
-input under `.ralph-state/`. If the loop stops, inspect the newest files and the
-worktree before doing anything else:
+Remove it only when you deliberately want to resume:
 
 ```powershell
-Get-ChildItem .ralph-state | Sort-Object LastWriteTime -Descending | Select-Object -First 8
-git status --short --branch
-git log --oneline --decorate -10
+Remove-Item "$env:LOCALAPPDATA\betterr-me-ralph\xtan9_betterr_me\STOP"
 ```
 
-Do not manually mark an issue complete in `progress.json` unless its verified
-commit is already present on the integration branch. GitHub issues should stay
-open until the resulting integration work has been reviewed and merged.
+## Final summary
 
-## Files
+Every stop or completion refreshes:
 
-- `architecture-queue.json` — ordered ticket snapshot and blocking graph.
-- `queue.mjs` — validated selection and success-gate logic.
-- `result.schema.json` — structured final response required from Codex.
-- `review.schema.json` — structured result for the independent review gate.
-- `ralph-once.ps1` — one fresh Codex iteration.
-- `afk-ralph.ps1` — bounded loop around `ralph-once.ps1`.
+- `overnight-summary.json` for automation;
+- `overnight-summary.md` for human review.
+
+The summary records merged PRs, human gates, failures, in-progress issues, and
+the exact stop reason.

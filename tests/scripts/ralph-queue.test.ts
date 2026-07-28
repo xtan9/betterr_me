@@ -5,9 +5,16 @@ import { spawnSync } from "node:child_process";
 
 import {
   analyzeTypeScriptRun,
+  buildOvernightSummary,
+  chooseClaimWinner,
+  classifyChangeRisk,
+  evaluateMergeGate,
   evaluateIteration,
   findNewTypeScriptDiagnostics,
+  selectNextLiveIssue,
   selectNextIssue,
+  shouldRetry,
+  transitionIssue,
   validateQueueState,
 } from "../../scripts/ralph/queue.mjs";
 
@@ -111,6 +118,241 @@ describe("Ralph queue selection", () => {
     [queue, { completed: [0] }, "completed issue must be a positive integer"],
   ])("rejects invalid queue or progress state", (issues, progress, message) => {
     expect(() => validateQueueState(issues, progress)).toThrow(message);
+  });
+});
+
+describe("Ralph live issue selection and claiming", () => {
+  const liveQueue = [
+    { issueNumber: 101, blockers: [] },
+    { issueNumber: 102, blockers: [101] },
+    { issueNumber: 103, blockers: [] },
+  ];
+
+  it("selects the first open, ready, unassigned issue whose blockers are merged", () => {
+    const liveIssues = [
+      {
+        issueNumber: 101,
+        state: "OPEN",
+        labels: ["ready-for-agent"],
+        assignees: [],
+      },
+      {
+        issueNumber: 102,
+        state: "OPEN",
+        labels: ["ready-for-agent"],
+        assignees: [],
+      },
+      {
+        issueNumber: 103,
+        state: "OPEN",
+        labels: ["ready-for-agent"],
+        assignees: [],
+      },
+    ];
+
+    expect(
+      selectNextLiveIssue(liveQueue, { completed: [] }, liveIssues, "xtan9"),
+    ).toEqual(liveQueue[0]);
+  });
+
+  it("skips issues that are closed, not ready, or assigned to another actor", () => {
+    const liveIssues = [
+      {
+        issueNumber: 101,
+        state: "CLOSED",
+        labels: ["ready-for-agent"],
+        assignees: [],
+      },
+      {
+        issueNumber: 102,
+        state: "OPEN",
+        labels: ["needs-info"],
+        assignees: [],
+      },
+      {
+        issueNumber: 103,
+        state: "OPEN",
+        labels: ["ready-for-agent"],
+        assignees: ["someone-else"],
+      },
+    ];
+
+    expect(
+      selectNextLiveIssue(liveQueue, { completed: [] }, liveIssues, "xtan9"),
+    ).toBeNull();
+  });
+
+  it("allows the current actor's assigned issue to be reconciled after a crash", () => {
+    expect(
+      selectNextLiveIssue(
+        liveQueue,
+        { completed: [] },
+        [
+          {
+            issueNumber: 101,
+            state: "OPEN",
+            labels: ["ready-for-agent"],
+            assignees: ["xtan9"],
+          },
+        ],
+        "xtan9",
+      ),
+    ).toEqual(liveQueue[0]);
+  });
+
+  it("chooses the earliest unexpired remote claim deterministically", () => {
+    const now = new Date("2026-07-28T06:00:00Z");
+    expect(
+      chooseClaimWinner(
+        [
+          {
+            runId: "later",
+            createdAt: "2026-07-28T05:01:00Z",
+            expiresAt: "2026-07-29T05:01:00Z",
+            commentId: 12,
+          },
+          {
+            runId: "expired",
+            createdAt: "2026-07-27T01:00:00Z",
+            expiresAt: "2026-07-28T01:00:00Z",
+            commentId: 9,
+          },
+          {
+            runId: "winner",
+            createdAt: "2026-07-28T05:00:00Z",
+            expiresAt: "2026-07-29T05:00:00Z",
+            commentId: 10,
+          },
+        ],
+        now,
+      )?.runId,
+    ).toBe("winner");
+  });
+});
+
+describe("Ralph durable state and policy", () => {
+  it("rejects duplicate or dependency-incomplete progress", () => {
+    const queue = [
+      { issueNumber: 101, blockers: [] },
+      { issueNumber: 102, blockers: [101] },
+    ];
+
+    expect(() => validateQueueState(queue, { completed: [101, 101] })).toThrow(
+      "duplicate completed issue #101",
+    );
+    expect(() => validateQueueState(queue, { completed: [102] })).toThrow(
+      "completed issue #102 appears before blocker #101",
+    );
+  });
+
+  it("advances issue stages monotonically and permits idempotent recovery", () => {
+    const selected = transitionIssue(
+      { version: 2, completed: [], issues: {} },
+      101,
+      "selected",
+      { baseSha: "abc" },
+      "2026-07-28T06:00:00Z",
+    );
+    const same = transitionIssue(
+      selected,
+      101,
+      "selected",
+      { baseSha: "abc" },
+      "2026-07-28T06:01:00Z",
+    );
+    const claimed = transitionIssue(
+      same,
+      101,
+      "claimed",
+      { claimRunId: "run-1" },
+      "2026-07-28T06:02:00Z",
+    );
+
+    expect(claimed.issues["101"].stage).toBe("claimed");
+    expect(() =>
+      transitionIssue(claimed, 101, "selected", {}, "2026-07-28T06:03:00Z"),
+    ).toThrow("cannot move issue #101 backward");
+  });
+
+  it("allows automatic merge only for a low-risk, fully green PR", () => {
+    expect(
+      evaluateMergeGate({
+        mode: "AutoMerge",
+        risk: "low",
+        checksPassed: true,
+        reviewRequired: true,
+        reviewDecision: "APPROVED",
+        mergeState: "CLEAN",
+        ambiguous: false,
+      }),
+    ).toEqual({ canMerge: true, reason: "all merge gates passed" });
+  });
+
+  it.each([
+    [{ mode: "PrOnly", risk: "low" }, "mode is PrOnly"],
+    [{ mode: "AutoMerge", risk: "high" }, "change is high risk"],
+    [{ mode: "AutoMerge", risk: "low", checksPassed: false }, "required checks did not pass"],
+    [{ mode: "AutoMerge", risk: "low", mergeState: "DIRTY" }, "pull request has conflicts"],
+    [{ mode: "AutoMerge", risk: "low", ambiguous: true }, "requirements are ambiguous"],
+  ])("fails closed at the merge boundary", (overrides, reason) => {
+    expect(
+      evaluateMergeGate({
+        mode: "AutoMerge",
+        risk: "low",
+        checksPassed: true,
+        reviewRequired: false,
+        reviewDecision: "",
+        mergeState: "CLEAN",
+        ambiguous: false,
+        ...overrides,
+      }),
+    ).toEqual({ canMerge: false, reason });
+  });
+
+  it("classifies controller, CI, migration, and authentication changes as high risk", () => {
+    for (const file of [
+      "scripts/ralph/queue.mjs",
+      ".github/workflows/ci.yml",
+      "supabase/migrations/20260728000000_change.sql",
+      "app/api/oauth/token/route.ts",
+    ]) {
+      expect(classifyChangeRisk([file], { title: "Routine change" }).level).toBe(
+        "high",
+      );
+    }
+    expect(
+      classifyChangeRisk(["lib/calendar/create-event.ts"], {
+        title: "Create a calendar event",
+      }).level,
+    ).toBe("low");
+  });
+
+  it("retries only transient failures and respects the cap", () => {
+    expect(shouldRetry("network", 1, 3)).toBe(true);
+    expect(shouldRetry("rate-limit", 2, 3)).toBe(true);
+    expect(shouldRetry("network", 3, 3)).toBe(false);
+    expect(shouldRetry("tests", 1, 3)).toBe(false);
+    expect(shouldRetry("review", 1, 3)).toBe(false);
+    expect(shouldRetry("ambiguous", 1, 3)).toBe(false);
+  });
+
+  it("builds a durable final summary from issue states", () => {
+    expect(
+      buildOvernightSummary({
+        version: 2,
+        runId: "run-1",
+        startedAt: "2026-07-28T06:00:00Z",
+        completed: [101],
+        issues: {
+          "101": { stage: "merged", prNumber: 601 },
+          "102": { stage: "manual-review", prNumber: 602, stopReason: "high risk" },
+        },
+      }),
+    ).toMatchObject({
+      runId: "run-1",
+      merged: [{ issueNumber: 101, prNumber: 601 }],
+      awaitingHuman: [{ issueNumber: 102, prNumber: 602, reason: "high risk" }],
+    });
   });
 });
 

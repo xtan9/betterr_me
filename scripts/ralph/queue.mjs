@@ -41,11 +41,26 @@ export function validateQueueState(queue, state) {
     }
   }
 
+  const seenCompleted = new Set();
   for (const completedIssue of state.completed) {
     assertIssueNumber(completedIssue, "completed issue");
     if (!issueNumbers.has(completedIssue)) {
       throw new Error(`progress references unknown issue #${completedIssue}`);
     }
+    if (seenCompleted.has(completedIssue)) {
+      throw new Error(`duplicate completed issue #${completedIssue}`);
+    }
+    const completedQueueIssue = queue.find(
+      (issue) => issue.issueNumber === completedIssue,
+    );
+    for (const blocker of completedQueueIssue.blockers) {
+      if (!seenCompleted.has(blocker)) {
+        throw new Error(
+          `completed issue #${completedIssue} appears before blocker #${blocker}`,
+        );
+      }
+    }
+    seenCompleted.add(completedIssue);
   }
 }
 
@@ -70,6 +85,201 @@ export function selectNextIssue(queue, state) {
   }
 
   return nextIssue;
+}
+
+export function selectNextLiveIssue(queue, state, liveIssues, actor) {
+  validateQueueState(queue, state);
+  const completed = new Set(state.completed);
+  const liveByNumber = new Map(
+    liveIssues.map((issue) => [issue.issueNumber, issue]),
+  );
+
+  return (
+    queue.find((issue) => {
+      if (
+        completed.has(issue.issueNumber) ||
+        !issue.blockers.every((blocker) => completed.has(blocker))
+      ) {
+        return false;
+      }
+
+      const live = liveByNumber.get(issue.issueNumber);
+      if (!live || live.state !== "OPEN") {
+        return false;
+      }
+      if (!live.labels.includes("ready-for-agent")) {
+        return false;
+      }
+      return (
+        live.assignees.length === 0 ||
+        live.assignees.every((assignee) => assignee === actor)
+      );
+    }) ?? null
+  );
+}
+
+export function chooseClaimWinner(claims, now = new Date()) {
+  const nowTime = now.getTime();
+  return (
+    claims
+      .filter((claim) => new Date(claim.expiresAt).getTime() > nowTime)
+      .sort((left, right) => {
+        const timeDifference =
+          new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+        return timeDifference || left.commentId - right.commentId;
+      })[0] ?? null
+  );
+}
+
+const ISSUE_STAGES = [
+  "selected",
+  "claimed",
+  "worktree-ready",
+  "implementing",
+  "implemented",
+  "verified",
+  "committed",
+  "pushed",
+  "pr-open",
+  "checks-passed",
+  "manual-review",
+  "merged",
+  "failed",
+];
+
+export function transitionIssue(state, issueNumber, nextStage, patch, now) {
+  assertIssueNumber(issueNumber, "issueNumber");
+  const nextIndex = ISSUE_STAGES.indexOf(nextStage);
+  if (nextIndex === -1) {
+    throw new Error(`unknown issue stage ${nextStage}`);
+  }
+
+  const current = state.issues?.[String(issueNumber)];
+  if (current) {
+    const currentIndex = ISSUE_STAGES.indexOf(current.stage);
+    if (nextIndex < currentIndex) {
+      throw new Error(`cannot move issue #${issueNumber} backward`);
+    }
+  }
+
+  return {
+    ...state,
+    issues: {
+      ...(state.issues ?? {}),
+      [String(issueNumber)]: {
+        ...(current ?? {}),
+        ...patch,
+        stage: nextStage,
+        updatedAt: now,
+      },
+    },
+    updatedAt: now,
+  };
+}
+
+const HIGH_RISK_PATHS = [
+  /^scripts\/ralph\//,
+  /^\.github\//,
+  /^supabase\/migrations\//,
+  /^agents\.md$/,
+  /(^|\/)\.env(?:\.|$)/,
+  /(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/,
+  /(^|\/)(vitest|eslint|next|playwright)\.config\./,
+  /(^|\/)oauth(\/|$)/,
+  /(^|\/)auth(\/|$)/,
+  /(^|\/)(permission|credential|secret|token)s?(\/|\.)/,
+  /(^|\/)middleware\.[^/]+$/,
+  /(^|\/)instrumentation\.[^/]+$/,
+];
+const HIGH_RISK_WORDS =
+  /\b(auth|oauth|authorization|credential|secret|token|permission|migration|schema|finance|payment|destructive|delete|deletion)\b/i;
+
+export function classifyChangeRisk(paths, issue = {}) {
+  const normalizedPaths = paths.map((file) => file.replaceAll("\\", "/").toLowerCase());
+  const riskyPaths = normalizedPaths.filter((file) =>
+    HIGH_RISK_PATHS.some((pattern) => pattern.test(file)),
+  );
+  const issueText = `${issue.title ?? ""}\n${issue.whatToBuild ?? ""}`;
+  const issueRisk = HIGH_RISK_WORDS.test(issueText);
+
+  if (riskyPaths.length > 0 || issueRisk) {
+    return {
+      level: "high",
+      reasons: [
+        ...riskyPaths.map((file) => `high-risk path: ${file}`),
+        ...(issueRisk ? ["high-risk issue language"] : []),
+      ],
+    };
+  }
+
+  return { level: "low", reasons: [] };
+}
+
+export function evaluateMergeGate(gate) {
+  const fail = (reason) => ({ canMerge: false, reason });
+  if (gate.mode !== "AutoMerge") {
+    return fail(`mode is ${gate.mode}`);
+  }
+  if (gate.risk !== "low") {
+    return fail(`change is ${gate.risk} risk`);
+  }
+  if (gate.ambiguous) {
+    return fail("requirements are ambiguous");
+  }
+  if (!gate.checksPassed) {
+    return fail("required checks did not pass");
+  }
+  if (gate.mergeState !== "CLEAN") {
+    return fail(
+      gate.mergeState === "DIRTY"
+        ? "pull request has conflicts"
+        : `pull request merge state is ${gate.mergeState || "unknown"}`,
+    );
+  }
+  if (gate.reviewRequired && gate.reviewDecision !== "APPROVED") {
+    return fail("required review approval is missing");
+  }
+  return { canMerge: true, reason: "all merge gates passed" };
+}
+
+export function shouldRetry(failureKind, attempt, maximumAttempts) {
+  return (
+    ["network", "rate-limit", "check-poll"].includes(failureKind) &&
+    attempt < maximumAttempts
+  );
+}
+
+export function buildOvernightSummary(state) {
+  const summary = {
+    runId: state.runId,
+    startedAt: state.startedAt,
+    updatedAt: state.updatedAt,
+    merged: [],
+    awaitingHuman: [],
+    failed: [],
+    inProgress: [],
+  };
+
+  for (const [issueNumberText, issue] of Object.entries(state.issues ?? {})) {
+    const item = {
+      issueNumber: Number(issueNumberText),
+      ...(issue.prNumber ? { prNumber: issue.prNumber } : {}),
+    };
+    if (issue.stage === "merged") {
+      summary.merged.push(item);
+    } else if (issue.stage === "manual-review" || issue.stage === "pr-open") {
+      summary.awaitingHuman.push({
+        ...item,
+        reason: issue.stopReason ?? "awaiting human review",
+      });
+    } else if (issue.stage === "failed") {
+      summary.failed.push({ ...item, reason: issue.stopReason ?? "failed" });
+    } else {
+      summary.inProgress.push({ ...item, stage: issue.stage });
+    }
+  }
+
+  return summary;
 }
 
 function normalizeTypeScriptDiagnostic(line) {
@@ -209,6 +419,56 @@ function runCli(args) {
     return;
   }
 
+  if (command === "live-next") {
+    const queue = readJson(getOption(args, "--queue"));
+    const progress = readJson(getOption(args, "--progress"));
+    const liveIssues = readJson(getOption(args, "--live"));
+    const actor = getOption(args, "--actor");
+    const issue = selectNextLiveIssue(queue, progress, liveIssues, actor);
+    process.stdout.write(
+      `${JSON.stringify(issue ? { complete: false, issue } : { complete: true })}\n`,
+    );
+    return;
+  }
+
+  if (command === "transition") {
+    const state = readJson(getOption(args, "--state"));
+    const issueNumber = Number.parseInt(getOption(args, "--issue"), 10);
+    const stage = getOption(args, "--stage");
+    const patch = readJson(getOption(args, "--patch"));
+    const now = getOption(args, "--now");
+    process.stdout.write(
+      `${JSON.stringify(transitionIssue(state, issueNumber, stage, patch, now))}\n`,
+    );
+    return;
+  }
+
+  if (command === "claim-winner") {
+    const claims = readJson(getOption(args, "--claims"));
+    const now = new Date(getOption(args, "--now"));
+    process.stdout.write(`${JSON.stringify(chooseClaimWinner(claims, now))}\n`);
+    return;
+  }
+
+  if (command === "risk") {
+    const paths = readJson(getOption(args, "--paths"));
+    const issue = readJson(getOption(args, "--issue"));
+    process.stdout.write(`${JSON.stringify(classifyChangeRisk(paths, issue))}\n`);
+    return;
+  }
+
+  if (command === "merge-gate") {
+    const gate = readJson(getOption(args, "--input"));
+    process.stdout.write(`${JSON.stringify(evaluateMergeGate(gate))}\n`);
+    return;
+  }
+
+  if (command === "summary") {
+    const state = readJson(getOption(args, "--state"));
+    process.stdout.write(`${JSON.stringify(buildOvernightSummary(state))}\n`);
+    return;
+  }
+
   if (command === "gate") {
     const iteration = readJson(getOption(args, "--input"));
     process.stdout.write(`${JSON.stringify(evaluateIteration(iteration))}\n`);
@@ -243,7 +503,7 @@ function runCli(args) {
   }
 
   throw new Error(
-    "usage: queue.mjs <next|gate|compare-diagnostics|analyze-diagnostics> [options]",
+    "usage: queue.mjs <next|live-next|transition|claim-winner|risk|merge-gate|summary|gate|compare-diagnostics|analyze-diagnostics> [options]",
   );
 }
 
