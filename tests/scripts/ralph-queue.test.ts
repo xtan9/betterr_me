@@ -401,11 +401,38 @@ describe("Ralph durable state and policy", () => {
   });
 
   it("maps ordinary test exits to repairable findings without hiding interruptions", () => {
-    expect(testVerificationFailureKind("command")).toBe("tests");
-    expect(testVerificationFailureKind(undefined)).toBe("tests");
-    expect(testVerificationFailureKind("timeout")).toBe("timeout");
-    expect(testVerificationFailureKind("kill-switch")).toBe("kill-switch");
-    expect(testVerificationFailureKind("network")).toBe("network");
+    const failedReport = JSON.stringify({
+      numFailedTests: 1,
+      numFailedTestSuites: 1,
+    });
+    expect(
+      testVerificationFailureKind({
+        failureKind: "command",
+        result: { stdout: failedReport },
+      }),
+    ).toBe("tests");
+    expect(
+      testVerificationFailureKind({
+        failureKind: "network",
+        result: { stdout: failedReport },
+      }),
+    ).toBe("tests");
+    expect(
+      testVerificationFailureKind({
+        failureKind: "command",
+        result: { stdout: "wsl launch failed" },
+      }),
+    ).toBe("command");
+    expect(testVerificationFailureKind({})).toBe("command");
+    expect(
+      testVerificationFailureKind({
+        failureKind: "timeout",
+        result: { stdout: failedReport },
+      }),
+    ).toBe("timeout");
+    expect(testVerificationFailureKind({ failureKind: "kill-switch" })).toBe(
+      "kill-switch",
+    );
   });
 
   it("repairs only review findings explicitly classified as safe to repair", () => {

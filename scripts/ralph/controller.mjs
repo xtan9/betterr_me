@@ -1511,12 +1511,17 @@ async function verifyIssue(state, issue, controllerOptions) {
   status(`Running the full Vitest suite for issue #${number}.`);
   const vitest = `${wslDependencyRoot}/vitest/vitest.mjs`;
   try {
-    await runWslSandboxed("/usr/local/bin/node", [vitest, "run"], worktreePath, {
-      timeoutSeconds: controllerOptions.verificationTimeoutSeconds,
-      logPrefix: path.join(issueLogRoot, `${timestamp}-vitest`),
-    });
+    await runWslSandboxed(
+      "/usr/local/bin/node",
+      [vitest, "run", "--reporter=json"],
+      worktreePath,
+      {
+        timeoutSeconds: controllerOptions.verificationTimeoutSeconds,
+        logPrefix: path.join(issueLogRoot, `${timestamp}-vitest`),
+      },
+    );
   } catch (error) {
-    error.failureKind = testVerificationFailureKind(error.failureKind);
+    error.failureKind = testVerificationFailureKind(error);
     throw error;
   }
 

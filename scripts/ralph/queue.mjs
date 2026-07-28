@@ -302,12 +302,19 @@ export function shouldRepairFailure(
   );
 }
 
-export function testVerificationFailureKind(failureKind) {
-  return ["timeout", "kill-switch", "network", "rate-limit"].includes(
-    failureKind,
-  )
-    ? failureKind
-    : "tests";
+export function testVerificationFailureKind(error) {
+  if (["timeout", "kill-switch"].includes(error?.failureKind)) {
+    return error.failureKind;
+  }
+  try {
+    const report = JSON.parse(error?.result?.stdout ?? "");
+    if (report.numFailedTests > 0 || report.numFailedTestSuites > 0) {
+      return "tests";
+    }
+  } catch {
+    // Missing or malformed reporter output is not evidence of a test finding.
+  }
+  return error?.failureKind ?? "command";
 }
 
 export function reviewFailureKind(review) {
