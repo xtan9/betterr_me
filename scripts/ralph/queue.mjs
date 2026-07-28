@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -319,6 +320,27 @@ export function testVerificationFailureKind(error) {
 
 export function reviewFailureKind(review) {
   return review?.repairable === true ? "review" : "review-nonrepairable";
+}
+
+export function isolatedCodexReadablePaths({
+  readOnly,
+  worktreePath,
+  dependencyRoot,
+  workerHome,
+}) {
+  return [
+    ...(readOnly ? [worktreePath] : []),
+    dependencyRoot,
+    workerHome,
+  ];
+}
+
+export function frameInertData(label, payload) {
+  let marker;
+  do {
+    marker = `RALPH_${label}_${crypto.randomBytes(24).toString("hex")}`;
+  } while (payload.includes(marker));
+  return { marker, framed: `${marker}\n${payload}\n${marker}` };
 }
 
 export function buildOvernightSummary(state) {
