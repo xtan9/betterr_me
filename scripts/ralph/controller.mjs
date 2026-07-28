@@ -362,6 +362,7 @@ function windowsToWslPath(filePath) {
 }
 
 async function runWsl(args, options = {}) {
+  const { allowFailure = false, ...processOptions } = options;
   const pidDirectory = path.join(stateRoot, "pids");
   fs.mkdirSync(pidDirectory, { recursive: true });
   const pidPath = path.join(pidDirectory, `${crypto.randomUUID()}.pid`);
@@ -384,7 +385,8 @@ async function runWsl(args, options = {}) {
     }
   };
   try {
-    return await runChecked(
+    const runner = allowFailure ? runProcess : runChecked;
+    return await runner(
       "wsl.exe",
       [
         "--",
@@ -394,7 +396,7 @@ async function runWsl(args, options = {}) {
         ...args,
       ],
       {
-        ...options,
+        ...processOptions,
         environment: scrubbedEnvironment(),
         onTerminate: terminateLinuxGroup,
       },
@@ -1172,7 +1174,7 @@ async function runTypeScript(worktreePath, timeoutSeconds, logPrefix) {
     "/usr/local/bin/node",
     [compiler, "--noEmit", "--pretty", "false"],
     worktreePath,
-    { timeoutSeconds, logPrefix },
+    { timeoutSeconds, logPrefix, allowFailure: true },
   );
   const lines = `${result.stdout}\n${result.stderr}`.split(/\r?\n/);
   const analysis = analyzeTypeScriptRun(lines, result.code);
