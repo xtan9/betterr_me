@@ -1652,7 +1652,7 @@ The privileged controller produced the exact staged diff below. It is authoritat
 Check correctness, acceptance criteria, regressions, missing tests, repository standards, and unsafe scope. Any ambiguity is blocking.
 Return status=pass, blockerKind=none, and an empty blockingFindings array only when no blocking finding remains.
 For findings, set blockerKind=code only when every finding is a concrete code or test defect inside the approved scope; set requirements for ambiguity or requirement conflict; set infrastructure for missing infrastructure; and set safety for unsafe scope, security or policy concerns, or secrets concerns. Use the most restrictive applicable kind (safety, then infrastructure, then requirements, then code).
-Set repairable=true only for blockerKind=code when every finding can be safely repaired inside the approved ticket scope. Otherwise set repairable=false.
+Set repairable=true only when every finding is concrete, its exact repair is clear, and it can be safely repaired inside the approved ticket scope. A concrete safety regression may be repairable, but remains blockerKind=safety so unresolved unsafe work is never published. Set repairable=false for pass results, missing infrastructure, ambiguity, requirement conflicts, secrets exposure, or any finding whose safe repair requires judgment outside the ticket.
 Ticket block:
 ${ticketBlock.framed}
 Diff block:

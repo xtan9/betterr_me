@@ -314,7 +314,7 @@ export function shouldRepairFailure(
   maximumRepairAttempts,
 ) {
   return (
-    ["tests", "typecheck", "review"].includes(failureKind) &&
+    ["tests", "typecheck", "review", "review-safety"].includes(failureKind) &&
     completedRepairAttempts < maximumRepairAttempts
   );
 }
@@ -400,7 +400,9 @@ export function testVerificationFailureKind(error) {
 
 export function reviewFailureKind(review) {
   if (review?.blockerKind === "infrastructure") return "infrastructure";
-  if (review?.blockerKind === "safety") return "safety";
+  if (review?.blockerKind === "safety") {
+    return review.repairable === true ? "review-safety" : "safety";
+  }
   if (review?.blockerKind === "requirements") return "ambiguous";
   if (review?.blockerKind === "code") {
     return review.repairable === true ? "review" : "review-nonrepairable";

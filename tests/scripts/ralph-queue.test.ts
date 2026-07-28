@@ -571,6 +571,8 @@ describe("Ralph durable state and policy", () => {
     expect(shouldRepairFailure("tests", 0, 2)).toBe(true);
     expect(shouldRepairFailure("typecheck", 1, 2)).toBe(true);
     expect(shouldRepairFailure("review", 2, 2)).toBe(false);
+    expect(shouldRepairFailure("review-safety", 2, 5)).toBe(true);
+    expect(shouldRepairFailure("review-safety", 5, 5)).toBe(false);
     expect(shouldRepairFailure("ambiguous", 0, 2)).toBe(false);
     expect(shouldRepairFailure("unsafe-scope", 0, 2)).toBe(false);
     expect(shouldRepairFailure("network", 0, 2)).toBe(false);
@@ -627,6 +629,10 @@ describe("Ralph durable state and policy", () => {
     expect(
       reviewFailureKind({ blockerKind: "safety", repairable: false }),
     ).toBe("safety");
+    expect(
+      reviewFailureKind({ blockerKind: "safety", repairable: true }),
+    ).toBe("review-safety");
+    expect(shouldParkIssueFailure("review-safety")).toBe(false);
     expect(reviewFailureKind({})).toBe("safety");
   });
 
