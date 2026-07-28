@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   ensureSanitizedWorkerGitView,
   removeSanitizedWorkerGitView,
+  workerCodexModelArguments,
   workerGitSmokeCommand,
 } from "../../scripts/ralph/worker-isolation.mjs";
 
@@ -25,6 +26,21 @@ function git(args: string[], options: { input?: string } = {}) {
 }
 
 describe("Ralph sanitized worker Git view", () => {
+  it("pins Sol with medium implementation effort and high review effort", () => {
+    expect(workerCodexModelArguments({ readOnly: false })).toEqual([
+      "--model",
+      "gpt-5.6-sol",
+      "-c",
+      'model_reasoning_effort="medium"',
+    ]);
+    expect(workerCodexModelArguments({ readOnly: true })).toEqual([
+      "--model",
+      "gpt-5.6-sol",
+      "-c",
+      'model_reasoning_effort="high"',
+    ]);
+  });
+
   it("does not use command substitutions that escape the standalone sandbox environment", () => {
     const command = workerGitSmokeCommand("/repository/.git/config");
     expect(command).not.toContain("$(");

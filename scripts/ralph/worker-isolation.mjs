@@ -1,6 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
+export function workerCodexModelArguments({ readOnly }) {
+  return [
+    "--model",
+    "gpt-5.6-sol",
+    "-c",
+    `model_reasoning_effort=${JSON.stringify(readOnly ? "high" : "medium")}`,
+  ];
+}
+
 export function isolatedCodexReadablePaths({
   readOnly,
   worktreePath,

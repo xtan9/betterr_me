@@ -78,6 +78,29 @@ Limited automatic merge:
 .\scripts\ralph\afk-ralph.ps1 -Iterations 24 -Mode AutoMerge
 ```
 
+## Live monitoring
+
+Ralph writes a redacted, human-readable event stream to the foreground terminal
+and to a stable durable log. In another PowerShell window, follow the current
+run with:
+
+```powershell
+.\scripts\ralph\watch-ralph.ps1
+```
+
+The monitor shows controller phases plus filtered Codex agent messages,
+commands, file changes, failures, and turn usage. Reasoning events are not
+displayed. Each Codex invocation also keeps its unmodified JSONL event stream
+beside the existing issue logs for debugging. Live output is observational
+only: the structured result file and controller verification gates remain the
+authority for commits, PRs, checks, and merges.
+
+Worker model policy is controller-owned and explicit: implementation and repair
+sessions use `gpt-5.6-sol` with medium reasoning effort, while independent
+reviews use `gpt-5.6-sol` with high reasoning effort. Because workers run with
+`--ignore-user-config`, personal Codex defaults cannot silently change this
+policy.
+
 There is exactly one controller process and one implementation worker at a
 time. A process lock prevents a second local controller. A time-limited GitHub
 claim comment plus assignment exposes ownership across hosts and resolves a
