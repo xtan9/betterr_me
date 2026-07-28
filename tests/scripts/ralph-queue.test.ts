@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
+  DEFAULT_VERIFICATION_TIMEOUT_SECONDS,
   analyzeTypeScriptRun,
   buildOvernightSummary,
   buildFailedAttemptPullRequestBody,
@@ -17,10 +18,12 @@ import {
   frameInertData,
   evaluateIteration,
   findNewTypeScriptDiagnostics,
+  findDuplicateMigrationPrefixes,
   isIssueActive,
   independentReviewClassificationContract,
   neutralizeClosingKeywords,
   preserveExternalFailureKind,
+  pullRequestCheckDisposition,
   selectNextLiveIssue,
   selectNextLiveIssueStatus,
   selectNextIssue,
@@ -321,6 +324,7 @@ describe("Ralph durable state and policy", () => {
     expect(isIssueActive({ stage: "interrupted" })).toBe(true);
     expect(isIssueActive({ stage: "failure-publishing" })).toBe(true);
     expect(isIssueActive({ stage: "parking" })).toBe(true);
+    expect(isIssueActive({ stage: "pr-repairing" })).toBe(true);
     expect(isIssueActive({ stage: "manual-review" })).toBe(false);
     expect(isIssueActive({ stage: "failed" })).toBe(false);
     expect(isIssueActive({ stage: "merged" })).toBe(false);
@@ -412,6 +416,9 @@ describe("Ralph durable state and policy", () => {
     expect(shouldParkIssueFailure("review-safety")).toBe(true);
     expect(shouldParkIssueFailure("ambiguous")).toBe(true);
     expect(shouldParkIssueFailure("worker-blocked")).toBe(true);
+    expect(shouldParkIssueFailure("pr-checks")).toBe(true);
+    expect(shouldParkIssueFailure("tests-timeout")).toBe(true);
+    expect(shouldParkIssueFailure("merge-conflict")).toBe(true);
     expect(shouldParkIssueFailure("command")).toBe(false);
     expect(shouldParkIssueFailure("kill-switch")).toBe(false);
   });
@@ -550,6 +557,23 @@ Reserve repairable=false for a genuine unresolved product decision with material
     expect(() =>
       transitionIssue(claimed, 101, "selected", {}, "2026-07-28T06:03:00Z"),
     ).toThrow("cannot move issue #101 backward");
+
+    const checksPassed = transitionIssue(
+      claimed,
+      101,
+      "checks-passed",
+      {},
+      "2026-07-28T06:04:00Z",
+    );
+    expect(
+      transitionIssue(
+        checksPassed,
+        101,
+        "pr-repairing",
+        {},
+        "2026-07-28T06:05:00Z",
+      ).issues["101"].stage,
+    ).toBe("pr-repairing");
   });
 
   it("allows a repaired failed-attempt PR to become merged", () => {
@@ -591,6 +615,12 @@ Reserve repairable=false for a genuine unresolved product decision with material
     expect(failureDisposition("pr-open", false)).toBe("manual-review");
     expect(failureDisposition("checks-passed", false)).toBe("manual-review");
     expect(failureDisposition("checks-passed", true)).toBe("merged");
+    expect(failureDisposition("pr-open", false, "pending-pr-repair")).toBe(
+      "interrupted",
+    );
+    expect(failureDisposition("pr-repairing", false, "command")).toBe(
+      "manual-review",
+    );
   });
 
   it("allows automatic merge only for a low-risk, fully green PR", () => {
@@ -676,6 +706,9 @@ Reserve repairable=false for a genuine unresolved product decision with material
     expect(shouldRepairFailure("review-security", 2, 5)).toBe(true);
     expect(shouldRepairFailure("review-security", 5, 5)).toBe(false);
     expect(shouldRepairFailure("review-safety", 2, 5)).toBe(true);
+    expect(shouldRepairFailure("pr-checks", 4, 5)).toBe(true);
+    expect(shouldRepairFailure("tests-timeout", 4, 5)).toBe(true);
+    expect(shouldRepairFailure("pr-checks", 5, 5)).toBe(false);
     expect(shouldRepairFailure("ambiguous", 0, 2)).toBe(false);
     expect(shouldRepairFailure("unsafe-scope", 0, 2)).toBe(false);
     expect(shouldRepairFailure("network", 0, 2)).toBe(false);
@@ -710,7 +743,7 @@ Reserve repairable=false for a genuine unresolved product decision with material
         failureKind: "timeout",
         result: { stdout: failedReport },
       }),
-    ).toBe("timeout");
+    ).toBe("tests-timeout");
     expect(testVerificationFailureKind({ failureKind: "kill-switch" })).toBe(
       "kill-switch",
     );
@@ -723,6 +756,78 @@ Reserve repairable=false for a genuine unresolved product decision with material
       "--reporter=json",
       "--maxWorkers=4",
     ]);
+    expect(DEFAULT_VERIFICATION_TIMEOUT_SECONDS).toBe(3600);
+    expect(fs.readFileSync("scripts/ralph/afk-ralph.ps1", "utf8")).toContain(
+      "$VerificationTimeoutSeconds = 3600",
+    );
+    expect(fs.readFileSync("scripts/ralph/ralph-once.ps1", "utf8")).toContain(
+      "$VerificationTimeoutSeconds = 3600",
+    );
+  });
+
+  it("repairs failed PR checks before applying the human-only merge gate", () => {
+    expect(
+      pullRequestCheckDisposition({
+        checksPassed: false,
+        completedRepairAttempts: 4,
+        maximumRepairAttempts: 5,
+        mode: "AutoMerge",
+        risk: "high",
+      }),
+    ).toBe("repair");
+    expect(
+      pullRequestCheckDisposition({
+        checksPassed: false,
+        completedRepairAttempts: 5,
+        maximumRepairAttempts: 5,
+        mode: "AutoMerge",
+        risk: "high",
+      }),
+    ).toBe("awaiting-human");
+    expect(
+      pullRequestCheckDisposition({
+        checksPassed: true,
+        completedRepairAttempts: 0,
+        maximumRepairAttempts: 5,
+        mode: "AutoMerge",
+        risk: "high",
+      }),
+    ).toBe("awaiting-human");
+    expect(
+      pullRequestCheckDisposition({
+        checksPassed: true,
+        completedRepairAttempts: 0,
+        maximumRepairAttempts: 5,
+        mode: "PrOnly",
+        risk: "low",
+      }),
+    ).toBe("awaiting-human");
+    expect(
+      pullRequestCheckDisposition({
+        checksPassed: true,
+        completedRepairAttempts: 0,
+        maximumRepairAttempts: 5,
+        mode: "AutoMerge",
+        risk: "low",
+      }),
+    ).toBe("merge-gates");
+  });
+
+  it("detects migration timestamp collisions in the candidate merge tree", () => {
+    expect(
+      findDuplicateMigrationPrefixes([
+        "supabase/migrations/20260728000001_first.sql",
+        "supabase/migrations/20260728000001_second.sql",
+        "supabase/migrations/20260728000002_third.sql",
+        "supabase/migrations/README.md",
+      ]),
+    ).toEqual(["20260728000001"]);
+    expect(
+      findDuplicateMigrationPrefixes([
+        "supabase/migrations/20260728000001_first.sql",
+        "supabase/migrations/20260728000002_second.sql",
+      ]),
+    ).toEqual([]);
   });
 
   it("repairs only review findings explicitly classified as safe to repair", () => {

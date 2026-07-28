@@ -3,6 +3,8 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+export const DEFAULT_VERIFICATION_TIMEOUT_SECONDS = 3600;
+
 function assertIssueNumber(value, context) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${context} must be a positive integer`);
@@ -161,6 +163,7 @@ export const ISSUE_STAGES = [
   "pushed",
   "pr-open",
   "checks-passed",
+  "pr-repairing",
   "manual-review",
   "failure-publishing",
   "parking",
@@ -229,10 +232,23 @@ export function selectRecoveryBase(recordedBase, currentBase, worktreeExists) {
 
 export function failureDisposition(stage, pullRequestMerged, failureKind) {
   if (pullRequestMerged) return "merged";
-  if (["kill-switch", "timeout", "network", "rate-limit", "check-poll"].includes(failureKind)) {
+  if (
+    [
+      "kill-switch",
+      "timeout",
+      "network",
+      "rate-limit",
+      "check-poll",
+      "pending-pr-repair",
+    ].includes(failureKind)
+  ) {
     return "interrupted";
   }
-  if (["pr-open", "checks-passed", "manual-review"].includes(stage)) {
+  if (
+    ["pr-open", "checks-passed", "pr-repairing", "manual-review"].includes(
+      stage,
+    )
+  ) {
     return "manual-review";
   }
   return "failed";
@@ -319,6 +335,8 @@ export function shouldRepairFailure(
       "typecheck",
       "review",
       "review-security",
+      "pr-checks",
+      "tests-timeout",
       // Backward compatibility for durable gates created before security and
       // controller-safety findings were split into separate kinds.
       "review-safety",
@@ -334,6 +352,9 @@ export function shouldParkIssueFailure(failureKind) {
     "review",
     "review-nonrepairable",
     "review-security-nonrepairable",
+    "pr-checks",
+    "tests-timeout",
+    "merge-conflict",
     // Legacy repairable product-security gates used this name. Under the old
     // contract, secrets and non-repairable safety findings mapped to `safety`.
     "review-safety",
@@ -442,9 +463,8 @@ export function neutralizeClosingKeywords(value) {
 }
 
 export function testVerificationFailureKind(error) {
-  if (["timeout", "kill-switch"].includes(error?.failureKind)) {
-    return error.failureKind;
-  }
+  if (error?.failureKind === "timeout") return "tests-timeout";
+  if (error?.failureKind === "kill-switch") return "kill-switch";
   try {
     const report = JSON.parse(error?.result?.stdout ?? "");
     if (report.numFailedTests > 0 || report.numFailedTestSuites > 0) {
@@ -454,6 +474,37 @@ export function testVerificationFailureKind(error) {
     // Missing or malformed reporter output is not evidence of a test finding.
   }
   return error?.failureKind ?? "command";
+}
+
+export function pullRequestCheckDisposition({
+  checksPassed,
+  completedRepairAttempts,
+  maximumRepairAttempts,
+  mode,
+  risk,
+}) {
+  if (!checksPassed) {
+    return completedRepairAttempts < maximumRepairAttempts
+      ? "repair"
+      : "awaiting-human";
+  }
+  if (mode !== "AutoMerge" || risk !== "low") return "awaiting-human";
+  return "merge-gates";
+}
+
+export function findDuplicateMigrationPrefixes(paths) {
+  const counts = new Map();
+  for (const filePath of paths) {
+    const match = String(filePath).match(
+      /(?:^|\/)supabase\/migrations\/(\d{14})[^/]*\.sql$/,
+    );
+    if (!match) continue;
+    counts.set(match[1], (counts.get(match[1]) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([prefix]) => prefix)
+    .sort();
 }
 
 export function vitestVerificationArguments(vitestPath) {
