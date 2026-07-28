@@ -43,6 +43,9 @@ function Invoke-RedirectedProcess {
     }
 
     $process = Start-Process @startParameters
+    # PowerShell 5.1 can leave ExitCode unset unless the native process handle
+    # is opened before waiting on a Start-Process -PassThru result.
+    $null = $process.Handle
     $exited = $process.WaitForExit($TimeoutSeconds * 1000)
     if (-not $exited) {
         try {
