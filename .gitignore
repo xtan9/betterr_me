@@ -33,6 +33,9 @@ e2e/.auth/
 # worktrees
 .worktrees/
 
+# Local Ralph loop state and logs
+.ralph-state/
+
 # Claude Code runtime artifacts (agent working copies, lock files, personal settings)
 .claude/worktrees/
 .claude/scheduled_tasks.lock

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["completed", "blocked", "failed"]
+    },
+    "issueNumber": {
+      "type": "integer"
+    },
+    "testsPassed": {
+      "type": "boolean"
+    },
+    "reviewCompleted": {
+      "type": "boolean"
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "issueNumber",
+    "testsPassed",
+    "reviewCompleted",
+    "summary"
+  ],
+  "additionalProperties": false
+}

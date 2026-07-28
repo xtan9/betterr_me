@@ -1,0 +1,363 @@
+[
+  {
+    "issueNumber": 481,
+    "title": "Create calendar events and reminders as one lifecycle",
+    "url": "https://github.com/xtan9/betterr_me/issues/481",
+    "blockers": [],
+    "testSeam": "The scheduling lifecycle's public create interface and its observable event/reminder outcome.",
+    "whatToBuild": "Creating a calendar event owns any requested reminder as one coherent operation, with a single outcome and no partial schedule.",
+    "acceptanceCriteria": [
+      "Creating an event without a reminder produces the event and no reminder.",
+      "Creating an event with a reminder produces both records with the intended relationship and schedule.",
+      "If any required part fails, no partial event/reminder state remains.",
+      "The lifecycle is testable independently of an HTTP route."
+    ]
+  },
+  {
+    "issueNumber": 491,
+    "title": "Reconcile reminders when calendar events change",
+    "url": "https://github.com/xtan9/betterr_me/issues/491",
+    "blockers": [481],
+    "testSeam": "The scheduling lifecycle's public update interface and its observable reconciled reminder outcome.",
+    "whatToBuild": "Updating a calendar event reconciles its reminder in the same lifecycle for time changes, reminder changes, removal, and unrelated updates.",
+    "acceptanceCriteria": [
+      "Moving an event recalculates the linked reminder schedule.",
+      "Changing reminder intent updates the relationship without duplicates.",
+      "Removing reminder intent removes the reminder but preserves the event.",
+      "Unrelated event updates leave an unchanged reminder stable.",
+      "Failures cannot leave event and reminder schedules inconsistent."
+    ]
+  },
+  {
+    "issueNumber": 499,
+    "title": "Delete calendar events without orphaning reminders",
+    "url": "https://github.com/xtan9/betterr_me/issues/499",
+    "blockers": [481, 491],
+    "testSeam": "The scheduling lifecycle's public delete interface and its observable event/reminder cleanup outcome.",
+    "whatToBuild": "Deleting a calendar event closes the event/reminder lifecycle in one operation without orphaned reminders or ambiguous partial outcomes.",
+    "acceptanceCriteria": [
+      "Deleting an event with a linked reminder removes both.",
+      "Deleting an event without a reminder succeeds without unrelated effects.",
+      "Repeated deletion has a defined idempotent outcome.",
+      "Failures cannot leave a reminder referring to a missing event.",
+      "Lifecycle tests cover create, update, and delete end to end."
+    ]
+  },
+  {
+    "issueNumber": 482,
+    "title": "Deepen authorization-code issuance and exchange",
+    "url": "https://github.com/xtan9/betterr_me/issues/482",
+    "blockers": [],
+    "testSeam": "The OAuth authorization-code lifecycle's public issue/exchange interface and credential outcome.",
+    "whatToBuild": "Authorization-code issuance and exchange form one lifecycle binding client, redirect, user, scopes, expiry, and proof-key policy, with one-time consumption.",
+    "acceptanceCriteria": [
+      "Issued codes contain all context required for exchange.",
+      "Expired, reused, mismatched, or invalid codes issue no credentials.",
+      "A valid code exchanges exactly once for the intended outcome.",
+      "Failures are explicit and testable independently of transport adapters."
+    ]
+  },
+  {
+    "issueNumber": 492,
+    "title": "Deepen refresh-token rotation and reuse response",
+    "url": "https://github.com/xtan9/betterr_me/issues/492",
+    "blockers": [482],
+    "testSeam": "The OAuth refresh lifecycle's public rotation interface and family-level reuse outcome.",
+    "whatToBuild": "Refresh-token use validates context, rotates atomically, and applies a defined token-family response when reuse is detected.",
+    "acceptanceCriteria": [
+      "A valid refresh token produces new access and refresh credentials.",
+      "Successful rotation invalidates the prior refresh token atomically.",
+      "Reuse is detected and triggers the defined family response.",
+      "Invalid refresh tokens never issue credentials.",
+      "Concurrent refresh attempts cannot both succeed."
+    ]
+  },
+  {
+    "issueNumber": 500,
+    "title": "Unify access-token issuance and verification",
+    "url": "https://github.com/xtan9/betterr_me/issues/500",
+    "blockers": [482, 492],
+    "testSeam": "The OAuth access-token policy's public issue/verify interface across supported grants.",
+    "whatToBuild": "All OAuth grants issue access tokens through one policy and consumers verify them through the same claim interpretation.",
+    "acceptanceCriteria": [
+      "Authorization-code and refresh grants use the same required claims.",
+      "Verification consistently checks signature, issuer, audience, expiry, subject, and scopes.",
+      "Invalid or insufficient tokens map to defined outcomes.",
+      "Lifetime and scope policy are centralized and tested.",
+      "Valid clients complete issue, refresh, and verify end to end."
+    ]
+  },
+  {
+    "issueNumber": 483,
+    "title": "Route HTTP task writes through a deep Task Writes module",
+    "url": "https://github.com/xtan9/betterr_me/issues/483",
+    "blockers": [],
+    "testSeam": "The Task Writes module's public intent interface plus the existing HTTP task contract.",
+    "whatToBuild": "HTTP task creation, updates, completion, and ordering express intent through one behavior owning defaults, placement, synchronization, and persistence outcomes.",
+    "acceptanceCriteria": [
+      "Creation applies established defaults and deterministic placement.",
+      "Status and completion remain synchronized on every HTTP write path.",
+      "Updates and ordering preserve invariants and return coherent outcomes.",
+      "Task-write policy is testable independently of routing and persistence."
+    ]
+  },
+  {
+    "issueNumber": 493,
+    "title": "Give AI task tools identical write behavior",
+    "url": "https://github.com/xtan9/betterr_me/issues/493",
+    "blockers": [483],
+    "testSeam": "Equivalent AI and HTTP task intents observed through the shared Task Writes interface.",
+    "whatToBuild": "AI task tools use the same Task Writes behavior so defaults, ordering, status, completion, validation, and failure outcomes match HTTP callers.",
+    "acceptanceCriteria": [
+      "AI creation receives the same defaults and placement as HTTP creation.",
+      "AI status and completion use the same synchronization rules.",
+      "AI validation and persistence failures match domain outcomes.",
+      "Parity tests exercise equivalent HTTP and AI intents.",
+      "AI adapters own no independent task invariant or ordering policy."
+    ]
+  },
+  {
+    "issueNumber": 484,
+    "title": "Own habit completion, streaks, and milestones together",
+    "url": "https://github.com/xtan9/betterr_me/issues/484",
+    "blockers": [],
+    "testSeam": "The habit completion behavior's public complete/uncomplete interface and its log, streak, and milestone outcome.",
+    "whatToBuild": "Completing or uncompleting a habit owns the log, streak, threshold, milestone, retry, and non-critical failure policy together.",
+    "acceptanceCriteria": [
+      "Completion and reversal update logs and streaks consistently.",
+      "Crossing a threshold records the correct milestone exactly once.",
+      "Retries do not duplicate completion or milestone outcomes.",
+      "Milestone failure policy is explicit and testable.",
+      "Existing streak and threshold semantics are preserved."
+    ]
+  },
+  {
+    "issueNumber": 494,
+    "title": "Give AI habit logging identical completion behavior",
+    "url": "https://github.com/xtan9/betterr_me/issues/494",
+    "blockers": [484],
+    "testSeam": "Equivalent AI and HTTP habit intents observed through the shared completion interface.",
+    "whatToBuild": "AI habit logging invokes the same completion behavior so logs, streaks, milestones, retries, and failures match other callers.",
+    "acceptanceCriteria": [
+      "AI completion and reversal match HTTP log and streak outcomes.",
+      "AI completion follows the same milestone and deduplication rules.",
+      "Retried AI actions create no duplicates.",
+      "AI callers observe shared failure outcomes.",
+      "Parity tests cover equivalent AI and HTTP intents."
+    ]
+  },
+  {
+    "issueNumber": 485,
+    "title": "Start workouts through a deep routine conversion module",
+    "url": "https://github.com/xtan9/betterr_me/issues/485",
+    "blockers": [],
+    "testSeam": "The routine-to-workout conversion module's public interface and complete session outcome.",
+    "whatToBuild": "Starting a workout from a routine maps exercises, targets, sets, and order into a complete session with a single success or failure outcome.",
+    "acceptanceCriteria": [
+      "The workout contains the expected exercise and set mapping.",
+      "Exercise order and applicable targets are preserved.",
+      "Unsupported source data has a defined failure.",
+      "Failed conversion leaves no partial workout state.",
+      "Conversion is testable independently of HTTP routing."
+    ]
+  },
+  {
+    "issueNumber": 495,
+    "title": "Save workouts as routines through the same conversion module",
+    "url": "https://github.com/xtan9/betterr_me/issues/495",
+    "blockers": [485],
+    "testSeam": "The workout-to-routine conversion interface plus representative bidirectional round trips.",
+    "whatToBuild": "Saving a workout as a routine uses the same bidirectional module, infers reusable targets, preserves order, and persists a complete routine.",
+    "acceptanceCriteria": [
+      "Saving creates the expected routine exercises in stable order.",
+      "Workout data maps to reusable targets under one policy.",
+      "Supported exercise/set types are consistent in both directions.",
+      "Invalid data produces no partial routine.",
+      "Round-trip tests cover representative cases."
+    ]
+  },
+  {
+    "issueNumber": 486,
+    "title": "Support atomic partial preference updates",
+    "url": "https://github.com/xtan9/betterr_me/issues/486",
+    "blockers": [],
+    "testSeam": "The profile preference intent interface and its atomic accepted profile outcome.",
+    "whatToBuild": "Preferences accept validated partial-update intents whose merge and persistence are atomic, preserving unrelated keys under concurrency and failure.",
+    "acceptanceCriteria": [
+      "Only supplied preference keys change.",
+      "Invalid values are rejected without partial writes.",
+      "Unrelated keys are preserved without caller-side merging.",
+      "Concurrent updates cannot silently erase unrelated changes.",
+      "All callers receive a consistent profile and cache outcome."
+    ]
+  },
+  {
+    "issueNumber": 496,
+    "title": "Migrate every settings screen to preference intents",
+    "url": "https://github.com/xtan9/betterr_me/issues/496",
+    "blockers": [486],
+    "testSeam": "Each settings surface's user-visible save contract through the shared preference intent interface.",
+    "whatToBuild": "Every settings surface sends only changed preference intent and no longer chooses persistence paths or performs browser-side read/merge/write.",
+    "acceptanceCriteria": [
+      "All settings surfaces submit only changed keys.",
+      "Updating one screen preserves preferences owned by others.",
+      "Screens reconcile the same accepted profile and failures.",
+      "No settings surface performs its own preference merge.",
+      "Existing save, validation, and error behavior remains covered."
+    ]
+  },
+  {
+    "issueNumber": 487,
+    "title": "Create a deep Household Runway Assessment module",
+    "url": "https://github.com/xtan9/betterr_me/issues/487",
+    "blockers": [],
+    "testSeam": "The Household Runway Assessment module's public input/output interface.",
+    "whatToBuild": "One assessment outcome owns scenarios, comparisons, adjustments, advice, validation, and result ordering.",
+    "acceptanceCriteria": [
+      "One request returns the complete supported scenario set in stable order.",
+      "All comparisons use one interpretation of inputs.",
+      "Adjustments and advice derive consistently from the outcome.",
+      "Invalid inputs produce defined results or validation failures.",
+      "Assessment outcomes are testable independently of callers."
+    ]
+  },
+  {
+    "issueNumber": 497,
+    "title": "Use the assessment for downloads and contract legacy exports",
+    "url": "https://github.com/xtan9/betterr_me/issues/497",
+    "blockers": [487],
+    "testSeam": "Equivalent interactive and downloaded outcomes through the shared assessment interface.",
+    "whatToBuild": "Downloads and saved/exported representations consume the shared assessment, then obsolete assembly and export paths are removed.",
+    "acceptanceCriteria": [
+      "Interactive, saved, and downloaded results share one assessment outcome.",
+      "Downloads contain supported results in stable order.",
+      "Equivalent inputs yield semantically identical outputs.",
+      "Legacy assembly and obsolete export paths are removed after migration.",
+      "Export failures do not alter the assessment."
+    ]
+  },
+  {
+    "issueNumber": 488,
+    "title": "Build Dashboard Snapshots behind one interface",
+    "url": "https://github.com/xtan9/betterr_me/issues/488",
+    "blockers": [],
+    "testSeam": "The Dashboard Snapshot interface and its complete, degraded, and failed outcomes.",
+    "whatToBuild": "Dashboard consumers receive one snapshot owning windows, acquisition, enrichment, recurring generation, graceful degradation, and warnings.",
+    "acceptanceCriteria": [
+      "A snapshot returns all required domain information for intended windows.",
+      "Enrichment and recurring behavior are applied consistently.",
+      "Optional failures degrade predictably with warnings.",
+      "Required failures produce a defined failure outcome.",
+      "Snapshot tests do not depend on an HTTP route."
+    ]
+  },
+  {
+    "issueNumber": 489,
+    "title": "Persist completed turns for existing conversations",
+    "url": "https://github.com/xtan9/betterr_me/issues/489",
+    "blockers": [],
+    "testSeam": "The saved-turn interface for an existing conversation and its retry-safe persistence outcome.",
+    "whatToBuild": "A completed turn owns user and assistant messages, model metadata, retries, and one observable completion or failure outcome.",
+    "acceptanceCriteria": [
+      "Both messages are stored in the correct order.",
+      "Assistant model metadata is retained.",
+      "Retries do not create duplicate messages.",
+      "Partial failures never appear as a successfully saved turn.",
+      "The behavior is testable independently of the visual layer."
+    ]
+  },
+  {
+    "issueNumber": 498,
+    "title": "Own first-turn conversation creation and title timing",
+    "url": "https://github.com/xtan9/betterr_me/issues/498",
+    "blockers": [489],
+    "testSeam": "The first saved-turn interface and its conversation, messages, title, and navigation outcome.",
+    "whatToBuild": "The first completed turn owns conversation creation, messages, metadata, title timing, retry safety, and the navigation identifier.",
+    "acceptanceCriteria": [
+      "The first turn creates one conversation and both messages in order.",
+      "Title work happens only after required turn state exists.",
+      "The result returns a stable conversation identifier.",
+      "Retries do not duplicate conversations, messages, or title work.",
+      "Later turns use the existing-conversation lifecycle."
+    ]
+  },
+  {
+    "issueNumber": 490,
+    "title": "Expand a policy-aware authenticated request context",
+    "url": "https://github.com/xtan9/betterr_me/issues/490",
+    "blockers": [],
+    "testSeam": "The authenticated request-context resolver across explicit credential policies and outcome categories.",
+    "whatToBuild": "Authenticated requests resolve principal, credential policy, permission, privileged client, and consistent errors while routes declare allowed credentials.",
+    "acceptanceCriteria": [
+      "Cookie, API-key, admin, and MCP credentials obey explicit route policy.",
+      "Success returns the required principal, permissions, and client.",
+      "Anonymous, invalid, forbidden, and misconfigured outcomes map consistently.",
+      "Allowed credentials remain explicit and reviewable.",
+      "The context is testable at real adapter boundaries."
+    ]
+  },
+  {
+    "issueNumber": 501,
+    "title": "Migrate productivity request routes",
+    "url": "https://github.com/xtan9/betterr_me/issues/501",
+    "blockers": [483, 493, 484, 494, 488, 490],
+    "testSeam": "Existing productivity HTTP request/response and authorization contracts backed by the new domain interfaces.",
+    "whatToBuild": "Productivity routes become thin adapters over Task Writes, habit completion, Dashboard Snapshot, and authenticated request context.",
+    "acceptanceCriteria": [
+      "Task and Kanban routes delegate all task-write policy.",
+      "Habit routes delegate completion policy.",
+      "Dashboard routes map one snapshot outcome consistently.",
+      "Routes declare credential policy and consume authenticated context.",
+      "Existing contracts and authorization boundaries remain covered.",
+      "No duplicate lifecycle or principal-resolution logic remains."
+    ]
+  },
+  {
+    "issueNumber": 502,
+    "title": "Migrate calendar and fitness request routes",
+    "url": "https://github.com/xtan9/betterr_me/issues/502",
+    "blockers": [481, 491, 499, 485, 495, 490],
+    "testSeam": "Existing calendar and fitness HTTP contracts backed by scheduling, conversion, and authenticated-context interfaces.",
+    "whatToBuild": "Calendar and fitness routes become thin adapters over scheduling lifecycle, bidirectional conversion, and authenticated request context.",
+    "acceptanceCriteria": [
+      "Calendar routes delegate create, update, and delete lifecycles.",
+      "Fitness routes delegate both conversion directions.",
+      "Routes declare credential policy and consume authenticated context.",
+      "Existing contracts and authorization remain covered.",
+      "Failures expose no partial scheduling or conversion state.",
+      "No duplicate lifecycle, conversion, or principal logic remains."
+    ]
+  },
+  {
+    "issueNumber": 503,
+    "title": "Migrate platform, finance, and chat request routes",
+    "url": "https://github.com/xtan9/betterr_me/issues/503",
+    "blockers": [482, 492, 500, 486, 496, 487, 497, 489, 498, 490],
+    "testSeam": "Existing OAuth, settings, finance, and chat HTTP contracts backed by their completed domain interfaces.",
+    "whatToBuild": "Platform OAuth, settings/profile, finance, and chat routes become thin adapters over the new lifecycles and authenticated context.",
+    "acceptanceCriteria": [
+      "OAuth routes delegate code, refresh, and access-token lifecycles.",
+      "Settings routes accept preference intent without merge policy.",
+      "Finance routes and downloads use the shared assessment.",
+      "Chat routes delegate existing- and first-turn persistence.",
+      "Routes use explicit credential policy and authenticated context.",
+      "Existing contracts, retries, and authorization remain covered.",
+      "No duplicate lifecycle, assessment, merge, or principal logic remains."
+    ]
+  },
+  {
+    "issueNumber": 504,
+    "title": "Contract legacy authentication plumbing",
+    "url": "https://github.com/xtan9/betterr_me/issues/504",
+    "blockers": [501, 502, 503],
+    "testSeam": "Representative authenticated route contracts across cookie, API-key, admin, and MCP credential policies after contraction.",
+    "whatToBuild": "Remove superseded route authentication plumbing so policy-aware authenticated context is the sole route-facing mechanism except documented exceptions.",
+    "acceptanceCriteria": [
+      "Legacy helpers and duplicate principal paths have no production callers.",
+      "Removal preserves supported credential behavior.",
+      "Every authenticated route uses explicit policy and shared context or a tested exception.",
+      "Failure mappings remain consistent across route families.",
+      "Repository checks and representative end-to-end flows pass."
+    ]
+  }
+]
