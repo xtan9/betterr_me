@@ -369,7 +369,11 @@ async function assertWslIsolationReady() {
   );
   const localLockHash = crypto
     .createHash("sha256")
-    .update(fs.readFileSync(path.join(repositoryRoot, "pnpm-lock.yaml")))
+    .update(
+      fs
+        .readFileSync(path.join(repositoryRoot, "pnpm-lock.yaml"), "utf8")
+        .replaceAll("\r\n", "\n"),
+    )
     .digest("hex");
   const dependencyLock = await runWsl(
     ["sha256sum", "/var/lib/betterr-me-ralph/deps-source/pnpm-lock.yaml"],
