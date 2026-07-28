@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["pass", "findings"]
+    },
+    "blockingFindings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "repairable": {
+      "type": "boolean"
+    },
+    "blockerKind": {
+      "type": "string",
+      "enum": ["none", "code", "requirements", "infrastructure", "safety"]
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "blockingFindings",
+    "repairable",
+    "blockerKind",
+    "summary"
+  ],
+  "additionalProperties": false
+}

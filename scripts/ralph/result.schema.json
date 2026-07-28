@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["completed", "blocked", "failed"]
+    },
+    "issueNumber": {
+      "type": "integer"
+    },
+    "testsPassed": {
+      "type": "boolean"
+    },
+    "reviewCompleted": {
+      "type": "boolean"
+    },
+    "ambiguous": {
+      "type": "boolean"
+    },
+    "blockerKind": {
+      "type": "string",
+      "enum": ["none", "requirements", "infrastructure", "safety"]
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "issueNumber",
+    "testsPassed",
+    "reviewCompleted",
+    "ambiguous",
+    "blockerKind",
+    "summary"
+  ],
+  "additionalProperties": false
+}
