@@ -15,16 +15,25 @@ import {
   findNewTypeScriptDiagnostics,
   frameInertData,
   isolatedCodexReadablePaths,
+  isIssueActive,
+  isIssueParked,
   issueStageAtLeast,
   reviewFailureKind,
   selectNextLiveIssueStatus,
   selectRecoveryBase,
   shouldRepairFailure,
+  shouldContinueQueue,
+  shouldParkIssueFailure,
   shouldRetry,
   testVerificationFailureKind,
   transitionIssue,
   validateQueueState,
 } from "./queue.mjs";
+import {
+  activeIssueWorktreePath,
+  cleanupIssueCheckout,
+  parkFailedIssueCheckout,
+} from "./local-checkout.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "..", "..");
@@ -697,6 +706,7 @@ async function getLiveIssues(state, controllerOptions) {
   const frontier = queue.filter(
     (issue) =>
       !completed.has(issue.issueNumber) &&
+      !isIssueParked(state.issues[String(issue.issueNumber)]) &&
       issue.blockers.every((blocker) => completed.has(blocker)),
   );
   const issues = [];
@@ -709,7 +719,7 @@ async function getLiveIssues(state, controllerOptions) {
 function activeStateIssue(state) {
   return Object.entries(state.issues)
     .map(([number, issue]) => ({ issueNumber: Number(number), ...issue }))
-    .find((issue) => issue.stage !== "merged");
+    .find((issue) => isIssueActive(issue));
 }
 
 async function selectIssue(state, actor, controllerOptions) {
@@ -845,6 +855,20 @@ async function reconcileRemoteCompletions(
       `origin/${baseBranch}`,
     ]);
     status(`Rebuilding completed state for issue #${issue.issueNumber}.`);
+    const issueState = state.issues[String(issue.issueNumber)];
+    let cleanup = { worktreeRemoved: false, branchDeleted: false };
+    if (persist) {
+      if (issueState?.worktreePath && fs.existsSync(issueState.worktreePath)) {
+        await removeControllerDependencyLink(issueState.worktreePath);
+      }
+      cleanup = await cleanupIssueCheckout({
+        repositoryRoot,
+        worktreeRoot,
+        issueNumber: issue.issueNumber,
+        issueState,
+        git,
+      });
+    }
     const completed = [...state.completed, issue.issueNumber];
     const mergedPatch = {
       prNumber: merged.number,
@@ -852,6 +876,9 @@ async function reconcileRemoteCompletions(
       mergeCommit: merged.mergeCommit.oid,
       mergedAt: merged.mergedAt,
       stopReason: null,
+      worktreePath: null,
+      localCheckoutCleanedAt: new Date().toISOString(),
+      ...cleanup,
     };
     state = persist
       ? moveIssue(
@@ -984,7 +1011,9 @@ async function ensureWorktree(state, issue, controllerOptions) {
     await git(["-C", repositoryRoot, "rev-parse", `origin/${baseBranch}`])
   ).stdout.trim();
   const branch = `codex/issue-${number}`;
-  const worktreePath = path.join(worktreeRoot, `issue-${number}`);
+  const worktreePath = recordedWorktree
+    ? issueState.worktreePath
+    : activeIssueWorktreePath(worktreeRoot);
   const worktreeExists = fs.existsSync(worktreePath);
   if (worktreeExists && !recordedWorktree) {
     throw new Error(`unrecorded worktree collision at ${worktreePath}`);
@@ -1372,25 +1401,29 @@ async function repairIssue(state, issue, failure, attempt, controllerOptions) {
   const changes = (
     await git(["-C", worktreePath, "status", "--porcelain"])
   ).stdout.trim();
-  if (result.status !== "completed" || result.issueNumber !== number) {
-    throw Object.assign(new Error(`repair worker reported ${result.status}`), {
-      stopReason: result.summary,
-    });
-  }
   if (result.ambiguous) {
     throw Object.assign(new Error("repair worker found ambiguous requirements"), {
       stopReason: result.summary,
       failureKind: "ambiguous",
     });
   }
+  if (result.status !== "completed" || result.issueNumber !== number) {
+    throw Object.assign(new Error(`repair worker reported ${result.status}`), {
+      stopReason: result.summary,
+      failureKind: "worker-blocked",
+    });
+  }
   if (!result.testsPassed || !result.reviewCompleted) {
     throw Object.assign(
       new Error("repair worker did not complete its required tests and self-review"),
-      { stopReason: result.summary },
+      { stopReason: result.summary, failureKind: "worker-blocked" },
     );
   }
   if (!changes) {
-    throw new Error("repair worker reported completion without an uncommitted diff");
+    throw Object.assign(
+      new Error("repair worker reported completion without an uncommitted diff"),
+      { failureKind: "worker-blocked" },
+    );
   }
   return moveIssue(state, number, "implemented", {
     implementationSummary: result.summary,
@@ -1465,24 +1498,29 @@ async function implementIssue(state, issue, controllerOptions) {
   const changes = (
     await git(["-C", worktreePath, "status", "--porcelain"])
   ).stdout.trim();
-  if (result.status !== "completed" || result.issueNumber !== number) {
-    throw Object.assign(new Error(`worker reported ${result.status}`), {
-      stopReason: result.summary,
-    });
-  }
   if (result.ambiguous) {
     throw Object.assign(new Error("worker found ambiguous requirements"), {
       stopReason: result.summary,
+      failureKind: "ambiguous",
+    });
+  }
+  if (result.status !== "completed" || result.issueNumber !== number) {
+    throw Object.assign(new Error(`worker reported ${result.status}`), {
+      stopReason: result.summary,
+      failureKind: "worker-blocked",
     });
   }
   if (!result.testsPassed || !result.reviewCompleted) {
     throw Object.assign(
       new Error("worker did not complete its required tests and self-review"),
-      { stopReason: result.summary },
+      { stopReason: result.summary, failureKind: "worker-blocked" },
     );
   }
   if (!changes) {
-    throw new Error("worker reported completion without an uncommitted diff");
+    throw Object.assign(
+      new Error("worker reported completion without an uncommitted diff"),
+      { failureKind: "worker-blocked" },
+    );
   }
   return moveIssue(state, number, "implemented", {
     implementationSummary: result.summary,
@@ -1743,6 +1781,16 @@ async function finalizeMergedPullRequest(
     mergedPr.mergeCommit.oid,
     `origin/${baseBranch}`,
   ]);
+  if (issueState?.worktreePath && fs.existsSync(issueState.worktreePath)) {
+    await removeControllerDependencyLink(issueState.worktreePath);
+  }
+  const cleanup = await cleanupIssueCheckout({
+    repositoryRoot,
+    worktreeRoot,
+    issueNumber: number,
+    issueState,
+    git,
+  });
   const completed = state.completed.includes(number)
     ? state.completed
     : [...state.completed, number];
@@ -1750,17 +1798,54 @@ async function finalizeMergedPullRequest(
     mergeCommit: mergedPr.mergeCommit.oid,
     mergedAt: mergedPr.mergedAt,
     stopReason: null,
+    worktreePath: null,
+    localCheckoutCleanedAt: new Date().toISOString(),
+    ...cleanup,
   });
-
-  const resolvedWorktree = path.resolve(issueState.worktreePath);
-  const resolvedRoot = `${path.resolve(worktreeRoot)}${path.sep}`;
-  if (resolvedWorktree.startsWith(resolvedRoot) && fs.existsSync(resolvedWorktree)) {
-    await git(
-      ["-C", repositoryRoot, "worktree", "remove", resolvedWorktree, "--force"],
-      { timeoutSeconds: 120 },
-    );
-  }
   return state;
+}
+
+async function releasePublishedCheckout(state, issue) {
+  const number = issue.issueNumber;
+  const issueState = state.issues[String(number)];
+  if (issueState?.worktreePath && fs.existsSync(issueState.worktreePath)) {
+    await removeControllerDependencyLink(issueState.worktreePath);
+  }
+  const cleanup = await cleanupIssueCheckout({
+    repositoryRoot,
+    worktreeRoot,
+    issueNumber: number,
+    issueState,
+    git,
+  });
+  return moveIssue(state, number, issueState.stage, {
+    worktreePath: null,
+    localCheckoutCleanedAt: new Date().toISOString(),
+    ...cleanup,
+  });
+}
+
+async function preserveFailedCheckout(state, issue, previousStage) {
+  const number = issue.issueNumber;
+  const issueState = state.issues[String(number)];
+  if (!issueState?.worktreePath) return state;
+  if (previousStage && issueStageAtLeast({ stage: previousStage }, "pushed")) {
+    return releasePublishedCheckout(state, issue);
+  }
+  if (fs.existsSync(issueState.worktreePath)) {
+    await removeControllerDependencyLink(issueState.worktreePath);
+  }
+  const parkedPath = await parkFailedIssueCheckout({
+    repositoryRoot,
+    worktreeRoot,
+    issueNumber: number,
+    issueState,
+    git,
+  });
+  return moveIssue(state, number, "failed", {
+    worktreePath: parkedPath,
+    parkedAt: new Date().toISOString(),
+  });
 }
 
 async function ensurePullRequest(state, issue, controllerOptions) {
@@ -2163,6 +2248,7 @@ async function processOne(state, actor, controllerOptions) {
       return { state, status: "merged", issue };
     }
     if (remotePr.state === "CLOSED") {
+      state = await releasePublishedCheckout(state, issue);
       state = moveIssue(state, number, "manual-review", {
         stopReason: "pull request was closed without merging",
       });
@@ -2216,6 +2302,7 @@ async function processOne(state, actor, controllerOptions) {
     state = await commitAndPush(state, issue, controllerOptions);
     state = await assertClaimOwnership(state, issue, actor, controllerOptions);
     state = await ensurePullRequest(state, issue, controllerOptions);
+    state = await releasePublishedCheckout(state, issue);
     state = await waitAndMaybeMerge(state, issue, actor, controllerOptions);
   } catch (error) {
     state = readJson(statePath);
@@ -2299,12 +2386,25 @@ async function processOne(state, actor, controllerOptions) {
       });
       return { state, status: "interrupted", issue };
     }
-    state = moveIssue(state, number, disposition, {
-      stopReason: error.stopReason ?? error.message,
-    });
     if (disposition === "manual-review") {
+      state = await releasePublishedCheckout(state, issue);
+      state = moveIssue(state, number, disposition, {
+        stopReason: error.stopReason ?? error.message,
+      });
       return { state, status: "awaiting-human", issue };
     }
+    if (shouldParkIssueFailure(error.failureKind)) {
+      const previousStage = current?.stage;
+      state = moveIssue(state, number, "failed", {
+        stopReason: error.stopReason ?? error.message,
+      });
+      state = await preserveFailedCheckout(state, issue, previousStage);
+      return { state, status: "failed", issue };
+    }
+    state = moveIssue(state, number, current.stage, {
+      stopReason: error.stopReason ?? error.message,
+      interruptedAt: new Date().toISOString(),
+    });
     throw error;
   }
 
@@ -2367,7 +2467,7 @@ async function main() {
       status(`Iteration ${iteration} of ${iterations} in ${options.mode} mode.`);
       const result = await processOne(state, actor, options);
       state = result.state;
-      if (result.status !== "merged") {
+      if (!shouldContinueQueue(result.status)) {
         stopReason =
           result.status === "queue-complete"
             ? "queue complete"
@@ -2381,7 +2481,7 @@ async function main() {
         break;
       }
       process.stdout.write(
-        `${JSON.stringify({ status: "merged", issueNumber: result.issue.issueNumber, prUrl: state.issues[String(result.issue.issueNumber)].prUrl })}\n`,
+        `${JSON.stringify({ status: result.status, issueNumber: result.issue.issueNumber, prUrl: state.issues[String(result.issue.issueNumber)].prUrl })}\n`,
       );
     }
     if (!stopReason) stopReason = `reached issue limit ${iterations}`;

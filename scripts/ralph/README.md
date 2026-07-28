@@ -15,11 +15,14 @@ that worktree—alone owns state, commits, pushes, PRs, checks, and merges.
 
 - `DryRun` performs authentication and live eligibility checks but makes no
   issue, branch, worktree, PR, or merge change.
-- `PrOnly` is the default. It claims and implements one issue, pushes it, opens
-  a linked PR, writes the summary, and stops for a human.
+- `PrOnly` is the default. It pushes each successful issue to a linked PR,
+  parks that issue for human review, and continues with another unrelated issue
+  on the ready dependency frontier. Dependents remain blocked until their PR is
+  actually merged.
 - `AutoMerge` waits for required GitHub checks and required review approvals.
   It merges without bypass only when the diff is classified low risk, the PR is
-  conflict-free, and every gate passes. High-risk work always stops at a PR.
+  conflict-free, and every gate passes. High-risk work is parked at a PR while
+  the single worker continues through unrelated ready issues.
 
 Automatic merging uses a narrow allowlist. Only pure calendar/reminder domain
 modules, their validations, and their focused tests may qualify as low risk.
@@ -76,6 +79,13 @@ time. A process lock prevents a second local controller. A time-limited GitHub
 claim comment plus assignment exposes ownership across hosts and resolves a
 claim race deterministically.
 
+The active worker uses one reusable `worktrees/current` checkout. Before each
+new issue the controller fetches and branches from the latest `origin/main`.
+Once a commit is safely published to a PR, or once its PR is merged, the local
+worktree and issue branch are removed. An uncommitted failed attempt is the one
+exception: it is moved to `worktrees/parked/issue-N` so continuing the queue
+cannot destroy recovery work.
+
 ## Recovery
 
 Durable state, prompts, verification logs, PR metadata, and summaries live
@@ -96,7 +106,10 @@ backoff. Concrete test, TypeScript, and independent-review findings may use up
 to `MaximumRepairAttempts` genuinely fresh, isolated repair sessions before
 the issue fails. Every repair is re-run through the complete verification and
 review gates. Ambiguity, unsafe scope, conflicts, ownership failures, and
-policy denials are never repaired or retried automatically.
+policy denials are never repaired or retried automatically. A failed or
+human-gated issue does not unblock its dependents, but it also does not prevent
+the controller from selecting an unrelated ready issue. Controller,
+infrastructure, timeout, and kill-switch failures still stop the whole run.
 
 The claim lease must be more than one hour longer than the longest cumulative
 span between ownership checks. Invalid combinations fail during argument

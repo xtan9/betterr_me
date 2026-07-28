@@ -74,8 +74,10 @@ export function selectNextIssue(queue, state) {
     return null;
   }
 
-  const nextIssue = incomplete.find((issue) =>
-    issue.blockers.every((blocker) => completed.has(blocker)),
+  const nextIssue = incomplete.find(
+    (issue) =>
+      !isIssueParked(state.issues?.[String(issue.issueNumber)]) &&
+      issue.blockers.every((blocker) => completed.has(blocker)),
   );
 
   if (!nextIssue) {
@@ -94,8 +96,10 @@ export function selectNextLiveIssueStatus(queue, state, liveIssues, actor) {
   const incomplete = queue.filter((issue) => !completed.has(issue.issueNumber));
   if (incomplete.length === 0) return { status: "complete" };
 
-  const frontier = incomplete.filter((issue) =>
-    issue.blockers.every((blocker) => completed.has(blocker)),
+  const frontier = incomplete.filter(
+    (issue) =>
+      !isIssueParked(state.issues?.[String(issue.issueNumber)]) &&
+      issue.blockers.every((blocker) => completed.has(blocker)),
   );
   if (frontier.length === 0) {
     return {
@@ -161,6 +165,16 @@ export const ISSUE_STAGES = [
   "merged",
   "failed",
 ];
+
+export function isIssueParked(issueState) {
+  return ["manual-review", "failed"].includes(issueState?.stage);
+}
+
+export function isIssueActive(issueState) {
+  return Boolean(issueState?.stage) &&
+    issueState.stage !== "merged" &&
+    !isIssueParked(issueState);
+}
 
 export function issueStageAtLeast(issueState, stage) {
   const currentIndex = ISSUE_STAGES.indexOf(issueState?.stage);
@@ -301,6 +315,21 @@ export function shouldRepairFailure(
     ["tests", "typecheck", "review"].includes(failureKind) &&
     completedRepairAttempts < maximumRepairAttempts
   );
+}
+
+export function shouldParkIssueFailure(failureKind) {
+  return [
+    "tests",
+    "typecheck",
+    "review",
+    "review-nonrepairable",
+    "ambiguous",
+    "worker-blocked",
+  ].includes(failureKind);
+}
+
+export function shouldContinueQueue(status) {
+  return ["merged", "awaiting-human", "failed"].includes(status);
 }
 
 export function testVerificationFailureKind(error) {

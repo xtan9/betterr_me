@@ -14,12 +14,15 @@ import {
   evaluateIteration,
   findNewTypeScriptDiagnostics,
   isolatedCodexReadablePaths,
+  isIssueActive,
   selectNextLiveIssue,
   selectNextLiveIssueStatus,
   selectNextIssue,
   selectRecoveryBase,
   reviewFailureKind,
   shouldRepairFailure,
+  shouldContinueQueue,
+  shouldParkIssueFailure,
   shouldRetry,
   testVerificationFailureKind,
   transitionIssue,
@@ -72,6 +75,53 @@ describe("Ralph queue selection", () => {
 
   it("returns null only when every queued issue is complete", () => {
     expect(selectNextIssue(queue, { completed: [101, 102, 103] })).toBeNull();
+  });
+
+  it.each(["failed", "manual-review"])(
+    "parks a %s issue and selects the next unrelated frontier issue",
+    (stage) => {
+      const state = {
+        completed: [],
+        issues: { "101": { stage } },
+      };
+
+      expect(selectNextIssue(queue, state)).toEqual(queue[2]);
+      expect(
+        selectNextLiveIssueStatus(
+          queue,
+          state,
+          [
+            {
+              issueNumber: 101,
+              state: "OPEN",
+              labels: ["ready-for-agent"],
+              assignees: ["xtan9"],
+            },
+            {
+              issueNumber: 103,
+              state: "OPEN",
+              labels: ["ready-for-agent"],
+              assignees: [],
+            },
+          ],
+          "xtan9",
+        ),
+      ).toEqual({ status: "selected", issue: queue[2] });
+    },
+  );
+
+  it("keeps dependents blocked when their blocker is parked", () => {
+    const state = {
+      completed: [103],
+      issues: {
+        "101": { stage: "failed" },
+        "103": { stage: "merged" },
+      },
+    };
+
+    expect(
+      selectNextLiveIssueStatus(queue, state, [], "xtan9"),
+    ).toEqual({ status: "blocked", issueNumbers: [101, 102] });
   });
 
   it("stops when incomplete work has no reachable frontier", () => {
@@ -253,6 +303,33 @@ describe("Ralph live issue selection and claiming", () => {
 });
 
 describe("Ralph durable state and policy", () => {
+  it("treats only resumable stages as active work", () => {
+    expect(isIssueActive({ stage: "implementing" })).toBe(true);
+    expect(isIssueActive({ stage: "interrupted" })).toBe(true);
+    expect(isIssueActive({ stage: "manual-review" })).toBe(false);
+    expect(isIssueActive({ stage: "failed" })).toBe(false);
+    expect(isIssueActive({ stage: "merged" })).toBe(false);
+  });
+
+  it("continues the single-worker queue after terminal issue outcomes", () => {
+    expect(shouldContinueQueue("merged")).toBe(true);
+    expect(shouldContinueQueue("awaiting-human")).toBe(true);
+    expect(shouldContinueQueue("failed")).toBe(true);
+    expect(shouldContinueQueue("interrupted")).toBe(false);
+    expect(shouldContinueQueue("queue-blocked")).toBe(false);
+  });
+
+  it("parks issue-level failures but stops for controller failures", () => {
+    expect(shouldParkIssueFailure("tests")).toBe(true);
+    expect(shouldParkIssueFailure("typecheck")).toBe(true);
+    expect(shouldParkIssueFailure("review")).toBe(true);
+    expect(shouldParkIssueFailure("review-nonrepairable")).toBe(true);
+    expect(shouldParkIssueFailure("ambiguous")).toBe(true);
+    expect(shouldParkIssueFailure("worker-blocked")).toBe(true);
+    expect(shouldParkIssueFailure("command")).toBe(false);
+    expect(shouldParkIssueFailure("kill-switch")).toBe(false);
+  });
+
   it("rejects duplicate or dependency-incomplete progress", () => {
     const queue = [
       { issueNumber: 101, blockers: [] },

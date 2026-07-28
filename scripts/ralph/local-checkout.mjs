@@ -1,0 +1,151 @@
+import fs from "node:fs";
+import path from "node:path";
+
+function expectedIssueBranch(issueNumber) {
+  return `codex/issue-${issueNumber}`;
+}
+
+function assertManagedBranch(issueNumber, branch) {
+  const expected = expectedIssueBranch(issueNumber);
+  if (branch !== expected) {
+    throw new Error(
+      `refusing local cleanup for unexpected branch ${branch ?? "<missing>"}; expected ${expected}`,
+    );
+  }
+}
+
+function assertManagedPath(worktreeRoot, worktreePath) {
+  const resolvedRoot = `${path.resolve(worktreeRoot)}${path.sep}`;
+  const resolvedWorktree = path.resolve(worktreePath);
+  if (!resolvedWorktree.startsWith(resolvedRoot)) {
+    throw new Error(`refusing local cleanup outside ${worktreeRoot}`);
+  }
+  return resolvedWorktree;
+}
+
+async function localBranchExists(repositoryRoot, branch, git) {
+  try {
+    await git([
+      "-C",
+      repositoryRoot,
+      "show-ref",
+      "--verify",
+      `refs/heads/${branch}`,
+    ]);
+    return true;
+  } catch (error) {
+    if (error?.result?.code === 1) return false;
+    throw error;
+  }
+}
+
+export function activeIssueWorktreePath(worktreeRoot) {
+  return path.join(worktreeRoot, "current");
+}
+
+export async function cleanupIssueCheckout({
+  repositoryRoot,
+  worktreeRoot,
+  issueNumber,
+  issueState,
+  git,
+}) {
+  if (!issueState?.branch && !issueState?.worktreePath) {
+    return { worktreeRemoved: false, branchDeleted: false };
+  }
+  assertManagedBranch(issueNumber, issueState.branch);
+
+  let worktreeRemoved = false;
+  if (issueState.worktreePath) {
+    const worktreePath = assertManagedPath(worktreeRoot, issueState.worktreePath);
+    if (fs.existsSync(worktreePath)) {
+      const branch = (
+        await git(["-C", worktreePath, "branch", "--show-current"])
+      ).stdout.trim();
+      if (branch !== issueState.branch) {
+        throw new Error(`refusing to remove ${worktreePath}; it is on ${branch}`);
+      }
+      const status = (
+        await git(["-C", worktreePath, "status", "--porcelain"])
+      ).stdout.trim();
+      if (status) {
+        throw new Error(`refusing to remove dirty worktree ${worktreePath}`);
+      }
+      if (issueState.commit) {
+        const head = (
+          await git(["-C", worktreePath, "rev-parse", "HEAD"])
+        ).stdout.trim();
+        if (head !== issueState.commit) {
+          throw new Error(`refusing to remove ${worktreePath}; HEAD changed`);
+        }
+      }
+      await git([
+        "-C",
+        repositoryRoot,
+        "worktree",
+        "remove",
+        worktreePath,
+      ]);
+      worktreeRemoved = true;
+    }
+  }
+
+  let branchDeleted = false;
+  if (await localBranchExists(repositoryRoot, issueState.branch, git)) {
+    await git([
+      "-C",
+      repositoryRoot,
+      "branch",
+      "--delete",
+      "--force",
+      issueState.branch,
+    ]);
+    branchDeleted = true;
+  }
+  await git(["-C", repositoryRoot, "worktree", "prune"]);
+  return { worktreeRemoved, branchDeleted };
+}
+
+export async function parkFailedIssueCheckout({
+  repositoryRoot,
+  worktreeRoot,
+  issueNumber,
+  issueState,
+  git,
+}) {
+  assertManagedBranch(issueNumber, issueState?.branch);
+  const activePath = activeIssueWorktreePath(worktreeRoot);
+  const recordedPath = assertManagedPath(worktreeRoot, issueState?.worktreePath);
+  const parkedPath = path.join(worktreeRoot, "parked", `issue-${issueNumber}`);
+  assertManagedPath(worktreeRoot, parkedPath);
+
+  if (!fs.existsSync(recordedPath) && fs.existsSync(parkedPath)) {
+    return parkedPath;
+  }
+  if (path.resolve(recordedPath) !== path.resolve(activePath)) {
+    return recordedPath;
+  }
+  if (!fs.existsSync(recordedPath)) {
+    throw new Error(`cannot park missing worktree ${recordedPath}`);
+  }
+  if (fs.existsSync(parkedPath)) {
+    throw new Error(`parked worktree collision at ${parkedPath}`);
+  }
+  const branch = (
+    await git(["-C", recordedPath, "branch", "--show-current"])
+  ).stdout.trim();
+  if (branch !== issueState.branch) {
+    throw new Error(`refusing to park ${recordedPath}; it is on ${branch}`);
+  }
+
+  fs.mkdirSync(path.dirname(parkedPath), { recursive: true });
+  await git([
+    "-C",
+    repositoryRoot,
+    "worktree",
+    "move",
+    recordedPath,
+    parkedPath,
+  ]);
+  return parkedPath;
+}
