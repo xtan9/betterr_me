@@ -18,7 +18,6 @@ import {
   failureDisposition,
   findNewTypeScriptDiagnostics,
   frameInertData,
-  isolatedCodexReadablePaths,
   isIssueActive,
   isIssueParked,
   issueStageAtLeast,
@@ -42,6 +41,13 @@ import {
   parkFailedIssueCheckout,
   recoverPreservationCommit,
 } from "./local-checkout.mjs";
+import {
+  ensureSanitizedWorkerGitView,
+  isolatedCodexFilesystemConfig,
+  isolatedCodexReadablePaths,
+  removeSanitizedWorkerGitView,
+  workerGitEnvironment,
+} from "./worker-isolation.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "..", "..");
@@ -63,6 +69,7 @@ const summaryMarkdownPath = path.join(stateRoot, "overnight-summary.md");
 const stopPath = path.join(stateRoot, "STOP");
 const lockPath = path.join(stateRoot, "runner.lock");
 const worktreeRoot = path.join(stateRoot, "worktrees");
+const workerGitRoot = path.join(stateRoot, "worker-git");
 const wslDependencyRoot = "/var/lib/betterr-me-ralph/deps-source/node_modules";
 const wslWorkerHome = "/var/lib/betterr-me-ralph/worker-home";
 const wslSkillRoot = `${wslWorkerHome}/.agents/skills`;
@@ -364,27 +371,16 @@ function tomlString(value) {
 }
 
 function restrictedProfileArguments(profile, baseProfile, extraReadable = []) {
-  const argumentsList = [
+  return [
     "-c",
     `default_permissions=${tomlString(profile)}`,
     "-c",
     `permissions.${profile}.extends=${tomlString(baseProfile)}`,
     "-c",
-    `permissions.${profile}.filesystem.:root=\"deny\"`,
-    "-c",
-    `permissions.${profile}.filesystem.:minimal=\"read\"`,
-    "-c",
-    `permissions.${profile}.filesystem.:tmpdir=\"deny\"`,
+    `permissions.${profile}.filesystem=${isolatedCodexFilesystemConfig(extraReadable)}`,
     "-c",
     `permissions.${profile}.network.enabled=false`,
   ];
-  for (const readablePath of extraReadable) {
-    argumentsList.push(
-      "-c",
-      `permissions.${profile}.filesystem.${readablePath}=\"read\"`,
-    );
-  }
-  return argumentsList;
 }
 
 function windowsToWslPath(filePath) {
@@ -392,6 +388,29 @@ function windowsToWslPath(filePath) {
   const match = normalized.match(/^([A-Za-z]):\\(.*)$/);
   if (!match) throw new Error(`cannot map Windows path to WSL: ${filePath}`);
   return `/mnt/${match[1].toLowerCase()}/${match[2].replaceAll("\\", "/")}`;
+}
+
+async function resolveWorkerGitContext(issueNumber, worktreePath, baseSha) {
+  const sanitizedView = await ensureSanitizedWorkerGitView({
+    repositoryRoot,
+    worktreePath,
+    baseSha,
+    workerGitRoot,
+    issueNumber,
+    git,
+  });
+  const context = {
+    nativeGitDirectory: sanitizedView.gitDirectory,
+    gitDirectory: windowsToWslPath(sanitizedView.gitDirectory),
+    gitMetadataRoot: windowsToWslPath(sanitizedView.gitDirectory),
+    worktreePath: windowsToWslPath(worktreePath),
+  };
+  const resolved = {
+    ...context,
+    environment: workerGitEnvironment(context),
+  };
+  await verifyWorkerGitSandbox(resolved);
+  return resolved;
 }
 
 async function runWsl(args, options = {}) {
@@ -461,6 +480,7 @@ async function runWslSandboxed(command, args, worktreePath, options = {}) {
 }
 
 async function isolatedCodex(args, options = {}) {
+  const { gitEnvironment = {}, ...processOptions } = options;
   const mappedArgs = args.map((argument) =>
     /^[A-Za-z]:\\/.test(argument) ? windowsToWslPath(argument) : argument,
   );
@@ -469,11 +489,61 @@ async function isolatedCodex(args, options = {}) {
       "env",
       `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
       "HOME=/var/lib/betterr-me-ralph/worker-home",
+      ...Object.entries(gitEnvironment).map(([name, value]) => `${name}=${value}`),
       "/usr/local/bin/codex",
       ...mappedArgs,
     ],
-    options,
+    processOptions,
   );
+}
+
+function shellEnvironmentArguments(environment) {
+  return Object.entries(environment).flatMap(([name, value]) => [
+    "-c",
+    `shell_environment_policy.set.${name}=${tomlString(value)}`,
+  ]);
+}
+
+async function verifyWorkerGitSandbox(gitContext) {
+  const profile = "ralph-worker-git-smoke";
+  const probePath = path.join(gitContext.nativeGitDirectory, "ralph-write-probe");
+  const realGitConfig = windowsToWslPath(
+    path.join(repositoryRoot, ".git", "config"),
+  );
+  try {
+    const result = await runWsl(
+      [
+        "env",
+        `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
+        "HOME=/var/lib/betterr-me-ralph/worker-home",
+        ...Object.entries(gitContext.environment).map(
+          ([name, value]) => `${name}=${value}`,
+        ),
+        "/usr/local/bin/codex",
+        "sandbox",
+        ...restrictedProfileArguments(profile, ":workspace", [
+          gitContext.gitMetadataRoot,
+          wslDependencyRoot,
+          wslWorkerHome,
+        ]),
+        ...shellEnvironmentArguments(gitContext.environment),
+        "-P",
+        profile,
+        "-C",
+        gitContext.worktreePath,
+        "--",
+        "bash",
+        "-lc",
+        `set -eu; git status --porcelain >/dev/null; test "$(git rev-list --count --all)" = 1; test -z "$(git remote)"; ! test -r ${tomlString(realGitConfig)}; ! touch "$GIT_DIR/ralph-write-probe" 2>/dev/null; echo RALPH_WORKER_GIT_OK`,
+      ],
+      { timeoutSeconds: 30 },
+    );
+    if (result.stdout.trim() !== "RALPH_WORKER_GIT_OK") {
+      throw new Error("isolated worker Git smoke test returned unexpected output");
+    }
+  } finally {
+    if (fs.existsSync(probePath)) fs.rmSync(probePath, { force: true });
+  }
 }
 
 async function assertWslIsolationReady() {
@@ -1269,8 +1339,17 @@ async function runTypeScript(worktreePath, timeoutSeconds, logPrefix) {
   return { ...result, lines };
 }
 
-function workerCodexArguments({ worktreePath, schemaPath, resultPath, readOnly }) {
+function workerCodexArguments({
+  worktreePath,
+  schemaPath,
+  resultPath,
+  readOnly,
+  gitContext,
+}) {
   const profile = readOnly ? "ralph-reviewer" : "ralph-worker";
+  const gitEnvironmentArguments = shellEnvironmentArguments(
+    gitContext?.environment ?? {},
+  );
   return [
     "exec",
     "--ephemeral",
@@ -1283,12 +1362,14 @@ function workerCodexArguments({ worktreePath, schemaPath, resultPath, readOnly }
       isolatedCodexReadablePaths({
         readOnly,
         worktreePath: windowsToWslPath(worktreePath),
+        gitMetadataRoot: gitContext?.gitMetadataRoot,
         dependencyRoot: wslDependencyRoot,
         workerHome: wslWorkerHome,
       }),
     ),
     "-c",
     'shell_environment_policy.inherit="core"',
+    ...gitEnvironmentArguments,
     "-c",
     "shell_environment_policy.ignore_default_excludes=false",
     "-c",
@@ -1452,18 +1533,25 @@ async function repairIssue(state, issue, failure, attempt, controllerOptions) {
     `Starting fresh isolated repair ${attempt} of ${controllerOptions.maximumRepairAttempts} for issue #${number}.`,
   );
   await installControllerDependencyLink(worktreePath);
+  const gitContext = await resolveWorkerGitContext(
+    number,
+    worktreePath,
+    issueState.baseSha,
+  );
   await isolatedCodex(
     workerCodexArguments({
       worktreePath,
       schemaPath: resultSchemaPath,
       resultPath,
       readOnly: false,
+      gitContext,
     }),
     {
       cwd: worktreePath,
       input: repairPrompt(issue, failure, attempt),
       timeoutSeconds: controllerOptions.implementationTimeoutSeconds,
       logPrefix,
+      gitEnvironment: gitContext.environment,
     },
   );
   if (!fs.existsSync(resultPath)) {
@@ -1532,18 +1620,25 @@ async function implementIssue(state, issue, controllerOptions) {
   const logPrefix = path.join(issueLogRoot, `${timestamp}-implementation`);
   status(`Starting a fresh isolated Codex worker for issue #${number}.`);
   await installControllerDependencyLink(worktreePath);
+  const gitContext = await resolveWorkerGitContext(
+    number,
+    worktreePath,
+    issueState.baseSha,
+  );
   await isolatedCodex(
     workerCodexArguments({
       worktreePath,
       schemaPath: resultSchemaPath,
       resultPath,
       readOnly: false,
+      gitContext,
     }),
     {
       cwd: worktreePath,
       input: implementationPrompt(issue, recovery),
       timeoutSeconds: controllerOptions.implementationTimeoutSeconds,
       logPrefix,
+      gitEnvironment: gitContext.environment,
     },
   );
   if (!fs.existsSync(resultPath)) {
@@ -1854,13 +1949,15 @@ async function localCheckoutCleanupPatch(issueNumber, issueState) {
   if (issueState?.worktreePath && fs.existsSync(issueState.worktreePath)) {
     await removeControllerDependencyLink(issueState.worktreePath);
   }
-  return cleanupIssueCheckout({
+  const cleanup = await cleanupIssueCheckout({
     repositoryRoot,
     worktreeRoot,
     issueNumber,
     issueState,
     git,
   });
+  removeSanitizedWorkerGitView(workerGitRoot, issueNumber);
+  return cleanup;
 }
 
 async function releasePublishedCheckout(state, issue) {

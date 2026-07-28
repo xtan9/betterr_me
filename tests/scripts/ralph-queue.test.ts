@@ -17,7 +17,6 @@ import {
   frameInertData,
   evaluateIteration,
   findNewTypeScriptDiagnostics,
-  isolatedCodexReadablePaths,
   isIssueActive,
   neutralizeClosingKeywords,
   preserveExternalFailureKind,
@@ -35,6 +34,11 @@ import {
   validateQueueState,
   workerResultFailureKind,
 } from "../../scripts/ralph/queue.mjs";
+import {
+  isolatedCodexFilesystemConfig,
+  isolatedCodexReadablePaths,
+  workerGitEnvironment,
+} from "../../scripts/ralph/worker-isolation.mjs";
 
 const queue = [
   { issueNumber: 101, title: "Create the lifecycle", blockers: [] },
@@ -712,6 +716,7 @@ describe("Ralph durable state and policy", () => {
   it("adds the external worktree read grant only to the read-only reviewer", () => {
     const input = {
       worktreePath: "/worktree",
+      gitMetadataRoot: "/repository/.git",
       dependencyRoot: "/deps",
       workerHome: "/home",
     };
@@ -721,9 +726,38 @@ describe("Ralph durable state and policy", () => {
       "/home",
     ]);
     expect(isolatedCodexReadablePaths({ ...input, readOnly: false })).toEqual([
+      "/repository/.git",
       "/deps",
       "/home",
     ]);
+  });
+
+  it("pins the isolated worker to the translated linked-worktree Git context", () => {
+    expect(
+      workerGitEnvironment({
+        gitDirectory: "/repository/.git/worktrees/current",
+        worktreePath: "/worktrees/current",
+      }),
+    ).toEqual({
+      GIT_DIR: "/repository/.git/worktrees/current",
+      GIT_WORK_TREE: "/worktrees/current",
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "core.autocrlf",
+      GIT_CONFIG_VALUE_0: "true",
+    });
+  });
+
+  it("serializes dotted readable paths as literal TOML filesystem keys", () => {
+    expect(
+      isolatedCodexFilesystemConfig([
+        "/repository/.git",
+        "/dependencies/node_modules",
+      ]),
+    ).toBe(
+      '{":root"="deny",":minimal"="read",":tmpdir"="deny","/repository/.git"="read","/dependencies/node_modules"="read"}',
+    );
   });
 
   it("frames untrusted prompt data with a random boundary absent from the payload", () => {

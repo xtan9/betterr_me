@@ -10,6 +10,10 @@ The implementation worker has no GitHub role. It runs without network access,
 with a filtered command environment, cannot write outside its issue worktree,
 and is instructed to leave the diff uncommitted. The controller—running outside
 that worktree—alone owns state, commits, pushes, PRs, checks, and merges.
+Before each worker starts, the controller builds and validates a read-only,
+one-commit Git view of that issue's baseline. This lets Linux Git inspect the
+Windows worktree without exposing the controller repository's config, remotes,
+reflogs, unrelated history, or writable metadata.
 
 ## Modes
 
@@ -82,7 +86,8 @@ claim race deterministically.
 The active worker uses one reusable `worktrees/current` checkout. Before each
 new issue the controller fetches and branches from the latest `origin/main`.
 Once a commit is safely published to a PR, or once its PR is merged, the local
-worktree and issue branch are removed. A repair-exhausted issue with a safe diff
+worktree, issue branch, and sanitized Git view are removed. A repair-exhausted
+issue with a safe diff
 is committed and pushed to a clearly marked draft failed-attempt PR before the
 local checkout is removed. The draft records the failed gate and remains
 dependency-blocking until a human repairs and merges it. Content that fails the

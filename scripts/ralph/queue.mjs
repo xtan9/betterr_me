@@ -455,19 +455,6 @@ export function reviewFailureKind(review) {
   return "safety";
 }
 
-export function isolatedCodexReadablePaths({
-  readOnly,
-  worktreePath,
-  dependencyRoot,
-  workerHome,
-}) {
-  return [
-    ...(readOnly ? [worktreePath] : []),
-    dependencyRoot,
-    workerHome,
-  ];
-}
-
 export function frameInertData(label, payload) {
   let marker;
   do {
