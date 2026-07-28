@@ -44,6 +44,9 @@ const worktreeRoot = path.join(stateRoot, "worktrees");
 const wslDependencyRoot = "/var/lib/betterr-me-ralph/deps-source/node_modules";
 const wslWorkerHome = "/var/lib/betterr-me-ralph/worker-home";
 const wslSkillRoot = `${wslWorkerHome}/.agents/skills`;
+const wslProcessWrapper = windowsToWslPath(
+  path.join(scriptDirectory, "wsl-process-wrapper.mjs"),
+);
 const queue = JSON.parse(fs.readFileSync(queuePath, "utf8"));
 
 function status(message) {
@@ -372,6 +375,10 @@ async function runWsl(args, options = {}) {
           windowsHide: true,
           stdio: "ignore",
         });
+        spawnSync("wsl.exe", ["--", "kill", "-KILL", `-${pid}`], {
+          windowsHide: true,
+          stdio: "ignore",
+        });
       }
     } catch {
       // The Windows process-tree termination remains the final fallback.
@@ -382,10 +389,8 @@ async function runWsl(args, options = {}) {
       "wsl.exe",
       [
         "--",
-        "/bin/sh",
-        "-c",
-        '/usr/bin/setsid "$@" & child=$!; printf "%s" "$child" > "$1"; trap \'kill -TERM -- -"$child" 2>/dev/null || true\' TERM INT; wait "$child"',
-        "ralph-wsl-wrapper",
+        "/usr/local/bin/node",
+        wslProcessWrapper,
         wslPidPath,
         ...args,
       ],
