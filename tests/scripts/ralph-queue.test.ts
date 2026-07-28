@@ -366,15 +366,20 @@ describe("Ralph durable state and policy", () => {
     ]);
   });
 
-  it("requires independent review pass results to be internally consistent", () => {
+  it("requires independent reviews to report a supported blocker kind", () => {
     const schema = JSON.parse(
       fs.readFileSync(path.resolve("scripts/ralph/review.schema.json"), "utf8"),
     );
 
     expect(schema.required).toContain("blockerKind");
-    expect(schema.allOf).toHaveLength(3);
-    expect(schema.allOf[0].then.properties.blockerKind.const).toBe("none");
-    expect(schema.allOf[0].then.properties.repairable.const).toBe(false);
+    expect(schema.properties.blockerKind.enum).toEqual([
+      "none",
+      "code",
+      "requirements",
+      "infrastructure",
+      "safety",
+    ]);
+    expect(schema.allOf).toBeUndefined();
   });
 
   it("labels a failed-attempt pull request as draft recovery work", () => {
