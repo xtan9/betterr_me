@@ -14,8 +14,11 @@ close, label, push, or merge anything on GitHub.
 An iteration advances only when all of these are true:
 
 - Codex reports the selected issue complete.
-- Tests passed and code review completed.
+- The implementation reports tests and code review complete.
+- An independent full Vitest run passes after the commit.
+- A separate ephemeral Codex review reports no blocking findings.
 - Exactly one new commit was created.
+- The commit directly extends the prior integration-branch commit.
 - The commit message references the selected issue number.
 - The worktree is clean.
 
@@ -67,7 +70,8 @@ After two successful supervised iterations:
 ```
 
 The iteration limit bounds runtime and spend. Re-running the same command is
-safe: selection resumes from `.ralph-state/progress.json`. A completed queue
+safe: selection resumes from `.ralph-state/progress.json` after confirming its
+last completed commit is still an ancestor of the integration branch. A completed queue
 returns `queue-complete` without invoking Codex.
 
 To perform only the AFK launcher's preflight:
@@ -97,5 +101,6 @@ open until the resulting integration work has been reviewed and merged.
 - `architecture-queue.json` — ordered ticket snapshot and blocking graph.
 - `queue.mjs` — validated selection and success-gate logic.
 - `result.schema.json` — structured final response required from Codex.
+- `review.schema.json` — structured result for the independent review gate.
 - `ralph-once.ps1` — one fresh Codex iteration.
 - `afk-ralph.ps1` — bounded loop around `ralph-once.ps1`.

@@ -12,24 +12,67 @@ function Write-RalphStatus {
     Write-Host "[ralph] $Message" -ForegroundColor Cyan
 }
 
+function Invoke-RedirectedProcess {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$WorkingDirectory,
+        [Parameter(Mandatory = $true)][string]$StandardOutput,
+        [Parameter(Mandatory = $true)][string]$StandardError,
+        [string]$StandardInput
+    )
+
+    $quotedArguments = ($Arguments | ForEach-Object {
+        '"' + ([string]$_).Replace('"', '\"') + '"'
+    }) -join " "
+    $startParameters = @{
+        FilePath = $FilePath
+        ArgumentList = $quotedArguments
+        WorkingDirectory = $WorkingDirectory
+        RedirectStandardOutput = $StandardOutput
+        RedirectStandardError = $StandardError
+        NoNewWindow = $true
+        Wait = $true
+        PassThru = $true
+    }
+    if ($StandardInput) {
+        $startParameters.RedirectStandardInput = $StandardInput
+    }
+
+    $process = Start-Process @startParameters
+    return $process.ExitCode
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $queueFile = Join-Path $PSScriptRoot "architecture-queue.json"
 $queueHelper = Join-Path $PSScriptRoot "queue.mjs"
 $resultSchema = Join-Path $PSScriptRoot "result.schema.json"
+$reviewSchema = Join-Path $PSScriptRoot "review.schema.json"
 $stateDirectory = Join-Path $repoRoot ".ralph-state"
 $progressFile = Join-Path $stateDirectory "progress.json"
 
 $git = Get-Command git -ErrorAction Stop
 $node = Get-Command node -ErrorAction Stop
-$codex = Get-Command codex -ErrorAction Stop
+$codexCommand = Get-Command codex -ErrorAction Stop
 
-& $codex.Source login status *> $null
-if ($LASTEXITCODE -ne 0) {
-    throw "Codex CLI is not authenticated. Run 'codex login' before starting Ralph."
+if ($codexCommand.CommandType -eq "ExternalScript" -and $codexCommand.Source.EndsWith("codex.ps1")) {
+    $codexScript = Join-Path (Split-Path $codexCommand.Source -Parent) "node_modules\@openai\codex\bin\codex.js"
+    if (-not (Test-Path $codexScript)) {
+        throw "Unable to locate the Codex CLI entrypoint beside $($codexCommand.Source)."
+    }
+    $codexExecutable = (Get-Command node.exe -ErrorAction Stop).Source
+    $codexPrefixArguments = @($codexScript)
+} else {
+    $codexExecutable = $codexCommand.Source
+    $codexPrefixArguments = @()
 }
 
-$gitRoot = (& $git.Source -C $repoRoot rev-parse --show-toplevel).Trim()
-if ($LASTEXITCODE -ne 0 -or $gitRoot -ne $repoRoot) {
+$gitRootText = (& $git.Source -C $repoRoot rev-parse --show-toplevel).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to resolve the Git repository root."
+}
+$gitRoot = (Resolve-Path -LiteralPath $gitRootText).Path
+if (-not [string]::Equals($gitRoot, $repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Ralph must run from the expected Git repository root: $repoRoot"
 }
 
@@ -49,6 +92,38 @@ if ($worktreeChanges.Count -gt 0) {
 $temporaryProgress = $null
 if (Test-Path $progressFile) {
     $selectionProgressFile = $progressFile
+
+    try {
+        $savedProgress = Get-Content -Raw $progressFile | ConvertFrom-Json
+    }
+    catch {
+        throw "Ralph progress is not valid JSON: $progressFile"
+    }
+    if (-not $savedProgress.PSObject.Properties["completed"] -or $savedProgress.completed -isnot [array]) {
+        throw "Ralph progress must contain a completed array. Inspect $progressFile."
+    }
+    $savedCompleted = @($savedProgress.completed)
+    if ($savedCompleted.Count -gt 0) {
+        $lastCommitProperty = $savedProgress.PSObject.Properties["lastCommit"]
+        if (-not $lastCommitProperty -or -not [string]$savedProgress.lastCommit) {
+            throw "Ralph progress contains completed issues but no lastCommit. Inspect $progressFile."
+        }
+        if (
+            -not $savedProgress.PSObject.Properties["lastCompletedIssue"] -or
+            [int]$savedProgress.lastCompletedIssue -ne [int]$savedCompleted[-1]
+        ) {
+            throw "Ralph progress lastCompletedIssue does not match the completed queue. Inspect $progressFile."
+        }
+
+        $previousErrorPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        & $git.Source -C $repoRoot merge-base --is-ancestor ([string]$savedProgress.lastCommit) HEAD *> $null
+        $savedCommitIsAncestor = ($LASTEXITCODE -eq 0)
+        $ErrorActionPreference = $previousErrorPreference
+        if (-not $savedCommitIsAncestor) {
+            throw "Ralph progress points to a commit that is not present on the current branch. Inspect $progressFile before continuing."
+        }
+    }
 }
 elseif ($DryRun) {
     $temporaryProgress = [System.IO.Path]::GetTempFileName()
@@ -151,6 +226,12 @@ $stdoutLog = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-s
 $stderrLog = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-stderr.log"
 $resultFile = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-result.json"
 $iterationFile = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-iteration.json"
+$verificationStdoutLog = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-verification-stdout.log"
+$verificationStderrLog = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-verification-stderr.log"
+$reviewPromptFile = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-review-prompt.txt"
+$reviewStdoutLog = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-review-stdout.log"
+$reviewStderrLog = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-review-stderr.log"
+$reviewResultFile = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-review-result.json"
 
 [System.IO.File]::WriteAllText($promptFile, $prompt)
 $beforeSha = (& $git.Source -C $repoRoot rev-parse HEAD).Trim()
@@ -159,7 +240,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-RalphStatus "Starting a fresh ephemeral Codex invocation. Logs: $stderrLog"
-$codexArguments = @(
+$codexArguments = @($codexPrefixArguments) + @(
     "exec",
     "--ephemeral",
     "--sandbox", "workspace-write",
@@ -169,9 +250,13 @@ $codexArguments = @(
     "-"
 )
 
-Get-Content -Raw $promptFile |
-    & $codex.Source @codexArguments 1> $stdoutLog 2> $stderrLog
-$codexExitCode = $LASTEXITCODE
+$codexExitCode = Invoke-RedirectedProcess `
+    -FilePath $codexExecutable `
+    -Arguments $codexArguments `
+    -WorkingDirectory $repoRoot `
+    -StandardInput $promptFile `
+    -StandardOutput $stdoutLog `
+    -StandardError $stderrLog
 
 if (Test-Path $stderrLog) {
     Get-Content $stderrLog | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
@@ -192,12 +277,116 @@ catch {
 }
 
 $afterSha = (& $git.Source -C $repoRoot rev-parse HEAD).Trim()
-$commitCount = [int]((& $git.Source -C $repoRoot rev-list --count "$beforeSha..$afterSha").Trim())
-$postRunChanges = @(& $git.Source -C $repoRoot status --porcelain)
-$commitMessage = if ($afterSha -ne $beforeSha) {
-    (& $git.Source -C $repoRoot log -1 --pretty=%B) -join [Environment]::NewLine
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to read the post-run commit."
+}
+$postRunBranch = (& $git.Source -C $repoRoot branch --show-current).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to read the post-run branch."
+}
+$commitCountText = (& $git.Source -C $repoRoot rev-list --count "$beforeSha..$afterSha").Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to count the commits created by the iteration."
+}
+$commitCount = [int]$commitCountText
+$directParent = if ($afterSha -ne $beforeSha) {
+    (& $git.Source -C $repoRoot rev-parse "$afterSha^").Trim()
 } else {
     ""
+}
+if ($afterSha -ne $beforeSha -and $LASTEXITCODE -ne 0) {
+    throw "Unable to verify the parent of the new commit."
+}
+$commitSubject = if ($afterSha -ne $beforeSha) {
+    (& $git.Source -C $repoRoot log -1 --pretty=%s).Trim()
+} else {
+    ""
+}
+if ($afterSha -ne $beforeSha -and $LASTEXITCODE -ne 0) {
+    throw "Unable to read the new commit subject."
+}
+$preVerificationChanges = @(& $git.Source -C $repoRoot status --porcelain)
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to inspect the post-agent worktree."
+}
+
+if ($preVerificationChanges.Count -gt 0) {
+    throw "Codex left a dirty worktree. Inspect the changes before continuing."
+}
+if ($postRunBranch -ne $Branch) {
+    throw "Codex left the integration branch. Expected '$Branch' but found '$postRunBranch'."
+}
+if ($directParent -ne $beforeSha) {
+    throw "The new commit does not directly extend the starting commit. Inspect Git history before continuing."
+}
+if ($commitCount -ne 1) {
+    throw "Codex created $commitCount commits; exactly one is required."
+}
+
+$vitestScript = Join-Path $repoRoot "node_modules\vitest\vitest.mjs"
+if (-not (Test-Path $vitestScript)) {
+    throw "Unable to locate Vitest at $vitestScript. Install dependencies before running Ralph."
+}
+Write-RalphStatus "Running the independent full Vitest suite."
+$verificationExitCode = Invoke-RedirectedProcess `
+    -FilePath $node.Source `
+    -Arguments @($vitestScript, "run") `
+    -WorkingDirectory $repoRoot `
+    -StandardOutput $verificationStdoutLog `
+    -StandardError $verificationStderrLog
+if ($verificationExitCode -ne 0) {
+    throw "Independent tests failed with code $verificationExitCode. Inspect $verificationStdoutLog and $verificationStderrLog."
+}
+
+$reviewPrompt = @"
+Review commit $afterSha only. This is an independent, read-only gate for issue #$($issue.issueNumber): $($issue.title).
+
+What the ticket must deliver:
+$($issue.whatToBuild)
+
+Acceptance criteria:
+$criteria
+
+Approved test seam:
+$($issue.testSeam)
+
+Check the commit against AGENTS.md, repository standards, the acceptance criteria, correctness, regressions, and missing tests. Report only blocking correctness/spec/standards findings. Do not edit files. Return status=pass with an empty blockingFindings array only when no blocking finding remains.
+"@
+[System.IO.File]::WriteAllText($reviewPromptFile, $reviewPrompt)
+$reviewArguments = @($codexPrefixArguments) + @(
+    "exec",
+    "review",
+    "--ephemeral",
+    "--commit", $afterSha,
+    "--output-schema", $reviewSchema,
+    "--output-last-message", $reviewResultFile,
+    "-"
+)
+Write-RalphStatus "Running an independent Codex review of commit $afterSha."
+$reviewExitCode = Invoke-RedirectedProcess `
+    -FilePath $codexExecutable `
+    -Arguments $reviewArguments `
+    -WorkingDirectory $repoRoot `
+    -StandardInput $reviewPromptFile `
+    -StandardOutput $reviewStdoutLog `
+    -StandardError $reviewStderrLog
+if ($reviewExitCode -ne 0) {
+    throw "Independent review failed to run. Inspect $reviewStdoutLog and $reviewStderrLog."
+}
+try {
+    $independentReview = Get-Content -Raw $reviewResultFile | ConvertFrom-Json
+}
+catch {
+    throw "Independent review returned invalid structured output. Inspect $reviewResultFile."
+}
+
+$postRunChanges = @(& $git.Source -C $repoRoot status --porcelain)
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to inspect the final worktree."
+}
+$finalBranch = (& $git.Source -C $repoRoot branch --show-current).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to inspect the final branch."
 }
 
 $iteration = [ordered]@{
@@ -205,8 +394,12 @@ $iteration = [ordered]@{
     beforeSha = $beforeSha
     afterSha = $afterSha
     commitCount = $commitCount
+    branchMatches = ($postRunBranch -eq $Branch -and $finalBranch -eq $Branch)
+    directParentMatches = ($directParent -eq $beforeSha)
     worktreeClean = ($postRunChanges.Count -eq 0)
-    commitMessage = $commitMessage.Trim()
+    commitSubject = $commitSubject
+    verificationExitCode = $verificationExitCode
+    independentReview = $independentReview
     agentResult = $agentResult
 }
 [System.IO.File]::WriteAllText(

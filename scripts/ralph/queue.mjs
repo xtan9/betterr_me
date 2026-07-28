@@ -83,6 +83,12 @@ export function evaluateIteration(iteration) {
   if (result.issueNumber !== selected) {
     return fail(`agent reported issue #${result.issueNumber}`);
   }
+  if (!iteration.branchMatches) {
+    return fail("agent left the integration branch");
+  }
+  if (!iteration.directParentMatches) {
+    return fail("new commit does not directly extend the starting commit");
+  }
   if (iteration.beforeSha === iteration.afterSha) {
     return fail("did not create a commit");
   }
@@ -92,14 +98,26 @@ export function evaluateIteration(iteration) {
   if (!iteration.worktreeClean) {
     return fail("worktree is not clean");
   }
-  if (!iteration.commitMessage?.includes(`#${selected}`)) {
-    return fail(`commit message does not reference #${selected}`);
+  const issueReference = new RegExp(`(^|\\D)#${selected}(?!\\d)`);
+  if (!issueReference.test(iteration.commitSubject ?? "")) {
+    return fail(`commit subject does not reference #${selected}`);
   }
   if (result.testsPassed !== true) {
     return fail("did not report passing tests");
   }
   if (result.reviewCompleted !== true) {
     return fail("did not report a completed review");
+  }
+  if (iteration.verificationExitCode !== 0) {
+    return fail("independent test suite failed");
+  }
+  if (
+    !iteration.independentReview ||
+    iteration.independentReview.status !== "pass" ||
+    !Array.isArray(iteration.independentReview.blockingFindings) ||
+    iteration.independentReview.blockingFindings.length > 0
+  ) {
+    return fail("independent code review did not pass");
   }
 
   return { canAdvance: true, reason: "completed" };

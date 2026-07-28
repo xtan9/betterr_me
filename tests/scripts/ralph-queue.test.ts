@@ -73,6 +73,42 @@ describe("Ralph queue selection", () => {
       "unknown issue #999",
     );
   });
+
+  it.each([
+    [[], { completed: [] }, "queue must contain at least one issue"],
+    [queue, {}, "progress must contain a completed array"],
+    [
+      [{ issueNumber: 0, title: "Invalid", blockers: [] }],
+      { completed: [] },
+      "issueNumber must be a positive integer",
+    ],
+    [
+      [
+        { issueNumber: 101, title: "First", blockers: [] },
+        { issueNumber: 101, title: "Duplicate", blockers: [] },
+      ],
+      { completed: [] },
+      "duplicate issue #101",
+    ],
+    [
+      [{ issueNumber: 101, title: "No blockers", blockers: null }],
+      { completed: [] },
+      "must contain a blockers array",
+    ],
+    [
+      [{ issueNumber: 101, title: "Bad blocker", blockers: [0] }],
+      { completed: [] },
+      "blocker for issue #101 must be a positive integer",
+    ],
+    [
+      [{ issueNumber: 101, title: "Unknown blocker", blockers: [999] }],
+      { completed: [] },
+      "references unknown blocker #999",
+    ],
+    [queue, { completed: [0] }, "completed issue must be a positive integer"],
+  ])("rejects invalid queue or progress state", (issues, progress, message) => {
+    expect(() => validateQueueState(issues, progress)).toThrow(message);
+  });
 });
 
 describe("Ralph iteration advancement", () => {
@@ -81,8 +117,16 @@ describe("Ralph iteration advancement", () => {
     beforeSha: "before",
     afterSha: "after",
     commitCount: 1,
+    branchMatches: true,
+    directParentMatches: true,
     worktreeClean: true,
-    commitMessage: "refactor: own scheduling lifecycle (#101)",
+    commitSubject: "refactor: own scheduling lifecycle (#101)",
+    verificationExitCode: 0,
+    independentReview: {
+      status: "pass",
+      blockingFindings: [],
+      summary: "No blocking findings.",
+    },
     agentResult: {
       status: "completed",
       issueNumber: 101,
@@ -104,8 +148,8 @@ describe("Ralph iteration advancement", () => {
     [{ ...successfulIteration, commitCount: 2 }, "created 2 commits"],
     [{ ...successfulIteration, worktreeClean: false }, "worktree is not clean"],
     [
-      { ...successfulIteration, commitMessage: "refactor: own lifecycle" },
-      "commit message does not reference #101",
+      { ...successfulIteration, commitSubject: "refactor: own lifecycle" },
+      "commit subject does not reference #101",
     ],
     [
       {
@@ -134,10 +178,57 @@ describe("Ralph iteration advancement", () => {
       },
       "did not report a completed review",
     ],
+    [
+      { ...successfulIteration, branchMatches: false },
+      "agent left the integration branch",
+    ],
+    [
+      { ...successfulIteration, directParentMatches: false },
+      "new commit does not directly extend the starting commit",
+    ],
+    [
+      { ...successfulIteration, verificationExitCode: 1 },
+      "independent test suite failed",
+    ],
+    [
+      {
+        ...successfulIteration,
+        independentReview: {
+          status: "findings",
+          blockingFindings: ["A blocking defect"],
+          summary: "Review failed.",
+        },
+      },
+      "independent code review did not pass",
+    ],
   ])("stops when the success gate fails", (iteration, reason) => {
     expect(evaluateIteration(iteration)).toEqual({
       canAdvance: false,
       reason,
+    });
+  });
+
+  it("does not accept a longer issue number as a ticket reference", () => {
+    expect(
+      evaluateIteration({
+        ...successfulIteration,
+        commitSubject: "refactor: own scheduling lifecycle (#1010)",
+      }),
+    ).toEqual({
+      canAdvance: false,
+      reason: "commit subject does not reference #101",
+    });
+  });
+
+  it("stops when the agent does not report completion", () => {
+    expect(
+      evaluateIteration({
+        ...successfulIteration,
+        agentResult: { ...successfulIteration.agentResult, status: "blocked" },
+      }),
+    ).toEqual({
+      canAdvance: false,
+      reason: "agent reported blocked",
     });
   });
 });
