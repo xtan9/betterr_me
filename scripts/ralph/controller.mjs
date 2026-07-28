@@ -1209,7 +1209,7 @@ function workerCodexArguments({ worktreePath, schemaPath, resultPath, readOnly }
     ...restrictedProfileArguments(
       profile,
       readOnly ? ":read-only" : ":workspace",
-      [wslDependencyRoot, wslWorkerHome],
+      [windowsToWslPath(worktreePath), wslDependencyRoot, wslWorkerHome],
     ),
     "-c",
     'shell_environment_policy.inherit="core"',
