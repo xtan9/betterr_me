@@ -9,8 +9,10 @@ import {
   buildFailedAttemptPullRequestBody,
   chooseClaimWinner,
   classifyChangeRisk,
+  createExternalVerificationGate,
   evaluateMergeGate,
   externalRepairDisposition,
+  externalVerificationReceiptMatches,
   failureDisposition,
   frameInertData,
   evaluateIteration,
@@ -18,6 +20,7 @@ import {
   isolatedCodexReadablePaths,
   isIssueActive,
   neutralizeClosingKeywords,
+  preserveExternalFailureKind,
   selectNextLiveIssue,
   selectNextLiveIssueStatus,
   selectNextIssue,
@@ -341,6 +344,55 @@ describe("Ralph durable state and policy", () => {
         5,
       ),
     ).toBe("unsafe");
+  });
+
+  it("durably preserves controller-owned safety verification provenance", () => {
+    const request = {
+      failureKind: "review-safety",
+      stopReason: "local database gate failed",
+    };
+    const gate = createExternalVerificationGate(
+      request,
+      "2026-07-28T14:00:00Z",
+      "gate-481",
+    );
+
+    expect(gate).toEqual({
+      gateId: "gate-481",
+      status: "repairing",
+      failureKind: "review-safety",
+      stopReason: "local database gate failed",
+      requestedAt: "2026-07-28T14:00:00Z",
+    });
+    expect(preserveExternalFailureKind(gate, "worker-blocked")).toBe(
+      "review-safety",
+    );
+    expect(preserveExternalFailureKind(null, "worker-blocked")).toBe(
+      "worker-blocked",
+    );
+  });
+
+  it("accepts external verification only for the exact gated tree", () => {
+    const gate = {
+      gateId: "gate-481",
+      status: "awaiting-verification",
+      treeSha: "tree-abc",
+    };
+    const receipt = {
+      gateId: "gate-481",
+      treeSha: "tree-abc",
+      passed: true,
+    };
+
+    expect(externalVerificationReceiptMatches(gate, receipt, "tree-abc")).toBe(
+      true,
+    );
+    expect(externalVerificationReceiptMatches(gate, receipt, "tree-changed")).toBe(
+      false,
+    );
+    expect(
+      externalVerificationReceiptMatches(gate, { ...receipt, passed: false }, "tree-abc"),
+    ).toBe(false);
   });
 
   it("parks issue-level failures but stops for controller failures", () => {

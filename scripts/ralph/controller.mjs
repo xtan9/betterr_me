@@ -11,8 +11,10 @@ import {
   buildOvernightSummary,
   chooseClaimWinner,
   classifyChangeRisk,
+  createExternalVerificationGate,
   evaluateMergeGate,
   externalRepairDisposition,
+  externalVerificationReceiptMatches,
   failureDisposition,
   findNewTypeScriptDiagnostics,
   frameInertData,
@@ -21,6 +23,7 @@ import {
   isIssueParked,
   issueStageAtLeast,
   neutralizeClosingKeywords,
+  preserveExternalFailureKind,
   reviewFailureKind,
   selectNextLiveIssueStatus,
   selectRecoveryBase,
@@ -1590,6 +1593,15 @@ async function verifyIssue(state, issue, controllerOptions) {
   const stagedTree = (
     await git(["-C", worktreePath, "write-tree"])
   ).stdout.trim();
+  if (
+    issueState.externalVerifiedTreeSha &&
+    stagedTree !== issueState.externalVerifiedTreeSha
+  ) {
+    throw Object.assign(
+      new Error("staged tree does not match controller-owned external verification"),
+      { failureKind: "safety" },
+    );
+  }
   await installControllerDependencyLink(worktreePath);
 
   status(`Running the full Vitest suite for issue #${number}.`);
@@ -2560,8 +2572,14 @@ async function processOne(state, actor, controllerOptions) {
             pendingExternalRepair,
           );
         }
+        const externalVerificationGate = createExternalVerificationGate(
+          pendingExternalRepair,
+          new Date().toISOString(),
+          crypto.randomUUID(),
+        );
         state = moveIssue(state, number, "implemented", {
           pendingExternalRepair: null,
+          externalVerificationGate,
         });
         state = await repairIssue(
           state,
@@ -2573,11 +2591,44 @@ async function processOne(state, actor, controllerOptions) {
           repairAttempts + 1,
           controllerOptions,
         );
+        const repairedIssueState = state.issues[String(number)];
+        const repairedWorktreePath = repairedIssueState.worktreePath;
+        await removeControllerDependencyLink(repairedWorktreePath);
+        await git(["-C", repairedWorktreePath, "add", "--all"]);
+        const changedFiles = (
+          await git([
+            "-C",
+            repairedWorktreePath,
+            "diff",
+            "--cached",
+            "--name-only",
+            "-z",
+          ])
+        ).stdout
+          .split("\0")
+          .filter(Boolean);
+        if (changedFiles.length === 0) {
+          throw Object.assign(
+            new Error("external repair produced no changed files"),
+            { failureKind: externalVerificationGate.failureKind },
+          );
+        }
+        await git(["-C", repairedWorktreePath, "diff", "--cached", "--check"]);
+        await assertStagedContentSafe(
+          repairedWorktreePath,
+          repairedIssueState.baseSha,
+          changedFiles,
+        );
+        const repairedTreeSha = (
+          await git(["-C", repairedWorktreePath, "write-tree"])
+        ).stdout.trim();
+        await installControllerDependencyLink(repairedWorktreePath);
         state = moveIssue(state, number, "implemented", {
-          awaitingExternalVerification: {
-            failureKind: pendingExternalRepair.failureKind,
-            stopReason: pendingExternalRepair.stopReason,
-            requestedAt: new Date().toISOString(),
+          externalVerificationGate: {
+            ...externalVerificationGate,
+            status: "awaiting-verification",
+            repairCompletedAt: new Date().toISOString(),
+            treeSha: repairedTreeSha,
           },
         });
         return {
@@ -2587,13 +2638,59 @@ async function processOne(state, actor, controllerOptions) {
           issue,
         };
       }
-      if (state.issues[String(number)]?.awaitingExternalVerification) {
-        return {
-          state,
-          status: "awaiting-external-verification",
-          reason: "controller-managed external verification is required",
-          issue,
-        };
+      const externalVerificationGate =
+        state.issues[String(number)]?.externalVerificationGate;
+      if (externalVerificationGate) {
+        const gatedIssueState = state.issues[String(number)];
+        const worktreePath = gatedIssueState.worktreePath;
+        const receipt = gatedIssueState.externalVerificationReceipt;
+        if (!receipt) {
+          return {
+            state,
+            status: "awaiting-external-verification",
+            reason: "controller-managed external verification is required",
+            issue,
+          };
+        }
+        const unstaged = await runProcess(
+          "git.exe",
+          ["-C", worktreePath, "diff", "--quiet"],
+          { timeoutSeconds: 30 },
+        );
+        const untracked = (
+          await git([
+            "-C",
+            worktreePath,
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+          ])
+        ).stdout.trim();
+        const currentTreeSha = (
+          await git(["-C", worktreePath, "write-tree"])
+        ).stdout.trim();
+        if (
+          unstaged.code !== 0 ||
+          untracked ||
+          !externalVerificationReceiptMatches(
+            externalVerificationGate,
+            receipt,
+            currentTreeSha,
+          )
+        ) {
+          throw Object.assign(
+            new Error(
+              "external verification receipt does not match the current repaired tree",
+            ),
+            { failureKind: externalVerificationGate.failureKind },
+          );
+        }
+        state = moveIssue(state, number, "implemented", {
+          externalVerificationGate: null,
+          externalVerificationReceipt: null,
+          externalVerifiedTreeSha: currentTreeSha,
+          externalVerificationPassedAt: receipt.passedAt,
+        });
       }
       try {
         state = await verifyIssue(state, issue, controllerOptions);
@@ -2631,6 +2728,16 @@ async function processOne(state, actor, controllerOptions) {
   } catch (error) {
     state = readJson(statePath);
     let current = state.issues[String(number)];
+    const externalVerificationGate = current?.externalVerificationGate;
+    const preservedFailureKind = preserveExternalFailureKind(
+      externalVerificationGate,
+      error.failureKind,
+    );
+    if (preservedFailureKind !== error.failureKind) {
+      error.failureKind = preservedFailureKind;
+      error.stopReason =
+        error.stopReason ?? externalVerificationGate.stopReason;
+    }
     let mergedPr = null;
     if (
       current?.branch &&

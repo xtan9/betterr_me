@@ -350,6 +350,34 @@ export function externalRepairDisposition(
     : "exhausted";
 }
 
+export function createExternalVerificationGate(request, now, gateId) {
+  return {
+    gateId,
+    status: "repairing",
+    failureKind: request.failureKind,
+    stopReason: request.stopReason,
+    requestedAt: now,
+  };
+}
+
+export function externalVerificationReceiptMatches(gate, receipt, treeSha) {
+  return Boolean(
+    gate?.status === "awaiting-verification" &&
+      gate.gateId &&
+      gate.treeSha &&
+      receipt?.passed === true &&
+      receipt.gateId === gate.gateId &&
+      receipt.treeSha === gate.treeSha &&
+      treeSha === gate.treeSha,
+  );
+}
+
+export function preserveExternalFailureKind(gate, failureKind) {
+  return gate && ["review-safety", "safety"].includes(gate.failureKind)
+    ? gate.failureKind
+    : failureKind;
+}
+
 export function workerResultFailureKind(result) {
   if (result?.blockerKind === "infrastructure") return "infrastructure";
   if (result?.blockerKind === "safety") return "safety";
