@@ -87,22 +87,27 @@ export function selectNextIssue(queue, state) {
   return nextIssue;
 }
 
-export function selectNextLiveIssue(queue, state, liveIssues, actor) {
+export function selectNextLiveIssueStatus(queue, state, liveIssues, actor) {
   validateQueueState(queue, state);
   const completed = new Set(state.completed);
+  const incomplete = queue.filter((issue) => !completed.has(issue.issueNumber));
+  if (incomplete.length === 0) return { status: "complete" };
+
+  const frontier = incomplete.filter((issue) =>
+    issue.blockers.every((blocker) => completed.has(blocker)),
+  );
+  if (frontier.length === 0) {
+    return {
+      status: "blocked",
+      issueNumbers: incomplete.map((issue) => issue.issueNumber),
+    };
+  }
+
   const liveByNumber = new Map(
     liveIssues.map((issue) => [issue.issueNumber, issue]),
   );
 
-  return (
-    queue.find((issue) => {
-      if (
-        completed.has(issue.issueNumber) ||
-        !issue.blockers.every((blocker) => completed.has(blocker))
-      ) {
-        return false;
-      }
-
+  const selected = frontier.find((issue) => {
       const live = liveByNumber.get(issue.issueNumber);
       if (!live || live.state !== "OPEN") {
         return false;
@@ -114,8 +119,17 @@ export function selectNextLiveIssue(queue, state, liveIssues, actor) {
         live.assignees.length === 0 ||
         live.assignees.every((assignee) => assignee === actor)
       );
-    }) ?? null
-  );
+    });
+  if (selected) return { status: "selected", issue: selected };
+  return {
+    status: "unavailable",
+    issueNumbers: frontier.map((issue) => issue.issueNumber),
+  };
+}
+
+export function selectNextLiveIssue(queue, state, liveIssues, actor) {
+  const result = selectNextLiveIssueStatus(queue, state, liveIssues, actor);
+  return result.status === "selected" ? result.issue : null;
 }
 
 export function chooseClaimWinner(claims, now = new Date()) {
@@ -131,7 +145,7 @@ export function chooseClaimWinner(claims, now = new Date()) {
   );
 }
 
-const ISSUE_STAGES = [
+export const ISSUE_STAGES = [
   "selected",
   "claimed",
   "worktree-ready",
@@ -146,6 +160,15 @@ const ISSUE_STAGES = [
   "merged",
   "failed",
 ];
+
+export function issueStageAtLeast(issueState, stage) {
+  const currentIndex = ISSUE_STAGES.indexOf(issueState?.stage);
+  const targetIndex = ISSUE_STAGES.indexOf(stage);
+  if (currentIndex === -1 || targetIndex === -1) {
+    throw new Error(`unknown issue stage ${issueState?.stage ?? stage}`);
+  }
+  return currentIndex >= targetIndex;
+}
 
 export function transitionIssue(state, issueNumber, nextStage, patch, now) {
   assertIssueNumber(issueNumber, "issueNumber");
@@ -177,36 +200,52 @@ export function transitionIssue(state, issueNumber, nextStage, patch, now) {
   };
 }
 
-const HIGH_RISK_PATHS = [
-  /^scripts\/ralph\//,
-  /^\.github\//,
-  /^supabase\/migrations\//,
-  /^agents\.md$/,
-  /(^|\/)\.env(?:\.|$)/,
-  /(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/,
-  /(^|\/)(vitest|eslint|next|playwright)\.config\./,
-  /(^|\/)oauth(\/|$)/,
-  /(^|\/)auth(\/|$)/,
-  /(^|\/)(permission|credential|secret|token)s?(\/|\.)/,
-  /(^|\/)middleware\.[^/]+$/,
-  /(^|\/)instrumentation\.[^/]+$/,
+export function selectRecoveryBase(recordedBase, currentBase, worktreeExists) {
+  if (worktreeExists) {
+    if (!recordedBase) {
+      throw new Error("existing worktree has no recorded base");
+    }
+    return recordedBase;
+  }
+  return currentBase;
+}
+
+export function failureDisposition(stage, pullRequestMerged, failureKind) {
+  if (pullRequestMerged) return "merged";
+  if (["kill-switch", "timeout", "network", "rate-limit", "check-poll"].includes(failureKind)) {
+    return "interrupted";
+  }
+  if (["pr-open", "checks-passed", "manual-review"].includes(stage)) {
+    return "manual-review";
+  }
+  return "failed";
+}
+
+const LOW_RISK_PATHS = [
+  /^lib\/calendar\//,
+  /^lib\/reminders\//,
+  /^lib\/validations\/(calendar-events|reminders)\.ts$/,
+  /^tests\/lib\/calendar\//,
+  /^tests\/lib\/reminders\//,
+  /^tests\/lib\/validations\/(calendar-events|reminders)\.test\.ts$/,
 ];
 const HIGH_RISK_WORDS =
   /\b(auth|oauth|authorization|credential|secret|token|permission|migration|schema|finance|payment|destructive|delete|deletion)\b/i;
 
 export function classifyChangeRisk(paths, issue = {}) {
   const normalizedPaths = paths.map((file) => file.replaceAll("\\", "/").toLowerCase());
-  const riskyPaths = normalizedPaths.filter((file) =>
-    HIGH_RISK_PATHS.some((pattern) => pattern.test(file)),
+  const nonAllowlistedPaths = normalizedPaths.filter(
+    (file) => !LOW_RISK_PATHS.some((pattern) => pattern.test(file)),
   );
   const issueText = `${issue.title ?? ""}\n${issue.whatToBuild ?? ""}`;
   const issueRisk = HIGH_RISK_WORDS.test(issueText);
 
-  if (riskyPaths.length > 0 || issueRisk) {
+  if (normalizedPaths.length === 0 || nonAllowlistedPaths.length > 0 || issueRisk) {
     return {
       level: "high",
       reasons: [
-        ...riskyPaths.map((file) => `high-risk path: ${file}`),
+        ...(normalizedPaths.length === 0 ? ["no changed files to classify"] : []),
+        ...nonAllowlistedPaths.map((file) => `path is not on the low-risk allowlist: ${file}`),
         ...(issueRisk ? ["high-risk issue language"] : []),
       ],
     };
@@ -228,6 +267,9 @@ export function evaluateMergeGate(gate) {
   }
   if (!gate.checksPassed) {
     return fail("required checks did not pass");
+  }
+  if (gate.reviewDecision === "CHANGES_REQUESTED") {
+    return fail("review changes were requested");
   }
   if (gate.mergeState !== "CLEAN") {
     return fail(

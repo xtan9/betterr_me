@@ -21,23 +21,29 @@ that worktree—alone owns state, commits, pushes, PRs, checks, and merges.
   It merges without bypass only when the diff is classified low risk, the PR is
   conflict-free, and every gate passes. High-risk work always stops at a PR.
 
-Automatic merging is denied for controller, CI, dependency-manifest,
-authentication/authorization, credential, migration, destructive-data,
-finance/payment, middleware, and environment/configuration changes.
+Automatic merging uses a narrow allowlist. Only pure calendar/reminder domain
+modules, their validations, and their focused tests may qualify as low risk.
+Every other path—including application routes, persistence, controller, CI,
+dependencies, authentication, finance, migrations, and configuration—stops at
+a PR for human review.
 
 ## Prerequisites
 
 - The controller checkout must be clean.
-- `git`, `gh`, `node`, and `codex` must be installed and authenticated.
-- Dependencies must be installed in the controller checkout's `node_modules`.
+- Windows `git`, `gh`, and `node` must be installed and authenticated.
+- WSL2 Ubuntu must contain Linux Node 24 and Codex 0.145.0, with Codex reading
+  the existing Windows login through `CODEX_HOME=/mnt/c/Users/steve/.codex`.
+- A Linux dependency tree matching `pnpm-lock.yaml` must exist read-only at
+  `/var/lib/betterr-me-ralph/deps-source/node_modules`.
 - The authenticated GitHub account must be allowed to assign issues, push
   branches, create PRs, read branch protection, and merge normally.
 
 Repository policy normally routes issue operations through the GitHub issue
 connector. That connector is unavailable to a standalone overnight process, so
 this controller uses the authenticated GitHub CLI as an explicit fallback for
-live reads and the claim assignment/comment. The worker never receives that
-authority.
+live reads and the claim assignment/comment. The WSL worker runs under a
+deny-by-default Linux filesystem profile, cannot read the Windows Codex/GitHub
+credential directories, and never receives that authority.
 
 ## Supervised proving run
 

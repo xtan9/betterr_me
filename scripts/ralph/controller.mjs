@@ -11,8 +11,11 @@ import {
   chooseClaimWinner,
   classifyChangeRisk,
   evaluateMergeGate,
+  failureDisposition,
   findNewTypeScriptDiagnostics,
-  selectNextLiveIssue,
+  issueStageAtLeast,
+  selectNextLiveIssueStatus,
+  selectRecoveryBase,
   shouldRetry,
   transitionIssue,
   validateQueueState,
@@ -37,24 +40,9 @@ const summaryJsonPath = path.join(stateRoot, "overnight-summary.json");
 const summaryMarkdownPath = path.join(stateRoot, "overnight-summary.md");
 const stopPath = path.join(stateRoot, "STOP");
 const lockPath = path.join(stateRoot, "runner.lock");
-const worktreeRoot = path.join(repositoryRoot, ".worktrees", "ralph");
+const worktreeRoot = path.join(stateRoot, "worktrees");
+const wslDependencyRoot = "/var/lib/betterr-me-ralph/deps-source/node_modules";
 const queue = JSON.parse(fs.readFileSync(queuePath, "utf8"));
-
-const stageOrder = [
-  "selected",
-  "claimed",
-  "worktree-ready",
-  "implementing",
-  "implemented",
-  "verified",
-  "committed",
-  "pushed",
-  "pr-open",
-  "checks-passed",
-  "manual-review",
-  "merged",
-  "failed",
-];
 
 function status(message) {
   process.stderr.write(`[ralph] ${message}\n`);
@@ -143,6 +131,15 @@ function terminateTree(child) {
   }
 }
 
+function scrubbedEnvironment() {
+  const safe = {};
+  const denied = /(^|_)(token|secret|password|credential|api_?key)(_|$)|^(gh|github|aws|azure|supabase|vercel)_/i;
+  for (const [name, value] of Object.entries(process.env)) {
+    if (!denied.test(name) && value !== undefined) safe[name] = value;
+  }
+  return safe;
+}
+
 function runProcess(command, args, options = {}) {
   const {
     cwd = repositoryRoot,
@@ -150,6 +147,7 @@ function runProcess(command, args, options = {}) {
     timeoutSeconds = 300,
     logPrefix,
     observeKillSwitch = true,
+    environment = process.env,
   } = options;
   ensureNotStopped();
 
@@ -158,6 +156,7 @@ function runProcess(command, args, options = {}) {
     const stderr = [];
     const child = spawn(command, args, {
       cwd,
+      env: environment,
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -287,27 +286,107 @@ async function ghJson(args, controllerOptions, options = {}) {
   return JSON.parse(result.stdout || "null");
 }
 
-function codexInvocation(args) {
-  if (process.platform === "win32" && process.env.APPDATA) {
-    const entrypoint = path.join(
-      process.env.APPDATA,
-      "npm",
-      "node_modules",
-      "@openai",
-      "codex",
-      "bin",
-      "codex.js",
-    );
-    if (fs.existsSync(entrypoint)) {
-      return { command: process.execPath, args: [entrypoint, ...args] };
-    }
-  }
-  return { command: "codex", args };
+function tomlString(value) {
+  return JSON.stringify(value);
 }
 
-async function codex(args, options = {}) {
-  const invocation = codexInvocation(args);
-  return runChecked(invocation.command, invocation.args, options);
+function restrictedProfileArguments(profile, baseProfile, extraReadable = []) {
+  const argumentsList = [
+    "-c",
+    `default_permissions=${tomlString(profile)}`,
+    "-c",
+    `permissions.${profile}.extends=${tomlString(baseProfile)}`,
+    "-c",
+    `permissions.${profile}.filesystem.:root=\"deny\"`,
+    "-c",
+    `permissions.${profile}.filesystem.:minimal=\"read\"`,
+    "-c",
+    `permissions.${profile}.filesystem.:tmpdir=\"deny\"`,
+    "-c",
+    `permissions.${profile}.network.enabled=false`,
+  ];
+  for (const readablePath of extraReadable) {
+    argumentsList.push(
+      "-c",
+      `permissions.${profile}.filesystem.${readablePath}=\"read\"`,
+    );
+  }
+  return argumentsList;
+}
+
+function windowsToWslPath(filePath) {
+  const normalized = path.resolve(filePath);
+  const match = normalized.match(/^([A-Za-z]):\\(.*)$/);
+  if (!match) throw new Error(`cannot map Windows path to WSL: ${filePath}`);
+  return `/mnt/${match[1].toLowerCase()}/${match[2].replaceAll("\\", "/")}`;
+}
+
+async function runWsl(args, options = {}) {
+  return runChecked("wsl.exe", ["--", ...args], {
+    ...options,
+    environment: scrubbedEnvironment(),
+  });
+}
+
+async function runWslSandboxed(command, args, worktreePath, options = {}) {
+  const wslWorktreePath = windowsToWslPath(worktreePath);
+  return runWsl([
+    "env",
+    `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
+    "/usr/local/bin/codex",
+    "sandbox",
+    ...restrictedProfileArguments("ralph-verifier", ":workspace", [wslDependencyRoot]),
+    "-P",
+    "ralph-verifier",
+    "-C",
+    wslWorktreePath,
+    "--",
+    command,
+    ...args,
+  ], options);
+}
+
+async function isolatedCodex(args, options = {}) {
+  const mappedArgs = args.map((argument) =>
+    /^[A-Za-z]:\\/.test(argument) ? windowsToWslPath(argument) : argument,
+  );
+  return runWsl(
+    [
+      "env",
+      `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
+      "/usr/local/bin/codex",
+      ...mappedArgs,
+    ],
+    options,
+  );
+}
+
+async function assertWslIsolationReady() {
+  const codexHome = windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"));
+  await runWsl(
+    ["env", `CODEX_HOME=${codexHome}`, "/usr/local/bin/codex", "login", "status"],
+    { timeoutSeconds: 60, observeKillSwitch: false },
+  );
+  const localLockHash = crypto
+    .createHash("sha256")
+    .update(fs.readFileSync(path.join(repositoryRoot, "pnpm-lock.yaml")))
+    .digest("hex");
+  const dependencyLock = await runWsl(
+    ["sha256sum", "/var/lib/betterr-me-ralph/deps-source/pnpm-lock.yaml"],
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (dependencyLock.stdout.trim().split(/\s+/)[0] !== localLockHash) {
+    throw new Error("immutable WSL dependencies do not match pnpm-lock.yaml");
+  }
+  await runWslSandboxed(
+    "/bin/sh",
+    [
+      "-c",
+      `head -n 1 package.json >/dev/null && ! head -c 1 ${codexHome}/auth.json >/dev/null 2>&1`,
+    ],
+    repositoryRoot,
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
 }
 
 function acquireLock() {
@@ -387,7 +466,7 @@ function moveIssue(state, issueNumber, stage, patch = {}) {
 }
 
 function stageAtLeast(issueState, stage) {
-  return stageOrder.indexOf(issueState.stage) >= stageOrder.indexOf(stage);
+  return issueStageAtLeast(issueState, stage);
 }
 
 function writeSummary(state, stopReason) {
@@ -432,7 +511,7 @@ async function preflight(controllerOptions) {
     throw new Error("the controller checkout must be clean before Ralph starts");
   }
   await gh(["auth", "status"], controllerOptions, { timeoutSeconds: 60 });
-  await codex(["login", "status"], { timeoutSeconds: 60, observeKillSwitch: false });
+  await assertWslIsolationReady();
   await git(["-C", repositoryRoot, "ls-remote", "--exit-code", "origin", `refs/heads/${baseBranch}`], {
     timeoutSeconds: 60,
   });
@@ -481,10 +560,10 @@ async function selectIssue(state, actor, controllerOptions) {
   if (active) {
     const approved = queue.find((issue) => issue.issueNumber === active.issueNumber);
     if (!approved) throw new Error(`state references unknown issue #${active.issueNumber}`);
-    return approved;
+    return { status: "selected", issue: approved, recovering: true };
   }
   const liveIssues = await getLiveIssues(controllerOptions);
-  return selectNextLiveIssue(queue, state, liveIssues, actor);
+  return selectNextLiveIssueStatus(queue, state, liveIssues, actor);
 }
 
 function claimMarker(claim) {
@@ -519,6 +598,82 @@ async function getClaims(issueNumber, controllerOptions) {
   });
 }
 
+async function getLiveIssue(issueNumber, controllerOptions) {
+  const issue = await ghJson(
+    [
+      "issue",
+      "view",
+      String(issueNumber),
+      "--repo",
+      repository,
+      "--json",
+      "number,state,labels,assignees,title,url",
+    ],
+    controllerOptions,
+  );
+  return {
+    issueNumber: issue.number,
+    state: issue.state,
+    labels: issue.labels.map((label) => label.name),
+    assignees: issue.assignees.map((assignee) => assignee.login),
+    title: issue.title,
+    url: issue.url,
+  };
+}
+
+async function postClaim(issueNumber, state, controllerOptions) {
+  const expiresAt = new Date(
+    Date.now() + controllerOptions.claimLeaseHours * 60 * 60 * 1000,
+  ).toISOString();
+  const claim = { runId: state.runId, expiresAt };
+  await gh(
+    [
+      "issue",
+      "comment",
+      String(issueNumber),
+      "--repo",
+      repository,
+      "--body",
+      `${claimMarker(claim)}\nRalph claimed this issue for a single isolated implementation run. Lease expires ${expiresAt}.`,
+    ],
+    controllerOptions,
+  );
+}
+
+async function assertClaimOwnership(state, issue, actor, controllerOptions) {
+  const number = issue.issueNumber;
+  const live = await getLiveIssue(number, controllerOptions);
+  if (live.state !== "OPEN" || !live.labels.includes("ready-for-agent")) {
+    throw new Error(`issue #${number} is no longer open and ready-for-agent`);
+  }
+  if (
+    live.assignees.length > 0 &&
+    !live.assignees.every((assignee) => assignee === actor)
+  ) {
+    throw new Error(`issue #${number} is assigned to another actor`);
+  }
+
+  const issueState = state.issues[String(number)];
+  if (!stageAtLeast(issueState, "claimed")) return state;
+  let claims = await getClaims(number, controllerOptions);
+  let winner = chooseClaimWinner(claims, new Date());
+  if (!winner) {
+    await postClaim(number, state, controllerOptions);
+    claims = await getClaims(number, controllerOptions);
+    winner = chooseClaimWinner(claims, new Date());
+  }
+  if (!winner || winner.runId !== state.runId) {
+    throw new Error(
+      `issue #${number} claim lost; active winner is ${winner?.runId ?? "unknown"}`,
+    );
+  }
+  const renewBefore = Date.now() + 2 * 60 * 60 * 1000;
+  if (new Date(winner.expiresAt).getTime() <= renewBefore) {
+    await postClaim(number, state, controllerOptions);
+  }
+  return state;
+}
+
 async function claimIssue(state, issue, actor, controllerOptions) {
   const existing = state.issues[String(issue.issueNumber)];
   if (stageAtLeast(existing, "claimed")) return state;
@@ -536,22 +691,7 @@ async function claimIssue(state, issue, actor, controllerOptions) {
     ],
     controllerOptions,
   );
-  const expiresAt = new Date(
-    Date.now() + controllerOptions.claimLeaseHours * 60 * 60 * 1000,
-  ).toISOString();
-  const claim = { runId: state.runId, expiresAt };
-  await gh(
-    [
-      "issue",
-      "comment",
-      String(issue.issueNumber),
-      "--repo",
-      repository,
-      "--body",
-      `${claimMarker(claim)}\nRalph claimed this issue for a single isolated implementation run. Lease expires ${expiresAt}.`,
-    ],
-    controllerOptions,
-  );
+  await postClaim(issue.issueNumber, state, controllerOptions);
   const claims = await getClaims(issue.issueNumber, controllerOptions);
   const winner = chooseClaimWinner(claims, new Date());
   if (!winner || winner.runId !== state.runId) {
@@ -571,17 +711,27 @@ async function ensureWorktree(state, issue, controllerOptions) {
   let issueState = state.issues[String(number)];
   if (stageAtLeast(issueState, "worktree-ready")) return state;
 
+  const recordedWorktree = Boolean(issueState.worktreePath);
   await runTransient(
     "git.exe",
     ["-C", repositoryRoot, "fetch", "origin", "--prune"],
     controllerOptions,
     { timeoutSeconds: 120 },
   );
-  const base = (
+  const currentBase = (
     await git(["-C", repositoryRoot, "rev-parse", `origin/${baseBranch}`])
   ).stdout.trim();
   const branch = `codex/issue-${number}`;
   const worktreePath = path.join(worktreeRoot, `issue-${number}`);
+  const worktreeExists = fs.existsSync(worktreePath);
+  if (worktreeExists && !recordedWorktree) {
+    throw new Error(`unrecorded worktree collision at ${worktreePath}`);
+  }
+  const base = selectRecoveryBase(
+    issueState.baseSha,
+    currentBase,
+    worktreeExists,
+  );
 
   state = moveIssue(state, number, "claimed", { baseSha: base, branch, worktreePath });
   issueState = state.issues[String(number)];
@@ -593,6 +743,14 @@ async function ensureWorktree(state, issue, controllerOptions) {
     if (currentBranch !== branch) {
       throw new Error(`existing worktree ${worktreePath} is on ${currentBranch}`);
     }
+    await git([
+      "-C",
+      worktreePath,
+      "merge-base",
+      "--is-ancestor",
+      base,
+      "HEAD",
+    ]);
   } else {
     const localBranch = await runProcess(
       "git.exe",
@@ -600,6 +758,9 @@ async function ensureWorktree(state, issue, controllerOptions) {
       { timeoutSeconds: 30 },
     );
     if (localBranch.code === 0) {
+      if (!recordedWorktree) {
+        throw new Error(`local branch collision for ${branch}`);
+      }
       await git(["-C", repositoryRoot, "worktree", "add", worktreePath, branch], {
         timeoutSeconds: 120,
       });
@@ -613,6 +774,9 @@ async function ensureWorktree(state, issue, controllerOptions) {
         branch,
       ]);
       if (remoteBranch.stdout.trim()) {
+        if (!recordedWorktree) {
+          throw new Error(`remote branch collision for ${branch}`);
+        }
         await git(
           [
             "-C",
@@ -644,14 +808,6 @@ async function ensureWorktree(state, issue, controllerOptions) {
     }
   }
 
-  const dependencyLink = path.join(worktreePath, "node_modules");
-  if (!fs.existsSync(dependencyLink)) {
-    const sourceDependencies = path.join(repositoryRoot, "node_modules");
-    if (!fs.existsSync(sourceDependencies)) {
-      throw new Error("controller checkout has no node_modules directory");
-    }
-    fs.symlinkSync(sourceDependencies, dependencyLink, "junction");
-  }
   return moveIssue(state, number, "worktree-ready", {
     baseSha: issueState.baseSha,
     branch,
@@ -659,12 +815,120 @@ async function ensureWorktree(state, issue, controllerOptions) {
   });
 }
 
+async function removeControllerDependencyLink(worktreePath) {
+  const dependencyLink = `${windowsToWslPath(worktreePath)}/node_modules`;
+  const readlink = await runProcess("wsl.exe", ["--", "readlink", "-f", dependencyLink], {
+    timeoutSeconds: 30,
+    environment: scrubbedEnvironment(),
+  });
+  if (readlink.code === 0) {
+    if (readlink.stdout.trim() !== wslDependencyRoot) {
+      throw new Error("worker worktree contains an untrusted node_modules link");
+    }
+    await runWsl(["unlink", dependencyLink], { timeoutSeconds: 30 });
+    return;
+  }
+  const stat = await runProcess("wsl.exe", ["--", "stat", dependencyLink], {
+    timeoutSeconds: 30,
+    environment: scrubbedEnvironment(),
+  });
+  if (stat.code === 0) {
+    throw new Error("worker worktree contains an untrusted node_modules entry");
+  }
+}
+
+async function installControllerDependencyLink(worktreePath) {
+  const source = await runProcess("wsl.exe", ["--", "stat", wslDependencyRoot], {
+    timeoutSeconds: 30,
+    environment: scrubbedEnvironment(),
+  });
+  if (source.code !== 0) throw new Error("immutable WSL dependencies are missing");
+  const dependencyLink = `${windowsToWslPath(worktreePath)}/node_modules`;
+  const existing = await runProcess(
+    "wsl.exe",
+    ["--", "readlink", "-f", dependencyLink],
+    { timeoutSeconds: 30, environment: scrubbedEnvironment() },
+  );
+  if (existing.code === 0) {
+    if (existing.stdout.trim() === wslDependencyRoot) return;
+    throw new Error("worker created a forbidden node_modules link");
+  }
+  const stat = await runProcess("wsl.exe", ["--", "stat", dependencyLink], {
+    timeoutSeconds: 30,
+    environment: scrubbedEnvironment(),
+  });
+  if (stat.code === 0) throw new Error("worker created a forbidden node_modules entry");
+  await runWsl(["ln", "-s", wslDependencyRoot, dependencyLink], {
+    timeoutSeconds: 30,
+  });
+}
+
+function collectSensitiveValues() {
+  const values = new Set();
+  const sensitiveName = /token|secret|password|credential|api_?key/i;
+  for (const [name, value] of Object.entries(process.env)) {
+    if (sensitiveName.test(name) && value && value.length >= 16) values.add(value);
+  }
+  const authPath = path.join(process.env.USERPROFILE ?? "", ".codex", "auth.json");
+  if (fs.existsSync(authPath)) {
+    try {
+      const visit = (value, key = "") => {
+        if (typeof value === "string" && sensitiveName.test(key) && value.length >= 16) {
+          values.add(value);
+        } else if (value && typeof value === "object") {
+          for (const [childKey, child] of Object.entries(value)) visit(child, childKey);
+        }
+      };
+      visit(readJson(authPath));
+    } catch {
+      throw new Error("unable to inspect Codex credential fingerprints safely");
+    }
+  }
+  const ghHostsPath = path.join(
+    process.env.APPDATA ?? "",
+    "GitHub CLI",
+    "hosts.yml",
+  );
+  if (fs.existsSync(ghHostsPath)) {
+    const hosts = fs.readFileSync(ghHostsPath, "utf8");
+    for (const match of hosts.matchAll(/oauth_token:\s*([^\s]+)/g)) values.add(match[1]);
+  }
+  return [...values];
+}
+
+async function assertStagedContentSafe(worktreePath, baseSha, changedFiles) {
+  const raw = (
+    await git(["-C", worktreePath, "diff", "--cached", "--raw", baseSha])
+  ).stdout;
+  if (/^:\d{6} (120000|160000) /m.test(raw)) {
+    throw new Error("staged changes contain a symbolic link or submodule");
+  }
+  const sensitiveValues = collectSensitiveValues();
+  const genericSecret =
+    /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}/;
+  for (const file of changedFiles) {
+    const staged = await runProcess(
+      "git.exe",
+      ["-C", worktreePath, "show", `:${file}`],
+      { timeoutSeconds: 30 },
+    );
+    if (staged.code !== 0) continue; // Deleted file.
+    if (
+      genericSecret.test(staged.stdout) ||
+      sensitiveValues.some((value) => staged.stdout.includes(value))
+    ) {
+      throw new Error(`secret scanner rejected staged file ${file}`);
+    }
+  }
+}
+
 async function runTypeScript(worktreePath, timeoutSeconds, logPrefix) {
-  const compiler = path.join(repositoryRoot, "node_modules", "typescript", "lib", "tsc.js");
-  const result = await runProcess(
-    process.execPath,
+  const compiler = `${wslDependencyRoot}/typescript/lib/tsc.js`;
+  const result = await runWslSandboxed(
+    "/usr/local/bin/node",
     [compiler, "--noEmit", "--pretty", "false"],
-    { cwd: worktreePath, timeoutSeconds, logPrefix },
+    worktreePath,
+    { timeoutSeconds, logPrefix },
   );
   const lines = `${result.stdout}\n${result.stderr}`.split(/\r?\n/);
   const analysis = analyzeTypeScriptRun(lines, result.code);
@@ -675,16 +939,18 @@ async function runTypeScript(worktreePath, timeoutSeconds, logPrefix) {
 }
 
 function workerCodexArguments({ worktreePath, schemaPath, resultPath, readOnly }) {
+  const profile = readOnly ? "ralph-reviewer" : "ralph-worker";
   return [
     "exec",
     "--ephemeral",
-    "--sandbox",
-    readOnly ? "read-only" : "workspace-write",
-    "--ask-for-approval",
-    "never",
     "--ignore-user-config",
     "-c",
-    "sandbox_workspace_write.network_access=false",
+    "approval_policy=\"never\"",
+    ...restrictedProfileArguments(
+      profile,
+      readOnly ? ":read-only" : ":workspace",
+      [],
+    ),
     "-c",
     'shell_environment_policy.inherit="core"',
     "-c",
@@ -756,11 +1022,17 @@ async function implementIssue(state, issue, controllerOptions) {
 
   if (issueState.stage !== "implementing") {
     status(`Capturing TypeScript baseline for issue #${number}.`);
-    const baseline = await runTypeScript(
-      worktreePath,
-      controllerOptions.verificationTimeoutSeconds,
-      baselinePrefix,
-    );
+    await installControllerDependencyLink(worktreePath);
+    let baseline;
+    try {
+      baseline = await runTypeScript(
+        worktreePath,
+        controllerOptions.verificationTimeoutSeconds,
+        baselinePrefix,
+      );
+    } finally {
+      await removeControllerDependencyLink(worktreePath);
+    }
     atomicWriteJson(baselinePath, { code: baseline.code, lines: baseline.lines });
     state = moveIssue(state, number, "implementing", { baselinePath });
     issueState = state.issues[String(number)];
@@ -772,7 +1044,8 @@ async function implementIssue(state, issue, controllerOptions) {
   const resultPath = path.join(issueLogRoot, `${timestamp}-implementation-result.json`);
   const logPrefix = path.join(issueLogRoot, `${timestamp}-implementation`);
   status(`Starting a fresh isolated Codex worker for issue #${number}.`);
-  await codex(
+  await removeControllerDependencyLink(worktreePath);
+  await isolatedCodex(
     workerCodexArguments({
       worktreePath,
       schemaPath: resultSchemaPath,
@@ -825,10 +1098,25 @@ async function verifyIssue(state, issue, controllerOptions) {
   const timestamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
   const issueLogRoot = path.join(stateRoot, "logs", `issue-${number}`);
 
+  await removeControllerDependencyLink(worktreePath);
+  await git(["-C", worktreePath, "add", "--all"]);
+  const changedFiles = (
+    await git(["-C", worktreePath, "diff", "--cached", "--name-only", "-z"])
+  ).stdout
+    .split("\0")
+    .filter(Boolean);
+  if (changedFiles.length === 0) throw new Error("verification found no changed files");
+  await git(["-C", worktreePath, "diff", "--cached", "--check"]);
+  await assertStagedContentSafe(worktreePath, issueState.baseSha, changedFiles);
+  const risk = classifyChangeRisk(changedFiles, issue);
+  const stagedTree = (
+    await git(["-C", worktreePath, "write-tree"])
+  ).stdout.trim();
+  await installControllerDependencyLink(worktreePath);
+
   status(`Running the full Vitest suite for issue #${number}.`);
-  const vitest = path.join(repositoryRoot, "node_modules", "vitest", "vitest.mjs");
-  await runChecked(process.execPath, [vitest, "run"], {
-    cwd: worktreePath,
+  const vitest = `${wslDependencyRoot}/vitest/vitest.mjs`;
+  await runWslSandboxed("/usr/local/bin/node", [vitest, "run"], worktreePath, {
     timeoutSeconds: controllerOptions.verificationTimeoutSeconds,
     logPrefix: path.join(issueLogRoot, `${timestamp}-vitest`),
   });
@@ -845,14 +1133,6 @@ async function verifyIssue(state, issue, controllerOptions) {
     throw new Error(`new TypeScript diagnostics: ${newDiagnostics.join("; ")}`);
   }
 
-  const changedFiles = (
-    await git(["-C", worktreePath, "diff", "--name-only"])
-  ).stdout
-    .split(/\r?\n/)
-    .filter(Boolean);
-  if (changedFiles.length === 0) throw new Error("verification found no changed files");
-  const risk = classifyChangeRisk(changedFiles, issue);
-
   const reviewResultPath = path.join(
     issueLogRoot,
     `${timestamp}-independent-review-result.json`,
@@ -863,7 +1143,7 @@ Check correctness, acceptance criteria, regressions, missing tests, repository s
 Return status=pass with an empty blockingFindings array only when no blocking finding remains.
 <ticket-data>\n${JSON.stringify(issue, null, 2)}\n</ticket-data>`;
   status(`Running an independent read-only Codex review for issue #${number}.`);
-  await codex(
+  await isolatedCodex(
     workerCodexArguments({
       worktreePath,
       schemaPath: reviewSchemaPath,
@@ -888,9 +1168,27 @@ Return status=pass with an empty blockingFindings array only when no blocking fi
     });
   }
 
+  const treeAfterReview = (
+    await git(["-C", worktreePath, "write-tree"])
+  ).stdout.trim();
+  const unstaged = await runProcess(
+    "git.exe",
+    ["-C", worktreePath, "diff", "--quiet"],
+    { timeoutSeconds: 30 },
+  );
+  const untracked = (
+    await git(["-C", worktreePath, "ls-files", "--others", "--exclude-standard"])
+  ).stdout
+    .split(/\r?\n/)
+    .filter((file) => file && file !== "node_modules");
+  if (treeAfterReview !== stagedTree || unstaged.code !== 0 || untracked.length > 0) {
+    throw new Error("verified staged manifest changed during tests or review");
+  }
+
   return moveIssue(state, number, "verified", {
     changedFiles,
     risk,
+    stagedTree,
     independentReviewSummary: review.summary,
   });
 }
@@ -903,7 +1201,12 @@ async function commitAndPush(state, issue, controllerOptions) {
     let commit = (await git(["-C", worktreePath, "rev-parse", "HEAD"])).stdout.trim();
     if (commit === issueState.baseSha) {
       status(`Committing verified work for issue #${number}.`);
-      await git(["-C", worktreePath, "add", "--all"]);
+      const stagedTree = (
+        await git(["-C", worktreePath, "write-tree"])
+      ).stdout.trim();
+      if (stagedTree !== issueState.stagedTree) {
+        throw new Error("staged tree no longer matches the verified manifest");
+      }
       await git([
         "-C",
         worktreePath,
@@ -1010,15 +1313,25 @@ async function ensurePullRequest(state, issue, controllerOptions) {
       "--repo",
       repository,
       "--state",
-      "open",
+      "all",
       "--head",
       issueState.branch,
       "--json",
-      "number,url,headRefOid",
+      "number,url,headRefOid,state,mergedAt,mergeCommit",
     ],
     controllerOptions,
   );
   let pullRequest = existing[0];
+  if (pullRequest?.state === "MERGED" && pullRequest.mergeCommit?.oid) {
+    return finalizeMergedPullRequest(state, issue, pullRequest, controllerOptions);
+  }
+  if (pullRequest?.state === "CLOSED") {
+    return moveIssue(state, number, "manual-review", {
+      prNumber: pullRequest.number,
+      prUrl: pullRequest.url,
+      stopReason: "existing pull request was closed without merging",
+    });
+  }
   if (!pullRequest) {
     const bodyPath = path.join(
       stateRoot,
@@ -1064,35 +1377,159 @@ async function ensurePullRequest(state, issue, controllerOptions) {
   });
 }
 
-async function requiredReviewCount(controllerOptions) {
-  const result = await runProcess(
-    "gh.exe",
-    [
-      "api",
-      `repos/${owner}/${repo}/branches/${baseBranch}/protection/required_pull_request_reviews`,
-    ],
-    { timeoutSeconds: 60 },
-  );
-  if (result.code === 0) {
-    const settings = JSON.parse(result.stdout);
-    return settings.required_approving_review_count ?? 0;
+async function optionalGhApiJson(endpoint, controllerOptions) {
+  for (
+    let attempt = 1;
+    attempt <= controllerOptions.maximumTransientAttempts;
+    attempt += 1
+  ) {
+    const result = await runProcess("gh.exe", ["api", endpoint], {
+      timeoutSeconds: 60,
+    });
+    if (result.code === 0) return JSON.parse(result.stdout);
+    if (/HTTP 404|Branch not protected/i.test(result.stderr)) return null;
+    const failureKind = failureKindFor(result);
+    if (!shouldRetry(failureKind, attempt, controllerOptions.maximumTransientAttempts)) {
+      throw Object.assign(
+        new Error(`unable to read GitHub policy ${endpoint}: ${result.stderr.trim()}`),
+        { failureKind },
+      );
+    }
   }
-  if (/HTTP 404|Branch not protected/i.test(result.stderr)) return 0;
-  const kind = failureKindFor(result);
-  if (shouldRetry(kind, 1, controllerOptions.maximumTransientAttempts)) {
-    const settings = await ghJson(
+  throw new Error(`unable to read GitHub policy ${endpoint}`);
+}
+
+async function requiredPullRequestPolicy(controllerOptions) {
+  const reviewSettings = await optionalGhApiJson(
+    `repos/${owner}/${repo}/branches/${baseBranch}/protection/required_pull_request_reviews`,
+    controllerOptions,
+  );
+  const statusSettings = await optionalGhApiJson(
+    `repos/${owner}/${repo}/branches/${baseBranch}/protection/required_status_checks`,
+    controllerOptions,
+  );
+  let requiredReviews = reviewSettings?.required_approving_review_count ?? 0;
+  let statusChecksRequired = (statusSettings?.contexts?.length ?? 0) > 0;
+
+  const rulesets =
+    (await optionalGhApiJson(
+      `repos/${owner}/${repo}/rulesets?includes_parents=true`,
+      controllerOptions,
+    )) ?? [];
+  for (const listed of rulesets.filter((ruleset) => ruleset.enforcement !== "disabled")) {
+    const ruleset = await optionalGhApiJson(
+      `repos/${owner}/${repo}/rulesets/${listed.id}?includes_parents=true`,
+      controllerOptions,
+    );
+    for (const rule of ruleset?.rules ?? []) {
+      if (rule.type === "pull_request") {
+        requiredReviews = Math.max(
+          requiredReviews,
+          rule.parameters?.required_approving_review_count ?? 0,
+        );
+      }
+      if (rule.type === "required_status_checks") statusChecksRequired = true;
+    }
+  }
+  return { requiredReviews, statusChecksRequired };
+}
+
+async function waitForRequiredChecks(prNumber, policy, controllerOptions) {
+  const deadline = Date.now() + controllerOptions.checkTimeoutSeconds * 1000;
+  while (Date.now() < deadline) {
+    ensureNotStopped();
+    const result = await runProcess(
+      "gh.exe",
       [
-        "api",
-        `repos/${owner}/${repo}/branches/${baseBranch}/protection/required_pull_request_reviews`,
+        "pr",
+        "checks",
+        String(prNumber),
+        "--repo",
+        repository,
+        "--required",
+        "--json",
+        "name,bucket,state",
+      ],
+      { timeoutSeconds: 60 },
+    );
+    let checks = [];
+    try {
+      checks = JSON.parse(result.stdout || "[]");
+    } catch {
+      throw new Error("GitHub returned invalid required-check data");
+    }
+    const buckets = checks.map((check) => String(check.bucket).toLowerCase());
+    if (buckets.some((bucket) => ["fail", "cancel"].includes(bucket))) {
+      return { passed: false, reason: "a required PR check failed or was cancelled" };
+    }
+    if (checks.length > 0 && buckets.every((bucket) => ["pass", "skipping"].includes(bucket))) {
+      return { passed: true };
+    }
+    if (checks.length === 0 && !policy.statusChecksRequired) {
+      return { passed: true };
+    }
+    const kind = failureKindFor(result);
+    if (result.code !== 0 && !["command", "check-poll"].includes(kind)) {
+      throw Object.assign(new Error(result.stderr.trim()), { failureKind: kind });
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, controllerOptions.pollSeconds * 1000),
+    );
+  }
+  throw Object.assign(new Error("timed out waiting for required PR checks"), {
+    failureKind: "timeout",
+  });
+}
+
+async function waitForReviewAndMergeState(
+  issueState,
+  policy,
+  controllerOptions,
+) {
+  const deadline = Date.now() + controllerOptions.reviewTimeoutSeconds * 1000;
+  while (Date.now() < deadline) {
+    ensureNotStopped();
+    const pr = await ghJson(
+      [
+        "pr",
+        "view",
+        String(issueState.prNumber),
+        "--repo",
+        repository,
+        "--json",
+        "reviewDecision,mergeStateStatus,isDraft,headRefOid,state",
       ],
       controllerOptions,
     );
-    return settings.required_approving_review_count ?? 0;
+    if (pr.headRefOid !== issueState.commit) {
+      return { ready: false, reason: "pull request head changed after verification" };
+    }
+    if (pr.isDraft) return { ready: false, reason: "pull request is draft" };
+    if (pr.state !== "OPEN") {
+      return { ready: false, reason: `pull request state is ${pr.state}` };
+    }
+    if (pr.reviewDecision === "CHANGES_REQUESTED") {
+      return { ready: false, reason: "a reviewer requested changes" };
+    }
+    if (pr.mergeStateStatus === "DIRTY") {
+      return { ready: false, reason: "pull request has conflicts" };
+    }
+    if (
+      pr.mergeStateStatus === "CLEAN" &&
+      (policy.requiredReviews === 0 || pr.reviewDecision === "APPROVED")
+    ) {
+      return { ready: true, pr };
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, controllerOptions.pollSeconds * 1000),
+    );
   }
-  throw new Error(`unable to read required review policy: ${result.stderr.trim()}`);
+  throw Object.assign(new Error("timed out waiting for required PR approval"), {
+    failureKind: "timeout",
+  });
 }
 
-async function waitAndMaybeMerge(state, issue, controllerOptions) {
+async function waitAndMaybeMerge(state, issue, actor, controllerOptions) {
   const number = issue.issueNumber;
   let issueState = state.issues[String(number)];
   if (issueState.stage === "merged") return state;
@@ -1123,46 +1560,40 @@ async function waitAndMaybeMerge(state, issue, controllerOptions) {
     });
   }
 
+  const policy = await requiredPullRequestPolicy(controllerOptions);
   status(`Waiting for required checks on PR #${issueState.prNumber}.`);
-  await runChecked(
-    "gh.exe",
-    [
-      "pr",
-      "checks",
-      String(issueState.prNumber),
-      "--repo",
-      repository,
-      "--required",
-      "--watch",
-      "--fail-fast",
-      "--interval",
-      String(controllerOptions.pollSeconds),
-    ],
-    { timeoutSeconds: controllerOptions.checkTimeoutSeconds },
+  const checks = await waitForRequiredChecks(
+    issueState.prNumber,
+    policy,
+    controllerOptions,
   );
+  if (!checks.passed) {
+    return moveIssue(state, number, "manual-review", {
+      stopReason: checks.reason,
+    });
+  }
   if (issueState.stage !== "manual-review") {
     state = moveIssue(state, number, "checks-passed", {});
     issueState = state.issues[String(number)];
   }
 
-  const requiredReviews = await requiredReviewCount(controllerOptions);
-  const pr = await ghJson(
-    [
-      "pr",
-      "view",
-      String(issueState.prNumber),
-      "--repo",
-      repository,
-      "--json",
-      "reviewDecision,mergeStateStatus,isDraft,headRefOid,state",
-    ],
+  status(`Waiting for required review gates on PR #${issueState.prNumber}.`);
+  const review = await waitForReviewAndMergeState(
+    issueState,
+    policy,
     controllerOptions,
   );
+  if (!review.ready) {
+    return moveIssue(state, number, "manual-review", {
+      stopReason: review.reason,
+    });
+  }
+  const pr = review.pr;
   const gate = evaluateMergeGate({
     mode: controllerOptions.mode,
     risk: issueState.risk.level,
     checksPassed: true,
-    reviewRequired: requiredReviews > 0,
+    reviewRequired: policy.requiredReviews > 0,
     reviewDecision: pr.reviewDecision ?? "",
     mergeState: pr.mergeStateStatus,
     ambiguous: false,
@@ -1173,6 +1604,8 @@ async function waitAndMaybeMerge(state, issue, controllerOptions) {
     });
   }
 
+  state = await assertClaimOwnership(state, issue, actor, controllerOptions);
+  issueState = state.issues[String(number)];
   status(`Merging PR #${issueState.prNumber} without bypassing protections.`);
   await gh(
     [
@@ -1219,10 +1652,18 @@ async function waitAndMaybeMerge(state, issue, controllerOptions) {
 
 async function processOne(state, actor, controllerOptions) {
   ensureNotStopped();
-  const issue = await selectIssue(state, actor, controllerOptions);
-  if (!issue) {
-    return { state, status: "queue-complete" };
+  const selection = await selectIssue(state, actor, controllerOptions);
+  if (selection.status !== "selected") {
+    return {
+      state,
+      status: selection.status === "complete" ? "queue-complete" : "queue-blocked",
+      reason:
+        selection.status === "blocked"
+          ? `dependency-blocked issues: ${selection.issueNumbers.join(", ")}`
+          : `ready frontier is unavailable: ${selection.issueNumbers.join(", ")}`,
+    };
   }
+  const issue = selection.issue;
   const number = issue.issueNumber;
   if (!state.issues[String(number)]) {
     await runTransient(
@@ -1242,6 +1683,32 @@ async function processOne(state, actor, controllerOptions) {
       `issue #${number} is in failed state: ${issueState.stopReason ?? "unknown failure"}`,
     );
   }
+  if (issueState.prNumber) {
+    const remotePr = await ghJson(
+      [
+        "pr",
+        "view",
+        String(issueState.prNumber),
+        "--repo",
+        repository,
+        "--json",
+        "state,mergedAt,mergeCommit,url",
+      ],
+      controllerOptions,
+    );
+    if (remotePr.state === "MERGED" && remotePr.mergeCommit?.oid) {
+      state = await finalizeMergedPullRequest(state, issue, remotePr, controllerOptions);
+      return { state, status: "merged", issue };
+    }
+    if (remotePr.state === "CLOSED") {
+      state = moveIssue(state, number, "manual-review", {
+        stopReason: "pull request was closed without merging",
+      });
+      return { state, status: "awaiting-human", issue };
+    }
+  }
+  state = await assertClaimOwnership(state, issue, actor, controllerOptions);
+  issueState = state.issues[String(number)];
   if (issueState.stage === "manual-review") {
     if (controllerOptions.mode === "PrOnly" || issueState.risk?.level !== "low") {
       return { state, status: "awaiting-human", issue };
@@ -1250,18 +1717,68 @@ async function processOne(state, actor, controllerOptions) {
 
   try {
     state = await claimIssue(state, issue, actor, controllerOptions);
+    state = await assertClaimOwnership(state, issue, actor, controllerOptions);
     state = await ensureWorktree(state, issue, controllerOptions);
+    state = await assertClaimOwnership(state, issue, actor, controllerOptions);
     state = await implementIssue(state, issue, controllerOptions);
+    state = await assertClaimOwnership(state, issue, actor, controllerOptions);
     state = await verifyIssue(state, issue, controllerOptions);
+    state = await assertClaimOwnership(state, issue, actor, controllerOptions);
     state = await commitAndPush(state, issue, controllerOptions);
+    state = await assertClaimOwnership(state, issue, actor, controllerOptions);
     state = await ensurePullRequest(state, issue, controllerOptions);
-    state = await waitAndMaybeMerge(state, issue, controllerOptions);
+    state = await waitAndMaybeMerge(state, issue, actor, controllerOptions);
   } catch (error) {
+    state = readJson(statePath);
     const current = state.issues[String(number)];
-    if (current && current.stage !== "manual-review") {
-      state = moveIssue(state, number, "failed", {
-        stopReason: error.stopReason ?? error.message,
+    let mergedPr = null;
+    if (current?.prNumber) {
+      try {
+        const remotePr = await ghJson(
+          [
+            "pr",
+            "view",
+            String(current.prNumber),
+            "--repo",
+            repository,
+            "--json",
+            "state,mergedAt,mergeCommit,url",
+          ],
+          controllerOptions,
+        );
+        if (remotePr.state === "MERGED" && remotePr.mergeCommit?.oid) {
+          mergedPr = remotePr;
+        }
+      } catch {
+        // Preserve the durable stage and fail closed when GitHub cannot be read.
+      }
+    }
+    const disposition = failureDisposition(
+      current?.stage,
+      Boolean(mergedPr),
+      error.failureKind,
+    );
+    if (disposition === "merged") {
+      state = await finalizeMergedPullRequest(
+        state,
+        issue,
+        mergedPr,
+        controllerOptions,
+      );
+      return { state, status: "merged", issue };
+    }
+    if (disposition === "interrupted") {
+      state = moveIssue(state, number, current.stage, {
+        stopReason: error.message,
+        interruptedAt: new Date().toISOString(),
       });
+      return { state, status: "interrupted", issue };
+    }
+    state = moveIssue(state, number, disposition, {
+      stopReason: error.stopReason ?? error.message,
+    });
+    if (disposition === "manual-review") {
+      return { state, status: "awaiting-human", issue };
     }
     throw error;
   }
@@ -1280,11 +1797,17 @@ async function dryRun(controllerOptions) {
   const state = fs.existsSync(statePath)
     ? loadState("DryRun", false)
     : initialState("DryRun");
-  const issue = await selectIssue(state, actor, controllerOptions);
+  const selection = await selectIssue(state, actor, controllerOptions);
   return {
-    status: issue ? "ready" : "queue-complete",
+    status:
+      selection.status === "selected"
+        ? "ready"
+        : selection.status === "complete"
+          ? "queue-complete"
+          : "queue-blocked",
     actor,
-    issue: issue ?? null,
+    issue: selection.issue ?? null,
+    selection,
     statePath,
     stopPath,
   };
@@ -1313,7 +1836,10 @@ async function main() {
         stopReason =
           result.status === "queue-complete"
             ? "queue complete"
-            : `issue #${result.issue.issueNumber} is awaiting human review`;
+            : result.reason ??
+              (result.issue
+                ? `issue #${result.issue.issueNumber} stopped at ${result.status}`
+                : result.status);
         process.stdout.write(
           `${JSON.stringify({ status: result.status, issueNumber: result.issue?.issueNumber, prUrl: state.issues[String(result.issue?.issueNumber)]?.prUrl })}\n`,
         );
@@ -1328,6 +1854,7 @@ async function main() {
     stopReason = error.message;
     throw error;
   } finally {
+    if (fs.existsSync(statePath)) state = readJson(statePath);
     if (state) writeSummary(state, stopReason);
     releaseLock();
   }

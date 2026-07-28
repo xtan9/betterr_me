@@ -9,10 +9,13 @@ import {
   chooseClaimWinner,
   classifyChangeRisk,
   evaluateMergeGate,
+  failureDisposition,
   evaluateIteration,
   findNewTypeScriptDiagnostics,
   selectNextLiveIssue,
+  selectNextLiveIssueStatus,
   selectNextIssue,
+  selectRecoveryBase,
   shouldRetry,
   transitionIssue,
   validateQueueState,
@@ -200,6 +203,20 @@ describe("Ralph live issue selection and claiming", () => {
     ).toEqual(liveQueue[0]);
   });
 
+  it("distinguishes a completed queue from a temporarily unavailable frontier", () => {
+    expect(
+      selectNextLiveIssueStatus(liveQueue, { completed: [] }, [], "xtan9"),
+    ).toEqual({ status: "unavailable", issueNumbers: [101, 103] });
+    expect(
+      selectNextLiveIssueStatus(
+        liveQueue,
+        { completed: [101, 102, 103] },
+        [],
+        "xtan9",
+      ),
+    ).toEqual({ status: "complete" });
+  });
+
   it("chooses the earliest unexpired remote claim deterministically", () => {
     const now = new Date("2026-07-28T06:00:00Z");
     expect(
@@ -274,6 +291,27 @@ describe("Ralph durable state and policy", () => {
     ).toThrow("cannot move issue #101 backward");
   });
 
+  it("keeps the recorded base when recovering an existing worktree", () => {
+    expect(selectRecoveryBase("recorded", "new-main", true)).toBe("recorded");
+    expect(selectRecoveryBase("recorded", "new-main", false)).toBe("new-main");
+    expect(() => selectRecoveryBase(undefined, "new-main", true)).toThrow(
+      "existing worktree has no recorded base",
+    );
+  });
+
+  it("reconciles controller errors according to durable remote progress", () => {
+    expect(failureDisposition("implementing", false)).toBe("failed");
+    expect(failureDisposition("implementing", false, "kill-switch")).toBe(
+      "interrupted",
+    );
+    expect(failureDisposition("implementing", false, "timeout")).toBe(
+      "interrupted",
+    );
+    expect(failureDisposition("pr-open", false)).toBe("manual-review");
+    expect(failureDisposition("checks-passed", false)).toBe("manual-review");
+    expect(failureDisposition("checks-passed", true)).toBe("merged");
+  });
+
   it("allows automatic merge only for a low-risk, fully green PR", () => {
     expect(
       evaluateMergeGate({
@@ -294,6 +332,10 @@ describe("Ralph durable state and policy", () => {
     [{ mode: "AutoMerge", risk: "low", checksPassed: false }, "required checks did not pass"],
     [{ mode: "AutoMerge", risk: "low", mergeState: "DIRTY" }, "pull request has conflicts"],
     [{ mode: "AutoMerge", risk: "low", ambiguous: true }, "requirements are ambiguous"],
+    [
+      { mode: "AutoMerge", risk: "low", reviewDecision: "CHANGES_REQUESTED" },
+      "review changes were requested",
+    ],
   ])("fails closed at the merge boundary", (overrides, reason) => {
     expect(
       evaluateMergeGate({
@@ -309,12 +351,16 @@ describe("Ralph durable state and policy", () => {
     ).toEqual({ canMerge: false, reason });
   });
 
-  it("classifies controller, CI, migration, and authentication changes as high risk", () => {
+  it("allows automatic merge only for an explicit low-risk path allowlist", () => {
     for (const file of [
       "scripts/ralph/queue.mjs",
       ".github/workflows/ci.yml",
       "supabase/migrations/20260728000000_change.sql",
       "app/api/oauth/token/route.ts",
+      "tsconfig.json",
+      "vercel.json",
+      "lib/billing/stripe.ts",
+      "lib/db/calendar-events.ts",
     ]) {
       expect(classifyChangeRisk([file], { title: "Routine change" }).level).toBe(
         "high",
@@ -324,6 +370,12 @@ describe("Ralph durable state and policy", () => {
       classifyChangeRisk(["lib/calendar/create-event.ts"], {
         title: "Create a calendar event",
       }).level,
+    ).toBe("low");
+    expect(
+      classifyChangeRisk(
+        ["lib/calendar/create-event.ts", "tests/lib/calendar/create-event.test.ts"],
+        { title: "Create a calendar event" },
+      ).level,
     ).toBe("low");
   });
 
