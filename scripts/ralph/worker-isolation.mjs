@@ -39,6 +39,10 @@ export function workerGitEnvironment({ gitDirectory, worktreePath }) {
   };
 }
 
+export function workerGitSmokeCommand(realGitConfig) {
+  return `set -eu; git status --porcelain >/dev/null; git rev-list --count --all | grep -qx 1; ! git remote | grep -q .; ! test -r ${JSON.stringify(realGitConfig)}; ! touch "$GIT_DIR/ralph-write-probe" 2>/dev/null; echo RALPH_WORKER_GIT_OK`;
+}
+
 export function workerGitViewPath(workerGitRoot, issueNumber) {
   if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
     throw new Error("issue number must be a positive integer");
