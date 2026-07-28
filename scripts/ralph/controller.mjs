@@ -47,6 +47,7 @@ import {
   isolatedCodexReadablePaths,
   removeSanitizedWorkerGitView,
   workerGitEnvironment,
+  workerGitSmokeCommand,
 } from "./worker-isolation.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -534,7 +535,7 @@ async function verifyWorkerGitSandbox(gitContext) {
         "--",
         "bash",
         "-lc",
-        `set -eu; git status --porcelain >/dev/null; test "$(git rev-list --count --all)" = 1; test -z "$(git remote)"; ! test -r ${tomlString(realGitConfig)}; ! touch "$GIT_DIR/ralph-write-probe" 2>/dev/null; echo RALPH_WORKER_GIT_OK`,
+        workerGitSmokeCommand(realGitConfig),
       ],
       { timeoutSeconds: 30 },
     );

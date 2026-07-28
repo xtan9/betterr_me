@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   ensureSanitizedWorkerGitView,
   removeSanitizedWorkerGitView,
+  workerGitSmokeCommand,
 } from "../../scripts/ralph/worker-isolation.mjs";
 
 const gitCommand = process.platform === "win32" ? "git.exe" : "git";
@@ -24,6 +25,13 @@ function git(args: string[], options: { input?: string } = {}) {
 }
 
 describe("Ralph sanitized worker Git view", () => {
+  it("does not use command substitutions that escape the standalone sandbox environment", () => {
+    const command = workerGitSmokeCommand("/repository/.git/config");
+    expect(command).not.toContain("$(");
+    expect(command).toContain("git rev-list --count --all | grep -qx 1");
+    expect(command).toContain("! git remote | grep -q .");
+  });
+
   it("exposes one clean baseline without the controller repository remote or history", async () => {
     const temporaryRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), "ralph-worker-isolation-"),
