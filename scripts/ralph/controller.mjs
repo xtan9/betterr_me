@@ -1061,7 +1061,7 @@ async function ensureWorktree(state, issue, controllerOptions) {
 
 async function removeControllerDependencyLink(worktreePath) {
   const dependencyLink = `${windowsToWslPath(worktreePath)}/node_modules`;
-  const readlink = await runProcess("wsl.exe", ["--", "readlink", "-f", dependencyLink], {
+  const readlink = await runProcess("wsl.exe", ["--", "readlink", dependencyLink], {
     timeoutSeconds: 30,
     environment: scrubbedEnvironment(),
   });
@@ -1090,7 +1090,7 @@ async function installControllerDependencyLink(worktreePath) {
   const dependencyLink = `${windowsToWslPath(worktreePath)}/node_modules`;
   const existing = await runProcess(
     "wsl.exe",
-    ["--", "readlink", "-f", dependencyLink],
+    ["--", "readlink", dependencyLink],
     { timeoutSeconds: 30, environment: scrubbedEnvironment() },
   );
   if (existing.code === 0) {
