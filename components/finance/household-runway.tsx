@@ -610,12 +610,19 @@ export function HouseholdRunway({
   };
 
   if (!hydrated) {
-    return <main className="min-h-screen bg-[#f5f6f2] dark:bg-[#101310]" />;
+    return (
+      <main
+        className={`${isAuthenticated ? "min-h-full" : "min-h-screen"} bg-[#f5f6f2] dark:bg-[#101310]`}
+      />
+    );
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f6f2] text-slate-950 dark:bg-[#101310] dark:text-white">
-      <RunwayHeader t={t} />
+    <main
+      className={`${isAuthenticated ? "min-h-full" : "min-h-screen"} bg-[#f5f6f2] text-slate-950 dark:bg-[#101310] dark:text-white`}
+      data-runway-presentation={isAuthenticated ? "authenticated" : "public"}
+    >
+      {!isAuthenticated ? <RunwayHeader t={t} /> : null}
       {showLanding ? (
         <HouseholdRunwayLanding
           t={t}
@@ -710,7 +717,10 @@ export function HouseholdRunway({
 
 function RunwayHeader({ t }: { t: ReturnType<typeof useTranslations> }) {
   return (
-    <header className="border-b border-black/5 bg-[#f5f6f2]/90 backdrop-blur dark:border-white/10 dark:bg-[#101310]/90">
+    <header
+      data-testid="runway-public-header"
+      className="border-b border-black/5 bg-[#f5f6f2]/90 backdrop-blur dark:border-white/10 dark:bg-[#101310]/90"
+    >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
         <Link href="/" className="font-display text-xl font-bold">
           BetterR<span className="text-emerald-600">.me</span>
