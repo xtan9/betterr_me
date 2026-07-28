@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
+  analyzeTypeScriptRun,
   evaluateIteration,
   findNewTypeScriptDiagnostics,
   selectNextIssue,
@@ -140,6 +141,40 @@ describe("Ralph TypeScript baseline comparison", () => {
     expect(findNewTypeScriptDiagnostics([diagnostic], [diagnostic, diagnostic])).toEqual([
       "lib/example.ts | error TS2304: Cannot find name 'missing'.",
     ]);
+  });
+
+  it("captures global compiler diagnostics without a file location", () => {
+    expect(
+      findNewTypeScriptDiagnostics([], [
+        "error TS18003: No inputs were found in config file 'tsconfig.json'.",
+      ]),
+    ).toEqual([
+      "GLOBAL | error TS18003: No inputs were found in config file 'tsconfig.json'.",
+    ]);
+  });
+
+  it("captures unfamiliar compiler output so failures cannot pass silently", () => {
+    expect(
+      findNewTypeScriptDiagnostics([], ["TypeScript compiler terminated unexpectedly"]),
+    ).toEqual(["OUTPUT | TypeScript compiler terminated unexpectedly"]);
+  });
+
+  it("rejects a nonzero compiler exit with no output", () => {
+    expect(analyzeTypeScriptRun([], 2)).toEqual({
+      accountedFor: false,
+      signals: [],
+    });
+  });
+
+  it("accepts a nonzero compiler exit only when a TypeScript diagnostic was captured", () => {
+    expect(analyzeTypeScriptRun(["error TS5023: Unknown compiler option."], 2)).toEqual({
+      accountedFor: true,
+      signals: ["GLOBAL | error TS5023: Unknown compiler option."],
+    });
+  });
+
+  it("does not treat unrelated output as accounting for a compiler failure", () => {
+    expect(analyzeTypeScriptRun(["Node runtime warning"], 2).accountedFor).toBe(false);
   });
 });
 

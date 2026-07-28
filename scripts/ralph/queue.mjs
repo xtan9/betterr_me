@@ -73,8 +73,21 @@ export function selectNextIssue(queue, state) {
 }
 
 function normalizeTypeScriptDiagnostic(line) {
-  const match = line.match(/^(.*)\(\d+,\d+\): (error TS\d+: .*)$/);
-  return match ? `${match[1]} | ${match[2]}` : null;
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const located = trimmed.match(/^(.*)\(\d+,\d+\): (error TS\d+: .*)$/);
+  if (located) {
+    return `${located[1]} | ${located[2]}`;
+  }
+
+  if (/^error TS\d+: /.test(trimmed)) {
+    return `GLOBAL | ${trimmed}`;
+  }
+
+  return `OUTPUT | ${trimmed}`;
 }
 
 function countDiagnostics(lines) {
@@ -101,6 +114,21 @@ export function findNewTypeScriptDiagnostics(beforeLines, afterLines) {
   }
 
   return additions.sort();
+}
+
+export function analyzeTypeScriptRun(lines, exitCode) {
+  const signals = [...countDiagnostics(lines).entries()]
+    .flatMap(([signal, count]) => Array.from({ length: count }, () => signal))
+    .sort();
+  const hasDiagnostic = signals.some(
+    (signal) =>
+      signal.startsWith("GLOBAL | error TS") || signal.includes(" | error TS"),
+  );
+
+  return {
+    accountedFor: exitCode === 0 || hasDiagnostic,
+    signals,
+  };
 }
 
 export function evaluateIteration(iteration) {
@@ -200,8 +228,22 @@ function runCli(args) {
     return;
   }
 
+  if (command === "analyze-diagnostics") {
+    const lines = fs
+      .readFileSync(path.resolve(getOption(args, "--file")), "utf8")
+      .split(/\r?\n/);
+    const exitCode = Number.parseInt(getOption(args, "--exit-code"), 10);
+    if (!Number.isInteger(exitCode) || exitCode < 0) {
+      throw new Error("--exit-code must be a non-negative integer");
+    }
+    process.stdout.write(
+      `${JSON.stringify(analyzeTypeScriptRun(lines, exitCode))}\n`,
+    );
+    return;
+  }
+
   throw new Error(
-    "usage: queue.mjs <next|gate|compare-diagnostics> [options]",
+    "usage: queue.mjs <next|gate|compare-diagnostics|analyze-diagnostics> [options]",
   );
 }
 

@@ -48,11 +48,14 @@ function Invoke-RedirectedProcess {
     $null = $process.Handle
     $exited = $process.WaitForExit($TimeoutSeconds * 1000)
     if (-not $exited) {
-        try {
-            & taskkill.exe /PID $process.Id /T /F *> $null
-        }
-        catch {
+        & taskkill.exe /PID $process.Id /T /F *> $null
+        $taskkillExitCode = $LASTEXITCODE
+        if ($taskkillExitCode -ne 0 -and -not $process.HasExited) {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+        $terminated = $process.WaitForExit(10000)
+        if (-not $terminated) {
+            throw "Process timed out and its process tree could not be terminated: $FilePath"
         }
         throw "Process timed out after $TimeoutSeconds seconds: $FilePath"
     }
@@ -301,7 +304,7 @@ if (-not (Test-Path $typeScriptCompiler)) {
     throw "Unable to locate TypeScript at $typeScriptCompiler. Install dependencies before running Ralph."
 }
 Write-RalphStatus "Capturing the pre-implementation TypeScript diagnostic baseline."
-$null = Invoke-RedirectedProcess `
+$typecheckBeforeExitCode = Invoke-RedirectedProcess `
     -FilePath $node.Source `
     -Arguments @($typeScriptCompiler, "--noEmit", "--pretty", "false") `
     -WorkingDirectory $repoRoot `
@@ -311,6 +314,14 @@ $null = Invoke-RedirectedProcess `
 Merge-ProcessLogs `
     -Paths @($typecheckBeforeStdout, $typecheckBeforeStderr) `
     -Destination $typecheckBeforeCombined
+$baselineAnalysisJson = & $node.Source $queueHelper analyze-diagnostics --file $typecheckBeforeCombined --exit-code $typecheckBeforeExitCode
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to analyze the TypeScript diagnostic baseline."
+}
+$baselineAnalysis = $baselineAnalysisJson | ConvertFrom-Json
+if (-not $baselineAnalysis.accountedFor) {
+    throw "TypeScript failed before implementation without producing an accountable diagnostic baseline."
+}
 
 Write-RalphStatus "Starting a fresh ephemeral Codex invocation. Logs: $stderrLog"
 $codexArguments = @($codexPrefixArguments) + @(
@@ -414,7 +425,7 @@ if ($verificationExitCode -ne 0) {
 }
 
 Write-RalphStatus "Comparing post-implementation TypeScript diagnostics to the baseline."
-$null = Invoke-RedirectedProcess `
+$typecheckAfterExitCode = Invoke-RedirectedProcess `
     -FilePath $node.Source `
     -Arguments @($typeScriptCompiler, "--noEmit", "--pretty", "false") `
     -WorkingDirectory $repoRoot `
@@ -424,6 +435,14 @@ $null = Invoke-RedirectedProcess `
 Merge-ProcessLogs `
     -Paths @($typecheckAfterStdout, $typecheckAfterStderr) `
     -Destination $typecheckAfterCombined
+$postTypecheckAnalysisJson = & $node.Source $queueHelper analyze-diagnostics --file $typecheckAfterCombined --exit-code $typecheckAfterExitCode
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to analyze post-implementation TypeScript diagnostics."
+}
+$postTypecheckAnalysis = $postTypecheckAnalysisJson | ConvertFrom-Json
+if (-not $postTypecheckAnalysis.accountedFor) {
+    throw "TypeScript failed after implementation without producing accountable diagnostics."
+}
 $diagnosticComparisonJson = & $node.Source $queueHelper compare-diagnostics --before $typecheckBeforeCombined --after $typecheckAfterCombined
 if ($LASTEXITCODE -ne 0) {
     throw "Unable to compare TypeScript diagnostics."
