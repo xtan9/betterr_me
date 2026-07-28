@@ -585,9 +585,22 @@ describe("Ralph durable state and policy", () => {
   });
 
   it("repairs only review findings explicitly classified as safe to repair", () => {
-    expect(reviewFailureKind({ repairable: true })).toBe("review");
-    expect(reviewFailureKind({ repairable: false })).toBe("review-nonrepairable");
-    expect(reviewFailureKind({})).toBe("review-nonrepairable");
+    expect(reviewFailureKind({ blockerKind: "code", repairable: true })).toBe(
+      "review",
+    );
+    expect(reviewFailureKind({ blockerKind: "code", repairable: false })).toBe(
+      "review-nonrepairable",
+    );
+    expect(
+      reviewFailureKind({ blockerKind: "requirements", repairable: false }),
+    ).toBe("ambiguous");
+    expect(
+      reviewFailureKind({ blockerKind: "infrastructure", repairable: false }),
+    ).toBe("infrastructure");
+    expect(
+      reviewFailureKind({ blockerKind: "safety", repairable: false }),
+    ).toBe("safety");
+    expect(reviewFailureKind({})).toBe("safety");
   });
 
   it("adds the external worktree read grant only to the read-only reviewer", () => {

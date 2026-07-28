@@ -392,7 +392,13 @@ export function testVerificationFailureKind(error) {
 }
 
 export function reviewFailureKind(review) {
-  return review?.repairable === true ? "review" : "review-nonrepairable";
+  if (review?.blockerKind === "infrastructure") return "infrastructure";
+  if (review?.blockerKind === "safety") return "safety";
+  if (review?.blockerKind === "requirements") return "ambiguous";
+  if (review?.blockerKind === "code") {
+    return review.repairable === true ? "review" : "review-nonrepairable";
+  }
+  return "safety";
 }
 
 export function isolatedCodexReadablePaths({
