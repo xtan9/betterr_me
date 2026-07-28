@@ -360,6 +360,7 @@ describe("Ralph durable state and policy", () => {
     expect(gate).toEqual({
       gateId: "gate-481",
       status: "repairing",
+      controllerManagedExternalGate: true,
       failureKind: "review-safety",
       stopReason: "local database gate failed",
       requestedAt: "2026-07-28T14:00:00Z",
@@ -370,6 +371,7 @@ describe("Ralph durable state and policy", () => {
     expect(preserveExternalFailureKind(null, "worker-blocked")).toBe(
       "worker-blocked",
     );
+    expect(externalRepairDisposition(gate, 3, 5)).toBe("repair");
   });
 
   it("accepts external verification only for the exact gated tree", () => {

@@ -354,6 +354,7 @@ export function createExternalVerificationGate(request, now, gateId) {
   return {
     gateId,
     status: "repairing",
+    controllerManagedExternalGate: true,
     failureKind: request.failureKind,
     stopReason: request.stopReason,
     requestedAt: now,

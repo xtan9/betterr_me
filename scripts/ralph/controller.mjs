@@ -2552,11 +2552,18 @@ async function processOne(state, actor, controllerOptions) {
     for (;;) {
       const pendingExternalRepair =
         state.issues[String(number)]?.pendingExternalRepair;
-      if (pendingExternalRepair) {
+      const interruptedExternalRepair =
+        state.issues[String(number)]?.externalVerificationGate?.status ===
+        "repairing"
+          ? state.issues[String(number)].externalVerificationGate
+          : null;
+      if (pendingExternalRepair || interruptedExternalRepair) {
+        const externalRepairRequest =
+          pendingExternalRepair ?? interruptedExternalRepair;
         const repairAttempts =
           state.issues[String(number)]?.repairAttempts ?? 0;
         const disposition = externalRepairDisposition(
-          pendingExternalRepair,
+          externalRepairRequest,
           repairAttempts,
           controllerOptions.maximumRepairAttempts,
         );
@@ -2569,24 +2576,27 @@ async function processOne(state, actor, controllerOptions) {
         if (disposition === "exhausted") {
           throw Object.assign(
             new Error("external repair request exhausted its repair budget"),
-            pendingExternalRepair,
+            externalRepairRequest,
           );
         }
-        const externalVerificationGate = createExternalVerificationGate(
-          pendingExternalRepair,
-          new Date().toISOString(),
-          crypto.randomUUID(),
-        );
-        state = moveIssue(state, number, "implemented", {
-          pendingExternalRepair: null,
-          externalVerificationGate,
-        });
+        const externalVerificationGate = interruptedExternalRepair ??
+          createExternalVerificationGate(
+            externalRepairRequest,
+            new Date().toISOString(),
+            crypto.randomUUID(),
+          );
+        if (pendingExternalRepair) {
+          state = moveIssue(state, number, "implemented", {
+            pendingExternalRepair: null,
+            externalVerificationGate,
+          });
+        }
         state = await repairIssue(
           state,
           issue,
           Object.assign(
-            new Error(pendingExternalRepair.stopReason),
-            pendingExternalRepair,
+            new Error(externalRepairRequest.stopReason),
+            externalRepairRequest,
           ),
           repairAttempts + 1,
           controllerOptions,
@@ -2652,6 +2662,7 @@ async function processOne(state, actor, controllerOptions) {
             issue,
           };
         }
+        await removeControllerDependencyLink(worktreePath);
         const unstaged = await runProcess(
           "git.exe",
           ["-C", worktreePath, "diff", "--quiet"],
@@ -2666,12 +2677,23 @@ async function processOne(state, actor, controllerOptions) {
             "--exclude-standard",
           ])
         ).stdout.trim();
+        const ignored = (
+          await git([
+            "-C",
+            worktreePath,
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+          ])
+        ).stdout.trim();
         const currentTreeSha = (
           await git(["-C", worktreePath, "write-tree"])
         ).stdout.trim();
         if (
           unstaged.code !== 0 ||
           untracked ||
+          ignored ||
           !externalVerificationReceiptMatches(
             externalVerificationGate,
             receipt,
