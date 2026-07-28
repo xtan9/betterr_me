@@ -1,9 +1,9 @@
-import crypto from "node:crypto";
-
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
 import { log } from "@/lib/logger";
+import { createAuthorizationCodeIssuer } from "@/lib/oauth/authorization-code";
+import { createSupabaseAuthorizationCodeStore } from "@/lib/oauth/supabase-authorization-code-store";
 import { createClient } from "@/lib/supabase/server";
 
 // ---------------------------------------------------------------------------
@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 // ---------------------------------------------------------------------------
 
 const LOCALHOST_RE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/;
+const DEFAULT_OAUTH_SCOPES = ["read", "write"];
 
 function isValidRedirectUri(uri: string): boolean {
   return LOCALHOST_RE.test(uri);
@@ -98,29 +99,17 @@ export async function GET(request: NextRequest) {
       log.error("Failed to clean up expired OAuth codes", cleanupError);
     }
 
-    // Generate random code and hash it for storage
-    const code = crypto.randomBytes(32).toString("hex");
-    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
-
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
-
-    const { error: insertError } = await serviceClient
-      .from("oauth_codes")
-      .insert({
-        code_hash: codeHash,
-        user_id: user.id,
-        code_challenge: codeChallenge,
-        redirect_uri: redirectUri,
-        expires_at: expiresAt,
-      });
-
-    if (insertError) {
-      log.error("Failed to store authorization code", insertError);
-      return NextResponse.json(
-        { error: "Failed to generate authorization code" },
-        { status: 500 },
-      );
-    }
+    const issuer = createAuthorizationCodeIssuer({
+      store: createSupabaseAuthorizationCodeStore(serviceClient),
+    });
+    const { code } = await issuer.issue({
+      clientId,
+      redirectUri,
+      userId: user.id,
+      scopes: [...DEFAULT_OAUTH_SCOPES],
+      codeChallenge,
+      codeChallengeMethod: "S256",
+    });
 
     // Redirect back to client with code and state
     const callbackUrl = new URL(redirectUri);

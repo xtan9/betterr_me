@@ -51,7 +51,11 @@ function getServiceClient() {
  *
  * Signed with `API_KEY_HMAC_SECRET` using Node.js native crypto.
  */
-export async function signMcpToken(userId: string): Promise<string> {
+export async function signMcpToken(
+  userId: string,
+  clientId = userId,
+  scopes = ["read", "write"],
+): Promise<string> {
   const secret = process.env.API_KEY_HMAC_SECRET;
   if (!secret) {
     throw new Error("API_KEY_HMAC_SECRET not configured");
@@ -62,6 +66,8 @@ export async function signMcpToken(userId: string): Promise<string> {
   const payload = base64url(
     JSON.stringify({
       sub: userId,
+      client_id: clientId,
+      scope: scopes.join(" "),
       aud: "mcp",
       iat: now,
       exp: now + 3600,
@@ -92,7 +98,7 @@ export async function signMcpToken(userId: string): Promise<string> {
  */
 export async function verifyMcpToken(
   bearerToken: string,
-): Promise<{ userId: string } | null> {
+): Promise<{ userId: string; clientId: string; scopes: string[] } | null> {
   const secret = process.env.API_KEY_HMAC_SECRET;
   if (!secret) {
     log.error("MCP token verification failed: API_KEY_HMAC_SECRET not configured");
@@ -131,7 +137,13 @@ export async function verifyMcpToken(
   }
 
   // Decode payload
-  let payload: { sub?: string; aud?: string; exp?: number };
+  let payload: {
+    sub?: string;
+    aud?: string;
+    exp?: number;
+    client_id?: string;
+    scope?: string;
+  };
   try {
     payload = JSON.parse(
       Buffer.from(payloadB64, "base64url").toString(),
@@ -183,7 +195,11 @@ export async function verifyMcpToken(
     return null;
   }
 
-  return { userId };
+  return {
+    userId,
+    clientId: payload.client_id ?? userId,
+    scopes: payload.scope?.split(/\s+/).filter(Boolean) ?? ["read", "write"],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -211,8 +227,8 @@ export async function verifyMcpAuth(
 
   return {
     token: bearerToken,
-    scopes: ["read", "write"],
-    clientId: result.userId,
+    scopes: result.scopes,
+    clientId: result.clientId,
     extra: { userId: result.userId },
   };
 }

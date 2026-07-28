@@ -51,6 +51,15 @@ describe('signMcpToken', () => {
     expect(payload.exp - payload.iat).toBe(3600);
   });
 
+  it('preserves the intended client and scopes in the credential outcome', async () => {
+    const token = await signMcpToken('user-abc', 'client-123', ['read']);
+    const payloadB64 = token.split('.')[1];
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+
+    expect(payload.client_id).toBe('client-123');
+    expect(payload.scope).toBe('read');
+  });
+
   it('two calls with same userId produce different tokens (different iat)', async () => {
     const token1 = await signMcpToken('user-123');
     // Advance time slightly
@@ -80,7 +89,11 @@ describe('verifyMcpToken', () => {
     const token = await signMcpToken('user-123');
     const result = await verifyMcpToken(token);
 
-    expect(result).toEqual({ userId: 'user-123' });
+    expect(result).toEqual({
+      userId: 'user-123',
+      clientId: 'user-123',
+      scopes: ['read', 'write'],
+    });
   });
 
   it('legacy token without exp is accepted (backwards-compat)', async () => {
@@ -101,7 +114,11 @@ describe('verifyMcpToken', () => {
     const token = `${data}.${signature}`;
 
     const result = await verifyMcpToken(token);
-    expect(result).toEqual({ userId: 'user-123' });
+    expect(result).toEqual({
+      userId: 'user-123',
+      clientId: 'user-123',
+      scopes: ['read', 'write'],
+    });
   });
 
   it('token with expired exp returns null', async () => {

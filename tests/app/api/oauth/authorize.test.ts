@@ -1,19 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import crypto from 'node:crypto';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+import { mockSupabaseClient } from '../../../setup';
 
 const {
   mockGetUser,
-  mockInsert,
-  mockServiceFrom,
 } = vi.hoisted(() => {
   const mockGetUser = vi.fn();
-  const mockInsert = vi.fn().mockResolvedValue({ error: null });
-  const mockDeleteLt = vi.fn().mockResolvedValue({ error: null });
-  const mockServiceFrom = vi.fn().mockImplementation(() => ({
-    insert: mockInsert,
-    delete: () => ({ lt: mockDeleteLt }),
-  }));
-  return { mockGetUser, mockInsert, mockServiceFrom };
+  return { mockGetUser };
 });
 
 // Mock logger
@@ -29,9 +24,10 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 // Mock Supabase service client (for DB operations)
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: () => ({ from: mockServiceFrom }),
-}));
+vi.mock('@supabase/supabase-js', async () => {
+  const { mockSupabaseClient: client } = await import('../../../setup');
+  return { createClient: () => client };
+});
 
 import { GET } from '@/app/api/oauth/authorize/route';
 
@@ -53,6 +49,7 @@ const VALID_PARAMS = {
   code_challenge: 'abc123challenge',
   code_challenge_method: 'S256',
 };
+const NOW = new Date('2026-07-28T20:00:00.000Z');
 
 function omit<T extends Record<string, unknown>>(obj: T, ...keys: string[]): Record<string, string> {
   return Object.fromEntries(
@@ -72,8 +69,12 @@ function makeRequest(overrides: Record<string, string> = {}): NextRequest {
 describe('GET /api/oauth/authorize', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockInsert.mockResolvedValue({ error: null });
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    mockSupabaseClient.setMockResponse(null, null);
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it('returns 400 if client_id is missing', async () => {
     const request = new NextRequest(makeUrl(omit(VALID_PARAMS, 'client_id')));
@@ -138,6 +139,38 @@ describe('GET /api/oauth/authorize', () => {
     expect(data.error).toContain('code_challenge_method');
   });
 
+  it('ignores requested scopes and issues the established read/write scopes', async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-123' } },
+    });
+
+    const response = await GET(makeRequest({ scope: 'read admin' }));
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get('location')!);
+    const codeHash = crypto
+      .createHash('sha256')
+      .update(location.searchParams.get('code')!)
+      .digest('hex');
+    expect(mockSupabaseClient.queryLog).toEqual(expectedQueries(codeHash));
+  });
+
+  it('keeps the issued scope fixed when a client requests a supported subset', async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-123' } },
+    });
+
+    const response = await GET(makeRequest({ scope: 'read' }));
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get('location')!);
+    const codeHash = crypto
+      .createHash('sha256')
+      .update(location.searchParams.get('code')!)
+      .digest('hex');
+    expect(mockSupabaseClient.queryLog).toEqual(expectedQueries(codeHash));
+  });
+
   it('redirects to /auth/login if no session', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
@@ -165,7 +198,34 @@ describe('GET /api/oauth/authorize', () => {
     expect(location.searchParams.get('code')).toBeTruthy();
     expect(location.searchParams.get('state')).toBe('random-state');
 
-    // Verify insert was called
-    expect(mockInsert).toHaveBeenCalled();
+    const codeHash = crypto
+      .createHash('sha256')
+      .update(location.searchParams.get('code')!)
+      .digest('hex');
+    expect(mockSupabaseClient.queryLog).toEqual(expectedQueries(codeHash));
   });
 });
+
+function expectedQueries(codeHash: string) {
+  return [
+    { table: 'oauth_codes', method: 'from', args: ['oauth_codes'] },
+    { table: 'oauth_codes', method: 'delete', args: [] },
+    { table: 'oauth_codes', method: 'lt', args: ['expires_at', NOW.toISOString()] },
+    { table: 'oauth_codes', method: 'from', args: ['oauth_codes'] },
+    {
+      table: 'oauth_codes',
+      method: 'insert',
+      args: [{
+        code_hash: codeHash,
+        client_id: 'test-client',
+        redirect_uri: 'http://localhost:3000/callback',
+        user_id: 'user-123',
+        scopes: ['read', 'write'],
+        expires_at: '2026-07-28T20:05:00.000Z',
+        code_challenge: 'abc123challenge',
+        code_challenge_method: 'S256',
+        used: false,
+      }],
+    },
+  ];
+}
