@@ -3,6 +3,9 @@ param(
     [ValidateRange(1, 100)]
     [int]$Iterations = 24,
     [string]$Branch = "codex/ralph-architecture",
+    [ValidateRange(60, 86400)][int]$ImplementationTimeoutSeconds = 7200,
+    [ValidateRange(60, 7200)][int]$VerificationTimeoutSeconds = 900,
+    [ValidateRange(60, 7200)][int]$ReviewTimeoutSeconds = 1800,
     [switch]$DryRun
 )
 
@@ -13,13 +16,22 @@ $once = Join-Path $PSScriptRoot "ralph-once.ps1"
 
 if ($DryRun) {
     Write-Host "[ralph] Validating one iteration without invoking Codex." -ForegroundColor Cyan
-    & $once -Branch $Branch -DryRun
+    & $once `
+        -Branch $Branch `
+        -ImplementationTimeoutSeconds $ImplementationTimeoutSeconds `
+        -VerificationTimeoutSeconds $VerificationTimeoutSeconds `
+        -ReviewTimeoutSeconds $ReviewTimeoutSeconds `
+        -DryRun
     return
 }
 
 for ($iteration = 1; $iteration -le $Iterations; $iteration++) {
     Write-Host "[ralph] Iteration $iteration of $Iterations" -ForegroundColor Cyan
-    $resultLines = @(& $once -Branch $Branch)
+    $resultLines = @(& $once `
+        -Branch $Branch `
+        -ImplementationTimeoutSeconds $ImplementationTimeoutSeconds `
+        -VerificationTimeoutSeconds $VerificationTimeoutSeconds `
+        -ReviewTimeoutSeconds $ReviewTimeoutSeconds)
     if ($resultLines.Count -eq 0) {
         throw "Ralph iteration returned no machine-readable result."
     }

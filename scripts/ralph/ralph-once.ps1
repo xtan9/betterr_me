@@ -1,6 +1,9 @@
 [CmdletBinding()]
 param(
     [string]$Branch = "codex/ralph-architecture",
+    [ValidateRange(60, 86400)][int]$ImplementationTimeoutSeconds = 7200,
+    [ValidateRange(60, 7200)][int]$VerificationTimeoutSeconds = 900,
+    [ValidateRange(60, 7200)][int]$ReviewTimeoutSeconds = 1800,
     [switch]$DryRun
 )
 
@@ -19,6 +22,7 @@ function Invoke-RedirectedProcess {
         [Parameter(Mandatory = $true)][string]$WorkingDirectory,
         [Parameter(Mandatory = $true)][string]$StandardOutput,
         [Parameter(Mandatory = $true)][string]$StandardError,
+        [Parameter(Mandatory = $true)][int]$TimeoutSeconds,
         [string]$StandardInput
     )
 
@@ -32,7 +36,6 @@ function Invoke-RedirectedProcess {
         RedirectStandardOutput = $StandardOutput
         RedirectStandardError = $StandardError
         NoNewWindow = $true
-        Wait = $true
         PassThru = $true
     }
     if ($StandardInput) {
@@ -40,7 +43,33 @@ function Invoke-RedirectedProcess {
     }
 
     $process = Start-Process @startParameters
+    $exited = $process.WaitForExit($TimeoutSeconds * 1000)
+    if (-not $exited) {
+        try {
+            & taskkill.exe /PID $process.Id /T /F *> $null
+        }
+        catch {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+        throw "Process timed out after $TimeoutSeconds seconds: $FilePath"
+    }
+    $process.WaitForExit()
     return $process.ExitCode
+}
+
+function Merge-ProcessLogs {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Paths,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    $lines = @()
+    foreach ($path in $Paths) {
+        if (Test-Path $path) {
+            $lines += @(Get-Content $path)
+        }
+    }
+    [System.IO.File]::WriteAllLines($Destination, [string[]]$lines)
 }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
@@ -65,6 +94,25 @@ if ($codexCommand.CommandType -eq "ExternalScript" -and $codexCommand.Source.End
 } else {
     $codexExecutable = $codexCommand.Source
     $codexPrefixArguments = @()
+}
+
+$authStdout = [System.IO.Path]::GetTempFileName()
+$authStderr = [System.IO.Path]::GetTempFileName()
+try {
+    $authArguments = @($codexPrefixArguments) + @("login", "status")
+    $authExitCode = Invoke-RedirectedProcess `
+        -FilePath $codexExecutable `
+        -Arguments $authArguments `
+        -WorkingDirectory $repoRoot `
+        -StandardOutput $authStdout `
+        -StandardError $authStderr `
+        -TimeoutSeconds 60
+    if ($authExitCode -ne 0) {
+        throw "Codex CLI is not authenticated. Run 'codex login' before starting Ralph."
+    }
+}
+finally {
+    Remove-Item -LiteralPath $authStdout, $authStderr -Force -ErrorAction SilentlyContinue
 }
 
 $gitRootText = (& $git.Source -C $repoRoot rev-parse --show-toplevel).Trim()
@@ -214,7 +262,7 @@ Write-RalphStatus "Next issue: #$($issue.issueNumber) - $($issue.title)"
 Write-RalphStatus "Approved test seam: $($issue.testSeam)"
 
 if ($DryRun) {
-    Write-RalphStatus "Dry run passed; Codex was not invoked and no state was changed."
+    Write-RalphStatus "Dry run passed; no agent was started and no repository state was changed."
     Write-Output ($selection | ConvertTo-Json -Depth 10 -Compress)
     return
 }
@@ -232,12 +280,34 @@ $reviewPromptFile = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNu
 $reviewStdoutLog = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-review-stdout.log"
 $reviewStderrLog = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-review-stderr.log"
 $reviewResultFile = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-review-result.json"
+$typecheckBeforeStdout = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-typecheck-before-stdout.log"
+$typecheckBeforeStderr = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-typecheck-before-stderr.log"
+$typecheckBeforeCombined = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-typecheck-before.log"
+$typecheckAfterStdout = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-typecheck-after-stdout.log"
+$typecheckAfterStderr = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-typecheck-after-stderr.log"
+$typecheckAfterCombined = Join-Path $stateDirectory "$timestamp-issue-$($issue.issueNumber)-typecheck-after.log"
 
 [System.IO.File]::WriteAllText($promptFile, $prompt)
 $beforeSha = (& $git.Source -C $repoRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) {
     throw "Unable to read the starting commit."
 }
+
+$typeScriptCompiler = Join-Path $repoRoot "node_modules\typescript\lib\tsc.js"
+if (-not (Test-Path $typeScriptCompiler)) {
+    throw "Unable to locate TypeScript at $typeScriptCompiler. Install dependencies before running Ralph."
+}
+Write-RalphStatus "Capturing the pre-implementation TypeScript diagnostic baseline."
+$null = Invoke-RedirectedProcess `
+    -FilePath $node.Source `
+    -Arguments @($typeScriptCompiler, "--noEmit", "--pretty", "false") `
+    -WorkingDirectory $repoRoot `
+    -StandardOutput $typecheckBeforeStdout `
+    -StandardError $typecheckBeforeStderr `
+    -TimeoutSeconds $VerificationTimeoutSeconds
+Merge-ProcessLogs `
+    -Paths @($typecheckBeforeStdout, $typecheckBeforeStderr) `
+    -Destination $typecheckBeforeCombined
 
 Write-RalphStatus "Starting a fresh ephemeral Codex invocation. Logs: $stderrLog"
 $codexArguments = @($codexPrefixArguments) + @(
@@ -256,7 +326,8 @@ $codexExitCode = Invoke-RedirectedProcess `
     -WorkingDirectory $repoRoot `
     -StandardInput $promptFile `
     -StandardOutput $stdoutLog `
-    -StandardError $stderrLog
+    -StandardError $stderrLog `
+    -TimeoutSeconds $ImplementationTimeoutSeconds
 
 if (Test-Path $stderrLog) {
     Get-Content $stderrLog | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
@@ -333,9 +404,31 @@ $verificationExitCode = Invoke-RedirectedProcess `
     -Arguments @($vitestScript, "run") `
     -WorkingDirectory $repoRoot `
     -StandardOutput $verificationStdoutLog `
-    -StandardError $verificationStderrLog
+    -StandardError $verificationStderrLog `
+    -TimeoutSeconds $VerificationTimeoutSeconds
 if ($verificationExitCode -ne 0) {
     throw "Independent tests failed with code $verificationExitCode. Inspect $verificationStdoutLog and $verificationStderrLog."
+}
+
+Write-RalphStatus "Comparing post-implementation TypeScript diagnostics to the baseline."
+$null = Invoke-RedirectedProcess `
+    -FilePath $node.Source `
+    -Arguments @($typeScriptCompiler, "--noEmit", "--pretty", "false") `
+    -WorkingDirectory $repoRoot `
+    -StandardOutput $typecheckAfterStdout `
+    -StandardError $typecheckAfterStderr `
+    -TimeoutSeconds $VerificationTimeoutSeconds
+Merge-ProcessLogs `
+    -Paths @($typecheckAfterStdout, $typecheckAfterStderr) `
+    -Destination $typecheckAfterCombined
+$diagnosticComparisonJson = & $node.Source $queueHelper compare-diagnostics --before $typecheckBeforeCombined --after $typecheckAfterCombined
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to compare TypeScript diagnostics."
+}
+$diagnosticComparison = $diagnosticComparisonJson | ConvertFrom-Json
+if (@($diagnosticComparison.newDiagnostics).Count -gt 0) {
+    $newDiagnosticSummary = @($diagnosticComparison.newDiagnostics) -join "; "
+    throw "The iteration introduced new TypeScript diagnostics: $newDiagnosticSummary"
 }
 
 $reviewPrompt = @"
@@ -369,7 +462,8 @@ $reviewExitCode = Invoke-RedirectedProcess `
     -WorkingDirectory $repoRoot `
     -StandardInput $reviewPromptFile `
     -StandardOutput $reviewStdoutLog `
-    -StandardError $reviewStderrLog
+    -StandardError $reviewStderrLog `
+    -TimeoutSeconds $ReviewTimeoutSeconds
 if ($reviewExitCode -ne 0) {
     throw "Independent review failed to run. Inspect $reviewStdoutLog and $reviewStderrLog."
 }
@@ -388,6 +482,10 @@ $finalBranch = (& $git.Source -C $repoRoot branch --show-current).Trim()
 if ($LASTEXITCODE -ne 0) {
     throw "Unable to inspect the final branch."
 }
+$finalHead = (& $git.Source -C $repoRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to inspect the final HEAD."
+}
 
 $iteration = [ordered]@{
     selectedIssueNumber = [int]$issue.issueNumber
@@ -396,6 +494,7 @@ $iteration = [ordered]@{
     commitCount = $commitCount
     branchMatches = ($postRunBranch -eq $Branch -and $finalBranch -eq $Branch)
     directParentMatches = ($directParent -eq $beforeSha)
+    headMatches = ($finalHead -eq $afterSha)
     worktreeClean = ($postRunChanges.Count -eq 0)
     commitSubject = $commitSubject
     verificationExitCode = $verificationExitCode

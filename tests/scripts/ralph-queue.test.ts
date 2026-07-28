@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 import {
   evaluateIteration,
+  findNewTypeScriptDiagnostics,
   selectNextIssue,
   validateQueueState,
 } from "../../scripts/ralph/queue.mjs";
@@ -111,6 +113,36 @@ describe("Ralph queue selection", () => {
   });
 });
 
+describe("Ralph TypeScript baseline comparison", () => {
+  it("ignores line-number movement for an existing diagnostic", () => {
+    expect(
+      findNewTypeScriptDiagnostics(
+        ["tests/example.test.ts(10,2): error TS2322: Type 'x' is invalid."],
+        ["tests/example.test.ts(25,4): error TS2322: Type 'x' is invalid."],
+      ),
+    ).toEqual([]);
+  });
+
+  it("reports a new diagnostic with its file and message", () => {
+    expect(
+      findNewTypeScriptDiagnostics([], [
+        "lib/example.ts(3,1): error TS2304: Cannot find name 'missing'.",
+      ]),
+    ).toEqual([
+      "lib/example.ts | error TS2304: Cannot find name 'missing'.",
+    ]);
+  });
+
+  it("reports an additional duplicate diagnostic", () => {
+    const diagnostic =
+      "lib/example.ts(3,1): error TS2304: Cannot find name 'missing'.";
+
+    expect(findNewTypeScriptDiagnostics([diagnostic], [diagnostic, diagnostic])).toEqual([
+      "lib/example.ts | error TS2304: Cannot find name 'missing'.",
+    ]);
+  });
+});
+
 describe("Ralph iteration advancement", () => {
   const successfulIteration = {
     selectedIssueNumber: 101,
@@ -119,6 +151,7 @@ describe("Ralph iteration advancement", () => {
     commitCount: 1,
     branchMatches: true,
     directParentMatches: true,
+    headMatches: true,
     worktreeClean: true,
     commitSubject: "refactor: own scheduling lifecycle (#101)",
     verificationExitCode: 0,
@@ -187,6 +220,10 @@ describe("Ralph iteration advancement", () => {
       "new commit does not directly extend the starting commit",
     ],
     [
+      { ...successfulIteration, headMatches: false },
+      "final HEAD does not match the verified commit",
+    ],
+    [
       { ...successfulIteration, verificationExitCode: 1 },
       "independent test suite failed",
     ],
@@ -230,5 +267,48 @@ describe("Ralph iteration advancement", () => {
       canAdvance: false,
       reason: "agent reported blocked",
     });
+  });
+
+  it("stops when the agent result is missing", () => {
+    expect(
+      evaluateIteration({ ...successfulIteration, agentResult: undefined }),
+    ).toEqual({
+      canAdvance: false,
+      reason: "agent reported no status",
+    });
+  });
+
+  it("stops when independent review output is malformed", () => {
+    expect(
+      evaluateIteration({
+        ...successfulIteration,
+        independentReview: { status: "pass", summary: "Missing findings." },
+      }),
+    ).toEqual({
+      canAdvance: false,
+      reason: "independent code review did not pass",
+    });
+  });
+});
+
+describe("Ralph queue CLI errors", () => {
+  const queueScript = path.resolve("scripts/ralph/queue.mjs");
+
+  it("fails for an unknown command", () => {
+    const result = spawnSync(process.execPath, [queueScript, "unknown"], {
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("usage: queue.mjs");
+  });
+
+  it("fails when a required option is missing", () => {
+    const result = spawnSync(process.execPath, [queueScript, "next"], {
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("missing required option --queue");
   });
 });

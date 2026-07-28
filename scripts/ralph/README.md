@@ -16,6 +16,7 @@ An iteration advances only when all of these are true:
 - Codex reports the selected issue complete.
 - The implementation reports tests and code review complete.
 - An independent full Vitest run passes after the commit.
+- The commit introduces no TypeScript diagnostics beyond the captured baseline.
 - A separate ephemeral Codex review reports no blocking findings.
 - Exactly one new commit was created.
 - The commit directly extends the prior integration-branch commit.
@@ -25,6 +26,11 @@ An iteration advances only when all of these are true:
 Any failed command, malformed result, dirty worktree, ambiguous ticket, missing
 infrastructure, or failed success gate stops the loop. Local progress and logs
 live under `.ralph-state/`, which Git ignores.
+
+Implementation, verification, and review stages have default time limits of
+120, 15, and 30 minutes respectively. The launchers stop the timed-out process
+tree rather than allowing one hung stage to consume the whole night. These can
+be overridden with the corresponding `*TimeoutSeconds` parameters.
 
 Codex runs with `--ephemeral --sandbox workspace-write`. It does not use the
 dangerous approval/sandbox bypass flag.
@@ -44,8 +50,9 @@ its changed scope.
 
 ## Supervised shakeout
 
-Run a dry preflight first. This validates the branch, clean worktree, tools,
-queue, progress, and next issue without invoking Codex or changing state:
+Run a dry preflight first. This validates Codex authentication, the branch,
+clean worktree, tools, queue, progress, and next issue without starting an
+agent or changing repository state:
 
 ```powershell
 .\scripts\ralph\ralph-once.ps1 -DryRun

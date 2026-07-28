@@ -72,6 +72,37 @@ export function selectNextIssue(queue, state) {
   return nextIssue;
 }
 
+function normalizeTypeScriptDiagnostic(line) {
+  const match = line.match(/^(.*)\(\d+,\d+\): (error TS\d+: .*)$/);
+  return match ? `${match[1]} | ${match[2]}` : null;
+}
+
+function countDiagnostics(lines) {
+  const counts = new Map();
+  for (const line of lines) {
+    const diagnostic = normalizeTypeScriptDiagnostic(line);
+    if (diagnostic) {
+      counts.set(diagnostic, (counts.get(diagnostic) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+export function findNewTypeScriptDiagnostics(beforeLines, afterLines) {
+  const before = countDiagnostics(beforeLines);
+  const after = countDiagnostics(afterLines);
+  const additions = [];
+
+  for (const [diagnostic, afterCount] of after) {
+    const addedCount = afterCount - (before.get(diagnostic) ?? 0);
+    for (let index = 0; index < addedCount; index += 1) {
+      additions.push(diagnostic);
+    }
+  }
+
+  return additions.sort();
+}
+
 export function evaluateIteration(iteration) {
   const fail = (reason) => ({ canAdvance: false, reason });
   const result = iteration.agentResult;
@@ -88,6 +119,9 @@ export function evaluateIteration(iteration) {
   }
   if (!iteration.directParentMatches) {
     return fail("new commit does not directly extend the starting commit");
+  }
+  if (!iteration.headMatches) {
+    return fail("final HEAD does not match the verified commit");
   }
   if (iteration.beforeSha === iteration.afterSha) {
     return fail("did not create a commit");
@@ -153,7 +187,22 @@ function runCli(args) {
     return;
   }
 
-  throw new Error("usage: queue.mjs <next|gate> [options]");
+  if (command === "compare-diagnostics") {
+    const before = fs
+      .readFileSync(path.resolve(getOption(args, "--before")), "utf8")
+      .split(/\r?\n/);
+    const after = fs
+      .readFileSync(path.resolve(getOption(args, "--after")), "utf8")
+      .split(/\r?\n/);
+    process.stdout.write(
+      `${JSON.stringify({ newDiagnostics: findNewTypeScriptDiagnostics(before, after) })}\n`,
+    );
+    return;
+  }
+
+  throw new Error(
+    "usage: queue.mjs <next|gate|compare-diagnostics> [options]",
+  );
 }
 
 const isMain =
