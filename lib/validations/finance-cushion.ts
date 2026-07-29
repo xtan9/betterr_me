@@ -183,6 +183,31 @@ export const householdRunwayAnswersSchema = z
     });
   });
 
+const runwayAdjustmentCents = z
+  .number()
+  .finite()
+  .int()
+  .min(0)
+  .max(MAX_CUSHION_AMOUNT_CENTS);
+
+export const runwayAdjustmentsSchema = z
+  .object({
+    expense_reduction_cents: runwayAdjustmentCents.default(0),
+    added_cash_cents: runwayAdjustmentCents.default(0),
+    added_monthly_income_cents: runwayAdjustmentCents.default(0),
+    expected_unconfirmed_funds_cents: runwayAdjustmentCents.default(0),
+    usable_illiquid_investments_cents: runwayAdjustmentCents.default(0),
+    usable_retirement_tax_deferred_cents: runwayAdjustmentCents.default(0),
+    usable_retirement_tax_free_cents: runwayAdjustmentCents.default(0),
+  })
+  .strict();
+
+export const householdRunwayAssessmentInputSchema = z.object({
+  answers: householdRunwayAnswersSchema,
+  adjustments: runwayAdjustmentsSchema.default({}),
+  startDate: z.date().optional(),
+});
+
 const attributionSchema = z
   .object({
     video: z.string().max(120).optional(),
