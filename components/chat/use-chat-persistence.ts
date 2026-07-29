@@ -14,6 +14,14 @@ async function fetchJSON(url: string, init?: RequestInit) {
   return res.json();
 }
 
+async function fetchJSONWithRetry(url: string, init: RequestInit) {
+  try {
+    return await fetchJSON(url, init);
+  } catch {
+    return fetchJSON(url, init);
+  }
+}
+
 export function useChatPersistence(
   status: string,
   messages: UIMessage[],
@@ -52,6 +60,8 @@ export function useChatPersistence(
               .join("")
           : null;
 
+      if (!userMsg || !userContent?.trim()) return;
+
       const saveMessages = async () => {
         let convId = activeConversationId;
 
@@ -72,33 +82,24 @@ export function useChatPersistence(
           }
         }
 
-        // Save user message — abort the whole persistence if this fails
-        if (userContent) {
-          try {
-            await fetchJSON(`/api/conversations/${convId}/messages`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ role: "user", content: userContent }),
-            });
-          } catch (err) {
-            log.error("[chat] Failed to save user message", err);
-            return;
-          }
-        }
-
-        // Save assistant message
         try {
-          await fetchJSON(`/api/conversations/${convId}/messages`, {
+          await fetchJSONWithRetry(`/api/conversations/${convId}/turns`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ role: "assistant", content: assistantContent }),
+            body: JSON.stringify({
+              turnId: userMsg.id,
+              userMessage: userContent,
+              assistantMessage: assistantContent,
+              assistantModel: selectedModel,
+            }),
           });
         } catch (err) {
-          log.error("[chat] Failed to save assistant message", err);
+          log.error("[chat] Failed to save completed turn", err);
+          return;
         }
 
         // Auto-generate title after first exchange (exactly 2 messages)
-        if (messages.length === 2 && userContent) {
+        if (messages.length === 2) {
           fetchJSON(`/api/conversations/${convId}/title`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

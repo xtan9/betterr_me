@@ -4,23 +4,25 @@ import type { UIMessage } from "ai";
 
 // --- Mocks via vi.hoisted ---
 
-const { mockSendMessage, mockStop, mockUseChat, mockSetMessages, mockMutateFn, mockSwrData } =
+const { mockSendMessage, mockRegenerate, mockStop, mockUseChat, mockSetMessages, mockMutateFn, mockSwrData } =
   vi.hoisted(() => {
     const mockSendMessage = vi.fn();
+    const mockRegenerate = vi.fn();
     const mockStop = vi.fn();
     const mockSetMessages = vi.fn();
     const mockMutateFn = vi.fn();
     const mockSwrData = { current: { conversations: [] as Record<string, unknown>[] } };
-    const mockUseChat = vi.fn(() => ({
+    const mockUseChat = vi.fn((): any => ({
       messages: [] as UIMessage[],
       sendMessage: mockSendMessage,
+      regenerate: mockRegenerate,
       stop: mockStop,
       status: "ready" as const,
       error: undefined as Error | undefined,
       setMessages: mockSetMessages,
       id: "test-chat",
     }));
-    return { mockSendMessage, mockStop, mockUseChat, mockSetMessages, mockMutateFn, mockSwrData };
+    return { mockSendMessage, mockRegenerate, mockStop, mockUseChat, mockSetMessages, mockMutateFn, mockSwrData };
   });
 
 vi.mock("@ai-sdk/react", () => ({ useChat: mockUseChat }));
@@ -308,13 +310,14 @@ describe("ChatContent", () => {
     expect(screen.queryByText("error.retry")).not.toBeInTheDocument();
   });
 
-  it("clicking retry removes failed assistant message and resends", () => {
+  it("clicking retry regenerates the same turn without adding another user message", () => {
     mockUseChat.mockReturnValue({
       messages: [
         makeMessage("1", "user", "hi"),
         makeMessage("2", "assistant", "partial..."),
       ],
       sendMessage: mockSendMessage,
+      regenerate: mockRegenerate,
       stop: mockStop,
       status: "ready" as const,
       error: new Error("LLM proxy unreachable"),
@@ -323,8 +326,8 @@ describe("ChatContent", () => {
     });
     render(<ChatContent />);
     fireEvent.click(screen.getByText("error.retry"));
-    expect(mockSetMessages).toHaveBeenCalled();
-    expect(mockSendMessage).toHaveBeenCalledWith({ text: "hi" });
+    expect(mockRegenerate).toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
   it("does not show retry button when no user message exists", () => {
@@ -401,12 +404,12 @@ describe("ChatContent", () => {
     });
 
     await waitFor(() => {
-      // Should also save messages
-      const messageCalls = mockFetch.mock.calls.filter(
+      // Should also save the completed turn
+      const turnCalls = mockFetch.mock.calls.filter(
         (call: unknown[]) =>
-          typeof call[0] === "string" && call[0].includes("/messages")
+          typeof call[0] === "string" && call[0].includes("/turns")
       );
-      expect(messageCalls.length).toBeGreaterThanOrEqual(1);
+      expect(turnCalls).toHaveLength(1);
     });
   });
 
@@ -437,7 +440,7 @@ describe("ChatContent", () => {
     });
   });
 
-  it("saves assistant message when status transitions from streaming to ready", async () => {
+  it("saves a completed turn in one request when streaming becomes ready", async () => {
     const msgs = [
       makeMessage("1", "user", "hi"),
       makeMessage("2", "assistant", "hello there"),
@@ -476,14 +479,84 @@ describe("ChatContent", () => {
     rerender(<ChatContent conversationId="conv-save" />);
 
     await waitFor(() => {
-      const saveCall = mockFetch.mock.calls.find(
-        (call: unknown[]) =>
-          typeof call[0] === "string" &&
-          call[0].includes("/messages") &&
-          typeof call[1] === "object" &&
-          (call[1] as RequestInit).method === "POST"
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/conversations/conv-save/turns",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            turnId: "1",
+            userMessage: "hi",
+            assistantMessage: "hello there",
+            assistantModel: "gpt-5.4-mini",
+          }),
+        }),
       );
-      expect(saveCall).toBeTruthy();
+    });
+  });
+
+  it("retries turn persistence with the same turn id after a transient failure", async () => {
+    const msgs = [
+      makeMessage("stable-turn-id", "user", "hi"),
+      makeMessage("2", "assistant", "hello there"),
+    ];
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "streaming" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    let turnAttempts = 0;
+    const mockFetch = vi.fn((url: string, _init?: RequestInit) => {
+      if (url.endsWith("/turns")) {
+        turnAttempts += 1;
+        return Promise.resolve({
+          json: () => Promise.resolve(
+            turnAttempts === 1
+              ? { outcome: "failed", error: "temporary failure" }
+              : { outcome: "saved", messages: [] },
+          ),
+          ok: turnAttempts > 1,
+          status: turnAttempts === 1 ? 500 : 201,
+        });
+      }
+      return Promise.resolve({
+        json: () => Promise.resolve({ messages: [] }),
+        ok: true,
+        status: 200,
+      });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { rerender } = render(
+      <ChatContent conversationId="conv-retry-save" />,
+    );
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+    rerender(<ChatContent conversationId="conv-retry-save" />);
+
+    await waitFor(() => {
+      const turnCalls = mockFetch.mock.calls.filter(
+        ([url]) => typeof url === "string" && url.endsWith("/turns"),
+      );
+      expect(turnCalls).toHaveLength(2);
+      const bodies = turnCalls.map(([, init]) =>
+        JSON.parse((init as RequestInit).body as string),
+      );
+      expect(bodies.map((body) => body.turnId)).toEqual([
+        "stable-turn-id",
+        "stable-turn-id",
+      ]);
     });
   });
 
@@ -614,7 +687,7 @@ describe("ChatContent", () => {
     });
   });
 
-  it("saves assistant message with concatenated text from multiple parts", async () => {
+  it("saves concatenated assistant text from multiple parts", async () => {
     const msgs = [
       makeMessage("1", "user", "hi"),
       {
@@ -658,18 +731,17 @@ describe("ChatContent", () => {
     rerender(<ChatContent conversationId="conv-multi" />);
 
     await waitFor(() => {
-      // Find the assistant message save call specifically (role: "assistant")
       const saveCall = mockFetch.mock.calls.find(
         (call: unknown[]) => {
           if (
             typeof call[0] !== "string" ||
-            !call[0].includes("/messages") ||
+            !call[0].includes("/turns") ||
             typeof call[1] !== "object" ||
             (call[1] as RequestInit).method !== "POST"
           ) return false;
           try {
             const body = JSON.parse((call[1] as RequestInit).body as string);
-            return body.role === "assistant";
+            return body.assistantMessage === "Hello there!";
           } catch {
             return false;
           }
@@ -677,7 +749,7 @@ describe("ChatContent", () => {
       );
       expect(saveCall).toBeTruthy();
       const body = JSON.parse((saveCall![1] as RequestInit).body as string);
-      expect(body.content).toBe("Hello there!");
+      expect(body.assistantMessage).toBe("Hello there!");
     });
   });
 

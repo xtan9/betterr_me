@@ -72,7 +72,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     [selectedModel, localDate, userTimezone]
   );
 
-  const { messages, sendMessage, setMessages, stop, status, error } = useChat({
+  const { messages, sendMessage, regenerate, setMessages, stop, status, error } = useChat({
     id: chatId,
     transport,
   });
@@ -169,15 +169,8 @@ export function ChatContent({ conversationId }: ChatContentProps) {
 
   const handleRetry = useCallback(() => {
     if (!lastUserMessage) return;
-    setMessages((prev) => {
-      const lastIdx = prev.length - 1;
-      if (lastIdx >= 0 && prev[lastIdx].role === "assistant") {
-        return prev.slice(0, lastIdx);
-      }
-      return prev;
-    });
-    sendMessage({ text: lastUserMessage });
-  }, [lastUserMessage, setMessages, sendMessage]);
+    regenerate();
+  }, [lastUserMessage, regenerate]);
 
   const errorMessage = useMemo(() => {
     if (!error) return "";
