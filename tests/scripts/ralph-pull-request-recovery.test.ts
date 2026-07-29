@@ -142,10 +142,11 @@ describe("Ralph pull-request recovery planning", () => {
           stage: "checks-passed",
           isDraft: false,
           risk: "low",
+          riskReasons: [],
           checks: passing,
         }),
-      ).action,
-    ).toBe("merge-gates");
+      ),
+    ).toMatchObject({ action: "merge-gates", risk: "low", riskReasons: [] });
     expect(
       planPullRequestRecovery(
         snapshot({
@@ -244,6 +245,70 @@ describe("Ralph pull-request recovery planning", () => {
         }),
       ).action,
     ).toBe("human-gate");
+  });
+
+  it("reverifies a green draft only when its original blocker is bounded and repairable", () => {
+    const passingChecks = [
+      {
+        name: "lint-and-test",
+        bucket: "pass",
+        state: "SUCCESS",
+        provider: "github-actions",
+        runId: "106",
+      },
+    ];
+
+    for (const originalFailureKind of [
+      "worker-blocked",
+      "ticket-infrastructure",
+      "review-ticket-infrastructure",
+    ]) {
+      expect(
+        planPullRequestRecovery(
+          snapshot({ originalFailureKind, checks: passingChecks }),
+        ),
+      ).toMatchObject({
+        action: "reverify-draft",
+        consumesCodingAttempt: false,
+      });
+    }
+
+    for (const originalFailureKind of [
+      "safety",
+      "ambiguous",
+      "review-nonrepairable",
+      "review-security-nonrepairable",
+      "infrastructure",
+    ]) {
+      expect(
+        planPullRequestRecovery(
+          snapshot({ originalFailureKind, checks: passingChecks }),
+        ).action,
+      ).toBe("human-gate");
+    }
+
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          originalFailureKind: "worker-blocked",
+          repairAttempts: 5,
+          checks: passingChecks,
+        }),
+      ).action,
+    ).toBe("human-gate");
+
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          originalFailureKind: "worker-blocked",
+          mergeStateStatus: "DIRTY",
+          checks: passingChecks,
+        }),
+      ),
+    ).toMatchObject({
+      action: "human-gate",
+      reason: "pull request has merge conflicts",
+    });
   });
 
   it("bounds controller and transient check retries independently of coding repairs", () => {

@@ -1,6 +1,12 @@
 import crypto from "node:crypto";
 
 const CONTROLLER_OWNED_CHECKS = new Set(["release-scope-evidence"]);
+const RECOVERY_POLICY_VERSION = 2;
+const REVERIFYABLE_DRAFT_FAILURES = new Set([
+  "worker-blocked",
+  "ticket-infrastructure",
+  "review-ticket-infrastructure",
+]);
 
 function normalizedChecks(checks) {
   return [...(Array.isArray(checks) ? checks : [])]
@@ -47,6 +53,7 @@ function transientCheck(check) {
 
 export function pullRequestRecoveryFingerprint(snapshot) {
   const normalized = {
+    recoveryPolicyVersion: RECOVERY_POLICY_VERSION,
     issueNumber: snapshot.issueNumber,
     prNumber: snapshot.prNumber,
     headSha: snapshot.headSha,
@@ -57,6 +64,7 @@ export function pullRequestRecoveryFingerprint(snapshot) {
     reviewDecision: snapshot.reviewDecision ?? "",
     mode: snapshot.mode,
     risk: snapshot.risk,
+    riskReasons: snapshot.riskReasons ?? [],
     stage: snapshot.stage,
     originalFailureKind: snapshot.originalFailureKind ?? null,
     checksAvailable: snapshot.checksAvailable !== false,
@@ -93,6 +101,8 @@ function recoveryPlan(snapshot, action, details = {}) {
     fingerprint: pullRequestRecoveryFingerprint(snapshot),
     retryKey: pullRequestCheckRetryKey(snapshot),
     action,
+    risk: snapshot.risk,
+    riskReasons: snapshot.riskReasons ?? [],
     consumesCodingAttempt: action === "code-repair",
     ...details,
   };
@@ -119,6 +129,11 @@ export function planPullRequestRecovery(snapshot) {
   ) {
     return recoveryPlan(snapshot, "refresh", {
       reason: "pull request head changed since durable state was recorded",
+    });
+  }
+  if (snapshot.mergeStateStatus === "DIRTY") {
+    return recoveryPlan(snapshot, "human-gate", {
+      reason: "pull request has merge conflicts",
     });
   }
   if (snapshot.checksAvailable === false) {
@@ -200,13 +215,18 @@ export function planPullRequestRecovery(snapshot) {
   }
 
   if (snapshot.isDraft) {
+    if (
+      REVERIFYABLE_DRAFT_FAILURES.has(snapshot.originalFailureKind) &&
+      snapshot.repairAttempts < snapshot.maximumRepairAttempts
+    ) {
+      return recoveryPlan(snapshot, "reverify-draft");
+    }
     return recoveryPlan(snapshot, "human-gate", {
-      reason: "draft pull request still has an unresolved original blocker",
-    });
-  }
-  if (snapshot.mergeStateStatus === "DIRTY") {
-    return recoveryPlan(snapshot, "human-gate", {
-      reason: "pull request has merge conflicts",
+      reason:
+        REVERIFYABLE_DRAFT_FAILURES.has(snapshot.originalFailureKind) &&
+        snapshot.repairAttempts >= snapshot.maximumRepairAttempts
+          ? "draft re-verification exhausted its bounded coding repair budget"
+          : "draft pull request still has an unresolved original blocker",
     });
   }
   if (snapshot.mode === "AutoMerge" && snapshot.risk === "low") {
