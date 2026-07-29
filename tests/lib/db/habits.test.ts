@@ -1313,11 +1313,15 @@ describe("HabitsDB", () => {
         { data: null, error: null }, // 90-day window: success but null data
       ]);
 
-      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
+      const acquisition = await db.getHabitsWithTodayStatusAcquisition(
+        USER_ID,
+        "2026-04-15",
+      );
 
-      expect(result).toHaveLength(1);
-      expect(result[0].monthly_completion_rate).toBe(0);
-      expect(result[0].graduation_eligible).toBe(false);
+      expect(acquisition.status).toBe("complete");
+      expect(acquisition.habits).toHaveLength(1);
+      expect(acquisition.habits[0].monthly_completion_rate).toBe(0);
+      expect(acquisition.habits[0].graduation_eligible).toBe(false);
       // No warn fired: data was null but no error.
       expect(log.warn).not.toHaveBeenCalled();
     });
@@ -1335,13 +1339,17 @@ describe("HabitsDB", () => {
         { data: null, error: new Error("window query failed") }, // 90-day (caught)
       ]);
 
-      const result = await db.getHabitsWithTodayStatus(USER_ID, "2026-04-15");
+      const acquisition = await db.getHabitsWithTodayStatusAcquisition(
+        USER_ID,
+        "2026-04-15",
+      );
 
       // Habits still render; rate falls back to 0 because windowLogs = [].
-      expect(result).toHaveLength(1);
-      expect(result[0].monthly_completion_rate).toBe(0);
+      expect(acquisition.status).toBe("degraded");
+      expect(acquisition.habits).toHaveLength(1);
+      expect(acquisition.habits[0].monthly_completion_rate).toBe(0);
       // graduation_eligible is false because logs = [].
-      expect(result[0].graduation_eligible).toBe(false);
+      expect(acquisition.habits[0].graduation_eligible).toBe(false);
 
       expect(log.warn).toHaveBeenCalledWith(
         "[habits] 90-day logs query failed; monthly rate + nudges will be empty",

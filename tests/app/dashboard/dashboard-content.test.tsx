@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { getLocalDateString } from "@/lib/utils";
 import { NextIntlClientProvider } from "next-intl";
@@ -210,11 +210,25 @@ const mockDashboardData = {
 };
 
 describe("DashboardContent", () => {
+  const originalTimeZone = process.env.TZ;
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("passes local date in SWR key for timezone-correct queries", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    if (originalTimeZone === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = originalTimeZone;
+    }
+  });
+
+  it("loads the browser-local date across a UTC date boundary", () => {
+    process.env.TZ = "America/Los_Angeles";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-29T03:30:00.000Z"));
     mockUseSWR.mockReturnValue({
       data: undefined,
       error: undefined,
@@ -224,9 +238,9 @@ describe("DashboardContent", () => {
 
     renderWithProviders(<DashboardContent userName="Test User" />);
 
-    // SWR should be called with a URL containing a date param
     const swrKey = mockUseSWR.mock.calls[0][0];
-    expect(swrKey).toMatch(/^\/api\/dashboard\?date=\d{4}-\d{2}-\d{2}$/);
+    expect(getLocalDateString()).toBe("2026-07-28");
+    expect(swrKey).toBe("/api/dashboard?date=2026-07-28");
   });
 
   it("shows loading skeleton while data is loading", () => {
