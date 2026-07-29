@@ -182,6 +182,13 @@ export function blockedRepairPreservationRecoveryAction(issueState) {
   return "inspect-receipt";
 }
 
+export function blockedRepairPostPushDisposition(snapshot, expectedHead) {
+  if (snapshot?.state !== "OPEN" || snapshot?.isDraft !== true) {
+    return "unsafe";
+  }
+  return snapshot.headRefOid === expectedHead ? "verified" : "wait-head";
+}
+
 function recoveryPlan(snapshot, action, details = {}) {
   return {
     issueNumber: snapshot.issueNumber,
