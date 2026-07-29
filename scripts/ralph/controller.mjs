@@ -82,6 +82,7 @@ import {
   reviewRecoveryPlan,
 } from "./review-protocol.mjs";
 import {
+  blockedRepairPostPushDisposition,
   blockedRepairPreservationRecoveryAction,
   blockedRepairRecoveryReceipt,
   blockedRepairRecoveryReceiptMatches,
@@ -3837,7 +3838,7 @@ async function preserveBlockedPullRequestRepair(
     issueState = state.issues[String(number)];
   }
 
-  const blockedPullRequest = await ghJson(
+  let blockedPullRequest = await ghJson(
     [
       "pr",
       "view",
@@ -3849,11 +3850,34 @@ async function preserveBlockedPullRequestRepair(
     ],
     controllerOptions,
   );
-  if (
-    blockedPullRequest.state !== "OPEN" ||
-    blockedPullRequest.isDraft !== true ||
-    blockedPullRequest.headRefOid !== issueState.commit
-  ) {
+  let blockedDisposition = blockedRepairPostPushDisposition(
+    blockedPullRequest,
+    issueState.commit,
+  );
+  if (blockedDisposition === "wait-head") {
+    await waitForPullRequestHead(
+      issueState.prNumber,
+      issueState.commit,
+      controllerOptions,
+    );
+    blockedPullRequest = await ghJson(
+      [
+        "pr",
+        "view",
+        String(issueState.prNumber),
+        "--repo",
+        repository,
+        "--json",
+        "state,isDraft,headRefOid",
+      ],
+      controllerOptions,
+    );
+    blockedDisposition = blockedRepairPostPushDisposition(
+      blockedPullRequest,
+      issueState.commit,
+    );
+  }
+  if (blockedDisposition !== "verified") {
     throw Object.assign(
       new Error("blocked pull-request repair was not preserved as an open draft"),
       { failureKind: "safety" },

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  blockedRepairPostPushDisposition,
   blockedRepairPreservationRecoveryAction,
   blockedRepairRecoveryReceipt,
   blockedRepairRecoveryReceiptMatches,
@@ -33,6 +34,21 @@ const snapshot = (overrides = {}) => ({
 });
 
 describe("Ralph pull-request recovery planning", () => {
+  it("waits for GitHub to observe an exact blocked-repair push", () => {
+    expect(
+      blockedRepairPostPushDisposition(
+        { state: "OPEN", isDraft: true, headRefOid: "previous-head" },
+        "preserved-head",
+      ),
+    ).toBe("wait-head");
+    expect(
+      blockedRepairPostPushDisposition(
+        { state: "OPEN", isDraft: true, headRefOid: "preserved-head" },
+        "preserved-head",
+      ),
+    ).toBe("verified");
+  });
+
   it("preserves a dirty blocked repair discovered while re-verifying a draft", () => {
     expect(
       pullRequestRecoveryErrorDisposition({
