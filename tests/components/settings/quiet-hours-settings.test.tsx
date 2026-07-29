@@ -42,6 +42,7 @@ describe("QuietHoursSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSWRData = null;
+    mockMutate.mockResolvedValue(undefined);
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
   });
 
@@ -84,27 +85,51 @@ describe("QuietHoursSettings", () => {
     expect(screen.getByText("quietHours.emailNote")).toBeInTheDocument();
   });
 
-  it("clicking save calls PATCH /api/profile with correct preferences", async () => {
+  it("sends only the quiet-hours intent and caches the accepted profile", async () => {
+    const acceptedProfile = {
+      id: "user-123",
+      preferences: {
+        theme: "dark",
+        weight_unit: "kg",
+        quiet_hours_start: "22:00",
+        quiet_hours_end: "07:00",
+      },
+    };
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ profile: acceptedProfile }),
+    });
     render(<QuietHoursSettings />);
 
-    // Enable quiet hours
     fireEvent.click(screen.getByRole("switch"));
-
-    // Click save
     fireEvent.click(screen.getByText("quietHours.save"));
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/profile", {
+      expect(mockFetch).toHaveBeenCalledWith("/api/profile/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: expect.stringContaining("quiet_hours_start"),
       });
     });
 
-    // Verify the body has the right values
     const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(callBody.preferences.quiet_hours_start).toBe("22:00");
-    expect(callBody.preferences.quiet_hours_end).toBe("07:00");
+    expect(callBody).toEqual({
+      quiet_hours_start: "22:00",
+      quiet_hours_end: "07:00",
+    });
+    const [cacheUpdater, options] = mockMutate.mock.calls[0];
+    expect(options).toEqual({ revalidate: false });
+    expect(cacheUpdater()).toEqual({
+      profile: {
+        id: "user-123",
+        preferences: {
+          theme: "dark",
+          weight_unit: "kg",
+          quiet_hours_start: "22:00",
+          quiet_hours_end: "07:00",
+        },
+      },
+    });
   });
 
   it("loads saved quiet hours from profile", () => {
@@ -139,7 +164,7 @@ describe("QuietHoursSettings", () => {
     });
 
     const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(callBody.preferences.quiet_hours_start).toBeNull();
-    expect(callBody.preferences.quiet_hours_end).toBeNull();
+    expect(callBody.quiet_hours_start).toBeNull();
+    expect(callBody.quiet_hours_end).toBeNull();
   });
 });

@@ -17,10 +17,18 @@ import {
 } from "@/components/ui/card";
 import { Moon } from "lucide-react";
 import { toast } from "sonner";
+import type { Profile } from "@/lib/db/types";
+import {
+  profilePreferenceIntents,
+  type PreferenceIntent,
+} from "@/lib/profile-preference-cache";
 
 export function QuietHoursSettings() {
   const t = useTranslations("settings.notifications");
-  const { data: profileData, mutate } = useSWR("/api/profile", fetcher);
+  const { data: profileData, mutate } = useSWR<{ profile: Profile }>(
+    "/api/profile",
+    fetcher,
+  );
 
   const prefs = profileData?.profile?.preferences;
   const savedStart = prefs?.quiet_hours_start ?? null;
@@ -43,27 +51,38 @@ export function QuietHoursSettings() {
 
   const handleSave = async () => {
     setSaving(true);
+    let trackedIntent: PreferenceIntent | undefined;
     try {
-      const existingPrefs = prefs || {};
-      const response = await fetch("/api/profile", {
+      const intent = {
+        quiet_hours_start: enabled ? start : null,
+        quiet_hours_end: enabled ? end : null,
+      };
+      trackedIntent = profilePreferenceIntents.begin(intent);
+      const response = await fetch("/api/profile/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          preferences: {
-            ...existingPrefs,
-            quiet_hours_start: enabled ? start : null,
-            quiet_hours_end: enabled ? end : null,
-          },
-        }),
+        body: JSON.stringify(intent),
       });
 
       if (!response.ok) {
         throw new Error("Failed to save quiet hours");
       }
 
-      mutate();
+      const acceptedOutcome = (await response.json()) as { profile: Profile };
+      const cacheOutcome = profilePreferenceIntents.accept(
+        trackedIntent,
+        acceptedOutcome,
+      );
+      await mutate(
+        () => cacheOutcome,
+        { revalidate: false },
+      );
+      void mutate().catch((error) => {
+        console.error("Failed to revalidate accepted quiet hours:", error);
+      });
       toast.success(t("quietHours.saved"));
     } catch (error) {
+      if (trackedIntent) profilePreferenceIntents.reject(trackedIntent);
       console.error("Failed to save quiet hours:", error);
       toast.error(t("quietHours.saveError"));
     } finally {

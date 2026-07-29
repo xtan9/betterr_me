@@ -16,6 +16,10 @@ import { ApiKeysSection } from "./api-keys-section";
 import { CheckCircle, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { fetcher } from "@/lib/fetcher";
+import {
+  profilePreferenceIntents,
+  type PreferenceIntent,
+} from "@/lib/profile-preference-cache";
 
 interface Profile {
   id: string;
@@ -57,22 +61,46 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
   const handleSave = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
+    let trackedIntent: PreferenceIntent | undefined;
 
     try {
+      const intent: {
+        week_start_day?: number;
+        weight_unit?: "kg" | "lbs";
+      } = {};
+      if (data?.profile.preferences.week_start_day !== weekStartDay) {
+        intent.week_start_day = weekStartDay;
+      }
+      if ((data?.profile.preferences.weight_unit ?? "kg") !== weightUnit) {
+        intent.weight_unit = weightUnit;
+      }
+      trackedIntent = profilePreferenceIntents.begin(intent);
       const response = await fetch("/api/profile/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ week_start_day: weekStartDay, weight_unit: weightUnit }),
+        body: JSON.stringify(intent),
       });
 
       if (!response.ok) {
         throw new Error("Failed to save");
       }
 
-      await mutate();
+      const acceptedOutcome = (await response.json()) as { profile: Profile };
+      const cacheOutcome = profilePreferenceIntents.accept(
+        trackedIntent,
+        acceptedOutcome,
+      );
+      await mutate(
+        () => cacheOutcome,
+        { revalidate: false },
+      );
+      void mutate().catch((error) => {
+        console.error("Failed to revalidate accepted settings:", error);
+      });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
+      if (trackedIntent) profilePreferenceIntents.reject(trackedIntent);
       console.error("Failed to save settings:", err);
       toast.error(t("toast.saveError"));
     } finally {
