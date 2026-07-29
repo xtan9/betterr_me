@@ -100,11 +100,22 @@ beside the existing issue logs for debugging. Live output is observational
 only: the structured result file and controller verification gates remain the
 authority for commits, PRs, checks, and merges.
 
-Worker model policy is controller-owned and explicit: implementation and repair
-sessions use `gpt-5.6-sol` with medium reasoning effort, while independent
-reviews use `gpt-5.6-sol` with high reasoning effort. Because workers run with
+Worker model policy is controller-owned and explicit. Implementation and repair
+sessions use `gpt-5.6-sol` with high reasoning effort. Initial and final
+exhaustive reviews use `gpt-5.6-sol` with xhigh reasoning effort, while bounded
+repair-delta reviews use high reasoning effort. Because workers run with
 `--ignore-user-config`, personal Codex defaults cannot silently change this
 policy.
+
+The exhaustive review uses the immutable `code-review` skill as its review
+discipline. The controller launches four separate read-only Codex sessions in
+parallel for Standards, Spec, Security/Data Integrity, and Tests/Regression,
+then validates and deterministically aggregates their independent reports. A
+structured result must prove that every axis, ticket requirement, and changed
+file was reviewed, and must include a traceability row for each changed
+observable contract. The controller rejects incomplete or internally
+inconsistent specialist or aggregate reports. Repair-delta review similarly
+launches separate Repair Ledger and Regression specialists.
 
 There is exactly one controller process and one implementation worker at a
 time. A process lock prevents a second local controller. A time-limited GitHub
@@ -156,9 +167,15 @@ Implementation, verification, review, and required-check waits are bounded.
 Transient network and rate-limit failures use a bounded retry count and
 backoff. Concrete test, TypeScript, independent-review, required-PR-check, and
 full-suite timeout findings may use up to `MaximumRepairAttempts` genuinely
-fresh, isolated repair sessions before the issue is parked. Every repair is
-re-run through the complete local verification, independent review, and PR-check
-gates. The default full-suite timeout is 3600 seconds. Ambiguity, unsafe scope,
+fresh, isolated repair sessions before the issue is parked. An exhaustive
+review persists every finding in a durable ledger so one repair session can
+address the complete batch. A durable pending/completed handshake prevents a
+crash-partial repair from entering verification; recovery starts another fresh,
+bounded repair until a worker completes. Ralph then runs controller-owned related tests,
+TypeScript comparison, and a high-effort delta review against that ledger. A
+successful repair still has to pass the full Vitest suite, TypeScript
+comparison, and a final xhigh exhaustive review before publication. The default
+full-suite timeout is 3600 seconds. Ambiguity, unsafe scope,
 conflicts, ownership failures, and policy denials are never repaired or retried
 automatically. A failed or human-gated issue does not unblock its dependents,
 but it also does not prevent the controller from selecting an unrelated ready

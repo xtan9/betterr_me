@@ -268,14 +268,24 @@ describe("Ralph sanitized worker Git view", () => {
     expect(unprivilegedWslIdentityIsSafe("Uid:\t65534\n")).toBe(false);
   });
 
-  it("pins Sol with medium implementation effort and high review effort", () => {
+  it("pins Sol with high coding, xhigh exhaustive review, and high delta review effort", () => {
     expect(workerCodexModelArguments({ readOnly: false })).toEqual([
       "--model",
       "gpt-5.6-sol",
       "-c",
-      'model_reasoning_effort="medium"',
+      'model_reasoning_effort="high"',
     ]);
-    expect(workerCodexModelArguments({ readOnly: true })).toEqual([
+    expect(
+      workerCodexModelArguments({ readOnly: true, reviewKind: "exhaustive" }),
+    ).toEqual([
+      "--model",
+      "gpt-5.6-sol",
+      "-c",
+      'model_reasoning_effort="xhigh"',
+    ]);
+    expect(
+      workerCodexModelArguments({ readOnly: true, reviewKind: "delta" }),
+    ).toEqual([
       "--model",
       "gpt-5.6-sol",
       "-c",
