@@ -64,6 +64,7 @@ describe("Ralph sanitized worker Git view", () => {
       environment: ["CODEX_HOME=/var/lib/betterr-me-ralph/codex-runtime"],
       sourceAuthPath: "/mnt/c/Users/test/.codex/auth.json",
       authPath: "/var/lib/betterr-me-ralph/codex-runtime/auth.json",
+      configPath: "/var/lib/betterr-me-ralph/codex-runtime/config.toml",
       directoryProvisionCommand: [
         "install",
         "-d",
@@ -85,6 +86,11 @@ describe("Ralph sanitized worker Git view", () => {
         "65534",
         "/mnt/c/Users/test/.codex/auth.json",
         "/var/lib/betterr-me-ralph/codex-runtime/auth.json",
+      ],
+      configRemovalCommand: [
+        "/bin/rm",
+        "-f",
+        "/var/lib/betterr-me-ralph/codex-runtime/config.toml",
       ],
     });
 
