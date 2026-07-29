@@ -33,6 +33,7 @@ import {
   shouldRepairFailure,
   shouldContinueQueue,
   shouldParkIssueFailure,
+  shouldPreserveBlockedPullRequestRepair,
   shouldRetry,
   testVerificationFailureKind,
   transitionIssue,
@@ -1582,7 +1583,8 @@ Implementation contract:
 - Invoke $code-review for a self-review and address blocking findings.
 - Leave the intended changes uncommitted for the controller to verify and commit.
 - Report blockerKind=requirements and ambiguous=true when requirements are ambiguous.
-- Report blockerKind=infrastructure and ambiguous=true when required local/controller infrastructure is missing.
+- Report blockerKind=ticket-infrastructure and ambiguous=true when only ticket-specific verification infrastructure is unavailable after the implementation and ordinary local checks are complete.
+- Report blockerKind=infrastructure and ambiguous=true only when controller-wide or ordinary worker runtime infrastructure is missing.
 - Report blockerKind=protected-scope and ambiguous=true only when completing the ticket requires editing a path forbidden by the security boundary.
 - Report blockerKind=safety and ambiguous=true when safety is uncertain.
 - Report blockerKind=none and ambiguous=false only for a completed implementation.
@@ -1636,7 +1638,8 @@ Repair contract:
 - Invoke $code-review for a self-review and address blocking findings.
 - When controllerManagedExternalGate=true, the controller deliberately owns and will rerun that exact external gate. Do not attempt to access it from the sandbox, and do not report missing infrastructure merely because that gate or Git metadata is unavailable. Run every applicable test available inside the worktree and review the repaired files directly.
 - Report blockerKind=requirements and ambiguous=true when requirements are ambiguous.
-- Report blockerKind=infrastructure and ambiguous=true when required local/controller infrastructure is missing.
+- Report blockerKind=ticket-infrastructure and ambiguous=true when only ticket-specific verification infrastructure is unavailable after the repair and ordinary local checks are complete.
+- Report blockerKind=infrastructure and ambiguous=true only when controller-wide or ordinary worker runtime infrastructure is missing.
 - Report blockerKind=protected-scope and ambiguous=true only when completing the repair requires editing a path forbidden by the security boundary.
 - Report blockerKind=safety and ambiguous=true when the finding cannot be safely repaired or safety is uncertain.
 - Report blockerKind=none and ambiguous=false only for a completed repair.
@@ -2054,7 +2057,7 @@ The privileged controller produced the exact staged diff below. It is authoritat
 Check correctness, acceptance criteria, regressions, missing tests, repository standards, and unsafe scope. Any ambiguity is blocking.
 ${independentReviewClassificationContract()}
 Return status=pass, blockerKind=none, and an empty blockingFindings array only when no blocking finding remains.
-For findings, set blockerKind=code only when every finding is a concrete code or test defect inside the approved scope; set requirements for ambiguity or requirement conflict; set infrastructure for missing infrastructure; set security for a concrete product-code vulnerability whose repair stays inside the approved ticket scope; and set safety for secrets exposure, forbidden or unsafe scope, controller-integrity concerns, or policy concerns that must stop the whole run. Use the most restrictive applicable kind (safety, then infrastructure, then requirements, then security, then code).
+For findings, set blockerKind=code only when every finding is a concrete code or test defect inside the approved scope; set requirements for ambiguity or requirement conflict; set ticket-infrastructure when only ticket-specific verification infrastructure is unavailable but controller and ordinary worker infrastructure are healthy; set infrastructure for controller-wide or ordinary worker-runtime infrastructure failures; set security for a concrete product-code vulnerability whose repair stays inside the approved ticket scope; and set safety for secrets exposure, forbidden or unsafe scope, controller-integrity concerns, or policy concerns that must stop the whole run. Use the most restrictive applicable kind (safety, then infrastructure, then ticket-infrastructure, then requirements, then security, then code).
 Set repairable=true only when every finding is concrete, its exact repair is clear, and it can be safely repaired inside the approved ticket scope. Product security defects may be repairable; unresolved non-repairable product security findings are preserved in a blocked draft PR. Always set repairable=false for safety findings, pass results, missing infrastructure, ambiguity, requirement conflicts, or any finding whose safe repair requires judgment outside the ticket.
 Ticket block:
 ${ticketBlock.framed}
@@ -2278,6 +2281,238 @@ async function amendAndPushPullRequestRepair(
     commit,
     pendingPrRepair: null,
     lastPrRepairPushedAt: new Date().toISOString(),
+  });
+}
+
+async function preserveBlockedPullRequestRepair(
+  state,
+  issue,
+  actor,
+  controllerOptions,
+  failure,
+) {
+  const number = issue.issueNumber;
+  const stopReason = redactFailureSummary(
+    failure.stopReason ?? failure.message ?? "ticket-specific verification is unavailable",
+  );
+  state = moveIssue(state, number, "pr-repairing", {
+    blockedPrFailureKind: failure.failureKind,
+    blockedPrStopReason: stopReason,
+  });
+  state = await assertClaimOwnership(state, issue, actor, controllerOptions);
+  let issueState = state.issues[String(number)];
+  if (issueState.blockedPrDraftVerifiedAt) {
+    if (issueState.worktreePath) {
+      state = await releasePublishedCheckout(state, issue);
+    }
+    return moveIssue(state, number, "manual-review", {
+      failureKind: issueState.blockedPrFailureKind,
+      failureDraft: true,
+      stopReason: issueState.blockedPrStopReason,
+    });
+  }
+  const worktreePath = issueState.worktreePath;
+  const expectedRemoteHeads = new Set([
+    issueState.commit,
+    issueState.pendingPrRepair?.commit,
+  ].filter(Boolean));
+  let pullRequest = await ghJson(
+    [
+      "pr",
+      "view",
+      String(issueState.prNumber),
+      "--repo",
+      repository,
+      "--json",
+      "state,isDraft,headRefOid,url",
+    ],
+    controllerOptions,
+  );
+  if (
+    pullRequest.state !== "OPEN" ||
+    !expectedRemoteHeads.has(pullRequest.headRefOid)
+  ) {
+    throw Object.assign(
+      new Error("blocked pull-request repair does not match the open remote PR"),
+      { failureKind: "safety" },
+    );
+  }
+  if (!pullRequest.isDraft) {
+    await gh(
+      [
+        "pr",
+        "ready",
+        String(issueState.prNumber),
+        "--undo",
+        "--repo",
+        repository,
+      ],
+      controllerOptions,
+    );
+  }
+  pullRequest = await ghJson(
+    [
+      "pr",
+      "view",
+      String(issueState.prNumber),
+      "--repo",
+      repository,
+      "--json",
+      "state,isDraft,headRefOid",
+    ],
+    controllerOptions,
+  );
+  if (
+    pullRequest.state !== "OPEN" ||
+    pullRequest.isDraft !== true ||
+    !expectedRemoteHeads.has(pullRequest.headRefOid)
+  ) {
+    throw Object.assign(
+      new Error("pull request was not safely drafted before repair preservation"),
+      { failureKind: "safety" },
+    );
+  }
+  if (!worktreePath || !fs.existsSync(worktreePath)) {
+    throw Object.assign(
+      new Error(`blocked pull-request repair worktree is missing for issue #${number}`),
+      { failureKind: "infrastructure" },
+    );
+  }
+  if (issueState.pendingPrRepair) {
+    state = await reconcilePendingPullRequestRepair(
+      state,
+      issue,
+      controllerOptions,
+    );
+    issueState = state.issues[String(number)];
+  }
+
+  await removeControllerDependencyLink(worktreePath);
+  const changes = (
+    await git(["-C", worktreePath, "status", "--porcelain"])
+  ).stdout.trim();
+  if (changes) {
+    await git(["-C", worktreePath, "add", "--all"]);
+    const changedFiles = (
+      await git([
+        "-C",
+        worktreePath,
+        "diff",
+        "--cached",
+        "--name-only",
+        "-z",
+      ])
+    ).stdout
+      .split("\0")
+      .filter(Boolean);
+    try {
+      await git(["-C", worktreePath, "diff", "--cached", "--check"]);
+      assertFailureSnapshotPathsSafe(changedFiles);
+      await assertStagedContentSafe(worktreePath, issueState.baseSha, changedFiles);
+    } catch (error) {
+      error.failureKind = "safety";
+      throw error;
+    }
+
+    const previousCommit = issueState.commit;
+    const head = (
+      await git(["-C", worktreePath, "rev-parse", "HEAD"])
+    ).stdout.trim();
+    if (head !== previousCommit) {
+      throw Object.assign(
+        new Error("blocked pull-request repair head changed outside the controller"),
+        { failureKind: "safety" },
+      );
+    }
+    const stagedTree = (
+      await git(["-C", worktreePath, "write-tree"])
+    ).stdout.trim();
+    const commitMessage = (
+      await git(["-C", worktreePath, "show", "-s", "--format=%B", previousCommit])
+    ).stdout;
+    const commit = (
+      await git(
+        ["-C", worktreePath, "commit-tree", stagedTree, "-p", issueState.baseSha],
+        { input: commitMessage, timeoutSeconds: 30 },
+      )
+    ).stdout.trim();
+    state = moveIssue(state, number, "pr-repairing", {
+      pendingPrRepair: { previousCommit, commit },
+    });
+    await git(["-C", worktreePath, "reset", "--hard", commit]);
+    try {
+      await runTransient(
+        "git.exe",
+        [
+          "-C",
+          worktreePath,
+          "push",
+          `--force-with-lease=refs/heads/${issueState.branch}:${previousCommit}`,
+          "origin",
+          `${commit}:refs/heads/${issueState.branch}`,
+        ],
+        controllerOptions,
+        { timeoutSeconds: 300 },
+      );
+    } catch (error) {
+      error.failureKind = "pending-pr-repair";
+      throw error;
+    }
+    state = moveIssue(state, number, "pr-repairing", {
+      commit,
+      pendingPrRepair: null,
+      blockedPrRepairPushedAt: new Date().toISOString(),
+    });
+    issueState = state.issues[String(number)];
+  }
+
+  const blockedPullRequest = await ghJson(
+    [
+      "pr",
+      "view",
+      String(issueState.prNumber),
+      "--repo",
+      repository,
+      "--json",
+      "state,isDraft,headRefOid",
+    ],
+    controllerOptions,
+  );
+  if (
+    blockedPullRequest.state !== "OPEN" ||
+    blockedPullRequest.isDraft !== true ||
+    blockedPullRequest.headRefOid !== issueState.commit
+  ) {
+    throw Object.assign(
+      new Error("blocked pull-request repair was not preserved as an open draft"),
+      { failureKind: "safety" },
+    );
+  }
+  if (!issueState.blockedPrCommentedAt) {
+    await gh(
+      [
+        "pr",
+        "comment",
+        String(issueState.prNumber),
+        "--repo",
+        repository,
+        "--body",
+        `Ralph blocked this draft because ${stopReason}. The safe recoverable repair is preserved in this PR; do not merge until the missing ticket-specific verification is run and all gates pass.`,
+      ],
+      controllerOptions,
+    );
+    state = moveIssue(state, number, "pr-repairing", {
+      blockedPrCommentedAt: new Date().toISOString(),
+    });
+  }
+  state = moveIssue(state, number, "pr-repairing", {
+    blockedPrDraftVerifiedAt: new Date().toISOString(),
+  });
+  state = await releasePublishedCheckout(state, issue);
+  return moveIssue(state, number, "manual-review", {
+    failureKind: failure.failureKind,
+    failureDraft: true,
+    stopReason,
   });
 }
 
@@ -3104,6 +3339,21 @@ async function completePullRequestLifecycle(
         controllerOptions.maximumRepairAttempts,
       );
     if (!repairAllowed) {
+      if (
+        shouldPreserveBlockedPullRequestRepair(
+          issueState.stage,
+          pendingPullRequestFailure.failureKind,
+        )
+      ) {
+        state = await preserveBlockedPullRequestRepair(
+          state,
+          issue,
+          actor,
+          controllerOptions,
+          pendingPullRequestFailure,
+        );
+        break;
+      }
       if (shouldParkIssueFailure(pendingPullRequestFailure.failureKind)) {
         state = moveIssue(state, number, "manual-review", {
           stopReason:
@@ -3175,6 +3425,24 @@ async function processOne(state, actor, controllerOptions) {
     state = moveIssue(state, number, "selected", { baseSha });
   }
   let issueState = state.issues[String(number)];
+  if (
+    shouldPreserveBlockedPullRequestRepair(
+      issueState.stage,
+      issueState.blockedPrFailureKind,
+    )
+  ) {
+    state = await preserveBlockedPullRequestRepair(
+      state,
+      issue,
+      actor,
+      controllerOptions,
+      {
+        failureKind: issueState.blockedPrFailureKind,
+        stopReason: issueState.blockedPrStopReason,
+      },
+    );
+    return { state, status: "awaiting-human", issue };
+  }
   if (issueState.pendingPrRepair) {
     state = await reconcilePendingPullRequestRepair(
       state,
@@ -3583,6 +3851,18 @@ async function processOne(state, actor, controllerOptions) {
       return { state, status: "interrupted", issue };
     }
     if (disposition === "manual-review") {
+      if (
+        shouldPreserveBlockedPullRequestRepair(current.stage, error.failureKind)
+      ) {
+        state = await preserveBlockedPullRequestRepair(
+          state,
+          issue,
+          actor,
+          controllerOptions,
+          error,
+        );
+        return { state, status: "awaiting-human", issue };
+      }
       state = await releasePublishedCheckout(state, issue);
       state = moveIssue(state, number, disposition, {
         stopReason: error.stopReason ?? error.message,

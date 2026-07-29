@@ -32,6 +32,7 @@ import {
   shouldRepairFailure,
   shouldContinueQueue,
   shouldParkIssueFailure,
+  shouldPreserveBlockedPullRequestRepair,
   shouldRetry,
   testVerificationFailureKind,
   transitionIssue,
@@ -416,6 +417,7 @@ describe("Ralph durable state and policy", () => {
     expect(shouldParkIssueFailure("review-safety")).toBe(true);
     expect(shouldParkIssueFailure("ambiguous")).toBe(true);
     expect(shouldParkIssueFailure("worker-blocked")).toBe(true);
+    expect(shouldParkIssueFailure("ticket-infrastructure")).toBe(true);
     expect(shouldParkIssueFailure("pr-checks")).toBe(true);
     expect(shouldParkIssueFailure("tests-timeout")).toBe(true);
     expect(shouldParkIssueFailure("merge-conflict")).toBe(true);
@@ -423,10 +425,16 @@ describe("Ralph durable state and policy", () => {
     expect(shouldParkIssueFailure("kill-switch")).toBe(false);
   });
 
-  it("parks worker safety refusals while stopping for missing infrastructure", () => {
+  it("parks ticket verification blockers while stopping for controller infrastructure", () => {
     expect(
       workerResultFailureKind({ blockerKind: "infrastructure", ambiguous: true }),
     ).toBe("infrastructure");
+    const unavailableTicketVerifier = workerResultFailureKind({
+      blockerKind: "ticket-infrastructure",
+      ambiguous: true,
+    });
+    expect(unavailableTicketVerifier).toBe("ticket-infrastructure");
+    expect(shouldParkIssueFailure(unavailableTicketVerifier)).toBe(true);
     expect(
       workerResultFailureKind({ blockerKind: "requirements", ambiguous: true }),
     ).toBe("ambiguous");
@@ -444,6 +452,24 @@ describe("Ralph durable state and policy", () => {
     ).toBe("worker-blocked");
     expect(shouldParkIssueFailure("infrastructure")).toBe(false);
     expect(shouldParkIssueFailure("safety")).toBe(false);
+    expect(
+      shouldPreserveBlockedPullRequestRepair(
+        "pr-repairing",
+        "ticket-infrastructure",
+      ),
+    ).toBe(true);
+    expect(
+      shouldPreserveBlockedPullRequestRepair(
+        "pr-repairing",
+        "review-ticket-infrastructure",
+      ),
+    ).toBe(true);
+    expect(
+      shouldPreserveBlockedPullRequestRepair("pr-repairing", "infrastructure"),
+    ).toBe(false);
+    expect(
+      shouldPreserveBlockedPullRequestRepair("implemented", "ticket-infrastructure"),
+    ).toBe(false);
   });
 
   it("requires workers to report a structured blocker kind", () => {
@@ -456,6 +482,7 @@ describe("Ralph durable state and policy", () => {
       "none",
       "requirements",
       "infrastructure",
+      "ticket-infrastructure",
       "protected-scope",
       "safety",
     ]);
@@ -484,6 +511,7 @@ describe("Ralph durable state and policy", () => {
       "code",
       "requirements",
       "infrastructure",
+      "ticket-infrastructure",
       "security",
       "safety",
     ]);
@@ -495,7 +523,7 @@ describe("Ralph durable state and policy", () => {
 
     expect(contract).toBe(`Before classifying a requirement as ambiguous or a finding as unrepairable, search the repository's authoritative design, policy, and domain documentation, including applicable AGENTS.md instructions and docs linked from them. A detail omitted from the issue is not ambiguous when established repository policy resolves it.
 List every issue, design, policy, and implementation source consulted in evidenceReviewed. For status=findings with blockerKind=requirements or repairable=false, cite the exact repository paths and the unresolved decision in blockingFindings and summary. Passing reviews are exempt because they have no unresolved decision and must keep blockingFindings empty. Do not use repairable=false merely because the issue itself omits a detail, because the first repair is not obvious, or because the defect is security-sensitive.
-Reserve repairable=false for a genuine unresolved product decision with materially different valid outcomes, forbidden scope, secrets or controller-integrity risk, missing infrastructure, or a repair that necessarily exceeds the approved ticket scope. A concrete defect with an established repository policy is repairable.`);
+Reserve repairable=false for a genuine unresolved product decision with materially different valid outcomes, forbidden scope, secrets or controller-integrity risk, missing infrastructure, or a repair that necessarily exceeds the approved ticket scope. Use blockerKind=ticket-infrastructure when only ticket-specific verification infrastructure is unavailable but the controller and ordinary worker runtime are healthy; reserve blockerKind=infrastructure for controller-wide or worker-runtime infrastructure failures. A concrete defect with an established repository policy is repairable.`);
   });
 
   it("labels a failed-attempt pull request as draft recovery work", () => {
@@ -627,6 +655,10 @@ Reserve repairable=false for a genuine unresolved product decision with material
     );
     expect(failureDisposition("pr-repairing", false, "command")).toBe(
       "manual-review",
+    );
+    expect(failureDisposition("pr-repairing", false, "safety")).toBe("fatal");
+    expect(failureDisposition("pr-repairing", false, "infrastructure")).toBe(
+      "fatal",
     );
   });
 
@@ -852,6 +884,9 @@ Reserve repairable=false for a genuine unresolved product decision with material
       reviewFailureKind({ blockerKind: "infrastructure", repairable: false }),
     ).toBe("infrastructure");
     expect(
+      reviewFailureKind({ blockerKind: "ticket-infrastructure", repairable: false }),
+    ).toBe("review-ticket-infrastructure");
+    expect(
       reviewFailureKind({ blockerKind: "security", repairable: false }),
     ).toBe("review-security-nonrepairable");
     expect(
@@ -864,6 +899,7 @@ Reserve repairable=false for a genuine unresolved product decision with material
       "safety",
     );
     expect(shouldParkIssueFailure("review-security-nonrepairable")).toBe(true);
+    expect(shouldParkIssueFailure("review-ticket-infrastructure")).toBe(true);
     expect(shouldParkIssueFailure("safety")).toBe(false);
     expect(reviewFailureKind({})).toBe("safety");
   });

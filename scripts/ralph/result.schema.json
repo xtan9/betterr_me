@@ -24,6 +24,7 @@
         "none",
         "requirements",
         "infrastructure",
+        "ticket-infrastructure",
         "protected-scope",
         "safety"
       ]
