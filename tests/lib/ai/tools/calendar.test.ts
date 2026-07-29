@@ -5,6 +5,7 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 const mockGetUserEvents = vi.fn();
 const mockCreateEvent = vi.fn();
 const mockUpdateEvent = vi.fn();
+const mockLifecycleUpdate = vi.fn();
 const mockGetEvent = vi.fn();
 const mockDeleteEvent = vi.fn();
 
@@ -15,6 +16,12 @@ vi.mock("@/lib/db", () => ({
     updateEvent = mockUpdateEvent;
     getEvent = mockGetEvent;
     deleteEvent = mockDeleteEvent;
+  },
+}));
+
+vi.mock("@/lib/scheduling/create", () => ({
+  SchedulingLifecycle: class {
+    update = mockLifecycleUpdate;
   },
 }));
 
@@ -48,15 +55,23 @@ describe("calendarTools", () => {
 
   it("updateEvent transforms camelCase params to snake_case", async () => {
     const ctx = makeCtx();
-    mockUpdateEvent.mockResolvedValue({ id: "e1", title: "Updated" });
-    await findTool("updateEvent").execute(
+    const outcome = {
+      event: { id: "e1", title: "Updated" },
+      reminders: [{ id: "reminder-1", fire_at: "2026-04-15T09:45:00Z" }],
+    };
+    mockLifecycleUpdate.mockResolvedValue(outcome);
+    const result = await findTool("updateEvent").execute(
       { eventId: "e1", title: "Updated", startDate: "2026-04-15" },
       ctx,
     );
-    expect(mockUpdateEvent).toHaveBeenCalledWith("e1", "user-123", {
-      title: "Updated",
-      start_date: "2026-04-15",
+    expect(mockLifecycleUpdate).toHaveBeenCalledWith("user-123", "e1", {
+      event: {
+        title: "Updated",
+        start_date: "2026-04-15",
+      },
     });
+    expect(result).toEqual(outcome);
+    expect(mockUpdateEvent).not.toHaveBeenCalled();
   });
 
   it("deleteEvent verifies existence then deletes", async () => {

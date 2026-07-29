@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CalendarEventsDB } from "@/lib/db";
+import { SchedulingLifecycle } from "@/lib/scheduling/create";
 import type { ToolDefinition, ToolContext } from "./types";
 
 export function calendarTools(): ToolDefinition[] {
@@ -75,7 +76,7 @@ export function calendarTools(): ToolDefinition[] {
         location: z.string().optional().describe("New location"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new CalendarEventsDB(ctx.supabase);
+        const lifecycle = new SchedulingLifecycle(ctx.supabase);
         const { eventId, startDate, endDate, startTime, endTime, ...rest } =
           params;
         const updates: Record<string, unknown> = { ...rest };
@@ -86,7 +87,7 @@ export function calendarTools(): ToolDefinition[] {
         for (const key of Object.keys(updates)) {
           if (updates[key] === undefined) delete updates[key];
         }
-        return db.updateEvent(eventId, ctx.userId, updates);
+        return lifecycle.update(ctx.userId, eventId, { event: updates });
       },
     },
     {
