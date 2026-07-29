@@ -1,15 +1,12 @@
 import crypto from "node:crypto";
 
-import { shouldPreserveBlockedPullRequestRepair } from "./queue.mjs";
+import {
+  draftFailurePolicy,
+  shouldPreserveBlockedPullRequestRepair,
+} from "./queue.mjs";
 
 const CONTROLLER_OWNED_CHECKS = new Set(["release-scope-evidence"]);
 const RECOVERY_POLICY_VERSION = 2;
-const REVERIFYABLE_DRAFT_FAILURES = new Set([
-  "worker-blocked",
-  "ticket-infrastructure",
-  "review-ticket-infrastructure",
-]);
-
 function normalizedChecks(checks) {
   return [...(Array.isArray(checks) ? checks : [])]
     .map((check) => ({
@@ -128,7 +125,9 @@ export function blockedRepairRecoveryReceipt(input) {
     result?.status !== "blocked" ||
     result?.issueNumber !== input.issueNumber ||
     result?.ambiguous !== true ||
-    result?.blockerKind !== "ticket-infrastructure" ||
+    !["ticket-infrastructure", "protected-scope"].includes(
+      result?.blockerKind,
+    ) ||
     typeof result?.summary !== "string" ||
     !result.summary.trim()
   ) {
@@ -159,6 +158,19 @@ export function blockedRepairRecoveryReceiptMatches(trusted, observed) {
     trusted &&
       observed &&
       fields.every((field) => trusted[field] === observed[field]),
+  );
+}
+
+export function canAdoptLegacyProtectedScopeRepair(issueState, receipt) {
+  return Boolean(
+    issueState?.stage === "pr-repairing" &&
+      issueState.failureKind === "worker-blocked" &&
+      !issueState.blockedPrRepairRecovery &&
+      issueState.commit === receipt?.headSha &&
+      issueState.repairAttempts === receipt?.repairAttempt &&
+      issueState.lastRepairResultPath === receipt?.resultPath &&
+      receipt?.failureKind === "protected-scope" &&
+      /^[a-f0-9]{64}$/.test(receipt?.worktreeFingerprint ?? ""),
   );
 }
 
@@ -232,6 +244,11 @@ export function planPullRequestRecovery(snapshot) {
       reason: "pull request has merge conflicts",
     });
   }
+  if (snapshot.reviewDecision === "CHANGES_REQUESTED") {
+    return recoveryPlan(snapshot, "human-gate", {
+      reason: "a reviewer requested changes",
+    });
+  }
   if (snapshot.checksAvailable === false) {
     return recoveryPlan(snapshot, "wait", {
       reason: "GitHub has not reported any PR checks yet",
@@ -284,6 +301,22 @@ export function planPullRequestRecovery(snapshot) {
   }
   if (failures.length > 0) {
     if (snapshot.isDraft) {
+      const failurePolicy = draftFailurePolicy(snapshot.originalFailureKind);
+      const untrustedFailures = failures.filter(
+        (check) => check.provider !== "github-actions" || !check.runId,
+      );
+      if (
+        failurePolicy.reverify &&
+        untrustedFailures.length === 0 &&
+        snapshot.repairAttempts < snapshot.maximumRepairAttempts
+      ) {
+        return recoveryPlan(snapshot, "code-repair", {
+          failedChecks: failures.map((check) => check.name).sort(),
+          checks: failures,
+          promoteDraftAfterVerification:
+            failurePolicy.promoteAfterVerification,
+        });
+      }
       return recoveryPlan(snapshot, "human-gate", {
         reason: `draft retains an unresolved ${snapshot.originalFailureKind ?? "original"} blocker`,
         failedChecks: failures.map((check) => check.name).sort(),
@@ -311,15 +344,20 @@ export function planPullRequestRecovery(snapshot) {
   }
 
   if (snapshot.isDraft) {
+    const failurePolicy = draftFailurePolicy(snapshot.originalFailureKind);
     if (
-      REVERIFYABLE_DRAFT_FAILURES.has(snapshot.originalFailureKind) &&
-      snapshot.repairAttempts < snapshot.maximumRepairAttempts
+      failurePolicy.reverify &&
+      (failurePolicy.reverifyWithoutRepairBudget ||
+        snapshot.repairAttempts < snapshot.maximumRepairAttempts)
     ) {
-      return recoveryPlan(snapshot, "reverify-draft");
+      return recoveryPlan(snapshot, "reverify-draft", {
+        promoteDraftAfterVerification:
+          failurePolicy.promoteAfterVerification,
+      });
     }
     return recoveryPlan(snapshot, "human-gate", {
       reason:
-        REVERIFYABLE_DRAFT_FAILURES.has(snapshot.originalFailureKind) &&
+        failurePolicy.reverify &&
         snapshot.repairAttempts >= snapshot.maximumRepairAttempts
           ? "draft re-verification exhausted its bounded coding repair budget"
           : "draft pull request still has an unresolved original blocker",

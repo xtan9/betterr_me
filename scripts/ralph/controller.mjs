@@ -86,6 +86,7 @@ import {
   blockedRepairPreservationRecoveryAction,
   blockedRepairRecoveryReceipt,
   blockedRepairRecoveryReceiptMatches,
+  canAdoptLegacyProtectedScopeRepair,
   pullRequestCheckRetryKey,
   pullRequestRecoveryErrorDisposition,
   reconcilePullRequestBacklog,
@@ -1255,6 +1256,17 @@ async function inspectPullRequestRecovery(candidate, state, controllerOptions) {
     (pullRequest.files ?? []).map((file) => file.path),
     candidate,
   );
+  let originalFailureKind = issueState.failureKind;
+  if (originalFailureKind === "worker-blocked") {
+    const legacyReceipt = await observedBlockedRepairRecoveryReceipt(
+      issueState,
+      candidate.issueNumber,
+      pullRequest.headRefOid,
+    );
+    if (canAdoptLegacyProtectedScopeRepair(issueState, legacyReceipt)) {
+      originalFailureKind = legacyReceipt.failureKind;
+    }
+  }
   const snapshot = {
     issueNumber: candidate.issueNumber,
     prNumber: issueState.prNumber,
@@ -1274,7 +1286,7 @@ async function inspectPullRequestRecovery(candidate, state, controllerOptions) {
     repairAttempts: issueState.repairAttempts ?? 0,
     maximumRepairAttempts: controllerOptions.maximumRepairAttempts,
     maximumTransientAttempts: controllerOptions.maximumTransientAttempts,
-    originalFailureKind: issueState.failureKind,
+    originalFailureKind,
     checksAvailable: !noChecksReported,
     checks: checks.map((check) => ({
       ...check,
@@ -1865,6 +1877,10 @@ async function reconcilePullRequestRecoveryBacklog(
           actor,
           controllerOptions,
           failure,
+          {
+            promoteDraftAfterVerification:
+              plan.promoteDraftAfterVerification === true,
+          },
         );
         return { status: state.issues[String(issue.issueNumber)].stage };
       }
@@ -1952,7 +1968,10 @@ async function reconcilePullRequestRecoveryBacklog(
           actor,
           controllerOptions,
           verificationFailure,
-          { promoteDraftAfterVerification: true },
+          {
+            promoteDraftAfterVerification:
+              plan.promoteDraftAfterVerification === true,
+          },
         );
         return { status: state.issues[String(issue.issueNumber)].stage };
       }
@@ -2522,6 +2541,7 @@ Implementation contract:
 - Run targeted tests. Run the relevant typecheck/tests before reporting completion.
 - Invoke $code-review for a self-review and address blocking findings.
 - Leave the intended changes uncommitted for the controller to verify and commit.
+- A new top-level supabase/tests/*.sql acceptance fixture may request controller-owned disposable PostgreSQL verification by placing the exact line -- ralph-ci: true in its first 12 lines. Marked fixtures must be transactional or self-cleaning, must work as the non-superuser ralph_ci_test role, and must not contain psql meta-commands, server program/file access, role administration/escalation, or postgres dblink credentials. When a conforming marked fixture covers the otherwise unavailable real-database test, do not report missing local Supabase/psql as a blocker; GitHub required checks own that external execution.
 - Report blockerKind=requirements and ambiguous=true when requirements are ambiguous.
 - Report blockerKind=ticket-infrastructure and ambiguous=true when only ticket-specific verification infrastructure is unavailable after the implementation and ordinary local checks are complete.
 - Report blockerKind=infrastructure and ambiguous=true only when controller-wide or ordinary worker runtime infrastructure is missing.
@@ -2572,6 +2592,7 @@ Repair contract:
 - Invoke $tdd for behavior changes and keep the approved public test seam.
 - Run the targeted tests and relevant typecheck before reporting completion.
 - Invoke $code-review for a self-review and address blocking findings.
+- A new top-level supabase/tests/*.sql acceptance fixture may request controller-owned disposable PostgreSQL verification by placing the exact line -- ralph-ci: true in its first 12 lines. Marked fixtures must be transactional or self-cleaning, must work as the non-superuser ralph_ci_test role, and must not contain psql meta-commands, server program/file access, role administration/escalation, or postgres dblink credentials. When a conforming marked fixture covers the otherwise unavailable real-database test, do not report missing local Supabase/psql as a blocker; GitHub required checks own that external execution.
 - When controllerManagedExternalGate=true, the controller deliberately owns and will rerun that exact external gate. Do not attempt to access it from the sandbox, and do not report missing infrastructure merely because that gate or Git metadata is unavailable. Run every applicable test available inside the worktree and review the repaired files directly.
 - Report blockerKind=requirements and ambiguous=true when requirements are ambiguous.
 - Report blockerKind=ticket-infrastructure and ambiguous=true when only ticket-specific verification infrastructure is unavailable after the repair and ordinary local checks are complete.
@@ -2858,6 +2879,47 @@ async function worktreeContentFingerprint(worktreePath) {
   return fingerprint.digest("hex");
 }
 
+async function observedBlockedRepairRecoveryReceipt(
+  issueState,
+  issueNumber,
+  expectedHeadSha,
+) {
+  const worktreePath = issueState?.worktreePath;
+  if (
+    issueState?.stage !== "pr-repairing" ||
+    !worktreePath ||
+    !fs.existsSync(worktreePath)
+  ) {
+    return null;
+  }
+  const changes = (
+    await git(["-C", worktreePath, "status", "--porcelain"])
+  ).stdout.trim();
+  if (!changes) return null;
+  const checkoutHeadSha = (
+    await git(["-C", worktreePath, "rev-parse", "HEAD"])
+  ).stdout.trim();
+  const issueLogRoot = path.join(stateRoot, "logs", `issue-${issueNumber}`);
+  const resultPath = recoverableRepairResultPath(issueState, issueLogRoot);
+  let result = null;
+  try {
+    result = resultPath ? readJson(resultPath) : null;
+  } catch {
+    return null;
+  }
+  return blockedRepairRecoveryReceipt({
+    stage: issueState.stage,
+    issueNumber,
+    expectedHeadSha,
+    checkoutHeadSha,
+    checkoutDirty: true,
+    worktreeFingerprint: await worktreeContentFingerprint(worktreePath),
+    repairAttempt: issueState.repairAttempts,
+    resultPath,
+    result,
+  });
+}
+
 async function recoverBlockedPullRequestRepair(
   state,
   issue,
@@ -2874,39 +2936,22 @@ async function recoverBlockedPullRequestRepair(
   ) {
     return { state, failure: null };
   }
-  const changes = (
-    await git(["-C", worktreePath, "status", "--porcelain"])
-  ).stdout.trim();
-  if (!changes) return { state, failure: null };
-  const checkoutHeadSha = (
-    await git(["-C", worktreePath, "rev-parse", "HEAD"])
-  ).stdout.trim();
-  const issueLogRoot = path.join(stateRoot, "logs", `issue-${number}`);
-  const resultPath = recoverableRepairResultPath(issueState, issueLogRoot);
-  const result = resultPath ? readJson(resultPath) : null;
-  const worktreeFingerprint = await worktreeContentFingerprint(worktreePath);
-  const receipt = blockedRepairRecoveryReceipt({
-    stage: issueState.stage,
-    issueNumber: number,
-    expectedHeadSha: plan.headSha,
-    checkoutHeadSha,
-    checkoutDirty: true,
-    worktreeFingerprint,
-    repairAttempt: issueState.repairAttempts,
-    resultPath,
-    result,
-  });
+  const receipt = await observedBlockedRepairRecoveryReceipt(
+    issueState,
+    number,
+    plan.headSha,
+  );
   if (
     !receipt ||
-    !blockedRepairRecoveryReceiptMatches(
+    (!blockedRepairRecoveryReceiptMatches(
       issueState.blockedPrRepairRecovery,
       receipt,
-    )
+    ) && !canAdoptLegacyProtectedScopeRepair(issueState, receipt))
   ) {
     return { state, failure: null };
   }
   state = moveIssue(state, number, issueState.stage, {
-    lastRepairResultPath: resultPath,
+    lastRepairResultPath: receipt.resultPath,
     ...blockedRepairStatePatch(receipt),
   });
   const failure = Object.assign(
@@ -3212,7 +3257,7 @@ async function runIndependentReviewGate({
         }),
         {
           cwd: worktreePath,
-          input: prompt,
+          input: `${prompt}\n\nController-owned database verification contract: a top-level supabase/tests/*.sql fixture with the exact line -- ralph-ci: true in its first 12 lines is executed on the exact PR head by required GitHub checks against disposable Supabase, after controller policy validation, in a cleared environment and as a dedicated non-superuser role. Review the fixture and marker contract statically, but do not report ticket-infrastructure solely because local Supabase/psql is unavailable. Continue to report any concrete defect, unsafe SQL, missing fixture coverage, or unmarked database requirement.`,
           timeoutSeconds: controllerOptions.reviewTimeoutSeconds,
           logPrefix: path.join(
             issueLogRoot,
@@ -4705,6 +4750,31 @@ async function completePullRequestLifecycle(
       try {
         if (promoteDraftAfterVerification) {
           const issueState = state.issues[String(number)];
+          await waitForPullRequestHead(
+            issueState.prNumber,
+            issueState.commit,
+            controllerOptions,
+          );
+          status(
+            `Waiting for all reported checks before promoting recovered draft PR #${issueState.prNumber}.`,
+          );
+          const checks = await waitForRequiredChecks(
+            issueState.prNumber,
+            controllerOptions,
+          );
+          if (!checks.passed) {
+            if (checks.timedOut) {
+              state = moveIssue(state, number, "manual-review", {
+                stopReason: checks.reason,
+              });
+              break;
+            }
+            pendingPullRequestFailure = Object.assign(
+              new Error("required PR checks failed on the repaired draft head"),
+              { failureKind: "pr-checks", stopReason: checks.reason },
+            );
+            continue;
+          }
           state = await synchronizeRecoveredPullRequest(
             state,
             issue,

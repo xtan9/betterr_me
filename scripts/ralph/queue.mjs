@@ -257,10 +257,48 @@ export function failureDisposition(stage, pullRequestMerged, failureKind) {
   return "failed";
 }
 
+const DRAFT_FAILURE_POLICIES = Object.freeze({
+  "worker-blocked": Object.freeze({
+    reverify: true,
+    reverifyWithoutRepairBudget: false,
+    preserveBlockedRepair: false,
+    promoteAfterVerification: true,
+  }),
+  "ticket-infrastructure": Object.freeze({
+    reverify: true,
+    reverifyWithoutRepairBudget: true,
+    preserveBlockedRepair: true,
+    promoteAfterVerification: true,
+  }),
+  "review-ticket-infrastructure": Object.freeze({
+    reverify: true,
+    reverifyWithoutRepairBudget: true,
+    preserveBlockedRepair: true,
+    promoteAfterVerification: true,
+  }),
+  "protected-scope": Object.freeze({
+    reverify: true,
+    reverifyWithoutRepairBudget: true,
+    preserveBlockedRepair: true,
+    promoteAfterVerification: false,
+  }),
+});
+
+const DEFAULT_DRAFT_FAILURE_POLICY = Object.freeze({
+  reverify: false,
+  reverifyWithoutRepairBudget: false,
+  preserveBlockedRepair: false,
+  promoteAfterVerification: false,
+});
+
+export function draftFailurePolicy(failureKind) {
+  return DRAFT_FAILURE_POLICIES[failureKind] ?? DEFAULT_DRAFT_FAILURE_POLICY;
+}
+
 export function shouldPreserveBlockedPullRequestRepair(stage, failureKind) {
   return (
     stage === "pr-repairing" &&
-    ["ticket-infrastructure", "review-ticket-infrastructure"].includes(failureKind)
+    draftFailurePolicy(failureKind).preserveBlockedRepair
   );
 }
 
@@ -403,6 +441,7 @@ export function shouldParkIssueFailure(failureKind) {
     "ambiguous",
     "worker-blocked",
     "ticket-infrastructure",
+    "protected-scope",
   ].includes(failureKind);
 }
 
@@ -461,7 +500,7 @@ export function workerResultFailureKind(result) {
   if (result?.blockerKind === "ticket-infrastructure") {
     return "ticket-infrastructure";
   }
-  if (result?.blockerKind === "protected-scope") return "worker-blocked";
+  if (result?.blockerKind === "protected-scope") return "protected-scope";
   if (result?.blockerKind === "safety") return "safety";
   if (result?.ambiguous || result?.blockerKind === "requirements") {
     return "ambiguous";
