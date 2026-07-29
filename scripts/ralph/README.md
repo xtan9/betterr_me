@@ -40,8 +40,11 @@ a PR for human review.
 
 - The controller checkout must be clean.
 - Windows `git`, `gh`, and `node` must be installed and authenticated.
-- WSL2 Ubuntu must contain Linux Node 24 and Codex 0.145.0, with Codex reading
-  the existing Windows login through `CODEX_HOME=/mnt/c/Users/steve/.codex`.
+- WSL2 Ubuntu must contain Linux Node 24 and Codex 0.145.0. At startup the
+  controller seeds only the existing Windows `auth.json` into a dedicated,
+  worker-owned WSL Codex runtime outside the agent-readable filesystem policy.
+  A refreshed runtime credential is preserved across controller restarts; a
+  newer Windows credential is recopied after an explicit desktop re-login.
 - A Linux dependency tree matching `pnpm-lock.yaml` must exist read-only at
   `/var/lib/betterr-me-ralph/deps-source/node_modules`, with its root-owned
   content fingerprint at `/var/lib/betterr-me-ralph/deps.content.sha256`.

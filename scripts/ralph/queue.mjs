@@ -578,6 +578,13 @@ function normalizeTypeScriptDiagnostic(line) {
   if (!trimmed) {
     return null;
   }
+  if (
+    /^WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted \(os error 1\)$/.test(
+      trimmed,
+    )
+  ) {
+    return null;
+  }
 
   const located = trimmed.match(/^(.*)\(\d+,\d+\): (error TS\d+: .*)$/);
   if (located) {

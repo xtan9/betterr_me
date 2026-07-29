@@ -47,9 +47,14 @@ import {
   recoverPreservationCommit,
 } from "./local-checkout.mjs";
 import {
+  codexSessionStarted,
+  codexStartupEventsReady,
   ensureSanitizedWorkerGitView,
+  isolatedCodexAuthInstallRequired,
   isolatedCodexFilesystemConfig,
   isolatedCodexReadablePaths,
+  isolatedCodexRuntimeConfiguration,
+  processExitCode,
   removeSanitizedWorkerGitView,
   unprivilegedWslCommandArguments,
   unprivilegedWslIdentityIsSafe,
@@ -87,6 +92,14 @@ const worktreeRoot = path.join(stateRoot, "worktrees");
 const workerGitRoot = path.join(stateRoot, "worker-git");
 const wslDependencyRoot = "/var/lib/betterr-me-ralph/deps-source/node_modules";
 const wslWorkerHome = "/var/lib/betterr-me-ralph/worker-home";
+const wslCodexHome = "/var/lib/betterr-me-ralph/codex-runtime";
+const wslCodexRuntime = isolatedCodexRuntimeConfiguration({
+  workerHome: wslWorkerHome,
+  codexHome: wslCodexHome,
+  sourceAuthPath: `${windowsToWslPath(
+    path.join(process.env.USERPROFILE, ".codex"),
+  )}/auth.json`,
+});
 const wslSkillRoot = `${wslWorkerHome}/.agents/skills`;
 const wslProcessWrapper = windowsToWslPath(
   path.join(scriptDirectory, "wsl-process-wrapper.mjs"),
@@ -242,6 +255,7 @@ function runProcess(command, args, options = {}) {
     environment = process.env,
     onTerminate,
     codexLiveContext,
+    successWhen,
   } = options;
   ensureNotStopped();
 
@@ -265,6 +279,7 @@ function runProcess(command, args, options = {}) {
       ? fs.createWriteStream(`${logPrefix}-stderr.log`)
       : null;
     let terminationReason = null;
+    let successfulStop = false;
     const codexRenderer = codexLiveContext
       ? createCodexJsonlRenderer({
           ...codexLiveContext,
@@ -283,10 +298,26 @@ function runProcess(command, args, options = {}) {
       }
     };
 
+    const terminateSuccessfully = () => {
+      if (terminationReason || successfulStop) return;
+      successfulStop = true;
+      try {
+        onTerminate?.();
+      } finally {
+        terminateTree(child);
+      }
+    };
+
     child.stdout.on("data", (chunk) => {
       stdout.push(chunk);
       stdoutLog?.write(chunk);
       codexRenderer?.write(chunk);
+      if (
+        typeof successWhen === "function" &&
+        successWhen(Buffer.concat(stdout).toString("utf8"))
+      ) {
+        terminateSuccessfully();
+      }
     });
     child.stderr.on("data", (chunk) => {
       stderr.push(chunk);
@@ -312,7 +343,7 @@ function runProcess(command, args, options = {}) {
       stdoutLog?.end();
       stderrLog?.end();
       const result = {
-        code: code ?? -1,
+        code: processExitCode({ code, successfulStop }),
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
       };
@@ -498,9 +529,7 @@ async function runWslSandboxed(command, args, worktreePath, options = {}) {
   return runWsl(
     unprivilegedWslCommandArguments({
       home: wslWorkerHome,
-      environment: [
-        `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
-      ],
+      environment: wslCodexRuntime.environment,
       command: "/usr/local/bin/codex",
       args: [
         "sandbox",
@@ -530,7 +559,7 @@ async function isolatedCodex(args, options = {}) {
     unprivilegedWslCommandArguments({
       home: wslWorkerHome,
       environment: [
-        `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
+        ...wslCodexRuntime.environment,
         ...Object.entries(gitEnvironment).map(([name, value]) => `${name}=${value}`),
       ],
       command: "/usr/local/bin/codex",
@@ -558,7 +587,7 @@ async function verifyWorkerGitSandbox(gitContext) {
       unprivilegedWslCommandArguments({
         home: wslWorkerHome,
         environment: [
-          `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
+          ...wslCodexRuntime.environment,
           ...Object.entries(gitContext.environment).map(
             ([name, value]) => `${name}=${value}`,
           ),
@@ -593,7 +622,48 @@ async function verifyWorkerGitSandbox(gitContext) {
 }
 
 async function assertWslIsolationReady() {
-  const codexHome = windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"));
+  await runWsl(wslCodexRuntime.directoryProvisionCommand, {
+    timeoutSeconds: 30,
+    observeKillSwitch: false,
+  });
+  await runWsl(["test", "-f", wslCodexRuntime.sourceAuthPath], {
+    timeoutSeconds: 30,
+    observeKillSwitch: false,
+  });
+  const existingAuth = await runWsl(["stat", wslCodexRuntime.authPath], {
+    allowFailure: true,
+    timeoutSeconds: 30,
+    observeKillSwitch: false,
+  });
+  const sourceNewer = await runWsl(
+    ["test", wslCodexRuntime.sourceAuthPath, "-nt", wslCodexRuntime.authPath],
+    { allowFailure: true, timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (
+    isolatedCodexAuthInstallRequired({
+      runtimeExists: existingAuth.code === 0,
+      sourceIsNewer: sourceNewer.code === 0,
+    })
+  ) {
+    await runWsl(wslCodexRuntime.authInstallCommand, {
+      timeoutSeconds: 30,
+      observeKillSwitch: false,
+    });
+  }
+  const codexRuntimeOwnership = await runWsl(
+    ["stat", "-c", "%u:%g:%a:%F", wslCodexHome, wslCodexRuntime.authPath],
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (
+    codexRuntimeOwnership.stdout.trim() !==
+    "65534:65534:700:directory\n65534:65534:600:regular file"
+  ) {
+    throw new Error("isolated Codex runtime has unsafe ownership or mode");
+  }
+  await runWsl(["test", "!", "-e", `${wslCodexHome}/config.toml`], {
+    timeoutSeconds: 30,
+    observeKillSwitch: false,
+  });
   const identity = await runWsl(
     unprivilegedWslIdentityProbeArguments(wslWorkerHome),
     { timeoutSeconds: 30, observeKillSwitch: false },
@@ -601,15 +671,43 @@ async function assertWslIsolationReady() {
   if (!unprivilegedWslIdentityIsSafe(identity.stdout)) {
     throw new Error("unprivileged WSL process identity is unsafe");
   }
-  await runWsl(
-    unprivilegedWslCommandArguments({
-      home: wslWorkerHome,
-      environment: [`CODEX_HOME=${codexHome}`],
-      command: "/usr/local/bin/codex",
-      args: ["login", "status"],
-    }),
-    { timeoutSeconds: 60, observeKillSwitch: false },
+  const loginArguments = unprivilegedWslCommandArguments({
+    home: wslWorkerHome,
+    environment: wslCodexRuntime.environment,
+    command: "/usr/local/bin/codex",
+    args: ["login", "status"],
+  });
+  await runWsl(loginArguments, {
+    timeoutSeconds: 60,
+    observeKillSwitch: false,
+  });
+  const startupProbeWorkspace = fs.mkdtempSync(
+    path.join(stateRoot, "codex-startup-probe-"),
   );
+  const startupProbeResultPath = path.join(startupProbeWorkspace, "result.json");
+  try {
+    await git(["init", "--quiet", startupProbeWorkspace], {
+      timeoutSeconds: 30,
+      observeKillSwitch: false,
+    });
+    await isolatedCodex(
+      workerCodexArguments({
+        worktreePath: startupProbeWorkspace,
+        schemaPath: resultSchemaPath,
+        resultPath: startupProbeResultPath,
+        readOnly: false,
+      }),
+      {
+        cwd: startupProbeWorkspace,
+        input: "Ralph readiness probe. Do not call tools.\n",
+        timeoutSeconds: 30,
+        observeKillSwitch: false,
+        successWhen: codexStartupEventsReady,
+      },
+    );
+  } finally {
+    fs.rmSync(startupProbeWorkspace, { recursive: true, force: true });
+  }
   const localLockHash = crypto
     .createHash("sha256")
     .update(
@@ -696,7 +794,7 @@ async function assertWslIsolationReady() {
     "/bin/sh",
     [
       "-c",
-      `head -n 1 package.json >/dev/null && ! head -c 1 ${codexHome}/auth.json >/dev/null 2>&1`,
+      `head -n 1 package.json >/dev/null && ! head -c 1 ${wslCodexRuntime.authPath} >/dev/null 2>&1`,
     ],
     repositoryRoot,
     { timeoutSeconds: 30, observeKillSwitch: false },
@@ -1615,23 +1713,37 @@ async function repairIssue(
     worktreePath,
     repairBase,
   );
-  await isolatedCodex(
-    workerCodexArguments({
-      worktreePath,
-      schemaPath: resultSchemaPath,
-      resultPath,
-      readOnly: false,
-      gitContext,
-    }),
-    {
-      cwd: worktreePath,
-      input: repairPrompt(issue, failure, attempt),
-      timeoutSeconds: controllerOptions.implementationTimeoutSeconds,
-      logPrefix,
-      gitEnvironment: gitContext.environment,
-      codexLiveContext: { issueNumber: number, phase: `repair ${attempt}` },
-    },
-  );
+  try {
+    await isolatedCodex(
+      workerCodexArguments({
+        worktreePath,
+        schemaPath: resultSchemaPath,
+        resultPath,
+        readOnly: false,
+        gitContext,
+      }),
+      {
+        cwd: worktreePath,
+        input: repairPrompt(issue, failure, attempt),
+        timeoutSeconds: controllerOptions.implementationTimeoutSeconds,
+        logPrefix,
+        gitEnvironment: gitContext.environment,
+        codexLiveContext: { issueNumber: number, phase: `repair ${attempt}` },
+      },
+    );
+  } catch (error) {
+    const sessionStarted = codexSessionStarted(error.result?.stdout);
+    if (!sessionStarted) {
+      state = moveIssue(state, number, stage, {
+        repairAttempts: Math.max(0, attempt - 1),
+        lastRepairFailureKind: "infrastructure",
+        lastRepairStopReason: redactFailureSummary(error.message),
+        lastRepairStartedAt: null,
+      });
+      error.failureKind = "infrastructure";
+    }
+    throw error;
+  }
   if (!fs.existsSync(resultPath)) {
     throw new Error(`repair worker did not produce ${resultPath}`);
   }
