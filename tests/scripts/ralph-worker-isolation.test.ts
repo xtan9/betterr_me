@@ -7,6 +7,9 @@ import { describe, expect, it } from "vitest";
 import {
   ensureSanitizedWorkerGitView,
   removeSanitizedWorkerGitView,
+  unprivilegedWslCommandArguments,
+  unprivilegedWslIdentityIsSafe,
+  unprivilegedWslIdentityProbeArguments,
   workerCodexModelArguments,
   workerGitSmokeCommand,
 } from "../../scripts/ralph/worker-isolation.mjs";
@@ -33,6 +36,103 @@ function gitWithoutStdin(args: string[], options: { input?: string } = {}) {
 }
 
 describe("Ralph sanitized worker Git view", () => {
+  it("drops WSL Codex processes to an unprivileged identity", () => {
+    expect(
+      unprivilegedWslCommandArguments({
+        home: "/var/lib/betterr-me-ralph/worker-home",
+        environment: ["CODEX_HOME=/mnt/c/Users/test/.codex"],
+        command: "/usr/local/bin/codex",
+        args: ["sandbox"],
+      }),
+    ).toEqual([
+      "/usr/bin/setpriv",
+      "--no-new-privs",
+      "--bounding-set=-all",
+      "--reuid=65534",
+      "--regid=65534",
+      "--clear-groups",
+      "env",
+      "HOME=/var/lib/betterr-me-ralph/worker-home",
+      "CODEX_HOME=/mnt/c/Users/test/.codex",
+      "/usr/local/bin/codex",
+      "sandbox",
+    ]);
+  });
+
+  it.each([
+    [
+      { home: "relative-home" },
+      "unprivileged WSL home must be an absolute Linux path",
+    ],
+    [
+      { command: "relative-command" },
+      "unprivileged WSL command must be an absolute Linux path",
+    ],
+    [
+      { environment: [42] },
+      "unprivileged WSL environment must contain strings",
+    ],
+    [{ args: [42] }, "unprivileged WSL arguments must contain strings"],
+  ])("rejects an unsafe WSL process boundary: %s", (override, expectedMessage) => {
+    expect(() =>
+      unprivilegedWslCommandArguments({
+        home: "/worker-home",
+        environment: [],
+        command: "/usr/local/bin/codex",
+        args: [],
+        ...override,
+      }),
+    ).toThrowError(new Error(expectedMessage));
+  });
+
+  it("probes the effective unprivileged WSL identity", () => {
+    expect(unprivilegedWslIdentityProbeArguments("/worker-home")).toEqual([
+      "/usr/bin/setpriv",
+      "--no-new-privs",
+      "--bounding-set=-all",
+      "--reuid=65534",
+      "--regid=65534",
+      "--clear-groups",
+      "env",
+      "HOME=/worker-home",
+      "/bin/sh",
+      "-c",
+      "/bin/grep -E '^(Uid|Gid|Groups|CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs):' /proc/self/status",
+    ]);
+    expect(
+      unprivilegedWslIdentityIsSafe(
+        "Uid:\t65534\t65534\t65534\t65534\n" +
+          "Gid:\t65534\t65534\t65534\t65534\n" +
+          "Groups:\t \n" +
+          "CapInh:\t0000000000000000\n" +
+          "CapPrm:\t0000000000000000\n" +
+          "CapEff:\t0000000000000000\n" +
+          "CapBnd:\t0000000000000000\n" +
+          "CapAmb:\t0000000000000000\n" +
+          "NoNewPrivs:\t1\n",
+      ),
+    ).toBe(true);
+    expect(
+      unprivilegedWslIdentityIsSafe(
+        "Uid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nGroups:\t0\n" +
+          "CapInh:\t0000000000000000\nCapPrm:\t000001ffffffffff\n" +
+          "CapEff:\t000001ffffffffff\nCapBnd:\t000001ffffffffff\n" +
+          "CapAmb:\t0000000000000000\nNoNewPrivs:\t0\n",
+      ),
+    ).toBe(false);
+    expect(
+      unprivilegedWslIdentityIsSafe(
+        "Uid:\t65534\t65534\t65534\t65534\n" +
+          "Gid:\t65534\t65534\t65534\t65534\n" +
+          "Groups:\t1234\nCapInh:\t0000000000000000\n" +
+          "CapPrm:\t0000000000000000\nCapEff:\t0000000000000000\n" +
+          "CapBnd:\t0000000000000000\nCapAmb:\t0000000000000000\n" +
+          "NoNewPrivs:\t1\n",
+      ),
+    ).toBe(false);
+    expect(unprivilegedWslIdentityIsSafe("Uid:\t65534\n")).toBe(false);
+  });
+
   it("pins Sol with medium implementation effort and high review effort", () => {
     expect(workerCodexModelArguments({ readOnly: false })).toEqual([
       "--model",
