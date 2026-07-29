@@ -1,12 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export function workerCodexModelArguments({ readOnly }) {
+export function workerCodexModelArguments({
+  readOnly,
+  reviewKind = "exhaustive",
+}) {
+  const effort = readOnly
+    ? reviewKind === "delta"
+      ? "high"
+      : "xhigh"
+    : "high";
   return [
     "--model",
     "gpt-5.6-sol",
     "-c",
-    `model_reasoning_effort=${JSON.stringify(readOnly ? "high" : "medium")}`,
+    `model_reasoning_effort=${JSON.stringify(effort)}`,
   ];
 }
 

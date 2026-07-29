@@ -495,7 +495,12 @@ describe("Ralph durable state and policy", () => {
     );
 
     expect(schema.required).toEqual([
+      "reviewKind",
+      "complete",
       "status",
+      "axes",
+      "coverage",
+      "findings",
       "blockingFindings",
       "repairable",
       "blockerKind",
@@ -511,6 +516,30 @@ describe("Ralph durable state and policy", () => {
       type: "string",
       pattern: "\\S",
     });
+    expect(schema.properties.reviewKind.enum).toEqual(["exhaustive", "delta"]);
+    expect(schema.properties.axes.items.properties.id.enum).toEqual([
+      "standards",
+      "spec",
+      "security",
+      "tests",
+      "repair-ledger",
+      "regression",
+    ]);
+    expect(schema.properties.axes.minItems).toBe(1);
+    expect(schema.properties.coverage.items.required).toEqual([
+      "id",
+      "implementationEvidence",
+      "testEvidence",
+      "verdict",
+    ]);
+    expect(schema.properties.findings.items.required).toEqual([
+      "id",
+      "axis",
+      "location",
+      "problem",
+      "evidence",
+      "safeRepair",
+    ]);
     expect(schema.properties.blockerKind.enum).toEqual([
       "none",
       "code",
@@ -521,7 +550,7 @@ describe("Ralph durable state and policy", () => {
       "scope",
       "safety",
     ]);
-    expect(schema.allOf).toBeUndefined();
+    expect(schema.additionalProperties).toBe(false);
   });
 
   it("requires evidence before a reviewer can call work unrepairable", () => {
