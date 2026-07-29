@@ -3,7 +3,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { loadCatalog } from "@/lib/exercisedb/catalog";
 import { downloadAndStoreGif } from "@/lib/exercisedb/gif-downloader";
 import { syncExerciseMediaSchema } from "@/lib/validations/exercise-media";
-import { requireAdminApi, AdminForbiddenError, AdminUnauthorizedError } from "@/lib/auth/admin";
+import {
+  authenticateRequest,
+  ADMIN_REQUEST_POLICY,
+} from "@/lib/auth/authenticated-request";
 import { log } from "@/lib/logger";
 import { findBestMatch } from "string-similarity";
 
@@ -19,27 +22,19 @@ import { findBestMatch } from "string-similarity";
 export async function POST(request: NextRequest) {
   try {
     // 1. Auth check: admin role OR secret header
-    let isAuthed = false;
+    const adminSecret = process.env.ADMIN_SYNC_SECRET;
+    const headerSecret = request.headers.get("x-admin-secret");
+    const hasValidAdminSecret =
+      Boolean(adminSecret) && headerSecret === adminSecret;
 
-    try {
-      await requireAdminApi();
-      isAuthed = true;
-    } catch (error) {
-      if (
-        !(error instanceof AdminUnauthorizedError) &&
-        !(error instanceof AdminForbiddenError)
-      ) {
-        throw error;
-      }
-      // Not authenticated or not admin — fall through to secret check
+    const auth = await authenticateRequest(request, ADMIN_REQUEST_POLICY);
+    const isAuthed = auth.ok || hasValidAdminSecret;
+    if (!isAuthed && auth.outcome === "misconfigured") {
+      throw new Error(auth.error);
     }
 
     if (!isAuthed) {
-      const adminSecret = process.env.ADMIN_SYNC_SECRET;
-      const headerSecret = request.headers.get("x-admin-secret");
-      if (!adminSecret || headerSecret !== adminSecret) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // 2. Parse body

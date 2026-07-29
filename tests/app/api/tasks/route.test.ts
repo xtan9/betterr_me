@@ -5,6 +5,15 @@ import { NextRequest } from 'next/server';
 const { mockEnsureProfile } = vi.hoisted(() => ({
   mockEnsureProfile: vi.fn(),
 }));
+const apiKeyMocks = vi.hoisted(() => ({
+  from: vi.fn(),
+  maybeSingle: vi.fn(),
+  queryLog: [] as Array<{
+    table: string;
+    method: string;
+    args: unknown[];
+  }>,
+}));
 
 // Chainable mock for Supabase sort_order query
 const mockSortOrderChain = {
@@ -12,7 +21,9 @@ const mockSortOrderChain = {
   eq: vi.fn().mockReturnThis(),
   order: vi.fn().mockReturnThis(),
   limit: vi.fn().mockReturnThis(),
-  maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
+  maybeSingle: vi.fn<
+    () => Promise<{ data: { sort_order: number } | null; error: null }>
+  >(() => Promise.resolve({ data: null, error: null })),
 };
 
 const mockSupabaseFrom = vi.fn(() => mockSortOrderChain);
@@ -26,6 +37,17 @@ vi.mock('@/lib/supabase/server', () => ({
     from: mockSupabaseFrom,
   })),
 }));
+
+vi.mock('@supabase/supabase-js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@supabase/supabase-js')>();
+  return {
+    ...actual,
+    createClient: vi.fn(() => ({
+      from: apiKeyMocks.from,
+    })),
+  };
+});
 
 const mockTasksDB = {
   getUserTasks: vi.fn(),
@@ -43,10 +65,42 @@ vi.mock('@/lib/db/ensure-profile', () => ({
 }));
 
 import { createClient } from '@/lib/supabase/server';
+import { hashApiKey } from '@/lib/auth/api-key';
 
 describe('GET /api/tasks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('API_KEY_HMAC_SECRET', 'test-hmac-secret');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://test.supabase.co');
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-role-key');
+    apiKeyMocks.queryLog.length = 0;
+    apiKeyMocks.from.mockImplementation((table: string) => {
+      apiKeyMocks.queryLog.push({ table, method: 'from', args: [table] });
+      return {
+        select: (...selectArgs: unknown[]) => {
+          apiKeyMocks.queryLog.push({
+            table,
+            method: 'select',
+            args: selectArgs,
+          });
+          return {
+            eq: (...eqArgs: unknown[]) => {
+              apiKeyMocks.queryLog.push({ table, method: 'eq', args: eqArgs });
+              return {
+                maybeSingle: (...singleArgs: unknown[]) => {
+                  apiKeyMocks.queryLog.push({
+                    table,
+                    method: 'maybeSingle',
+                    args: singleArgs,
+                  });
+                  return apiKeyMocks.maybeSingle(...singleArgs);
+                },
+              };
+            },
+          };
+        },
+      };
+    });
   });
 
   it('should return tasks for authenticated user', async () => {
@@ -87,6 +141,44 @@ describe('GET /api/tasks', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(401);
+  });
+
+  it('should enforce write permission for an API key', async () => {
+    apiKeyMocks.maybeSingle.mockResolvedValue({
+      data: {
+        id: 'read-only-key',
+        user_id: 'api-user',
+        permissions: 'read',
+        expires_at: null,
+      },
+      error: null,
+    });
+
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/tasks', {
+        method: 'POST',
+        headers: { authorization: 'Bearer brm_readonly' },
+        body: JSON.stringify({ title: 'Not allowed' }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: 'Forbidden' });
+    expect(mockTasksDB.createTask).not.toHaveBeenCalled();
+    expect(apiKeyMocks.queryLog).toEqual([
+      { table: 'api_keys', method: 'from', args: ['api_keys'] },
+      {
+        table: 'api_keys',
+        method: 'select',
+        args: ['id, user_id, permissions, expires_at'],
+      },
+      {
+        table: 'api_keys',
+        method: 'eq',
+        args: ['key_hash', hashApiKey('brm_readonly')],
+      },
+      { table: 'api_keys', method: 'maybeSingle', args: [] },
+    ]);
   });
 });
 

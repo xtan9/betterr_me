@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest } from '@/lib/auth/api-key';
+import {
+  authenticateRequest,
+  USER_API_READ_POLICY,
+  USER_API_WRITE_POLICY,
+} from '@/lib/auth/authenticated-request';
 import { ProjectsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
@@ -17,11 +21,11 @@ import type { ProjectSection, ProjectStatus } from '@/lib/db/types';
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = await authenticateRequest(request);
-    if ('error' in auth) {
+    const auth = await authenticateRequest(request, USER_API_READ_POLICY);
+    if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { userId, supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const projectsDB = new ProjectsDB(supabase);
     const searchParams = request.nextUrl.searchParams;
@@ -56,11 +60,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = await authenticateRequest(request);
-    if ('error' in auth) {
+    const auth = await authenticateRequest(request, USER_API_WRITE_POLICY);
+    if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { userId, supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 

@@ -8,25 +8,13 @@ import crypto from 'node:crypto';
 
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { NextRequest } from 'next/server';
 
 import { log } from '@/lib/logger';
-import { createClient as createServerClient } from '@/lib/supabase/server';
+import type { CredentialOutcome } from '@/lib/auth/request-context';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export type AuthResult = {
-  userId: string;
-  permissions: 'read' | 'read_write';
-  supabase: SupabaseClient;
-};
-
-export type AuthError = {
-  error: string;
-  status: 401 | 403 | 500;
-};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,117 +68,90 @@ export function hashApiKey(key: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// authenticateRequest
+// authenticateApiKeyCredential
 // ---------------------------------------------------------------------------
 
-/** Write HTTP methods that require `read_write` permission. */
-const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-
 /**
- * Authenticate an incoming API request.
- *
- * Supports two authentication paths:
- * 1. **API key** — `Authorization: Bearer brm_xxx` header
- * 2. **Cookie** — Supabase session cookie (existing web auth)
- *
- * @returns `AuthResult` on success, `AuthError` on failure.
+ * Resolve a BetterR.Me API-key credential at the request adapter boundary.
  */
-export async function authenticateRequest(
-  request: NextRequest,
-): Promise<AuthResult | AuthError> {
+export async function authenticateApiKeyCredential(
+  request: Request,
+): Promise<CredentialOutcome<SupabaseClient>> {
   const authHeader = request.headers.get('authorization');
 
-  // ---- API key path -------------------------------------------------------
-  if (authHeader?.startsWith('Bearer brm_')) {
-    const apiKey = authHeader.slice('Bearer '.length);
-
-    let keyHash: string;
-    try {
-      keyHash = hashApiKey(apiKey);
-    } catch (err) {
-      log.error('API key authentication failed: could not hash API key', err);
-      return { error: 'Internal server error', status: 500 };
-    }
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      log.error(
-        'API key authentication failed: Supabase service role not configured',
-      );
-      return { error: 'Internal server error', status: 500 };
-    }
-
-    const serviceClient = createSupabaseClient(supabaseUrl, serviceRoleKey);
-
-    const { data: keyRow, error: dbError } = await serviceClient
-      .from('api_keys')
-      .select('id, user_id, permissions, expires_at')
-      .eq('key_hash', keyHash)
-      .maybeSingle();
-
-    if (dbError) {
-      log.error('API key lookup failed', dbError);
-      return { error: 'Internal server error', status: 500 };
-    }
-    if (!keyRow) {
-      return { error: 'Invalid API key', status: 401 };
-    }
-
-    // Check expiration
-    if (keyRow.expires_at && new Date(keyRow.expires_at) < new Date()) {
-      return { error: 'API key has expired', status: 401 };
-    }
-
-    // Check permissions for write methods
-    const permissions = keyRow.permissions as 'read' | 'read_write';
-    if (permissions === 'read' && WRITE_METHODS.has(request.method)) {
-      return {
-        error: 'API key does not have write permission',
-        status: 403,
-      };
-    }
-
-    // Fire-and-forget last_used_at update (non-blocking).
-    // NOTE: Supabase resolves with { error } rather than rejecting, so we must
-    // check the resolved value — .then(null, handler) would miss DB errors.
-    serviceClient
-      .from('api_keys')
-      .update({ last_used_at: new Date().toISOString() })
-      .eq('id', keyRow.id)
-      .then(
-        ({ error: updateError }) => {
-          if (updateError) log.error('Failed to update last_used_at', updateError);
-        },
-        (err: unknown) => log.error('Failed to update last_used_at (network)', err),
-      );
-
-    return {
-      userId: keyRow.user_id,
-      permissions,
-      supabase: serviceClient,
-    };
+  if (!authHeader?.startsWith('Bearer brm_')) {
+    return { outcome: 'anonymous' };
   }
 
-  // ---- Cookie fallback path -----------------------------------------------
+  const apiKey = authHeader.slice('Bearer '.length);
+
+  let keyHash: string;
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { error: 'Unauthorized', status: 401 };
-    }
-
-    return {
-      userId: user.id,
-      permissions: 'read_write',
-      supabase,
-    };
+    keyHash = hashApiKey(apiKey);
   } catch (err) {
-    log.error('Cookie authentication failed', err);
-    return { error: 'Unauthorized', status: 401 };
+    log.error('[api-key] Authentication failed: could not hash API key', err);
+    return { outcome: 'misconfigured' };
   }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    log.error(
+      '[api-key] Authentication failed: Supabase service role not configured',
+    );
+    return { outcome: 'misconfigured' };
+  }
+
+  const serviceClient = createSupabaseClient(supabaseUrl, serviceRoleKey);
+
+  const { data: keyRow, error: dbError } = await serviceClient
+    .from('api_keys')
+    .select('id, user_id, permissions, expires_at')
+    .eq('key_hash', keyHash)
+    .maybeSingle();
+
+  if (dbError) {
+    log.error('[api-key] Lookup failed', dbError);
+    return { outcome: 'misconfigured' };
+  }
+  if (!keyRow) {
+    return { outcome: 'invalid' };
+  }
+
+  // Check expiration
+  if (keyRow.expires_at && new Date(keyRow.expires_at) < new Date()) {
+    return { outcome: 'invalid' };
+  }
+
+  const permissions = keyRow.permissions as 'read' | 'read_write';
+
+  return {
+    outcome: 'authenticated',
+    principal: { userId: keyRow.user_id, credential: 'apiKey' },
+    permissions:
+      permissions === 'read_write' ? ['read', 'write'] : ['read'],
+    client: serviceClient,
+    onAuthorized: () => {
+      // Fire-and-forget last_used_at update only after route authorization.
+      // Supabase resolves with { error }, so handle both DB and network errors.
+      try {
+        serviceClient
+          .from('api_keys')
+          .update({ last_used_at: new Date().toISOString() })
+          .eq('id', keyRow.id)
+          .then(
+            ({ error: updateError }) => {
+              if (updateError) {
+                log.error('[api-key] Failed to update last_used_at', updateError);
+              }
+            },
+            (err: unknown) =>
+              log.error('[api-key] Failed to update last_used_at (network)', err),
+          );
+      } catch (error) {
+        log.error('[api-key] Failed to update last_used_at (setup)', error);
+      }
+    },
+  };
 }

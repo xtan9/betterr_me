@@ -38,6 +38,38 @@ function getServiceClient() {
   return _serviceClient;
 }
 
+type McpTokenClaims = {
+  sub: string;
+  aud: "mcp";
+  exp?: number;
+  iat?: number;
+  client_id?: string;
+  scope?: string;
+};
+
+function isMcpTokenClaims(payload: unknown): payload is McpTokenClaims {
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
+    return false;
+  }
+
+  const claims = payload as Record<string, unknown>;
+  return (
+    typeof claims.sub === "string" &&
+    claims.sub.length > 0 &&
+    claims.aud === "mcp" &&
+    (claims.exp === undefined ||
+      (typeof claims.exp === "number" && Number.isFinite(claims.exp))) &&
+    (claims.iat === undefined ||
+      (typeof claims.iat === "number" && Number.isFinite(claims.iat))) &&
+    (claims.client_id === undefined || typeof claims.client_id === "string") &&
+    (claims.scope === undefined || typeof claims.scope === "string")
+  );
+}
+
 // ---------------------------------------------------------------------------
 // signMcpToken
 // ---------------------------------------------------------------------------
@@ -96,20 +128,30 @@ export async function signMcpToken(
  * 4. If `exp` is present, token not expired (backwards-compat with legacy tokens)
  * 5. User exists in the `profiles` table (via service-role client)
  */
-export async function verifyMcpToken(
+export type McpTokenCredentialOutcome =
+  | {
+      outcome: "authenticated";
+      userId: string;
+      clientId: string;
+      scopes: string[];
+    }
+  | { outcome: "invalid" }
+  | { outcome: "misconfigured" };
+
+export async function verifyMcpTokenCredential(
   bearerToken: string,
-): Promise<{ userId: string; clientId: string; scopes: string[] } | null> {
+): Promise<McpTokenCredentialOutcome> {
   const secret = process.env.API_KEY_HMAC_SECRET;
   if (!secret) {
     log.error("MCP token verification failed: API_KEY_HMAC_SECRET not configured");
-    return null;
+    return { outcome: "misconfigured" };
   }
 
   // 1. Split & decode
   const parts = bearerToken.split(".");
   if (parts.length !== 3) {
     log.warn("[mcp] Token rejected: malformed structure");
-    return null;
+    return { outcome: "invalid" };
   }
 
   const [headerB64, payloadB64, signatureB64] = parts;
@@ -123,7 +165,7 @@ export async function verifyMcpToken(
     );
   } catch (err) {
     log.error("MCP token verification failed: signature computation error", err);
-    return null;
+    return { outcome: "misconfigured" };
   }
 
   const sigBuf = Buffer.from(signatureB64);
@@ -133,51 +175,47 @@ export async function verifyMcpToken(
     !crypto.timingSafeEqual(sigBuf, expectedBuf)
   ) {
     log.warn("[mcp] Token rejected: invalid signature");
-    return null;
+    return { outcome: "invalid" };
   }
 
   // Decode payload
-  let payload: {
-    sub?: string;
-    aud?: string;
-    exp?: number;
-    client_id?: string;
-    scope?: string;
-  };
+  let payload: unknown;
   try {
     payload = JSON.parse(
       Buffer.from(payloadB64, "base64url").toString(),
     );
   } catch {
     log.warn("[mcp] Token rejected: invalid payload");
-    return null;
+    return { outcome: "invalid" };
   }
 
-  // 3. Audience check
-  if (payload.aud !== "mcp") {
-    log.warn("[mcp] Token rejected: wrong audience");
-    return null;
+  if (!isMcpTokenClaims(payload)) {
+    log.warn("[mcp] Token rejected: malformed claims");
+    return { outcome: "invalid" };
   }
 
-  // 4. Expiry check (optional — legacy tokens without exp are accepted)
+  // 3. Expiry check (optional — legacy tokens without exp are accepted)
   const CLOCK_SKEW_SECONDS = 30;
-  if (payload.exp) {
+  if (payload.exp !== undefined) {
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp + CLOCK_SKEW_SECONDS <= now) {
       log.warn("[mcp] Token rejected: expired", { exp: payload.exp });
-      return null;
+      return { outcome: "invalid" };
     }
   }
 
-  // 5. Subject (userId) must exist
+  // 4. Subject (userId) must exist
   const userId = payload.sub;
-  if (!userId) {
-    log.warn("[mcp] Token rejected: missing subject");
-    return null;
-  }
 
-  // 6. Verify user exists in profiles (separate try/catch for Supabase errors)
+  // 5. Verify user exists in profiles (separate try/catch for Supabase errors)
   try {
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.SUPABASE_SERVICE_ROLE_KEY
+    ) {
+      log.error("[mcp] Token verification configuration is incomplete");
+      return { outcome: "misconfigured" };
+    }
     const supabase = getServiceClient();
     const { data: profile, error } = await supabase
       .from("profiles")
@@ -187,18 +225,33 @@ export async function verifyMcpToken(
 
     if (error) {
       log.error("MCP token verification: profile lookup failed", error);
-      return null;
+      return error.code === "PGRST116"
+        ? { outcome: "invalid" }
+        : { outcome: "misconfigured" };
     }
-    if (!profile) return null;
+    if (!profile) return { outcome: "invalid" };
   } catch (err) {
     log.error("MCP token verification: Supabase connection error", err);
-    return null;
+    return { outcome: "misconfigured" };
   }
 
   return {
+    outcome: "authenticated",
     userId,
     clientId: payload.client_id ?? userId,
     scopes: payload.scope?.split(/\s+/).filter(Boolean) ?? ["read", "write"],
+  };
+}
+
+export async function verifyMcpToken(
+  bearerToken: string,
+): Promise<{ userId: string; clientId: string; scopes: string[] } | null> {
+  const result = await verifyMcpTokenCredential(bearerToken);
+  if (result.outcome !== "authenticated") return null;
+  return {
+    userId: result.userId,
+    clientId: result.clientId,
+    scopes: result.scopes,
   };
 }
 

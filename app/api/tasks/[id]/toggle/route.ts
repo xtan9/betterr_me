@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest } from '@/lib/auth/api-key';
+import {
+  authenticateRequest,
+  USER_API_WRITE_POLICY,
+} from '@/lib/auth/authenticated-request';
 import { TasksDB } from '@/lib/db';
 import { log } from '@/lib/logger';
 
@@ -13,11 +16,11 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const auth = await authenticateRequest(request);
-    if ('error' in auth) {
+    const auth = await authenticateRequest(request, USER_API_WRITE_POLICY);
+    if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { userId, supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const tasksDB = new TasksDB(supabase);
     const task = await tasksDB.toggleTaskCompletion(id, userId);

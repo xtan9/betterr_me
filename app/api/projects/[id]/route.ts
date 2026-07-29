@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest } from '@/lib/auth/api-key';
+import {
+  authenticateRequest,
+  USER_API_READ_POLICY,
+  USER_API_WRITE_POLICY,
+} from '@/lib/auth/authenticated-request';
 import { ProjectsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
@@ -15,11 +19,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const auth = await authenticateRequest(request);
-    if ('error' in auth) {
+    const auth = await authenticateRequest(request, USER_API_READ_POLICY);
+    if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { userId, supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const projectsDB = new ProjectsDB(supabase);
     const project = await projectsDB.getProject(id, userId);
@@ -48,11 +52,11 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const auth = await authenticateRequest(request);
-    if ('error' in auth) {
+    const auth = await authenticateRequest(request, USER_API_WRITE_POLICY);
+    if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { userId, supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 
@@ -86,11 +90,11 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const auth = await authenticateRequest(request);
-    if ('error' in auth) {
+    const auth = await authenticateRequest(request, USER_API_WRITE_POLICY);
+    if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { userId, supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const projectsDB = new ProjectsDB(supabase);
     await projectsDB.deleteProject(id, userId);

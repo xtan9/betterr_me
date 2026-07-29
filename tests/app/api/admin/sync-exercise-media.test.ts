@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
+import { AuthRetryableFetchError } from "@supabase/supabase-js";
 
 // --- Hoisted mocks ---
 const {
@@ -45,7 +46,7 @@ import { POST } from "@/app/api/admin/sync-exercise-media/route";
 
 // --- Helpers ---
 function makeRequest(body?: Record<string, unknown>, headers?: Record<string, string>) {
-  const init: RequestInit = { method: "POST" };
+  const init: ConstructorParameters<typeof NextRequest>[1] = { method: "POST" };
   if (body !== undefined) {
     init.body = JSON.stringify(body);
   }
@@ -173,6 +174,39 @@ describe("POST /api/admin/sync-exercise-media", () => {
     );
 
     expect(response.status).toBe(200);
+  });
+
+  it("allows a valid x-admin-secret when admin authentication is unavailable", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthRetryableFetchError("Auth service unavailable", 503),
+    });
+    process.env.ADMIN_SYNC_SECRET = "test-secret";
+    setupCatalog();
+    setupAdminClient();
+
+    const response = await POST(
+      makeRequest({}, { "x-admin-secret": "test-secret" }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it("returns 500 when admin authentication is unavailable and the secret is invalid", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthRetryableFetchError("Auth service unavailable", 503),
+    });
+    process.env.ADMIN_SYNC_SECRET = "test-secret";
+
+    const response = await POST(
+      makeRequest({}, { "x-admin-secret": "wrong-secret" }),
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Failed to sync exercise media",
+    });
   });
 
   it("returns 403 when x-admin-secret header does not match env var and user is not admin", async () => {
