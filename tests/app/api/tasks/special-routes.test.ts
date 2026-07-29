@@ -13,7 +13,9 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const mockTasksDB = {
-  toggleTaskCompletion: vi.fn(),
+  getTask: vi.fn(),
+  createTask: vi.fn(),
+  updateTask: vi.fn(),
   getTodayTasks: vi.fn(),
   getUpcomingTasks: vi.fn(),
   getOverdueTasks: vi.fn(),
@@ -32,7 +34,11 @@ describe('POST /api/tasks/[id]/toggle', () => {
 
   it('should toggle task completion', async () => {
     const toggledTask = { id: 'task-1', is_completed: true };
-    vi.mocked(mockTasksDB.toggleTaskCompletion).mockResolvedValue(toggledTask as any);
+    vi.mocked(mockTasksDB.getTask).mockResolvedValue({
+      id: 'task-1',
+      is_completed: false,
+    } as any);
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue(toggledTask as any);
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1/toggle', {
       method: 'POST',
@@ -45,13 +51,15 @@ describe('POST /api/tasks/[id]/toggle', () => {
 
     expect(response.status).toBe(200);
     expect(data.task).toEqual(toggledTask);
-    expect(mockTasksDB.toggleTaskCompletion).toHaveBeenCalledWith('task-1', 'user-123');
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith(
+      'task-1',
+      'user-123',
+      expect.objectContaining({ is_completed: true, status: 'done' }),
+    );
   });
 
   it('should return 404 if task not found', async () => {
-    vi.mocked(mockTasksDB.toggleTaskCompletion).mockRejectedValue(
-      new Error('Task not found')
-    );
+    vi.mocked(mockTasksDB.getTask).mockResolvedValue(null);
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1/toggle', {
       method: 'POST',

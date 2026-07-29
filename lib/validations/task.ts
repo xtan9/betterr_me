@@ -25,7 +25,6 @@ export const taskUpdateSchema = taskFormSchema
   .partial()
   .extend({
     is_completed: z.boolean().optional(),
-    completed_at: z.string().nullable().optional(),
     status: taskStatusSchema.optional(),
     section: z.enum(['personal', 'work']).optional(),
     sort_order: z.number().optional(),
