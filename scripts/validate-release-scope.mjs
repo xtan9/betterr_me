@@ -32,8 +32,9 @@ function tableRows(map) {
 }
 
 export function validateReleaseScope(body, changedFiles) {
-  const isUserVisible = body.includes(USER_VISIBLE);
-  const isInternal = body.includes(INTERNAL);
+  const classification = section(body, 'Delivery classification');
+  const isUserVisible = classification.includes(USER_VISIBLE);
+  const isInternal = classification.includes(INTERNAL);
   if (isUserVisible === isInternal) {
     fail('choose exactly one delivery classification.');
   }

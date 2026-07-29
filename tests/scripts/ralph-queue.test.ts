@@ -7,6 +7,7 @@ import {
   analyzeTypeScriptRun,
   buildOvernightSummary,
   buildFailedAttemptPullRequestBody,
+  buildInternalPullRequestBody,
   chooseClaimWinner,
   classifyChangeRisk,
   createExternalVerificationGate,
@@ -20,11 +21,15 @@ import {
   findNewTypeScriptDiagnostics,
   findDuplicateMigrationPrefixes,
   isIssueActive,
+  isPullRequestRecoveryCandidate,
   independentReviewClassificationContract,
   independentReviewFailureKind,
   neutralizeClosingKeywords,
   preserveExternalFailureKind,
   pullRequestCheckDisposition,
+  reopenIssueForPullRequestRecovery,
+  redactCredentialPatterns,
+  recordCheckRetryAttempt,
   selectNextLiveIssue,
   selectNextLiveIssueStatus,
   selectNextIssue,
@@ -572,11 +577,136 @@ Reserve repairable=false for a genuine unresolved product decision with material
       failureSummary: "Independent review found a blocking defect.",
       repairAttempts: 2,
     });
+    expect(body).toContain('## Delivery classification');
+    expect(body).toContain('- [x] Internal, operational, or infrastructure-only change');
+    expect(body).toContain('- [ ] User-visible product delivery');
 
     expect(body).toContain("Draft failed attempt — do not merge");
     expect(body).toContain("Independent review found a blocking defect.");
     expect(body).toContain("Repair attempts: **2**");
     expect(body).toContain("Closes #101");
+  });
+
+  it("builds a canonical internal PR body without honoring worker closing keywords", () => {
+    const body = buildInternalPullRequestBody({
+      issueNumber: 101,
+      issueUrl: "https://github.com/example/repo/issues/101",
+      summary: "Done. Closes #999 and ping @everyone.",
+      risk: { level: "low", reasons: [] },
+    });
+
+    expect(body).toContain("- [x] Internal, operational, or infrastructure-only change");
+    expect(body).toContain("references #999");
+    expect(body).not.toContain("Closes #999");
+    expect(body).toContain("@\u200beveryone");
+    expect(body).toContain("Closes #101");
+  });
+
+  it("redacts a credential before any caller truncates the text", () => {
+    const credential = `github_pat_${"a".repeat(24)}`;
+    const redacted = redactCredentialPatterns(`${"x".repeat(3988)}${credential}`)
+      .slice(0, 4000);
+
+    expect(redacted).toContain("[REDACTED]");
+    expect(redacted).not.toContain("github_pat_");
+  });
+
+  it("counts a check retry fingerprint exactly once across crash replay", () => {
+    const plan = { fingerprint: "generation-1", retryKey: "head-and-runs" };
+    const first = recordCheckRetryAttempt({}, plan, "controller");
+    const replay = recordCheckRetryAttempt(first, plan, "controller");
+    const nextGeneration = recordCheckRetryAttempt(
+      replay,
+      { ...plan, fingerprint: "generation-2" },
+      "controller",
+    );
+
+    expect(first.controllerCheckRetry.attempts).toBe(1);
+    expect(replay).toBe(first);
+    expect(nextGeneration.controllerCheckRetry.attempts).toBe(2);
+  });
+
+  it("excludes incomplete publication transactions from PR backlog recovery", () => {
+    expect(
+      isPullRequestRecoveryCandidate({ stage: "failure-publishing", prNumber: 201 }),
+    ).toBe(false);
+    expect(
+      isPullRequestRecoveryCandidate({ stage: "parking", prNumber: 201 }),
+    ).toBe(false);
+    expect(
+      isPullRequestRecoveryCandidate({ stage: "failed", prNumber: 201 }),
+    ).toBe(true);
+    expect(
+      isPullRequestRecoveryCandidate({ stage: "manual-review", prNumber: 201 }),
+    ).toBe(true);
+  });
+
+  it("reopens only a published PR stage for exact-head recovery", () => {
+    const state = {
+      completed: [],
+      issues: {
+        "101": {
+          stage: "failed",
+          prNumber: 201,
+          branch: "codex/issue-101",
+        },
+      },
+    };
+    expect(
+      reopenIssueForPullRequestRecovery(
+        state,
+        101,
+        { commit: "head-1", worktreePath: "managed" },
+        "2026-07-29T10:00:00Z",
+      ).issues["101"],
+    ).toMatchObject({
+      stage: "pr-repairing",
+      prRecoveryOriginalStage: "failed",
+      commit: "head-1",
+      worktreePath: "managed",
+    });
+    expect(() =>
+      reopenIssueForPullRequestRecovery(
+        {
+          completed: [],
+          issues: { "101": { stage: "implementing" } },
+        },
+        101,
+        {},
+        "2026-07-29T10:00:00Z",
+      ),
+    ).toThrow("not eligible");
+
+    const retained = {
+      completed: [],
+      issues: {
+        "101": {
+          stage: "manual-review",
+          prNumber: 201,
+          branch: "codex/issue-101",
+          worktreePath: "managed",
+          commit: "head-1",
+        },
+      },
+    };
+    const reopened = reopenIssueForPullRequestRecovery(
+      retained,
+      101,
+      { commit: "head-1", worktreePath: "managed" },
+      "2026-07-29T10:00:00Z",
+    );
+    const replayed = reopenIssueForPullRequestRecovery(
+      reopened,
+      101,
+      { commit: "head-1", worktreePath: "managed" },
+      "2026-07-29T10:01:00Z",
+    );
+    expect(replayed.issues["101"]).toMatchObject({
+      stage: "pr-repairing",
+      prRecoveryOriginalStage: "manual-review",
+      worktreePath: "managed",
+      commit: "head-1",
+    });
   });
 
   it("neutralizes local and cross-repository issue-closing keywords", () => {
