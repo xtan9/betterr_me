@@ -755,6 +755,7 @@ Reserve repairable=false for a genuine unresolved product decision with material
       "run",
       "--reporter=json",
       "--maxWorkers=4",
+      "--no-cache",
     ]);
     expect(DEFAULT_VERIFICATION_TIMEOUT_SECONDS).toBe(3600);
     expect(fs.readFileSync("scripts/ralph/afk-ralph.ps1", "utf8")).toContain(

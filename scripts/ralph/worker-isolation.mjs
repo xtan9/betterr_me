@@ -10,6 +10,90 @@ export function workerCodexModelArguments({ readOnly }) {
   ];
 }
 
+export function unprivilegedWslCommandArguments({
+  home,
+  environment = [],
+  command,
+  args = [],
+}) {
+  if (typeof home !== "string" || !home.startsWith("/")) {
+    throw new Error("unprivileged WSL home must be an absolute Linux path");
+  }
+  if (typeof command !== "string" || !command.startsWith("/")) {
+    throw new Error("unprivileged WSL command must be an absolute Linux path");
+  }
+  if (!Array.isArray(environment) || !environment.every((value) => typeof value === "string")) {
+    throw new Error("unprivileged WSL environment must contain strings");
+  }
+  if (!Array.isArray(args) || !args.every((value) => typeof value === "string")) {
+    throw new Error("unprivileged WSL arguments must contain strings");
+  }
+  return [
+    "/usr/bin/setpriv",
+    "--no-new-privs",
+    "--bounding-set=-all",
+    "--reuid=65534",
+    "--regid=65534",
+    "--clear-groups",
+    "env",
+    `HOME=${home}`,
+    ...environment,
+    command,
+    ...args,
+  ];
+}
+
+export function unprivilegedWslIdentityProbeArguments(home) {
+  return unprivilegedWslCommandArguments({
+    home,
+    command: "/bin/sh",
+    args: [
+      "-c",
+      "/bin/grep -E '^(Uid|Gid|Groups|CapInh|CapPrm|CapEff|CapBnd|CapAmb|NoNewPrivs):' /proc/self/status",
+    ],
+  });
+}
+
+export function unprivilegedWslIdentityIsSafe(output) {
+  const fields = new Map(
+    String(output)
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => {
+        const separator = line.indexOf(":");
+        if (separator < 0) return [line, []];
+        return [
+          line.slice(0, separator),
+          line
+            .slice(separator + 1)
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean),
+        ];
+      }),
+  );
+  const equals = (name, expected) => {
+    const actual = fields.get(name);
+    return (
+      Array.isArray(actual) &&
+      actual.length === expected.length &&
+      actual.every((value, index) => value === expected[index])
+    );
+  };
+  const zeroCapability = ["0000000000000000"];
+  return (
+    equals("Uid", ["65534", "65534", "65534", "65534"]) &&
+    equals("Gid", ["65534", "65534", "65534", "65534"]) &&
+    equals("Groups", []) &&
+    equals("CapInh", zeroCapability) &&
+    equals("CapPrm", zeroCapability) &&
+    equals("CapEff", zeroCapability) &&
+    equals("CapBnd", zeroCapability) &&
+    equals("CapAmb", zeroCapability) &&
+    equals("NoNewPrivs", ["1"])
+  );
+}
+
 export function isolatedCodexReadablePaths({
   readOnly,
   worktreePath,

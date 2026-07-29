@@ -508,7 +508,7 @@ export function findDuplicateMigrationPrefixes(paths) {
 }
 
 export function vitestVerificationArguments(vitestPath) {
-  return [vitestPath, "run", "--reporter=json", "--maxWorkers=4"];
+  return [vitestPath, "run", "--reporter=json", "--maxWorkers=4", "--no-cache"];
 }
 
 export function independentReviewClassificationContract() {

@@ -51,6 +51,9 @@ import {
   isolatedCodexFilesystemConfig,
   isolatedCodexReadablePaths,
   removeSanitizedWorkerGitView,
+  unprivilegedWslCommandArguments,
+  unprivilegedWslIdentityIsSafe,
+  unprivilegedWslIdentityProbeArguments,
   workerCodexModelArguments,
   workerGitEnvironment,
   workerGitSmokeCommand,
@@ -492,23 +495,30 @@ async function runWsl(args, options = {}) {
 
 async function runWslSandboxed(command, args, worktreePath, options = {}) {
   const wslWorktreePath = windowsToWslPath(worktreePath);
-  return runWsl([
-    "env",
-    `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
-    "/usr/local/bin/codex",
-    "sandbox",
-    ...restrictedProfileArguments("ralph-verifier", ":workspace", [
-      wslDependencyRoot,
-      wslWorkerHome,
-    ]),
-    "-P",
-    "ralph-verifier",
-    "-C",
-    wslWorktreePath,
-    "--",
-    command,
-    ...args,
-  ], options);
+  return runWsl(
+    unprivilegedWslCommandArguments({
+      home: wslWorkerHome,
+      environment: [
+        `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
+      ],
+      command: "/usr/local/bin/codex",
+      args: [
+        "sandbox",
+        ...restrictedProfileArguments("ralph-verifier", ":workspace", [
+          wslDependencyRoot,
+          wslWorkerHome,
+        ]),
+        "-P",
+        "ralph-verifier",
+        "-C",
+        wslWorktreePath,
+        "--",
+        command,
+        ...args,
+      ],
+    }),
+    options,
+  );
 }
 
 async function isolatedCodex(args, options = {}) {
@@ -517,14 +527,15 @@ async function isolatedCodex(args, options = {}) {
     /^[A-Za-z]:\\/.test(argument) ? windowsToWslPath(argument) : argument,
   );
   return runWsl(
-    [
-      "env",
-      `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
-      "HOME=/var/lib/betterr-me-ralph/worker-home",
-      ...Object.entries(gitEnvironment).map(([name, value]) => `${name}=${value}`),
-      "/usr/local/bin/codex",
-      ...mappedArgs,
-    ],
+    unprivilegedWslCommandArguments({
+      home: wslWorkerHome,
+      environment: [
+        `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
+        ...Object.entries(gitEnvironment).map(([name, value]) => `${name}=${value}`),
+      ],
+      command: "/usr/local/bin/codex",
+      args: mappedArgs,
+    }),
     processOptions,
   );
 }
@@ -544,30 +555,33 @@ async function verifyWorkerGitSandbox(gitContext) {
   );
   try {
     const result = await runWsl(
-      [
-        "env",
-        `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
-        "HOME=/var/lib/betterr-me-ralph/worker-home",
-        ...Object.entries(gitContext.environment).map(
-          ([name, value]) => `${name}=${value}`,
-        ),
-        "/usr/local/bin/codex",
-        "sandbox",
-        ...restrictedProfileArguments(profile, ":workspace", [
-          gitContext.gitMetadataRoot,
-          wslDependencyRoot,
-          wslWorkerHome,
-        ]),
-        ...shellEnvironmentArguments(gitContext.environment),
-        "-P",
-        profile,
-        "-C",
-        gitContext.worktreePath,
-        "--",
-        "bash",
-        "-lc",
-        workerGitSmokeCommand(realGitConfig),
-      ],
+      unprivilegedWslCommandArguments({
+        home: wslWorkerHome,
+        environment: [
+          `CODEX_HOME=${windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"))}`,
+          ...Object.entries(gitContext.environment).map(
+            ([name, value]) => `${name}=${value}`,
+          ),
+        ],
+        command: "/usr/local/bin/codex",
+        args: [
+          "sandbox",
+          ...restrictedProfileArguments(profile, ":workspace", [
+            gitContext.gitMetadataRoot,
+            wslDependencyRoot,
+            wslWorkerHome,
+          ]),
+          ...shellEnvironmentArguments(gitContext.environment),
+          "-P",
+          profile,
+          "-C",
+          gitContext.worktreePath,
+          "--",
+          "bash",
+          "-lc",
+          workerGitSmokeCommand(realGitConfig),
+        ],
+      }),
       { timeoutSeconds: 30 },
     );
     if (result.stdout.trim() !== "RALPH_WORKER_GIT_OK") {
@@ -580,8 +594,20 @@ async function verifyWorkerGitSandbox(gitContext) {
 
 async function assertWslIsolationReady() {
   const codexHome = windowsToWslPath(path.join(process.env.USERPROFILE, ".codex"));
+  const identity = await runWsl(
+    unprivilegedWslIdentityProbeArguments(wslWorkerHome),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (!unprivilegedWslIdentityIsSafe(identity.stdout)) {
+    throw new Error("unprivileged WSL process identity is unsafe");
+  }
   await runWsl(
-    ["env", `CODEX_HOME=${codexHome}`, "/usr/local/bin/codex", "login", "status"],
+    unprivilegedWslCommandArguments({
+      home: wslWorkerHome,
+      environment: [`CODEX_HOME=${codexHome}`],
+      command: "/usr/local/bin/codex",
+      args: ["login", "status"],
+    }),
     { timeoutSeconds: 60, observeKillSwitch: false },
   );
   const localLockHash = crypto
