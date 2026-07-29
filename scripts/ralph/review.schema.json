@@ -9,7 +9,8 @@
     "blockingFindings": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "pattern": "\\S"
       }
     },
     "repairable": {
@@ -24,6 +25,7 @@
         "infrastructure",
         "ticket-infrastructure",
         "security",
+        "scope",
         "safety"
       ]
     },

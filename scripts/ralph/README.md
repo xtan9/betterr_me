@@ -133,6 +133,11 @@ safety checks pass. The queue then continues with an unrelated ready issue.
 Safety findings—including secret detection, forbidden scope or paths, unsafe
 links or history, and controller-integrity failures—still stop the entire run.
 
+Candidate changes beyond the approved ticket are not terminal safety findings
+when the exact safe repair is to remove or revert those extra changes to the
+issue base. They use the bounded repair loop. Here, forbidden scope means that
+completing the ticket itself requires changes outside its approved boundary.
+
 ## Recovery
 
 Durable state, prompts, verification logs, PR metadata, and summaries live

@@ -21,13 +21,13 @@ import {
   findNewTypeScriptDiagnostics,
   frameInertData,
   independentReviewClassificationContract,
+  independentReviewFailureKind,
   isIssueActive,
   isIssueParked,
   issueStageAtLeast,
   neutralizeClosingKeywords,
   preserveExternalFailureKind,
   pullRequestCheckDisposition,
-  reviewFailureKind,
   selectNextLiveIssueStatus,
   selectRecoveryBase,
   shouldRepairFailure,
@@ -2057,8 +2057,6 @@ The privileged controller produced the exact staged diff below. It is authoritat
 Check correctness, acceptance criteria, regressions, missing tests, repository standards, and unsafe scope. Any ambiguity is blocking.
 ${independentReviewClassificationContract()}
 Return status=pass, blockerKind=none, and an empty blockingFindings array only when no blocking finding remains.
-For findings, set blockerKind=code only when every finding is a concrete code or test defect inside the approved scope; set requirements for ambiguity or requirement conflict; set ticket-infrastructure when only ticket-specific verification infrastructure is unavailable but controller and ordinary worker infrastructure are healthy; set infrastructure for controller-wide or ordinary worker-runtime infrastructure failures; set security for a concrete product-code vulnerability whose repair stays inside the approved ticket scope; and set safety for secrets exposure, forbidden or unsafe scope, controller-integrity concerns, or policy concerns that must stop the whole run. Use the most restrictive applicable kind (safety, then infrastructure, then ticket-infrastructure, then requirements, then security, then code).
-Set repairable=true only when every finding is concrete, its exact repair is clear, and it can be safely repaired inside the approved ticket scope. Product security defects may be repairable; unresolved non-repairable product security findings are preserved in a blocked draft PR. Always set repairable=false for safety findings, pass results, missing infrastructure, ambiguity, requirement conflicts, or any finding whose safe repair requires judgment outside the ticket.
 Ticket block:
 ${ticketBlock.framed}
 Diff block:
@@ -2089,7 +2087,7 @@ ${diffBlock.framed}`;
   ) {
     throw Object.assign(new Error("independent review returned blocking findings"), {
       stopReason: review.blockingFindings?.join("; ") || review.summary,
-      failureKind: reviewFailureKind(review),
+      failureKind: independentReviewFailureKind(review),
     });
   }
 

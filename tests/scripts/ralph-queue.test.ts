@@ -21,6 +21,7 @@ import {
   findDuplicateMigrationPrefixes,
   isIssueActive,
   independentReviewClassificationContract,
+  independentReviewFailureKind,
   neutralizeClosingKeywords,
   preserveExternalFailureKind,
   pullRequestCheckDisposition,
@@ -506,6 +507,10 @@ describe("Ralph durable state and policy", () => {
       items: { type: "string", minLength: 1 },
       minItems: 1,
     });
+    expect(schema.properties.blockingFindings.items).toEqual({
+      type: "string",
+      pattern: "\\S",
+    });
     expect(schema.properties.blockerKind.enum).toEqual([
       "none",
       "code",
@@ -513,6 +518,7 @@ describe("Ralph durable state and policy", () => {
       "infrastructure",
       "ticket-infrastructure",
       "security",
+      "scope",
       "safety",
     ]);
     expect(schema.allOf).toBeUndefined();
@@ -523,7 +529,10 @@ describe("Ralph durable state and policy", () => {
 
     expect(contract).toBe(`Before classifying a requirement as ambiguous or a finding as unrepairable, search the repository's authoritative design, policy, and domain documentation, including applicable AGENTS.md instructions and docs linked from them. A detail omitted from the issue is not ambiguous when established repository policy resolves it.
 List every issue, design, policy, and implementation source consulted in evidenceReviewed. For status=findings with blockerKind=requirements or repairable=false, cite the exact repository paths and the unresolved decision in blockingFindings and summary. Passing reviews are exempt because they have no unresolved decision and must keep blockingFindings empty. Do not use repairable=false merely because the issue itself omits a detail, because the first repair is not obvious, or because the defect is security-sensitive.
-Reserve repairable=false for a genuine unresolved product decision with materially different valid outcomes, forbidden scope, secrets or controller-integrity risk, missing infrastructure, or a repair that necessarily exceeds the approved ticket scope. Use blockerKind=ticket-infrastructure when only ticket-specific verification infrastructure is unavailable but the controller and ordinary worker runtime are healthy; reserve blockerKind=infrastructure for controller-wide or worker-runtime infrastructure failures. A concrete defect with an established repository policy is repairable.`);
+Candidate changes beyond the approved ticket are repairable scope findings when the one safe repair is to remove or revert those extra changes to the issue base while preserving the in-scope implementation. Classify that case as blockerKind=scope and repairable=true; removing candidate changes does not itself require approval to broaden scope. Do not use blockerKind=scope when completing the ticket requires adding or modifying forbidden scope.
+For findings, set blockerKind=code only when every finding is a concrete code or test defect inside the approved scope; set requirements for ambiguity or requirement conflict; set ticket-infrastructure when only ticket-specific verification infrastructure is unavailable but controller and ordinary worker infrastructure are healthy; set infrastructure for controller-wide or ordinary worker-runtime infrastructure failures; set security for a concrete product-code vulnerability whose repair stays inside the approved ticket scope; set scope for the removable candidate-diff case above; and set safety for secrets exposure, forbidden paths, scope that cannot be restored solely by removing or reverting candidate changes, controller-integrity concerns, or policy concerns that must stop the whole run. Use the most restrictive applicable kind (safety, then infrastructure, then ticket-infrastructure, then requirements, then scope, then security, then code).
+Set repairable=true only when every finding is concrete, its exact repair is clear, and it can be safely repaired without broadening the approved ticket scope. Removing or reverting extra candidate changes to restore the approved scope qualifies. Product security defects may be repairable; unresolved non-repairable product security findings are preserved in a blocked draft PR. Always set repairable=false for safety findings, pass results, missing infrastructure, ambiguity, requirement conflicts, or any finding whose safe repair requires judgment outside the ticket.
+Reserve repairable=false for a genuine unresolved product decision with materially different valid outcomes, secrets or controller-integrity risk, missing infrastructure, forbidden scope that cannot be restored solely by removing or reverting candidate changes, or a repair that necessarily exceeds the approved ticket scope. A concrete defect with an established repository policy is repairable.`);
   });
 
   it("labels a failed-attempt pull request as draft recovery work", () => {
@@ -892,6 +901,20 @@ Reserve repairable=false for a genuine unresolved product decision with material
     expect(
       reviewFailureKind({ blockerKind: "security", repairable: true }),
     ).toBe("review-security");
+    expect(
+      reviewFailureKind({ blockerKind: "scope", repairable: true }),
+    ).toBe("review");
+    expect(
+      independentReviewFailureKind({
+        status: "findings",
+        blockingFindings: ["Revert the extra caller migration."],
+        blockerKind: "scope",
+        repairable: true,
+      }),
+    ).toBe("review");
+    expect(
+      reviewFailureKind({ blockerKind: "scope", repairable: false }),
+    ).toBe("safety");
     expect(reviewFailureKind({ blockerKind: "safety", repairable: false })).toBe(
       "safety",
     );
@@ -902,6 +925,33 @@ Reserve repairable=false for a genuine unresolved product decision with material
     expect(shouldParkIssueFailure("review-ticket-infrastructure")).toBe(true);
     expect(shouldParkIssueFailure("safety")).toBe(false);
     expect(reviewFailureKind({})).toBe("safety");
+  });
+
+  it("fails closed for cross-field-inconsistent review results", () => {
+    expect(
+      independentReviewFailureKind({
+        status: "pass",
+        blockingFindings: [],
+        blockerKind: "scope",
+        repairable: true,
+      }),
+    ).toBe("safety");
+    expect(
+      independentReviewFailureKind({
+        status: "findings",
+        blockingFindings: [],
+        blockerKind: "scope",
+        repairable: true,
+      }),
+    ).toBe("safety");
+    expect(
+      independentReviewFailureKind({
+        status: "findings",
+        blockingFindings: ["   "],
+        blockerKind: "scope",
+        repairable: true,
+      }),
+    ).toBe("safety");
   });
 
   it("adds the external worktree read grant only to the read-only reviewer", () => {
