@@ -5,6 +5,7 @@ import {
   blockedRepairPreservationRecoveryAction,
   blockedRepairRecoveryReceipt,
   blockedRepairRecoveryReceiptMatches,
+  canAdoptLegacyProtectedScopeRepair,
   planPullRequestRecovery,
   pullRequestCheckRetryKey,
   pullRequestRecoveryErrorDisposition,
@@ -57,6 +58,13 @@ describe("Ralph pull-request recovery planning", () => {
         failureKind: "ticket-infrastructure",
       }),
     ).toBe("preserve-blocked-repair");
+    expect(
+      pullRequestRecoveryErrorDisposition({
+        action: "reverify-draft",
+        stage: "pr-repairing",
+        failureKind: "protected-scope",
+      }),
+    ).toBe("preserve-blocked-repair");
   });
 
   it("adopts an exact blocked repair result left dirty by a controller crash", () => {
@@ -87,6 +95,66 @@ describe("Ralph pull-request recovery planning", () => {
       failureKind: "ticket-infrastructure",
       stopReason: "PostgreSQL is unavailable for the ticket-specific fixture.",
     });
+  });
+
+  it("adopts an exact protected-scope result left dirty by a controller crash", () => {
+    expect(
+      blockedRepairRecoveryReceipt({
+        stage: "pr-repairing",
+        issueNumber: 491,
+        expectedHeadSha: "head-491",
+        checkoutHeadSha: "head-491",
+        checkoutDirty: true,
+        worktreeFingerprint: "b".repeat(64),
+        repairAttempt: 5,
+        resultPath: "logs/issue-491/repair-5-result.json",
+        result: {
+          status: "blocked",
+          issueNumber: 491,
+          ambiguous: true,
+          blockerKind: "protected-scope",
+          summary: "The ticket requires a supervised workflow edit.",
+        },
+      }),
+    ).toMatchObject({
+      issueNumber: 491,
+      failureKind: "protected-scope",
+      stopReason: "The ticket requires a supervised workflow edit.",
+    });
+  });
+
+  it("adopts only the exact legacy protected-scope result for the recorded PR head", () => {
+    const issueState = {
+      stage: "pr-repairing",
+      failureKind: "worker-blocked",
+      commit: "head-491",
+      repairAttempts: 5,
+      lastRepairResultPath: "logs/issue-491/repair-5-result.json",
+      blockedPrRepairRecovery: null,
+    };
+    const receipt = {
+      issueNumber: 491,
+      headSha: "head-491",
+      repairAttempt: 5,
+      resultPath: "logs/issue-491/repair-5-result.json",
+      worktreeFingerprint: "c".repeat(64),
+      failureKind: "protected-scope",
+      stopReason: "A supervised workflow edit is required.",
+    };
+
+    expect(canAdoptLegacyProtectedScopeRepair(issueState, receipt)).toBe(true);
+    expect(
+      canAdoptLegacyProtectedScopeRepair(issueState, {
+        ...receipt,
+        headSha: "different-head",
+      }),
+    ).toBe(false);
+    expect(
+      canAdoptLegacyProtectedScopeRepair(
+        { ...issueState, blockedPrRepairRecovery: receipt },
+        receipt,
+      ),
+    ).toBe(false);
   });
 
   it("rejects a blocked repair receipt when the checkout head changed", () => {
@@ -392,6 +460,22 @@ describe("Ralph pull-request recovery planning", () => {
     ).toBe("human-gate");
   });
 
+  it("human-gates drafts only after a reviewer explicitly requests changes", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({ reviewDecision: "CHANGES_REQUESTED" }),
+      ),
+    ).toMatchObject({
+      action: "human-gate",
+      reason: "a reviewer requested changes",
+    });
+    expect(
+      planPullRequestRecovery(
+        snapshot({ reviewDecision: "REVIEW_REQUIRED" }),
+      ).action,
+    ).toBe("reverify-draft");
+  });
+
   it("reverifies a green draft only when its original blocker is bounded and repairable", () => {
     const passingChecks = [
       {
@@ -407,6 +491,7 @@ describe("Ralph pull-request recovery planning", () => {
       "worker-blocked",
       "ticket-infrastructure",
       "review-ticket-infrastructure",
+      "protected-scope",
     ]) {
       expect(
         planPullRequestRecovery(
@@ -435,6 +520,20 @@ describe("Ralph pull-request recovery planning", () => {
     expect(
       planPullRequestRecovery(
         snapshot({
+          originalFailureKind: "protected-scope",
+          repairAttempts: 5,
+          checks: passingChecks,
+        }),
+      ),
+    ).toMatchObject({
+      action: "reverify-draft",
+      consumesCodingAttempt: false,
+      promoteDraftAfterVerification: false,
+    });
+
+    expect(
+      planPullRequestRecovery(
+        snapshot({
           originalFailureKind: "worker-blocked",
           repairAttempts: 5,
           checks: passingChecks,
@@ -453,6 +552,29 @@ describe("Ralph pull-request recovery planning", () => {
     ).toMatchObject({
       action: "human-gate",
       reason: "pull request has merge conflicts",
+    });
+  });
+
+  it("repairs trusted failed checks on a recoverable draft", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          originalFailureKind: "ticket-infrastructure",
+          checks: [
+            {
+              name: "e2e-tests",
+              bucket: "fail",
+              state: "FAILURE",
+              provider: "github-actions",
+              runId: "107",
+            },
+          ],
+        }),
+      ),
+    ).toMatchObject({
+      action: "code-repair",
+      promoteDraftAfterVerification: true,
+      failedChecks: ["e2e-tests"],
     });
   });
 

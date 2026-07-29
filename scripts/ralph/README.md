@@ -178,6 +178,23 @@ draft only after that cycle passes; safety, ambiguity, controller infrastructure
 explicitly non-repairable findings, exhausted attempts, and high-risk merges
 remain human-gated. Unrelated ready issues may continue.
 
+Ticket-specific infrastructure and protected-scope blockers do not consume a
+coding attempt merely to re-verify a new, green PR head. Safe in-scope changes
+completed before either blocker are committed and pushed to the draft instead
+of leaving a dirty worktree that stops the queue. A protected workflow or
+controller change still requires supervised handling; Ralph never grants an
+ordinary issue worker write access to `.github/**` or `scripts/ralph/**`.
+
+Ticket-specific PostgreSQL fixtures opt into the controller-owned disposable
+database gate by placing the exact marker `-- ralph-ci: true` in their first 12
+lines. `scripts/ci/run-ralph-sql-tests.sh` discovers marked fixtures in stable
+path order, rejects psql meta-commands and dangerous server/role primitives,
+clears the process environment, and runs accepted fixtures as a dedicated
+non-superuser role. Both local-Supabase PR jobs execute them with
+`ON_ERROR_STOP=1`. This gives ordinary workers a narrow test-data-only path to
+request real database verification without granting workflow, controller, or
+secret authority.
+
 Implementation, verification, review, and required-check waits are bounded.
 Transient network and rate-limit failures use a bounded retry count and
 backoff. Concrete test, TypeScript, independent-review, required-PR-check, and

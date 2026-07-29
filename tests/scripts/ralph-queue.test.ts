@@ -449,7 +449,7 @@ describe("Ralph durable state and policy", () => {
       blockerKind: "protected-scope",
       ambiguous: true,
     });
-    expect(protectedScopeRefusal).toBe("worker-blocked");
+    expect(protectedScopeRefusal).toBe("protected-scope");
     expect(shouldParkIssueFailure(protectedScopeRefusal)).toBe(true);
     expect(
       workerResultFailureKind({ blockerKind: "safety", ambiguous: true }),
@@ -469,6 +469,12 @@ describe("Ralph durable state and policy", () => {
       shouldPreserveBlockedPullRequestRepair(
         "pr-repairing",
         "review-ticket-infrastructure",
+      ),
+    ).toBe(true);
+    expect(
+      shouldPreserveBlockedPullRequestRepair(
+        "pr-repairing",
+        "protected-scope",
       ),
     ).toBe(true);
     expect(
