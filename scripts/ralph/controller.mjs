@@ -9,6 +9,7 @@ import {
   DEFAULT_VERIFICATION_TIMEOUT_SECONDS,
   analyzeTypeScriptRun,
   buildFailedAttemptPullRequestBody,
+  buildInternalPullRequestBody,
   buildOvernightSummary,
   chooseClaimWinner,
   classifyChangeRisk,
@@ -21,10 +22,14 @@ import {
   findNewTypeScriptDiagnostics,
   isIssueActive,
   isIssueParked,
+  isPullRequestRecoveryCandidate,
   issueStageAtLeast,
   neutralizeClosingKeywords,
   preserveExternalFailureKind,
   pullRequestCheckDisposition,
+  redactCredentialPatterns,
+  recordCheckRetryAttempt,
+  reopenIssueForPullRequestRecovery,
   selectNextLiveIssueStatus,
   selectRecoveryBase,
   shouldRepairFailure,
@@ -75,6 +80,10 @@ import {
   reviewReportViolations,
   reviewRecoveryPlan,
 } from "./review-protocol.mjs";
+import {
+  pullRequestCheckRetryKey,
+  reconcilePullRequestBacklog,
+} from "./pull-request-recovery.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "..", "..");
@@ -1138,6 +1147,682 @@ async function reconcileRemoteCompletions(
   return state;
 }
 
+function internalPullRequestBody(issue, issueState) {
+  const risk = issueState.risk ?? { level: "high", reasons: ["risk was not verified"] };
+  const summary = redactFailureSummary(issueState.implementationSummary);
+  return buildInternalPullRequestBody({
+    issueNumber: issue.issueNumber,
+    issueUrl: issue.url,
+    summary,
+    risk,
+  });
+}
+
+function normalizedPullRequestBody(body) {
+  return String(body).replaceAll("\r\n", "\n").trimEnd();
+}
+
+function checkRunId(check) {
+  try {
+    const link = new URL(String(check.link ?? ""));
+    const match = link.pathname.match(
+      new RegExp(`^/${owner}/${repo}/actions/runs/(\\d+)(?:/|$)`),
+    );
+    return link.protocol === "https:" && link.hostname === "github.com"
+      ? match?.[1] ?? null
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function inspectPullRequestRecovery(candidate, state, controllerOptions) {
+  const issueState = state.issues[String(candidate.issueNumber)];
+  const pullRequest = await ghJson(
+    [
+      "pr",
+      "view",
+      String(issueState.prNumber),
+      "--repo",
+      repository,
+      "--json",
+      "state,isDraft,headRefOid,mergeStateStatus,reviewDecision,url,mergedAt,mergeCommit",
+    ],
+    controllerOptions,
+  );
+  let result;
+  let checks = [];
+  let noChecksReported = false;
+  for (
+    let attempt = 1;
+    attempt <= controllerOptions.maximumTransientAttempts;
+    attempt += 1
+  ) {
+    ensureNotStopped();
+    result = await runProcess(
+      "gh.exe",
+      [
+        "pr",
+        "checks",
+        String(issueState.prNumber),
+        "--repo",
+        repository,
+        "--json",
+        "name,bucket,state,link,startedAt,completedAt",
+      ],
+      { timeoutSeconds: 60 },
+    );
+    try {
+      checks = JSON.parse(result.stdout || "[]");
+    } catch {
+      checks = [];
+      result = { ...result, stderr: `${result.stderr}\ninvalid check JSON` };
+    }
+    noChecksReported = /no checks reported/i.test(result.stderr);
+    if (result.code === 0 || checks.length > 0 || noChecksReported) break;
+    const failureKind = /invalid check JSON/.test(result.stderr)
+      ? "check-poll"
+      : failureKindFor(result);
+    if (
+      !shouldRetry(
+        failureKind,
+        attempt,
+        controllerOptions.maximumTransientAttempts,
+      )
+    ) {
+      throw Object.assign(
+        new Error(`unable to inspect checks for PR #${issueState.prNumber}`),
+        { failureKind },
+      );
+    }
+    const delay = Math.min(8000, 1000 * 2 ** (attempt - 1));
+    status(`Transient ${failureKind} failure inspecting PR #${issueState.prNumber}; retrying.`);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+  if (result.code !== 0 && checks.length === 0 && !noChecksReported) {
+    throw Object.assign(
+      new Error(`unable to inspect required checks for PR #${issueState.prNumber}`),
+      { failureKind: failureKindFor(result) },
+    );
+  }
+  const snapshot = {
+    issueNumber: candidate.issueNumber,
+    prNumber: issueState.prNumber,
+    stage: issueState.stage,
+    prState: pullRequest.state,
+    isDraft: pullRequest.isDraft,
+    headSha: pullRequest.headRefOid,
+    expectedHeadSha: issueState.commit ?? issueState.failureCommit,
+    mergeStateStatus: pullRequest.mergeStateStatus,
+    reviewDecision: pullRequest.reviewDecision ?? "",
+    mergedAt: pullRequest.mergedAt,
+    mergeCommit: pullRequest.mergeCommit,
+    url: pullRequest.url,
+    risk: issueState.risk?.level ?? "high",
+    mode: controllerOptions.mode,
+    repairAttempts: issueState.repairAttempts ?? 0,
+    maximumRepairAttempts: controllerOptions.maximumRepairAttempts,
+    maximumTransientAttempts: controllerOptions.maximumTransientAttempts,
+    originalFailureKind: issueState.failureKind,
+    checksAvailable: !noChecksReported,
+    checks: checks.map((check) => ({
+      ...check,
+      provider: checkRunId(check) ? "github-actions" : "unknown",
+      runId: checkRunId(check),
+    })),
+  };
+  const retryKey = pullRequestCheckRetryKey(snapshot);
+  return {
+    ...snapshot,
+    transientCheckAttempts:
+      issueState.transientCheckRetry?.key === retryKey
+        ? issueState.transientCheckRetry.attempts
+        : 0,
+    controllerRepairAttempts:
+      issueState.controllerCheckRetry?.key === retryKey
+        ? issueState.controllerCheckRetry.attempts
+        : 0,
+  };
+}
+
+async function rerunFailedCheckRuns(
+  state,
+  issue,
+  plan,
+  controllerOptions,
+) {
+  const runIds = [
+    ...new Set((plan.checks ?? []).map((check) => check.runId).filter(Boolean)),
+  ];
+  if (runIds.length === 0) {
+    return {
+      state,
+      result: {
+        status: "human-gate",
+        reason: "failed checks expose no safe GitHub Actions rerun identifier",
+      },
+    };
+  }
+  const number = issue.issueNumber;
+  for (const runId of runIds) {
+    ensureNotStopped();
+    const run = await ghJson(
+      ["api", `repos/${owner}/${repo}/actions/runs/${runId}`],
+      controllerOptions,
+    );
+    const receiptKey = `${plan.fingerprint}:${runId}`;
+    const issueState = state.issues[String(number)];
+    const existing = issueState.checkRerunReceipts?.[receiptKey];
+    if (existing) {
+      if (
+        existing.status === "requesting" &&
+        (run.run_attempt > existing.observedAttempt || run.status !== "completed")
+      ) {
+        state = moveIssue(state, number, issueState.stage, {
+          checkRerunReceipts: {
+            ...issueState.checkRerunReceipts,
+            [receiptKey]: {
+              ...existing,
+              status: "requested",
+              adoptedAt: new Date().toISOString(),
+            },
+          },
+        });
+        continue;
+      }
+      if (existing.status === "requesting") {
+        const reason = `check rerun ${runId} has an uncertain crash boundary; refusing a duplicate request`;
+        state = moveIssue(state, number, issueState.stage, {
+          checkRerunReceipts: {
+            ...issueState.checkRerunReceipts,
+            [receiptKey]: {
+              ...existing,
+              status: "uncertain",
+              gatedAt: new Date().toISOString(),
+            },
+          },
+        });
+        return { state, result: { status: "human-gate", reason } };
+      }
+      if (["requested", "uncertain"].includes(existing.status)) continue;
+    }
+    if (
+      run.status !== "completed" ||
+      !["failure", "cancelled", "timed_out", "action_required"].includes(
+        String(run.conclusion).toLowerCase(),
+      )
+    ) {
+      continue;
+    }
+    const receipts = Object.fromEntries(
+      Object.entries(issueState.checkRerunReceipts ?? {}).slice(-19),
+    );
+    state = moveIssue(state, number, issueState.stage, {
+      checkRerunReceipts: {
+        ...receipts,
+        [receiptKey]: {
+          status: "requesting",
+          runId,
+          observedAttempt: run.run_attempt,
+          requestedAt: new Date().toISOString(),
+        },
+      },
+    });
+    await gh(
+      ["run", "rerun", runId, "--failed", "--repo", repository],
+      controllerOptions,
+      { timeoutSeconds: 120 },
+    );
+    const currentIssueState = state.issues[String(number)];
+    state = moveIssue(state, number, currentIssueState.stage, {
+      checkRerunReceipts: {
+        ...currentIssueState.checkRerunReceipts,
+        [receiptKey]: {
+          ...currentIssueState.checkRerunReceipts[receiptKey],
+          status: "requested",
+          confirmedAt: new Date().toISOString(),
+        },
+      },
+    });
+  }
+  return { state, result: { status: "rerun-requested", runIds } };
+}
+
+async function restorePullRequestRecoveryCheckout(
+  state,
+  issue,
+  expectedHead,
+  controllerOptions,
+) {
+  const number = issue.issueNumber;
+  let issueState = state.issues[String(number)];
+  const worktreePath = issueState.worktreePath ?? activeIssueWorktreePath(worktreeRoot);
+  const adoptCheckout = () => {
+    const now = new Date().toISOString();
+    return saveState(
+      reopenIssueForPullRequestRecovery(
+        state,
+        number,
+        {
+          commit: expectedHead,
+          worktreePath,
+          prRecoveryCheckoutAt: now,
+        },
+        now,
+      ),
+    );
+  };
+  if (fs.existsSync(worktreePath)) {
+    const branch = (
+      await git(["-C", worktreePath, "branch", "--show-current"])
+    ).stdout.trim();
+    const head = (
+      await git(["-C", worktreePath, "rev-parse", "HEAD"])
+    ).stdout.trim();
+    const changes = (
+      await git(["-C", worktreePath, "status", "--porcelain"])
+    ).stdout.trim();
+    if (branch === issueState.branch && head === expectedHead && !changes) {
+      return adoptCheckout();
+    }
+    throw Object.assign(
+      new Error("the single implementation worktree is occupied by different or dirty work"),
+      { failureKind: "safety" },
+    );
+  }
+  await runTransient(
+    "git.exe",
+    ["-C", repositoryRoot, "fetch", "origin", "--prune"],
+    controllerOptions,
+    { timeoutSeconds: 120 },
+  );
+  const remoteHead = (
+    await git([
+      "-C",
+      repositoryRoot,
+      "ls-remote",
+      "--heads",
+      "origin",
+      `refs/heads/${issueState.branch}`,
+    ])
+  ).stdout.trim().split(/\s+/)[0];
+  if (remoteHead !== expectedHead) {
+    throw Object.assign(new Error("remote PR branch changed before recovery checkout"), {
+      failureKind: "safety",
+    });
+  }
+  fs.mkdirSync(worktreeRoot, { recursive: true });
+  const localBranch = await runProcess(
+    "git.exe",
+    ["-C", repositoryRoot, "show-ref", "--verify", `refs/heads/${issueState.branch}`],
+    { timeoutSeconds: 30 },
+  );
+  if (localBranch.code === 0) {
+    await git(["-C", repositoryRoot, "worktree", "add", worktreePath, issueState.branch], {
+      timeoutSeconds: 120,
+    });
+  } else {
+    await git(
+      [
+        "-C",
+        repositoryRoot,
+        "worktree",
+        "add",
+        "-b",
+        issueState.branch,
+        worktreePath,
+        `origin/${issueState.branch}`,
+      ],
+      { timeoutSeconds: 120 },
+    );
+  }
+  const head = (await git(["-C", worktreePath, "rev-parse", "HEAD"])).stdout.trim();
+  if (head !== expectedHead) {
+    throw Object.assign(new Error("recovery worktree does not match the exact PR head"), {
+      failureKind: "safety",
+    });
+  }
+  return adoptCheckout();
+}
+
+async function failedCheckEvidence(plan) {
+  const checks = plan.checks ?? [];
+  const manifest = checks.map(
+    (check) => `${check.name} (${check.state}; run ${check.runId ?? "unavailable"})`,
+  );
+  const manifestText = redactCredentialPatterns(manifest.join("\n"))
+    .replaceAll("@", "@\u200b");
+  const excerptBudget = Math.max(
+    100,
+    Math.floor(Math.max(1000, 11000 - manifestText.length) / Math.max(1, checks.length)),
+  );
+  const excerpts = [];
+  for (const check of checks) {
+    if (!check.runId) {
+      excerpts.push(`${check.name}: no trusted log identifier`);
+      continue;
+    }
+    const result = await runProcess(
+      "gh.exe",
+      ["run", "view", check.runId, "--repo", repository, "--log-failed"],
+      { timeoutSeconds: 120 },
+    );
+    const safeLog = redactFailureSummary(result.stdout || result.stderr).slice(
+      0,
+      excerptBudget,
+    );
+    excerpts.push(`${check.name} excerpt:\n${safeLog}`);
+  }
+  return `${manifestText}\n\n${excerpts.join("\n\n")}`.slice(0, 12000);
+}
+
+async function parkPullRequestRecoveryGate(state, issue, action, reason) {
+  let issueState = state.issues[String(issue.issueNumber)];
+  if (issueState.worktreePath) {
+    state = await releasePublishedCheckout(state, issue);
+    issueState = state.issues[String(issue.issueNumber)];
+  }
+  const stage = issueState.stage === "failed" ? "failed" : "manual-review";
+  return moveIssue(state, issue.issueNumber, stage, {
+    stopReason: reason,
+    prRecoveryGate: {
+      action,
+      reason,
+      at: new Date().toISOString(),
+    },
+  });
+}
+
+async function reconcilePullRequestRecoveryBacklog(
+  state,
+  actor,
+  controllerOptions,
+) {
+  const deadline = Date.now() + controllerOptions.checkTimeoutSeconds * 1000;
+  let announced = false;
+  for (;;) {
+    ensureNotStopped();
+    const candidates = queue.filter((issue) => {
+      const issueState = state.issues[String(issue.issueNumber)];
+      return isPullRequestRecoveryCandidate(issueState);
+    });
+    if (candidates.length === 0) return state;
+    if (!announced) {
+      status(`Reconciling ${candidates.length} existing Ralph pull request(s) before selecting new work.`);
+      announced = true;
+    }
+    const outcomes = await reconcilePullRequestBacklog({
+    candidates,
+    inspect: (candidate) => inspectPullRequestRecovery(candidate, state, controllerOptions),
+    readRecord: async (fingerprint, plan) => {
+      const record = state.issues[String(plan.issueNumber)]?.prRecovery;
+      return record?.fingerprint === fingerprint ? record : null;
+    },
+    writeRecord: async (fingerprint, record) => {
+      const issueState = state.issues[String(record.issueNumber)];
+      state = moveIssue(state, record.issueNumber, issueState.stage, {
+        prRecovery: { fingerprint, ...record, updatedAt: new Date().toISOString() },
+      });
+    },
+    execute: async (plan) => {
+      ensureNotStopped();
+      const issue = queue.find((entry) => entry.issueNumber === plan.issueNumber);
+      let issueState = state.issues[String(plan.issueNumber)];
+      status(`PR #${plan.prNumber} recovery action: ${plan.action}.`);
+      if (plan.action === "finalize-merged") {
+        const snapshot = await inspectPullRequestRecovery(issue, state, controllerOptions);
+        state = await finalizeMergedPullRequest(
+          state,
+          issue,
+          {
+            number: plan.prNumber,
+            url: snapshot.url,
+            mergedAt: snapshot.mergedAt,
+            mergeCommit: snapshot.mergeCommit,
+          },
+          controllerOptions,
+        );
+        return { status: "merged" };
+      }
+      if (plan.action === "wait") {
+        return { status: plan.action, reason: plan.reason ?? null };
+      }
+      if (plan.action === "human-gate") {
+        const reason = plan.reason ?? "pull request requires human review";
+        state = await parkPullRequestRecoveryGate(
+          state,
+          issue,
+          plan.action,
+          reason,
+        );
+        return { status: "human-gate", reason };
+      }
+      if (plan.action === "refresh") {
+        if (
+          issueState.pendingPrRepair?.commit &&
+          issueState.pendingPrRepair.commit === plan.headSha
+        ) {
+          state = await reconcilePendingPullRequestRepair(
+            state,
+            issue,
+            controllerOptions,
+          );
+          return { status: "refresh", reason: "adopted a pending controller push" };
+        }
+        const reason = "pull request head changed outside the controller; human verification is required";
+        state = await parkPullRequestRecoveryGate(
+          state,
+          issue,
+          "refresh",
+          reason,
+        );
+        return { status: "human-gate", reason };
+      }
+      if (plan.action === "controller-repair") {
+        const body = issueState.failureDraft
+          ? buildFailedAttemptPullRequestBody({
+              issueNumber: issue.issueNumber,
+              issueUrl: issue.url,
+              failureKind: issueState.failureKind,
+              failureSummary: redactFailureSummary(issueState.stopReason),
+              repairAttempts: issueState.repairAttempts ?? 0,
+            })
+          : internalPullRequestBody(issue, issueState);
+        const bodyPath = path.join(
+          stateRoot,
+          "logs",
+          `issue-${issue.issueNumber}`,
+          "recovered-pull-request-body.md",
+        );
+        fs.mkdirSync(path.dirname(bodyPath), { recursive: true });
+        fs.writeFileSync(bodyPath, body);
+        const current = await ghJson(
+          ["pr", "view", String(plan.prNumber), "--repo", repository, "--json", "body,headRefOid"],
+          controllerOptions,
+        );
+        if (current.headRefOid !== plan.headSha) {
+          return { status: "refresh", reason: "PR head changed before controller repair" };
+        }
+        if (normalizedPullRequestBody(current.body) !== normalizedPullRequestBody(body)) {
+          await gh(
+            ["pr", "edit", String(plan.prNumber), "--repo", repository, "--body-file", bodyPath],
+            controllerOptions,
+          );
+          const verified = await ghJson(
+            ["pr", "view", String(plan.prNumber), "--repo", repository, "--json", "body,headRefOid"],
+            controllerOptions,
+          );
+          if (
+            verified.headRefOid !== plan.headSha ||
+            normalizedPullRequestBody(verified.body) !== normalizedPullRequestBody(body)
+          ) {
+            throw Object.assign(new Error("controller-owned PR metadata repair did not verify"), {
+              failureKind: "safety",
+            });
+          }
+        }
+        if (issueState.controllerCheckAttempt?.fingerprint !== plan.fingerprint) {
+          const retry = recordCheckRetryAttempt(issueState, plan, "controller");
+          state = moveIssue(state, issue.issueNumber, issueState.stage, {
+            controllerCheckAttempt: retry.controllerCheckAttempt,
+            controllerCheckRetry: retry.controllerCheckRetry,
+          });
+        }
+        const rerun = await rerunFailedCheckRuns(
+          state,
+          issue,
+          plan,
+          controllerOptions,
+        );
+        state = rerun.state;
+        return rerun.result;
+      }
+      if (plan.action === "retry-checks") {
+        if (issueState.transientCheckAttempt?.fingerprint !== plan.fingerprint) {
+          const retry = recordCheckRetryAttempt(issueState, plan, "transient");
+          state = moveIssue(state, issue.issueNumber, issueState.stage, {
+            transientCheckAttempt: retry.transientCheckAttempt,
+            transientCheckRetry: retry.transientCheckRetry,
+          });
+        }
+        const rerun = await rerunFailedCheckRuns(
+          state,
+          issue,
+          plan,
+          controllerOptions,
+        );
+        state = rerun.state;
+        return rerun.result;
+      }
+      if (plan.action === "code-repair") {
+        state = await restorePullRequestRecoveryCheckout(
+          state,
+          issue,
+          plan.headSha,
+          controllerOptions,
+        );
+        state = await assertClaimOwnership(state, issue, actor, controllerOptions);
+        issueState = state.issues[String(issue.issueNumber)];
+        if (issueState.pendingPrRepair) {
+          state = await reconcilePendingPullRequestRepair(
+            state,
+            issue,
+            controllerOptions,
+          );
+          issueState = state.issues[String(issue.issueNumber)];
+        }
+        const evidence = await failedCheckEvidence(plan);
+        let failure = Object.assign(new Error("required PR checks failed"), {
+          failureKind: "pr-checks",
+          stopReason: `Required PR checks failed together:\n${evidence}`,
+        });
+        const changes = (
+          await git(["-C", issueState.worktreePath, "status", "--porcelain"])
+        ).stdout.trim();
+        if (changes && issueState.prRepairWorkerCompletedAt) {
+          try {
+            state = await verifyIssue(state, issue, controllerOptions, {
+              force: true,
+              stage: "pr-repairing",
+            });
+            state = await amendAndPushPullRequestRepair(
+              state,
+              issue,
+              controllerOptions,
+            );
+            failure = null;
+          } catch (error) {
+            failure = error;
+          }
+        }
+        state = await completePullRequestLifecycle(
+          state,
+          issue,
+          actor,
+          controllerOptions,
+          failure,
+        );
+        return { status: state.issues[String(issue.issueNumber)].stage };
+      }
+      if (plan.action === "merge-gates") {
+        state = await waitAndMaybeMerge(state, issue, actor, controllerOptions);
+        return { status: state.issues[String(issue.issueNumber)].stage };
+      }
+      throw new Error(`unsupported PR recovery action ${plan.action}`);
+    },
+    onError: async (error, plan) => {
+      if (["kill-switch", "safety", "infrastructure"].includes(error.failureKind)) {
+        throw error;
+      }
+      if (plan.action === "code-repair") {
+        const issue = queue.find(
+          (entry) => entry.issueNumber === plan.issueNumber,
+        );
+        if (error.failureKind === "ownership") {
+          const reason = redactFailureSummary(error.message);
+          state = await parkPullRequestRecoveryGate(
+            state,
+            issue,
+            "ownership",
+            reason,
+          );
+          return { status: "human-gate", reason };
+        }
+        state = await preserveBlockedPullRequestRepair(
+          state,
+          issue,
+          actor,
+          controllerOptions,
+          error,
+        );
+        return {
+          status: "human-gate",
+          reason: redactFailureSummary(error.stopReason ?? error.message),
+        };
+      }
+      const reason = redactFailureSummary(error.stopReason ?? error.message);
+      const issue = queue.find((entry) => entry.issueNumber === plan.issueNumber);
+      state = await parkPullRequestRecoveryGate(
+        state,
+        issue,
+        plan.action,
+        reason,
+      );
+      status(`PR #${plan.prNumber} recovery was safely gated: ${reason}`);
+      return { status: "human-gate", reason };
+    },
+    onInspectError: async (error, issue) => {
+      if (["kill-switch", "safety", "infrastructure"].includes(error.failureKind)) {
+        throw error;
+      }
+      const issueState = state.issues[String(issue.issueNumber)];
+      const reason = redactFailureSummary(error.message);
+      state = await parkPullRequestRecoveryGate(
+        state,
+        issue,
+        "inspect",
+        reason,
+      );
+      status(`PR #${issueState.prNumber} inspection was safely gated: ${reason}`);
+      return { status: "human-gate", reason };
+    },
+    });
+    const pending = outcomes.some(
+      ({ plan, result }) =>
+        plan?.action === "wait" ||
+        ["refresh", "rerun-requested"].includes(result?.status),
+    );
+    if (!pending) return state;
+    if (Date.now() >= deadline) {
+      status("Existing PR checks are still pending after the bounded recovery wait; continuing without merging them.");
+      return state;
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, controllerOptions.pollSeconds * 1000),
+    );
+  }
+}
+
 async function postClaim(issueNumber, state, controllerOptions) {
   const expiresAt = new Date(
     Date.now() + controllerOptions.claimLeaseHours * 60 * 60 * 1000,
@@ -1164,19 +1849,21 @@ async function assertClaimOwnership(
   controllerOptions,
   allowRenewal = true,
 ) {
+  const ownershipError = (message) =>
+    Object.assign(new Error(message), { failureKind: "ownership" });
   const number = issue.issueNumber;
   const live = await getLiveIssue(number, controllerOptions);
   if (live.state !== "OPEN" || !live.labels.includes("ready-for-agent")) {
-    throw new Error(`issue #${number} is no longer open and ready-for-agent`);
+    throw ownershipError(`issue #${number} is no longer open and ready-for-agent`);
   }
   if (live.title !== issue.title) {
-    throw new Error(`issue #${number} title no longer matches the approved queue`);
+    throw ownershipError(`issue #${number} title no longer matches the approved queue`);
   }
   if (
     live.assignees.length > 0 &&
     !live.assignees.every((assignee) => assignee === actor)
   ) {
-    throw new Error(`issue #${number} is assigned to another actor`);
+    throw ownershipError(`issue #${number} is assigned to another actor`);
   }
 
   const issueState = state.issues[String(number)];
@@ -1185,14 +1872,14 @@ async function assertClaimOwnership(
   let winner = chooseClaimWinner(claims, new Date());
   if (!winner) {
     if (!allowRenewal) {
-      throw new Error(`issue #${number} has no active claim for this recovery`);
+      throw ownershipError(`issue #${number} has no active claim for this recovery`);
     }
     await postClaim(number, state, controllerOptions);
     claims = await getClaims(number, controllerOptions);
     winner = chooseClaimWinner(claims, new Date());
   }
   if (!winner || winner.runId !== state.runId) {
-    throw new Error(
+    throw ownershipError(
       `issue #${number} claim lost; active winner is ${winner?.runId ?? "unknown"}`,
     );
   }
@@ -1476,22 +2163,14 @@ function assertFailureSnapshotPathsSafe(changedFiles) {
 }
 
 function redactFailureSummary(value) {
-  let redacted = String(value ?? "Automated verification did not complete.").slice(
-    0,
-    4000,
+  let redacted = redactCredentialPatterns(
+    String(value ?? "Automated verification did not complete."),
   );
   for (const sensitiveValue of collectSensitiveValues()) {
     redacted = redacted.replaceAll(sensitiveValue, "[REDACTED]");
   }
-  return neutralizeClosingKeywords(redacted
-    .replace(
-      /-----BEGIN ((?:RSA |EC |OPENSSH )?PRIVATE KEY)-----[\s\S]*?-----END \1-----/g,
-      "[REDACTED]",
-    )
-    .replace(
-      /github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}/g,
-      "[REDACTED]",
-    ))
+  return neutralizeClosingKeywords(redacted)
+    .slice(0, 4000)
     .replaceAll("@", "@\u200b");
 }
 
@@ -3192,10 +3871,7 @@ async function ensurePullRequest(state, issue, controllerOptions) {
       "pull-request-body.md",
     );
     fs.mkdirSync(path.dirname(bodyPath), { recursive: true });
-    fs.writeFileSync(
-      bodyPath,
-      `## Delivery classification\n\n- [ ] User-visible product delivery\n- [x] Internal, operational, or infrastructure-only change\n\n## Product scope source\n\n${issue.url}\n\n## Summary\n\n${issueState.implementationSummary}\n\n## Verification\n\n- Full Vitest suite passed locally.\n- No new TypeScript diagnostics beyond the captured baseline.\n- Independent Codex review passed.\n- Risk classification: **${issueState.risk.level}**${issueState.risk.reasons.length ? ` — ${issueState.risk.reasons.join("; ")}` : ""}.\n\n## Reviewer release-scope check\n\n- [ ] I reconciled every approved user-visible capability in the scope source to a row above.\n- [ ] Each mapped file is part of this PR, and each verification is runnable against this delivery.\n\nCloses #${number}\n`,
-    );
+    fs.writeFileSync(bodyPath, internalPullRequestBody(issue, issueState));
     status(`Creating a linked pull request for issue #${number}.`);
     const created = await gh(
       [
@@ -3286,7 +3962,7 @@ async function requiredPullRequestPolicy(controllerOptions) {
   return { requiredReviews, statusChecksRequired };
 }
 
-async function waitForRequiredChecks(prNumber, policy, controllerOptions) {
+async function waitForRequiredChecks(prNumber, controllerOptions) {
   const deadline = Date.now() + controllerOptions.checkTimeoutSeconds * 1000;
   while (Date.now() < deadline) {
     ensureNotStopped();
@@ -3298,7 +3974,6 @@ async function waitForRequiredChecks(prNumber, policy, controllerOptions) {
         String(prNumber),
         "--repo",
         repository,
-        "--required",
         "--json",
         "name,bucket,state",
       ],
@@ -3319,13 +3994,10 @@ async function waitForRequiredChecks(prNumber, policy, controllerOptions) {
         .map((check) => `${check.name} (${check.state})`);
       return {
         passed: false,
-        reason: `required PR checks failed or were cancelled: ${failedChecks.join(", ")}`,
+        reason: `PR checks failed or were cancelled: ${failedChecks.join(", ")}`,
       };
     }
     if (checks.length > 0 && buckets.every((bucket) => ["pass", "skipping"].includes(bucket))) {
-      return { passed: true };
-    }
-    if (checks.length === 0 && !policy.statusChecksRequired) {
       return { passed: true };
     }
     const kind = failureKindFor(result);
@@ -3336,9 +4008,11 @@ async function waitForRequiredChecks(prNumber, policy, controllerOptions) {
       setTimeout(resolve, controllerOptions.pollSeconds * 1000),
     );
   }
-  throw Object.assign(new Error("timed out waiting for required PR checks"), {
-    failureKind: "timeout",
-  });
+  return {
+    passed: false,
+    timedOut: true,
+    reason: "timed out waiting for all reported PR checks",
+  };
 }
 
 async function waitForPullRequestHead(
@@ -3445,19 +4119,19 @@ async function waitAndMaybeMerge(state, issue, actor, controllerOptions) {
     issueState.commit,
     controllerOptions,
   );
-  status(`Waiting for required checks on PR #${issueState.prNumber}.`);
+  status(`Waiting for all reported checks on PR #${issueState.prNumber}.`);
   const checks = await waitForRequiredChecks(
     issueState.prNumber,
-    policy,
     controllerOptions,
   );
   if (!checks.passed) {
-    throw Object.assign(new Error(checks.reason), {
-      failureKind: "pr-checks",
-      stopReason: checks.reason,
+    return moveIssue(state, number, "manual-review", {
+      stopReason: checks.timedOut
+        ? checks.reason
+        : `${checks.reason}; deferred to the shared PR recovery planner`,
     });
   }
-  status(`Required checks passed on PR #${issueState.prNumber}.`);
+  status(`All reported checks passed on PR #${issueState.prNumber}.`);
   if (!stageAtLeast(issueState, "checks-passed")) {
     state = moveIssue(state, number, "checks-passed", {});
     issueState = state.issues[String(number)];
@@ -3653,6 +4327,12 @@ async function completePullRequestLifecycle(
 
 async function processOne(state, actor, controllerOptions) {
   ensureNotStopped();
+  state = await reconcileRemoteCompletions(state, controllerOptions);
+  state = await reconcilePullRequestRecoveryBacklog(
+    state,
+    actor,
+    controllerOptions,
+  );
   state = await reconcileRemoteCompletions(state, controllerOptions);
   const selection = await selectIssue(state, actor, controllerOptions);
   if (selection.status !== "selected") {

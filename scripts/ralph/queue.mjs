@@ -445,7 +445,12 @@ export function buildFailedAttemptPullRequestBody({
   failureSummary,
   repairAttempts,
 }) {
-  return `## Status
+  return `## Delivery classification
+
+- [ ] User-visible product delivery
+- [x] Internal, operational, or infrastructure-only change
+
+## Status
 
 **Draft failed attempt — do not merge.** Ralph preserved this branch for supervised recovery after an automated gate stopped the issue.
 
@@ -471,10 +476,132 @@ Closes #${issueNumber}
 `;
 }
 
+export function reopenIssueForPullRequestRecovery(
+  state,
+  issueNumber,
+  patch,
+  now,
+) {
+  const current = state.issues?.[String(issueNumber)];
+  if (
+    !current ||
+    !["pr-open", "checks-passed", "pr-repairing", "manual-review", "failed"].includes(
+      current.stage,
+    ) ||
+    !current.prNumber ||
+    !current.branch
+  ) {
+    throw new Error(
+      `issue #${issueNumber} is not eligible for pull-request recovery`,
+    );
+  }
+  return {
+    ...state,
+    updatedAt: now,
+    issues: {
+      ...state.issues,
+      [String(issueNumber)]: {
+        ...current,
+        ...patch,
+        stage: "pr-repairing",
+        prRecoveryOriginalStage:
+          current.prRecoveryOriginalStage ?? current.stage,
+        updatedAt: now,
+      },
+    },
+  };
+}
+
+export function buildInternalPullRequestBody({
+  issueNumber,
+  issueUrl,
+  summary,
+  risk,
+}) {
+  const safeSummary = neutralizeClosingKeywords(String(summary)).replaceAll(
+    "@",
+    "@\u200b",
+  );
+  return `## Delivery classification
+
+- [ ] User-visible product delivery
+- [x] Internal, operational, or infrastructure-only change
+
+## Product scope source
+
+${issueUrl}
+
+## Summary
+
+${safeSummary}
+
+## Verification
+
+- Full Vitest suite passed locally.
+- No new TypeScript diagnostics beyond the captured baseline.
+- Independent Codex review passed.
+- Risk classification: **${risk.level}**${risk.reasons.length ? ` — ${risk.reasons.join("; ")}` : ""}.
+
+## Reviewer release-scope check
+
+- [ ] I reconciled every approved user-visible capability in the scope source to a row above.
+- [ ] Each mapped file is part of this PR, and each verification is runnable against this delivery.
+
+Closes #${issueNumber}
+`;
+}
+
 export function neutralizeClosingKeywords(value) {
   return String(value).replace(
     /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(?=(?:[\w.-]+\/[\w.-]+)?#\d+)/gi,
     "references ",
+  );
+}
+
+export function redactCredentialPatterns(value) {
+  return String(value)
+    .replace(
+      /-----BEGIN ((?:RSA |EC |OPENSSH )?PRIVATE KEY)-----[\s\S]*?-----END \1-----/g,
+      "[REDACTED]",
+    )
+    .replace(
+      /github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}/g,
+      "[REDACTED]",
+    );
+}
+
+export function recordCheckRetryAttempt(issueState, plan, kind) {
+  if (!['controller', 'transient'].includes(kind)) {
+    throw new Error(`unsupported check retry kind ${kind}`);
+  }
+  const attemptField = `${kind}CheckAttempt`;
+  const retryField = `${kind}CheckRetry`;
+  if (issueState[attemptField]?.fingerprint === plan.fingerprint) {
+    return issueState;
+  }
+  return {
+    ...issueState,
+    [attemptField]: { fingerprint: plan.fingerprint },
+    [retryField]: {
+      key: plan.retryKey,
+      attempts:
+        issueState[retryField]?.key === plan.retryKey
+          ? issueState[retryField].attempts + 1
+          : 1,
+    },
+  };
+}
+
+export function isPullRequestRecoveryCandidate(issueState) {
+  return Boolean(
+    issueState?.prNumber &&
+      [
+        "pr-open",
+        "checks-passed",
+        "pr-repairing",
+        "manual-review",
+        "failed",
+      ].includes(issueState.stage),
   );
 }
 

@@ -24,7 +24,7 @@ reflogs, unrelated history, or writable metadata.
   repair budget, then parks the green PR for human review and continues with
   another unrelated issue on the ready dependency frontier. Dependents remain
   blocked until their PR is actually merged.
-- `AutoMerge` waits for required GitHub checks and required review approvals.
+- `AutoMerge` waits for all reported GitHub checks and required review approvals.
   It merges without bypass only when the diff is classified low risk, the PR is
   conflict-free, and every gate passes. High-risk work must still pass required
   checks (including bounded check-failure repairs) before it is parked for a
@@ -162,6 +162,17 @@ State advances atomically through selection, claim, worktree creation,
 implementation, verification, commit, push, PR, checks, and merge. Re-running
 the same command reconciles the recorded branch, worktree, commit, PR, and
 merged SHA instead of starting duplicate work.
+
+Before selecting new work, Ralph also reconciles every open PR recorded in its
+durable state. It fingerprints the exact PR head and check generation, repairs
+controller-owned metadata, reruns cancelled GitHub Actions checks, and batches
+all remaining failed-check evidence into one bounded coding repair. Pending and
+completed actions are recorded before and after each side effect so a restart
+resumes rather than duplicates it. Check reruns have their own bounded budget;
+they do not consume coding repair attempts. A repaired PR still passes the
+normal check, review, conflict, risk, and merge gates. Drafts with an unresolved
+original blocker and high-risk PRs remain human-gated, while unrelated ready
+issues may continue.
 
 Implementation, verification, review, and required-check waits are bounded.
 Transient network and rate-limit failures use a bounded retry count and
