@@ -798,15 +798,23 @@ function runCli(args) {
   );
 }
 
+export function executeQueueCli(
+  args,
+  writeError = (message) => process.stderr.write(message),
+) {
+  try {
+    runCli(args);
+    return 0;
+  } catch (error) {
+    writeError(`${error.message}\n`);
+    return 1;
+  }
+}
+
 const isMain =
   process.argv[1] &&
   path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 
 if (isMain) {
-  try {
-    runCli(process.argv.slice(2));
-  } catch (error) {
-    process.stderr.write(`${error.message}\n`);
-    process.exitCode = 1;
-  }
+  process.exitCode = executeQueueCli(process.argv.slice(2));
 }

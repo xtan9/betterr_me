@@ -108,19 +108,22 @@ export async function ensureSanitizedWorkerGitView({
         baseSha,
       ])
     ).stdout;
-    await git(
-      [
+    const pathspecPath = path.join(viewPath, "tracked-files.pathspec");
+    fs.writeFileSync(pathspecPath, trackedFiles, "utf8");
+    try {
+      await git([
         `--git-dir=${gitDirectory}`,
         `--work-tree=${worktreePath}`,
         "-c",
         "core.autocrlf=true",
         "add",
         "--force",
-        "--pathspec-from-file=-",
+        `--pathspec-from-file=${pathspecPath}`,
         "--pathspec-file-nul",
-      ],
-      { input: trackedFiles },
-    );
+      ]);
+    } finally {
+      fs.rmSync(pathspecPath, { force: true });
+    }
     await git([
       `--git-dir=${gitDirectory}`,
       `--work-tree=${worktreePath}`,
