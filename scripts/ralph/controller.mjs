@@ -552,6 +552,10 @@ async function runWslSandboxed(command, args, worktreePath, options = {}) {
 
 async function isolatedCodex(args, options = {}) {
   const { gitEnvironment = {}, ...processOptions } = options;
+  await runWsl(wslCodexRuntime.configRemovalCommand, {
+    timeoutSeconds: 30,
+    observeKillSwitch: false,
+  });
   const mappedArgs = args.map((argument) =>
     /^[A-Za-z]:\\/.test(argument) ? windowsToWslPath(argument) : argument,
   );
@@ -626,6 +630,10 @@ async function assertWslIsolationReady() {
     timeoutSeconds: 30,
     observeKillSwitch: false,
   });
+  await runWsl(wslCodexRuntime.configRemovalCommand, {
+    timeoutSeconds: 30,
+    observeKillSwitch: false,
+  });
   await runWsl(["test", "-f", wslCodexRuntime.sourceAuthPath], {
     timeoutSeconds: 30,
     observeKillSwitch: false,
@@ -660,7 +668,7 @@ async function assertWslIsolationReady() {
   ) {
     throw new Error("isolated Codex runtime has unsafe ownership or mode");
   }
-  await runWsl(["test", "!", "-e", `${wslCodexHome}/config.toml`], {
+  await runWsl(["test", "!", "-e", wslCodexRuntime.configPath], {
     timeoutSeconds: 30,
     observeKillSwitch: false,
   });

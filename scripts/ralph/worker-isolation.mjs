@@ -72,10 +72,12 @@ export function isolatedCodexRuntimeConfiguration({
   }
 
   const authPath = path.posix.join(codexHome, "auth.json");
+  const configPath = path.posix.join(codexHome, "config.toml");
   return {
     environment: [`CODEX_HOME=${codexHome}`],
     sourceAuthPath,
     authPath,
+    configPath,
     directoryProvisionCommand: [
       "install",
       "-d",
@@ -98,6 +100,7 @@ export function isolatedCodexRuntimeConfiguration({
       sourceAuthPath,
       authPath,
     ],
+    configRemovalCommand: ["/bin/rm", "-f", configPath],
   };
 }
 
