@@ -6,6 +6,9 @@ import {
   pullRequestRecoveryFingerprint,
   reconcilePullRequestBacklog,
 } from "../../scripts/ralph/pull-request-recovery.mjs";
+import {
+  selectPullRequestRecoveryCandidates,
+} from "../../scripts/ralph/queue.mjs";
 
 const snapshot = (overrides = {}) => ({
   issueNumber: 521,
@@ -408,6 +411,35 @@ describe("Ralph pull-request recovery planning", () => {
 });
 
 describe("Ralph pull-request backlog reconciliation", () => {
+  it("does not execute a later checkout while a waiting PR owns the worktree", async () => {
+    const candidates = [
+      snapshot({
+        issueNumber: 491,
+        checks: [{ name: "CI", state: "PENDING" }],
+      }),
+      snapshot({ issueNumber: 492, checks: [] }),
+    ];
+    const selected = selectPullRequestRecoveryCandidates(candidates, {
+      "491": { worktreePath: "managed/current" },
+      "492": { worktreePath: null },
+    });
+    const execute = vi.fn(async (plan) => ({ status: plan.action }));
+
+    await reconcilePullRequestBacklog({
+      candidates: selected,
+      inspect: async (candidate) => candidate,
+      readRecord: async () => null,
+      writeRecord: async () => {},
+      execute,
+    });
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(execute.mock.calls[0][0]).toMatchObject({
+      issueNumber: 491,
+      action: "wait",
+    });
+  });
+
   it("runs sequentially and skips an already completed idempotency key", async () => {
     const order: string[] = [];
     const records = new Map<string, { status: string }>();

@@ -636,6 +636,18 @@ export function isPullRequestRecoveryCandidate(issueState) {
   );
 }
 
+export function selectPullRequestRecoveryCandidates(candidates, issueStates) {
+  const reserved = [];
+  for (const candidate of candidates) {
+    const issueState = issueStates?.[String(candidate.issueNumber)];
+    if (issueState?.worktreePath) reserved.push(candidate);
+  }
+  if (reserved.length > 1) {
+    throw new Error("multiple PR recovery candidates reserve the single worktree");
+  }
+  return reserved.length === 1 ? reserved : [...candidates];
+}
+
 export function testVerificationFailureKind(error) {
   if (error?.failureKind === "timeout") return "tests-timeout";
   if (error?.failureKind === "kill-switch") return "kill-switch";
