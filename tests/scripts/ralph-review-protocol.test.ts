@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -28,7 +31,48 @@ const completedAxis = (id: string) => ({
   findingIds: [],
 });
 
+const reviewSchema = JSON.parse(
+  readFileSync(
+    path.resolve("scripts/ralph/review.schema.json"),
+    "utf8",
+  ),
+);
+
+function structuredOutputRequiredViolations(
+  schema: unknown,
+  location = "$",
+): string[] {
+  if (Array.isArray(schema)) {
+    return schema.flatMap((item, index) =>
+      structuredOutputRequiredViolations(item, `${location}[${index}]`),
+    );
+  }
+  if (!schema || typeof schema !== "object") return [];
+
+  const node = schema as Record<string, unknown>;
+  const violations: string[] = [];
+  if (node.type === "object") {
+    const properties = (node.properties ?? {}) as Record<string, unknown>;
+    const required = new Set(Array.isArray(node.required) ? node.required : []);
+    for (const property of Object.keys(properties)) {
+      if (!required.has(property)) violations.push(`${location}.${property}`);
+    }
+  }
+
+  for (const [key, value] of Object.entries(node)) {
+    violations.push(
+      ...structuredOutputRequiredViolations(value, `${location}.${key}`),
+    );
+  }
+
+  return violations;
+}
+
 describe("Ralph exhaustive review protocol", () => {
+  it("keeps every object compatible with Codex strict structured output", () => {
+    expect(structuredOutputRequiredViolations(reviewSchema)).toEqual([]);
+  });
+
   it("requires one parallel read-only specialist per exhaustive review axis", () => {
     const request = createReviewRequest({
       issue,
