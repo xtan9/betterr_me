@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 
 import {
   DEFAULT_VERIFICATION_TIMEOUT_SECONDS,
@@ -12,6 +11,7 @@ import {
   classifyChangeRisk,
   createExternalVerificationGate,
   evaluateMergeGate,
+  executeQueueCli,
   externalRepairDisposition,
   externalVerificationReceiptMatches,
   failureDisposition,
@@ -1148,23 +1148,26 @@ describe("Ralph iteration advancement", () => {
 });
 
 describe("Ralph queue CLI errors", () => {
-  const queueScript = path.resolve("scripts/ralph/queue.mjs");
+  function execute(args: string[]) {
+    let stderr = "";
+    const status = executeQueueCli(args, (message) => {
+      stderr += message;
+    });
+    return { status, stderr };
+  }
 
   it("fails for an unknown command", () => {
-    const result = spawnSync(process.execPath, [queueScript, "unknown"], {
-      encoding: "utf8",
+    expect(execute(["unknown"])).toEqual({
+      status: 1,
+      stderr:
+        "usage: queue.mjs <next|live-next|transition|claim-winner|risk|merge-gate|summary|gate|compare-diagnostics|analyze-diagnostics> [options]\n",
     });
-
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("usage: queue.mjs");
   });
 
   it("fails when a required option is missing", () => {
-    const result = spawnSync(process.execPath, [queueScript, "next"], {
-      encoding: "utf8",
+    expect(execute(["next"])).toEqual({
+      status: 1,
+      stderr: "missing required option --queue\n",
     });
-
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain("missing required option --queue");
   });
 });

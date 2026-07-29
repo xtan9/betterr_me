@@ -25,6 +25,13 @@ function git(args: string[], options: { input?: string } = {}) {
   return { stdout: result.stdout, stderr: result.stderr };
 }
 
+function gitWithoutStdin(args: string[], options: { input?: string } = {}) {
+  if (options.input !== undefined) {
+    throw new Error("git stdin transport is unavailable");
+  }
+  return git(args, options);
+}
+
 describe("Ralph sanitized worker Git view", () => {
   it("pins Sol with medium implementation effort and high review effort", () => {
     expect(workerCodexModelArguments({ readOnly: false })).toEqual([
@@ -48,7 +55,7 @@ describe("Ralph sanitized worker Git view", () => {
     expect(command).toContain("! git remote | grep -q .");
   });
 
-  it("exposes one clean baseline without the controller repository remote or history", async () => {
+  it("exposes one clean baseline when git stdin transport is unavailable", async () => {
     const temporaryRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), "ralph-worker-isolation-"),
     );
@@ -91,7 +98,7 @@ describe("Ralph sanitized worker Git view", () => {
         baseSha,
         workerGitRoot,
         issueNumber: 1,
-        git,
+        git: gitWithoutStdin,
       });
       const workerGit = (args: string[]) =>
         git([
