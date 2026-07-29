@@ -71,6 +71,7 @@
         },
         "required": [
           "id",
+          "subject",
           "implementationEvidence",
           "testEvidence",
           "verdict"

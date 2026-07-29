@@ -533,6 +533,7 @@ describe("Ralph durable state and policy", () => {
     expect(schema.properties.axes.minItems).toBe(1);
     expect(schema.properties.coverage.items.required).toEqual([
       "id",
+      "subject",
       "implementationEvidence",
       "testEvidence",
       "verdict",
