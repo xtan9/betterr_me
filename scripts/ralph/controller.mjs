@@ -82,7 +82,11 @@ import {
   reviewRecoveryPlan,
 } from "./review-protocol.mjs";
 import {
+  blockedRepairPreservationRecoveryAction,
+  blockedRepairRecoveryReceipt,
+  blockedRepairRecoveryReceiptMatches,
   pullRequestCheckRetryKey,
+  pullRequestRecoveryErrorDisposition,
   reconcilePullRequestBacklog,
 } from "./pull-request-recovery.mjs";
 
@@ -1864,6 +1868,62 @@ async function reconcilePullRequestRecoveryBacklog(
         return { status: state.issues[String(issue.issueNumber)].stage };
       }
       if (plan.action === "reverify-draft") {
+        issueState = state.issues[String(issue.issueNumber)];
+        let blockedRecoveryAction =
+          blockedRepairPreservationRecoveryAction(issueState);
+        if (blockedRecoveryAction === "reconcile-pending") {
+          state = await reconcilePendingPullRequestRepair(
+            state,
+            issue,
+            controllerOptions,
+          );
+          issueState = state.issues[String(issue.issueNumber)];
+          blockedRecoveryAction =
+            blockedRepairPreservationRecoveryAction(issueState);
+        }
+        if (blockedRecoveryAction === "finish-preservation") {
+          const failure = Object.assign(
+            new Error("resuming blocked pull-request repair preservation"),
+            {
+              failureKind: issueState.blockedPrFailureKind,
+              stopReason: issueState.blockedPrStopReason,
+            },
+          );
+          status(`Finishing blocked repair preservation for PR #${plan.prNumber}.`);
+          state = await preserveBlockedPullRequestRepair(
+            state,
+            issue,
+            actor,
+            controllerOptions,
+            failure,
+          );
+          return {
+            status: "human-gate",
+            reason: failure.stopReason,
+          };
+        }
+        const recoveredRepair = await recoverBlockedPullRequestRepair(
+          state,
+          issue,
+          plan,
+        );
+        state = recoveredRepair.state;
+        if (recoveredRepair.failure) {
+          status(
+            `Preserving recovered blocked repair for PR #${plan.prNumber}.`,
+          );
+          state = await preserveBlockedPullRequestRepair(
+            state,
+            issue,
+            actor,
+            controllerOptions,
+            recoveredRepair.failure,
+          );
+          return {
+            status: "human-gate",
+            reason: recoveredRepair.failure.stopReason,
+          };
+        }
         state = await restorePullRequestRecoveryCheckout(
           state,
           issue,
@@ -1908,13 +1968,31 @@ async function reconcilePullRequestRecoveryBacklog(
       throw new Error(`unsupported PR recovery action ${plan.action}`);
     },
     onError: async (error, plan) => {
-      if (["kill-switch", "safety", "infrastructure"].includes(error.failureKind)) {
+      state = readJson(statePath);
+      const issue = queue.find((entry) => entry.issueNumber === plan.issueNumber);
+      const issueState = state.issues[String(plan.issueNumber)];
+      const disposition = pullRequestRecoveryErrorDisposition({
+        action: plan.action,
+        stage: issueState?.stage,
+        failureKind: error.failureKind,
+      });
+      if (disposition === "fatal") {
         throw error;
       }
-      if (plan.action === "code-repair") {
-        const issue = queue.find(
-          (entry) => entry.issueNumber === plan.issueNumber,
+      if (disposition === "preserve-blocked-repair") {
+        state = await preserveBlockedPullRequestRepair(
+          state,
+          issue,
+          actor,
+          controllerOptions,
+          error,
         );
+        return {
+          status: "human-gate",
+          reason: redactFailureSummary(error.stopReason ?? error.message),
+        };
+      }
+      if (disposition === "code-repair") {
         if (error.failureKind === "ownership") {
           const reason = redactFailureSummary(error.message);
           state = await parkPullRequestRecoveryGate(
@@ -1938,7 +2016,6 @@ async function reconcilePullRequestRecoveryBacklog(
         };
       }
       const reason = redactFailureSummary(error.stopReason ?? error.message);
-      const issue = queue.find((entry) => entry.issueNumber === plan.issueNumber);
       state = await parkPullRequestRecoveryGate(
         state,
         issue,
@@ -2541,6 +2618,14 @@ function assertWorkerCompletion(result, issueNumber, workerLabel) {
   }
 }
 
+function blockedRepairStatePatch(receipt) {
+  return {
+    blockedPrRepairRecovery: receipt,
+    blockedPrFailureKind: receipt.failureKind,
+    blockedPrStopReason: receipt.stopReason,
+  };
+}
+
 async function repairIssue(
   state,
   issue,
@@ -2565,6 +2650,7 @@ async function repairIssue(
     Boolean(expectedHead) && issueState.prRepairBaseSha !== repairBase;
   state = moveIssue(state, number, stage, {
     repairAttempts: attempt,
+    lastRepairResultPath: resultPath,
     lastRepairFailureKind: failure.failureKind,
     lastRepairStopReason: failure.stopReason ?? failure.message,
     lastRepairStartedAt: new Date().toISOString(),
@@ -2632,6 +2718,26 @@ async function repairIssue(
   const changes = (
     await git(["-C", worktreePath, "status", "--porcelain"])
   ).stdout.trim();
+  const worktreeFingerprint = changes
+    ? await worktreeContentFingerprint(worktreePath)
+    : null;
+  const blockedRepairReceipt = blockedRepairRecoveryReceipt({
+    stage,
+    issueNumber: number,
+    expectedHeadSha: repairBase,
+    checkoutHeadSha: head,
+    checkoutDirty: Boolean(changes),
+    worktreeFingerprint,
+    repairAttempt: attempt,
+    resultPath,
+    result,
+  });
+  if (blockedRepairReceipt) {
+    state = moveIssue(state, number, stage, {
+      ...blockedRepairStatePatch(blockedRepairReceipt),
+      lastRepairCompletedAt: new Date().toISOString(),
+    });
+  }
   assertWorkerCompletion(result, number, "repair worker");
   if (!changes) {
     throw Object.assign(
@@ -2654,6 +2760,162 @@ async function repairIssue(
       ? { prRepairWorkerCompletedAt: new Date().toISOString() }
       : {}),
   });
+}
+
+function recoverableRepairResultPath(issueState, issueLogRoot) {
+  const attempt = issueState.repairAttempts;
+  const startedAt = Date.parse(issueState.lastRepairStartedAt ?? "");
+  if (!Number.isInteger(attempt) || !Number.isFinite(startedAt)) return null;
+  const suffix = `-repair-${attempt}-result.json`;
+  const allowedResultPath = (candidate) => {
+    if (!candidate) return false;
+    const resolved = path.resolve(candidate);
+    const relative = path.relative(path.resolve(issueLogRoot), resolved);
+    return (
+      relative &&
+      !relative.startsWith("..") &&
+      !path.isAbsolute(relative) &&
+      path.basename(resolved).endsWith(suffix) &&
+      fs.existsSync(resolved) &&
+      fs.statSync(resolved).mtimeMs >= startedAt - 1000
+    );
+  };
+  if (
+    allowedResultPath(issueState.lastRepairResultPath)
+  ) {
+    return path.resolve(issueState.lastRepairResultPath);
+  }
+  if (!fs.existsSync(issueLogRoot)) return null;
+  const candidates = fs
+    .readdirSync(issueLogRoot)
+    .filter((name) => name.endsWith(suffix))
+    .map((name) => path.join(issueLogRoot, name))
+    .filter(allowedResultPath)
+    .sort((left, right) =>
+      right.localeCompare(left, "en", { sensitivity: "case" }),
+    );
+  return candidates[0] ?? null;
+}
+
+async function worktreeContentFingerprint(worktreePath) {
+  const tracked = (
+    await git(["-C", worktreePath, "diff", "HEAD", "--name-only", "-z", "--"])
+  ).stdout
+    .split("\0")
+    .filter(Boolean);
+  const untracked = (
+    await git([
+      "-C",
+      worktreePath,
+      "ls-files",
+      "--others",
+      "--exclude-standard",
+      "-z",
+    ])
+  ).stdout
+    .split("\0")
+    .filter(Boolean);
+  const changedFiles = [...new Set([...tracked, ...untracked])].sort((left, right) =>
+    left.localeCompare(right, "en", { sensitivity: "case" }),
+  );
+  if (changedFiles.length === 0) return null;
+  const fingerprint = crypto.createHash("sha256");
+  fingerprint.update("ralph-dirty-worktree-v1\0");
+  for (const relativePath of changedFiles) {
+    const absolutePath = path.resolve(worktreePath, relativePath);
+    const relative = path.relative(path.resolve(worktreePath), absolutePath);
+    if (
+      !relative ||
+      relative.startsWith("..") ||
+      path.isAbsolute(relative)
+    ) {
+      throw Object.assign(new Error("dirty worktree path escaped the issue checkout"), {
+        failureKind: "safety",
+      });
+    }
+    fingerprint.update(relativePath.replaceAll("\\", "/"));
+    fingerprint.update("\0");
+    if (!fs.existsSync(absolutePath)) {
+      fingerprint.update("deleted\0");
+      continue;
+    }
+    const stat = fs.lstatSync(absolutePath);
+    fingerprint.update(`${stat.mode.toString(8)}\0`);
+    if (stat.isSymbolicLink()) {
+      fingerprint.update("symlink\0");
+      fingerprint.update(fs.readlinkSync(absolutePath));
+    } else if (stat.isFile()) {
+      fingerprint.update("file\0");
+      fingerprint.update(fs.readFileSync(absolutePath));
+    } else {
+      throw Object.assign(new Error("dirty worktree contains an unsupported path type"), {
+        failureKind: "safety",
+      });
+    }
+    fingerprint.update("\0");
+  }
+  return fingerprint.digest("hex");
+}
+
+async function recoverBlockedPullRequestRepair(
+  state,
+  issue,
+  plan,
+) {
+  const number = issue.issueNumber;
+  const issueState = state.issues[String(number)];
+  const worktreePath = issueState.worktreePath;
+  if (
+    plan.action !== "reverify-draft" ||
+    issueState.stage !== "pr-repairing" ||
+    !worktreePath ||
+    !fs.existsSync(worktreePath)
+  ) {
+    return { state, failure: null };
+  }
+  const changes = (
+    await git(["-C", worktreePath, "status", "--porcelain"])
+  ).stdout.trim();
+  if (!changes) return { state, failure: null };
+  const checkoutHeadSha = (
+    await git(["-C", worktreePath, "rev-parse", "HEAD"])
+  ).stdout.trim();
+  const issueLogRoot = path.join(stateRoot, "logs", `issue-${number}`);
+  const resultPath = recoverableRepairResultPath(issueState, issueLogRoot);
+  const result = resultPath ? readJson(resultPath) : null;
+  const worktreeFingerprint = await worktreeContentFingerprint(worktreePath);
+  const receipt = blockedRepairRecoveryReceipt({
+    stage: issueState.stage,
+    issueNumber: number,
+    expectedHeadSha: plan.headSha,
+    checkoutHeadSha,
+    checkoutDirty: true,
+    worktreeFingerprint,
+    repairAttempt: issueState.repairAttempts,
+    resultPath,
+    result,
+  });
+  if (
+    !receipt ||
+    !blockedRepairRecoveryReceiptMatches(
+      issueState.blockedPrRepairRecovery,
+      receipt,
+    )
+  ) {
+    return { state, failure: null };
+  }
+  state = moveIssue(state, number, issueState.stage, {
+    lastRepairResultPath: resultPath,
+    ...blockedRepairStatePatch(receipt),
+  });
+  const failure = Object.assign(
+    new Error("recovering a blocked pull-request repair from durable worker output"),
+    {
+      failureKind: receipt.failureKind,
+      stopReason: receipt.stopReason,
+    },
+  );
+  return { state, failure };
 }
 
 async function implementIssue(state, issue, controllerOptions) {
@@ -3410,16 +3672,6 @@ async function preserveBlockedPullRequestRepair(
   });
   state = await assertClaimOwnership(state, issue, actor, controllerOptions);
   let issueState = state.issues[String(number)];
-  if (issueState.blockedPrDraftVerifiedAt) {
-    if (issueState.worktreePath) {
-      state = await releasePublishedCheckout(state, issue);
-    }
-    return moveIssue(state, number, "manual-review", {
-      failureKind: issueState.blockedPrFailureKind,
-      failureDraft: true,
-      stopReason: issueState.blockedPrStopReason,
-    });
-  }
   const worktreePath = issueState.worktreePath;
   const expectedRemoteHeads = new Set([
     issueState.commit,
@@ -3480,6 +3732,16 @@ async function preserveBlockedPullRequestRepair(
       new Error("pull request was not safely drafted before repair preservation"),
       { failureKind: "safety" },
     );
+  }
+  if (issueState.blockedPrDraftVerifiedAt) {
+    if (issueState.worktreePath) {
+      state = await releasePublishedCheckout(state, issue);
+    }
+    return moveIssue(state, number, "manual-review", {
+      failureKind: issueState.blockedPrFailureKind,
+      failureDraft: true,
+      stopReason: issueState.blockedPrStopReason,
+    });
   }
   if (!worktreePath || !fs.existsSync(worktreePath)) {
     throw Object.assign(
@@ -3702,6 +3964,9 @@ async function reconcilePendingPullRequestRepair(
     commit: pending.commit,
     pendingPrRepair: null,
     lastPrRepairPushedAt: new Date().toISOString(),
+    ...(issueState.blockedPrFailureKind
+      ? { blockedPrRepairPushedAt: new Date().toISOString() }
+      : {}),
   });
 }
 
