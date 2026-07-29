@@ -415,6 +415,7 @@ export function preserveExternalFailureKind(gate, failureKind) {
 
 export function workerResultFailureKind(result) {
   if (result?.blockerKind === "infrastructure") return "infrastructure";
+  if (result?.blockerKind === "protected-scope") return "worker-blocked";
   if (result?.blockerKind === "safety") return "safety";
   if (result?.ambiguous || result?.blockerKind === "requirements") {
     return "ambiguous";
