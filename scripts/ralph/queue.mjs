@@ -244,6 +244,9 @@ export function failureDisposition(stage, pullRequestMerged, failureKind) {
   ) {
     return "interrupted";
   }
+  if (["safety", "infrastructure"].includes(failureKind)) {
+    return "fatal";
+  }
   if (
     ["pr-open", "checks-passed", "pr-repairing", "manual-review"].includes(
       stage,
@@ -252,6 +255,13 @@ export function failureDisposition(stage, pullRequestMerged, failureKind) {
     return "manual-review";
   }
   return "failed";
+}
+
+export function shouldPreserveBlockedPullRequestRepair(stage, failureKind) {
+  return (
+    stage === "pr-repairing" &&
+    ["ticket-infrastructure", "review-ticket-infrastructure"].includes(failureKind)
+  );
 }
 
 const LOW_RISK_PATHS = [
@@ -352,6 +362,7 @@ export function shouldParkIssueFailure(failureKind) {
     "review",
     "review-nonrepairable",
     "review-security-nonrepairable",
+    "review-ticket-infrastructure",
     "pr-checks",
     "tests-timeout",
     "merge-conflict",
@@ -360,6 +371,7 @@ export function shouldParkIssueFailure(failureKind) {
     "review-safety",
     "ambiguous",
     "worker-blocked",
+    "ticket-infrastructure",
   ].includes(failureKind);
 }
 
@@ -415,6 +427,9 @@ export function preserveExternalFailureKind(gate, failureKind) {
 
 export function workerResultFailureKind(result) {
   if (result?.blockerKind === "infrastructure") return "infrastructure";
+  if (result?.blockerKind === "ticket-infrastructure") {
+    return "ticket-infrastructure";
+  }
   if (result?.blockerKind === "protected-scope") return "worker-blocked";
   if (result?.blockerKind === "safety") return "safety";
   if (result?.ambiguous || result?.blockerKind === "requirements") {
@@ -515,11 +530,14 @@ export function vitestVerificationArguments(vitestPath) {
 export function independentReviewClassificationContract() {
   return `Before classifying a requirement as ambiguous or a finding as unrepairable, search the repository's authoritative design, policy, and domain documentation, including applicable AGENTS.md instructions and docs linked from them. A detail omitted from the issue is not ambiguous when established repository policy resolves it.
 List every issue, design, policy, and implementation source consulted in evidenceReviewed. For status=findings with blockerKind=requirements or repairable=false, cite the exact repository paths and the unresolved decision in blockingFindings and summary. Passing reviews are exempt because they have no unresolved decision and must keep blockingFindings empty. Do not use repairable=false merely because the issue itself omits a detail, because the first repair is not obvious, or because the defect is security-sensitive.
-Reserve repairable=false for a genuine unresolved product decision with materially different valid outcomes, forbidden scope, secrets or controller-integrity risk, missing infrastructure, or a repair that necessarily exceeds the approved ticket scope. A concrete defect with an established repository policy is repairable.`;
+Reserve repairable=false for a genuine unresolved product decision with materially different valid outcomes, forbidden scope, secrets or controller-integrity risk, missing infrastructure, or a repair that necessarily exceeds the approved ticket scope. Use blockerKind=ticket-infrastructure when only ticket-specific verification infrastructure is unavailable but the controller and ordinary worker runtime are healthy; reserve blockerKind=infrastructure for controller-wide or worker-runtime infrastructure failures. A concrete defect with an established repository policy is repairable.`;
 }
 
 export function reviewFailureKind(review) {
   if (review?.blockerKind === "infrastructure") return "infrastructure";
+  if (review?.blockerKind === "ticket-infrastructure") {
+    return "review-ticket-infrastructure";
+  }
   if (review?.blockerKind === "security") {
     return review.repairable === true
       ? "review-security"

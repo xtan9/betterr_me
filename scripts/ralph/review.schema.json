@@ -22,6 +22,7 @@
         "code",
         "requirements",
         "infrastructure",
+        "ticket-infrastructure",
         "security",
         "safety"
       ]
