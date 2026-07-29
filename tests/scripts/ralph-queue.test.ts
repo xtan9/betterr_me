@@ -869,32 +869,84 @@ Reserve repairable=false for a genuine unresolved product decision with material
     ).toEqual({ canMerge: false, reason });
   });
 
-  it("allows automatic merge only for an explicit low-risk path allowlist", () => {
+  it("reserves human review for genuinely sensitive change paths", () => {
     for (const file of [
       "scripts/ralph/queue.mjs",
       ".github/workflows/ci.yml",
       "supabase/migrations/20260728000000_change.sql",
       "app/api/oauth/token/route.ts",
+      "lib/auth/request-context.ts",
+      "lib/authentication/session.ts",
+      "lib/admin/users.ts",
+      "lib/administration/users.ts",
+      "lib/security/csrf.ts",
+      "lib/db/schema.ts",
+      "drizzle/migrations/0001.sql",
       "tsconfig.json",
+      "vite.config.ts",
       "vercel.json",
+      "pnpm-workspace.yaml",
+      "packages/ui/package.json",
+      "scripts/ci/check.ts",
+      "scripts/validate-release-scope.mjs",
+      "scripts/lighthouse-config.js",
+      "tooling/custom-runner.js",
+      ".github/actions/setup/action.yml",
+      "serverless.yml",
+      ".babelrc",
       "lib/billing/stripe.ts",
-      "lib/db/calendar-events.ts",
+      "lib/finance/household-runway-assessment.ts",
+      "lib/financial/ledger.ts",
+      "lib/accounts/password-reset.ts",
+      "lib/accounts/passkey.ts",
+      "lib/accounts/api-key.ts",
+      "lib/db/api-keys.ts",
+      "app/api/api-keys/route.ts",
+      "components/settings/api-keys-section.tsx",
+      "lib/stripe.ts",
     ]) {
       expect(classifyChangeRisk([file], { title: "Routine change" }).level).toBe(
         "high",
       );
     }
+    for (const file of [
+      "lib/calendar/create-event.ts",
+      "app/api/tasks/route.ts",
+      "lib/tasks/writes.ts",
+      "app/dashboard/page.tsx",
+      "lib/dashboard/dashboard-snapshot.ts",
+      "lib/db/calendar-events.ts",
+      "tests/lib/tasks/writes.test.ts",
+    ]) {
+      expect(classifyChangeRisk([file], { title: "Routine change" }).level).toBe(
+        "low",
+      );
+    }
     expect(
-      classifyChangeRisk(["lib/calendar/create-event.ts"], {
-        title: "Create a calendar event",
+      classifyChangeRisk(["lib/dashboard/dashboard-snapshot.ts"], {
+        title: "Delete customer credentials during account teardown",
       }).level,
-    ).toBe("low");
+    ).toBe("high");
     expect(
-      classifyChangeRisk(
-        ["lib/calendar/create-event.ts", "tests/lib/calendar/create-event.test.ts"],
-        { title: "Create a calendar event" },
-      ).level,
-    ).toBe("low");
+      classifyChangeRisk(["lib/data/purge-user.ts"], {
+        title: "Purge customer records",
+      }).level,
+    ).toBe("high");
+    expect(
+      classifyChangeRisk(["lib/dashboard/dashboard-snapshot.ts"], {
+        title: "Rotate API keys",
+      }).level,
+    ).toBe("high");
+  });
+
+  it("classifies the same sensitive file set deterministically", () => {
+    const files = [
+      "lib/finance/household-runway-assessment.ts",
+      "lib/auth/request-context.ts",
+    ];
+    expect(classifyChangeRisk(files, { title: "Routine change" })).toEqual(
+      classifyChangeRisk([...files].reverse(), { title: "Routine change" }),
+    );
   });
 
   it("retries only transient failures and respects the cap", () => {

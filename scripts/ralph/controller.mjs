@@ -1186,7 +1186,7 @@ async function inspectPullRequestRecovery(candidate, state, controllerOptions) {
       "--repo",
       repository,
       "--json",
-      "state,isDraft,headRefOid,mergeStateStatus,reviewDecision,url,mergedAt,mergeCommit",
+      "state,isDraft,headRefOid,mergeStateStatus,reviewDecision,url,mergedAt,mergeCommit,files",
     ],
     controllerOptions,
   );
@@ -1245,6 +1245,10 @@ async function inspectPullRequestRecovery(candidate, state, controllerOptions) {
       { failureKind: failureKindFor(result) },
     );
   }
+  const risk = classifyChangeRisk(
+    (pullRequest.files ?? []).map((file) => file.path),
+    candidate,
+  );
   const snapshot = {
     issueNumber: candidate.issueNumber,
     prNumber: issueState.prNumber,
@@ -1258,7 +1262,8 @@ async function inspectPullRequestRecovery(candidate, state, controllerOptions) {
     mergedAt: pullRequest.mergedAt,
     mergeCommit: pullRequest.mergeCommit,
     url: pullRequest.url,
-    risk: issueState.risk?.level ?? "high",
+    risk: risk.level,
+    riskReasons: risk.reasons,
     mode: controllerOptions.mode,
     repairAttempts: issueState.repairAttempts ?? 0,
     maximumRepairAttempts: controllerOptions.maximumRepairAttempts,
@@ -1485,6 +1490,105 @@ async function restorePullRequestRecoveryCheckout(
   return adoptCheckout();
 }
 
+async function synchronizeRecoveredPullRequest(
+  state,
+  issue,
+  expectedHead,
+  controllerOptions,
+  { promoteDraft = false } = {},
+) {
+  const number = issue.issueNumber;
+  let issueState = state.issues[String(number)];
+  const expectedTitle = `refactor: ${issue.title} (#${number})`;
+  const expectedBody = internalPullRequestBody(issue, issueState);
+  const bodyPath = path.join(
+    stateRoot,
+    "logs",
+    `issue-${number}`,
+    "recovered-ready-pull-request-body.md",
+  );
+  fs.mkdirSync(path.dirname(bodyPath), { recursive: true });
+  fs.writeFileSync(bodyPath, expectedBody);
+
+  let pullRequest = await ghJson(
+    [
+      "pr",
+      "view",
+      String(issueState.prNumber),
+      "--repo",
+      repository,
+      "--json",
+      "state,isDraft,headRefOid,title,body",
+    ],
+    controllerOptions,
+  );
+  if (pullRequest.state !== "OPEN" || pullRequest.headRefOid !== expectedHead) {
+    throw Object.assign(
+      new Error("pull request changed before recovered metadata synchronization"),
+      { failureKind: "safety" },
+    );
+  }
+  if (
+    pullRequest.title !== expectedTitle ||
+    normalizedPullRequestBody(pullRequest.body) !==
+      normalizedPullRequestBody(expectedBody)
+  ) {
+    await gh(
+      [
+        "pr",
+        "edit",
+        String(issueState.prNumber),
+        "--repo",
+        repository,
+        "--title",
+        expectedTitle,
+        "--body-file",
+        bodyPath,
+      ],
+      controllerOptions,
+    );
+  }
+  if (promoteDraft && pullRequest.isDraft) {
+    await gh(
+      ["pr", "ready", String(issueState.prNumber), "--repo", repository],
+      controllerOptions,
+    );
+  }
+  pullRequest = await ghJson(
+    [
+      "pr",
+      "view",
+      String(issueState.prNumber),
+      "--repo",
+      repository,
+      "--json",
+      "state,isDraft,headRefOid,title,body",
+    ],
+    controllerOptions,
+  );
+  if (
+    pullRequest.state !== "OPEN" ||
+    pullRequest.headRefOid !== expectedHead ||
+    pullRequest.title !== expectedTitle ||
+    normalizedPullRequestBody(pullRequest.body) !==
+      normalizedPullRequestBody(expectedBody) ||
+    (promoteDraft && pullRequest.isDraft)
+  ) {
+    throw Object.assign(
+      new Error("recovered pull request metadata did not verify"),
+      { failureKind: "safety" },
+    );
+  }
+  if (!promoteDraft) return state;
+  issueState = state.issues[String(number)];
+  return moveIssue(state, number, issueState.stage, {
+    failureDraft: false,
+    failureKind: null,
+    stopReason: null,
+    recoveredDraftPromotedAt: new Date().toISOString(),
+  });
+}
+
 async function failedCheckEvidence(plan) {
   const checks = plan.checks ?? [];
   const manifest = checks.map(
@@ -1568,6 +1672,16 @@ async function reconcilePullRequestRecoveryBacklog(
       ensureNotStopped();
       const issue = queue.find((entry) => entry.issueNumber === plan.issueNumber);
       let issueState = state.issues[String(plan.issueNumber)];
+      const observedRisk = {
+        level: plan.risk,
+        reasons: plan.riskReasons ?? [],
+      };
+      if (JSON.stringify(issueState.risk) !== JSON.stringify(observedRisk)) {
+        state = moveIssue(state, plan.issueNumber, issueState.stage, {
+          risk: observedRisk,
+        });
+        issueState = state.issues[String(plan.issueNumber)];
+      }
       status(`PR #${plan.prNumber} recovery action: ${plan.action}.`);
       if (plan.action === "finalize-merged") {
         const snapshot = await inspectPullRequestRecovery(issue, state, controllerOptions);
@@ -1744,7 +1858,45 @@ async function reconcilePullRequestRecoveryBacklog(
         );
         return { status: state.issues[String(issue.issueNumber)].stage };
       }
+      if (plan.action === "reverify-draft") {
+        state = await restorePullRequestRecoveryCheckout(
+          state,
+          issue,
+          plan.headSha,
+          controllerOptions,
+        );
+        state = await assertClaimOwnership(
+          state,
+          issue,
+          actor,
+          controllerOptions,
+        );
+        let verificationFailure = null;
+        try {
+          state = await verifyIssue(state, issue, controllerOptions, {
+            force: true,
+            stage: "pr-repairing",
+          });
+        } catch (error) {
+          verificationFailure = error;
+        }
+        state = await completePullRequestLifecycle(
+          state,
+          issue,
+          actor,
+          controllerOptions,
+          verificationFailure,
+          { promoteDraftAfterVerification: true },
+        );
+        return { status: state.issues[String(issue.issueNumber)].stage };
+      }
       if (plan.action === "merge-gates") {
+        state = await synchronizeRecoveredPullRequest(
+          state,
+          issue,
+          plan.headSha,
+          controllerOptions,
+        );
         state = await waitAndMaybeMerge(state, issue, actor, controllerOptions);
         return { status: state.issues[String(issue.issueNumber)].stage };
       }
@@ -4232,12 +4384,23 @@ async function completePullRequestLifecycle(
   actor,
   controllerOptions,
   initialFailure = null,
+  { promoteDraftAfterVerification = false } = {},
 ) {
   const number = issue.issueNumber;
   let pendingPullRequestFailure = initialFailure;
   for (;;) {
     if (!pendingPullRequestFailure) {
       try {
+        if (promoteDraftAfterVerification) {
+          const issueState = state.issues[String(number)];
+          state = await synchronizeRecoveredPullRequest(
+            state,
+            issue,
+            issueState.commit,
+            controllerOptions,
+            { promoteDraft: true },
+          );
+        }
         state = await waitAndMaybeMerge(
           state,
           issue,

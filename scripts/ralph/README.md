@@ -30,11 +30,12 @@ reflogs, unrelated history, or writable metadata.
   checks (including bounded check-failure repairs) before it is parked for a
   human merge while the single worker continues through unrelated ready issues.
 
-Automatic merging uses a narrow allowlist. Only pure calendar/reminder domain
-modules, their validations, and their focused tests may qualify as low risk.
-Every other path—including application routes, persistence, controller, CI,
-dependencies, authentication, finance, migrations, and configuration—stops at
-a PR for human review.
+Automatic merging uses a sensitive-scope denylist. Ordinary application,
+domain, persistence, and test changes may qualify as low risk after every test,
+review, check, conflict, and ambiguity gate passes. Controller and CI changes,
+dependencies, authentication and credentials, finance and payments, database
+migrations, privileged administration, destructive issue scope, and deployment
+or compiler configuration always stop at a PR for human review.
 
 ## Prerequisites
 
@@ -170,9 +171,12 @@ all remaining failed-check evidence into one bounded coding repair. Pending and
 completed actions are recorded before and after each side effect so a restart
 resumes rather than duplicates it. Check reruns have their own bounded budget;
 they do not consume coding repair attempts. A repaired PR still passes the
-normal check, review, conflict, risk, and merge gates. Drafts with an unresolved
-original blocker and high-risk PRs remain human-gated, while unrelated ready
-issues may continue.
+normal check, review, conflict, risk, and merge gates. A green failed draft may
+re-enter one bounded, exhaustive verification and review cycle when its original
+blocker is a worker or ticket-specific verification finding. Ralph promotes the
+draft only after that cycle passes; safety, ambiguity, controller infrastructure,
+explicitly non-repairable findings, exhausted attempts, and high-risk merges
+remain human-gated. Unrelated ready issues may continue.
 
 Implementation, verification, review, and required-check waits are bounded.
 Transient network and rate-limit failures use a bounded retry count and
