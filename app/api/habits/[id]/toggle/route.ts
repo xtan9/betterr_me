@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { HabitLogsDB, HabitMilestonesDB } from '@/lib/db';
 import { getLocalDateString } from '@/lib/utils';
 import { log } from '@/lib/logger';
-import { isMilestoneStreak } from '@/lib/habits/milestones';
+import { createHabitCompletion } from '@/lib/habits/completion';
+import { habitCompletionSchema } from '@/lib/validations/habit';
 
 /**
  * POST /api/habits/[id]/toggle
@@ -11,6 +11,7 @@ import { isMilestoneStreak } from '@/lib/habits/milestones';
  *
  * Request body:
  * - date: string (YYYY-MM-DD) - defaults to today
+ * - completed: boolean - desired completion state
  *
  * Response:
  * - log: HabitLog
@@ -33,36 +34,31 @@ export async function POST(
     }
 
     // Get date from body (defaults to today)
-    const body = await request.json().catch(() => ({}));
-    const date = body.date || getLocalDateString();
-
-    // Validate date format
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const parsedBody = habitCompletionSchema.safeParse(
+      await request.json().catch(() => ({}))
+    );
+    if (!parsedBody.success) {
       return NextResponse.json(
-        { error: 'Invalid date format. Use YYYY-MM-DD' },
+        { error: parsedBody.error.issues[0]?.message || 'Invalid request body' },
         { status: 400 }
       );
     }
 
-    // Toggle the log
-    const habitLogsDB = new HabitLogsDB(supabase);
-    const result = await habitLogsDB.toggleLog(habitId, user.id, date);
+    const { completed } = parsedBody.data;
+    const date = parsedBody.data.date || getLocalDateString();
 
-    // Record milestone if streak hits a threshold (best-effort, non-fatal)
-    if (result.log.completed && isMilestoneStreak(result.currentStreak)) {
-      try {
-        const milestonesDB = new HabitMilestonesDB(supabase);
-        await milestonesDB.recordMilestone(habitId, user.id, result.currentStreak);
-      } catch (err) {
-        log.error('Milestone check failed', err, { habitId });
-      }
-    }
+    const completion = createHabitCompletion(supabase);
+    const intent = { habitId, userId: user.id, date };
+    const result = completed
+      ? await completion.complete(intent)
+      : await completion.uncomplete(intent);
 
     return NextResponse.json({
       log: result.log,
       currentStreak: result.currentStreak,
       bestStreak: result.bestStreak,
-      completed: result.log.completed,
+      completed: result.completed,
+      milestone: result.milestone,
     });
   } catch (error: unknown) {
     log.error('POST /api/habits/[id]/toggle error', error);

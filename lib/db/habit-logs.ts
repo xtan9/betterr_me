@@ -1,18 +1,15 @@
 import { createClient } from '@/lib/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { HabitLog, HabitLogInsert, HabitFrequency } from './types';
-import { HabitsDB } from './habits';
 import { getLocalDateString } from '@/lib/utils';
 import { shouldTrackOnDate } from '@/lib/habits/format';
 import { getWeekStart, getWeekKey } from '@/lib/habits/week-utils';
 
 export class HabitLogsDB {
   private supabase: SupabaseClient;
-  private habitsDB: HabitsDB;
 
   constructor(supabase: SupabaseClient) {
     this.supabase = supabase;
-    this.habitsDB = new HabitsDB(supabase);
   }
 
   /**
@@ -84,42 +81,6 @@ export class HabitLogsDB {
 
     if (error) throw error;
     return data;
-  }
-
-  /**
-   * Toggle habit completion for a date
-   * Returns the updated log and new streak values
-   */
-  async toggleLog(
-    habitId: string,
-    userId: string,
-    date: string
-  ): Promise<{ log: HabitLog; currentStreak: number; bestStreak: number }> {
-    // Get existing log
-    const existingLog = await this.getLogForDate(habitId, userId, date);
-
-    // Toggle completion
-    const newCompleted = existingLog ? !existingLog.completed : true;
-
-    // Upsert the log
-    const log = await this.upsertLog({
-      habit_id: habitId,
-      user_id: userId,
-      logged_date: date,
-      completed: newCompleted,
-    });
-
-    // Get habit for frequency info
-    const habit = await this.habitsDB.getHabit(habitId, userId);
-    if (!habit) throw new Error('Habit not found');
-
-    // Recalculate streak
-    const { currentStreak, bestStreak } = await this.calculateStreak(habitId, userId, habit.frequency, habit.best_streak);
-
-    // Update habit with new streak values
-    await this.habitsDB.updateHabitStreak(habitId, userId, currentStreak, bestStreak);
-
-    return { log, currentStreak, bestStreak };
   }
 
   /**
