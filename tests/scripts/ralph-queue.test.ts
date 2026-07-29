@@ -423,13 +423,19 @@ describe("Ralph durable state and policy", () => {
     expect(shouldParkIssueFailure("kill-switch")).toBe(false);
   });
 
-  it("distinguishes missing infrastructure from issue-level worker blockers", () => {
+  it("parks worker safety refusals while stopping for missing infrastructure", () => {
     expect(
       workerResultFailureKind({ blockerKind: "infrastructure", ambiguous: true }),
     ).toBe("infrastructure");
     expect(
       workerResultFailureKind({ blockerKind: "requirements", ambiguous: true }),
     ).toBe("ambiguous");
+    const protectedScopeRefusal = workerResultFailureKind({
+      blockerKind: "protected-scope",
+      ambiguous: true,
+    });
+    expect(protectedScopeRefusal).toBe("worker-blocked");
+    expect(shouldParkIssueFailure(protectedScopeRefusal)).toBe(true);
     expect(
       workerResultFailureKind({ blockerKind: "safety", ambiguous: true }),
     ).toBe("safety");
@@ -450,6 +456,7 @@ describe("Ralph durable state and policy", () => {
       "none",
       "requirements",
       "infrastructure",
+      "protected-scope",
       "safety",
     ]);
   });

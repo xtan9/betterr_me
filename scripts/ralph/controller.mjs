@@ -1583,6 +1583,7 @@ Implementation contract:
 - Leave the intended changes uncommitted for the controller to verify and commit.
 - Report blockerKind=requirements and ambiguous=true when requirements are ambiguous.
 - Report blockerKind=infrastructure and ambiguous=true when required local/controller infrastructure is missing.
+- Report blockerKind=protected-scope and ambiguous=true only when completing the ticket requires editing a path forbidden by the security boundary.
 - Report blockerKind=safety and ambiguous=true when safety is uncertain.
 - Report blockerKind=none and ambiguous=false only for a completed implementation.
 
@@ -1636,6 +1637,7 @@ Repair contract:
 - When controllerManagedExternalGate=true, the controller deliberately owns and will rerun that exact external gate. Do not attempt to access it from the sandbox, and do not report missing infrastructure merely because that gate or Git metadata is unavailable. Run every applicable test available inside the worktree and review the repaired files directly.
 - Report blockerKind=requirements and ambiguous=true when requirements are ambiguous.
 - Report blockerKind=infrastructure and ambiguous=true when required local/controller infrastructure is missing.
+- Report blockerKind=protected-scope and ambiguous=true only when completing the repair requires editing a path forbidden by the security boundary.
 - Report blockerKind=safety and ambiguous=true when the finding cannot be safely repaired or safety is uncertain.
 - Report blockerKind=none and ambiguous=false only for a completed repair.
 
