@@ -30,6 +30,7 @@ import {
   redactCredentialPatterns,
   recordCheckRetryAttempt,
   reopenIssueForPullRequestRecovery,
+  selectPullRequestRecoveryCandidates,
   selectNextLiveIssueStatus,
   selectRecoveryBase,
   shouldRepairFailure,
@@ -1646,13 +1647,17 @@ async function reconcilePullRequestRecoveryBacklog(
   let announced = false;
   for (;;) {
     ensureNotStopped();
-    const candidates = queue.filter((issue) => {
+    const allCandidates = queue.filter((issue) => {
       const issueState = state.issues[String(issue.issueNumber)];
       return isPullRequestRecoveryCandidate(issueState);
     });
+    const candidates = selectPullRequestRecoveryCandidates(
+      allCandidates,
+      state.issues,
+    );
     if (candidates.length === 0) return state;
     if (!announced) {
-      status(`Reconciling ${candidates.length} existing Ralph pull request(s) before selecting new work.`);
+      status(`Reconciling ${allCandidates.length} existing Ralph pull request(s) before selecting new work.`);
       announced = true;
     }
     const outcomes = await reconcilePullRequestBacklog({
@@ -1964,8 +1969,26 @@ async function reconcilePullRequestRecoveryBacklog(
         plan?.action === "wait" ||
         ["refresh", "rerun-requested"].includes(result?.status),
     );
+    const reservedIssue = candidates.find(
+      (issue) => state.issues[String(issue.issueNumber)]?.worktreePath,
+    );
+    if (!pending && candidates.length < allCandidates.length) {
+      if (reservedIssue) {
+        throw Object.assign(
+          new Error("PR recovery completed without releasing the single worktree"),
+          { failureKind: "safety" },
+        );
+      }
+      continue;
+    }
     if (!pending) return state;
     if (Date.now() >= deadline) {
+      if (reservedIssue) {
+        throw Object.assign(
+          new Error("PR recovery checks timed out while the single worktree remained reserved"),
+          { failureKind: "safety" },
+        );
+      }
       status("Existing PR checks are still pending after the bounded recovery wait; continuing without merging them.");
       return state;
     }

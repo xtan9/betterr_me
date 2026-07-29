@@ -33,6 +33,7 @@ import {
   selectNextLiveIssue,
   selectNextLiveIssueStatus,
   selectNextIssue,
+  selectPullRequestRecoveryCandidates,
   selectRecoveryBase,
   reviewFailureKind,
   shouldRepairFailure,
@@ -640,6 +641,43 @@ Reserve repairable=false for a genuine unresolved product decision with material
     expect(
       isPullRequestRecoveryCandidate({ stage: "manual-review", prNumber: 201 }),
     ).toBe(true);
+  });
+
+  it("reconciles only the PR that owns the preserved single worktree", () => {
+    const candidates = [
+      { issueNumber: 491 },
+      { issueNumber: 492 },
+      { issueNumber: 493 },
+    ];
+    const issueStates = {
+      "491": { stage: "failed", worktreePath: null },
+      "492": { stage: "pr-repairing", worktreePath: "managed/current" },
+      "493": { stage: "manual-review", worktreePath: null },
+    };
+
+    expect(
+      selectPullRequestRecoveryCandidates(candidates, issueStates).map(
+        ({ issueNumber }) => issueNumber,
+      ),
+    ).toEqual([492]);
+    expect(candidates.map(({ issueNumber }) => issueNumber)).toEqual([
+      491,
+      492,
+      493,
+    ]);
+    expect(
+      selectPullRequestRecoveryCandidates(candidates, {
+        "491": { worktreePath: null },
+        "492": { worktreePath: null },
+        "493": { worktreePath: null },
+      }).map(({ issueNumber }) => issueNumber),
+    ).toEqual([491, 492, 493]);
+    expect(() =>
+      selectPullRequestRecoveryCandidates(candidates, {
+        "491": { worktreePath: "managed/current" },
+        "492": { worktreePath: "managed/other" },
+      }),
+    ).toThrow("multiple PR recovery candidates reserve the single worktree");
   });
 
   it("reopens only a published PR stage for exact-head recovery", () => {
