@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 
+import { shouldPreserveBlockedPullRequestRepair } from "./queue.mjs";
+
 const CONTROLLER_OWNED_CHECKS = new Set(["release-scope-evidence"]);
 const RECOVERY_POLICY_VERSION = 2;
 const REVERIFYABLE_DRAFT_FAILURES = new Set([
@@ -91,6 +93,93 @@ export function pullRequestCheckRetryKey(snapshot) {
       }),
     )
     .digest("hex");
+}
+
+export function pullRequestRecoveryErrorDisposition({
+  action,
+  stage,
+  failureKind,
+}) {
+  if (["kill-switch", "safety", "infrastructure"].includes(failureKind)) {
+    return "fatal";
+  }
+  if (action === "code-repair") return "code-repair";
+  if (
+    action === "reverify-draft" &&
+    shouldPreserveBlockedPullRequestRepair(stage, failureKind)
+  ) {
+    return "preserve-blocked-repair";
+  }
+  return "human-gate";
+}
+
+export function blockedRepairRecoveryReceipt(input) {
+  const result = input?.result;
+  if (
+    input?.stage !== "pr-repairing" ||
+    input?.checkoutDirty !== true ||
+    !Number.isInteger(input?.issueNumber) ||
+    !Number.isInteger(input?.repairAttempt) ||
+    input.repairAttempt < 1 ||
+    !input?.resultPath ||
+    !input?.expectedHeadSha ||
+    input.checkoutHeadSha !== input.expectedHeadSha ||
+    !/^[a-f0-9]{64}$/.test(input?.worktreeFingerprint ?? "") ||
+    result?.status !== "blocked" ||
+    result?.issueNumber !== input.issueNumber ||
+    result?.ambiguous !== true ||
+    result?.blockerKind !== "ticket-infrastructure" ||
+    typeof result?.summary !== "string" ||
+    !result.summary.trim()
+  ) {
+    return null;
+  }
+  return {
+    issueNumber: input.issueNumber,
+    headSha: input.expectedHeadSha,
+    repairAttempt: input.repairAttempt,
+    resultPath: input.resultPath,
+    worktreeFingerprint: input.worktreeFingerprint,
+    failureKind: result.blockerKind,
+    stopReason: result.summary,
+  };
+}
+
+export function blockedRepairRecoveryReceiptMatches(trusted, observed) {
+  const fields = [
+    "issueNumber",
+    "headSha",
+    "repairAttempt",
+    "resultPath",
+    "worktreeFingerprint",
+    "failureKind",
+    "stopReason",
+  ];
+  return Boolean(
+    trusted &&
+      observed &&
+      fields.every((field) => trusted[field] === observed[field]),
+  );
+}
+
+export function blockedRepairPreservationRecoveryAction(issueState) {
+  if (
+    issueState?.stage !== "pr-repairing" ||
+    !shouldPreserveBlockedPullRequestRepair(
+      issueState.stage,
+      issueState.blockedPrFailureKind,
+    )
+  ) {
+    return "inspect-receipt";
+  }
+  if (issueState.pendingPrRepair) return "reconcile-pending";
+  if (
+    issueState.blockedPrRepairPushedAt ||
+    issueState.blockedPrDraftVerifiedAt
+  ) {
+    return "finish-preservation";
+  }
+  return "inspect-receipt";
 }
 
 function recoveryPlan(snapshot, action, details = {}) {

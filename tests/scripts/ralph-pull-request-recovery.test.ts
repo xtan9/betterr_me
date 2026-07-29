@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  blockedRepairPreservationRecoveryAction,
+  blockedRepairRecoveryReceipt,
+  blockedRepairRecoveryReceiptMatches,
   planPullRequestRecovery,
   pullRequestCheckRetryKey,
+  pullRequestRecoveryErrorDisposition,
   pullRequestRecoveryFingerprint,
   reconcilePullRequestBacklog,
 } from "../../scripts/ralph/pull-request-recovery.mjs";
@@ -29,6 +33,128 @@ const snapshot = (overrides = {}) => ({
 });
 
 describe("Ralph pull-request recovery planning", () => {
+  it("preserves a dirty blocked repair discovered while re-verifying a draft", () => {
+    expect(
+      pullRequestRecoveryErrorDisposition({
+        action: "reverify-draft",
+        stage: "pr-repairing",
+        failureKind: "ticket-infrastructure",
+      }),
+    ).toBe("preserve-blocked-repair");
+  });
+
+  it("adopts an exact blocked repair result left dirty by a controller crash", () => {
+    expect(
+      blockedRepairRecoveryReceipt({
+        stage: "pr-repairing",
+        issueNumber: 492,
+        expectedHeadSha: "head-492",
+        checkoutHeadSha: "head-492",
+        checkoutDirty: true,
+        worktreeFingerprint: "a".repeat(64),
+        repairAttempt: 3,
+        resultPath: "logs/issue-492/repair-3-result.json",
+        result: {
+          status: "blocked",
+          issueNumber: 492,
+          ambiguous: true,
+          blockerKind: "ticket-infrastructure",
+          summary: "PostgreSQL is unavailable for the ticket-specific fixture.",
+        },
+      }),
+    ).toEqual({
+      issueNumber: 492,
+      headSha: "head-492",
+      repairAttempt: 3,
+      resultPath: "logs/issue-492/repair-3-result.json",
+      worktreeFingerprint: "a".repeat(64),
+      failureKind: "ticket-infrastructure",
+      stopReason: "PostgreSQL is unavailable for the ticket-specific fixture.",
+    });
+  });
+
+  it("rejects a blocked repair receipt when the checkout head changed", () => {
+    expect(
+      blockedRepairRecoveryReceipt({
+        stage: "pr-repairing",
+        issueNumber: 492,
+        expectedHeadSha: "expected-head",
+        checkoutHeadSha: "different-head",
+        checkoutDirty: true,
+        worktreeFingerprint: "a".repeat(64),
+        repairAttempt: 3,
+        resultPath: "logs/issue-492/repair-3-result.json",
+        result: {
+          status: "blocked",
+          issueNumber: 492,
+          ambiguous: true,
+          blockerKind: "ticket-infrastructure",
+          summary: "PostgreSQL is unavailable for the ticket-specific fixture.",
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects a blocked repair receipt without an exact content fingerprint", () => {
+    expect(
+      blockedRepairRecoveryReceipt({
+        stage: "pr-repairing",
+        issueNumber: 492,
+        expectedHeadSha: "head-492",
+        checkoutHeadSha: "head-492",
+        checkoutDirty: true,
+        repairAttempt: 3,
+        resultPath: "logs/issue-492/repair-3-result.json",
+        result: {
+          status: "blocked",
+          issueNumber: 492,
+          ambiguous: true,
+          blockerKind: "ticket-infrastructure",
+          summary: "PostgreSQL is unavailable for the ticket-specific fixture.",
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects recovery when dirty content no longer matches its durable receipt", () => {
+    const receipt = {
+      issueNumber: 492,
+      headSha: "head-492",
+      repairAttempt: 3,
+      resultPath: "logs/issue-492/repair-3-result.json",
+      worktreeFingerprint: "a".repeat(64),
+      failureKind: "ticket-infrastructure",
+      stopReason: "PostgreSQL is unavailable for the ticket-specific fixture.",
+    };
+    expect(
+      blockedRepairRecoveryReceiptMatches(receipt, {
+        ...receipt,
+        worktreeFingerprint: "b".repeat(64),
+      }),
+    ).toBe(false);
+  });
+
+  it("resumes a pending blocked preservation before restoring its checkout", () => {
+    expect(
+      blockedRepairPreservationRecoveryAction({
+        stage: "pr-repairing",
+        blockedPrFailureKind: "ticket-infrastructure",
+        pendingPrRepair: { previousCommit: "old", commit: "new" },
+      }),
+    ).toBe("reconcile-pending");
+  });
+
+  it("finishes a verified blocked draft after checkout release", () => {
+    expect(
+      blockedRepairPreservationRecoveryAction({
+        stage: "pr-repairing",
+        blockedPrFailureKind: "ticket-infrastructure",
+        blockedPrDraftVerifiedAt: "2026-07-29T19:30:00.000Z",
+        worktreePath: null,
+      }),
+    ).toBe("finish-preservation");
+  });
+
   it("repairs controller-owned failures before batching remaining code failures", () => {
     const plan = planPullRequestRecovery(
       snapshot({
