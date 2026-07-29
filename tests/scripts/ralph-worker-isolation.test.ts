@@ -5,7 +5,12 @@ import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 import {
+  codexStartupEventsReady,
+  codexSessionStarted,
   ensureSanitizedWorkerGitView,
+  isolatedCodexAuthInstallRequired,
+  isolatedCodexRuntimeConfiguration,
+  processExitCode,
   removeSanitizedWorkerGitView,
   unprivilegedWslCommandArguments,
   unprivilegedWslIdentityIsSafe,
@@ -36,6 +41,130 @@ function gitWithoutStdin(args: string[], options: { input?: string } = {}) {
 }
 
 describe("Ralph sanitized worker Git view", () => {
+  it.each([
+    [1, true, 0],
+    [137, true, 0],
+    [1, false, 1],
+    [null, false, -1],
+  ])(
+    "normalizes process exit code %s with successfulStop=%s to %s",
+    (code, successfulStop, expected) => {
+      expect(processExitCode({ code, successfulStop })).toBe(expected);
+    },
+  );
+
+  it("keeps the writable Codex runtime outside the agent-readable worker home", () => {
+    expect(
+      isolatedCodexRuntimeConfiguration({
+        workerHome: "/var/lib/betterr-me-ralph/worker-home",
+        codexHome: "/var/lib/betterr-me-ralph/codex-runtime",
+        sourceAuthPath: "/mnt/c/Users/test/.codex/auth.json",
+      }),
+    ).toEqual({
+      environment: ["CODEX_HOME=/var/lib/betterr-me-ralph/codex-runtime"],
+      sourceAuthPath: "/mnt/c/Users/test/.codex/auth.json",
+      authPath: "/var/lib/betterr-me-ralph/codex-runtime/auth.json",
+      directoryProvisionCommand: [
+        "install",
+        "-d",
+        "-m",
+        "700",
+        "-o",
+        "65534",
+        "-g",
+        "65534",
+        "/var/lib/betterr-me-ralph/codex-runtime",
+      ],
+      authInstallCommand: [
+        "install",
+        "-m",
+        "600",
+        "-o",
+        "65534",
+        "-g",
+        "65534",
+        "/mnt/c/Users/test/.codex/auth.json",
+        "/var/lib/betterr-me-ralph/codex-runtime/auth.json",
+      ],
+    });
+
+    expect(() =>
+      isolatedCodexRuntimeConfiguration({
+        workerHome: "/var/lib/betterr-me-ralph/worker-home",
+        codexHome: "/var/lib/betterr-me-ralph/worker-home/.codex",
+        sourceAuthPath: "/mnt/c/Users/test/.codex/auth.json",
+      }),
+    ).toThrowError("isolated Codex runtime must be outside the agent-readable worker home");
+  });
+
+  it.each([
+    ["workerHome", "relative-home", "isolated worker home must be an absolute Linux path"],
+    ["codexHome", "relative-runtime", "isolated Codex runtime must be an absolute Linux path"],
+    [
+      "sourceAuthPath",
+      "relative-auth.json",
+      "isolated source auth path must be an absolute Linux path",
+    ],
+  ])("rejects a relative isolated runtime %s", (property, value, message) => {
+    expect(() =>
+      isolatedCodexRuntimeConfiguration({
+        workerHome: "/worker-home",
+        codexHome: "/codex-runtime",
+        sourceAuthPath: "/source/auth.json",
+        [property]: value,
+      }),
+    ).toThrowError(message);
+  });
+
+  it("requires both Codex startup events before accepting initialization", () => {
+    expect(codexStartupEventsReady("")).toBe(false);
+    expect(codexStartupEventsReady('{"type":"thread.started"}\n')).toBe(false);
+    expect(
+      codexStartupEventsReady(
+        '{"type":"thread.started"}\n' + '{"type":"turn.started"}\n',
+      ),
+    ).toBe(true);
+    expect(
+      codexStartupEventsReady(
+        '{"type":"thread.started"}\n' +
+          '{"type":"error","message":"initialization failed"}\n',
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    [false, false, true],
+    [false, true, true],
+    [true, false, false],
+    [true, true, true],
+  ])(
+    "installs isolated auth when runtimeExists=%s and sourceIsNewer=%s",
+    (runtimeExists, sourceIsNewer, expected) => {
+      expect(
+        isolatedCodexAuthInstallRequired({ runtimeExists, sourceIsNewer }),
+      ).toBe(expected);
+    },
+  );
+
+  it("rejects non-boolean isolated auth reconciliation evidence", () => {
+    expect(() =>
+      isolatedCodexAuthInstallRequired({ runtimeExists: "yes", sourceIsNewer: false }),
+    ).toThrowError("isolated auth reconciliation evidence must be boolean");
+  });
+
+  it("counts a repair only after Codex reports a started session", () => {
+    expect(codexSessionStarted("")).toBe(false);
+    expect(codexSessionStarted('{"type":"error","message":"init failed"}\n')).toBe(
+      false,
+    );
+    expect(
+      codexSessionStarted(
+        '{"type":"thread.started","thread_id":"thread-1"}\n' +
+          '{"type":"turn.started"}\n',
+      ),
+    ).toBe(true);
+  });
+
   it("drops WSL Codex processes to an unprivileged identity", () => {
     expect(
       unprivilegedWslCommandArguments({

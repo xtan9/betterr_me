@@ -981,6 +981,14 @@ describe("Ralph TypeScript baseline comparison", () => {
     ).toEqual(["OUTPUT | TypeScript compiler terminated unexpectedly"]);
   });
 
+  it("ignores the expected Codex PATH-alias warning around a compiler run", () => {
+    expect(
+      findNewTypeScriptDiagnostics([], [
+        "WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)",
+      ]),
+    ).toEqual([]);
+  });
+
   it("rejects a nonzero compiler exit with no output", () => {
     expect(analyzeTypeScriptRun([], 2)).toEqual({
       accountedFor: false,
