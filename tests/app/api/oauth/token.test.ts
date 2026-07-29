@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 import { hashToken } from '@/lib/mcp/refresh-token';
+import { signMcpToken } from '@/lib/mcp/token';
+import { log } from '@/lib/logger';
 import { queueThenResponses, restoreMockSupabaseThen } from '../../../helpers/mock-supabase';
 import { mockSupabaseClient } from '../../../setup';
 
@@ -245,6 +247,10 @@ describe('POST /api/oauth/token', () => {
   it('returns access_token for valid request', async () => {
     const { code, codeHash, pkce, stored } = makeStoredCode();
     mockRpc.mockResolvedValue({ data: [stored], error: null });
+    const rawRefreshToken = 'ab'.repeat(48);
+    const randomBytes = vi.spyOn(crypto, 'randomBytes').mockImplementation(
+      ((size: number) => Buffer.alloc(size, 0xab)) as typeof crypto.randomBytes,
+    );
 
     const request = makeRequest({
       grant_type: 'authorization_code',
@@ -254,14 +260,14 @@ describe('POST /api/oauth/token', () => {
       client_id: 'test-client',
     });
     const response = await POST(request);
+    randomBytes.mockRestore();
     const data = await response.json();
 
     expect(response.status).toBe(200);
     expect(data.access_token).toBe('mock-access-token');
     expect(data.token_type).toBe('bearer');
     expect(data.expires_in).toBe(3600);
-    expect(typeof data.refresh_token).toBe('string');
-    expect(data.refresh_token).toHaveLength(96);
+    expect(data.refresh_token).toBe(rawRefreshToken);
 
     // Verify atomic lifecycle consumption was called
     expect(mockRpc).toHaveBeenCalledWith(
@@ -285,18 +291,19 @@ describe('POST /api/oauth/token', () => {
           user_id: 'user-123',
           client_id: 'test-client',
           scopes: ['read', 'write'],
-          token_hash: hashToken(data.refresh_token),
+          token_hash:
+            '6a6d77bf81726016010757422ea814316f64420f2f6852ef29568c80876918b3',
           expires_at: '2027-01-24T20:00:00.000Z',
         }],
       },
-      { table: 'oauth_refresh_tokens', method: 'from', args: ['oauth_refresh_tokens'] },
-      { table: 'oauth_refresh_tokens', method: 'delete', args: [] },
-      {
-        table: 'oauth_refresh_tokens',
-        method: 'or',
-        args: ['expires_at.lt.2026-07-27T20:00:00.000Z,and(revoked.eq.true,created_at.lt.2026-07-21T20:00:00.000Z)'],
-      },
     ]);
+    expect(mockRpc).toHaveBeenCalledWith(
+      'cleanup_oauth_refresh_token_families',
+      {
+        expired_before: '2026-07-27T20:00:00.000Z',
+        revoked_before: '2026-07-21T20:00:00.000Z',
+      },
+    );
   });
 
   it('returns server_error without credentials when refresh-token insertion fails', async () => {
@@ -344,73 +351,6 @@ describe('POST /api/oauth/token', () => {
 // grant_type=refresh_token tests
 // ---------------------------------------------------------------------------
 
-function makeStoredRefreshToken(overrides: Record<string, unknown> = {}) {
-  return {
-    token_hash: 'some-hash',
-    client_id: 'test-client',
-    user_id: 'user-123',
-    scopes: ['read', 'write'],
-    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    revoked: false,
-    replaced_by_hash: null,
-    created_at: new Date().toISOString(),
-    ...overrides,
-  };
-}
-
-function refreshLookupQueries(rawToken: string) {
-  return [
-    { table: 'oauth_refresh_tokens', method: 'from', args: ['oauth_refresh_tokens'] },
-    { table: 'oauth_refresh_tokens', method: 'select', args: ['*'] },
-    { table: 'oauth_refresh_tokens', method: 'eq', args: ['token_hash', hashToken(rawToken)] },
-    { table: 'oauth_refresh_tokens', method: 'single', args: [] },
-  ];
-}
-
-function successfulRotationQueries({
-  rawToken,
-  newRawToken,
-  clientId,
-}: {
-  rawToken: string;
-  newRawToken: string;
-  clientId: string;
-}) {
-  const oldTokenHash = hashToken(rawToken);
-  const newTokenHash = hashToken(newRawToken);
-  return [
-    ...refreshLookupQueries(rawToken),
-    { table: 'oauth_refresh_tokens', method: 'from', args: ['oauth_refresh_tokens'] },
-    {
-      table: 'oauth_refresh_tokens',
-      method: 'insert',
-      args: [{
-        token_hash: newTokenHash,
-        client_id: clientId,
-        user_id: 'user-123',
-        scopes: ['read', 'write'],
-        expires_at: '2027-01-24T20:00:00.000Z',
-      }],
-    },
-    { table: 'oauth_refresh_tokens', method: 'from', args: ['oauth_refresh_tokens'] },
-    {
-      table: 'oauth_refresh_tokens',
-      method: 'update',
-      args: [{ revoked: true, replaced_by_hash: newTokenHash }],
-    },
-    { table: 'oauth_refresh_tokens', method: 'eq', args: ['token_hash', oldTokenHash] },
-    { table: 'oauth_refresh_tokens', method: 'eq', args: ['revoked', false] },
-    { table: 'oauth_refresh_tokens', method: 'select', args: ['id'] },
-    { table: 'oauth_refresh_tokens', method: 'from', args: ['oauth_refresh_tokens'] },
-    { table: 'oauth_refresh_tokens', method: 'delete', args: [] },
-    {
-      table: 'oauth_refresh_tokens',
-      method: 'or',
-      args: ['expires_at.lt.2026-07-27T20:00:00.000Z,and(revoked.eq.true,created_at.lt.2026-07-21T20:00:00.000Z)'],
-    },
-  ];
-}
-
 describe('POST /api/oauth/token — grant_type=refresh_token', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -418,7 +358,10 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
   });
 
   it('returns invalid_request when refresh_token param is missing', async () => {
-    const request = makeRequest({ grant_type: 'refresh_token' });
+    const request = makeRequest({
+      grant_type: 'refresh_token',
+      client_id: 'test-client',
+    });
     const response = await POST(request);
     const data = await response.json();
 
@@ -427,197 +370,327 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
     expect(data.error_description).toBe('refresh_token is required');
   });
 
-  it('returns invalid_grant for unknown refresh token', async () => {
-    mockSupabaseClient.setMockResponse(null, { code: 'PGRST116' });
-
-    const request = makeRequest({
-      grant_type: 'refresh_token',
-      refresh_token: 'unknown-token',
-    });
-    const response = await POST(request);
-    const data = await response.json();
-
-    expect(response.status).toBe(401);
-    expect(data.error).toBe('invalid_grant');
-  });
-
-  it('returns invalid_grant for expired refresh token', async () => {
-    const stored = makeStoredRefreshToken({
-      expires_at: new Date(Date.now() - 60 * 1000).toISOString(),
-    });
-    mockSupabaseClient.setMockResponse(stored, null);
-
+  it('returns invalid_request when client_id context is missing', async () => {
     const request = makeRequest({
       grant_type: 'refresh_token',
       refresh_token: 'some-raw-token',
     });
     const response = await POST(request);
-    const data = await response.json();
 
-    expect(response.status).toBe(401);
-    expect(data.error).toBe('invalid_grant');
-    expect(data.error_description).toBe('Refresh token expired');
-  });
-
-  it('returns invalid_grant for revoked refresh token', async () => {
-    const stored = makeStoredRefreshToken({ revoked: true });
-    mockSupabaseClient.setMockResponse(stored, null);
-
-    const request = makeRequest({
-      grant_type: 'refresh_token',
-      refresh_token: 'some-raw-token',
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_request',
+      error_description: 'client_id is required',
     });
-    const response = await POST(request);
-    const data = await response.json();
-
-    expect(response.status).toBe(401);
-    expect(data.error).toBe('invalid_grant');
-    expect(data.error_description).toBe('Refresh token revoked');
   });
 
-  it('returns invalid_grant and revokes all user tokens on reuse detection', async () => {
-    const stored = makeStoredRefreshToken({ replaced_by_hash: 'already-rotated-hash' });
-    mockSupabaseClient.setMockResponse(stored, null);
-    queueThenResponses([{ data: null, error: null }]);
+  it.each([
+    ['refresh_token', '', 'refresh_token is required'],
+    ['client_id', '', 'client_id is required'],
+  ])(
+    'returns invalid_request when %s is empty',
+    async (field, value, description) => {
+      const response = await POST(makeRequest({
+        grant_type: 'refresh_token',
+        refresh_token: 'some-raw-token',
+        client_id: 'test-client',
+        [field]: value,
+      }));
 
-    const request = makeRequest({
-      grant_type: 'refresh_token',
-      refresh_token: 'reused-raw-token',
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: 'invalid_request',
+        error_description: description,
+      });
+      expect(mockRpc).not.toHaveBeenCalled();
+      expect(signMcpToken).not.toHaveBeenCalled();
+      expect(mockSupabaseClient.queryLog).toEqual([]);
+    },
+  );
+
+  it('rotates a valid token through one atomic lifecycle operation', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        outcome: 'valid_token',
+        client_id: 'test-client',
+        user_id: 'user-123',
+        scopes: ['read', 'write'],
+      }],
+      error: null,
+    }).mockResolvedValueOnce({
+      data: [{
+        outcome: 'rotated',
+        client_id: 'test-client',
+        user_id: 'user-123',
+        scopes: ['read', 'write'],
+      }],
+      error: null,
+    }).mockResolvedValueOnce({
+      data: null,
+      error: null,
     });
-    const response = await POST(request);
-    const data = await response.json();
+    const rawRefreshToken = 'ef'.repeat(48);
+    const randomBytes = vi.spyOn(crypto, 'randomBytes').mockImplementation(
+      ((size: number) => Buffer.alloc(size, 0xef)) as typeof crypto.randomBytes,
+    );
 
-    expect(response.status).toBe(401);
-    expect(data.error).toBe('invalid_grant');
-    expect(data.error_description).toBe('Token reuse detected — all sessions revoked');
-
-    expect(mockSupabaseClient.queryLog).toEqual([
-      ...refreshLookupQueries('reused-raw-token'),
-      { table: 'oauth_refresh_tokens', method: 'from', args: ['oauth_refresh_tokens'] },
-      { table: 'oauth_refresh_tokens', method: 'update', args: [{ revoked: true }] },
-      { table: 'oauth_refresh_tokens', method: 'eq', args: ['user_id', 'user-123'] },
-    ]);
-  });
-
-  it('returns new access_token and rotated refresh_token for a valid token', async () => {
-    const stored = makeStoredRefreshToken();
-    mockSupabaseClient.setMockResponse(stored, null);
-    queueThenResponses([
-      { data: null, error: null },
-      { data: [{ id: 'row-1' }], error: null },
-      { data: null, error: null },
-    ]);
-
-    const request = makeRequest({
+    const response = await POST(makeRequest({
       grant_type: 'refresh_token',
       refresh_token: 'valid-raw-token',
-    });
-    const response = await POST(request);
+      client_id: 'test-client',
+    }));
+    randomBytes.mockRestore();
     const data = await response.json();
 
     expect(response.status).toBe(200);
     expect(data.access_token).toBe('mock-access-token');
+    expect(data.refresh_token).toBe(rawRefreshToken);
     expect(data.token_type).toBe('bearer');
     expect(data.expires_in).toBe(3600);
-    expect(typeof data.refresh_token).toBe('string');
-    expect(data.refresh_token).toHaveLength(96);
-
-    expect(mockSupabaseClient.queryLog).toEqual(successfulRotationQueries({
-      rawToken: 'valid-raw-token',
-      newRawToken: data.refresh_token,
-      clientId: 'test-client',
-    }));
-  });
-
-  it('preserves the legacy user-bound client identity during refresh rotation', async () => {
-    mockSupabaseClient.setMockResponse(
-      makeStoredRefreshToken({ client_id: '' }),
-      null,
+    expect(data.scope).toBe('read write');
+    expect(mockRpc).toHaveBeenNthCalledWith(
+      1,
+      'resolve_oauth_refresh_token_context',
+      {
+        requested_token_hash: hashToken('valid-raw-token'),
+        requested_client_id: 'test-client',
+        requested_at: NOW.toISOString(),
+      },
     );
-    queueThenResponses([
-      { data: null, error: null },
-      { data: [{ id: 'row-1' }], error: null },
-      { data: null, error: null },
-    ]);
-
-    const response = await POST(makeRequest({
-      grant_type: 'refresh_token',
-      refresh_token: 'legacy-raw-token',
-    }));
-
-    const data = await response.json();
-    expect(response.status).toBe(200);
-    expect(mockSupabaseClient.queryLog).toEqual(successfulRotationQueries({
-      rawToken: 'legacy-raw-token',
-      newRawToken: data.refresh_token,
-      clientId: 'user-123',
-    }));
+    expect(mockRpc).toHaveBeenNthCalledWith(
+      2,
+      'rotate_oauth_refresh_token',
+      {
+        requested_token_hash: hashToken('valid-raw-token'),
+        replacement_token_hash:
+          '451541b7fec3361c8ffe8ff45487c7b66468b3e7f95f40e46d57beac608d45ef',
+        replacement_expires_at: '2027-01-24T20:00:00.000Z',
+        requested_client_id: 'test-client',
+        requested_at: NOW.toISOString(),
+      },
+    );
+    expect(mockRpc).toHaveBeenNthCalledWith(
+      3,
+      'cleanup_oauth_refresh_token_families',
+      {
+        expired_before: '2026-07-27T20:00:00.000Z',
+        revoked_before: '2026-07-21T20:00:00.000Z',
+      },
+    );
   });
 
-  it('returns server_error without revoking the old token when rotation insert fails', async () => {
-    mockSupabaseClient.setMockResponse(makeStoredRefreshToken(), null);
-    queueThenResponses([{ data: null, error: { message: 'insert failed' } }]);
+  it('returns credentials when cleanup fails and logs the warning', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        outcome: 'valid_token',
+        client_id: 'test-client',
+        user_id: 'user-123',
+        scopes: ['read', 'write'],
+      }],
+      error: null,
+    }).mockResolvedValueOnce({
+      data: [{
+        outcome: 'rotated',
+        client_id: 'test-client',
+        user_id: 'user-123',
+        scopes: ['read', 'write'],
+      }],
+      error: null,
+    }).mockResolvedValueOnce({
+      data: null,
+      error: new Error('cleanup unavailable'),
+    });
     const randomBytes = vi.spyOn(crypto, 'randomBytes').mockImplementation(
-      ((size: number) => Buffer.alloc(size, 0xab)) as typeof crypto.randomBytes,
+      ((size: number) => Buffer.alloc(size, 0x12)) as typeof crypto.randomBytes,
     );
 
     const response = await POST(makeRequest({
       grant_type: 'refresh_token',
       refresh_token: 'valid-raw-token',
+      client_id: 'test-client',
     }));
     randomBytes.mockRestore();
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      access_token: 'mock-access-token',
+      token_type: 'bearer',
+      expires_in: 3600,
+      refresh_token: '12'.repeat(48),
+      scope: 'read write',
+    });
+    expect(log.warn).toHaveBeenCalledExactlyOnceWith(
+      '[oauth] Refresh token cleanup failed',
+      { error: 'Error: cleanup unavailable' },
+    );
+  });
+
+  it('returns credentials when the cleanup RPC rejects and logs the warning', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        outcome: 'valid_token',
+        client_id: 'test-client',
+        user_id: 'user-123',
+        scopes: ['read', 'write'],
+      }],
+      error: null,
+    }).mockResolvedValueOnce({
+      data: [{
+        outcome: 'rotated',
+        client_id: 'test-client',
+        user_id: 'user-123',
+        scopes: ['read', 'write'],
+      }],
+      error: null,
+    }).mockRejectedValueOnce(new Error('cleanup rejected'));
+    const randomBytes = vi.spyOn(crypto, 'randomBytes').mockImplementation(
+      ((size: number) => Buffer.alloc(size, 0x34)) as typeof crypto.randomBytes,
+    );
+
+    const response = await POST(makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'valid-raw-token',
+      client_id: 'test-client',
+    }));
+    randomBytes.mockRestore();
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      access_token: 'mock-access-token',
+      token_type: 'bearer',
+      expires_in: 3600,
+      refresh_token: '34'.repeat(48),
+      scope: 'read write',
+    });
+    expect(log.warn).toHaveBeenCalledExactlyOnceWith(
+      '[oauth] Refresh token cleanup failed',
+      { error: 'Error: cleanup rejected' },
+    );
+  });
+
+  it.each([
+    ['invalid_token', 'Invalid refresh token'],
+    ['expired_token', 'Refresh token expired'],
+    ['mismatched_context', 'Refresh token context mismatch'],
+    ['revoked_token', 'Refresh token revoked'],
+  ])('issues no credentials for a %s outcome', async (outcome, description) => {
+    mockRpc.mockResolvedValue({ data: [{ outcome }], error: null });
+
+    const response = await POST(makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'unusable-token',
+      client_id: 'test-client',
+    }));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_grant',
+      error_description: description,
+    });
+    expect(signMcpToken).not.toHaveBeenCalled();
+    expect(mockSupabaseClient.queryLog).toEqual([]);
+  });
+
+  it('returns the family-level response when reuse is detected', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{ outcome: 'reused_token' }],
+      error: null,
+    }).mockResolvedValueOnce({
+      data: [{ outcome: 'reused_token' }],
+      error: null,
+    });
+    const response = await POST(makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'reused-token',
+      client_id: 'test-client',
+    }));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_grant',
+      error_description: 'Token reuse detected — token family revoked',
+    });
+    expect(signMcpToken).not.toHaveBeenCalled();
+    expect(mockRpc).toHaveBeenNthCalledWith(
+      1,
+      'resolve_oauth_refresh_token_context',
+      {
+        requested_token_hash: hashToken('reused-token'),
+        requested_client_id: 'test-client',
+        requested_at: NOW.toISOString(),
+      },
+    );
+    expect(mockRpc).toHaveBeenNthCalledWith(
+      2,
+      'rotate_oauth_refresh_token',
+      {
+        requested_token_hash: hashToken('reused-token'),
+        replacement_token_hash: '0'.repeat(64),
+        replacement_expires_at: '2027-01-24T20:00:00.000Z',
+        requested_client_id: 'test-client',
+        requested_at: NOW.toISOString(),
+      },
+    );
+  });
+
+  it('returns the family-level response when atomic rotation detects concurrent reuse', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        outcome: 'valid_token',
+        client_id: 'test-client',
+        user_id: 'user-123',
+        scopes: ['read', 'write'],
+      }],
+      error: null,
+    }).mockResolvedValueOnce({
+      data: [{ outcome: 'reused_token' }],
+      error: null,
+    });
+
+    const response = await POST(makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'concurrently-reused-token',
+      client_id: 'test-client',
+    }));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: 'invalid_grant',
+      error_description: 'Token reuse detected — token family revoked',
+    });
+    expect(signMcpToken).not.toHaveBeenCalled();
+    expect(mockRpc).toHaveBeenCalledTimes(2);
+    expect(mockRpc).not.toHaveBeenCalledWith(
+      'cleanup_oauth_refresh_token_families',
+      expect.anything(),
+    );
+  });
+
+  it('returns server_error without credentials when atomic rotation fails', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{
+        outcome: 'valid_token',
+        client_id: 'test-client',
+        user_id: 'user-123',
+        scopes: ['read', 'write'],
+      }],
+      error: null,
+    }).mockResolvedValueOnce({
+      data: null,
+      error: new Error('database unavailable'),
+    });
+
+    const response = await POST(makeRequest({
+      grant_type: 'refresh_token',
+      refresh_token: 'valid-token',
+      client_id: 'test-client',
+    }));
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({
       error: 'server_error',
-      error_description: 'Token rotation failed',
+      error_description: 'Internal server error',
     });
-    expect(mockSupabaseClient.queryLog).toEqual([
-      ...refreshLookupQueries('valid-raw-token'),
-      { table: 'oauth_refresh_tokens', method: 'from', args: ['oauth_refresh_tokens'] },
-      {
-        table: 'oauth_refresh_tokens',
-        method: 'insert',
-        args: [{
-          token_hash: hashToken('ab'.repeat(48)),
-          client_id: 'test-client',
-          user_id: 'user-123',
-          scopes: ['read', 'write'],
-          expires_at: '2027-01-24T20:00:00.000Z',
-        }],
-      },
-    ]);
-  });
-
-  it('returns 401 and rolls back new token when atomic revoke claims zero rows (concurrent race)', async () => {
-    const stored = makeStoredRefreshToken();
-    mockSupabaseClient.setMockResponse(stored, null);
-
-    // Simulate concurrent request already claimed the token — revoke update returns 0 rows
-    queueThenResponses([
-      { data: null, error: null },
-      { data: [], error: null },
-      { data: null, error: null },
-    ]);
-
-    const request = makeRequest({
-      grant_type: 'refresh_token',
-      refresh_token: 'valid-raw-token',
-    });
-    const response = await POST(request);
-    const data = await response.json();
-
-    expect(response.status).toBe(401);
-    expect(data.error).toBe('invalid_grant');
-    expect(data.error_description).toBe('Token already consumed');
-    const insert = mockSupabaseClient.queryLog.find(
-      ({ method }) => method === 'insert',
-    );
-    const insertedHash = (insert?.args[0] as { token_hash: string }).token_hash;
-    expect(mockSupabaseClient.queryLog.slice(-3)).toEqual([
-      { table: 'oauth_refresh_tokens', method: 'from', args: ['oauth_refresh_tokens'] },
-      { table: 'oauth_refresh_tokens', method: 'delete', args: [] },
-      { table: 'oauth_refresh_tokens', method: 'eq', args: ['token_hash', insertedHash] },
-    ]);
+    expect(signMcpToken).not.toHaveBeenCalled();
   });
 });
