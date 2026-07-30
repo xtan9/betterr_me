@@ -224,6 +224,81 @@ export function isolatedCodexFilesystemConfig(extraReadable = []) {
     .join(",")}}`;
 }
 
+const IMMUTABLE_ESBUILD_SELECTOR =
+  "*/node_modules/@esbuild/linux-x64/bin/esbuild";
+
+function immutableDependencyFindArguments(dependencyRoot) {
+  if (typeof dependencyRoot !== "string" || !dependencyRoot.startsWith("/")) {
+    throw new Error("immutable dependency root must be an absolute Linux path");
+  }
+  return [
+    "find",
+    dependencyRoot,
+    "-path",
+    IMMUTABLE_ESBUILD_SELECTOR,
+    "-type",
+    "f",
+  ];
+}
+
+export function immutableDependencyExecutableDiscoveryArguments(
+  dependencyRoot,
+) {
+  return [...immutableDependencyFindArguments(dependencyRoot), "-print"];
+}
+
+export function immutableDependencyExecutableRepairArguments(dependencyRoot) {
+  return [
+    ...immutableDependencyFindArguments(dependencyRoot),
+    "-exec",
+    "chmod",
+    "0555",
+    "{}",
+    "+",
+  ];
+}
+
+export function immutableDependencyUnsafeOwnershipProbeArguments(
+  dependencyRoot,
+) {
+  return [
+    ...immutableDependencyFindArguments(dependencyRoot),
+    "(",
+    "!",
+    "-user",
+    "root",
+    "-o",
+    "!",
+    "-group",
+    "root",
+    ")",
+    "-print",
+    "-quit",
+  ];
+}
+
+export function immutableDependencyNonExecutableProbeArguments(dependencyRoot) {
+  return [
+    ...immutableDependencyFindArguments(dependencyRoot),
+    "!",
+    "-perm",
+    "/111",
+    "-print",
+    "-quit",
+  ];
+}
+
+export function immutableDependencyUnsafeModeProbeArguments(dependencyRoot) {
+  return [
+    ...immutableDependencyFindArguments(dependencyRoot),
+    "!",
+    "-perm",
+    "0555",
+    "-print",
+    "-quit",
+  ];
+}
+
 export function workerGitEnvironment({ gitDirectory, worktreePath }) {
   return {
     GIT_DIR: gitDirectory,

@@ -8,6 +8,11 @@ import {
   codexStartupEventsReady,
   codexSessionStarted,
   ensureSanitizedWorkerGitView,
+  immutableDependencyExecutableDiscoveryArguments,
+  immutableDependencyExecutableRepairArguments,
+  immutableDependencyNonExecutableProbeArguments,
+  immutableDependencyUnsafeModeProbeArguments,
+  immutableDependencyUnsafeOwnershipProbeArguments,
   isolatedCodexAuthInstallRequired,
   isolatedCodexReadablePaths,
   isolatedCodexRuntimeConfiguration,
@@ -52,6 +57,78 @@ function gitWithoutStdin(args: string[], options: { input?: string } = {}) {
 }
 
 describe("Ralph sanitized worker Git view", () => {
+  it("repairs only immutable Linux esbuild binaries without making them writable", () => {
+    const root = "/var/lib/betterr-me-ralph/deps-source/node_modules";
+    const selector = "*/node_modules/@esbuild/linux-x64/bin/esbuild";
+    expect(immutableDependencyExecutableDiscoveryArguments(root)).toEqual([
+      "find",
+      root,
+      "-path",
+      selector,
+      "-type",
+      "f",
+      "-print",
+    ]);
+    expect(immutableDependencyExecutableRepairArguments(root)).toEqual([
+      "find",
+      root,
+      "-path",
+      selector,
+      "-type",
+      "f",
+      "-exec",
+      "chmod",
+      "0555",
+      "{}",
+      "+",
+    ]);
+    expect(immutableDependencyUnsafeOwnershipProbeArguments(root)).toEqual([
+      "find",
+      root,
+      "-path",
+      selector,
+      "-type",
+      "f",
+      "(",
+      "!",
+      "-user",
+      "root",
+      "-o",
+      "!",
+      "-group",
+      "root",
+      ")",
+      "-print",
+      "-quit",
+    ]);
+    expect(immutableDependencyNonExecutableProbeArguments(root)).toEqual([
+      "find",
+      root,
+      "-path",
+      selector,
+      "-type",
+      "f",
+      "!",
+      "-perm",
+      "/111",
+      "-print",
+      "-quit",
+    ]);
+    expect(immutableDependencyUnsafeModeProbeArguments(root)).toEqual([
+      "find",
+      root,
+      "-path",
+      selector,
+      "-type",
+      "f",
+      "!",
+      "-perm",
+      "0555",
+      "-print",
+      "-quit",
+    ]);
+  });
+
   it("rebuilds stale metadata only before the durable merge begins", () => {
     expect(
       sanitizedWorkerGitViewRecoveryAction({

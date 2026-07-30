@@ -55,6 +55,11 @@ import {
   codexSessionStarted,
   codexStartupEventsReady,
   ensureSanitizedWorkerGitView,
+  immutableDependencyExecutableDiscoveryArguments,
+  immutableDependencyExecutableRepairArguments,
+  immutableDependencyNonExecutableProbeArguments,
+  immutableDependencyUnsafeModeProbeArguments,
+  immutableDependencyUnsafeOwnershipProbeArguments,
   isolatedCodexAuthInstallRequired,
   isolatedCodexFilesystemConfig,
   isolatedCodexReadablePaths,
@@ -827,6 +832,45 @@ async function assertWslIsolationReady() {
     expectedDependencyFingerprint.stdout.trim()
   ) {
     throw new Error("immutable WSL dependency content fingerprint changed");
+  }
+  const nativeExecutables = await runWsl(
+    immutableDependencyExecutableDiscoveryArguments(wslDependencyRoot),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (!nativeExecutables.stdout.trim()) {
+    throw new Error("immutable WSL dependencies are missing the Linux esbuild binary");
+  }
+  const unsafeNativeOwnership = await runWsl(
+    immutableDependencyUnsafeOwnershipProbeArguments(wslDependencyRoot),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (unsafeNativeOwnership.stdout.trim()) {
+    throw new Error("immutable WSL esbuild dependency is not root-owned");
+  }
+  await runWsl(
+    immutableDependencyExecutableRepairArguments(wslDependencyRoot),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  const nonExecutableDependency = await runWsl(
+    immutableDependencyNonExecutableProbeArguments(wslDependencyRoot),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (nonExecutableDependency.stdout.trim()) {
+    throw new Error("immutable WSL esbuild dependency is not executable");
+  }
+  const unsafeNativeOwnershipAfterRepair = await runWsl(
+    immutableDependencyUnsafeOwnershipProbeArguments(wslDependencyRoot),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (unsafeNativeOwnershipAfterRepair.stdout.trim()) {
+    throw new Error("immutable WSL esbuild dependency ownership changed during repair");
+  }
+  const unsafeNativeMode = await runWsl(
+    immutableDependencyUnsafeModeProbeArguments(wslDependencyRoot),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (unsafeNativeMode.stdout.trim()) {
+    throw new Error("immutable WSL esbuild dependency is not root-owned read/execute-only");
   }
   await runWsl(
     [
