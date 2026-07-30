@@ -418,7 +418,12 @@ describe("Ralph sanitized worker Git view", () => {
         environment: [],
         command: "/usr/local/bin/codex",
         args: [],
-        ...override,
+        ...(override as unknown as Partial<{
+          home: string;
+          environment: string[];
+          command: string;
+          args: string[];
+        }>),
       }),
     ).toThrowError(new Error(expectedMessage));
   });

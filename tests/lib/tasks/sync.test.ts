@@ -94,10 +94,10 @@ describe('syncTaskCreate', () => {
       priority: 0,
       due_date: null,
       due_time: null,
-      section: 'work-project',
+      section: 'work',
     };
     const result = syncTaskCreate(input);
-    expect(result.section).toBe('work-project');
+    expect(result.section).toBe('work');
   });
 
   it('preserves all other input fields in output', () => {

@@ -114,9 +114,9 @@ export function isolatedCodexRuntimeConfiguration({
 
 export function unprivilegedWslCommandArguments({
   home,
-  environment = [],
+  environment = /** @type {string[]} */ ([]),
   command,
-  args = [],
+  args = /** @type {string[]} */ ([]),
 }) {
   if (typeof home !== "string" || !home.startsWith("/")) {
     throw new Error("unprivileged WSL home must be an absolute Linux path");
@@ -202,7 +202,7 @@ export function isolatedCodexReadablePaths({
   gitMetadataRoot,
   dependencyRoot,
   workerHome,
-  protectedPaths = [],
+  protectedPaths = /** @type {string[]} */ ([]),
 }) {
   return [
     ...(readOnly ? [worktreePath] : []),
@@ -213,7 +213,9 @@ export function isolatedCodexReadablePaths({
   ];
 }
 
-export function isolatedCodexFilesystemConfig(extraReadable = []) {
+export function isolatedCodexFilesystemConfig(
+  extraReadable = /** @type {string[]} */ ([]),
+) {
   return `{${[
     [":root", "deny"],
     [":minimal", "read"],
@@ -299,7 +301,7 @@ export function immutableDependencyExecutableRepairArguments(executablePaths) {
 export function immutableDependencyExecutableStatsAreSafe(
   output,
   expectedCount,
-  expectedMode = null,
+  expectedMode = /** @type {string | null} */ (null),
 ) {
   if (!Number.isInteger(expectedCount) || expectedCount < 1) return false;
   const lines = String(output ?? "")

@@ -344,7 +344,7 @@ describe("KanbanDetailModal", () => {
       await waitFor(() => {
         expect(screen.getByText("Delete this task?")).toBeInTheDocument();
       });
-      await user.click(screen.getByRole("button", { name: "Delete", exact: true }));
+      await user.click(screen.getByRole("button", { name: /^Delete$/ }));
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith("/api/tasks/task-1", {
@@ -370,7 +370,7 @@ describe("KanbanDetailModal", () => {
       await waitFor(() => {
         expect(screen.getByText("Delete this task?")).toBeInTheDocument();
       });
-      await user.click(screen.getByRole("button", { name: "Delete", exact: true }));
+      await user.click(screen.getByRole("button", { name: /^Delete$/ }));
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith("Failed to delete task");
@@ -390,7 +390,7 @@ describe("KanbanDetailModal", () => {
       await waitFor(() => {
         expect(screen.getByText("Delete this task?")).toBeInTheDocument();
       });
-      await user.click(screen.getByRole("button", { name: "Delete", exact: true }));
+      await user.click(screen.getByRole("button", { name: /^Delete$/ }));
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith("Failed to delete task");
@@ -433,7 +433,7 @@ describe("KanbanDetailModal", () => {
       await waitFor(() => {
         expect(screen.getByText("Delete this task?")).toBeInTheDocument();
       });
-      await user.click(screen.getByRole("button", { name: "Delete", exact: true }));
+      await user.click(screen.getByRole("button", { name: /^Delete$/ }));
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith("/api/tasks/task-1", {

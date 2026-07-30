@@ -263,7 +263,12 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
           ))}
         </div>
 
-        <DragOverlay>
+        <DragOverlay
+          adjustScale={false}
+          className={undefined}
+          style={undefined}
+          transition={undefined}
+        >
           {activeTask ? <KanbanCardOverlay task={activeTask} /> : null}
         </DragOverlay>
       </DndContext>

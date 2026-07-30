@@ -6,7 +6,7 @@ import {
   waitForVercelDeployment,
 } from "../../scripts/ci/production-smoke.mjs";
 
-function response(payload, status = 200) {
+function response(payload: unknown, status = 200) {
   const body = typeof payload === "string" ? payload : JSON.stringify(payload);
   return new Response(body, {
     status,

@@ -19,7 +19,7 @@ const {
 // Supabase mock with chainable insert
 const mockSupabase = {
   auth: { getUser: mockGetUser },
-  from: vi.fn(() => ({
+  from: vi.fn((_table: string): Partial<Record<string, ReturnType<typeof vi.fn>>> => ({
     insert: mockInsert,
     delete: vi.fn(() => ({
       eq: vi.fn().mockResolvedValue({ error: null }),

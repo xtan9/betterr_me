@@ -1120,7 +1120,9 @@ function runCli(args) {
 
 export function executeQueueCli(
   args,
-  writeError = (message) => process.stderr.write(message),
+  writeError = (message) => {
+    process.stderr.write(message);
+  },
 ) {
   try {
     runCli(args);

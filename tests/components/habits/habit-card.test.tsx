@@ -95,10 +95,14 @@ const baseHabit: HabitWithTodayStatus = {
   current_streak: 23,
   best_streak: 30,
   paused_at: null,
+  graduated_at: null,
+  graduated_streak: null,
+  nudge_dismissed_at: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   completed_today: false,
   monthly_completion_rate: 75,
+  graduation_eligible: false,
 };
 
 describe('HabitCard', () => {

@@ -44,6 +44,7 @@ function makeWorkout(): WorkoutWithExercises {
           equipment: "barbell",
           exercise_type: "weight_reps",
           is_custom: false,
+          exercise_media: null,
           created_at: "2026-02-28T10:00:00Z",
           updated_at: "2026-02-28T10:00:00Z",
         },
