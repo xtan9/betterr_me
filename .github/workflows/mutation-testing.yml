@@ -39,17 +39,8 @@ jobs:
       - name: Fetch base ref
         run: git fetch origin main:refs/remotes/origin/main
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js, pnpm, and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Run Stryker on changed files
         run: pnpm mutation-test:changed
@@ -74,17 +65,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js, pnpm, and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Run full Stryker
         run: pnpm mutation-test
