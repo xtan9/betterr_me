@@ -27,7 +27,7 @@ jobs:
       e2e_supabase: ${{ steps.classify.outputs.e2e_supabase }}
       e2e_label: ${{ steps.classify.outputs.e2e_label }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Classify changes
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
@@ -74,7 +74,7 @@ jobs:
 
       - name: Setup disposable Supabase for pull-request E2E
         if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
-        uses: supabase/setup-cli@v3
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
         with:
           version: 2.109.1
 
@@ -110,7 +110,7 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Restore Next.js build cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .next/cache
           key: ${{ runner.os }}-nextjs-e2e-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
@@ -204,7 +204,7 @@ jobs:
           fi
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: failure()
         with:
           name: playwright-failure-${{ github.run_id }}
