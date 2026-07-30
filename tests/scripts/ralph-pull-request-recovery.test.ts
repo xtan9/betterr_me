@@ -13,6 +13,7 @@ import {
   pullRequestRecoveryErrorDisposition,
   pullRequestRecoveryFingerprint,
   reconcilePullRequestBacklog,
+  staleBlockedRepairPreservationPatch,
 } from "../../scripts/ralph/pull-request-recovery.mjs";
 import {
   selectPullRequestRecoveryCandidates,
@@ -37,6 +38,22 @@ const snapshot = (overrides = {}) => ({
 });
 
 describe("Ralph pull-request recovery planning", () => {
+  it("invalidates an old preservation receipt when new dirty repair work exists", () => {
+    const issueState = {
+      blockedPrRepairRecovery: { headSha: "old-head" },
+      blockedPrRepairPushedAt: "2026-07-29T19:00:00.000Z",
+      blockedPrCommentedAt: "2026-07-29T19:01:00.000Z",
+      blockedPrDraftVerifiedAt: "2026-07-29T19:02:00.000Z",
+    };
+    expect(staleBlockedRepairPreservationPatch(issueState, false)).toBeNull();
+    expect(staleBlockedRepairPreservationPatch(issueState, true)).toEqual({
+      blockedPrRepairRecovery: null,
+      blockedPrRepairPushedAt: null,
+      blockedPrCommentedAt: null,
+      blockedPrDraftVerifiedAt: null,
+    });
+  });
+
   it("archives and clears an active review repair when a new base is adopted", () => {
     expect(
       baseUpdateReviewResetPatch(
@@ -51,6 +68,10 @@ describe("Ralph pull-request recovery planning", () => {
       reviewFindingLedger: null,
       reviewBaselineTreeSha: null,
       reviewRepairPending: null,
+      blockedPrRepairRecovery: null,
+      blockedPrRepairPushedAt: null,
+      blockedPrCommentedAt: null,
+      blockedPrDraftVerifiedAt: null,
       supersededReviewFindingLedgers: [
         {
           findingLedger: [{ id: "SEC-001", problem: "old finding" }],
