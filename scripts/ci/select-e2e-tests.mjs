@@ -25,9 +25,7 @@ const SPEC_LABEL_GROUPS = [
 
 const FULL_SUITE_PATTERNS = [
   /^\.github\/actions\//,
-  /^\.github\/workflows\/e2e\.yml$/,
   /^(?:package\.json|pnpm-lock\.yaml|next\.config\.ts|playwright\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs)$/,
-  /^scripts\/ci\/(?:classify-changes\.sh|select-e2e-tests\.mjs)$/,
   /^e2e\/(?:auth\.setup|constants|global-setup|global-teardown)\.ts$/,
   /^e2e\/(?:helpers|pages)\//,
   /^supabase\//,
@@ -42,6 +40,13 @@ const FULL_SUITE_PATTERNS = [
 ];
 
 const FEATURE_MAPPINGS = [
+  {
+    patterns: [
+      /^\.github\/workflows\/e2e\.yml$/,
+      /^scripts\/ci\/(?:classify-changes\.sh|select-e2e-tests\.mjs)$/,
+    ],
+    specs: [SPECS.dashboard],
+  },
   {
     patterns: [
       /^app\/(?:api\/habits|habits)\//,

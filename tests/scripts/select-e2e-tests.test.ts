@@ -87,6 +87,22 @@ describe("E2E test selection", () => {
     }
   });
 
+  it("runs a dashboard pipeline smoke test for E2E workflow changes", () => {
+    for (const file of [
+      ".github/workflows/e2e.yml",
+      "scripts/ci/classify-changes.sh",
+      "scripts/ci/select-e2e-tests.mjs",
+    ]) {
+      expect(selectE2ETests([file])).toMatchObject({
+        e2e: true,
+        full: false,
+        chromiumSpecs: ["e2e/dashboard.spec.ts"],
+        supabase: true,
+        label: "dashboard",
+      });
+    }
+  });
+
   it("runs a directly changed Chromium spec", () => {
     expect(selectE2ETests([
       "e2e/tasks-list.spec.ts",
