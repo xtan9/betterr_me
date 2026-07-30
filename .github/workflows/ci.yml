@@ -92,6 +92,10 @@ jobs:
           fi
           pnpm exec eslint "${lint_files[@]}"
 
+      - name: Typecheck full suite
+        if: needs.changes.outputs.full_tests == 'true'
+        run: pnpm typecheck
+
       - name: Test full suite
         if: needs.changes.outputs.full_tests == 'true' && github.event_name != 'schedule'
         run: pnpm test:run

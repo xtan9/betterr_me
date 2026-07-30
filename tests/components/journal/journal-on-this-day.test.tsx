@@ -34,6 +34,7 @@ describe("JournalOnThisDay", () => {
             mood: 4,
             title: "A good day",
             content: makeTiptapContent("Had a great morning walk."),
+            word_count: 4,
             period: "30_days_ago",
           },
         ]}
@@ -60,6 +61,7 @@ describe("JournalOnThisDay", () => {
             mood: 5,
             title: "Amazing",
             content: makeTiptapContent("Incredible day"),
+            word_count: 3,
             period: "30_days_ago",
           },
           {
@@ -68,6 +70,7 @@ describe("JournalOnThisDay", () => {
             mood: 3,
             title: "Okay day",
             content: makeTiptapContent("Regular day"),
+            word_count: 3,
             period: "90_days_ago",
           },
           {
@@ -76,6 +79,7 @@ describe("JournalOnThisDay", () => {
             mood: 2,
             title: "Tough",
             content: makeTiptapContent("Challenging time"),
+            word_count: 3,
             period: "1_year_ago",
           },
         ]}
@@ -101,6 +105,7 @@ describe("JournalOnThisDay", () => {
             mood: null,
             title: "No mood",
             content: makeTiptapContent("Entry without mood"),
+            word_count: 3,
             period: "30_days_ago",
           },
         ]}

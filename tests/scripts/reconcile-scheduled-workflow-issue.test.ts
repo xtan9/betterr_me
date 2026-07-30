@@ -20,7 +20,11 @@ function scheduledRun(overrides = {}) {
   };
 }
 
-function mockApi(openIssues = []) {
+function mockApi(openIssues: Array<{
+  number: number;
+  title: string;
+  pull_request?: unknown;
+}> = []) {
   return {
     listOpenIssues: vi.fn().mockResolvedValue(openIssues),
     hasLabel: vi.fn().mockResolvedValue(true),

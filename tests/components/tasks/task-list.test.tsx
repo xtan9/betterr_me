@@ -57,8 +57,32 @@ function renderWithIntl(component: React.ReactElement) {
   );
 }
 
+const baseTask: Task = {
+  id: "base",
+  user_id: "user-1",
+  title: "Base task",
+  description: null,
+  is_completed: false,
+  priority: 0,
+  category_id: null,
+  due_date: null,
+  due_time: null,
+  completion_difficulty: null,
+  completed_at: null,
+  status: "todo",
+  section: "personal",
+  sort_order: 0,
+  project_id: null,
+  recurring_task_id: null,
+  is_exception: false,
+  original_date: null,
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
+
 const mockTasks: Task[] = [
   {
+    ...baseTask,
     id: "1",
     user_id: "user-1",
     title: "Buy groceries",
@@ -73,6 +97,7 @@ const mockTasks: Task[] = [
     updated_at: "2026-01-01T00:00:00Z",
   },
   {
+    ...baseTask,
     id: "2",
     user_id: "user-1",
     title: "Finish report",
@@ -87,6 +112,7 @@ const mockTasks: Task[] = [
     updated_at: "2026-01-01T00:00:00Z",
   },
   {
+    ...baseTask,
     id: "3",
     user_id: "user-1",
     title: "Call plumber",

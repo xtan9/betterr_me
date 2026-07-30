@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import type { UIMessage } from "ai";
+import type { ChatStatus, UIMessage } from "ai";
 
 // --- Mocks via vi.hoisted ---
 
@@ -15,7 +15,7 @@ const { mockSendMessage, mockStop, mockUseChat, mockSetMessages, mockMutateFn, m
       messages: [] as UIMessage[],
       sendMessage: mockSendMessage,
       stop: mockStop,
-      status: "ready" as const,
+      status: "ready" as ChatStatus,
       error: undefined as Error | undefined,
       setMessages: mockSetMessages,
       id: "test-chat",

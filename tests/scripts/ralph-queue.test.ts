@@ -959,7 +959,7 @@ Reserve repairable=false for a genuine unresolved product decision with material
     ],
   ])("fails closed at the merge boundary", (overrides, reason) => {
     expect(
-      evaluateMergeGate({
+      evaluateMergeGate(Object.assign({
         mode: "AutoMerge",
         risk: "low",
         checksPassed: true,
@@ -967,8 +967,7 @@ Reserve repairable=false for a genuine unresolved product decision with material
         reviewDecision: "",
         mergeState: "CLEAN",
         ambiguous: false,
-        ...overrides,
-      }),
+      }, overrides)),
     ).toEqual({ canMerge: false, reason });
   });
 

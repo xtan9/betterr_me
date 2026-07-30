@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CategoriesDB } from "@/lib/db/categories";
 import { SEED_CATEGORIES } from "@/lib/categories/seed";
 import { mockSupabaseClient } from "../../setup";
