@@ -40,6 +40,107 @@ async function localBranchExists(repositoryRoot, branch, git) {
   }
 }
 
+async function optionalGitLine(args, git) {
+  try {
+    return (await git(args)).stdout.trim();
+  } catch (error) {
+    if (error?.result?.code === 1) return null;
+    throw error;
+  }
+}
+
+export async function prepareConflictRepair({
+  worktreeRoot,
+  worktreePath,
+  issueNumber,
+  expectedHead,
+  latestMainSha,
+  git,
+}) {
+  const branch = expectedIssueBranch(issueNumber);
+  const resolvedWorktree = assertManagedPath(worktreeRoot, worktreePath);
+  if (!fs.existsSync(resolvedWorktree)) {
+    throw new Error(`cannot prepare conflict repair in missing ${resolvedWorktree}`);
+  }
+  const observedBranch = (
+    await git(["-C", resolvedWorktree, "branch", "--show-current"])
+  ).stdout.trim();
+  assertManagedBranch(issueNumber, observedBranch);
+  const observedHead = (
+    await git(["-C", resolvedWorktree, "rev-parse", "HEAD"])
+  ).stdout.trim();
+  if (observedHead !== expectedHead) {
+    throw new Error(`refusing conflict repair for ${branch}; HEAD changed`);
+  }
+
+  const mergeHead = await optionalGitLine(
+    ["-C", resolvedWorktree, "rev-parse", "--quiet", "--verify", "MERGE_HEAD"],
+    git,
+  );
+  if (mergeHead) {
+    if (mergeHead !== latestMainSha) {
+      throw new Error(`refusing conflict repair for ${branch}; MERGE_HEAD changed`);
+    }
+    const paths = (
+      await git([
+        "-C",
+        resolvedWorktree,
+        "diff",
+        "--name-only",
+        "--diff-filter=U",
+        "-z",
+      ])
+    ).stdout
+      .split("\0")
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right, "en"));
+    return { status: paths.length > 0 ? "conflicted" : "resolved", paths };
+  }
+
+  const status = (
+    await git(["-C", resolvedWorktree, "status", "--porcelain"])
+  ).stdout.trim();
+  if (status) {
+    throw new Error(`refusing conflict repair for ${branch}; worktree is dirty`);
+  }
+
+  try {
+    await git([
+      "-C",
+      resolvedWorktree,
+      "merge",
+      "--no-commit",
+      "--no-ff",
+      latestMainSha,
+    ]);
+    await git(["-C", resolvedWorktree, "merge", "--abort"]);
+    return { status: "clean", paths: [] };
+  } catch (error) {
+    if (error?.result?.code !== 1) throw error;
+  }
+
+  const preparedMergeHead = (
+    await git(["-C", resolvedWorktree, "rev-parse", "--verify", "MERGE_HEAD"])
+  ).stdout.trim();
+  const paths = (
+    await git([
+      "-C",
+      resolvedWorktree,
+      "diff",
+      "--name-only",
+      "--diff-filter=U",
+      "-z",
+    ])
+  ).stdout
+    .split("\0")
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right, "en"));
+  if (preparedMergeHead !== latestMainSha || paths.length === 0) {
+    throw new Error(`conflict repair for ${branch} did not reach a verified conflict state`);
+  }
+  return { status: "conflicted", paths };
+}
+
 export function activeIssueWorktreePath(worktreeRoot) {
   return path.join(worktreeRoot, "current");
 }

@@ -247,6 +247,15 @@ export function workerGitViewPath(workerGitRoot, issueNumber) {
   return path.join(workerGitRoot, `issue-${issueNumber}`);
 }
 
+export function sanitizedWorkerGitViewRecoveryAction({
+  mergeActive,
+  recordedBaseSha,
+  expectedBaseSha,
+}) {
+  if (mergeActive !== true) return "rebuild";
+  return recordedBaseSha === expectedBaseSha ? "adopt" : "unsafe";
+}
+
 function sanitizedConfig() {
   return `[core]\n\trepositoryformatversion = 0\n\tfilemode = false\n\tbare = false\n\tlogallrefupdates = true\n\tautocrlf = true\n\tignorecase = true\n`;
 }

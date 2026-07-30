@@ -48,6 +48,7 @@ import {
   activeIssueWorktreePath,
   cleanupIssueCheckout,
   parkFailedIssueCheckout,
+  prepareConflictRepair,
   recoverPreservationCommit,
 } from "./local-checkout.mjs";
 import {
@@ -60,6 +61,7 @@ import {
   isolatedCodexRuntimeConfiguration,
   processExitCode,
   removeSanitizedWorkerGitView,
+  sanitizedWorkerGitViewRecoveryAction,
   unprivilegedWslCommandArguments,
   unprivilegedWslIdentityIsSafe,
   unprivilegedWslIdentityProbeArguments,
@@ -88,6 +90,7 @@ import {
   blockedRepairRecoveryReceipt,
   blockedRepairRecoveryReceiptMatches,
   canAdoptLegacyProtectedScopeRepair,
+  completedConflictRepairPatch,
   mergedPullRequestFromRecoverySnapshot,
   pullRequestBaseUpdateDisposition,
   pullRequestCheckRetryKey,
@@ -1378,6 +1381,7 @@ async function inspectPullRequestRecovery(candidate, state, controllerOptions) {
     riskReasons: risk.reasons,
     mode: controllerOptions.mode,
     repairAttempts: issueState.repairAttempts ?? 0,
+    conflictRepairAttempts: issueState.conflictRepairAttempts ?? 0,
     maximumRepairAttempts: controllerOptions.maximumRepairAttempts,
     maximumTransientAttempts: controllerOptions.maximumTransientAttempts,
     originalFailureKind,
@@ -1390,6 +1394,7 @@ async function inspectPullRequestRecovery(candidate, state, controllerOptions) {
       issueState.baseUpdateRequiresVerification === true,
     baseUpdateBlockedByDirtyWorktree,
     pendingBaseUpdate: issueState.pendingBaseUpdate ?? null,
+    pendingConflictRepair: issueState.pendingConflictRepair ?? null,
     pendingPrRepair: issueState.pendingPrRepair ?? null,
     baseUpdateRetryReady:
       issueState.pendingBaseUpdate?.status !== "requested" ||
@@ -1523,6 +1528,7 @@ async function restorePullRequestRecoveryCheckout(
   issue,
   expectedHead,
   controllerOptions,
+  { allowDirty = false } = {},
 ) {
   const number = issue.issueNumber;
   let issueState = state.issues[String(number)];
@@ -1552,7 +1558,11 @@ async function restorePullRequestRecoveryCheckout(
     const changes = (
       await git(["-C", worktreePath, "status", "--porcelain"])
     ).stdout.trim();
-    if (branch === issueState.branch && head === expectedHead && !changes) {
+    if (
+      branch === issueState.branch &&
+      head === expectedHead &&
+      (!changes || allowDirty)
+    ) {
       return adoptCheckout();
     }
     throw Object.assign(
@@ -1613,6 +1623,309 @@ async function restorePullRequestRecoveryCheckout(
     });
   }
   return adoptCheckout();
+}
+
+async function abortConflictRepairCheckout(state, issue) {
+  const issueState = state.issues[String(issue.issueNumber)];
+  const worktreePath = issueState?.worktreePath;
+  if (worktreePath && fs.existsSync(worktreePath)) {
+    await removeControllerDependencyLink(worktreePath);
+    const mergeHead = await runProcess(
+      "git.exe",
+      ["-C", worktreePath, "rev-parse", "--quiet", "--verify", "MERGE_HEAD"],
+      { timeoutSeconds: 30 },
+    );
+    if (mergeHead.code === 0) {
+      await git(["-C", worktreePath, "merge", "--abort"]);
+    } else if (mergeHead.code !== 1) {
+      throw Object.assign(
+        new Error("unable to inspect the conflict-repair merge state"),
+        { failureKind: "safety" },
+      );
+    }
+    const changes = (
+      await git(["-C", worktreePath, "status", "--porcelain"])
+    ).stdout.trim();
+    if (changes) {
+      throw Object.assign(
+        new Error("conflict-repair abort did not restore a clean PR head"),
+        { failureKind: "safety" },
+      );
+    }
+  }
+  return releasePublishedCheckout(state, issue);
+}
+
+function conflictRepairFailureIsRetryable(failureKind) {
+  return [
+    "tests",
+    "typecheck",
+    "review",
+    "review-security",
+    "review-safety",
+    "tests-timeout",
+    "worker-blocked",
+  ].includes(failureKind);
+}
+
+async function resolvePullRequestConflict(
+  state,
+  issue,
+  plan,
+  actor,
+  controllerOptions,
+) {
+  const number = issue.issueNumber;
+  let issueState = state.issues[String(number)];
+  let pending = issueState.pendingConflictRepair;
+  const previousHead = pending?.previousHead ?? plan.headSha;
+  const baseSha = pending?.baseSha ?? plan.latestMainSha;
+  if (!previousHead || !baseSha) {
+    throw Object.assign(new Error("conflict repair is missing an exact head or main SHA"), {
+      failureKind: "safety",
+    });
+  }
+
+  state = await restorePullRequestRecoveryCheckout(
+    state,
+    issue,
+    previousHead,
+    controllerOptions,
+    { allowDirty: Boolean(pending) },
+  );
+  state = await assertClaimOwnership(state, issue, actor, controllerOptions);
+  issueState = state.issues[String(number)];
+
+  if (!pending) {
+    await runTransient(
+      "git.exe",
+      ["-C", repositoryRoot, "fetch", "origin", "--prune"],
+      controllerOptions,
+      { timeoutSeconds: 120 },
+    );
+    const observedMain = (
+      await git(["-C", repositoryRoot, "rev-parse", `origin/${baseBranch}`])
+    ).stdout.trim();
+    if (observedMain !== baseSha) {
+      state = await releasePublishedCheckout(state, issue);
+      return {
+        state,
+        result: { status: "refresh", reason: "main advanced before conflict repair began" },
+      };
+    }
+    const attempt = (issueState.conflictRepairAttempts ?? 0) + 1;
+    pending = {
+      previousHead,
+      previousBaseSha: issueState.baseSha,
+      baseSha,
+      attempt,
+      status: "preparing",
+      startedAt: new Date().toISOString(),
+    };
+    state = moveIssue(state, number, "pr-repairing", {
+      pendingConflictRepair: pending,
+      pendingBaseUpdate: null,
+      conflictRepairAttempts: attempt,
+      prRecovery: null,
+    });
+    issueState = state.issues[String(number)];
+  }
+
+  // Establish the credential-free Git baseline while the checkout is still
+  // clean. Once the durable merge begins, only its exact recorded baseline
+  // may be adopted; rebuilding from a dirty tree would be unsafe.
+  const mergeHead = await runProcess(
+    "git.exe",
+    [
+      "-C",
+      issueState.worktreePath,
+      "rev-parse",
+      "--quiet",
+      "--verify",
+      "MERGE_HEAD",
+    ],
+    { timeoutSeconds: 30 },
+  );
+  if (![0, 1].includes(mergeHead.code)) {
+    throw Object.assign(new Error("unable to inspect durable conflict merge state"), {
+      failureKind: "safety",
+    });
+  }
+  const gitViewAction = sanitizedWorkerGitViewRecoveryAction({
+    mergeActive: mergeHead.code === 0,
+    recordedBaseSha: issueState.prRepairBaseSha,
+    expectedBaseSha: previousHead,
+  });
+  if (gitViewAction === "unsafe") {
+    throw Object.assign(
+      new Error("durable conflict merge has a stale isolated Git baseline"),
+      { failureKind: "safety" },
+    );
+  }
+  if (gitViewAction === "rebuild") {
+    removeSanitizedWorkerGitView(workerGitRoot, number);
+    state = moveIssue(state, number, issueState.stage, {
+      prRepairBaseSha: previousHead,
+    });
+    issueState = state.issues[String(number)];
+  }
+  try {
+    await resolveWorkerGitContext(number, issueState.worktreePath, previousHead);
+  } catch (error) {
+    error.failureKind ??= "safety";
+    throw error;
+  }
+  const prepared = await prepareConflictRepair({
+    worktreeRoot,
+    worktreePath: issueState.worktreePath,
+    issueNumber: number,
+    expectedHead: previousHead,
+    latestMainSha: baseSha,
+    git,
+  });
+  if (prepared.status === "clean") {
+    state = moveIssue(state, number, issueState.stage, {
+      pendingConflictRepair: null,
+      baseSha: pending.previousBaseSha ?? issueState.baseSha,
+      conflictRepairAttempts: Math.max(0, pending.attempt - 1),
+      prRecovery: null,
+    });
+    state = await releasePublishedCheckout(state, issue);
+    return {
+      state,
+      result: {
+        status: "refresh",
+        reason: "local exact-base merge is clean; retrying GitHub base synchronization",
+      },
+    };
+  }
+
+  if (issueState.baseSha !== baseSha) {
+    const initializedAt = new Date().toISOString();
+    state = moveIssue(state, number, "pr-repairing", {
+      baseSha,
+      preConflictRepairAttempts:
+        issueState.preConflictRepairAttempts ?? issueState.repairAttempts ?? 0,
+      repairAttempts: 0,
+      prRepairBaseSha: previousHead,
+      prRepairWorkerCompletedAt: null,
+      ...baseUpdateReviewResetPatch(issueState, initializedAt),
+      baseUpdateRequiresVerification: true,
+      conflictRepairInitializedAt: initializedAt,
+    });
+    issueState = state.issues[String(number)];
+  }
+  state = moveIssue(state, number, "pr-repairing", {
+    pendingConflictRepair: {
+      ...pending,
+      status: prepared.status,
+      conflictedPaths: prepared.paths,
+      preparedAt: new Date().toISOString(),
+    },
+  });
+
+  let failure = Object.assign(new Error("pull request conflicts with latest main"), {
+    failureKind: "tests",
+    stopReason: `Resolve every merge conflict against exact main ${baseSha}. Conflicted paths: ${prepared.paths.join(", ")}. Preserve the approved ticket behavior and current main behavior; do not weaken either side.`,
+  });
+
+  for (;;) {
+    issueState = state.issues[String(number)];
+    pending = issueState.pendingConflictRepair;
+    const attempt = pending.attempt;
+    try {
+      if (!issueState.prRepairWorkerCompletedAt) {
+        state = await repairIssue(
+          state,
+          issue,
+          failure,
+          attempt,
+          controllerOptions,
+          { stage: "pr-repairing", expectedHead: previousHead },
+        );
+      }
+      state = await assertClaimOwnership(state, issue, actor, controllerOptions);
+      state = await verifyIssue(state, issue, controllerOptions, {
+        force: true,
+        stage: "pr-repairing",
+        mergeTargetSha: baseSha,
+      });
+      issueState = state.issues[String(number)];
+      state = moveIssue(state, number, issueState.stage, {
+        pendingConflictRepair: {
+          ...issueState.pendingConflictRepair,
+          status: "verified",
+          verifiedAt: new Date().toISOString(),
+        },
+      });
+      state = await amendAndPushPullRequestRepair(state, issue, controllerOptions);
+      state = await completePullRequestLifecycle(
+        state,
+        issue,
+        actor,
+        controllerOptions,
+        null,
+        { promoteDraftAfterVerification: true },
+      );
+      return { state, result: { status: state.issues[String(number)].stage } };
+    } catch (error) {
+      state = readJson(statePath);
+      issueState = state.issues[String(number)];
+      if (issueState.pendingPrRepair) throw error;
+      if (
+        [
+          "kill-switch",
+          "infrastructure",
+          "network",
+          "rate-limit",
+          "check-poll",
+        ].includes(error.failureKind)
+      ) {
+        throw error;
+      }
+      const canRetry =
+        conflictRepairFailureIsRetryable(error.failureKind) &&
+        attempt < controllerOptions.maximumRepairAttempts;
+      if (canRetry) {
+        const nextAttempt = attempt + 1;
+        status(
+          `Conflict repair ${attempt} failed for issue #${number}; starting fresh repair ${nextAttempt}.`,
+        );
+        state = moveIssue(state, number, "pr-repairing", {
+          conflictRepairAttempts: nextAttempt,
+          prRepairWorkerCompletedAt: null,
+          pendingConflictRepair: {
+            ...issueState.pendingConflictRepair,
+            attempt: nextAttempt,
+            status: "prepared",
+            lastFailureKind: error.failureKind,
+            lastFailureReason: redactFailureSummary(error.stopReason ?? error.message),
+          },
+        });
+        failure = error;
+        continue;
+      }
+
+      const reason = redactFailureSummary(error.stopReason ?? error.message);
+      const previousBaseSha = issueState.pendingConflictRepair?.previousBaseSha;
+      state = await abortConflictRepairCheckout(state, issue);
+      issueState = state.issues[String(number)];
+      state = moveIssue(state, number, "manual-review", {
+        pendingConflictRepair: null,
+        pendingBaseUpdate: null,
+        baseSha: previousBaseSha ?? issueState.baseSha,
+        repairAttempts:
+          issueState.preConflictRepairAttempts ?? issueState.repairAttempts ?? 0,
+        preConflictRepairAttempts: null,
+        prRepairWorkerCompletedAt: null,
+        stopReason:
+          attempt >= controllerOptions.maximumRepairAttempts
+            ? `${reason}; conflict repair exhausted ${controllerOptions.maximumRepairAttempts} attempts`
+            : reason,
+      });
+      return { state, result: { status: "human-gate", reason } };
+    }
+  }
 }
 
 async function synchronizeRecoveredPullRequest(
@@ -1945,6 +2258,17 @@ async function reconcilePullRequestRecoveryBacklog(
           reason: "requested an idempotent update to latest main",
         };
       }
+      if (plan.action === "resolve-conflict") {
+        const recovery = await resolvePullRequestConflict(
+          state,
+          issue,
+          plan,
+          actor,
+          controllerOptions,
+        );
+        state = recovery.state;
+        return recovery.result;
+      }
       if (plan.action === "human-gate") {
         const reason = plan.reason ?? "pull request requires human review";
         state = await parkPullRequestRecoveryGate(
@@ -2255,6 +2579,12 @@ async function reconcilePullRequestRecoveryBacklog(
       state = readJson(statePath);
       const issue = queue.find((entry) => entry.issueNumber === plan.issueNumber);
       const issueState = state.issues[String(plan.issueNumber)];
+      if (plan.action === "resolve-conflict" && issueState?.pendingPrRepair) {
+        return {
+          status: "refresh",
+          reason: "resuming the exact durable conflict-repair push",
+        };
+      }
       const disposition = pullRequestRecoveryErrorDisposition({
         action: plan.action,
         stage: issueState?.stage,
@@ -3330,7 +3660,14 @@ async function assertCandidateMergeSafe(
   baseSha,
   stagedTree,
   controllerOptions,
+  mergeTargetSha = null,
 ) {
+  if (mergeTargetSha && mergeTargetSha !== baseSha) {
+    throw Object.assign(
+      new Error("candidate merge preflight target changed from its recorded base"),
+      { failureKind: "safety" },
+    );
+  }
   await runTransient(
     "git.exe",
     ["-C", repositoryRoot, "fetch", "origin", "--prune"],
@@ -3350,14 +3687,18 @@ async function assertCandidateMergeSafe(
       worktreePath,
       "merge-tree",
       "--write-tree",
-      `origin/${baseBranch}`,
+      mergeTargetSha ?? `origin/${baseBranch}`,
       candidateCommit,
     ],
     { timeoutSeconds: 120 },
   );
   if (merge.code !== 0) {
     throw Object.assign(
-      new Error("candidate change conflicts with the latest remote main"),
+      new Error(
+        mergeTargetSha
+          ? "candidate change conflicts with its exact approved main base"
+          : "candidate change conflicts with the latest remote main",
+      ),
       { failureKind: "merge-conflict" },
     );
   }
@@ -3619,7 +3960,7 @@ async function verifyIssue(
   state,
   issue,
   controllerOptions,
-  { force = false, stage = "verified" } = {},
+  { force = false, stage = "verified", mergeTargetSha = null } = {},
 ) {
   const number = issue.issueNumber;
   let issueState = state.issues[String(number)];
@@ -3666,6 +4007,7 @@ async function verifyIssue(
     issueState.baseSha,
     stagedTree,
     controllerOptions,
+    mergeTargetSha,
   );
   await installControllerDependencyLink(worktreePath);
 
@@ -3970,10 +4312,12 @@ async function amendAndPushPullRequestRepair(
     error.failureKind = "pending-pr-repair";
     throw error;
   }
+  const pushedAt = new Date().toISOString();
   return moveIssue(state, number, "pr-repairing", {
     commit,
     pendingPrRepair: null,
-    lastPrRepairPushedAt: new Date().toISOString(),
+    ...completedConflictRepairPatch(issueState, previousCommit, pushedAt),
+    lastPrRepairPushedAt: pushedAt,
   });
 }
 
@@ -4328,10 +4672,12 @@ async function reconcilePendingPullRequestRepair(
       { failureKind: "safety" },
     );
   }
+  const pushedAt = new Date().toISOString();
   return moveIssue(state, number, "pr-repairing", {
     commit: pending.commit,
     pendingPrRepair: null,
-    lastPrRepairPushedAt: new Date().toISOString(),
+    ...completedConflictRepairPatch(issueState, pending.previousCommit, pushedAt),
+    lastPrRepairPushedAt: pushedAt,
     ...(issueState.blockedPrFailureKind
       ? { blockedPrRepairPushedAt: new Date().toISOString() }
       : {}),
