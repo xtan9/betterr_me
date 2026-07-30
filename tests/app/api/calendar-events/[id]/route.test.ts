@@ -2,12 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, PATCH, DELETE } from '@/app/api/calendar-events/[id]/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetEvent, mockUpdateEvent, mockDeleteEvent, mockGetRemindersBySource, mockUpdateReminder } = vi.hoisted(() => ({
+const { mockGetEvent, mockDeleteEvent, mockUpdateSchedule } = vi.hoisted(() => ({
   mockGetEvent: vi.fn(),
-  mockUpdateEvent: vi.fn(),
   mockDeleteEvent: vi.fn(),
-  mockGetRemindersBySource: vi.fn(),
-  mockUpdateReminder: vi.fn(),
+  mockUpdateSchedule: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -23,12 +21,13 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/db', () => ({
   CalendarEventsDB: class {
     getEvent = mockGetEvent;
-    updateEvent = mockUpdateEvent;
     deleteEvent = mockDeleteEvent;
   },
-  RemindersDB: class {
-    getRemindersBySource = mockGetRemindersBySource;
-    updateReminder = mockUpdateReminder;
+}));
+
+vi.mock('@/lib/scheduling/create', () => ({
+  SchedulingLifecycle: class {
+    update = mockUpdateSchedule;
   },
 }));
 
@@ -157,7 +156,7 @@ describe('PATCH /api/calendar-events/[id]', () => {
 
   it('should update event with valid payload', async () => {
     const updatedEvent = { ...mockEvent, title: 'Updated Title' };
-    mockUpdateEvent.mockResolvedValue(updatedEvent);
+    mockUpdateSchedule.mockResolvedValue({ event: updatedEvent, reminders: [] });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
@@ -168,7 +167,151 @@ describe('PATCH /api/calendar-events/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.event.title).toBe('Updated Title');
-    expect(mockUpdateEvent).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440001', 'user-123', { title: 'Updated Title' });
+    expect(mockUpdateSchedule).toHaveBeenCalledWith(
+      'user-123',
+      '550e8400-e29b-41d4-a716-446655440001',
+      { event: { title: 'Updated Title' } },
+    );
+  });
+
+  it('reconciles changed reminder intent in the event update lifecycle', async () => {
+    const reminders = [{
+      reminder_type: 'relative',
+      relative_minutes: 30,
+      absolute_time: null,
+      channels: ['push'],
+    }];
+    mockUpdateSchedule.mockResolvedValue({ event: mockEvent, reminders });
+
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'Updated', reminders }),
+    });
+    const response = await PATCH(request, { params });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.reminders).toEqual(reminders);
+    expect(mockUpdateSchedule).toHaveBeenCalledWith(
+      'user-123',
+      '550e8400-e29b-41d4-a716-446655440001',
+      { event: { title: 'Updated' }, reminders },
+    );
+  });
+
+  it('normalizes omitted reminder fields in a reminder-only update', async () => {
+    const reminders = [
+      {
+        reminder_type: 'relative',
+        relative_minutes: 30,
+        channels: ['push'],
+      },
+      {
+        reminder_type: 'absolute',
+        absolute_time: '2026-05-10T08:45:00Z',
+        channels: ['email'],
+      },
+    ];
+    mockUpdateSchedule.mockResolvedValue({ event: mockEvent, reminders });
+
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
+      method: 'PATCH',
+      body: JSON.stringify({ reminders }),
+    });
+    const response = await PATCH(request, { params });
+
+    expect(response.status).toBe(200);
+    expect(mockUpdateSchedule).toHaveBeenCalledWith(
+      'user-123',
+      '550e8400-e29b-41d4-a716-446655440001',
+      {
+        event: {},
+        reminders: [
+          {
+            reminder_type: 'relative',
+            relative_minutes: 30,
+            absolute_time: null,
+            channels: ['push'],
+          },
+          {
+            reminder_type: 'absolute',
+            relative_minutes: null,
+            absolute_time: '2026-05-10T08:45:00Z',
+            channels: ['email'],
+          },
+        ],
+      },
+    );
+  });
+
+  it.each([
+    {
+      name: 'a relative reminder without relative_minutes',
+      reminder: { reminder_type: 'relative', channels: ['push'] },
+    },
+    {
+      name: 'an absolute reminder without absolute_time',
+      reminder: { reminder_type: 'absolute', channels: ['push'] },
+    },
+    {
+      name: 'an absolute reminder with malformed absolute_time',
+      reminder: {
+        reminder_type: 'absolute',
+        absolute_time: 'tomorrow morning',
+        channels: ['push'],
+      },
+    },
+    {
+      name: 'a reminder without a delivery channel',
+      reminder: {
+        reminder_type: 'relative',
+        relative_minutes: 15,
+        channels: [],
+      },
+    },
+  ])('returns 400 for $name', async ({ reminder }) => {
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
+      method: 'PATCH',
+      body: JSON.stringify({ reminders: [reminder] }),
+    });
+    const response = await PATCH(request, { params });
+
+    expect(response.status).toBe(400);
+    expect(mockUpdateSchedule).not.toHaveBeenCalled();
+  });
+
+  it('removes reminder intent when the event update supplies an empty list', async () => {
+    mockUpdateSchedule.mockResolvedValue({ event: mockEvent, reminders: [] });
+
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'Keep event', reminders: [] }),
+    });
+    const response = await PATCH(request, { params });
+
+    expect(response.status).toBe(200);
+    expect(mockUpdateSchedule).toHaveBeenCalledWith(
+      'user-123',
+      '550e8400-e29b-41d4-a716-446655440001',
+      { event: { title: 'Keep event' }, reminders: [] },
+    );
+  });
+
+  it('accepts a reminder-only removal request', async () => {
+    mockUpdateSchedule.mockResolvedValue({ event: mockEvent, reminders: [] });
+
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
+      method: 'PATCH',
+      body: JSON.stringify({ reminders: [] }),
+    });
+    const response = await PATCH(request, { params });
+
+    expect(response.status).toBe(200);
+    expect(mockUpdateSchedule).toHaveBeenCalledWith(
+      'user-123',
+      '550e8400-e29b-41d4-a716-446655440001',
+      { event: {}, reminders: [] },
+    );
   });
 
   it('should update recurring event parent (edit all occurrences)', async () => {
@@ -178,7 +321,7 @@ describe('PATCH /api/calendar-events/[id]', () => {
       is_recurring: true,
       recurrence_rule: recurrenceRule,
     };
-    mockUpdateEvent.mockResolvedValue(updatedEvent);
+    mockUpdateSchedule.mockResolvedValue({ event: updatedEvent, reminders: [] });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
@@ -191,15 +334,15 @@ describe('PATCH /api/calendar-events/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.event.recurrence_rule).toEqual(recurrenceRule);
-    expect(mockUpdateEvent).toHaveBeenCalledWith(
-      '550e8400-e29b-41d4-a716-446655440001',
+    expect(mockUpdateSchedule).toHaveBeenCalledWith(
       'user-123',
-      expect.objectContaining({ recurrence_rule: recurrenceRule })
+      '550e8400-e29b-41d4-a716-446655440001',
+      { event: expect.objectContaining({ recurrence_rule: recurrenceRule }) },
     );
   });
 
   it('should return 404 when event not found', async () => {
-    mockUpdateEvent.mockRejectedValue({ code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' });
+    mockUpdateSchedule.mockRejectedValue({ code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
@@ -210,8 +353,26 @@ describe('PATCH /api/calendar-events/[id]', () => {
     expect(response.status).toBe(404);
   });
 
+  it('returns the exact not-found response for the update RPC no-data SQLSTATE', async () => {
+    mockUpdateSchedule.mockRejectedValue({
+      code: 'P0002',
+      message: 'no_data_found',
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'Updated' }),
+    });
+    const response = await PATCH(request, { params });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Calendar event not found',
+    });
+  });
+
   it('should return 500 on DB error', async () => {
-    mockUpdateEvent.mockRejectedValue(new Error('DB connection failed'));
+    mockUpdateSchedule.mockRejectedValue(new Error('DB connection failed'));
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
@@ -328,8 +489,7 @@ describe('PATCH /api/calendar-events/[id] — field mapping', () => {
         })),
       },
     } as any);
-    mockUpdateEvent.mockResolvedValue(mockEvent);
-    mockGetRemindersBySource.mockResolvedValue([]);
+    mockUpdateSchedule.mockResolvedValue({ event: mockEvent, reminders: [] });
   });
 
   it('passes through all optional fields when provided', async () => {
@@ -354,13 +514,11 @@ describe('PATCH /api/calendar-events/[id] — field mapping', () => {
     const response = await PATCH(request, { params });
 
     expect(response.status).toBe(200);
-    expect(mockUpdateEvent).toHaveBeenCalledWith(
-      '550e8400-e29b-41d4-a716-446655440001',
+    expect(mockUpdateSchedule).toHaveBeenCalledWith(
       'user-123',
-      expect.objectContaining(payload)
+      '550e8400-e29b-41d4-a716-446655440001',
+      { event: expect.objectContaining(payload) },
     );
-    // start_date/start_time not provided → no reminder recomputation
-    expect(mockGetRemindersBySource).not.toHaveBeenCalled();
   });
 
   it('trims whitespace from title', async () => {
@@ -371,15 +529,15 @@ describe('PATCH /api/calendar-events/[id] — field mapping', () => {
     const response = await PATCH(request, { params });
 
     expect(response.status).toBe(200);
-    expect(mockUpdateEvent).toHaveBeenCalledWith(
-      '550e8400-e29b-41d4-a716-446655440001',
+    expect(mockUpdateSchedule).toHaveBeenCalledWith(
       'user-123',
-      { title: 'Padded' }
+      '550e8400-e29b-41d4-a716-446655440001',
+      { event: { title: 'Padded' } },
     );
   });
 });
 
-describe('PATCH /api/calendar-events/[id] — reminder recomputation', () => {
+describe('PATCH /api/calendar-events/[id] — atomic reminder reconciliation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(createClient).mockReturnValue({
@@ -391,43 +549,19 @@ describe('PATCH /api/calendar-events/[id] — reminder recomputation', () => {
     } as any);
   });
 
-  it('recomputes fire_at for pending relative reminders when start_date changes', async () => {
+  it('moves the event through the lifecycle that returns reconciled reminders', async () => {
     const rescheduled = { ...mockEvent, start_date: '2026-05-10', start_time: '09:00:00' };
-    mockUpdateEvent.mockResolvedValue(rescheduled);
-    mockGetRemindersBySource.mockResolvedValue([
-      {
-        id: 'rem-1',
-        status: 'pending',
-        reminder_type: 'relative',
-        relative_minutes: 15,
-        absolute_time: null,
-      },
-      // Should skip — not pending
-      {
-        id: 'rem-2',
-        status: 'sent',
-        reminder_type: 'relative',
-        relative_minutes: 30,
-        absolute_time: null,
-      },
-      // Should skip — absolute reminder
-      {
-        id: 'rem-3',
-        status: 'pending',
-        reminder_type: 'absolute',
-        relative_minutes: null,
-        absolute_time: '2026-05-10T08:00:00',
-      },
-      // Should skip — relative_minutes null
-      {
-        id: 'rem-4',
-        status: 'pending',
-        reminder_type: 'relative',
-        relative_minutes: null,
-        absolute_time: null,
-      },
-    ]);
-    mockUpdateReminder.mockResolvedValue({});
+    const reconciledReminder = {
+      id: 'rem-1',
+      status: 'pending',
+      reminder_type: 'relative',
+      relative_minutes: 15,
+      fire_at: '2026-05-10T08:45:00Z',
+    };
+    mockUpdateSchedule.mockResolvedValue({
+      event: rescheduled,
+      reminders: [reconciledReminder],
+    });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
@@ -436,48 +570,18 @@ describe('PATCH /api/calendar-events/[id] — reminder recomputation', () => {
     const response = await PATCH(request, { params });
 
     expect(response.status).toBe(200);
-    expect(mockGetRemindersBySource).toHaveBeenCalledWith(
+    const data = await response.json();
+
+    expect(mockUpdateSchedule).toHaveBeenCalledWith(
       'user-123',
-      'calendar_event',
-      '550e8400-e29b-41d4-a716-446655440001'
+      '550e8400-e29b-41d4-a716-446655440001',
+      { event: { start_date: '2026-05-10' } },
     );
-    // Only rem-1 qualifies
-    expect(mockUpdateReminder).toHaveBeenCalledTimes(1);
-    expect(mockUpdateReminder).toHaveBeenCalledWith(
-      'user-123',
-      'rem-1',
-      expect.objectContaining({ fire_at: expect.any(String) })
-    );
+    expect(data.reminders).toEqual([reconciledReminder]);
   });
 
-  it('recomputes using default start_time when event has no start_time', async () => {
-    const rescheduled = { ...mockEvent, start_date: '2026-05-10', start_time: null };
-    mockUpdateEvent.mockResolvedValue(rescheduled);
-    mockGetRemindersBySource.mockResolvedValue([
-      {
-        id: 'rem-1',
-        status: 'pending',
-        reminder_type: 'relative',
-        relative_minutes: 10,
-        absolute_time: null,
-      },
-    ]);
-    mockUpdateReminder.mockResolvedValue({});
-
-    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
-      method: 'PATCH',
-      body: JSON.stringify({ start_time: '08:00:00' }),
-    });
-    const response = await PATCH(request, { params });
-
-    expect(response.status).toBe(200);
-    expect(mockUpdateReminder).toHaveBeenCalledTimes(1);
-  });
-
-  it('still returns 200 when reminder recomputation throws', async () => {
-    const rescheduled = { ...mockEvent, start_date: '2026-05-10' };
-    mockUpdateEvent.mockResolvedValue(rescheduled);
-    mockGetRemindersBySource.mockRejectedValue(new Error('reminder lookup failed'));
+  it('fails the event update when reminder reconciliation fails', async () => {
+    mockUpdateSchedule.mockRejectedValue(new Error('reminder reconciliation failed'));
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
@@ -486,7 +590,7 @@ describe('PATCH /api/calendar-events/[id] — reminder recomputation', () => {
     const response = await PATCH(request, { params });
     const data = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(data.event).toEqual(rescheduled);
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('Failed to update calendar event');
   });
 });
