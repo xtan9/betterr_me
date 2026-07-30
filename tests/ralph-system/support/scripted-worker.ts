@@ -1,13 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import { git } from "./git-world";
+import { assertPathWithin } from "./test-paths";
 
 type WorkerChange = {
   path: string;
   content: string;
 };
 
-export function createScriptedWorker(changes: WorkerChange[]) {
+export function createScriptedWorker(
+  changes: WorkerChange[],
+  events: Array<{ kind: string; [key: string]: unknown }>,
+) {
   let activeWorkers = 0;
   let maximumActiveWorkers = 0;
   const sessions: Array<{
@@ -31,21 +35,27 @@ export function createScriptedWorker(changes: WorkerChange[]) {
         worktreePath: input.worktreePath,
         baseSha: git(input.worktreePath, ["rev-parse", "HEAD"]).stdout.trim(),
       });
+      events.push({
+        kind: "worker-started",
+        issueNumber: input.issue.number,
+        sessionId: input.sessionId,
+      });
 
       try {
         for (const change of changes) {
-          const destination = path.resolve(input.worktreePath, change.path);
-          const relative = path.relative(path.resolve(input.worktreePath), destination);
-          if (
-            !relative ||
-            relative.startsWith("..") ||
-            path.isAbsolute(relative)
-          ) {
-            throw new Error(`worker change escapes its worktree: ${change.path}`);
-          }
+          const destination = assertPathWithin(
+            input.worktreePath,
+            path.join(input.worktreePath, change.path),
+            "worker change",
+          );
           fs.mkdirSync(path.dirname(destination), { recursive: true });
           fs.writeFileSync(destination, change.content);
         }
+        events.push({
+          kind: "worker-completed",
+          issueNumber: input.issue.number,
+          sessionId: input.sessionId,
+        });
         return { kind: "completed" as const, sessionId: input.sessionId };
       } finally {
         activeWorkers -= 1;

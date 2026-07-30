@@ -28,6 +28,11 @@ The production CLI is a thin composition root over this interface. System
 tests call the same interface with real Git and deterministic external
 adapters. Later crash tests launch it in a fresh Node process.
 
+The system suite has a dedicated Node configuration and is excluded from the
+normal application suite so candidate verification cannot recursively launch
+Ralph. Import purity is checked in a poisoned fresh process before orchestration
+is trusted.
+
 ## Permanent invariants
 
 1. At most one implementation worker owns a writable checkout.
@@ -60,6 +65,8 @@ file, `run --mode PrOnly --max-issues 1` must:
 8. expose `published` with no active worker lease through `status`.
 
 Running the same command again must not duplicate any of those effects.
+The repeat and subsequent `status` call must each construct a fresh runtime from
+the same durable directory; retaining state only in memory is not acceptable.
 
 ## Vertical slice 2: the issue #499 regression
 
@@ -79,4 +86,3 @@ at a time for intent/receipt crash recovery, two-issue queue progress, bounded
 repair, failed and cancelled checks, base movement and conflicts, manual GitHub
 actions, kill-switch behaviour, hostile issue content, randomized fault
 injection, Windows/WSL contracts, and a live GitHub PR-only canary.
-

@@ -4,7 +4,13 @@ type ReadyIssue = {
   body: string;
 };
 
-export function createFakeGitHub(issues: ReadyIssue[]) {
+export function createFakeGitHub(
+  issues: ReadyIssue[],
+  options: {
+    events: Array<{ kind: string; [key: string]: unknown }>;
+    resolveRemoteHead: (headBranch: string) => string;
+  },
+) {
   const claims: Array<{ issueNumber: number; operationId: string }> = [];
   const claimRequests: Array<{ issueNumber: number; operationId: string }> = [];
   const pullRequestRequests: Array<{ issueNumber: number; operationId: string }> = [];
@@ -25,6 +31,11 @@ export function createFakeGitHub(issues: ReadyIssue[]) {
     },
     async claimIssue(input: { issueNumber: number; operationId: string }) {
       claimRequests.push(input);
+      options.events.push({
+        kind: "issue-claimed",
+        issueNumber: input.issueNumber,
+        operationId: input.operationId,
+      });
       const existing = claims.find(
         (claim) => claim.operationId === input.operationId,
       );
@@ -56,6 +67,18 @@ export function createFakeGitHub(issues: ReadyIssue[]) {
       );
       if (existing) return existing;
 
+      const observedRemoteHead = options.resolveRemoteHead(input.headBranch);
+      options.events.push({
+        kind: "remote-head-observed",
+        headBranch: input.headBranch,
+        headSha: observedRemoteHead,
+      });
+      if (observedRemoteHead !== input.headSha) {
+        throw new Error(
+          `PR head ${input.headSha} does not match remote ${observedRemoteHead}`,
+        );
+      }
+
       const pullRequest = {
         number: pullRequests.length + 1,
         issueNumber: input.issueNumber,
@@ -67,6 +90,11 @@ export function createFakeGitHub(issues: ReadyIssue[]) {
         baseBranch: input.baseBranch,
       };
       pullRequests.push(pullRequest);
+      options.events.push({
+        kind: "draft-pr-created",
+        issueNumber: input.issueNumber,
+        headSha: input.headSha,
+      });
       return pullRequest;
     },
     inspect() {

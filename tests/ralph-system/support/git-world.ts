@@ -2,14 +2,29 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { assertPathWithin } from "./test-paths";
 
 export function git(cwd: string, args: string[], allowFailure = false) {
   const result = spawnSync("git", args, {
     cwd,
     encoding: "utf8",
     windowsHide: true,
+    timeout: 10_000,
+    env: {
+      ...process.env,
+      GCM_INTERACTIVE: "Never",
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_SSH_COMMAND: "ssh -oBatchMode=yes",
+    },
   });
 
+  if (result.error || result.signal) {
+    throw new Error(
+      `git ${args.join(" ")} did not exit normally: ${
+        result.error?.message ?? `signal ${result.signal}`
+      }`,
+    );
+  }
   if (!allowFailure && result.status !== 0) {
     throw new Error(
       `git ${args.join(" ")} failed: ${result.stderr || result.stdout}`,
@@ -46,16 +61,20 @@ export function createGitWorld() {
     mainSha: git(controllerPath, ["rev-parse", "origin/main"]).stdout.trim(),
     cleanup() {
       const temporaryDirectory = path.resolve(os.tmpdir());
-      const resolvedRoot = path.resolve(root);
-      const relative = path.relative(temporaryDirectory, resolvedRoot);
-      if (
-        !relative ||
-        relative.startsWith("..") ||
-        path.isAbsolute(relative)
-      ) {
+      const resolvedRoot = assertPathWithin(
+        temporaryDirectory,
+        root,
+        "system-test cleanup",
+      );
+      if (!path.basename(resolvedRoot).startsWith("ralph-v2-system-")) {
         throw new Error(`refusing to remove unexpected test path ${resolvedRoot}`);
       }
-      fs.rmSync(resolvedRoot, { recursive: true, force: true });
+      fs.rmSync(resolvedRoot, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      });
     },
   };
 }
