@@ -66,7 +66,10 @@ export function pullRequestRecoveryFingerprint(snapshot) {
     riskReasons: snapshot.riskReasons ?? [],
     stage: snapshot.stage,
     originalFailureKind: snapshot.originalFailureKind ?? null,
+    conflictRepairAttempts: snapshot.conflictRepairAttempts ?? 0,
     checksAvailable: snapshot.checksAvailable !== false,
+    requiredCheckEvidenceReady:
+      snapshot.requiredCheckEvidenceReady !== false,
     latestMainSha: snapshot.latestMainSha ?? null,
     headContainsLatestMain: snapshot.headContainsLatestMain !== false,
     headContainsPendingBase: snapshot.headContainsPendingBase === true,
@@ -77,6 +80,7 @@ export function pullRequestRecoveryFingerprint(snapshot) {
     baseUpdateBlockedByDirtyWorktree:
       snapshot.baseUpdateBlockedByDirtyWorktree === true,
     pendingBaseUpdate: snapshot.pendingBaseUpdate ?? null,
+    pendingConflictRepair: snapshot.pendingConflictRepair ?? null,
     pendingPrRepair: snapshot.pendingPrRepair ?? null,
     baseUpdateRetryReady: snapshot.baseUpdateRetryReady !== false,
     checks: normalizedChecks(snapshot.checks),
@@ -109,7 +113,16 @@ export function pullRequestRecoveryErrorDisposition({
   stage,
   failureKind,
 }) {
-  if (["kill-switch", "safety", "infrastructure"].includes(failureKind)) {
+  if (
+    [
+      "kill-switch",
+      "safety",
+      "infrastructure",
+      "network",
+      "rate-limit",
+      "check-poll",
+    ].includes(failureKind)
+  ) {
     return "fatal";
   }
   if (action === "code-repair") return "code-repair";
@@ -314,10 +327,69 @@ function recoveryPlan(snapshot, action, details = {}) {
     baseUpdateBlockedByDirtyWorktree:
       snapshot.baseUpdateBlockedByDirtyWorktree === true,
     pendingBaseUpdate: snapshot.pendingBaseUpdate ?? null,
+    pendingConflictRepair: snapshot.pendingConflictRepair ?? null,
     pendingPrRepair: snapshot.pendingPrRepair ?? null,
+    conflictRepairAttempts: snapshot.conflictRepairAttempts ?? 0,
     consumesCodingAttempt: action === "code-repair",
     ...details,
   };
+}
+
+export function requiredCheckEvidence(checks, requiredNames = []) {
+  const byName = new Map(
+    (checks ?? []).map((check) => [
+      String(check.name),
+      String(check.bucket ?? "").toLowerCase(),
+    ]),
+  );
+  const missing = requiredNames.filter((name) => !byName.has(name));
+  const notPassed = requiredNames.filter(
+    (name) => byName.has(name) && byName.get(name) !== "pass",
+  );
+  return {
+    ready: missing.length === 0 && notPassed.length === 0,
+    missing,
+    notPassed,
+  };
+}
+
+export function completedConflictRepairPatch(issueState, previousCommit, at) {
+  if (
+    issueState?.pendingConflictRepair?.previousHead !== previousCommit ||
+    issueState.pendingConflictRepair.baseSha !== issueState.baseSha
+  ) {
+    return {};
+  }
+  return {
+    pendingConflictRepair: null,
+    pendingBaseUpdate: null,
+    baseUpdateRequiresVerification: false,
+    conflictResolvedAt: at,
+    repairAttempts:
+      issueState.preConflictRepairAttempts ?? issueState.repairAttempts ?? 0,
+    preConflictRepairAttempts: null,
+  };
+}
+
+function conflictRecoveryPlan(snapshot, reason) {
+  if (!snapshot.latestMainSha) {
+    return recoveryPlan(snapshot, "human-gate", {
+      reason: `${reason}; latest main SHA is unavailable`,
+    });
+  }
+  if (
+    (snapshot.conflictRepairAttempts ?? 0) >=
+    (snapshot.maximumRepairAttempts ?? 5)
+  ) {
+    return recoveryPlan(snapshot, "human-gate", {
+      reason: `${reason}; conflict repair exhausted its bounded retry budget`,
+    });
+  }
+  return recoveryPlan(snapshot, "resolve-conflict", {
+    reason,
+    latestMainSha: snapshot.latestMainSha,
+    consumesCodingAttempt: true,
+  });
 }
 
 export function planPullRequestRecovery(snapshot) {
@@ -335,6 +407,11 @@ export function planPullRequestRecovery(snapshot) {
       reason: `pull request state is ${snapshot.prState}`,
     });
   }
+  if (snapshot.pendingPrRepair) {
+    return recoveryPlan(snapshot, "reconcile-pending-repair", {
+      reason: "finish the durable interrupted pull-request repair transaction",
+    });
+  }
   if (
     snapshot.expectedHeadSha &&
     snapshot.expectedHeadSha !== snapshot.headSha
@@ -343,15 +420,37 @@ export function planPullRequestRecovery(snapshot) {
       reason: "pull request head changed since durable state was recorded",
     });
   }
-  if (snapshot.pendingPrRepair) {
-    return recoveryPlan(snapshot, "reconcile-pending-repair", {
-      reason: "finish the durable interrupted pull-request repair transaction",
+  if (snapshot.pendingConflictRepair) {
+    const pending = snapshot.pendingConflictRepair;
+    if (
+      pending.previousHead !== snapshot.headSha ||
+      !Number.isInteger(pending.attempt) ||
+      pending.attempt < 1
+    ) {
+      return recoveryPlan(snapshot, "human-gate", {
+        reason: "durable conflict repair does not match the observed PR head and main",
+      });
+    }
+    return recoveryPlan(snapshot, "resolve-conflict", {
+      reason: "resume the durable pull-request conflict repair",
+      latestMainSha: pending.baseSha,
+      conflictRepairAttempt: pending.attempt,
+      consumesCodingAttempt: true,
     });
   }
   if (
     snapshot.pendingBaseUpdate &&
     snapshot.headSha === snapshot.pendingBaseUpdate.previousHead
   ) {
+    if (snapshot.mergeStateStatus === "DIRTY") {
+      return conflictRecoveryPlan(
+        {
+          ...snapshot,
+          latestMainSha: snapshot.pendingBaseUpdate.baseSha,
+        },
+        "pull-request base update requires conflict resolution",
+      );
+    }
     if (snapshot.baseUpdateRetryReady === false) {
       return recoveryPlan(snapshot, "wait", {
         reason: "waiting for GitHub to apply the pending base update",
@@ -378,9 +477,10 @@ export function planPullRequestRecovery(snapshot) {
       });
     }
     if (snapshot.mergeStateStatus === "DIRTY") {
-      return recoveryPlan(snapshot, "human-gate", {
-        reason: "pull request conflicts with the latest main branch",
-      });
+      return conflictRecoveryPlan(
+        snapshot,
+        "pull request conflicts with the latest main branch",
+      );
     }
     return recoveryPlan(snapshot, "update-base", {
       reason: "pull request does not contain the latest main branch",
@@ -388,9 +488,7 @@ export function planPullRequestRecovery(snapshot) {
     });
   }
   if (snapshot.mergeStateStatus === "DIRTY") {
-    return recoveryPlan(snapshot, "human-gate", {
-      reason: "pull request has merge conflicts",
-    });
+    return conflictRecoveryPlan(snapshot, "pull request has merge conflicts");
   }
   if (snapshot.reviewDecision === "CHANGES_REQUESTED") {
     return recoveryPlan(snapshot, "human-gate", {
@@ -488,6 +586,12 @@ export function planPullRequestRecovery(snapshot) {
     return recoveryPlan(snapshot, "human-gate", {
       reason: "required checks failed after the bounded coding repair budget",
       failedChecks: failures.map((check) => check.name).sort(),
+    });
+  }
+
+  if (snapshot.requiredCheckEvidenceReady === false) {
+    return recoveryPlan(snapshot, "wait", {
+      reason: "required external verification evidence has not passed",
     });
   }
 
