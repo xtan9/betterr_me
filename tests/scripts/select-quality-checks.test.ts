@@ -75,6 +75,14 @@ describe("quality check selection", () => {
       ],
       label: "CI smoke",
     });
+
+    expect(selectQualityChecks([
+      ".github/workflows/production-smoke.yml",
+    ])).toMatchObject({
+      changedTests: false,
+      smokeTests: ["tests/scripts/production-smoke.test.ts"],
+      label: "CI smoke",
+    });
   });
 
   it("combines related tests with CI smoke tests for mixed changes", () => {
