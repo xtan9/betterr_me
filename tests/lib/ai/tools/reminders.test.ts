@@ -82,6 +82,23 @@ describe("reminderTools", () => {
     });
   });
 
+  it("createReminder refuses calendar-event intent outside the lifecycle", async () => {
+    const result = await findTool("createReminder").execute(
+      {
+        sourceType: "calendar_event",
+        sourceId: "event-1",
+        fireAt: "2026-04-10T09:00:00",
+      },
+      makeCtx(),
+    );
+
+    expect(result).toEqual({
+      error:
+        "Calendar event reminders must be updated through the calendar event lifecycle",
+    });
+    expect(mockCreateReminder).not.toHaveBeenCalled();
+  });
+
   it("dismissReminder dismisses by setting status to sent", async () => {
     const ctx = makeCtx();
     mockUpdateReminderStatus.mockResolvedValue({ id: "r1", status: "sent" });
@@ -128,6 +145,43 @@ describe("reminderTools", () => {
       ctx,
     );
     expect(result).toEqual({ error: "Reminder not found" });
+    expect(mockDeleteReminder).not.toHaveBeenCalled();
+  });
+
+  it("dismissReminder refuses calendar-event mutation outside the lifecycle", async () => {
+    const result = await findTool("dismissReminder").execute(
+      { reminderId: "r1", snoozeUntil: "2026-04-10T14:00:00" },
+      makeCtx({
+        supabase: mockSupabaseSelect({
+          id: "r1",
+          source_type: "calendar_event",
+        }),
+      }),
+    );
+
+    expect(result).toEqual({
+      error:
+        "Calendar event reminders must be updated through the calendar event lifecycle",
+    });
+    expect(mockUpdateReminder).not.toHaveBeenCalled();
+    expect(mockUpdateReminderStatus).not.toHaveBeenCalled();
+  });
+
+  it("deleteReminder refuses calendar-event intent outside the lifecycle", async () => {
+    const result = await findTool("deleteReminder").execute(
+      { reminderId: "r1" },
+      makeCtx({
+        supabase: mockSupabaseSelect({
+          id: "r1",
+          source_type: "calendar_event",
+        }),
+      }),
+    );
+
+    expect(result).toEqual({
+      error:
+        "Calendar event reminders must be updated through the calendar event lifecycle",
+    });
     expect(mockDeleteReminder).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,22 @@
 import { z } from "zod";
 import { RemindersDB } from "@/lib/db";
 import type { ToolDefinition, ToolContext } from "./types";
+import {
+  CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR,
+  isCalendarEventReminder,
+} from "@/lib/reminders/lifecycle-policy";
+
+async function reminderSourceType(ctx: ToolContext, reminderId: string) {
+  const { data } = await ctx.supabase
+    .from("reminders")
+    .select("source_type")
+    .eq("id", reminderId)
+    .eq("user_id", ctx.userId)
+    .single();
+  return data?.source_type;
+}
+
+const lifecycleConflict = { error: CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR };
 
 export function reminderTools(): ToolDefinition[] {
   return [
@@ -33,6 +49,9 @@ export function reminderTools(): ToolDefinition[] {
           ),
       }),
       execute: async (params, ctx: ToolContext) => {
+        if (isCalendarEventReminder(params.sourceType)) {
+          return lifecycleConflict;
+        }
         const db = new RemindersDB(ctx.supabase);
         return db.createReminder(ctx.userId, {
           source_type: params.sourceType,
@@ -58,6 +77,13 @@ export function reminderTools(): ToolDefinition[] {
           ),
       }),
       execute: async (params, ctx: ToolContext) => {
+        if (
+          isCalendarEventReminder(
+            await reminderSourceType(ctx, params.reminderId),
+          )
+        ) {
+          return lifecycleConflict;
+        }
         const db = new RemindersDB(ctx.supabase);
         if (params.snoozeUntil) {
           return db.updateReminder(ctx.userId, params.reminderId, {
@@ -84,11 +110,14 @@ export function reminderTools(): ToolDefinition[] {
         // RemindersDB has no getReminder(id) method, so verify via direct query
         const { data } = await ctx.supabase
           .from("reminders")
-          .select("id")
+          .select("id, source_type")
           .eq("id", params.reminderId)
           .eq("user_id", ctx.userId)
           .single();
         if (!data) return { error: "Reminder not found" };
+        if (isCalendarEventReminder(data.source_type)) {
+          return lifecycleConflict;
+        }
         const db = new RemindersDB(ctx.supabase);
         await db.deleteReminder(ctx.userId, params.reminderId);
         return { success: true };

@@ -153,6 +153,30 @@ describe("RemindersDB", () => {
     });
   });
 
+  describe("getReminder", () => {
+    it("returns one user-owned reminder", async () => {
+      const expected = makeReminder();
+      mockSupabaseClient.setMockResponse(expected);
+
+      await expect(db.getReminder(USER_ID, REMINDER_ID)).resolves.toEqual(
+        expected,
+      );
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "reminders", method: "from", args: ["reminders"] },
+        { table: "reminders", method: "select", args: ["*"] },
+        { table: "reminders", method: "eq", args: ["id", REMINDER_ID] },
+        { table: "reminders", method: "eq", args: ["user_id", USER_ID] },
+        { table: "reminders", method: "maybeSingle", args: [] },
+      ]);
+    });
+
+    it("returns null when the reminder does not exist", async () => {
+      mockSupabaseClient.setMockResponse(null);
+
+      await expect(db.getReminder(USER_ID, REMINDER_ID)).resolves.toBeNull();
+    });
+  });
+
   // ─── getPendingReminders ────────────────────────────────────────────────────
   describe("getPendingReminders", () => {
     const BEFORE = "2026-03-30T10:00:00Z";

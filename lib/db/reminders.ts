@@ -27,6 +27,17 @@ export class RemindersDB {
     return data || [];
   }
 
+  async getReminder(userId: string, reminderId: string): Promise<Reminder | null> {
+    const { data, error } = await this.supabase
+      .from('reminders')
+      .select('*')
+      .eq('id', reminderId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
   async getPendingReminders(beforeTime: string): Promise<Reminder[]> {
     const { data, error } = await this.supabase
       .from('reminders')

@@ -4,6 +4,17 @@ import { RemindersDB } from "@/lib/db";
 import { reminderUpdateSchema } from "@/lib/validations/reminders";
 import { validateRequestBody } from "@/lib/validations/api";
 import { log } from "@/lib/logger";
+import {
+  CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR,
+  isCalendarEventReminder,
+} from "@/lib/reminders/lifecycle-policy";
+
+function lifecycleConflict() {
+  return NextResponse.json(
+    { error: CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR },
+    { status: 409 },
+  );
+}
 
 /**
  * PATCH /api/reminders/[id]
@@ -29,6 +40,13 @@ export async function PATCH(
     if (!validation.success) return validation.response;
 
     const remindersDB = new RemindersDB(supabase);
+    const existing = await remindersDB.getReminder(user.id, id);
+    if (!existing) {
+      return NextResponse.json({ error: "Reminder not found" }, { status: 404 });
+    }
+    if (isCalendarEventReminder(existing.source_type)) {
+      return lifecycleConflict();
+    }
     const reminder = await remindersDB.updateReminder(
       user.id,
       id,
@@ -65,6 +83,13 @@ export async function DELETE(
     }
 
     const remindersDB = new RemindersDB(supabase);
+    const existing = await remindersDB.getReminder(user.id, id);
+    if (!existing) {
+      return NextResponse.json({ error: "Reminder not found" }, { status: 404 });
+    }
+    if (isCalendarEventReminder(existing.source_type)) {
+      return lifecycleConflict();
+    }
     await remindersDB.deleteReminder(user.id, id);
 
     return NextResponse.json({ success: true });
