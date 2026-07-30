@@ -21,6 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       e2e: ${{ steps.classify.outputs.e2e }}
+      e2e_full: ${{ steps.classify.outputs.e2e_full }}
+      e2e_specs: ${{ steps.classify.outputs.e2e_specs }}
+      e2e_runway: ${{ steps.classify.outputs.e2e_runway }}
+      e2e_visual: ${{ steps.classify.outputs.e2e_visual }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -207,7 +211,29 @@ jobs:
         run: pnpm build
 
       - name: Run E2E tests
-        run: pnpm test:e2e:chromium
+        env:
+          E2E_FULL: ${{ needs.changes.outputs.e2e_full }}
+          E2E_SPECS: ${{ needs.changes.outputs.e2e_specs }}
+          E2E_RUNWAY: ${{ needs.changes.outputs.e2e_runway }}
+          E2E_VISUAL: ${{ needs.changes.outputs.e2e_visual }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$E2E_FULL" == "true" ]]; then
+            pnpm test:e2e:chromium
+          elif [[ -n "$E2E_SPECS" ]]; then
+            IFS=',' read -r -a specs <<< "$E2E_SPECS"
+            pnpm exec playwright test "${specs[@]}" --project=chromium
+          fi
+
+          if [[ "$E2E_RUNWAY" == "true" ]]; then
+            pnpm exec playwright test e2e/financial-cushion.spec.ts --project=runway-public-desktop
+          fi
+
+          if [[ "$E2E_VISUAL" == "true" ]]; then
+            pnpm exec playwright test e2e/visual-regression.spec.ts --project=visual-regression
+          fi
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4

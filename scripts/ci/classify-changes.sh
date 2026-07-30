@@ -8,6 +8,10 @@ if [[ "${EVENT_NAME:-}" != "pull_request" ]]; then
     echo "full_tests=true"
     echo "migrations=true"
     echo "e2e=true"
+    echo "e2e_full=true"
+    echo "e2e_specs="
+    echo "e2e_runway=false"
+    echo "e2e_visual=false"
     echo "performance=true"
     echo "base_sha=${BASE_SHA:-}"
   } >> "$GITHUB_OUTPUT"
@@ -21,6 +25,10 @@ if [[ -z "${BASE_SHA:-}" || -z "${HEAD_SHA:-}" ]]; then
     echo "full_tests=true"
     echo "migrations=true"
     echo "e2e=true"
+    echo "e2e_full=true"
+    echo "e2e_specs="
+    echo "e2e_runway=false"
+    echo "e2e_visual=false"
     echo "performance=true"
     echo "base_sha=${BASE_SHA:-}"
   } >> "$GITHUB_OUTPUT"
@@ -37,7 +45,6 @@ matches() {
 quality=false
 full_tests=false
 migrations=false
-e2e=false
 performance=false
 
 # Source, tests, executable scripts, or tool configuration can affect lint/unit tests.
@@ -54,20 +61,18 @@ if matches '^supabase/migrations/|^\.github/workflows/ci\.yml$'; then
   migrations=true
 fi
 
-# Browser tests cover the application surface; unit-test/docs-only PRs skip them.
-if matches '^(app|components|emails|hooks|i18n|lib|public|e2e|supabase)/|^\.github/actions/|^(package\.json|pnpm-lock\.yaml|next\.config\.ts|playwright\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs|\.github/workflows/e2e\.yml|scripts/ci/)'; then
-  e2e=true
-fi
-
 if matches '^(app|components|emails|hooks|i18n|lib|public)/|^\.github/actions/|^(package\.json|pnpm-lock\.yaml|next\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs|lighthouserc\.js|\.github/workflows/performance\.yml|scripts/analyze-bundle\.ts)$'; then
   performance=true
 fi
+
+e2e_outputs="$(printf '%s\n' "$changed_files" | node scripts/ci/select-e2e-tests.mjs)"
+printf '%s\n' "$e2e_outputs"
+printf '%s\n' "$e2e_outputs" >> "$GITHUB_OUTPUT"
 
 {
   echo "quality=$quality"
   echo "full_tests=$full_tests"
   echo "migrations=$migrations"
-  echo "e2e=$e2e"
   echo "performance=$performance"
   echo "base_sha=$BASE_SHA"
 } >> "$GITHUB_OUTPUT"
