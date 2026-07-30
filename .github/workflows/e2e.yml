@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   changes:
+    name: Detect E2E scope
     runs-on: ubuntu-latest
     outputs:
       e2e: ${{ steps.classify.outputs.e2e }}
@@ -25,6 +26,7 @@ jobs:
       e2e_specs: ${{ steps.classify.outputs.e2e_specs }}
       e2e_runway: ${{ steps.classify.outputs.e2e_runway }}
       e2e_visual: ${{ steps.classify.outputs.e2e_visual }}
+      e2e_label: ${{ steps.classify.outputs.e2e_label }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,6 +65,7 @@ jobs:
           echo "Production Supabase secrets and E2E_PREVIEW_URL are not used for authenticated PR browser traffic."
 
   e2e-tests:
+    name: E2E (${{ needs.changes.outputs.e2e_label }})
     needs: [changes, check-secrets]
     if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
