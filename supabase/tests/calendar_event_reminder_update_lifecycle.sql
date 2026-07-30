@@ -3,58 +3,21 @@
 -- observes the public update lifecycle; the transaction leaves no data behind.
 begin;
 
-insert into auth.users (
-  id,
-  instance_id,
-  aud,
-  role,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  created_at,
-  updated_at
-)
-values (
+select public.ralph_ci_create_auth_user(
   '49100000-0000-0000-0000-000000000001',
-  '00000000-0000-0000-0000-000000000000',
-  'authenticated',
-  'authenticated',
-  'calendar-update-lifecycle@example.test',
-  'not-used',
-  now(),
-  '{}'::jsonb,
-  '{}'::jsonb,
-  now(),
-  now()
+  'calendar-update-lifecycle@example.test'
 );
 
-insert into auth.users (
-  id,
-  instance_id,
-  aud,
-  role,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  created_at,
-  updated_at
-)
-values (
+select public.ralph_ci_create_auth_user(
   '49100000-0000-0000-0000-000000000002',
-  '00000000-0000-0000-0000-000000000000',
-  'authenticated',
-  'authenticated',
-  'other-calendar-update-lifecycle@example.test',
-  'not-used',
-  now(),
-  '{}'::jsonb,
-  '{}'::jsonb,
-  now(),
-  now()
+  'other-calendar-update-lifecycle@example.test'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  '49100000-0000-0000-0000-000000000002',
+  true
 );
 
 insert into public.calendar_events (
@@ -99,7 +62,6 @@ values (
   '2026-08-04 08:40:00+00'
 );
 
-set local role authenticated;
 select set_config(
   'request.jwt.claim.sub',
   '49100000-0000-0000-0000-000000000001',
@@ -463,7 +425,11 @@ begin
 end
 $$;
 
-reset role;
+select set_config(
+  'request.jwt.claim.sub',
+  '49100000-0000-0000-0000-000000000002',
+  true
+);
 
 do $$
 begin
@@ -493,4 +459,5 @@ begin
 end
 $$;
 
+reset role;
 rollback;
