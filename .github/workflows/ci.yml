@@ -24,14 +24,8 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      quality: ${{ steps.classify.outputs.quality }}
-      full_tests: ${{ steps.classify.outputs.full_tests }}
-      full_lint: ${{ steps.classify.outputs.full_lint }}
-      changed_tests: ${{ steps.classify.outputs.changed_tests }}
-      quality_smoke_tests: ${{ steps.classify.outputs.quality_smoke_tests }}
-      quality_label: ${{ steps.classify.outputs.quality_label }}
-      migrations: ${{ steps.classify.outputs.migrations }}
       base_sha: ${{ steps.classify.outputs.base_sha }}
+      classification_json: ${{ steps.classify.outputs.classification_json }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -76,13 +70,12 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           VALIDATED_BY_PULL_REQUEST: ${{ steps.pull-request.outputs.validated || 'false' }}
-        shell: bash
-        run: bash scripts/ci/classify-changes.sh
+        run: node scripts/ci/run-change-classifier.mjs
 
   lint-and-test:
-    name: Lint + test (${{ needs.changes.outputs.quality_label }})
+    name: Lint + test (${{ fromJSON(needs.changes.outputs.classification_json).labels.quality }})
     needs: changes
-    if: needs.changes.outputs.quality == 'true'
+    if: fromJSON(needs.changes.outputs.classification_json).suites.quality
     runs-on: ubuntu-latest
 
     steps:
@@ -96,11 +89,11 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Lint all files
-        if: needs.changes.outputs.full_lint == 'true'
+        if: fromJSON(needs.changes.outputs.classification_json).suites.fullLint
         run: pnpm lint
 
       - name: Lint changed files
-        if: needs.changes.outputs.full_lint != 'true'
+        if: ${{ !fromJSON(needs.changes.outputs.classification_json).suites.fullLint }}
         env:
           TEST_BASE_SHA: ${{ needs.changes.outputs.base_sha }}
           TEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -118,27 +111,27 @@ jobs:
           pnpm exec eslint "${lint_files[@]}"
 
       - name: Typecheck full suite
-        if: needs.changes.outputs.full_tests == 'true'
+        if: fromJSON(needs.changes.outputs.classification_json).suites.fullTests
         run: pnpm typecheck
 
       - name: Test full suite
-        if: needs.changes.outputs.full_tests == 'true' && github.event_name != 'schedule'
+        if: fromJSON(needs.changes.outputs.classification_json).suites.fullTests && github.event_name != 'schedule'
         run: pnpm test:run
 
       - name: Test full suite with coverage
-        if: needs.changes.outputs.full_tests == 'true' && github.event_name == 'schedule'
+        if: fromJSON(needs.changes.outputs.classification_json).suites.fullTests && github.event_name == 'schedule'
         run: pnpm test:coverage
 
       - name: Test changed code
-        if: needs.changes.outputs.changed_tests == 'true'
+        if: fromJSON(needs.changes.outputs.classification_json).suites.changedTests
         env:
           TEST_BASE_SHA: ${{ needs.changes.outputs.base_sha }}
         run: pnpm test:run --changed="$TEST_BASE_SHA"
 
       - name: Test CI selectors
-        if: needs.changes.outputs.full_tests != 'true' && needs.changes.outputs.quality_smoke_tests != ''
+        if: ${{ !fromJSON(needs.changes.outputs.classification_json).suites.fullTests && join(fromJSON(needs.changes.outputs.classification_json).suites.smokeTests, ',') != '' }}
         env:
-          QUALITY_SMOKE_TESTS: ${{ needs.changes.outputs.quality_smoke_tests }}
+          QUALITY_SMOKE_TESTS: ${{ join(fromJSON(needs.changes.outputs.classification_json).suites.smokeTests, ',') }}
         shell: bash
         run: |
           IFS=',' read -ra smoke_tests <<< "$QUALITY_SMOKE_TESTS"
@@ -146,7 +139,7 @@ jobs:
 
   check-migrations:
     needs: changes
-    if: needs.changes.outputs.migrations == 'true'
+    if: fromJSON(needs.changes.outputs.classification_json).suites.migrations
     runs-on: ubuntu-latest
 
     steps:
@@ -180,9 +173,9 @@ jobs:
       - name: Verify selected CI checks
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
-          QUALITY_NEEDED: ${{ needs.changes.outputs.quality }}
+          QUALITY_NEEDED: ${{ fromJSON(needs.changes.outputs.classification_json).suites.quality }}
           QUALITY_RESULT: ${{ needs.lint-and-test.result }}
-          MIGRATIONS_NEEDED: ${{ needs.changes.outputs.migrations }}
+          MIGRATIONS_NEEDED: ${{ fromJSON(needs.changes.outputs.classification_json).suites.migrations }}
           MIGRATIONS_RESULT: ${{ needs.check-migrations.result }}
         shell: bash
         run: |
