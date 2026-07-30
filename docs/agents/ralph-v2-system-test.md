@@ -28,6 +28,14 @@ The production CLI is a thin composition root over this interface. System
 tests call the same interface with real Git and deterministic external
 adapters. Later crash tests launch it in a fresh Node process.
 
+The worker boundary is session-oriented. `startOrAttach()` is one atomic
+capability keyed by the controller-generated session ID: it returns a durable
+completion receipt, waits on that exact live session, or starts it exactly
+once. It may never implement “not completed, therefore spawn.” `terminate()`
+must return an authoritative receipt only after the complete process tree is
+dead. These guarantees belong to the production worker supervisor and are
+tested with real child processes, not assumed from an in-memory mock.
+
 The system suite has a dedicated Node configuration and is excluded from the
 normal application suite so candidate verification cannot recursively launch
 Ralph. Import purity is checked in a poisoned fresh process before orchestration
@@ -86,3 +94,33 @@ at a time for intent/receipt crash recovery, two-issue queue progress, bounded
 repair, failed and cancelled checks, base movement and conflicts, manual GitHub
 actions, kill-switch behaviour, hostile issue content, randomized fault
 injection, Windows/WSL contracts, and a live GitHub PR-only canary.
+
+## Release acceptance matrix
+
+Ralph v2 is not eligible for a live queue merely because its happy path is
+green. The dedicated system suite must exercise every row below through the
+public CLI in fresh processes. A skipped scenario is an incomplete release,
+not a passing gate.
+
+| Area | Required observable scenarios |
+| --- | --- |
+| Selection | Dependency-frontier order; claimed, closed, and unapproved issues excluded; one blocked route does not block an unrelated route; a manually merged PR is reconciled before selecting more work. |
+| Ownership | Atomic GitHub claim race; one local controller; one writable implementation session; recovery attaches to a surviving session and never starts a duplicate. |
+| Freshness | Every generation begins at the exact latest remote `main`; a moved base is adopted and fully reverified; a conflicting base enters bounded conflict repair; the next issue starts from the preceding merge. |
+| Worker | Every implementation and repair is a fresh isolated Codex session using the immutable `implement` and `tdd` disciplines; the worker has no GitHub or network credentials, receives an allowlisted environment, and cannot alter controller or verification assets. |
+| Verification | Related tests, TypeScript diagnostics, the full suite, and exhaustive independent review are bound to one candidate tree; every changed contract, file, and review axis has evidence; repair reviews close every durable finding. |
+| Repairs | One complete finding batch per attempt; default maximum five coding attempts; interrupted attempts are never completed; check reruns and transient retries have separate bounds; exhaustion produces a safe reviewable Draft or a private safety artifact and releases the queue. |
+| Pull requests | Exactly one linked PR per generation; title and body conventions are controller-owned; all reported required checks are terminal and successful; generic failed-check evidence returns to bounded repair; cancelled checks use bounded reruns; repeated recovery is idempotent. |
+| Merge | `PrOnly` never merges; `AutoMerge` merges only a current, conflict-free, low-risk, unambiguous head with passing verification, exhaustive review, required approvals, and all required checks; high-risk, ambiguous, conflicted, or failed work remains human-gated. |
+| Stop and bounds | Dry-run has no writes; issue limit, run deadline, phase timeouts, retry bounds, and STOP are enforced; STOP terminates a non-cooperative child tree within a bound and prevents the next irreversible stage; startup reconciles a stopped in-flight generation. |
+| Recovery | Hard crashes immediately after every Git, GitHub, worker, and verifier effect recover exactly once; stale and partially written locks recover safely; PID reuse cannot impersonate the owner; tampered state, worktree, ancestry, remote head, or receipt fails closed. |
+| Safety | Hostile issue text cannot alter policy, prompts, models, commands, paths, environment, credentials, gates, or PR metadata; secret-bearing, symlinked, protected-path, and unverified-history candidates are never committed or pushed and stop when containment cannot be proved. |
+| Cleanup and reporting | A published or merged generation removes its local worktree, branch, and private views; blocked artifacts remain exact and reviewable; every exit atomically refreshes machine and human summaries with merged, parked, failed, active, and stop-reason entries. |
+| Platform | The same acceptance suite passes on Windows; WSL worker composition proves immutable dependencies and skills, credential isolation, bounded process-tree control, and live redacted streaming; a fault-injection soak leaves no duplicates or leaked worker. |
+
+The final pre-release proof is a multi-issue overnight simulation combining
+success, repair, failed checks, base movement, conflict repair, high risk,
+ambiguity, manual merge, controller restart, and an unrelated dependency route.
+It must drain every eligible route sequentially and produce an exact summary.
+Only then may a supervised live GitHub `PrOnly` canary run; automatic merging is
+enabled only after that canary is audited.

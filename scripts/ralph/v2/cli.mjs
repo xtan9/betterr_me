@@ -48,7 +48,7 @@ export async function runCli(args, { runtime, stdout, stderr }) {
     }
     if (command === "stop") {
       const options = parseSimpleArguments(commandArguments);
-      const result = runtime.requestStop();
+      const result = await runtime.requestStop();
       printResult(result, options.json, stdout);
       return 0;
     }
@@ -58,4 +58,3 @@ export async function runCli(args, { runtime, stdout, stderr }) {
     return 1;
   }
 }
-

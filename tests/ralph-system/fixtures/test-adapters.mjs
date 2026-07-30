@@ -395,6 +395,27 @@ export function createTestAdapters(config) {
       }
     },
   };
+  worker.startOrAttach = async (input) => {
+    const completed = await worker.findResult({
+      issueNumber: input.issue.number,
+      sessionId: input.sessionId,
+    });
+    return completed ?? worker.implement(input);
+  };
+  worker.terminate = async (input) => {
+    changeState(config, (state) => {
+      const session = state.sessions.find(
+        (candidate) => candidate.sessionId === input.sessionId,
+      );
+      if (session && !session.resultKind) session.resultKind = "aborted";
+      state.activeWorkers = 0;
+    });
+    return {
+      kind: "terminated",
+      sessionId: input.sessionId,
+      processTreeTerminated: true,
+    };
+  };
 
   const verifier = {
     async findReceipt(input) {

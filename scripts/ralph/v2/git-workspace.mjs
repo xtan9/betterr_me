@@ -165,6 +165,24 @@ export function createGitWorkspace({ repositoryPath, runtimePath }) {
       return { baseSha, branch, worktreePath };
     },
 
+    activeCheckoutExists({
+      number,
+      baseSha,
+      branch,
+      worktreePath: recordedWorktreePath,
+    }) {
+      assertManagedGeneration(
+        {
+          issueNumber: number,
+          branch,
+          baseSha,
+          recordedWorktreePath,
+        },
+        worktreePath,
+      );
+      return fs.existsSync(worktreePath);
+    },
+
     buildCandidate() {
       runGit(worktreePath, ["add", "--all"]);
       const candidateTreeSha = gitLine(worktreePath, ["write-tree"]);

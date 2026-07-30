@@ -11,6 +11,9 @@ const TERMINAL_DISPOSITIONS = new Set([
   "safety_blocked",
   "verification_failed",
 ]);
+const STOP_POLL_MILLISECONDS = 20;
+const COOPERATIVE_STOP_MILLISECONDS = 250;
+const FORCED_STOP_MILLISECONDS = 2_000;
 
 function operationId(issueNumber, operation, generation = 1) {
   return `ralph-v2:issue-${issueNumber}:generation-${generation}:${operation}`;
@@ -30,6 +33,9 @@ function publicStatus(state, stopRequested) {
         pullRequestNumber: issue.pullRequestNumber,
         artifactPath: issue.artifactPath,
         blocker: issue.blocker,
+        ...(issue.disposition === "publishing"
+          ? { headBranch: issue.branch }
+          : {}),
       })),
   };
 }
@@ -71,6 +77,16 @@ async function checkpoint(lifecycle, point, record) {
   });
 }
 
+async function runAdmittedEffect(stateStore, effect, action) {
+  const admission = stateStore.acquireEffectAdmission(effect);
+  if (!admission) return { admitted: false };
+  try {
+    return { admitted: true, value: await action() };
+  } finally {
+    admission.release();
+  }
+}
+
 function saveWorkerLease(state, stateStore, record) {
   state.workerLease = {
     issueNumber: record.number,
@@ -97,18 +113,223 @@ function parkIssue({
   stateStore.save(state);
 }
 
+function observe(promise) {
+  return promise.then(
+    (value) => ({ kind: "fulfilled", value }),
+    (error) => ({ kind: "rejected", error }),
+  );
+}
+
+function waitForStop(stateStore) {
+  let timer;
+  let settled = false;
+  const promise = new Promise((resolve) => {
+    const poll = () => {
+      if (settled) return;
+      if (stateStore.isStopRequested()) {
+        settled = true;
+        resolve({ kind: "stop-requested" });
+        return;
+      }
+      if (!settled) {
+        timer = setTimeout(poll, STOP_POLL_MILLISECONDS);
+      }
+    };
+    poll();
+  });
+  return {
+    promise,
+    cancel() {
+      settled = true;
+      if (timer) clearTimeout(timer);
+    },
+  };
+}
+
+function timeoutAfter(milliseconds) {
+  let timer;
+  return {
+    promise: new Promise((resolve) => {
+      timer = setTimeout(() => resolve({ kind: "timeout" }), milliseconds);
+    }),
+    cancel() {
+      if (timer) clearTimeout(timer);
+    },
+  };
+}
+
+function unwrapObserved(outcome) {
+  if (outcome.kind === "rejected") throw outcome.error;
+  return outcome.value;
+}
+
+function validateTerminationReceipt(receipt, sessionId) {
+  if (
+    receipt?.kind !== "terminated" ||
+    receipt.sessionId !== sessionId ||
+    receipt.processTreeTerminated !== true
+  ) {
+    throw new Error(`worker termination receipt is invalid for ${sessionId}`);
+  }
+  return receipt;
+}
+
+async function awaitWithin(observedPromise, milliseconds) {
+  const timeout = timeoutAfter(milliseconds);
+  try {
+    return await Promise.race([observedPromise, timeout.promise]);
+  } finally {
+    timeout.cancel();
+  }
+}
+
 async function runImplementation({ worker, input, stateStore }) {
   const cancellation = new AbortController();
-  const poll = setInterval(() => {
-    if (stateStore.isStopRequested()) cancellation.abort();
-  }, 20);
-  poll.unref?.();
+  const implementation = observe(
+    Promise.resolve().then(() =>
+      worker.startOrAttach({
+        ...input,
+        signal: cancellation.signal,
+      }),
+    ),
+  );
+  const stop = waitForStop(stateStore);
   try {
-    if (stateStore.isStopRequested()) cancellation.abort();
-    return await worker.implement({ ...input, signal: cancellation.signal });
+    const first = await Promise.race([implementation, stop.promise]);
+    if (first.kind !== "stop-requested") return unwrapObserved(first);
+
+    const forcedStopDeadline = Date.now() + FORCED_STOP_MILLISECONDS;
+    cancellation.abort();
+    await awaitWithin(
+      implementation,
+      Math.min(
+        COOPERATIVE_STOP_MILLISECONDS,
+        Math.max(0, forcedStopDeadline - Date.now()),
+      ),
+    );
+    if (typeof worker.terminate !== "function") {
+      throw new Error(
+        `implementation worker cannot prove process-tree termination for issue #${input.issue.number}`,
+      );
+    }
+
+    const termination = observe(
+      Promise.resolve().then(() =>
+        worker.terminate({
+          issueNumber: input.issue.number,
+          sessionId: input.sessionId,
+          worktreePath: input.worktreePath,
+        }),
+      ),
+    );
+    const terminated = await awaitWithin(
+      termination,
+      Math.max(0, forcedStopDeadline - Date.now()),
+    );
+    if (terminated.kind === "timeout") {
+      throw new Error(
+        `implementation worker process tree exceeded the stop timeout for issue #${input.issue.number}`,
+      );
+    }
+    validateTerminationReceipt(
+      unwrapObserved(terminated),
+      input.sessionId,
+    );
+    return { kind: "aborted", sessionId: input.sessionId };
   } finally {
-    clearInterval(poll);
+    stop.cancel();
   }
+}
+
+async function reconcileRequestedStop({
+  record,
+  state,
+  stateStore,
+  workspace,
+  worker,
+}) {
+  if (record.disposition === "implementing") {
+    if (typeof worker.terminate !== "function") {
+      throw new Error(
+        `cannot safely reconcile the active worker for issue #${record.number}`,
+      );
+    }
+    const termination = observe(
+      Promise.resolve().then(() =>
+        worker.terminate({
+          issueNumber: record.number,
+          sessionId: record.sessionId,
+          worktreePath: record.worktreePath,
+        }),
+      ),
+    );
+    const terminated = await awaitWithin(
+      termination,
+      FORCED_STOP_MILLISECONDS,
+    );
+    if (terminated.kind === "timeout") {
+      throw new Error(
+        `implementation worker process tree exceeded the stop timeout for issue #${record.number}`,
+      );
+    }
+    validateTerminationReceipt(
+      unwrapObserved(terminated),
+      record.sessionId,
+    );
+  }
+
+  if (record.disposition === "verifying") {
+    const committedCandidate = workspace.findVerifiedCommit({
+      issueNumber: record.number,
+      branch: record.branch,
+      baseSha: record.baseSha,
+      candidateTreeSha: record.candidateTreeSha,
+    });
+    if (committedCandidate) record.headSha = committedCandidate.headSha;
+    parkIssue({
+      state,
+      stateStore,
+      workspace,
+      record,
+      disposition: "stopped",
+    });
+    return;
+  }
+
+  if (record.disposition === "implementing") {
+    parkIssue({
+      state,
+      stateStore,
+      workspace,
+      record,
+      disposition: "stopped",
+    });
+    return;
+  }
+
+  if (
+    record.disposition === "preparing" &&
+    workspace.activeCheckoutExists(record)
+  ) {
+    parkIssue({
+      state,
+      stateStore,
+      workspace,
+      record,
+      disposition: "stopped",
+    });
+    return;
+  }
+
+  if (record.disposition === "publishing") {
+    state.workerLease = null;
+    stateStore.save(state);
+    return;
+  }
+
+  Object.assign(record, { disposition: "stopped" });
+  state.workerLease = null;
+  stateStore.save(state);
 }
 
 async function reconcileIssue({
@@ -133,26 +354,45 @@ async function reconcileIssue({
       operationId: record.claimOperationId,
     });
     if (!claim) {
-      claim = await github.claimIssue({
-        issueNumber: record.number,
-        operationId: record.claimOperationId,
-        claimedAt: clock.now().toISOString(),
-      });
+      const claimed = await runAdmittedEffect(
+        stateStore,
+        "claim-issue",
+        () =>
+          github.claimIssue({
+            issueNumber: record.number,
+            operationId: record.claimOperationId,
+            claimedAt: clock.now().toISOString(),
+          }),
+      );
+      if (!claimed.admitted) return;
+      claim = claimed.value;
       await checkpoint(lifecycle, "claim-applied", record);
     }
     validateClaimReceipt(claim, record);
     record.disposition = "claimed";
     stateStore.save(state);
+    if (stateStore.isStopRequested()) return;
   }
 
   if (record.disposition === "claimed") {
     const plan = workspace.plan(record.number);
     Object.assign(record, plan, { disposition: "preparing" });
     stateStore.save(state);
+    if (stateStore.isStopRequested()) {
+      record.disposition = "stopped";
+      state.workerLease = null;
+      stateStore.save(state);
+      return;
+    }
   }
 
   if (record.disposition === "preparing") {
-    workspace.ensureCheckout(record);
+    const prepared = await runAdmittedEffect(
+      stateStore,
+      "create-worktree",
+      () => workspace.ensureCheckout(record),
+    );
+    if (!prepared.admitted) return;
     await checkpoint(lifecycle, "worktree-created", record);
     record.sessionId ??= operationId(
       record.number,
@@ -175,24 +415,18 @@ async function reconcileIssue({
       });
       return;
     }
-    let workerResult = await worker.findResult({
-      issueNumber: record.number,
-      sessionId: record.sessionId,
+    const workerResult = await runImplementation({
+      worker,
+      stateStore,
+      input: {
+        issue,
+        sessionId: record.sessionId,
+        worktreePath: record.worktreePath,
+        baseSha: record.baseSha,
+      },
     });
-    if (!workerResult) {
-      workerResult = await runImplementation({
-        worker,
-        stateStore,
-        input: {
-          issue,
-          sessionId: record.sessionId,
-          worktreePath: record.worktreePath,
-          baseSha: record.baseSha,
-        },
-      });
-      if (workerResult?.kind === "completed") {
-        await checkpoint(lifecycle, "worker-completed", record);
-      }
+    if (workerResult?.kind === "completed") {
+      await checkpoint(lifecycle, "worker-completed", record);
     }
     if (workerResult?.kind === "aborted" && stateStore.isStopRequested()) {
       parkIssue({
@@ -313,16 +547,24 @@ async function reconcileIssue({
       candidateTreeSha: record.candidateTreeSha,
     });
     if (!commit) {
-      commit = workspace.commit({
-        issueNumber: record.number,
-        candidateTreeSha: record.candidateTreeSha,
-      });
+      const committed = await runAdmittedEffect(
+        stateStore,
+        "commit-candidate",
+        () =>
+          workspace.commit({
+            issueNumber: record.number,
+            candidateTreeSha: record.candidateTreeSha,
+          }),
+      );
+      if (!committed.admitted) return;
+      commit = committed.value;
       await checkpoint(lifecycle, "candidate-committed", record);
     }
     Object.assign(record, {
       disposition: "publishing",
       headSha: commit.headSha,
     });
+    state.workerLease = null;
     stateStore.save(state);
     if (stateStore.isStopRequested()) {
       parkIssue({
@@ -337,21 +579,30 @@ async function reconcileIssue({
   }
 
   if (record.disposition === "publishing") {
+    if (stateStore.isStopRequested()) return;
     const observedRemoteHead = workspace.remoteHead({
       issueNumber: record.number,
       branch: record.branch,
     });
+    if (stateStore.isStopRequested()) return;
     if (observedRemoteHead && observedRemoteHead !== record.headSha) {
       throw new Error(`remote issue branch changed for issue #${record.number}`);
     }
     if (!observedRemoteHead) {
-      workspace.push({
-        issueNumber: record.number,
-        branch: record.branch,
-        headSha: record.headSha,
-      });
+      const pushed = await runAdmittedEffect(
+        stateStore,
+        "push-branch",
+        () =>
+          workspace.push({
+            issueNumber: record.number,
+            branch: record.branch,
+            headSha: record.headSha,
+          }),
+      );
+      if (!pushed.admitted) return;
       await checkpoint(lifecycle, "branch-pushed", record);
     }
+    if (stateStore.isStopRequested()) return;
 
     const pullRequestOperationId = operationId(
       record.number,
@@ -363,17 +614,25 @@ async function reconcileIssue({
       headBranch: record.branch,
       headSha: record.headSha,
     });
+    if (stateStore.isStopRequested()) return;
     if (!pullRequest) {
-      pullRequest = await github.createDraftPullRequest({
-        issueNumber: record.number,
-        operationId: pullRequestOperationId,
-        draft: true,
-        title: pullRequestTitle(issue),
-        body: `Closes #${record.number}`,
-        headBranch: record.branch,
-        headSha: record.headSha,
-        baseBranch: "main",
-      });
+      const createdPullRequest = await runAdmittedEffect(
+        stateStore,
+        "create-draft-pr",
+        () =>
+          github.createDraftPullRequest({
+            issueNumber: record.number,
+            operationId: pullRequestOperationId,
+            draft: true,
+            title: pullRequestTitle(issue),
+            body: `Closes #${record.number}`,
+            headBranch: record.branch,
+            headSha: record.headSha,
+            baseBranch: "main",
+          }),
+      );
+      if (!createdPullRequest.admitted) return;
+      pullRequest = createdPullRequest.value;
       await checkpoint(lifecycle, "draft-pr-created", record);
     }
     if (
@@ -386,12 +645,19 @@ async function reconcileIssue({
     }
     record.pullRequestNumber = pullRequest.number;
     stateStore.save(state);
+    if (stateStore.isStopRequested()) return;
 
-    workspace.cleanup({
-      issueNumber: record.number,
-      branch: record.branch,
-      headSha: record.headSha,
-    });
+    const cleaned = await runAdmittedEffect(
+      stateStore,
+      "cleanup-checkout",
+      () =>
+        workspace.cleanup({
+          issueNumber: record.number,
+          branch: record.branch,
+          headSha: record.headSha,
+        }),
+    );
+    if (!cleaned.admitted) return;
     await checkpoint(lifecycle, "checkout-cleaned", record);
     record.disposition = "published";
     state.workerLease = null;
@@ -408,7 +674,14 @@ export function createRalphRuntime({
   lifecycle = { checkpoint: async () => {} },
   clock,
 }) {
-  if (!github || !worker || !verifier || !clock) {
+  if (
+    !github ||
+    !worker ||
+    typeof worker.startOrAttach !== "function" ||
+    typeof worker.terminate !== "function" ||
+    !verifier ||
+    !clock
+  ) {
     throw new Error("Ralph requires GitHub, worker, verifier, and clock adapters");
   }
   const stateStore = createStateStore(runtimePath);
@@ -423,10 +696,25 @@ export function createRalphRuntime({
         throw new Error("maxIssues must be a positive integer");
       }
 
-      const controllerLease = stateStore.acquireControllerLease();
+      const controllerLease = await stateStore.acquireControllerLease();
       try {
         const state = stateStore.load();
         if (stateStore.isStopRequested()) {
+          const resumable = Object.values(state.issues).filter(
+            (issue) => !TERMINAL_DISPOSITIONS.has(issue.disposition),
+          );
+          if (resumable.length > 1) {
+            throw new Error("Ralph state contains multiple resumable issues");
+          }
+          if (resumable.length === 1) {
+            await reconcileRequestedStop({
+              record: resumable[0],
+              state,
+              stateStore,
+              workspace,
+              worker,
+            });
+          }
           return publicStatus(state, true);
         }
 
@@ -484,7 +772,7 @@ export function createRalphRuntime({
         }
         return publicStatus(state, stateStore.isStopRequested());
       } finally {
-        controllerLease.release();
+        await controllerLease.release();
       }
     },
 
@@ -493,8 +781,8 @@ export function createRalphRuntime({
       return publicStatus(state, stateStore.isStopRequested());
     },
 
-    requestStop() {
-      stateStore.requestStop();
+    async requestStop() {
+      await stateStore.requestStop();
       return publicStatus(stateStore.load(), true);
     },
   };
