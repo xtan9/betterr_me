@@ -56,10 +56,10 @@ import {
   codexStartupEventsReady,
   ensureSanitizedWorkerGitView,
   immutableDependencyExecutableDiscoveryArguments,
+  immutableDependencyExecutablePaths,
   immutableDependencyExecutableRepairArguments,
-  immutableDependencyNonExecutableProbeArguments,
-  immutableDependencyUnsafeModeProbeArguments,
-  immutableDependencyUnsafeOwnershipProbeArguments,
+  immutableDependencyExecutableStatArguments,
+  immutableDependencyExecutableStatsAreSafe,
   isolatedCodexAuthInstallRequired,
   isolatedCodexFilesystemConfig,
   isolatedCodexReadablePaths,
@@ -837,39 +837,40 @@ async function assertWslIsolationReady() {
     immutableDependencyExecutableDiscoveryArguments(wslDependencyRoot),
     { timeoutSeconds: 30, observeKillSwitch: false },
   );
-  if (!nativeExecutables.stdout.trim()) {
+  const nativeExecutablePaths = immutableDependencyExecutablePaths(
+    nativeExecutables.stdout,
+    wslDependencyRoot,
+  );
+  if (nativeExecutablePaths.length === 0) {
     throw new Error("immutable WSL dependencies are missing the Linux esbuild binary");
   }
-  const unsafeNativeOwnership = await runWsl(
-    immutableDependencyUnsafeOwnershipProbeArguments(wslDependencyRoot),
+  const nativeExecutableStats = await runWsl(
+    immutableDependencyExecutableStatArguments(nativeExecutablePaths),
     { timeoutSeconds: 30, observeKillSwitch: false },
   );
-  if (unsafeNativeOwnership.stdout.trim()) {
+  if (
+    !immutableDependencyExecutableStatsAreSafe(
+      nativeExecutableStats.stdout,
+      nativeExecutablePaths.length,
+    )
+  ) {
     throw new Error("immutable WSL esbuild dependency is not root-owned");
   }
   await runWsl(
-    immutableDependencyExecutableRepairArguments(wslDependencyRoot),
+    immutableDependencyExecutableRepairArguments(nativeExecutablePaths),
     { timeoutSeconds: 30, observeKillSwitch: false },
   );
-  const nonExecutableDependency = await runWsl(
-    immutableDependencyNonExecutableProbeArguments(wslDependencyRoot),
+  const repairedNativeExecutableStats = await runWsl(
+    immutableDependencyExecutableStatArguments(nativeExecutablePaths),
     { timeoutSeconds: 30, observeKillSwitch: false },
   );
-  if (nonExecutableDependency.stdout.trim()) {
-    throw new Error("immutable WSL esbuild dependency is not executable");
-  }
-  const unsafeNativeOwnershipAfterRepair = await runWsl(
-    immutableDependencyUnsafeOwnershipProbeArguments(wslDependencyRoot),
-    { timeoutSeconds: 30, observeKillSwitch: false },
-  );
-  if (unsafeNativeOwnershipAfterRepair.stdout.trim()) {
-    throw new Error("immutable WSL esbuild dependency ownership changed during repair");
-  }
-  const unsafeNativeMode = await runWsl(
-    immutableDependencyUnsafeModeProbeArguments(wslDependencyRoot),
-    { timeoutSeconds: 30, observeKillSwitch: false },
-  );
-  if (unsafeNativeMode.stdout.trim()) {
+  if (
+    !immutableDependencyExecutableStatsAreSafe(
+      repairedNativeExecutableStats.stdout,
+      nativeExecutablePaths.length,
+      "555",
+    )
+  ) {
     throw new Error("immutable WSL esbuild dependency is not root-owned read/execute-only");
   }
   await runWsl(

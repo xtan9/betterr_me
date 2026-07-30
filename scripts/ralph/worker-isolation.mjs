@@ -247,56 +247,69 @@ export function immutableDependencyExecutableDiscoveryArguments(
   return [...immutableDependencyFindArguments(dependencyRoot), "-print"];
 }
 
-export function immutableDependencyExecutableRepairArguments(dependencyRoot) {
-  return [
-    ...immutableDependencyFindArguments(dependencyRoot),
-    "-exec",
-    "chmod",
-    "0555",
-    "{}",
-    "+",
-  ];
+export function immutableDependencyExecutablePaths(output, dependencyRoot) {
+  immutableDependencyFindArguments(dependencyRoot);
+  const prefix = `${dependencyRoot}/.pnpm/`;
+  const suffix = "/node_modules/@esbuild/linux-x64/bin/esbuild";
+  const paths = String(output ?? "")
+    .split(/\r?\n/)
+    .filter(Boolean);
+  for (const executablePath of paths) {
+    const packageDirectory = executablePath.slice(
+      prefix.length,
+      executablePath.length - suffix.length,
+    );
+    if (
+      !executablePath.startsWith(prefix) ||
+      !executablePath.endsWith(suffix) ||
+      !/^@esbuild\+linux-x64@[^/]+$/.test(packageDirectory)
+    ) {
+      throw new Error(`unexpected immutable esbuild path ${executablePath}`);
+    }
+  }
+  if (new Set(paths).size !== paths.length) {
+    throw new Error("duplicate immutable esbuild path");
+  }
+  return paths.sort();
 }
 
-export function immutableDependencyUnsafeOwnershipProbeArguments(
-  dependencyRoot,
+function assertExecutablePaths(executablePaths) {
+  if (
+    !Array.isArray(executablePaths) ||
+    executablePaths.length === 0 ||
+    executablePaths.some(
+      (executablePath) =>
+        typeof executablePath !== "string" || !executablePath.startsWith("/"),
+    )
+  ) {
+    throw new Error("immutable esbuild paths must be non-empty absolute paths");
+  }
+}
+
+export function immutableDependencyExecutableStatArguments(executablePaths) {
+  assertExecutablePaths(executablePaths);
+  return ["stat", "-c", "%U:%G:%a", ...executablePaths];
+}
+
+export function immutableDependencyExecutableRepairArguments(executablePaths) {
+  assertExecutablePaths(executablePaths);
+  return ["chmod", "0555", ...executablePaths];
+}
+
+export function immutableDependencyExecutableStatsAreSafe(
+  output,
+  expectedCount,
+  expectedMode = null,
 ) {
-  return [
-    ...immutableDependencyFindArguments(dependencyRoot),
-    "(",
-    "!",
-    "-user",
-    "root",
-    "-o",
-    "!",
-    "-group",
-    "root",
-    ")",
-    "-print",
-    "-quit",
-  ];
-}
-
-export function immutableDependencyNonExecutableProbeArguments(dependencyRoot) {
-  return [
-    ...immutableDependencyFindArguments(dependencyRoot),
-    "!",
-    "-perm",
-    "/111",
-    "-print",
-    "-quit",
-  ];
-}
-
-export function immutableDependencyUnsafeModeProbeArguments(dependencyRoot) {
-  return [
-    ...immutableDependencyFindArguments(dependencyRoot),
-    "!",
-    "-perm",
-    "0555",
-    "-print",
-    "-quit",
-  ];
+  if (!Number.isInteger(expectedCount) || expectedCount < 1) return false;
+  const lines = String(output ?? "")
+    .split(/\r?\n/)
+    .filter(Boolean);
+  if (lines.length !== expectedCount) return false;
+  const pattern = expectedMode === null
+    ? /^root:root:[0-7]{3,4}$/
+    : new RegExp(`^root:root:${expectedMode}$`);
+  return lines.every((line) => pattern.test(line));
 }
 
 export function workerGitEnvironment({ gitDirectory, worktreePath }) {
