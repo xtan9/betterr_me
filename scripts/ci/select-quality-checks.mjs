@@ -17,15 +17,14 @@ const FULL_LINT_PATTERNS = [
 
 const CI_ONLY_PATTERNS = [
   /^\.github\/workflows\/(?:ci|e2e|production-smoke|scheduled-failure-alerts)\.yml$/,
-  /^scripts\/ci\/(?:classify-changes\.sh|production-smoke\.mjs|reconcile-scheduled-workflow-issue\.mjs|select-e2e-tests\.mjs|select-quality-checks\.mjs)$/,
-  /^tests\/scripts\/(?:production-smoke|reconcile-scheduled-workflow-issue|select-e2e-tests|select-quality-checks)\.test\.ts$/,
+  /^scripts\/ci\/(?:classify-changes\.sh|detect-pull-request-validated-push\.mjs|production-smoke\.mjs|reconcile-scheduled-workflow-issue\.mjs|select-e2e-tests\.mjs|select-quality-checks\.mjs)$/,
+  /^tests\/scripts\/(?:classify-changes|detect-pull-request-validated-push|production-smoke|reconcile-scheduled-workflow-issue|select-e2e-tests|select-quality-checks)\.test\.ts$/,
 ];
 
 const CI_SMOKE_MAPPINGS = [
   {
     patterns: [
-      /^\.github\/workflows\/ci\.yml$/,
-      /^scripts\/ci\/(?:classify-changes\.sh|select-quality-checks\.mjs)$/,
+      /^scripts\/ci\/select-quality-checks\.mjs$/,
       /^tests\/scripts\/select-quality-checks\.test\.ts$/,
     ],
     tests: ["tests/scripts/select-quality-checks.test.ts"],
@@ -33,10 +32,36 @@ const CI_SMOKE_MAPPINGS = [
   {
     patterns: [
       /^\.github\/workflows\/e2e\.yml$/,
-      /^scripts\/ci\/(?:classify-changes\.sh|select-e2e-tests\.mjs)$/,
+      /^scripts\/ci\/select-e2e-tests\.mjs$/,
       /^tests\/scripts\/select-e2e-tests\.test\.ts$/,
     ],
     tests: ["tests/scripts/select-e2e-tests.test.ts"],
+  },
+  {
+    patterns: [
+      /^scripts\/ci\/classify-changes\.sh$/,
+      /^tests\/scripts\/classify-changes\.test\.ts$/,
+    ],
+    tests: [
+      "tests/scripts/classify-changes.test.ts",
+      "tests/scripts/select-e2e-tests.test.ts",
+      "tests/scripts/select-quality-checks.test.ts",
+    ],
+  },
+  {
+    patterns: [/^\.github\/workflows\/ci\.yml$/],
+    tests: [
+      "tests/scripts/classify-changes.test.ts",
+      "tests/scripts/detect-pull-request-validated-push.test.ts",
+      "tests/scripts/select-quality-checks.test.ts",
+    ],
+  },
+  {
+    patterns: [
+      /^scripts\/ci\/detect-pull-request-validated-push\.mjs$/,
+      /^tests\/scripts\/detect-pull-request-validated-push\.test\.ts$/,
+    ],
+    tests: ["tests/scripts/detect-pull-request-validated-push.test.ts"],
   },
   {
     patterns: [

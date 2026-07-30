@@ -52,7 +52,11 @@ describe("quality check selection", () => {
         fullTests: false,
         fullLint: false,
         changedTests: false,
-        smokeTests: ["tests/scripts/select-quality-checks.test.ts"],
+        smokeTests: [
+          "tests/scripts/classify-changes.test.ts",
+          "tests/scripts/detect-pull-request-validated-push.test.ts",
+          "tests/scripts/select-quality-checks.test.ts",
+        ],
         label: "CI smoke",
       });
 
@@ -60,6 +64,7 @@ describe("quality check selection", () => {
       .toMatchObject({
         changedTests: false,
         smokeTests: [
+          "tests/scripts/classify-changes.test.ts",
           "tests/scripts/select-e2e-tests.test.ts",
           "tests/scripts/select-quality-checks.test.ts",
         ],
@@ -91,7 +96,11 @@ describe("quality check selection", () => {
       "lib/habits/schedule.ts",
     ])).toMatchObject({
       changedTests: true,
-      smokeTests: ["tests/scripts/select-quality-checks.test.ts"],
+      smokeTests: [
+        "tests/scripts/classify-changes.test.ts",
+        "tests/scripts/detect-pull-request-validated-push.test.ts",
+        "tests/scripts/select-quality-checks.test.ts",
+      ],
       label: "changed code + CI smoke",
     });
   });
@@ -104,8 +113,20 @@ describe("quality check selection", () => {
       "full_tests=false",
       "full_lint=false",
       "changed_tests=false",
-      "quality_smoke_tests=tests/scripts/select-e2e-tests.test.ts,tests/scripts/select-quality-checks.test.ts",
+      "quality_smoke_tests=tests/scripts/classify-changes.test.ts,tests/scripts/select-e2e-tests.test.ts,tests/scripts/select-quality-checks.test.ts",
       "quality_label=CI smoke",
     ].join("\n"));
+  });
+
+  it("selects the pull-request validation test for its detector", () => {
+    expect(selectQualityChecks([
+      "scripts/ci/detect-pull-request-validated-push.mjs",
+    ])).toMatchObject({
+      changedTests: false,
+      smokeTests: [
+        "tests/scripts/detect-pull-request-validated-push.test.ts",
+      ],
+      label: "CI smoke",
+    });
   });
 });
