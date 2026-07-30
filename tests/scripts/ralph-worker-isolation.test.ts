@@ -13,6 +13,7 @@ import {
   isolatedCodexRuntimeConfiguration,
   processExitCode,
   removeSanitizedWorkerGitView,
+  sanitizedWorkerGitViewRecoveryAction,
   unprivilegedWslCommandArguments,
   unprivilegedWslIdentityIsSafe,
   unprivilegedWslIdentityProbeArguments,
@@ -46,6 +47,30 @@ function gitWithoutStdin(args: string[], options: { input?: string } = {}) {
 }
 
 describe("Ralph sanitized worker Git view", () => {
+  it("rebuilds stale metadata only before the durable merge begins", () => {
+    expect(
+      sanitizedWorkerGitViewRecoveryAction({
+        mergeActive: false,
+        recordedBaseSha: "old-head",
+        expectedBaseSha: "pr-head",
+      }),
+    ).toBe("rebuild");
+    expect(
+      sanitizedWorkerGitViewRecoveryAction({
+        mergeActive: true,
+        recordedBaseSha: "pr-head",
+        expectedBaseSha: "pr-head",
+      }),
+    ).toBe("adopt");
+    expect(
+      sanitizedWorkerGitViewRecoveryAction({
+        mergeActive: true,
+        recordedBaseSha: "old-head",
+        expectedBaseSha: "pr-head",
+      }),
+    ).toBe("unsafe");
+  });
+
   it.each([
     ".github/workflows/e2e.yml",
     ".gitattributes",
