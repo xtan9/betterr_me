@@ -11,6 +11,7 @@ const mockRemindersDB = {
   getRemindersBySource: vi.fn(),
   getReminder: vi.fn(),
   updateReminder: vi.fn(),
+  transitionCalendarEventReminder: vi.fn(),
   deleteReminder: vi.fn(),
 };
 
@@ -309,6 +310,95 @@ describe("PATCH /api/reminders/[id]", () => {
 
     expect(response.status).toBe(409);
     expect(mockRemindersDB.updateReminder).not.toHaveBeenCalled();
+  });
+
+  it("allows calendar-event dismissal through the delivery transition", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+    mockRemindersDB.transitionCalendarEventReminder.mockResolvedValue({ id: "r1", status: "sent" });
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({ status: "sent" }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+    expect(response.status).toBe(200);
+    expect(mockRemindersDB.transitionCalendarEventReminder).toHaveBeenCalledWith(
+      "user-123",
+      "r1",
+      { status: "sent", sent_at: undefined },
+    );
+  });
+
+  it("allows calendar-event snooze through the delivery transition", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+    mockRemindersDB.transitionCalendarEventReminder.mockResolvedValue({ id: "r1", status: "pending" });
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({ status: "pending", fire_at: "2026-04-10T15:00:00Z" }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+    expect(response.status).toBe(200);
+    expect(mockRemindersDB.transitionCalendarEventReminder).toHaveBeenCalledWith(
+      "user-123",
+      "r1",
+      { status: "pending", fire_at: "2026-04-10T15:00:00Z", sent_at: undefined },
+    );
+  });
+
+  it("preserves the legacy calendar-event snoozed status", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+    mockRemindersDB.transitionCalendarEventReminder.mockResolvedValue({ id: "r1", status: "snoozed" });
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({ status: "snoozed" }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+    expect(response.status).toBe(200);
+    expect(mockRemindersDB.transitionCalendarEventReminder).toHaveBeenCalledWith(
+      "user-123",
+      "r1",
+      { status: "snoozed", sent_at: undefined },
+    );
+  });
+
+  it("rejects sent_at on a calendar-event snooze before calling the RPC", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "pending",
+          fire_at: "2026-04-10T15:00:00Z",
+          sent_at: "2026-04-10T14:00:00Z",
+        }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+    expect(response.status).toBe(400);
+    expect(mockRemindersDB.transitionCalendarEventReminder).not.toHaveBeenCalled();
+  });
+
+  it("refuses calendar-event channel mutation", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({ channels: ["email"] }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+    expect(response.status).toBe(409);
+    expect(mockRemindersDB.transitionCalendarEventReminder).not.toHaveBeenCalled();
   });
 
   it("updates reminder and returns 200", async () => {

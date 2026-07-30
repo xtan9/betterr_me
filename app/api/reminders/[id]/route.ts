@@ -45,7 +45,42 @@ export async function PATCH(
       return NextResponse.json({ error: "Reminder not found" }, { status: 404 });
     }
     if (isCalendarEventReminder(existing.source_type)) {
-      return lifecycleConflict();
+      const update = validation.data;
+      const keys = Object.keys(update);
+      if (
+        (update.status === "pending" || update.status === "snoozed") &&
+        update.sent_at !== undefined &&
+        update.sent_at !== null
+      ) {
+        return NextResponse.json(
+          { error: "A snoozed reminder cannot set sent_at" },
+          { status: 400 },
+        );
+      }
+      const isTerminalTransition =
+        (update.status === "sent" || update.status === "failed") &&
+        keys.every((key) => ["status", "sent_at"].includes(key));
+      const isSnoozeTransition =
+        update.status === "pending" &&
+        typeof update.fire_at === "string" &&
+        keys.every((key) => ["status", "fire_at", "sent_at"].includes(key));
+      const isLegacySnoozeTransition =
+        update.status === "snoozed" &&
+        keys.every((key) => ["status", "sent_at"].includes(key));
+      if (!isTerminalTransition && !isSnoozeTransition && !isLegacySnoozeTransition) {
+        return lifecycleConflict();
+      }
+      const reminder = await remindersDB.transitionCalendarEventReminder(
+        user.id,
+        id,
+        isSnoozeTransition
+          ? { status: "pending", fire_at: update.fire_at, sent_at: update.sent_at }
+          : {
+              status: update.status as "sent" | "failed" | "snoozed",
+              sent_at: update.sent_at,
+            },
+      );
+      return NextResponse.json({ reminder });
     }
     const reminder = await remindersDB.updateReminder(
       user.id,

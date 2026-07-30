@@ -22,7 +22,10 @@ DECLARE
   requested_intent JSONB;
   should_recalculate BOOLEAN := false;
 BEGIN
-  IF auth.uid() IS DISTINCT FROM p_user_id THEN
+  IF COALESCE(
+    NULLIF(current_setting('request.jwt.claim.sub', true), ''),
+    NULLIF(current_setting('request.jwt.claims', true), '')::JSONB->>'sub'
+  )::UUID IS DISTINCT FROM p_user_id THEN
     RAISE EXCEPTION 'Cannot update a schedule for another user';
   END IF;
 

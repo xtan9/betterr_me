@@ -38,6 +38,24 @@ export class RemindersDB {
     return data;
   }
 
+  async transitionCalendarEventReminder(
+    userId: string,
+    reminderId: string,
+    transition: { status: "pending" | "sent" | "failed" | "snoozed"; fire_at?: string; sent_at?: string | null },
+  ): Promise<Reminder> {
+    const { data, error } = await this.supabase
+      .rpc("transition_calendar_event_reminder", {
+        p_user_id: userId,
+        p_reminder_id: reminderId,
+        p_status: transition.status,
+        p_fire_at: transition.fire_at ?? null,
+        p_sent_at: transition.sent_at ?? null,
+      })
+      .single();
+    if (error) throw error;
+    return data as Reminder;
+  }
+
   async getPendingReminders(beforeTime: string): Promise<Reminder[]> {
     const { data, error } = await this.supabase
       .from('reminders')

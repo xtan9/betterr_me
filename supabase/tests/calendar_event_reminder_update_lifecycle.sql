@@ -15,56 +15,38 @@ select public.ralph_ci_create_auth_user(
 
 set local role authenticated;
 select set_config(
-  'request.jwt.claim.sub',
-  '49100000-0000-0000-0000-000000000002',
+  'request.jwt.claims',
+  '{"sub":"49100000-0000-0000-0000-000000000002"}',
   true
 );
 
-insert into public.calendar_events (
-  id,
-  user_id,
-  title,
-  start_date,
-  start_time,
-  end_date,
-  end_time
-)
-values (
-  '49100000-0000-0000-0000-000000000102',
-  '49100000-0000-0000-0000-000000000002',
-  'Other user event',
-  '2026-08-04',
-  '09:00:00',
-  '2026-08-04',
-  '10:00:00'
-);
-
-insert into public.reminders (
-  id,
-  user_id,
-  source_type,
-  source_id,
-  reminder_type,
-  relative_minutes,
-  channels,
-  status,
-  fire_at
-)
-values (
-  '49100000-0000-0000-0000-000000000202',
-  '49100000-0000-0000-0000-000000000002',
-  'calendar_event',
-  '49100000-0000-0000-0000-000000000102',
-  'relative',
-  20,
-  array['push'],
-  'pending',
-  '2026-08-04 08:40:00+00'
-);
+create temporary table ralph_491_other_ids(event_id uuid, reminder_id uuid) on commit drop;
+insert into ralph_491_other_ids
+select
+  (created->'event'->>'id')::uuid,
+  (created->'reminders'->0->>'id')::uuid
+from (
+  select public.create_calendar_event_with_reminder(
+    '49100000-0000-0000-0000-000000000002',
+    '{
+      "title": "Other user event",
+      "start_date": "2026-08-04",
+      "start_time": "09:00:00",
+      "end_date": "2026-08-04",
+      "end_time": "10:00:00"
+    }'::jsonb,
+    '[{
+      "reminder_type": "relative",
+      "relative_minutes": 20,
+      "absolute_time": null,
+      "channels": ["push"]
+    }]'::jsonb
+  ) created
+) seed;
 
 select set_config(
-  'request.jwt.claim.sub',
-  '49100000-0000-0000-0000-000000000001',
+  'request.jwt.claims',
+  '{"sub":"49100000-0000-0000-0000-000000000001"}',
   true
 );
 
@@ -97,6 +79,48 @@ begin
   ) then
     raise exception 'PUBLIC update lifecycle execute privilege leaked';
   end if;
+
+  if has_table_privilege('authenticated', 'public.calendar_events', 'UPDATE') then
+    raise exception 'authenticated retained direct calendar event update privilege';
+  end if;
+
+  if not has_function_privilege(
+    'authenticated',
+    'public.transition_calendar_event_reminder(uuid,uuid,text,timestamptz,timestamptz)',
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated lacks reminder transition execute privilege';
+  end if;
+
+  if exists (
+    select 1 from pg_roles
+    where rolname = 'betterr_calendar_lifecycle'
+      and (rolcanlogin or rolsuper or rolcreatedb or rolcreaterole
+        or rolinherit or rolreplication or rolbypassrls)
+  ) then
+    raise exception 'lifecycle owner role has unsafe attributes';
+  end if;
+
+  if has_schema_privilege('betterr_calendar_lifecycle', 'public', 'CREATE') then
+    raise exception 'lifecycle owner retained schema create privilege';
+  end if;
+
+  if exists (
+    select 1
+    from pg_proc routine
+    where routine.oid in (
+      'public.create_calendar_event_with_reminder(uuid,jsonb,jsonb)'::regprocedure,
+      'public.update_calendar_event_with_reminders(uuid,uuid,jsonb,jsonb)'::regprocedure,
+      'public.transition_calendar_event_reminder(uuid,uuid,text,timestamptz,timestamptz)'::regprocedure
+    )
+      and (
+        pg_get_userbyid(routine.proowner) <> 'betterr_calendar_lifecycle'
+        or not routine.prosecdef
+        or not (routine.proconfig @> array['search_path=pg_catalog, public'])
+      )
+  ) then
+    raise exception 'lifecycle function ownership or security settings are unsafe';
+  end if;
 end
 $$;
 
@@ -106,6 +130,7 @@ declare
   outcome jsonb;
   event_id uuid;
   original_reminder_id uuid;
+  snoozed_reminder_id uuid;
 begin
   created := public.create_calendar_event_with_reminder(
     '49100000-0000-0000-0000-000000000001',
@@ -125,6 +150,58 @@ begin
   );
   event_id := (created->'event'->>'id')::uuid;
   original_reminder_id := (created->'reminders'->0->>'id')::uuid;
+
+  begin
+    update public.calendar_events set title = 'Direct bypass' where id = event_id;
+    raise exception 'direct authenticated event update unexpectedly succeeded';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  begin
+    insert into public.reminders (
+      user_id, source_type, source_id, reminder_type,
+      relative_minutes, channels, fire_at
+    ) values (
+      '49100000-0000-0000-0000-000000000001', 'calendar_event', event_id,
+      'relative', 5, array['push'], '2026-08-03 09:55:00+00'
+    );
+    raise exception 'direct calendar reminder insert unexpectedly succeeded';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  update public.reminders set fire_at = '2026-08-03 09:00:00+00'
+  where id = original_reminder_id;
+  if found then
+    raise exception 'direct calendar reminder update unexpectedly succeeded';
+  end if;
+
+  delete from public.reminders where id = original_reminder_id;
+  if found then
+    raise exception 'direct calendar reminder delete unexpectedly succeeded';
+  end if;
+
+  insert into public.reminders (
+    user_id, source_type, source_id, reminder_type,
+    absolute_time, channels, fire_at
+  ) values (
+    '49100000-0000-0000-0000-000000000001', 'task',
+    '49100000-0000-0000-0000-000000000301', 'absolute',
+    '2026-08-03 09:00:00+00', array['push'], '2026-08-03 09:00:00+00'
+  );
+  update public.reminders set fire_at = '2026-08-03 09:05:00+00'
+  where user_id = '49100000-0000-0000-0000-000000000001'
+    and source_type = 'task';
+  if not found then
+    raise exception 'non-calendar reminder update was blocked';
+  end if;
+  delete from public.reminders
+  where user_id = '49100000-0000-0000-0000-000000000001'
+    and source_type = 'task';
+  if not found then
+    raise exception 'non-calendar reminder delete was blocked';
+  end if;
 
   -- Moving the event with omitted reminder intent preserves its relationship
   -- and recalculates its derived schedule.
@@ -203,29 +280,105 @@ begin
     raise exception 'moving with changed reminder intent did not reconcile: %', outcome;
   end if;
 
-  insert into public.reminders (
-    user_id,
-    source_type,
-    source_id,
-    reminder_type,
-    relative_minutes,
-    absolute_time,
-    channels,
-    status,
-    fire_at,
-    sent_at
-  )
-  values (
+  perform public.transition_calendar_event_reminder(
     '49100000-0000-0000-0000-000000000001',
-    'calendar_event',
+    (outcome->'reminders'->0->>'id')::uuid,
+    'pending',
+    '2026-08-03 12:45:00+00',
+    null
+  );
+  if not exists (
+    select 1 from public.reminders
+    where id = (outcome->'reminders'->0->>'id')::uuid
+      and status = 'pending'
+      and fire_at = timestamptz '2026-08-03 12:45:00+00'
+  ) then
+    raise exception 'calendar reminder snooze transition failed';
+  end if;
+
+  snoozed_reminder_id := (outcome->'reminders'->0->>'id')::uuid;
+  perform public.transition_calendar_event_reminder(
+    '49100000-0000-0000-0000-000000000001',
+    snoozed_reminder_id,
+    'snoozed'
+  );
+
+  begin
+    perform public.transition_calendar_event_reminder(
+      '49100000-0000-0000-0000-000000000001',
+      snoozed_reminder_id,
+      'pending',
+      '2026-08-03 12:50:00+00'
+    );
+    raise exception 'inactive snoozed reminder was resurrected';
+  exception
+    when raise_exception then
+      if sqlerrm <> 'Inactive snoozed calendar reminders cannot be transitioned' then
+        raise;
+      end if;
+  end;
+
+  outcome := public.update_calendar_event_with_reminders(
+    '49100000-0000-0000-0000-000000000001',
     event_id,
-    'relative',
-    60,
-    null,
-    array['push'],
+    '{}'::jsonb,
+    '[{
+      "reminder_type": "relative",
+      "relative_minutes": 30,
+      "absolute_time": null,
+      "channels": ["push"]
+    }]'::jsonb
+  );
+  if jsonb_array_length(outcome->'reminders') is distinct from 1
+    or (select count(*) from public.reminders
+        where source_id = event_id and status = 'pending') is distinct from 1
+    or not exists (select 1 from public.reminders
+        where id = snoozed_reminder_id and status = 'snoozed') then
+    raise exception 'snoozed history produced duplicate active reminders: %', outcome;
+  end if;
+
+  perform public.transition_calendar_event_reminder(
+    '49100000-0000-0000-0000-000000000001',
+    (outcome->'reminders'->0->>'id')::uuid,
     'sent',
-    '2026-08-03 10:00:00+00',
+    null,
     '2026-08-03 10:00:01+00'
+  );
+
+  -- Terminal delivery history is immutable and cannot be scheduled again.
+  begin
+    perform public.transition_calendar_event_reminder(
+      '49100000-0000-0000-0000-000000000001',
+      (outcome->'reminders'->0->>'id')::uuid,
+      'pending',
+      '2026-08-03 13:00:00+00'
+    );
+    raise exception 'terminal reminder was resurrected';
+  exception
+    when raise_exception then
+      if sqlerrm <> 'Terminal calendar reminders cannot be transitioned' then
+        raise;
+      end if;
+  end;
+
+  begin
+    perform public.transition_calendar_event_reminder(
+      '49100000-0000-0000-0000-000000000001',
+      (outcome->'reminders'->0->>'id')::uuid,
+      'failed'
+    );
+    raise exception 'terminal reminder was reclassified';
+  exception
+    when raise_exception then
+      if sqlerrm <> 'Terminal calendar reminders cannot be transitioned' then
+        raise;
+      end if;
+  end;
+
+  perform public.transition_calendar_event_reminder(
+    '49100000-0000-0000-0000-000000000001',
+    (outcome->'reminders'->0->>'id')::uuid,
+    'sent'
   );
 
   -- Replacing reminder intent creates exactly the requested relationship.
@@ -338,27 +491,20 @@ begin
   from public.calendar_events
   where user_id = '49100000-0000-0000-0000-000000000001';
 
-  insert into public.reminders (
-    user_id,
-    source_type,
-    source_id,
-    reminder_type,
-    relative_minutes,
-    absolute_time,
-    channels,
-    fire_at
-  )
-  values (
+  perform public.update_calendar_event_with_reminders(
     '49100000-0000-0000-0000-000000000001',
-    'calendar_event',
     event_id,
-    'relative',
-    10,
-    null,
-    array['push'],
-    '2026-08-03 10:50:00+00'
-  )
-  returning id into reminder_id;
+    '{}'::jsonb,
+    '[{
+      "reminder_type": "relative",
+      "relative_minutes": 10,
+      "absolute_time": null,
+      "channels": ["push"]
+    }]'::jsonb
+  );
+  select id into reminder_id
+  from public.reminders
+  where source_id = event_id and status = 'pending';
 
   begin
     perform public.update_calendar_event_with_reminders(
@@ -395,11 +541,16 @@ $$;
 -- The authenticated caller cannot spoof another owner or reach another
 -- owner's event through an otherwise valid caller identity.
 do $$
+declare
+  other_event_id uuid;
+  other_reminder_id uuid;
 begin
+  select event_id, reminder_id into other_event_id, other_reminder_id
+  from ralph_491_other_ids;
   begin
     perform public.update_calendar_event_with_reminders(
       '49100000-0000-0000-0000-000000000002',
-      '49100000-0000-0000-0000-000000000102',
+      other_event_id,
       '{"title": "Spoofed owner"}'::jsonb,
       '[]'::jsonb
     );
@@ -414,7 +565,7 @@ begin
   begin
     perform public.update_calendar_event_with_reminders(
       '49100000-0000-0000-0000-000000000001',
-      '49100000-0000-0000-0000-000000000102',
+      other_event_id,
       '{"title": "Cross-user event"}'::jsonb,
       '[]'::jsonb
     );
@@ -422,21 +573,38 @@ begin
   exception
     when no_data_found then null;
   end;
+
+  begin
+    perform public.transition_calendar_event_reminder(
+      '49100000-0000-0000-0000-000000000001',
+      other_reminder_id,
+      'sent'
+    );
+    raise exception 'cross-user reminder transition unexpectedly succeeded';
+  exception
+    when no_data_found then null;
+  end;
 end
 $$;
 
 select set_config(
-  'request.jwt.claim.sub',
-  '49100000-0000-0000-0000-000000000002',
+  'request.jwt.claims',
+  '{"sub":"49100000-0000-0000-0000-000000000002"}',
   true
 );
 
 do $$
+declare
+  other_event_id uuid;
+  other_reminder_id uuid;
 begin
+  select event_id, reminder_id
+  into other_event_id, other_reminder_id
+  from ralph_491_other_ids;
   if not exists (
     select 1
     from public.calendar_events
-    where id = '49100000-0000-0000-0000-000000000102'
+    where id = other_event_id
       and user_id = '49100000-0000-0000-0000-000000000002'
       and title = 'Other user event'
       and start_time = time '09:00:00'
@@ -447,9 +615,9 @@ begin
   if not exists (
     select 1
     from public.reminders
-    where id = '49100000-0000-0000-0000-000000000202'
+    where id = other_reminder_id
       and user_id = '49100000-0000-0000-0000-000000000002'
-      and source_id = '49100000-0000-0000-0000-000000000102'
+      and source_id = other_event_id
       and relative_minutes = 20
       and status = 'pending'
       and fire_at = timestamptz '2026-08-04 08:40:00+00'

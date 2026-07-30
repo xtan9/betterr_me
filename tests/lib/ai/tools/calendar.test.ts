@@ -74,6 +74,27 @@ describe("calendarTools", () => {
     expect(mockUpdateEvent).not.toHaveBeenCalled();
   });
 
+  it("updateEvent sends complete reminder intent through the lifecycle", async () => {
+    mockLifecycleUpdate.mockResolvedValue({ event: { id: "e1" }, reminders: [] });
+    await findTool("updateEvent").execute(
+      {
+        eventId: "e1",
+        reminders: [
+          { reminderType: "relative", relativeMinutes: 20, channels: ["push", "email"] },
+          { reminderType: "absolute", absoluteTime: "2026-04-15T16:00:00Z", channels: ["push"] },
+        ],
+      },
+      makeCtx(),
+    );
+    expect(mockLifecycleUpdate).toHaveBeenCalledWith("user-123", "e1", {
+      event: {},
+      reminders: [
+        { reminder_type: "relative", relative_minutes: 20, absolute_time: null, channels: ["push", "email"] },
+        { reminder_type: "absolute", relative_minutes: null, absolute_time: "2026-04-15T16:00:00Z", channels: ["push"] },
+      ],
+    });
+  });
+
   it("deleteEvent verifies existence then deletes", async () => {
     const ctx = makeCtx();
     mockGetEvent.mockResolvedValue({ id: "e1" });

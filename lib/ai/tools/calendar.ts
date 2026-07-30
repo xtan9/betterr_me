@@ -3,6 +3,18 @@ import { CalendarEventsDB } from "@/lib/db";
 import { SchedulingLifecycle } from "@/lib/scheduling/create";
 import type { ToolDefinition, ToolContext } from "./types";
 
+type AiEventReminder =
+  | {
+      reminderType: "relative";
+      relativeMinutes: number;
+      channels: Array<"push" | "email">;
+    }
+  | {
+      reminderType: "absolute";
+      absoluteTime: string;
+      channels: Array<"push" | "email">;
+    };
+
 export function calendarTools(): ToolDefinition[] {
   return [
     {
@@ -74,11 +86,27 @@ export function calendarTools(): ToolDefinition[] {
           .optional()
           .describe("New end time in HH:MM format"),
         location: z.string().optional().describe("New location"),
+        reminders: z
+          .array(
+            z.discriminatedUnion("reminderType", [
+              z.object({
+                reminderType: z.literal("relative"),
+                relativeMinutes: z.number().int().nonnegative(),
+                channels: z.array(z.enum(["push", "email"])).min(1),
+              }),
+              z.object({
+                reminderType: z.literal("absolute"),
+                absoluteTime: z.string().datetime(),
+                channels: z.array(z.enum(["push", "email"])).min(1),
+              }),
+            ]),
+          )
+          .optional()
+          .describe("Complete desired reminder intent; omit to preserve existing reminders"),
       }),
       execute: async (params, ctx: ToolContext) => {
         const lifecycle = new SchedulingLifecycle(ctx.supabase);
-        const { eventId, startDate, endDate, startTime, endTime, ...rest } =
-          params;
+        const { eventId, startDate, endDate, startTime, endTime, reminders, ...rest } = params;
         const updates: Record<string, unknown> = { ...rest };
         if (startDate !== undefined) updates.start_date = startDate;
         if (endDate !== undefined) updates.end_date = endDate;
@@ -87,7 +115,25 @@ export function calendarTools(): ToolDefinition[] {
         for (const key of Object.keys(updates)) {
           if (updates[key] === undefined) delete updates[key];
         }
-        return lifecycle.update(ctx.userId, eventId, { event: updates });
+        return lifecycle.update(ctx.userId, eventId, {
+          event: updates,
+          ...(reminders === undefined
+            ? {}
+            : {
+                reminders: reminders.map((reminder: AiEventReminder) => ({
+                  reminder_type: reminder.reminderType,
+                  relative_minutes:
+                    reminder.reminderType === "relative"
+                      ? reminder.relativeMinutes
+                      : null,
+                  absolute_time:
+                    reminder.reminderType === "absolute"
+                      ? reminder.absoluteTime
+                      : null,
+                  channels: reminder.channels,
+                })),
+              }),
+        });
       },
     },
     {
