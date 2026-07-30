@@ -92,6 +92,7 @@ import {
   pullRequestCheckRetryKey,
   pullRequestRecoveryErrorDisposition,
   reconcilePullRequestBacklog,
+  staleBlockedRepairPreservationPatch,
 } from "./pull-request-recovery.mjs";
 import {
   WORKER_PROTECTED_PATHS,
@@ -4060,6 +4061,21 @@ async function preserveBlockedPullRequestRepair(
       new Error("pull request was not safely drafted before repair preservation"),
       { failureKind: "safety" },
     );
+  }
+  if (issueState.blockedPrDraftVerifiedAt && worktreePath && fs.existsSync(worktreePath)) {
+    const checkoutDirty = Boolean(
+      (
+        await git(["-C", worktreePath, "status", "--porcelain"])
+      ).stdout.trim(),
+    );
+    const stalePreservationPatch = staleBlockedRepairPreservationPatch(
+      issueState,
+      checkoutDirty,
+    );
+    if (stalePreservationPatch) {
+      state = moveIssue(state, number, "pr-repairing", stalePreservationPatch);
+      issueState = state.issues[String(number)];
+    }
   }
   if (issueState.blockedPrDraftVerifiedAt) {
     if (issueState.worktreePath) {

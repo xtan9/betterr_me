@@ -57,6 +57,8 @@ describe("Ralph sanitized worker Git view", () => {
     "supabase/seed.sql",
     "supabase/tests/e2e_local_authenticated_grants.sql",
     "supabase/tests/finance_cushion_rls.sql",
+    "supabase/tests/oauth_refresh_token_lifecycle.sql",
+    "supabase/tests/oauth_refresh_token_upgrade.sql",
     "AGENTS.md",
     ".env.local",
     "nested/private.pem",
