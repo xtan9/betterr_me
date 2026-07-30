@@ -68,6 +68,8 @@ export function pullRequestRecoveryFingerprint(snapshot) {
     originalFailureKind: snapshot.originalFailureKind ?? null,
     conflictRepairAttempts: snapshot.conflictRepairAttempts ?? 0,
     checksAvailable: snapshot.checksAvailable !== false,
+    requiredCheckEvidenceReady:
+      snapshot.requiredCheckEvidenceReady !== false,
     latestMainSha: snapshot.latestMainSha ?? null,
     headContainsLatestMain: snapshot.headContainsLatestMain !== false,
     headContainsPendingBase: snapshot.headContainsPendingBase === true,
@@ -333,6 +335,24 @@ function recoveryPlan(snapshot, action, details = {}) {
   };
 }
 
+export function requiredCheckEvidence(checks, requiredNames = []) {
+  const byName = new Map(
+    (checks ?? []).map((check) => [
+      String(check.name),
+      String(check.bucket ?? "").toLowerCase(),
+    ]),
+  );
+  const missing = requiredNames.filter((name) => !byName.has(name));
+  const notPassed = requiredNames.filter(
+    (name) => byName.has(name) && byName.get(name) !== "pass",
+  );
+  return {
+    ready: missing.length === 0 && notPassed.length === 0,
+    missing,
+    notPassed,
+  };
+}
+
 export function completedConflictRepairPatch(issueState, previousCommit, at) {
   if (
     issueState?.pendingConflictRepair?.previousHead !== previousCommit ||
@@ -566,6 +586,12 @@ export function planPullRequestRecovery(snapshot) {
     return recoveryPlan(snapshot, "human-gate", {
       reason: "required checks failed after the bounded coding repair budget",
       failedChecks: failures.map((check) => check.name).sort(),
+    });
+  }
+
+  if (snapshot.requiredCheckEvidenceReady === false) {
+    return recoveryPlan(snapshot, "wait", {
+      reason: "required external verification evidence has not passed",
     });
   }
 
