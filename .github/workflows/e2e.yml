@@ -27,7 +27,7 @@ jobs:
       e2e_supabase: ${{ steps.classify.outputs.e2e_supabase }}
       e2e_label: ${{ steps.classify.outputs.e2e_label }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Classify changes
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
@@ -74,7 +74,7 @@ jobs:
 
       - name: Setup disposable Supabase for pull-request E2E
         if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v3
         with:
           version: 2.109.1
 
@@ -107,19 +107,19 @@ jobs:
         run: bash scripts/ci/run-ralph-sql-tests.sh
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Restore Next.js build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .next/cache
           key: ${{ runner.os }}-nextjs-e2e-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
@@ -213,7 +213,7 @@ jobs:
           fi
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-failure-${{ github.run_id }}

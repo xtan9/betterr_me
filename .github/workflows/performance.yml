@@ -18,7 +18,7 @@ jobs:
     outputs:
       performance: ${{ steps.classify.outputs.performance }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Classify changes
@@ -37,7 +37,7 @@ jobs:
     outputs:
       has-secrets: ${{ steps.check.outputs.has-secrets }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check required secrets
         id: check
         uses: ./.github/actions/check-secrets
@@ -66,15 +66,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       - name: Install dependencies

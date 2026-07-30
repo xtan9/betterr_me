@@ -59,6 +59,7 @@ describe("quality check selection", () => {
         smokeTests: [
           "tests/scripts/classify-changes.test.ts",
           "tests/scripts/detect-pull-request-validated-push.test.ts",
+          "tests/scripts/github-actions-runtime-policy.test.ts",
           "tests/scripts/select-quality-checks.test.ts",
         ],
         label: "CI smoke",
@@ -80,6 +81,7 @@ describe("quality check selection", () => {
     ])).toMatchObject({
       changedTests: false,
       smokeTests: [
+        "tests/scripts/github-actions-runtime-policy.test.ts",
         "tests/scripts/reconcile-scheduled-workflow-issue.test.ts",
       ],
       label: "CI smoke",
@@ -89,9 +91,31 @@ describe("quality check selection", () => {
       ".github/workflows/production-smoke.yml",
     ])).toMatchObject({
       changedTests: false,
-      smokeTests: ["tests/scripts/production-smoke.test.ts"],
+      smokeTests: [
+        "tests/scripts/github-actions-runtime-policy.test.ts",
+        "tests/scripts/production-smoke.test.ts",
+      ],
       label: "CI smoke",
     });
+  });
+
+  it("guards every workflow change with the action runtime policy", () => {
+    for (const file of [
+      ".github/workflows/db-migrate.yml",
+      ".github/workflows/mutation-testing.yml",
+      ".github/workflows/performance.yml",
+      ".github/workflows/release-scope.yml",
+      ".github/workflows/update-snapshots.yml",
+    ]) {
+      expect(selectQualityChecks([file])).toMatchObject({
+        quality: true,
+        changedTests: false,
+        smokeTests: [
+          "tests/scripts/github-actions-runtime-policy.test.ts",
+        ],
+        label: "CI smoke",
+      });
+    }
   });
 
   it("combines related tests with CI smoke tests for mixed changes", () => {
@@ -103,6 +127,7 @@ describe("quality check selection", () => {
       smokeTests: [
         "tests/scripts/classify-changes.test.ts",
         "tests/scripts/detect-pull-request-validated-push.test.ts",
+        "tests/scripts/github-actions-runtime-policy.test.ts",
         "tests/scripts/select-quality-checks.test.ts",
       ],
       label: "changed code + CI smoke",
