@@ -575,8 +575,20 @@ values
     null
   );
 
-select dblink_connect('refresh_a', 'dbname=' || current_database());
-select dblink_connect('refresh_b', 'dbname=' || current_database());
+select dblink_connect(
+  'refresh_a',
+  'hostaddr=' || host(inet_server_addr())
+    || ' port=' || inet_server_port()
+    || ' dbname=' || current_database()
+    || ' user=postgres password=postgres'
+);
+select dblink_connect(
+  'refresh_b',
+  'hostaddr=' || host(inet_server_addr())
+    || ' port=' || inet_server_port()
+    || ' dbname=' || current_database()
+    || ' user=postgres password=postgres'
+);
 
 -- Hold the family lock until both calls are in flight. Whichever RPC acquires
 -- it first, the reuse response must leave no descendant usable.
