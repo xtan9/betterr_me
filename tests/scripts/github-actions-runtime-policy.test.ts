@@ -33,7 +33,7 @@ const automationFiles = [
 const approvedActionMajors = new Map([
   ["actions/cache", "v6"],
   ["actions/checkout", "v7"],
-  ["actions/github-script", "v7"],
+  ["actions/github-script", "v9"],
   ["actions/setup-node", "v7"],
   ["actions/upload-artifact", "v7"],
   ["pnpm/action-setup", "v6"],
@@ -101,6 +101,22 @@ updates:
 
     expect(configuredVersions).not.toHaveLength(0);
     expect(new Set(configuredVersions)).toEqual(new Set(["24"]));
+  });
+
+  it("keeps github-script v9 blocks compatible with its injected context", () => {
+    const incompatiblePatterns = automationFiles.flatMap(({ name, contents }) =>
+      [
+        /require\(\s*['"]@actions\/github['"]\s*\)/g,
+        /\b(?:const|let)\s+getOctokit\b/g,
+      ].flatMap((pattern) =>
+        [...contents.matchAll(pattern)].map((match) => ({
+          workflow: name,
+          declaration: match[0],
+        }))
+      )
+    );
+
+    expect(incompatiblePatterns).toEqual([]);
   });
 
   it("uses the shared dependency setup action in every JavaScript job", () => {
