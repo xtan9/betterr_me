@@ -26,6 +26,31 @@ if [[ "${EVENT_NAME:-}" != "pull_request" && "${EVENT_NAME:-}" != "push" ]]; the
   exit 0
 fi
 
+# Pull requests already validate their exact head before merge. A push created
+# by merging one of those pull requests only needs the separate production
+# smoke; direct pushes still flow through the normal changed-file selection.
+if [[ "${EVENT_NAME:-}" == "push" && "${VALIDATED_BY_PULL_REQUEST:-false}" == "true" ]]; then
+  {
+    echo "quality=false"
+    echo "full_tests=false"
+    echo "full_lint=false"
+    echo "changed_tests=false"
+    echo "quality_smoke_tests="
+    echo "quality_label=already validated"
+    echo "migrations=false"
+    echo "e2e=false"
+    echo "e2e_full=false"
+    echo "e2e_specs="
+    echo "e2e_runway=false"
+    echo "e2e_visual=false"
+    echo "e2e_supabase=false"
+    echo "e2e_label=not needed"
+    echo "performance=false"
+    echo "base_sha=${BASE_SHA:-}"
+  } >> "$GITHUB_OUTPUT"
+  exit 0
+fi
+
 if [[ -z "${BASE_SHA:-}" || -z "${HEAD_SHA:-}" ]]; then
   echo "::warning::Missing comparison SHA; running all checks."
   {
