@@ -8,6 +8,11 @@ import {
   codexStartupEventsReady,
   codexSessionStarted,
   ensureSanitizedWorkerGitView,
+  immutableDependencyExecutableDiscoveryArguments,
+  immutableDependencyExecutablePaths,
+  immutableDependencyExecutableRepairArguments,
+  immutableDependencyExecutableStatArguments,
+  immutableDependencyExecutableStatsAreSafe,
   isolatedCodexAuthInstallRequired,
   isolatedCodexReadablePaths,
   isolatedCodexRuntimeConfiguration,
@@ -52,6 +57,67 @@ function gitWithoutStdin(args: string[], options: { input?: string } = {}) {
 }
 
 describe("Ralph sanitized worker Git view", () => {
+  it("repairs only immutable Linux esbuild binaries without making them writable", () => {
+    const root = "/var/lib/betterr-me-ralph/deps-source/node_modules";
+    const selector = "*/node_modules/@esbuild/linux-x64/bin/esbuild";
+    const binaries = [
+      `${root}/.pnpm/@esbuild+linux-x64@0.27.2/node_modules/@esbuild/linux-x64/bin/esbuild`,
+      `${root}/.pnpm/@esbuild+linux-x64@0.27.3/node_modules/@esbuild/linux-x64/bin/esbuild`,
+    ];
+    expect(immutableDependencyExecutableDiscoveryArguments(root)).toEqual([
+      "find",
+      root,
+      "-path",
+      selector,
+      "-type",
+      "f",
+      "-print",
+    ]);
+    expect(
+      immutableDependencyExecutablePaths(`${binaries.join("\n")}\n`, root),
+    ).toEqual(binaries);
+    expect(immutableDependencyExecutableStatArguments(binaries)).toEqual([
+      "stat",
+      "-c",
+      "%U:%G:%a",
+      ...binaries,
+    ]);
+    expect(immutableDependencyExecutableRepairArguments(binaries)).toEqual([
+      "chmod",
+      "0555",
+      ...binaries,
+    ]);
+    expect(
+      immutableDependencyExecutableStatsAreSafe(
+        "root:root:444\nroot:root:555\n",
+        binaries.length,
+      ),
+    ).toBe(true);
+    expect(
+      immutableDependencyExecutableStatsAreSafe(
+        "root:root:555\nroot:root:555\n",
+        binaries.length,
+        "555",
+      ),
+    ).toBe(true);
+    expect(
+      immutableDependencyExecutableStatsAreSafe(
+        "nobody:root:444\nroot:root:555\n",
+        binaries.length,
+      ),
+    ).toBe(false);
+    expect(
+      immutableDependencyExecutableStatsAreSafe(
+        "root:root:555\nroot:root:755\n",
+        binaries.length,
+        "555",
+      ),
+    ).toBe(false);
+    expect(() =>
+      immutableDependencyExecutablePaths("/tmp/esbuild\n", root),
+    ).toThrow("unexpected immutable esbuild path");
+  });
+
   it("rebuilds stale metadata only before the durable merge begins", () => {
     expect(
       sanitizedWorkerGitViewRecoveryAction({
