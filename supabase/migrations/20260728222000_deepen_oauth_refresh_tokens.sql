@@ -242,9 +242,19 @@ LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  DELETE FROM oauth_refresh_tokens
-  WHERE (revoked = false AND expires_at < expired_before)
-     OR (revoked = true AND revoked_at < revoked_before);
+  DELETE FROM oauth_refresh_tokens AS candidate
+  WHERE (candidate.revoked = false AND candidate.expires_at < expired_before)
+     OR (
+       candidate.revoked = true
+       AND candidate.revoked_at < revoked_before
+       AND NOT EXISTS (
+         SELECT 1
+         FROM oauth_refresh_tokens AS active_family_member
+         WHERE active_family_member.family_id = candidate.family_id
+           AND active_family_member.revoked = false
+           AND active_family_member.expires_at >= expired_before
+       )
+     );
 $$;
 
 REVOKE ALL ON FUNCTION cleanup_oauth_refresh_token_families(

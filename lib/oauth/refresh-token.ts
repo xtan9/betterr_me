@@ -112,6 +112,7 @@ export function createRefreshTokenRotator({
         throw new Error("Consumed refresh token unexpectedly rotated");
       }
 
+      const accessToken = await issueAccessToken(resolution.context);
       const nextRefreshToken = generateToken();
       const result = await store.rotate({
         currentTokenHash,
@@ -123,7 +124,6 @@ export function createRefreshTokenRotator({
         now: rotatedAt,
       });
       if (!result.ok) return result;
-      const accessToken = await issueAccessToken(result.context);
 
       return {
         ok: true,

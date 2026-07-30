@@ -753,6 +753,10 @@ begin
     raise exception 'aged token did not rotate: %', rotation_outcome;
   end if;
 
+  update oauth_refresh_tokens
+  set revoked_at = now() - interval '8 days'
+  where token_hash = 'aged-token-current';
+
   perform cleanup_oauth_refresh_token_families(
     now() - interval '1 day',
     now() - interval '7 days'

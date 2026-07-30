@@ -67,11 +67,11 @@ describe("refresh-token rotation lifecycle", () => {
       clientId: "client-123",
       now: new Date("2026-07-28T12:00:00.000Z"),
     });
-    expect(rotate.mock.invocationCallOrder[0])
-      .toBeLessThan(issueAccessToken.mock.invocationCallOrder[0]);
+    expect(issueAccessToken.mock.invocationCallOrder[0])
+      .toBeLessThan(rotate.mock.invocationCallOrder[0]);
   });
 
-  it("reports access-token issuance failure only after atomic rotation succeeds", async () => {
+  it("leaves the refresh token usable when access-token issuance fails", async () => {
     const resolve = vi.fn<RefreshTokenRotationStore["resolve"]>()
       .mockResolvedValue({
         ok: true,
@@ -101,7 +101,7 @@ describe("refresh-token rotation lifecycle", () => {
       refreshToken: "current-refresh-token",
       clientId: "client-123",
     })).rejects.toThrow("signing failed");
-    expect(rotate).toHaveBeenCalledOnce();
+    expect(rotate).not.toHaveBeenCalled();
   });
 
   it("revokes a reused token family without depending on token generation", async () => {
@@ -196,7 +196,7 @@ describe("refresh-token rotation lifecycle", () => {
     "revoked_token",
     "reused_token",
   ] as const)(
-    "issues no access credential when atomic rotation returns %s",
+    "returns no credential when atomic rotation returns %s",
     async (error) => {
       const resolve = vi.fn<RefreshTokenRotationStore["resolve"]>()
         .mockResolvedValue({
@@ -220,7 +220,11 @@ describe("refresh-token rotation lifecycle", () => {
         refreshToken: "current-refresh-token",
         clientId: "client-123",
       })).resolves.toEqual({ ok: false, error });
-      expect(issueAccessToken).not.toHaveBeenCalled();
+      expect(issueAccessToken).toHaveBeenCalledExactlyOnceWith({
+        clientId: "client-123",
+        userId: "user-456",
+        scopes: ["read", "write"],
+      });
     },
   );
 });

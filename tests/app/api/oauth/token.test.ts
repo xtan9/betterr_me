@@ -658,7 +658,12 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
       error: 'invalid_grant',
       error_description: 'Token reuse detected — token family revoked',
     });
-    expect(signMcpToken).not.toHaveBeenCalled();
+    expect(signMcpToken).toHaveBeenCalledOnce();
+    expect(signMcpToken).toHaveBeenCalledWith(
+      'user-123',
+      'test-client',
+      ['read', 'write'],
+    );
     expect(mockRpc).toHaveBeenCalledTimes(2);
     expect(mockRpc).not.toHaveBeenCalledWith(
       'cleanup_oauth_refresh_token_families',
@@ -691,6 +696,11 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
       error: 'server_error',
       error_description: 'Internal server error',
     });
-    expect(signMcpToken).not.toHaveBeenCalled();
+    expect(signMcpToken).toHaveBeenCalledOnce();
+    expect(signMcpToken).toHaveBeenCalledWith(
+      'user-123',
+      'test-client',
+      ['read', 'write'],
+    );
   });
 });
