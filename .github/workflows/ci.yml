@@ -92,17 +92,8 @@ jobs:
           # Vitest --changed needs the pull request base commit.
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js, pnpm, and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Lint all files
         if: needs.changes.outputs.full_lint == 'true'
