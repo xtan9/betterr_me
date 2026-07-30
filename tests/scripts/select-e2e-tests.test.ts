@@ -77,6 +77,7 @@ describe("E2E test selection", () => {
 
   it("runs the full Chromium suite for shared infrastructure", () => {
     for (const file of [
+      "pnpm-workspace.yaml",
       "playwright.config.ts",
       "components/ui/button.tsx",
       "e2e/auth.setup.ts",

@@ -21,6 +21,7 @@ describe("Vercel ignored build classification", () => {
   it.each([
     "package.json",
     "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
     "next.config.ts",
     "postcss.config.mjs",
     "proxy.ts",
@@ -28,7 +29,10 @@ describe("Vercel ignored build classification", () => {
     "tsconfig.json",
     "vercel.json",
   ])("builds for configuration or dependency input %s", (file) => {
-    expect(classifyVercelBuild([file]).build).toBe(true);
+    expect(classifyVercelBuild([file])).toMatchObject({
+      build: true,
+      runtimeFiles: [file],
+    });
   });
 
   it.each([
