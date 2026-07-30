@@ -8,9 +8,18 @@ on:
       - 'supabase/migrations/**'
   workflow_dispatch:  # Allow manual trigger
 
+concurrency:
+  group: database-migration-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
   migrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Production
     
     steps:
       - name: Checkout code
@@ -19,7 +28,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.109.1
       
       - name: Link Supabase project
         env:
@@ -34,7 +43,13 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          supabase db push --include-all
+          supabase db push --linked --include-all --yes
+
+      - name: Verify remote migration history
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase migration list --linked
       
       - name: Migration success
         run: |

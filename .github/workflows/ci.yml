@@ -11,8 +11,12 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # Keep merge pushes from cancelling the nightly full safety run.
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   changes:
@@ -88,9 +92,13 @@ jobs:
           fi
           pnpm exec eslint "${lint_files[@]}"
 
-      - name: Test
-        if: needs.changes.outputs.full_tests == 'true'
+      - name: Test full suite
+        if: needs.changes.outputs.full_tests == 'true' && github.event_name != 'schedule'
         run: pnpm test:run
+
+      - name: Test full suite with coverage
+        if: needs.changes.outputs.full_tests == 'true' && github.event_name == 'schedule'
+        run: pnpm test:coverage
 
       - name: Test changed code
         if: needs.changes.outputs.changed_tests == 'true'
@@ -133,3 +141,27 @@ jobs:
             exit 1
           fi
           echo "✅ All migration timestamps are unique"
+
+  pr-gate:
+    name: PR Gate
+    needs: [changes, lint-and-test, check-migrations]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify selected CI checks
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          QUALITY_NEEDED: ${{ needs.changes.outputs.quality }}
+          QUALITY_RESULT: ${{ needs.lint-and-test.result }}
+          MIGRATIONS_NEEDED: ${{ needs.changes.outputs.migrations }}
+          MIGRATIONS_RESULT: ${{ needs.check-migrations.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CHANGES_RESULT" = "success"
+          if [[ "$QUALITY_NEEDED" == "true" ]]; then
+            test "$QUALITY_RESULT" = "success"
+          fi
+          if [[ "$MIGRATIONS_NEEDED" == "true" ]]; then
+            test "$MIGRATIONS_RESULT" = "success"
+          fi

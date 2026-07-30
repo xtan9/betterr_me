@@ -1,0 +1,29 @@
+name: Production Smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  statuses: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Production
+    steps:
+      - name: Checkout deployed commit
+        uses: actions/checkout@v4
+
+      - name: Wait for Vercel and probe production
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci/production-smoke.mjs
