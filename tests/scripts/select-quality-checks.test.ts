@@ -102,6 +102,7 @@ describe("quality check selection", () => {
   it("guards every automation change with the action runtime policy", () => {
     for (const file of [
       ".github/actions/setup-node-pnpm/action.yml",
+      ".github/dependabot.yml",
       ".github/workflows/db-migrate.yml",
       ".github/workflows/mutation-testing.yml",
       ".github/workflows/performance.yml",

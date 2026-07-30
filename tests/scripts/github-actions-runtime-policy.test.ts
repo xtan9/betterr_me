@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 
 const workflowDirectory = resolve(".github/workflows");
 const actionDirectory = resolve(".github/actions");
+const dependabotConfig = readFileSync(resolve(".github/dependabot.yml"), "utf8")
+  .replaceAll("\r\n", "\n")
+  .trim();
 
 function yamlFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -75,6 +78,22 @@ function externalActionReferences() {
 }
 
 describe("GitHub Actions runtime policy", () => {
+  it("groups GitHub Actions updates into one monthly pull request", () => {
+    expect(dependabotConfig).toBe(`version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+      - "/.github/actions/setup-node-pnpm"
+    schedule:
+      interval: "monthly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"`);
+  });
+
   it("pins every external action to an approved immutable commit", () => {
     const references = externalActionReferences();
 
