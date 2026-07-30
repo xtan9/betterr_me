@@ -19,10 +19,15 @@ if (!Number.isInteger(numberOfRuns) || numberOfRuns < 1) {
   throw new Error('LHCI_NUMBER_OF_RUNS must be a positive integer.');
 }
 
+const fullAuditPaths = [...PUBLIC_PATHS, ...PROTECTED_PATHS];
+const auditPaths = process.env.LHCI_SMOKE_ONLY === 'true'
+  ? [PUBLIC_PATHS[0]]
+  : fullAuditPaths;
+
 module.exports = {
   ci: {
     collect: {
-      url: [...PUBLIC_PATHS, ...PROTECTED_PATHS].map((p) => `${BASE_URL}${p}`),
+      url: auditPaths.map((path) => `${BASE_URL}${path}`),
       puppeteerScript: './scripts/lighthouse-auth.js',
       startServerCommand: 'pnpm start',
       startServerReadyPattern: 'Ready in',
