@@ -38,6 +38,16 @@ export function createSafeEnvironment(source = process.env, overrides = {}) {
   };
 }
 
+export function writeFileDurably(filePath, content) {
+  const descriptor = fs.openSync(filePath, "wx", 0o600);
+  try {
+    fs.writeFileSync(descriptor, content, "utf8");
+    fs.fsyncSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
 export function assertPathWithin(root, candidate, purpose) {
   const resolvedRoot = path.resolve(root);
   const resolvedCandidate = path.resolve(candidate);

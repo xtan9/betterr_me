@@ -1,13 +1,24 @@
 import { createGitWorkspace } from "./git-workspace.mjs";
 import { createStateStore } from "./state-store.mjs";
+import {
+  workerChangePolicyViolation,
+  workerProtectedPath,
+} from "../worker-path-policy.mjs";
+
+const TERMINAL_DISPOSITIONS = new Set([
+  "published",
+  "stopped",
+  "safety_blocked",
+  "verification_failed",
+]);
 
 function operationId(issueNumber, operation, generation = 1) {
   return `ralph-v2:issue-${issueNumber}:generation-${generation}:${operation}`;
 }
 
-function publicStatus(state) {
+function publicStatus(state, stopRequested) {
   return {
-    stopRequested: state.stopRequested,
+    stopRequested,
     workerLease: state.workerLease,
     issues: Object.values(state.issues)
       .sort((left, right) => left.number - right.number)
@@ -18,6 +29,7 @@ function publicStatus(state) {
         headSha: issue.headSha,
         pullRequestNumber: issue.pullRequestNumber,
         artifactPath: issue.artifactPath,
+        blocker: issue.blocker,
       })),
   };
 }
@@ -40,145 +52,351 @@ function pullRequestTitle(issue) {
   return `Resolve #${issue.number}: ${oneLineTitle}`;
 }
 
-async function deliverIssue({
-  issue,
+function validateClaimReceipt(receipt, record) {
+  if (
+    !receipt?.claimed ||
+    (receipt.issueNumber !== undefined && receipt.issueNumber !== record.number) ||
+    (receipt.operationId !== undefined &&
+      receipt.operationId !== record.claimOperationId)
+  ) {
+    throw new Error(`claim receipt is invalid for issue #${record.number}`);
+  }
+}
+
+async function checkpoint(lifecycle, point, record) {
+  await lifecycle.checkpoint({
+    point,
+    issueNumber: record.number,
+    generation: record.generation,
+  });
+}
+
+function saveWorkerLease(state, stateStore, record) {
+  state.workerLease = {
+    issueNumber: record.number,
+    sessionId: record.sessionId,
+    worktreePath: record.worktreePath,
+  };
+  stateStore.save(state);
+}
+
+function parkIssue({
+  state,
+  stateStore,
+  workspace,
+  record,
+  disposition,
+}) {
+  const { artifactPath } = workspace.park({
+    issueNumber: record.number,
+    branch: record.branch,
+    expectedHead: record.headSha ?? record.baseSha,
+  });
+  Object.assign(record, { disposition, artifactPath });
+  state.workerLease = null;
+  stateStore.save(state);
+}
+
+async function runImplementation({ worker, input, stateStore }) {
+  const cancellation = new AbortController();
+  const poll = setInterval(() => {
+    if (stateStore.isStopRequested()) cancellation.abort();
+  }, 20);
+  poll.unref?.();
+  try {
+    if (stateStore.isStopRequested()) cancellation.abort();
+    return await worker.implement({ ...input, signal: cancellation.signal });
+  } finally {
+    clearInterval(poll);
+  }
+}
+
+async function reconcileIssue({
+  record,
   state,
   stateStore,
   workspace,
   github,
   worker,
   verifier,
+  lifecycle,
   clock,
 }) {
-  const generation = 1;
-  const claimOperationId = operationId(issue.number, "claim", generation);
-  state.issues[issue.number] = {
-    number: issue.number,
-    disposition: "claiming",
-    generation,
-    claimOperationId,
-  };
-  stateStore.save(state);
-
-  const claim = await github.claimIssue({
-    issueNumber: issue.number,
-    operationId: claimOperationId,
-    claimedAt: clock.now().toISOString(),
-  });
-  if (!claim?.claimed) {
-    throw new Error(`issue #${issue.number} could not be claimed`);
-  }
-  state.issues[issue.number].disposition = "claimed";
-  stateStore.save(state);
-
-  const checkout = workspace.prepare(issue.number);
-  Object.assign(state.issues[issue.number], checkout, {
-    disposition: "implementing",
-  });
-  const sessionId = operationId(issue.number, "implementation", generation);
-  state.workerLease = {
-    issueNumber: issue.number,
-    sessionId,
-    worktreePath: checkout.worktreePath,
-  };
-  stateStore.save(state);
-
-  const workerResult = await worker.implement({
-    issue,
-    sessionId,
-    worktreePath: checkout.worktreePath,
-    baseSha: checkout.baseSha,
-  });
-  if (
-    workerResult?.kind !== "completed" ||
-    workerResult.sessionId !== sessionId
-  ) {
-    throw new Error(`implementation worker failed for issue #${issue.number}`);
+  const issue = validateReadyIssue(record.issue);
+  if (issue.number !== record.number) {
+    throw new Error("Ralph issue identity failed integrity validation");
   }
 
-  workspace.discardEmptySandboxPlaceholders({ baseSha: checkout.baseSha });
-  const { candidateTreeSha } = workspace.buildCandidate();
-  Object.assign(state.issues[issue.number], {
-    disposition: "verifying",
-    candidateTreeSha,
-  });
-  stateStore.save(state);
+  if (record.disposition === "claiming") {
+    let claim = await github.findClaim({
+      issueNumber: record.number,
+      operationId: record.claimOperationId,
+    });
+    if (!claim) {
+      claim = await github.claimIssue({
+        issueNumber: record.number,
+        operationId: record.claimOperationId,
+        claimedAt: clock.now().toISOString(),
+      });
+      await checkpoint(lifecycle, "claim-applied", record);
+    }
+    validateClaimReceipt(claim, record);
+    record.disposition = "claimed";
+    stateStore.save(state);
+  }
 
-  const verification = await verifier.verify({
-    issue,
-    sessionId,
-    worktreePath: checkout.worktreePath,
-    baseSha: checkout.baseSha,
-    headBranch: checkout.branch,
-    candidateTreeSha,
-  });
-  if (
-    verification?.kind !== "passed" ||
-    verification.candidateTreeSha !== candidateTreeSha
-  ) {
-    const { artifactPath } = workspace.park({
-      issueNumber: issue.number,
-      branch: checkout.branch,
-      baseSha: checkout.baseSha,
+  if (record.disposition === "claimed") {
+    const plan = workspace.plan(record.number);
+    Object.assign(record, plan, { disposition: "preparing" });
+    stateStore.save(state);
+  }
+
+  if (record.disposition === "preparing") {
+    workspace.ensureCheckout(record);
+    await checkpoint(lifecycle, "worktree-created", record);
+    record.sessionId ??= operationId(
+      record.number,
+      "implementation",
+      record.generation,
+    );
+    record.disposition = "implementing";
+    saveWorkerLease(state, stateStore, record);
+  }
+
+  if (record.disposition === "implementing") {
+    saveWorkerLease(state, stateStore, record);
+    if (stateStore.isStopRequested()) {
+      parkIssue({
+        state,
+        stateStore,
+        workspace,
+        record,
+        disposition: "stopped",
+      });
+      return;
+    }
+    let workerResult = await worker.findResult({
+      issueNumber: record.number,
+      sessionId: record.sessionId,
     });
-    Object.assign(state.issues[issue.number], {
-      disposition: "verification_failed",
-      artifactPath,
+    if (!workerResult) {
+      workerResult = await runImplementation({
+        worker,
+        stateStore,
+        input: {
+          issue,
+          sessionId: record.sessionId,
+          worktreePath: record.worktreePath,
+          baseSha: record.baseSha,
+        },
+      });
+      if (workerResult?.kind === "completed") {
+        await checkpoint(lifecycle, "worker-completed", record);
+      }
+    }
+    if (workerResult?.kind === "aborted" && stateStore.isStopRequested()) {
+      parkIssue({
+        state,
+        stateStore,
+        workspace,
+        record,
+        disposition: "stopped",
+      });
+      return;
+    }
+    if (
+      workerResult?.kind !== "completed" ||
+      workerResult.sessionId !== record.sessionId
+    ) {
+      throw new Error(`implementation worker failed for issue #${record.number}`);
+    }
+    if (stateStore.isStopRequested()) {
+      parkIssue({
+        state,
+        stateStore,
+        workspace,
+        record,
+        disposition: "stopped",
+      });
+      return;
+    }
+
+    workspace.discardEmptySandboxPlaceholders({ baseSha: record.baseSha });
+    const { candidateTreeSha } = workspace.buildCandidate();
+    const candidateChanges = workspace.candidateChanges({
+      baseSha: record.baseSha,
+      candidateTreeSha,
     });
+    const pathViolation = workerChangePolicyViolation(candidateChanges, issue);
+    if (pathViolation) {
+      const protectedChanges = candidateChanges.filter((change) =>
+        workerProtectedPath(change.path),
+      );
+      Object.assign(record, {
+        candidateTreeSha,
+        blocker: {
+          kind: "protected_path",
+          changes: protectedChanges,
+        },
+      });
+      parkIssue({
+        state,
+        stateStore,
+        workspace,
+        record,
+        disposition: "safety_blocked",
+      });
+      return;
+    }
+    Object.assign(record, {
+      disposition: "verifying",
+      candidateTreeSha,
+    });
+    stateStore.save(state);
+  }
+
+  if (record.disposition === "verifying") {
+    if (stateStore.isStopRequested()) {
+      parkIssue({
+        state,
+        stateStore,
+        workspace,
+        record,
+        disposition: "stopped",
+      });
+      return;
+    }
+    const verificationInput = {
+      issue,
+      sessionId: record.sessionId,
+      worktreePath: record.worktreePath,
+      baseSha: record.baseSha,
+      headBranch: record.branch,
+      candidateTreeSha: record.candidateTreeSha,
+    };
+    let verification = await verifier.findReceipt(verificationInput);
+    if (!verification) {
+      verification = await verifier.verify(verificationInput);
+      await checkpoint(lifecycle, "candidate-verified", record);
+    }
+    if (
+      verification?.candidateTreeSha !== record.candidateTreeSha ||
+      !["passed", "failed"].includes(verification.kind)
+    ) {
+      throw new Error(`verification receipt is invalid for issue #${record.number}`);
+    }
+    if (verification.kind === "failed") {
+      parkIssue({
+        state,
+        stateStore,
+        workspace,
+        record,
+        disposition: "verification_failed",
+      });
+      return;
+    }
+    if (stateStore.isStopRequested()) {
+      parkIssue({
+        state,
+        stateStore,
+        workspace,
+        record,
+        disposition: "stopped",
+      });
+      return;
+    }
+
+    let commit = workspace.findVerifiedCommit({
+      issueNumber: record.number,
+      branch: record.branch,
+      baseSha: record.baseSha,
+      candidateTreeSha: record.candidateTreeSha,
+    });
+    if (!commit) {
+      commit = workspace.commit({
+        issueNumber: record.number,
+        candidateTreeSha: record.candidateTreeSha,
+      });
+      await checkpoint(lifecycle, "candidate-committed", record);
+    }
+    Object.assign(record, {
+      disposition: "publishing",
+      headSha: commit.headSha,
+    });
+    stateStore.save(state);
+    if (stateStore.isStopRequested()) {
+      parkIssue({
+        state,
+        stateStore,
+        workspace,
+        record,
+        disposition: "stopped",
+      });
+      return;
+    }
+  }
+
+  if (record.disposition === "publishing") {
+    const observedRemoteHead = workspace.remoteHead({
+      issueNumber: record.number,
+      branch: record.branch,
+    });
+    if (observedRemoteHead && observedRemoteHead !== record.headSha) {
+      throw new Error(`remote issue branch changed for issue #${record.number}`);
+    }
+    if (!observedRemoteHead) {
+      workspace.push({
+        issueNumber: record.number,
+        branch: record.branch,
+        headSha: record.headSha,
+      });
+      await checkpoint(lifecycle, "branch-pushed", record);
+    }
+
+    const pullRequestOperationId = operationId(
+      record.number,
+      `pull-request:${record.headSha}`,
+      record.generation,
+    );
+    let pullRequest = await github.findPullRequest({
+      issueNumber: record.number,
+      headBranch: record.branch,
+      headSha: record.headSha,
+    });
+    if (!pullRequest) {
+      pullRequest = await github.createDraftPullRequest({
+        issueNumber: record.number,
+        operationId: pullRequestOperationId,
+        draft: true,
+        title: pullRequestTitle(issue),
+        body: `Closes #${record.number}`,
+        headBranch: record.branch,
+        headSha: record.headSha,
+        baseBranch: "main",
+      });
+      await checkpoint(lifecycle, "draft-pr-created", record);
+    }
+    if (
+      !pullRequest ||
+      pullRequest.headBranch !== record.branch ||
+      pullRequest.headSha !== record.headSha ||
+      pullRequest.draft !== true
+    ) {
+      throw new Error(`pull request receipt is invalid for issue #${record.number}`);
+    }
+    record.pullRequestNumber = pullRequest.number;
+    stateStore.save(state);
+
+    workspace.cleanup({
+      issueNumber: record.number,
+      branch: record.branch,
+      headSha: record.headSha,
+    });
+    await checkpoint(lifecycle, "checkout-cleaned", record);
+    record.disposition = "published";
     state.workerLease = null;
     stateStore.save(state);
-    return;
   }
-
-  const { headSha } = workspace.commit({
-    issueNumber: issue.number,
-    candidateTreeSha,
-  });
-  Object.assign(state.issues[issue.number], {
-    disposition: "publishing",
-    headSha,
-  });
-  stateStore.save(state);
-
-  workspace.push({ branch: checkout.branch, headSha });
-  const pullRequestOperationId = operationId(
-    issue.number,
-    `pull-request:${headSha}`,
-    generation,
-  );
-  let pullRequest = await github.findPullRequest({
-    issueNumber: issue.number,
-    headBranch: checkout.branch,
-    headSha,
-  });
-  if (!pullRequest) {
-    pullRequest = await github.createDraftPullRequest({
-      issueNumber: issue.number,
-      operationId: pullRequestOperationId,
-      draft: true,
-      title: pullRequestTitle(issue),
-      body: `Closes #${issue.number}`,
-      headBranch: checkout.branch,
-      headSha,
-      baseBranch: "main",
-    });
-  }
-  if (
-    !pullRequest ||
-    pullRequest.headBranch !== checkout.branch ||
-    pullRequest.headSha !== headSha ||
-    pullRequest.draft !== true
-  ) {
-    throw new Error(`pull request receipt is invalid for issue #${issue.number}`);
-  }
-
-  workspace.cleanup({ branch: checkout.branch, headSha });
-  Object.assign(state.issues[issue.number], {
-    disposition: "published",
-    pullRequestNumber: pullRequest.number,
-  });
-  state.workerLease = null;
-  stateStore.save(state);
 }
 
 export function createRalphRuntime({
@@ -187,6 +405,7 @@ export function createRalphRuntime({
   github,
   worker,
   verifier,
+  lifecycle = { checkpoint: async () => {} },
   clock,
 }) {
   if (!github || !worker || !verifier || !clock) {
@@ -203,45 +422,80 @@ export function createRalphRuntime({
       if (!Number.isSafeInteger(maxIssues) || maxIssues <= 0) {
         throw new Error("maxIssues must be a positive integer");
       }
-      const state = stateStore.load();
-      if (state.stopRequested) return publicStatus(state);
 
-      const readyIssues = await github.listReadyIssues();
-      let delivered = 0;
-      for (const candidate of readyIssues) {
-        if (delivered >= maxIssues || state.stopRequested) break;
-        const issue = validateReadyIssue(candidate);
-        if (
-          ["published", "verification_failed"].includes(
-            state.issues[issue.number]?.disposition,
-          )
-        ) {
-          continue;
+      const controllerLease = stateStore.acquireControllerLease();
+      try {
+        const state = stateStore.load();
+        if (stateStore.isStopRequested()) {
+          return publicStatus(state, true);
         }
-        await deliverIssue({
-          issue,
-          state,
-          stateStore,
-          workspace,
-          github,
-          worker,
-          verifier,
-          clock,
-        });
-        delivered += 1;
+
+        let processed = 0;
+        const resumable = Object.values(state.issues).filter(
+          (issue) => !TERMINAL_DISPOSITIONS.has(issue.disposition),
+        );
+        if (resumable.length > 1) {
+          throw new Error("Ralph state contains multiple resumable issues");
+        }
+        if (resumable.length === 1) {
+          await reconcileIssue({
+            record: resumable[0],
+            state,
+            stateStore,
+            workspace,
+            github,
+            worker,
+            verifier,
+            lifecycle,
+            clock,
+          });
+          processed += 1;
+        }
+
+        if (processed < maxIssues && !stateStore.isStopRequested()) {
+          const readyIssues = await github.listReadyIssues();
+          for (const candidate of readyIssues) {
+            if (processed >= maxIssues || stateStore.isStopRequested()) break;
+            const issue = validateReadyIssue(candidate);
+            if (state.issues[issue.number]) continue;
+            const generation = 1;
+            const record = {
+              number: issue.number,
+              issue: structuredClone(issue),
+              disposition: "claiming",
+              generation,
+              claimOperationId: operationId(issue.number, "claim", generation),
+            };
+            state.issues[issue.number] = record;
+            stateStore.save(state);
+            await reconcileIssue({
+              record,
+              state,
+              stateStore,
+              workspace,
+              github,
+              worker,
+              verifier,
+              lifecycle,
+              clock,
+            });
+            processed += 1;
+          }
+        }
+        return publicStatus(state, stateStore.isStopRequested());
+      } finally {
+        controllerLease.release();
       }
-      return publicStatus(state);
     },
 
     inspect() {
-      return publicStatus(stateStore.load());
+      const state = stateStore.load();
+      return publicStatus(state, stateStore.isStopRequested());
     },
 
     requestStop() {
-      const state = stateStore.load();
-      state.stopRequested = true;
-      stateStore.save(state);
-      return publicStatus(state);
+      stateStore.requestStop();
+      return publicStatus(stateStore.load(), true);
     },
   };
 }

@@ -9,6 +9,19 @@ if (separator < 3) {
 }
 
 const config = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (
+  config.controllerReadyDirectory &&
+  process.argv[separator + 1] === "run"
+) {
+  fs.mkdirSync(config.controllerReadyDirectory, { recursive: true });
+  fs.writeFileSync(
+    `${config.controllerReadyDirectory}/${process.pid}.ready`,
+    "ready\n",
+  );
+  while (!fs.existsSync(config.controllerReleasePath)) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 const adapters = createTestAdapters(config);
 const runtime = createRalphRuntime({
   repositoryPath: config.repositoryPath,

@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { assertPathWithin, runGit as git } from "./test-primitives.mjs";
+import { randomUUID } from "node:crypto";
+import {
+  assertPathWithin,
+  runGit as git,
+  writeFileDurably,
+} from "./test-primitives.mjs";
 
 function readState(config) {
   return JSON.parse(fs.readFileSync(config.externalStatePath, "utf8"));
@@ -21,6 +26,22 @@ function changeState(config, change) {
 
 function appendEvent(config, event) {
   fs.appendFileSync(config.eventLogPath, `${JSON.stringify(event)}\n`);
+}
+
+function recordEffect(config, kind, payload) {
+  fs.mkdirSync(config.effectLedgerPath, { recursive: true });
+  const recordPath = path.join(
+    config.effectLedgerPath,
+    `${kind}-${process.pid}-${Date.now()}-${randomUUID()}.json`,
+  );
+  writeFileDurably(
+    recordPath,
+    `${JSON.stringify({ kind, ...payload }, null, 2)}\n`,
+  );
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function resolveRemoteHead(config, headBranch, allowMissing = false) {
@@ -87,29 +108,36 @@ function assertWorkerCheckout(config, input) {
   }
 }
 
-function assertNoCheckoutBeforeClaim(config) {
-  const worktreeCount = (
-    git(config.repositoryPath, ["worktree", "list", "--porcelain"])
-      .stdout.match(/^worktree /gm) ?? []
-  ).length;
-  if (worktreeCount !== 1) {
-    throw new Error("Ralph created a worktree before claiming the issue");
-  }
-  const localIssueBranches = git(config.repositoryPath, [
-    "for-each-ref",
-    "--format=%(refname:short)",
-    "refs/heads/codex/issue-",
-  ]).stdout.trim();
-  if (localIssueBranches) {
-    throw new Error("Ralph created an issue branch before claiming the issue");
-  }
+function assertNoCheckoutBeforeClaim(config, issueNumber) {
   if (fs.existsSync(path.join(config.runtimePath, "worktrees", "current"))) {
     throw new Error("Ralph populated the reusable worktree before claiming");
   }
+  const issueBranch = git(
+    config.repositoryPath,
+    [
+      "show-ref",
+      "--verify",
+      "--quiet",
+      `refs/heads/codex/issue-${issueNumber}`,
+    ],
+    true,
+  );
+  if (issueBranch.status === 0) {
+    throw new Error("Ralph created an issue branch before claiming the issue");
+  }
 }
 
-function assertExpectedCandidate(config, candidateTreeSha) {
-  const expectedNames = config.expectedChanges
+function issueSetting(config, setting, issueNumber) {
+  return config[`${setting}ByIssue`]?.[String(issueNumber)] ?? config[setting];
+}
+
+function assertExpectedCandidate(config, candidateTreeSha, issueNumber) {
+  const expectedChanges = issueSetting(
+    config,
+    "expectedChanges",
+    issueNumber,
+  );
+  const expectedNames = expectedChanges
     .map((change) => `${change.status}\t${change.path}`)
     .sort();
   const actualNames = git(config.repositoryPath, [
@@ -126,7 +154,7 @@ function assertExpectedCandidate(config, candidateTreeSha) {
     );
   }
 
-  for (const change of config.expectedChanges) {
+  for (const change of expectedChanges) {
     const entry = git(config.repositoryPath, [
       "ls-tree",
       candidateTreeSha,
@@ -152,7 +180,7 @@ export function createTestAdapters(config) {
       return structuredClone(config.issues);
     },
     async claimIssue(input) {
-      assertNoCheckoutBeforeClaim(config);
+      assertNoCheckoutBeforeClaim(config, input.issueNumber);
       if (
         !config.issues.some((issue) => issue.number === input.issueNumber) ||
         typeof input.operationId !== "string" ||
@@ -160,6 +188,7 @@ export function createTestAdapters(config) {
       ) {
         throw new Error("Ralph claimed an issue outside the ready generation");
       }
+      recordEffect(config, "claim-request", input);
       appendEvent(config, {
         kind: "issue-claimed",
         issueNumber: input.issueNumber,
@@ -168,10 +197,19 @@ export function createTestAdapters(config) {
       return changeState(config, (state) => {
         state.claimRequests.push(input);
         if (!state.claims.some((claim) => claim.operationId === input.operationId)) {
-          state.claims.push(input);
+          state.claims.push({ ...input, claimed: true });
         }
-        return { claimed: true };
+        return { ...input, claimed: true };
       });
+    },
+    async findClaim(input) {
+      return (
+        readState(config).claims.find(
+          (claim) =>
+            claim.issueNumber === input.issueNumber &&
+            claim.operationId === input.operationId,
+        ) ?? null
+      );
     },
     async findPullRequest(input) {
       return (
@@ -184,6 +222,12 @@ export function createTestAdapters(config) {
       if (!config.issues.some((issue) => issue.number === input.issueNumber)) {
         throw new Error("Ralph published the wrong issue");
       }
+      recordEffect(config, "pull-request-request", {
+        issueNumber: input.issueNumber,
+        operationId: input.operationId,
+        headBranch: input.headBranch,
+        headSha: input.headSha,
+      });
       const currentWorktree = path.join(config.runtimePath, "worktrees", "current");
       if (!fs.existsSync(currentWorktree)) {
         throw new Error("Ralph cleaned the worktree before creating the PR");
@@ -237,6 +281,14 @@ export function createTestAdapters(config) {
   };
 
   const worker = {
+    async findResult(input) {
+      const session = readState(config).sessions.find(
+        (candidate) => candidate.sessionId === input.sessionId,
+      );
+      return session?.resultKind
+        ? { kind: session.resultKind, sessionId: session.sessionId }
+        : null;
+    },
     async implement(input) {
       const expectedIssue = config.issues.find(
         (issue) => issue.number === input.issue?.number,
@@ -249,6 +301,26 @@ export function createTestAdapters(config) {
         throw new Error("worker received the wrong issue requirements");
       }
       assertWorkerCheckout(config, input);
+      recordEffect(config, "worker-request", {
+        issueNumber: input.issue.number,
+        sessionId: input.sessionId,
+      });
+      const activeWorkerDirectory = path.join(
+        config.effectLedgerPath,
+        "active-workers",
+      );
+      fs.mkdirSync(activeWorkerDirectory, { recursive: true });
+      const activeWorkerPath = path.join(
+        activeWorkerDirectory,
+        `${process.pid}-${randomUUID()}`,
+      );
+      writeFileDurably(activeWorkerPath, `${input.sessionId}\n`);
+      if (fs.readdirSync(activeWorkerDirectory).length > 1) {
+        recordEffect(config, "worker-overlap", {
+          issueNumber: input.issue.number,
+          sessionId: input.sessionId,
+        });
+      }
       changeState(config, (state) => {
         state.activeWorkers += 1;
         state.maximumActiveWorkers = Math.max(
@@ -270,7 +342,11 @@ export function createTestAdapters(config) {
       });
 
       try {
-        for (const change of config.workerChanges) {
+        for (const change of issueSetting(
+          config,
+          "workerChanges",
+          input.issue.number,
+        )) {
           const destination = assertPathWithin(
             input.worktreePath,
             path.join(input.worktreePath, change.path),
@@ -279,13 +355,40 @@ export function createTestAdapters(config) {
           fs.mkdirSync(path.dirname(destination), { recursive: true });
           fs.writeFileSync(destination, change.content);
         }
+        if (config.workerStartedPath) {
+          fs.writeFileSync(config.workerStartedPath, `${input.sessionId}\n`);
+          while (!fs.existsSync(config.workerReleasePath)) {
+            if (input.signal?.aborted) {
+              appendEvent(config, {
+                kind: "worker-aborted",
+                issueNumber: input.issue.number,
+                sessionId: input.sessionId,
+              });
+              changeState(config, (state) => {
+                const session = state.sessions.find(
+                  (candidate) => candidate.sessionId === input.sessionId,
+                );
+                if (session) session.resultKind = "aborted";
+              });
+              return { kind: "aborted", sessionId: input.sessionId };
+            }
+            await sleep(20);
+          }
+        }
         appendEvent(config, {
           kind: "worker-completed",
           issueNumber: input.issue.number,
           sessionId: input.sessionId,
         });
+        changeState(config, (state) => {
+          const session = state.sessions.find(
+            (candidate) => candidate.sessionId === input.sessionId,
+          );
+          if (session) session.resultKind = "completed";
+        });
         return { kind: "completed", sessionId: input.sessionId };
       } finally {
+        fs.rmSync(activeWorkerPath, { force: true });
         changeState(config, (state) => {
           state.activeWorkers -= 1;
         });
@@ -294,7 +397,25 @@ export function createTestAdapters(config) {
   };
 
   const verifier = {
+    async findReceipt(input) {
+      const receipt = readState(config).verificationRequests.find(
+        (candidate) =>
+          candidate.issueNumber === input.issue.number &&
+          candidate.candidateTreeSha === input.candidateTreeSha,
+      );
+      return receipt
+        ? {
+            kind: receipt.kind,
+            candidateTreeSha: receipt.candidateTreeSha,
+            evidence: receipt.evidence,
+          }
+        : null;
+    },
     async verify(input) {
+      recordEffect(config, "verification-request", {
+        issueNumber: input.issue.number,
+        candidateTreeSha: input.candidateTreeSha,
+      });
       const preVerificationHead = git(input.worktreePath, ["rev-parse", "HEAD"])
         .stdout.trim();
       if (preVerificationHead !== config.mainSha) {
@@ -312,11 +433,21 @@ export function createTestAdapters(config) {
         "rev-parse",
         `${input.candidateTreeSha}^{tree}`,
       ]).stdout.trim();
-      assertExpectedCandidate(config, observedTreeSha);
+      assertExpectedCandidate(config, observedTreeSha, input.issue.number);
+      const verificationSetting = issueSetting(
+        config,
+        "verification",
+        input.issue.number,
+      );
       changeState(config, (state) => {
         state.verificationRequests.push({
           issueNumber: input.issue.number,
           candidateTreeSha: observedTreeSha,
+          kind: verificationSetting === "fail" ? "failed" : "passed",
+          evidence:
+            verificationSetting === "fail"
+              ? "scripted verification failure"
+              : undefined,
         });
       });
       appendEvent(config, {
@@ -324,7 +455,7 @@ export function createTestAdapters(config) {
         issueNumber: input.issue.number,
         treeSha: observedTreeSha,
       });
-      if (config.verification === "fail") {
+      if (verificationSetting === "fail") {
         return {
           kind: "failed",
           candidateTreeSha: observedTreeSha,
@@ -335,10 +466,29 @@ export function createTestAdapters(config) {
     },
   };
 
+  const lifecycle = {
+    async checkpoint(input) {
+      if (
+        config.crashPoint === input.point &&
+        !fs.existsSync(config.crashMarkerPath)
+      ) {
+        writeFileDurably(config.crashMarkerPath, `${input.point}\n`);
+        recordEffect(config, "crash-checkpoint", input);
+        appendEvent(config, {
+          kind: "crash-injected",
+          point: input.point,
+          issueNumber: input.issueNumber,
+        });
+        process.kill(process.pid, "SIGKILL");
+      }
+    },
+  };
+
   return {
     github,
     worker,
     verifier,
+    lifecycle,
     clock: { now: () => new Date(config.now) },
   };
 }
