@@ -16,6 +16,10 @@ jobs:
     outputs:
       quality: ${{ steps.classify.outputs.quality }}
       full_tests: ${{ steps.classify.outputs.full_tests }}
+      full_lint: ${{ steps.classify.outputs.full_lint }}
+      changed_tests: ${{ steps.classify.outputs.changed_tests }}
+      quality_smoke_tests: ${{ steps.classify.outputs.quality_smoke_tests }}
+      quality_label: ${{ steps.classify.outputs.quality_label }}
       migrations: ${{ steps.classify.outputs.migrations }}
       base_sha: ${{ steps.classify.outputs.base_sha }}
     steps:
@@ -34,6 +38,7 @@ jobs:
         run: bash scripts/ci/classify-changes.sh
 
   lint-and-test:
+    name: Lint + test (${{ needs.changes.outputs.quality_label }})
     needs: changes
     if: needs.changes.outputs.quality == 'true'
     runs-on: ubuntu-latest
@@ -57,18 +62,46 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
+      - name: Lint all files
+        if: needs.changes.outputs.full_lint == 'true'
         run: pnpm lint
+
+      - name: Lint changed files
+        if: needs.changes.outputs.full_lint != 'true'
+        env:
+          TEST_BASE_SHA: ${{ needs.changes.outputs.base_sha }}
+          TEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          mapfile -d '' lint_files < <(
+            git diff --name-only --diff-filter=ACMRTUXB -z \
+              "$TEST_BASE_SHA" "$TEST_HEAD_SHA" -- \
+              '*.js' '*.jsx' '*.ts' '*.tsx' '*.mjs' '*.cjs'
+          )
+          if (( ${#lint_files[@]} == 0 )); then
+            echo "No changed JavaScript or TypeScript files to lint."
+            exit 0
+          fi
+          pnpm exec eslint "${lint_files[@]}"
 
       - name: Test
         if: needs.changes.outputs.full_tests == 'true'
         run: pnpm test:run
 
       - name: Test changed code
-        if: needs.changes.outputs.full_tests != 'true'
+        if: needs.changes.outputs.changed_tests == 'true'
         env:
           TEST_BASE_SHA: ${{ needs.changes.outputs.base_sha }}
         run: pnpm test:run --changed="$TEST_BASE_SHA"
+
+      - name: Test CI selectors
+        if: needs.changes.outputs.full_tests != 'true' && needs.changes.outputs.quality_smoke_tests != ''
+        env:
+          QUALITY_SMOKE_TESTS: ${{ needs.changes.outputs.quality_smoke_tests }}
+        shell: bash
+        run: |
+          IFS=',' read -ra smoke_tests <<< "$QUALITY_SMOKE_TESTS"
+          pnpm exec vitest run "${smoke_tests[@]}"
 
   check-migrations:
     needs: changes
