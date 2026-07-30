@@ -6,13 +6,44 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      quality: ${{ steps.classify.outputs.quality }}
+      full_tests: ${{ steps.classify.outputs.full_tests }}
+      migrations: ${{ steps.classify.outputs.migrations }}
+      base_sha: ${{ steps.classify.outputs.base_sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changes
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: bash scripts/ci/classify-changes.sh
+
   lint-and-test:
+    needs: changes
+    if: needs.changes.outputs.quality == 'true'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Vitest --changed needs the pull request base commit.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -30,9 +61,18 @@ jobs:
         run: pnpm lint
 
       - name: Test
+        if: needs.changes.outputs.full_tests == 'true'
         run: pnpm test:run
 
+      - name: Test changed code
+        if: needs.changes.outputs.full_tests != 'true'
+        env:
+          TEST_BASE_SHA: ${{ needs.changes.outputs.base_sha }}
+        run: pnpm test:run --changed="$TEST_BASE_SHA"
+
   check-migrations:
+    needs: changes
+    if: needs.changes.outputs.migrations == 'true'
     runs-on: ubuntu-latest
 
     steps:
