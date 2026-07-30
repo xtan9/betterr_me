@@ -27,41 +27,69 @@ const automationFiles = [
   ...yamlFiles(actionDirectory).map(automationFile),
 ];
 
-const supportedActionMajors = new Map([
-  ["actions/cache", "v6"],
-  ["actions/checkout", "v7"],
-  ["actions/setup-node", "v7"],
-  ["actions/upload-artifact", "v7"],
-  ["pnpm/action-setup", "v6"],
-  ["supabase/setup-cli", "v3"],
+const approvedActionRevisions = new Map([
+  [
+    "actions/cache",
+    { version: "v6", commit: "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" },
+  ],
+  [
+    "actions/checkout",
+    { version: "v7", commit: "3d3c42e5aac5ba805825da76410c181273ba90b1" },
+  ],
+  [
+    "actions/github-script",
+    { version: "v7", commit: "f28e40c7f34bde8b3046d885e986cb6290c5673b" },
+  ],
+  [
+    "actions/setup-node",
+    { version: "v7", commit: "820762786026740c76f36085b0efc47a31fe5020" },
+  ],
+  [
+    "actions/upload-artifact",
+    { version: "v7", commit: "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" },
+  ],
+  [
+    "pnpm/action-setup",
+    { version: "v6", commit: "0ebf47130e4866e96fce0953f49152a61190b271" },
+  ],
+  [
+    "supabase/setup-cli",
+    { version: "v3", commit: "46f7f98c7f948ad727d22c1e67fab04c223a0520" },
+  ],
+  [
+    "treosh/lighthouse-ci-action",
+    { version: "v12", commit: "3e7e23fb74242897f95c0ba9cabad3d0227b9b18" },
+  ],
 ]);
 
-function actionReferences(action: string) {
-  const pattern = new RegExp(
-    `uses:\\s*${action.replace("/", "\\/")}@([^\\s#]+)`,
-    "g",
-  );
-
+function externalActionReferences() {
+  const pattern = /uses:\s*([\w.-]+\/[\w.-]+)@([^\s#]+)(?:\s*#\s*(\S+))?/g;
   return automationFiles.flatMap(({ name, contents }) =>
     [...contents.matchAll(pattern)].map((match) => ({
       workflow: name,
-      reference: match[1],
+      action: match[1],
+      reference: match[2],
+      versionComment: match[3],
     }))
   );
 }
 
 describe("GitHub Actions runtime policy", () => {
-  it.each([...supportedActionMajors])(
-    "uses %s at supported major %s",
-    (action, supportedMajor) => {
-      const references = actionReferences(action);
-      expect(references, `${action} must remain covered by this policy`)
-        .not.toHaveLength(0);
-      expect(
-        references.filter(({ reference }) => reference !== supportedMajor),
-      ).toEqual([]);
-    },
-  );
+  it("pins every external action to an approved immutable commit", () => {
+    const references = externalActionReferences();
+
+    expect(new Set(references.map(({ action }) => action))).toEqual(
+      new Set(approvedActionRevisions.keys()),
+    );
+    expect(
+      references.filter(({ action, reference, versionComment }) => {
+        const approved = approvedActionRevisions.get(action);
+        return !approved ||
+          reference !== approved.commit ||
+          versionComment !== approved.version;
+      }),
+    ).toEqual([]);
+  });
 
   it("runs project commands on Node.js 24", () => {
     const configuredVersions = automationFiles.flatMap(({ contents }) =>
