@@ -55,6 +55,11 @@ import {
   codexSessionStarted,
   codexStartupEventsReady,
   ensureSanitizedWorkerGitView,
+  immutableDependencyExecutableDiscoveryArguments,
+  immutableDependencyExecutablePaths,
+  immutableDependencyExecutableRepairArguments,
+  immutableDependencyExecutableStatArguments,
+  immutableDependencyExecutableStatsAreSafe,
   isolatedCodexAuthInstallRequired,
   isolatedCodexFilesystemConfig,
   isolatedCodexReadablePaths,
@@ -827,6 +832,46 @@ async function assertWslIsolationReady() {
     expectedDependencyFingerprint.stdout.trim()
   ) {
     throw new Error("immutable WSL dependency content fingerprint changed");
+  }
+  const nativeExecutables = await runWsl(
+    immutableDependencyExecutableDiscoveryArguments(wslDependencyRoot),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  const nativeExecutablePaths = immutableDependencyExecutablePaths(
+    nativeExecutables.stdout,
+    wslDependencyRoot,
+  );
+  if (nativeExecutablePaths.length === 0) {
+    throw new Error("immutable WSL dependencies are missing the Linux esbuild binary");
+  }
+  const nativeExecutableStats = await runWsl(
+    immutableDependencyExecutableStatArguments(nativeExecutablePaths),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (
+    !immutableDependencyExecutableStatsAreSafe(
+      nativeExecutableStats.stdout,
+      nativeExecutablePaths.length,
+    )
+  ) {
+    throw new Error("immutable WSL esbuild dependency is not root-owned");
+  }
+  await runWsl(
+    immutableDependencyExecutableRepairArguments(nativeExecutablePaths),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  const repairedNativeExecutableStats = await runWsl(
+    immutableDependencyExecutableStatArguments(nativeExecutablePaths),
+    { timeoutSeconds: 30, observeKillSwitch: false },
+  );
+  if (
+    !immutableDependencyExecutableStatsAreSafe(
+      repairedNativeExecutableStats.stdout,
+      nativeExecutablePaths.length,
+      "555",
+    )
+  ) {
+    throw new Error("immutable WSL esbuild dependency is not root-owned read/execute-only");
   }
   await runWsl(
     [
