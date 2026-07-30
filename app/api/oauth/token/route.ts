@@ -9,7 +9,10 @@ import {
 } from "@/lib/mcp/refresh-token";
 import { signMcpToken } from "@/lib/mcp/token";
 import { createAuthorizationCodeExchanger } from "@/lib/oauth/authorization-code";
+import { createRefreshTokenRotator } from "@/lib/oauth/refresh-token";
 import { createSupabaseAuthorizationCodeStore } from "@/lib/oauth/supabase-authorization-code-store";
+import { createSupabaseRefreshTokenStore } from "@/lib/oauth/supabase-refresh-token-store";
+import { oauthRefreshGrantSchema } from "@/lib/validations/oauth";
 
 
 
@@ -21,13 +24,18 @@ import { createSupabaseAuthorizationCodeStore } from "@/lib/oauth/supabase-autho
 type ServiceClient = any;
 
 async function cleanupExpiredTokens(client: ServiceClient) {
-  const { error } = await client
-    .from("oauth_refresh_tokens")
-    .delete()
-    .or(
-      `expires_at.lt.${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()},and(revoked.eq.true,created_at.lt.${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()})`,
-    );
-  if (error) {
+  try {
+    const { error } = await client.rpc("cleanup_oauth_refresh_token_families", {
+      expired_before: new Date(
+        Date.now() - 24 * 60 * 60 * 1000,
+      ).toISOString(),
+      revoked_before: new Date(
+        Date.now() - 7 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+    });
+    if (!error) return;
+    log.warn("[oauth] Refresh token cleanup failed", { error: String(error) });
+  } catch (error) {
     log.warn("[oauth] Refresh token cleanup failed", { error: String(error) });
   }
 }
@@ -72,123 +80,49 @@ async function handleRefreshToken(
   body: Record<string, string>,
   serviceClient: ServiceClient,
 ) {
-  const { refresh_token } = body;
-
-  if (!refresh_token) {
-    return oauthError("invalid_request", "refresh_token is required");
-  }
-
-  const tokenHash = hashToken(refresh_token);
-
-  // Look up the refresh token
-  const { data: storedToken, error: lookupError } = await serviceClient
-    .from("oauth_refresh_tokens")
-    .select("*")
-    .eq("token_hash", tokenHash)
-    .single();
-
-  if (lookupError || !storedToken) {
-    return oauthError("invalid_grant", "Invalid refresh token", 401);
-  }
-
-  // Check expiry
-  if (new Date(storedToken.expires_at) < new Date()) {
-    return oauthError("invalid_grant", "Refresh token expired", 401);
-  }
-
-  // Reuse detection FIRST: if already rotated, revoke ALL tokens for this user
-  if (storedToken.replaced_by_hash) {
-    const { error: revokeAllError } = await serviceClient
-      .from("oauth_refresh_tokens")
-      .update({ revoked: true })
-      .eq("user_id", storedToken.user_id);
-
-    if (revokeAllError) {
-      log.error("[oauth] Failed to revoke all tokens during reuse detection", revokeAllError, {
-        userId: storedToken.user_id,
-      });
-    }
-
-    log.error("[oauth] Refresh token reuse detected", {
-      userId: storedToken.user_id,
-      tokenHash,
-    });
-
-    return oauthError(
-      "invalid_grant",
-      "Token reuse detected — all sessions revoked",
-      401,
+  const parsed = oauthRefreshGrantSchema.safeParse(body);
+  if (!parsed.success) {
+    const invalidFields = new Set(
+      parsed.error.issues.map(({ path }) => path[0]),
     );
+    if (invalidFields.has("refresh_token")) {
+      return oauthError("invalid_request", "refresh_token is required");
+    }
+    if (invalidFields.has("client_id")) {
+      return oauthError("invalid_request", "client_id is required");
+    }
+    return oauthError("invalid_request", "Invalid refresh-token request");
+  }
+  const { refresh_token, client_id } = parsed.data;
+
+  const rotator = createRefreshTokenRotator({
+    store: createSupabaseRefreshTokenStore(serviceClient),
+    issueAccessToken: ({ userId, clientId, scopes }) =>
+      signMcpToken(userId, clientId, scopes),
+  });
+  const result = await rotator.rotate({
+    refreshToken: refresh_token,
+    clientId: client_id,
+  });
+  if (!result.ok) {
+    const descriptions = {
+      invalid_token: "Invalid refresh token",
+      expired_token: "Refresh token expired",
+      mismatched_context: "Refresh token context mismatch",
+      revoked_token: "Refresh token revoked",
+      reused_token: "Token reuse detected — token family revoked",
+    } satisfies Record<typeof result.error, string>;
+    return oauthError("invalid_grant", descriptions[result.error], 401);
   }
 
-  // Then check revoked (covers manually-revoked tokens without replacement)
-  if (storedToken.revoked) {
-    return oauthError("invalid_grant", "Refresh token revoked", 401);
-  }
-
-  // --- Rotate: issue new refresh token ---
-  const newRawToken = generateRefreshToken();
-  const newTokenHash = hashToken(newRawToken);
-  const newExpiresAt = new Date(
-    Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
-  ).toISOString();
-  const clientId = storedToken.client_id || storedToken.user_id;
-
-  // Insert new token first (safer — if this fails, old token still valid)
-  const { error: insertError } = await serviceClient
-    .from("oauth_refresh_tokens")
-    .insert({
-      token_hash: newTokenHash,
-      client_id: clientId,
-      user_id: storedToken.user_id,
-      scopes: storedToken.scopes,
-      expires_at: newExpiresAt,
-    });
-
-  if (insertError) {
-    log.error("[oauth] Failed to insert new refresh token", insertError, {
-      userId: storedToken.user_id,
-    });
-    return oauthError("server_error", "Token rotation failed", 500);
-  }
-
-  // Mark old token as replaced (atomic claim — only if still unclaimed)
-  const { data: revokedRows, error: revokeError } = await serviceClient
-    .from("oauth_refresh_tokens")
-    .update({ revoked: true, replaced_by_hash: newTokenHash })
-    .eq("token_hash", tokenHash)
-    .eq("revoked", false)
-    .select("id");
-
-  if (revokeError) {
-    log.error("[oauth] Failed to revoke old refresh token", revokeError, { tokenHash });
-  }
-
-  if (!revokedRows || revokedRows.length === 0) {
-    // Concurrent request already claimed this token — roll back our insert
-    await serviceClient
-      .from("oauth_refresh_tokens")
-      .delete()
-      .eq("token_hash", newTokenHash);
-    return oauthError("invalid_grant", "Token already consumed", 401);
-  }
-
-  // --- Issue new access token ---
-  const accessToken = await signMcpToken(
-    storedToken.user_id,
-    clientId,
-    storedToken.scopes,
-  );
-
-  // --- Opportunistic cleanup ---
   await cleanupExpiredTokens(serviceClient);
 
   return NextResponse.json({
-    access_token: accessToken,
-    token_type: "bearer",
-    expires_in: 3600,
-    refresh_token: newRawToken,
-    scope: storedToken.scopes.join(" "),
+    access_token: result.credentials.accessToken,
+    token_type: result.credentials.tokenType,
+    expires_in: result.credentials.expiresIn,
+    refresh_token: result.credentials.refreshToken,
+    scope: result.credentials.scope,
   });
 }
 
@@ -220,7 +154,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (grant_type === "refresh_token") {
-      return handleRefreshToken(body, serviceClient);
+      return await handleRefreshToken(body, serviceClient);
     }
 
     // --- authorization_code flow ---

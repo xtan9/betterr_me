@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { CalendarEventsDB, RemindersDB } from '@/lib/db';
+import { CalendarEventsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { calendarEventUpdateSchema } from '@/lib/validations/calendar-events';
-import { computeFireAt } from '@/lib/reminders/fire-at';
+import { SchedulingLifecycle } from '@/lib/scheduling/create';
 import { log } from '@/lib/logger';
 import type { CalendarEventUpdate } from '@/lib/db/types';
 
@@ -122,42 +122,28 @@ export async function PATCH(
       updates.end_count = data.end_count;
     }
 
-    const db = new CalendarEventsDB(supabase);
-    const event = await db.updateEvent(id, user.id, updates);
-
-    // Recompute fire_at for pending relative reminders when event is rescheduled (REMN-09)
-    if (data.start_date !== undefined || data.start_time !== undefined) {
-      try {
-        const remindersDB = new RemindersDB(supabase);
-        const reminders = await remindersDB.getRemindersBySource(user.id, 'calendar_event', id);
-        const startTime = event.start_time || '00:00:00';
-        const newStartISO = `${event.start_date}T${startTime}`;
-
-        for (const reminder of reminders) {
-          if (
-            reminder.status === 'pending' &&
-            reminder.reminder_type === 'relative' &&
-            reminder.relative_minutes != null
-          ) {
-            const newFireAt = computeFireAt(
-              { reminder_type: 'relative', relative_minutes: reminder.relative_minutes, absolute_time: null },
-              newStartISO
-            );
-            await remindersDB.updateReminder(user.id, reminder.id, { fire_at: newFireAt });
+    const lifecycle = new SchedulingLifecycle(supabase);
+    const outcome = await lifecycle.update(user.id, id, {
+      event: updates,
+      ...(data.reminders !== undefined
+        ? {
+            reminders: data.reminders.map((reminder) => ({
+              ...reminder,
+              relative_minutes: reminder.relative_minutes ?? null,
+              absolute_time: reminder.absolute_time ?? null,
+            })),
           }
-        }
-      } catch (reminderError) {
-        // Log but don't fail the event update if reminder recomputation fails
-        log.error('Failed to recompute reminder fire_at after event reschedule', reminderError, {
-          eventId: id,
-          userId: user.id,
-        });
-      }
-    }
+        : {}),
+    });
 
-    return NextResponse.json({ event });
+    return NextResponse.json(outcome);
   } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'PGRST116') {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      ['PGRST116', 'P0002'].includes((error as { code: string }).code)
+    ) {
       return NextResponse.json({ error: 'Calendar event not found' }, { status: 404 });
     }
 

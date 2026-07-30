@@ -9,6 +9,7 @@ import {
   codexSessionStarted,
   ensureSanitizedWorkerGitView,
   isolatedCodexAuthInstallRequired,
+  isolatedCodexReadablePaths,
   isolatedCodexRuntimeConfiguration,
   processExitCode,
   removeSanitizedWorkerGitView,
@@ -18,6 +19,10 @@ import {
   workerCodexModelArguments,
   workerGitSmokeCommand,
 } from "../../scripts/ralph/worker-isolation.mjs";
+import {
+  WORKER_PROTECTED_PATHS,
+  workerProtectedPath,
+} from "../../scripts/ralph/worker-path-policy.mjs";
 
 const gitCommand = process.platform === "win32" ? "git.exe" : "git";
 
@@ -41,6 +46,55 @@ function gitWithoutStdin(args: string[], options: { input?: string } = {}) {
 }
 
 describe("Ralph sanitized worker Git view", () => {
+  it.each([
+    ".github/workflows/e2e.yml",
+    ".gitattributes",
+    "scripts/ralph/controller.mjs",
+    "scripts/ci/ralph-sql-policy.mjs",
+    "scripts/ci/run-ralph-sql-tests.sh",
+    "supabase/migrations/20260729000001_ticket.sql",
+    "supabase/config.toml",
+    "supabase/seed.sql",
+    "supabase/tests/e2e_local_authenticated_grants.sql",
+    "supabase/tests/finance_cushion_rls.sql",
+    "supabase/tests/oauth_refresh_token_lifecycle.sql",
+    "supabase/tests/oauth_refresh_token_upgrade.sql",
+    "supabase/tests/ralph_ci_runner_security.sql",
+    "AGENTS.md",
+    ".env.local",
+    "nested/private.pem",
+  ])("protects controller-trusted worker path %s", (filePath) => {
+    expect(workerProtectedPath(filePath)).toBe(true);
+  });
+
+  it.each([
+    "app/api/tasks/route.ts",
+    "supabase/tests/ticket_fixture.sql",
+    "tests/ticket.test.ts",
+  ])("allows ordinary ticket path %s", (filePath) => {
+    expect(workerProtectedPath(filePath)).toBe(false);
+  });
+
+  it("keeps every protected source path in the worker read-only overlay", () => {
+    const protectedPaths = WORKER_PROTECTED_PATHS.map(
+      (relativePath) => `/worktree/${relativePath}`,
+    );
+    expect(
+      isolatedCodexReadablePaths({
+        readOnly: false,
+        worktreePath: "/worktree",
+        gitMetadataRoot: "/git-view/.git",
+        dependencyRoot: "/dependencies",
+        workerHome: "/worker-home",
+        protectedPaths,
+      }),
+    ).toEqual([
+      "/git-view/.git",
+      "/dependencies",
+      "/worker-home",
+      ...protectedPaths,
+    ]);
+  });
   it.each([
     [1, true, 0],
     [137, true, 0],
@@ -268,14 +322,24 @@ describe("Ralph sanitized worker Git view", () => {
     expect(unprivilegedWslIdentityIsSafe("Uid:\t65534\n")).toBe(false);
   });
 
-  it("pins Sol with medium implementation effort and high review effort", () => {
+  it("pins Sol with high coding, xhigh exhaustive review, and high delta review effort", () => {
     expect(workerCodexModelArguments({ readOnly: false })).toEqual([
       "--model",
       "gpt-5.6-sol",
       "-c",
-      'model_reasoning_effort="medium"',
+      'model_reasoning_effort="high"',
     ]);
-    expect(workerCodexModelArguments({ readOnly: true })).toEqual([
+    expect(
+      workerCodexModelArguments({ readOnly: true, reviewKind: "exhaustive" }),
+    ).toEqual([
+      "--model",
+      "gpt-5.6-sol",
+      "-c",
+      'model_reasoning_effort="xhigh"',
+    ]);
+    expect(
+      workerCodexModelArguments({ readOnly: true, reviewKind: "delta" }),
+    ).toEqual([
       "--model",
       "gpt-5.6-sol",
       "-c",

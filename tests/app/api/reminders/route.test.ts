@@ -9,7 +9,9 @@ const { mockComputeFireAt } = vi.hoisted(() => ({
 const mockRemindersDB = {
   createReminder: vi.fn(),
   getRemindersBySource: vi.fn(),
+  getReminder: vi.fn(),
   updateReminder: vi.fn(),
+  transitionCalendarEventReminder: vi.fn(),
   deleteReminder: vi.fn(),
 };
 
@@ -113,7 +115,7 @@ describe("POST /api/reminders", () => {
     const mockReminder = {
       id: "r1",
       user_id: "user-123",
-      source_type: "calendar_event",
+      source_type: "task",
       source_id: "11111111-1111-1111-1111-111111111111",
       reminder_type: "relative",
       relative_minutes: 15,
@@ -131,7 +133,7 @@ describe("POST /api/reminders", () => {
     const request = new NextRequest("http://localhost:3000/api/reminders", {
       method: "POST",
       body: JSON.stringify({
-        source_type: "calendar_event",
+        source_type: "task",
         source_id: "11111111-1111-1111-1111-111111111111",
         reminder_type: "relative",
         relative_minutes: 15,
@@ -159,7 +161,7 @@ describe("POST /api/reminders", () => {
     const mockReminder = {
       id: "r2",
       user_id: "user-123",
-      source_type: "calendar_event",
+      source_type: "habit",
       source_id: "11111111-1111-1111-1111-111111111111",
       reminder_type: "absolute",
       relative_minutes: null,
@@ -177,7 +179,7 @@ describe("POST /api/reminders", () => {
     const request = new NextRequest("http://localhost:3000/api/reminders", {
       method: "POST",
       body: JSON.stringify({
-        source_type: "calendar_event",
+        source_type: "habit",
         source_id: "11111111-1111-1111-1111-111111111111",
         reminder_type: "absolute",
         absolute_time: "2026-04-10T08:00:00Z",
@@ -224,6 +226,31 @@ describe("POST /api/reminders", () => {
     expect(response.status).toBe(401);
   });
 
+  it("refuses direct calendar-event reminder creation", async () => {
+    const { POST } = await import("@/app/api/reminders/route");
+    const request = new NextRequest("http://localhost:3000/api/reminders", {
+      method: "POST",
+      body: JSON.stringify({
+        source_type: "calendar_event",
+        source_id: "11111111-1111-1111-1111-111111111111",
+        reminder_type: "relative",
+        relative_minutes: 15,
+        channels: ["push"],
+        event_start_time: "2026-04-10T14:00:00Z",
+      }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error:
+        "Calendar event reminders must be updated through the calendar event lifecycle",
+    });
+    expect(mockComputeFireAt).not.toHaveBeenCalled();
+    expect(mockRemindersDB.createReminder).not.toHaveBeenCalled();
+  });
+
   it("returns 400 when relative reminder is missing relative_minutes", async () => {
     const { POST } = await import("@/app/api/reminders/route");
 
@@ -257,6 +284,121 @@ describe("POST /api/reminders", () => {
 describe("PATCH /api/reminders/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRemindersDB.getReminder.mockResolvedValue({
+      id: "r1",
+      source_type: "task",
+    });
+  });
+
+  it("refuses direct calendar-event reminder updates", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({
+      id: "r1",
+      source_type: "calendar_event",
+    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/reminders/r1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ fire_at: "2026-04-10T15:00:00Z" }),
+      },
+    );
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "r1" }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(mockRemindersDB.updateReminder).not.toHaveBeenCalled();
+  });
+
+  it("allows calendar-event dismissal through the delivery transition", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+    mockRemindersDB.transitionCalendarEventReminder.mockResolvedValue({ id: "r1", status: "sent" });
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({ status: "sent" }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+    expect(response.status).toBe(200);
+    expect(mockRemindersDB.transitionCalendarEventReminder).toHaveBeenCalledWith(
+      "user-123",
+      "r1",
+      { status: "sent", sent_at: undefined },
+    );
+  });
+
+  it("allows calendar-event snooze through the delivery transition", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+    mockRemindersDB.transitionCalendarEventReminder.mockResolvedValue({ id: "r1", status: "pending" });
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({ status: "pending", fire_at: "2026-04-10T15:00:00Z" }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+    expect(response.status).toBe(200);
+    expect(mockRemindersDB.transitionCalendarEventReminder).toHaveBeenCalledWith(
+      "user-123",
+      "r1",
+      { status: "pending", fire_at: "2026-04-10T15:00:00Z", sent_at: undefined },
+    );
+  });
+
+  it("preserves the legacy calendar-event snoozed status", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+    mockRemindersDB.transitionCalendarEventReminder.mockResolvedValue({ id: "r1", status: "snoozed" });
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({ status: "snoozed" }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+    expect(response.status).toBe(200);
+    expect(mockRemindersDB.transitionCalendarEventReminder).toHaveBeenCalledWith(
+      "user-123",
+      "r1",
+      { status: "snoozed", sent_at: undefined },
+    );
+  });
+
+  it("rejects sent_at on a calendar-event snooze before calling the RPC", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "pending",
+          fire_at: "2026-04-10T15:00:00Z",
+          sent_at: "2026-04-10T14:00:00Z",
+        }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+    expect(response.status).toBe(400);
+    expect(mockRemindersDB.transitionCalendarEventReminder).not.toHaveBeenCalled();
+  });
+
+  it("refuses calendar-event channel mutation", async () => {
+    const { PATCH } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+    const response = await PATCH(
+      new NextRequest("http://localhost:3000/api/reminders/r1", {
+        method: "PATCH",
+        body: JSON.stringify({ channels: ["email"] }),
+      }),
+      { params: Promise.resolve({ id: "r1" }) },
+    );
+    expect(response.status).toBe(409);
+    expect(mockRemindersDB.transitionCalendarEventReminder).not.toHaveBeenCalled();
   });
 
   it("updates reminder and returns 200", async () => {
@@ -346,6 +488,29 @@ describe("PATCH /api/reminders/[id]", () => {
 describe("DELETE /api/reminders/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRemindersDB.getReminder.mockResolvedValue({
+      id: "r1",
+      source_type: "task",
+    });
+  });
+
+  it("refuses direct calendar-event reminder deletion", async () => {
+    const { DELETE } = await import("@/app/api/reminders/[id]/route");
+    mockRemindersDB.getReminder.mockResolvedValue({
+      id: "r1",
+      source_type: "calendar_event",
+    });
+    const request = new NextRequest(
+      "http://localhost:3000/api/reminders/r1",
+      { method: "DELETE" },
+    );
+
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "r1" }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(mockRemindersDB.deleteReminder).not.toHaveBeenCalled();
   });
 
   it("deletes reminder and returns 200", async () => {

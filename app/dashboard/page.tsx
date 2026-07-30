@@ -1,9 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
-import { HabitsDB, TasksDB, HabitMilestonesDB } from "@/lib/db";
-import { getLocalDateString, getNextDateString } from "@/lib/utils";
-import { type DashboardData, type HabitMilestone, ZERO_ABSENCE } from "@/lib/db/types";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -19,62 +16,10 @@ export default async function DashboardPage() {
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
   const avatarUrl = user?.user_metadata?.avatar_url ?? null;
 
-  // Server-side data fetching — eliminates client-side waterfall
-  const habitsDB = new HabitsDB(supabase);
-  const tasksDB = new TasksDB(supabase);
-  const milestonesDB = new HabitMilestonesDB(supabase);
-  const date = getLocalDateString();
-
-  // Server-side date — may differ from client timezone; SWR will revalidate with correct client date
-  const tomorrowStr = getNextDateString(date);
-
-  const [habitsWithStatus, todayTasks, totalTaskCount, tasksTomorrow, milestonesToday] =
-    await Promise.all([
-      habitsDB.getHabitsWithTodayStatus(user.id, date),
-      tasksDB.getTodayTasks(user.id, date),
-      // Count all tasks (HEAD-only, no row data)
-      tasksDB.getTaskCount(user.id),
-      // Get incomplete tasks for tomorrow (rows needed for rendering)
-      tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
-      milestonesDB.getTodaysMilestones(user.id, date).catch((err) => {
-        console.error("Failed to fetch milestones:", err);
-        return [] as HabitMilestone[];
-      }),
-    ]);
-
-  // Derive completed count from todayTasks (no separate DB call needed)
-  const tasksCompletedTodayCount = todayTasks.filter(t => t.is_completed).length;
-
-  const completedHabitsToday = habitsWithStatus.filter(
-    (h) => h.completed_today
-  ).length;
-  const bestStreak = habitsWithStatus.reduce(
-    (max, h) => Math.max(max, h.current_streak),
-    0
+  return (
+    <DashboardContent
+      userName={userName}
+      avatarUrl={avatarUrl}
+    />
   );
-  // Server-side render doesn't have log data to compute absence;
-  // SWR will revalidate with the real values from the API route.
-  const habitsWithAbsence = habitsWithStatus.map(h => ({
-    ...h,
-    ...ZERO_ABSENCE,
-  }));
-
-  const initialData: DashboardData = {
-    habits: habitsWithAbsence,
-    tasks_today: todayTasks,
-    tasks_tomorrow: tasksTomorrow,
-    milestones_today: milestonesToday,
-    stats: {
-      total_habits: habitsWithStatus.length,
-      completed_today: completedHabitsToday,
-      current_best_streak: bestStreak,
-      total_tasks: totalTaskCount,
-      tasks_due_today: todayTasks.length,
-      tasks_completed_today: tasksCompletedTodayCount,
-      last_workout_at: null, // Workout stats hydrated via SWR from API
-      week_workout_count: 0,
-    },
-  };
-
-  return <DashboardContent userName={userName} avatarUrl={avatarUrl} initialData={initialData} />;
 }

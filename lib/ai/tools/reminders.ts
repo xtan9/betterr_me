@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { RemindersDB } from "@/lib/db";
 import type { ToolDefinition, ToolContext } from "./types";
+import {
+  CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR,
+  isCalendarEventReminder,
+} from "@/lib/reminders/lifecycle-policy";
+
+const lifecycleConflict = { error: CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR };
 
 export function reminderTools(): ToolDefinition[] {
   return [
@@ -20,10 +26,10 @@ export function reminderTools(): ToolDefinition[] {
     {
       name: "createReminder",
       description:
-        "Create a reminder linked to an existing task, calendar event, or habit. The reminder fires a push notification at the specified time.",
+        "Create a reminder linked to an existing task or habit. Calendar reminders are edited with updateEvent.",
       parameters: z.object({
         sourceType: z
-          .enum(["calendar_event", "task", "habit"])
+          .enum(["task", "habit"])
           .describe("Type of item this reminder is for"),
         sourceId: z.string().describe("ID of the task, event, or habit"),
         fireAt: z
@@ -52,6 +58,7 @@ export function reminderTools(): ToolDefinition[] {
         reminderId: z.string().describe("The reminder ID"),
         snoozeUntil: z
           .string()
+          .datetime()
           .optional()
           .describe(
             "If provided, snooze until this ISO datetime instead of dismissing",
@@ -59,6 +66,17 @@ export function reminderTools(): ToolDefinition[] {
       }),
       execute: async (params, ctx: ToolContext) => {
         const db = new RemindersDB(ctx.supabase);
+        const reminder = await db.getReminder(ctx.userId, params.reminderId);
+        if (!reminder) return { error: "Reminder not found" };
+        if (isCalendarEventReminder(reminder.source_type)) {
+          return db.transitionCalendarEventReminder(
+            ctx.userId,
+            params.reminderId,
+            params.snoozeUntil
+              ? { status: "pending", fire_at: params.snoozeUntil }
+              : { status: "sent" },
+          );
+        }
         if (params.snoozeUntil) {
           return db.updateReminder(ctx.userId, params.reminderId, {
             status: "pending",
@@ -81,15 +99,12 @@ export function reminderTools(): ToolDefinition[] {
         reminderId: z.string().describe("The reminder ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        // RemindersDB has no getReminder(id) method, so verify via direct query
-        const { data } = await ctx.supabase
-          .from("reminders")
-          .select("id")
-          .eq("id", params.reminderId)
-          .eq("user_id", ctx.userId)
-          .single();
-        if (!data) return { error: "Reminder not found" };
         const db = new RemindersDB(ctx.supabase);
+        const reminder = await db.getReminder(ctx.userId, params.reminderId);
+        if (!reminder) return { error: "Reminder not found" };
+        if (isCalendarEventReminder(reminder.source_type)) {
+          return lifecycleConflict;
+        }
         await db.deleteReminder(ctx.userId, params.reminderId);
         return { success: true };
       },

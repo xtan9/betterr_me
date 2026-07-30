@@ -3,6 +3,10 @@ import type { RecurringTask, TaskInsert } from '@/lib/db/types';
 import { getOccurrencesInRange } from './recurrence';
 import { log } from '@/lib/logger';
 
+export type RecurringGenerationResult =
+  | { status: 'complete'; failedTemplateIds: [] }
+  | { status: 'partial'; failedTemplateIds: string[] };
+
 /**
  * Ensure task instances exist for all active recurring tasks through the given date.
  * Called on dashboard load and task list load to generate instances on-demand.
@@ -17,7 +21,7 @@ export async function ensureRecurringInstances(
   supabase: SupabaseClient,
   userId: string,
   throughDate: string
-): Promise<void> {
+): Promise<RecurringGenerationResult> {
   // Find templates that need instance generation
   const { data: templates, error: fetchErr } = await supabase
     .from('recurring_tasks')
@@ -29,17 +33,31 @@ export async function ensureRecurringInstances(
   if (fetchErr) {
     throw new Error(`ensureRecurringInstances: failed to fetch templates: ${fetchErr.message}`);
   }
-  if (!templates || templates.length === 0) return;
+  if (!templates || templates.length === 0) {
+    return { status: 'complete', failedTemplateIds: [] };
+  }
 
+  const failedTemplateIds: string[] = [];
   for (const template of templates as RecurringTask[]) {
     try {
-      await generateInstancesForTemplate(supabase, template, userId, throughDate);
+      const generated = await generateInstancesForTemplate(
+        supabase,
+        template,
+        userId,
+        throughDate,
+      );
+      if (!generated) failedTemplateIds.push(template.id);
     } catch (err) {
       log.error('ensureRecurringInstances: failed for template', err, {
         templateId: template.id,
       });
+      failedTemplateIds.push(template.id);
     }
   }
+
+  return failedTemplateIds.length === 0
+    ? { status: 'complete', failedTemplateIds: [] }
+    : { status: 'partial', failedTemplateIds };
 }
 
 async function generateInstancesForTemplate(
@@ -47,7 +65,7 @@ async function generateInstancesForTemplate(
   template: RecurringTask,
   userId: string,
   throughDate: string
-): Promise<void> {
+): Promise<boolean> {
   const rangeStart = template.next_generate_date ?? template.start_date;
 
   // Apply end_date constraint
@@ -68,8 +86,7 @@ async function generateInstancesForTemplate(
 
   if (occurrences.length === 0) {
     // Still advance next_generate_date even if no occurrences in this window
-    await updateTemplateAfterGeneration(supabase, template, throughDate, 0);
-    return;
+    return updateTemplateAfterGeneration(supabase, template, throughDate, 0);
   }
 
   // Check end_count constraint
@@ -84,8 +101,9 @@ async function generateInstancesForTemplate(
         .eq('id', template.id);
       if (archiveErr) {
         log.error('Failed to archive template at count limit', archiveErr, { templateId: template.id });
+        return false;
       }
-      return;
+      return true;
     }
     allowedOccurrences = occurrences.slice(0, remaining);
   }
@@ -134,12 +152,21 @@ async function generateInstancesForTemplate(
         templateId: template.id,
         count: newInstances.length,
       });
-      return;
+      return false;
     }
   }
 
-  const totalGenerated = newInstances.length;
-  await updateTemplateAfterGeneration(supabase, template, throughDate, totalGenerated);
+  // Every allowed occurrence is now represented by an instance, including
+  // rows inserted by an earlier attempt whose template advancement failed.
+  // Account for the whole pending window so retries cannot leave
+  // instances_generated stale and exceed an after_count limit.
+  const totalGenerated = allowedOccurrences.length;
+  return updateTemplateAfterGeneration(
+    supabase,
+    template,
+    throughDate,
+    totalGenerated,
+  );
 }
 
 async function updateTemplateAfterGeneration(
@@ -147,7 +174,7 @@ async function updateTemplateAfterGeneration(
   template: RecurringTask,
   throughDate: string,
   newCount: number
-): Promise<void> {
+): Promise<boolean> {
   // next_generate_date = day after throughDate, so we don't re-check this range
   const [y, m, d] = throughDate.split('-').map(Number);
   const nextDay = new Date(y, m - 1, d + 1);
@@ -169,5 +196,7 @@ async function updateTemplateAfterGeneration(
     log.error('Failed to update template after generation', error, {
       templateId: template.id,
     });
+    return false;
   }
+  return true;
 }
