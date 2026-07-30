@@ -20,7 +20,7 @@ jobs:
     environment: Production
     steps:
       - name: Checkout deployed commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Wait for Vercel and probe production
         env:
