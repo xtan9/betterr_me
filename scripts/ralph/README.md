@@ -49,6 +49,9 @@ or compiler configuration always stop at a PR for human review.
 - A Linux dependency tree matching `pnpm-lock.yaml` must exist read-only at
   `/var/lib/betterr-me-ralph/deps-source/node_modules`, with its root-owned
   content fingerprint at `/var/lib/betterr-me-ralph/deps.content.sha256`.
+  Ralph keeps the fingerprinted Linux esbuild binaries root-owned and
+  read/execute-only so controller verification can spawn them without making
+  any dependency content writable.
 - Immutable copies of the `implement`, `tdd`, and `code-review` skills must
   exist below `/var/lib/betterr-me-ralph/worker-home/.agents/skills`.
 - The authenticated GitHub account must be allowed to assign issues, push
