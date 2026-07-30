@@ -6,6 +6,7 @@ import type {
   ReminderChannel,
   ReminderType,
 } from "@/lib/db/types";
+import type { CalendarEventUpdateValues } from "@/lib/validations/calendar-events";
 
 export interface RequestedEventReminder {
   reminder_type: ReminderType;
@@ -23,6 +24,17 @@ export interface CreateScheduleOutcome {
   event: CalendarEvent;
   reminders: Reminder[];
 }
+
+export interface UpdateScheduleRequest {
+  event: Omit<CalendarEventUpdateValues, "reminders">;
+  /**
+   * Omitted means preserve the existing reminder intent. An empty array
+   * explicitly removes every reminder from the event.
+   */
+  reminders?: RequestedEventReminder[];
+}
+
+export type UpdateScheduleOutcome = CreateScheduleOutcome;
 
 /**
  * Creates an event and its requested reminders as one database transaction.
@@ -47,5 +59,24 @@ export class SchedulingLifecycle {
 
     if (error) throw error;
     return data as CreateScheduleOutcome;
+  }
+
+  async update(
+    userId: string,
+    eventId: string,
+    request: UpdateScheduleRequest,
+  ): Promise<UpdateScheduleOutcome> {
+    const { data, error } = await this.supabase.rpc(
+      "update_calendar_event_with_reminders",
+      {
+        p_user_id: userId,
+        p_event_id: eventId,
+        p_event: request.event,
+        p_reminders: request.reminders ?? null,
+      },
+    );
+
+    if (error) throw error;
+    return data as UpdateScheduleOutcome;
   }
 }

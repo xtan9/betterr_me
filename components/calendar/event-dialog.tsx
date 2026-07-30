@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { ReminderRows, ReminderRowData, SMART_DEFAULTS } from "./reminder-rows";
@@ -65,7 +65,10 @@ export function EventDialog({
   const [deleting, setDeleting] = useState(false);
   const [reminderRows, setReminderRows] = useState<ReminderRowData[]>([]);
   const [reminderLoadFailed, setReminderLoadFailed] = useState(false);
-  const loadedReminderIds = useRef<Set<string>>(new Set());
+  const [reminderLoadState, setReminderLoadState] = useState<{
+    eventId: string;
+    status: "loading" | "settled";
+  } | null>(null);
 
   const isEditing = !!event;
   const todayStr = getLocalDateString();
@@ -78,18 +81,26 @@ export function EventDialog({
   useEffect(() => {
     if (isOpen) {
       form.reset(getDefaults(event, prefill, todayStr));
-      loadedReminderIds.current = new Set();
       setReminderLoadFailed(false);
 
       if (event) {
+        const controller = new AbortController();
+        setReminderRows([]);
+        setReminderLoadState({ eventId: event.id, status: "loading" });
+
         // Edit mode: fetch existing reminders
-        fetch(`/api/reminders?source_type=calendar_event&source_id=${event.id}`)
+        fetch(`/api/reminders?source_type=calendar_event&source_id=${event.id}`, {
+          signal: controller.signal,
+        })
           .then((res) => {
             if (!res.ok) throw new Error(`Failed to fetch reminders: ${res.status}`);
             return res.json();
           })
           .then((data) => {
-            const reminders: Reminder[] = data.reminders || [];
+            if (controller.signal.aborted) return;
+            const reminders: Reminder[] = (data.reminders || []).filter(
+              (reminder: Reminder) => reminder.status === "pending",
+            );
             const rows: ReminderRowData[] = reminders.map((r) => ({
               id: r.id,
               tempId: r.id,
@@ -99,15 +110,20 @@ export function EventDialog({
               channels: [...r.channels] as ("push" | "email")[],
             }));
             setReminderRows(rows);
-            loadedReminderIds.current = new Set(reminders.map((r) => r.id));
+            setReminderLoadState({ eventId: event.id, status: "settled" });
           })
           .catch((err) => {
+            if (controller.signal.aborted) return;
             console.error("Failed to load reminders:", err);
             setReminderLoadFailed(true);
             setReminderRows([]);
+            setReminderLoadState({ eventId: event.id, status: "settled" });
           });
+
+        return () => controller.abort();
       } else {
         // New event: smart defaults
+        setReminderLoadState(null);
         const defaultReminder: ReminderRowData = {
           tempId: crypto.randomUUID(),
           reminderType: "relative",
@@ -117,10 +133,18 @@ export function EventDialog({
         };
         setReminderRows([defaultReminder]);
       }
+    } else {
+      setReminderRows([]);
+      setReminderLoadFailed(false);
+      setReminderLoadState(null);
     }
   }, [isOpen, event, prefill, todayStr, form]);
 
   const isAllDay = form.watch("is_all_day");
+  const remindersLoading =
+    !!event &&
+    (reminderLoadState?.eventId !== event.id ||
+      reminderLoadState.status === "loading");
 
   const handleSubmit = useCallback(
     async (values: FormValues) => {
@@ -145,7 +169,9 @@ export function EventDialog({
           description: values.description || null,
           color: values.color || null,
         };
-        if (!isEditing) {
+        // If an edit could not load current intent, omit this field so the
+        // lifecycle preserves it instead of treating an empty UI as removal.
+        if (!isEditing || !reminderLoadFailed) {
           payload.reminders = reminderRows.map((row) => ({
             reminder_type: row.reminderType,
             relative_minutes: row.relativeMinutes,
@@ -187,81 +213,6 @@ export function EventDialog({
 
         if (!eventId && reminderRows.length > 0) {
           toast.warning(t("eventDialog.reminderSaveWarning"));
-        }
-
-        // Editing retains the existing reminder API. Creation has already
-        // persisted every requested reminder in the event transaction.
-        // Skip edits if the initial load failed to avoid silent deletion.
-        if (isEditing && eventId && !reminderLoadFailed) {
-          const startDateTime = values.is_all_day
-            ? `${values.start_date}T00:00:00Z`
-            : values.start_time
-              ? `${values.start_date}T${values.start_time}:00Z`
-              : `${values.start_date}T00:00:00Z`;
-
-          // Determine which reminders to create, update, delete
-          const currentIds = new Set(
-            reminderRows.filter((r) => r.id).map((r) => r.id!)
-          );
-          const deletedIds = [...loadedReminderIds.current].filter(
-            (id) => !currentIds.has(id)
-          );
-
-          let reminderErrors = 0;
-
-          // Delete removed reminders
-          const deleteResults = await Promise.allSettled(
-            deletedIds.map((id) =>
-              fetch(`/api/reminders/${id}`, { method: "DELETE" })
-            )
-          );
-          for (const result of deleteResults) {
-            if (result.status === "rejected") {
-              reminderErrors++;
-              console.error("Failed to delete reminder:", result.reason);
-            }
-          }
-
-          // Create new reminders (no id) and update existing
-          const saveResults = await Promise.allSettled(
-            reminderRows.map((row) => {
-              if (!row.id) {
-                // New reminder
-                return fetch("/api/reminders", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    source_type: "calendar_event",
-                    source_id: eventId,
-                    reminder_type: row.reminderType,
-                    relative_minutes: row.relativeMinutes,
-                    absolute_time: row.absoluteTime,
-                    channels: row.channels,
-                    event_start_time: startDateTime,
-                  }),
-                });
-              } else {
-                // Existing reminder - update channels
-                return fetch(`/api/reminders/${row.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    channels: row.channels,
-                  }),
-                });
-              }
-            })
-          );
-          for (const result of saveResults) {
-            if (result.status === "rejected") {
-              reminderErrors++;
-              console.error("Failed to save reminder:", result.reason);
-            }
-          }
-
-          if (reminderErrors > 0) {
-            toast.warning(t("eventDialog.reminderSaveWarning"));
-          }
         }
 
         onSaved();
@@ -451,7 +402,7 @@ export function EventDialog({
             <ReminderRows
               rows={reminderRows}
               onChange={setReminderRows}
-              disabled={saving}
+              disabled={saving || remindersLoading}
             />
           </div>
 
@@ -494,7 +445,11 @@ export function EventDialog({
               >
                 {t("eventDialog.cancel")}
               </Button>
-              <Button type="submit" size="sm" disabled={saving || deleting}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={saving || deleting || remindersLoading}
+              >
                 {t("eventDialog.save")}
               </Button>
             </div>

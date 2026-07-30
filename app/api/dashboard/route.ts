@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { HabitsDB, TasksDB, HabitLogsDB, HabitMilestonesDB, ProfilesDB } from '@/lib/db';
-import { WorkoutsDB } from '@/lib/db/workouts';
-import { type DashboardData, type HabitLog, type HabitMilestone, ZERO_ABSENCE } from '@/lib/db/types';
-import { getLocalDateString, getNextDateString } from '@/lib/utils';
-import { computeMissedDays } from '@/lib/habits/absence';
-import { ensureRecurringInstances } from '@/lib/recurring-tasks';
+import { getLocalDateString } from '@/lib/utils';
 import { log } from '@/lib/logger';
+import { createSupabaseDashboardSnapshot } from '@/lib/dashboard/supabase-dashboard-snapshot';
 
 /**
  * GET /api/dashboard
@@ -32,12 +28,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const habitsDB = new HabitsDB(supabase);
-    const tasksDB = new TasksDB(supabase);
-    const habitLogsDB = new HabitLogsDB(supabase);
-    const milestonesDB = new HabitMilestonesDB(supabase);
-    const workoutsDB = new WorkoutsDB(supabase);
-    const profilesDB = new ProfilesDB(supabase);
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
 
@@ -49,138 +39,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const tomorrowStr = getNextDateString(date);
-
-    // Generate recurring task instances through 7 days from now
-    const [dy, dm, dd] = date.split('-').map(Number);
-    const throughDate = getLocalDateString(new Date(dy, dm - 1, dd + 7));
-    let recurringGenFailed = false;
-    await ensureRecurringInstances(supabase, user.id, throughDate).catch((err) => {
-      log.error('ensureRecurringInstances failed on dashboard', err, { userId: user.id });
-      recurringGenFailed = true;
+    const outcome = await createSupabaseDashboardSnapshot(supabase).load({
+      userId: user.id,
+      date,
     });
-
-    // 30-day lookback window for absence computation
-    const [year, month, day] = date.split('-').map(Number);
-    const thirtyDaysAgo = new Date(year, month - 1, day - 30);
-    const thirtyDaysAgoStr = [
-      thirtyDaysAgo.getFullYear(),
-      String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0'),
-      String(thirtyDaysAgo.getDate()).padStart(2, '0'),
-    ].join('-');
-
-    // Core queries — failure here returns 500
-    const [habitsWithStatus, todayTasks, totalTaskCount, tasksTomorrow] = await Promise.all([
-      habitsDB.getHabitsWithTodayStatus(user.id, date),
-      tasksDB.getTodayTasks(user.id, date),
-      // Count all tasks (HEAD-only, no row data)
-      tasksDB.getTaskCount(user.id),
-      // Get incomplete tasks for tomorrow (rows needed for rendering)
-      tasksDB.getUserTasks(user.id, { due_date: tomorrowStr, is_completed: false }),
-    ]);
-
-    // Derive completed count from todayTasks (no separate DB call needed)
-    const tasksCompletedToday = todayTasks.filter(t => t.is_completed).length;
-
-    // Compute week start date for workout count query using user's preference
-    const profile = await profilesDB.getProfile(user.id).catch((err) => {
-      log.error('Failed to fetch profile for week_start_day', err, { userId: user.id });
-      return null;
-    });
-    const weekStartDay = profile?.preferences?.week_start_day ?? 1;
-    const currentDayOfWeek = new Date(year, month - 1, day).getDay();
-    const daysToSubtract = (currentDayOfWeek - weekStartDay + 7) % 7;
-    const weekStartDate = getLocalDateString(new Date(year, month - 1, day - daysToSubtract));
-
-    // Supplementary queries — failure falls back gracefully
-    let logsFetchFailed = false;
-    const [allLogs, milestonesToday, lastWorkoutAt, weekWorkoutCount] = await Promise.all([
-      // Bulk fetch 30-day logs for all habits (1 query, avoids N+1)
-      habitLogsDB.getAllUserLogs(user.id, thirtyDaysAgoStr, date).catch((err) => {
-        log.error('Failed to fetch habit logs for absence', err, { userId: user.id, date });
-        logsFetchFailed = true;
-        return [] as Pick<HabitLog, 'habit_id' | 'logged_date' | 'completed'>[];
-      }),
-      // Get milestones achieved today
-      milestonesDB.getTodaysMilestones(user.id, date).catch((err) => {
-        log.error('Failed to fetch milestones', err, { userId: user.id, date });
-        return [] as HabitMilestone[];
-      }),
-      // Last completed workout
-      workoutsDB.getLastCompletedAt(user.id).catch((err) => {
-        log.error('Failed to fetch last workout', err, { userId: user.id });
-        return null;
-      }),
-      // Completed workouts this week
-      workoutsDB.getWeekWorkoutCount(user.id, weekStartDate).catch((err) => {
-        log.error('Failed to fetch week workout count', err, { userId: user.id });
-        return 0;
-      }),
-    ]);
-
-    // Group completed logs by habit_id for absence computation
-    const logsByHabit = new Map<string, Set<string>>();
-    for (const log of allLogs) {
-      if (log.completed) {
-        if (!logsByHabit.has(log.habit_id)) {
-          logsByHabit.set(log.habit_id, new Set());
-        }
-        logsByHabit.get(log.habit_id)!.add(log.logged_date);
-      }
+    if (outcome.status === 'failed') {
+      return NextResponse.json(
+        { error: 'Failed to fetch dashboard data' },
+        { status: 500 },
+      );
     }
 
-    // Enrich habits with absence data
-    const warnings: string[] = [];
-    if (logsFetchFailed) {
-      warnings.push('Absence data may be inaccurate — habit logs temporarily unavailable');
-    }
-    if (recurringGenFailed) {
-      warnings.push('Some recurring tasks may not appear — generation failed temporarily');
-    }
-    const enrichedHabits = habitsWithStatus.map(habit => {
-      try {
-        const completedDates = logsByHabit.get(habit.id) || new Set<string>();
-        const { missed_scheduled_periods, previous_streak, absence_unit } = computeMissedDays(
-          habit.frequency,
-          completedDates,
-          date,
-          habit.created_at,
-          thirtyDaysAgoStr,
-        );
-        return { ...habit, missed_scheduled_periods, previous_streak, absence_unit };
-      } catch (err) {
-        log.error('computeMissedDays failed', err, { userId: user.id, habitId: habit.id, date, dateRange: `${thirtyDaysAgoStr} to ${date}` });
-        warnings.push(`Absence data unavailable for habit ${habit.id}`);
-        // Zeros as fallback: no prior cached value available
-        return { ...habit, ...ZERO_ABSENCE };
-      }
+    return NextResponse.json({
+      ...outcome.snapshot,
+      ...(outcome.status === 'degraded' && {
+        _warnings: outcome.warnings.map((warning) => warning.message),
+      }),
     });
-
-    // Calculate stats
-    const completedHabitsToday = enrichedHabits.filter(h => h.completed_today).length;
-    const bestStreak = enrichedHabits.reduce(
-      (max, h) => Math.max(max, h.current_streak),
-      0
-    );
-    const dashboardData: DashboardData = {
-      habits: enrichedHabits,
-      tasks_today: todayTasks,
-      tasks_tomorrow: tasksTomorrow,
-      milestones_today: milestonesToday,
-      stats: {
-        total_habits: enrichedHabits.length,
-        completed_today: completedHabitsToday,
-        current_best_streak: bestStreak,
-        total_tasks: totalTaskCount,
-        tasks_due_today: todayTasks.length,
-        tasks_completed_today: tasksCompletedToday,
-        last_workout_at: lastWorkoutAt,
-        week_workout_count: weekWorkoutCount,
-      },
-      ...(warnings.length > 0 && { _warnings: warnings }),
-    };
-
-    return NextResponse.json(dashboardData);
   } catch (error) {
     log.error('GET /api/dashboard error', error);
     return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 });

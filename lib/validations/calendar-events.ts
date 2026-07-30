@@ -135,6 +135,7 @@ export const calendarEventUpdateSchema = z
       .optional()
       .nullable(),
     end_count: z.number().int().min(1).max(500).optional().nullable(),
+    reminders: z.array(eventReminderSchema).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",

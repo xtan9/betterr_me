@@ -159,11 +159,16 @@ describe("ensureRecurringInstances", () => {
         { data: [], error: null }, // empty template list
       ]);
 
-      await ensureRecurringInstances(
+      const result = await ensureRecurringInstances(
         supabase as any,
         USER_ID,
         "2026-02-20",
       );
+
+      expect(result).toEqual({
+        status: "complete",
+        failedTemplateIds: [],
+      });
 
       // Full chain sanity — catches .from / .select / .eq / .lte arg mutations
       expectQuery(queryLog, { table: "recurring_tasks", method: "from", args: ["recurring_tasks"] });
@@ -178,12 +183,16 @@ describe("ensureRecurringInstances", () => {
         { data: [], error: null },
       ]);
 
-      await ensureRecurringInstances(
+      const result = await ensureRecurringInstances(
         supabase as any,
         USER_ID,
         "2026-02-20",
       );
 
+      expect(result).toEqual({
+        status: "complete",
+        failedTemplateIds: [],
+      });
       // No second from() — only the initial template fetch happened
       const fromCalls = queryLog.filter((q) => q.method === "from");
       expect(fromCalls).toHaveLength(1);
@@ -197,12 +206,16 @@ describe("ensureRecurringInstances", () => {
         { data: null, error: null },
       ]);
 
-      await ensureRecurringInstances(
+      const result = await ensureRecurringInstances(
         supabase as any,
         USER_ID,
         "2026-02-20",
       );
 
+      expect(result).toEqual({
+        status: "complete",
+        failedTemplateIds: [],
+      });
       const fromCalls = queryLog.filter((q) => q.method === "from");
       expect(fromCalls).toHaveLength(1);
     });
@@ -247,11 +260,16 @@ describe("ensureRecurringInstances", () => {
         { data: null, error: null }, // 4) template update
       ]);
 
-      await ensureRecurringInstances(
+      const result = await ensureRecurringInstances(
         supabase as any,
         USER_ID,
         "2026-02-20",
       );
+
+      expect(result).toEqual({
+        status: "complete",
+        failedTemplateIds: [],
+      });
 
       // Existing-instances query chain
       expectQuery(queryLog, { table: "tasks", method: "from", args: ["tasks"] });
@@ -410,14 +428,15 @@ describe("ensureRecurringInstances", () => {
       const insertCalls = queryLog.filter((q) => q.method === "insert");
       expect(insertCalls).toHaveLength(0);
 
-      // Template is still updated (next_generate_date advances) with 0 new
+      // Template advancement accounts for every occurrence in the pending
+      // window, even though the corresponding rows already exist.
       const updateCall = expectQuery(queryLog, {
         table: "recurring_tasks",
         method: "update",
       });
       expect(updateCall.args[0]).toEqual({
         next_generate_date: "2026-02-21",
-        instances_generated: 10, // unchanged (newCount=0)
+        instances_generated: 14,
       });
     });
 
@@ -666,6 +685,63 @@ describe("ensureRecurringInstances", () => {
       expect(rows).toHaveLength(4);
     });
 
+    it("accounts for existing instances when retrying after template advancement fails", async () => {
+      const template = makeTemplate({
+        id: "tmpl-retry-count",
+        end_type: "after_count",
+        end_count: 2,
+        instances_generated: 0,
+        next_generate_date: "2026-02-17",
+      });
+      const existingInstances = [
+        { original_date: "2026-02-17" },
+        { original_date: "2026-02-18" },
+      ];
+      const { supabase, queryLog } = createRecordingSupabase([
+        { data: [template], error: null },
+        { data: [], error: null },
+        { data: null, error: null },
+        { data: null, error: { message: "advancement failed" } },
+        { data: [template], error: null },
+        { data: existingInstances, error: null },
+        { data: null, error: null },
+      ]);
+
+      await expect(
+        ensureRecurringInstances(
+          supabase as any,
+          USER_ID,
+          "2026-02-20",
+        ),
+      ).resolves.toEqual({
+        status: "partial",
+        failedTemplateIds: ["tmpl-retry-count"],
+      });
+      await expect(
+        ensureRecurringInstances(
+          supabase as any,
+          USER_ID,
+          "2026-02-20",
+        ),
+      ).resolves.toEqual({
+        status: "complete",
+        failedTemplateIds: [],
+      });
+
+      const templateUpdates = queryLog.filter(
+        (entry) =>
+          entry.table === "recurring_tasks" && entry.method === "update",
+      );
+      expect(templateUpdates).toHaveLength(2);
+      expect(templateUpdates[1].args[0]).toEqual({
+        next_generate_date: "2026-02-21",
+        instances_generated: 2,
+      });
+      expect(queryLog.filter((entry) => entry.method === "insert")).toHaveLength(
+        1,
+      );
+    });
+
     it("archives the template (status='archived') when remaining <= 0 (exactly at limit)", async () => {
       const template = makeTemplate({
         id: "tmpl-at-limit",
@@ -751,7 +827,10 @@ describe("ensureRecurringInstances", () => {
           USER_ID,
           "2026-02-20",
         ),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({
+        status: "partial",
+        failedTemplateIds: ["tmpl-archive-fail"],
+      });
 
       // Verify the archive-specific error log — kills mutations on the log message
       const calls = (log.error as ReturnType<typeof vi.fn>).mock.calls;
@@ -977,7 +1056,10 @@ describe("ensureRecurringInstances", () => {
           USER_ID,
           "2026-02-20",
         ),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({
+        status: "partial",
+        failedTemplateIds: ["tmpl-existing-err"],
+      });
 
       // Top-level outer-catch logs the thrown Error — check msg + templateId context
       const calls = (log.error as ReturnType<typeof vi.fn>).mock.calls;
@@ -1008,7 +1090,10 @@ describe("ensureRecurringInstances", () => {
           USER_ID,
           "2026-02-20",
         ),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({
+        status: "partial",
+        failedTemplateIds: ["tmpl-insert-fail"],
+      });
 
       // Insert-specific error is logged
       const calls = (log.error as ReturnType<typeof vi.fn>).mock.calls;
@@ -1045,7 +1130,10 @@ describe("ensureRecurringInstances", () => {
           USER_ID,
           "2026-02-20",
         ),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({
+        status: "partial",
+        failedTemplateIds: ["tmpl-update-fail"],
+      });
 
       const calls = (log.error as ReturnType<typeof vi.fn>).mock.calls;
       const match = calls.find(
@@ -1075,12 +1163,16 @@ describe("ensureRecurringInstances", () => {
         { data: null, error: null }, // tpl2 update
       ]);
 
-      await ensureRecurringInstances(
+      const result = await ensureRecurringInstances(
         supabase as any,
         USER_ID,
         "2026-02-20",
       );
 
+      expect(result).toEqual({
+        status: "partial",
+        failedTemplateIds: ["tmpl-1"],
+      });
       // tpl2 still processed — its insert ran with tpl-2's id
       const insertCall = expectQuery(queryLog, { table: "tasks", method: "insert" });
       const rows = insertCall.args[0] as Array<{ recurring_task_id: string }>;
