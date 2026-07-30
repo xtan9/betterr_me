@@ -4,7 +4,7 @@ const QUALITY_PATTERNS = [
   /^(?:app|components|emails|hooks|i18n|lib|scripts|tests)\//,
   /\.(?:c|m)?(?:j|t)sx?$/,
   /^(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig\.json|vitest\.config\.ts|eslint\.config\.mjs|next\.config\.ts|proxy\.ts)$/,
-  /^\.github\/(?:actions\/.+\/action|workflows\/.+)\.ya?ml$/,
+  /^\.github\/(?:dependabot|actions\/.+\/action|workflows\/.+)\.ya?ml$/,
 ];
 
 const FULL_TEST_PATTERNS = [
@@ -16,7 +16,7 @@ const FULL_LINT_PATTERNS = [
 ];
 
 const CI_ONLY_PATTERNS = [
-  /^\.github\/(?:actions\/.+\/action|workflows\/.+)\.ya?ml$/,
+  /^\.github\/(?:dependabot|actions\/.+\/action|workflows\/.+)\.ya?ml$/,
   /^scripts\/ci\/(?:classify-changes\.sh|detect-pull-request-validated-push\.mjs|production-smoke\.mjs|reconcile-scheduled-workflow-issue\.mjs|select-e2e-tests\.mjs|select-quality-checks\.mjs)$/,
   /^tests\/scripts\/(?:classify-changes|detect-pull-request-validated-push|production-smoke|reconcile-scheduled-workflow-issue|select-e2e-tests|select-quality-checks)\.test\.ts$/,
   /^tests\/scripts\/github-actions-runtime-policy\.test\.ts$/,
@@ -25,7 +25,7 @@ const CI_ONLY_PATTERNS = [
 const CI_SMOKE_MAPPINGS = [
   {
     patterns: [
-      /^\.github\/(?:actions\/.+\/action|workflows\/.+)\.ya?ml$/,
+      /^\.github\/(?:dependabot|actions\/.+\/action|workflows\/.+)\.ya?ml$/,
       /^tests\/scripts\/github-actions-runtime-policy\.test\.ts$/,
     ],
     tests: ["tests/scripts/github-actions-runtime-policy.test.ts"],
