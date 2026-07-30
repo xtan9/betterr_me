@@ -1,3 +1,4 @@
+-- ralph-ci: true
 -- Run after `supabase db reset` against the local instance. Each assertion
 -- observes the public update lifecycle; the transaction leaves no data behind.
 begin;
@@ -21,7 +22,7 @@ values (
   'authenticated',
   'authenticated',
   'calendar-update-lifecycle@example.test',
-  crypt('not-used', gen_salt('bf')),
+  'not-used',
   now(),
   '{}'::jsonb,
   '{}'::jsonb,
@@ -48,7 +49,7 @@ values (
   'authenticated',
   'authenticated',
   'other-calendar-update-lifecycle@example.test',
-  crypt('not-used', gen_salt('bf')),
+  'not-used',
   now(),
   '{}'::jsonb,
   '{}'::jsonb,
