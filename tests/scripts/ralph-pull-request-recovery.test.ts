@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  baseUpdateReviewResetPatch,
   blockedRepairPostPushDisposition,
   blockedRepairPreservationRecoveryAction,
   blockedRepairRecoveryReceipt,
   blockedRepairRecoveryReceiptMatches,
   canAdoptLegacyProtectedScopeRepair,
   planPullRequestRecovery,
+  pullRequestBaseUpdateDisposition,
   pullRequestCheckRetryKey,
   pullRequestRecoveryErrorDisposition,
   pullRequestRecoveryFingerprint,
@@ -35,6 +37,284 @@ const snapshot = (overrides = {}) => ({
 });
 
 describe("Ralph pull-request recovery planning", () => {
+  it("archives and clears an active review repair when a new base is adopted", () => {
+    expect(
+      baseUpdateReviewResetPatch(
+        {
+          reviewFindingLedger: [{ id: "SEC-001", problem: "old finding" }],
+          reviewBaselineTreeSha: "tree-before-repair",
+          reviewRepairPending: false,
+        },
+        "2026-07-29T20:00:00.000Z",
+      ),
+    ).toEqual({
+      reviewFindingLedger: null,
+      reviewBaselineTreeSha: null,
+      reviewRepairPending: null,
+      supersededReviewFindingLedgers: [
+        {
+          findingLedger: [{ id: "SEC-001", problem: "old finding" }],
+          baselineTreeSha: "tree-before-repair",
+          repairPending: false,
+          supersededAt: "2026-07-29T20:00:00.000Z",
+          reason: "pull-request base updated before forced exhaustive review",
+        },
+      ],
+    });
+  });
+
+  it("adopts only an exact observable head from a durable base-update receipt", () => {
+    const pending = { previousHead: "head-1", baseSha: "main-2" };
+    expect(
+      pullRequestBaseUpdateDisposition({
+        pending,
+        observedHead: "head-1",
+        headContainsPendingBase: false,
+        headContainsPendingPreviousHead: false,
+      }),
+    ).toEqual({ action: "wait" });
+    expect(
+      pullRequestBaseUpdateDisposition({
+        pending,
+        observedHead: "head-2",
+        headContainsPendingBase: true,
+        headContainsPendingPreviousHead: true,
+      }),
+    ).toEqual({ action: "adopt", headSha: "head-2", baseSha: "main-2" });
+    expect(
+      pullRequestBaseUpdateDisposition({
+        pending,
+        observedHead: "head-2",
+        headContainsPendingBase: false,
+        headContainsPendingPreviousHead: true,
+      }),
+    ).toEqual({ action: "unsafe" });
+    expect(
+      pullRequestBaseUpdateDisposition({
+        pending,
+        observedHead: "head-2",
+        headContainsPendingBase: true,
+        headContainsPendingPreviousHead: false,
+      }),
+    ).toEqual({ action: "unsafe" });
+  });
+  it("updates a clean stale Draft to latest main before repairing checks", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          latestMainSha: "main-2",
+          headContainsLatestMain: false,
+          checks: [
+            {
+              name: "e2e",
+              bucket: "fail",
+              state: "FAILURE",
+              provider: "github-actions",
+              runId: "123",
+            },
+          ],
+        }),
+      ),
+    ).toMatchObject({
+      action: "update-base",
+      headSha: "head-1",
+      latestMainSha: "main-2",
+      consumesCodingAttempt: false,
+    });
+  });
+
+  it("does not replace a dirty recovery checkout before preserving its work", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          latestMainSha: "main-2",
+          headContainsLatestMain: false,
+          baseUpdateBlockedByDirtyWorktree: true,
+          checks: [
+            {
+              name: "e2e",
+              bucket: "fail",
+              state: "FAILURE",
+              provider: "github-actions",
+              runId: "123",
+            },
+          ],
+        }),
+      ).action,
+    ).toBe("preserve-dirty-repair");
+  });
+
+  it("resumes the durable requested base even if main advances again", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          latestMainSha: "main-3",
+          headContainsLatestMain: false,
+          pendingBaseUpdate: {
+            previousHead: "head-1",
+            baseSha: "main-2",
+            attempts: 1,
+          },
+        }),
+      ),
+    ).toMatchObject({
+      action: "update-base",
+      headSha: "head-1",
+      latestMainSha: "main-2",
+    });
+  });
+
+  it("waits for an asynchronous base update before consuming another retry", () => {
+    const pendingBaseUpdate = {
+      previousHead: "head-1",
+      baseSha: "main-2",
+      attempts: 1,
+      status: "requested",
+      nextAttemptAt: "2026-07-29T20:00:00.000Z",
+    };
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          latestMainSha: "main-3",
+          headContainsLatestMain: false,
+          pendingBaseUpdate,
+          baseUpdateRetryReady: false,
+        }),
+      ).action,
+    ).toBe("wait");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          latestMainSha: "main-3",
+          headContainsLatestMain: false,
+          pendingBaseUpdate,
+          baseUpdateRetryReady: true,
+        }),
+      ),
+    ).toMatchObject({ action: "update-base", latestMainSha: "main-2" });
+    expect(
+      pullRequestRecoveryFingerprint(
+        snapshot({ pendingBaseUpdate, baseUpdateRetryReady: false }),
+      ),
+    ).not.toBe(
+      pullRequestRecoveryFingerprint(
+        snapshot({ pendingBaseUpdate, baseUpdateRetryReady: true }),
+      ),
+    );
+  });
+
+  it("finishes a pending repair transaction before synchronizing main", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          latestMainSha: "main-2",
+          headContainsLatestMain: false,
+          pendingPrRepair: {
+            previousCommit: "head-1",
+            commit: "repair-head",
+          },
+        }),
+      ).action,
+    ).toBe("reconcile-pending-repair");
+  });
+
+  it("preserves a dirty interrupted repair before gating a base conflict", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          latestMainSha: "main-2",
+          headContainsLatestMain: false,
+          mergeStateStatus: "DIRTY",
+          baseUpdateBlockedByDirtyWorktree: true,
+        }),
+      ).action,
+    ).toBe("preserve-dirty-repair");
+  });
+
+  it("forces full verification after adopting a controller base update", () => {
+    const passing = [
+      {
+        name: "lint-and-test",
+        bucket: "pass",
+        state: "SUCCESS",
+        provider: "github-actions",
+        runId: "base-update-check",
+      },
+    ];
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          isDraft: false,
+          risk: "low",
+          checks: passing,
+          baseUpdateRequiresVerification: true,
+        }),
+      ),
+    ).toMatchObject({
+      action: "reverify-draft",
+      promoteDraftAfterVerification: false,
+    });
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          isDraft: true,
+          checks: passing,
+          originalFailureKind: "protected-scope",
+          baseUpdateRequiresVerification: true,
+        }),
+      ),
+    ).toMatchObject({
+      action: "reverify-draft",
+      promoteDraftAfterVerification: false,
+    });
+  });
+
+  it("does not preserve dirty work over a stricter unresolved blocker", () => {
+    for (const originalFailureKind of [
+      "safety",
+      "ambiguous",
+      "review-nonrepairable",
+    ]) {
+      expect(
+        planPullRequestRecovery(
+          snapshot({
+            latestMainSha: "main-2",
+            headContainsLatestMain: false,
+            baseUpdateBlockedByDirtyWorktree: true,
+            originalFailureKind,
+          }),
+        ),
+      ).toMatchObject({
+        action: "human-gate",
+        reason: "interrupted work retains a stricter unresolved draft blocker",
+      });
+    }
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          latestMainSha: "main-2",
+          headContainsLatestMain: false,
+          baseUpdateBlockedByDirtyWorktree: true,
+          originalFailureKind: "protected-scope",
+        }),
+      ).action,
+    ).toBe("preserve-dirty-repair");
+  });
+
+  it("human-gates a stale PR that conflicts with latest main", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          latestMainSha: "main-2",
+          headContainsLatestMain: false,
+          mergeStateStatus: "DIRTY",
+        }),
+      ),
+    ).toMatchObject({
+      action: "human-gate",
+      reason: "pull request conflicts with the latest main branch",
+    });
+  });
   it("waits for GitHub to observe an exact blocked-repair push", () => {
     expect(
       blockedRepairPostPushDisposition(
@@ -624,6 +904,9 @@ describe("Ralph pull-request recovery planning", () => {
     const reconciledExpectation = pullRequestRecoveryFingerprint(
       snapshot({ expectedHeadSha: "head-1" }),
     );
+    const staleBase = pullRequestRecoveryFingerprint(
+      snapshot({ latestMainSha: "main-2", headContainsLatestMain: false }),
+    );
     const rerun = pullRequestRecoveryFingerprint(
       snapshot({
         checks: [
@@ -642,6 +925,7 @@ describe("Ralph pull-request recovery planning", () => {
     expect(first).toBe(reordered);
     expect(newHead).not.toBe(first);
     expect(reconciledExpectation).not.toBe(first);
+    expect(staleBase).not.toBe(first);
     expect(rerun).not.toBe(first);
     expect(
       pullRequestCheckRetryKey(

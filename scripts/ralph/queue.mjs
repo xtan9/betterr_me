@@ -258,6 +258,12 @@ export function failureDisposition(stage, pullRequestMerged, failureKind) {
 }
 
 const DRAFT_FAILURE_POLICIES = Object.freeze({
+  "interrupted-repair": Object.freeze({
+    reverify: true,
+    reverifyWithoutRepairBudget: true,
+    preserveBlockedRepair: true,
+    promoteAfterVerification: true,
+  }),
   "worker-blocked": Object.freeze({
     reverify: true,
     reverifyWithoutRepairBudget: false,
@@ -442,6 +448,7 @@ export function shouldParkIssueFailure(failureKind) {
     "worker-blocked",
     "ticket-infrastructure",
     "protected-scope",
+    "interrupted-repair",
   ].includes(failureKind);
 }
 
