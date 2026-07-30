@@ -4,7 +4,7 @@ const QUALITY_PATTERNS = [
   /^(?:app|components|emails|hooks|i18n|lib|scripts|tests)\//,
   /\.(?:c|m)?(?:j|t)sx?$/,
   /^(?:package\.json|pnpm-lock\.yaml|tsconfig\.json|vitest\.config\.ts|eslint\.config\.mjs|next\.config\.ts|proxy\.ts)$/,
-  /^\.github\/workflows\/(?:ci|e2e)\.yml$/,
+  /^\.github\/workflows\/(?:ci|e2e|scheduled-failure-alerts)\.yml$/,
 ];
 
 const FULL_TEST_PATTERNS = [
@@ -16,9 +16,9 @@ const FULL_LINT_PATTERNS = [
 ];
 
 const CI_ONLY_PATTERNS = [
-  /^\.github\/workflows\/(?:ci|e2e)\.yml$/,
-  /^scripts\/ci\/(?:classify-changes\.sh|select-e2e-tests\.mjs|select-quality-checks\.mjs)$/,
-  /^tests\/scripts\/(?:select-e2e-tests|select-quality-checks)\.test\.ts$/,
+  /^\.github\/workflows\/(?:ci|e2e|scheduled-failure-alerts)\.yml$/,
+  /^scripts\/ci\/(?:classify-changes\.sh|reconcile-scheduled-workflow-issue\.mjs|select-e2e-tests\.mjs|select-quality-checks\.mjs)$/,
+  /^tests\/scripts\/(?:reconcile-scheduled-workflow-issue|select-e2e-tests|select-quality-checks)\.test\.ts$/,
 ];
 
 const CI_SMOKE_MAPPINGS = [
@@ -37,6 +37,14 @@ const CI_SMOKE_MAPPINGS = [
       /^tests\/scripts\/select-e2e-tests\.test\.ts$/,
     ],
     tests: ["tests/scripts/select-e2e-tests.test.ts"],
+  },
+  {
+    patterns: [
+      /^\.github\/workflows\/scheduled-failure-alerts\.yml$/,
+      /^scripts\/ci\/reconcile-scheduled-workflow-issue\.mjs$/,
+      /^tests\/scripts\/reconcile-scheduled-workflow-issue\.test\.ts$/,
+    ],
+    tests: ["tests/scripts/reconcile-scheduled-workflow-issue.test.ts"],
   },
 ];
 

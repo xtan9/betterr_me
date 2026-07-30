@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Scheduled/manual runs and pushes to main are intentionally full safety runs.
-if [[ "${EVENT_NAME:-}" != "pull_request" ]]; then
+# Scheduled/manual runs are intentionally full safety runs. Pull requests and
+# pushes to main use the same changed-file selection so a merge is not tested
+# twice at full-repository scope.
+if [[ "${EVENT_NAME:-}" != "pull_request" && "${EVENT_NAME:-}" != "push" ]]; then
   {
     echo "quality=true"
     echo "full_tests=true"

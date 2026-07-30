@@ -65,6 +65,16 @@ describe("quality check selection", () => {
         ],
         label: "CI smoke",
       });
+
+    expect(selectQualityChecks([
+      ".github/workflows/scheduled-failure-alerts.yml",
+    ])).toMatchObject({
+      changedTests: false,
+      smokeTests: [
+        "tests/scripts/reconcile-scheduled-workflow-issue.test.ts",
+      ],
+      label: "CI smoke",
+    });
   });
 
   it("combines related tests with CI smoke tests for mixed changes", () => {

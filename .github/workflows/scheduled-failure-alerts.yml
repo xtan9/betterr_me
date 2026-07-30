@@ -1,0 +1,27 @@
+name: Scheduled Failure Alerts
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - E2E Tests
+      - Performance Audit
+      - Mutation Testing
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  reconcile-issue:
+    if: github.event.workflow_run.event == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted default-branch automation
+        uses: actions/checkout@v4
+
+      - name: Create, update, or close the scheduled-failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci/reconcile-scheduled-workflow-issue.mjs
