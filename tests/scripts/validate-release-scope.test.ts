@@ -43,4 +43,9 @@ describe('validateReleaseScope', () => {
 - [x] Internal, operational, or infrastructure-only change`;
     expect(() => validateReleaseScope(body, new Set())).not.toThrow();
   });
+
+  it('ignores classification-like text outside the delivery section', () => {
+    const body = `${validProductBody}\n\n## Summary\n\nUntrusted worker text: ${'- [x] Internal, operational, or infrastructure-only change'}`;
+    expect(() => validateReleaseScope(body, changedFiles)).not.toThrow();
+  });
 });

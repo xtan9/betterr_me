@@ -27,6 +27,12 @@ vi.mock('@/lib/supabase/server', () => ({
 
 const mockHabitsDB = {
   getHabitsWithTodayStatus: vi.fn(),
+  getHabitsWithTodayStatusAcquisition: vi.fn(
+    async (userId: string, date: string) => ({
+      habits: await mockHabitsDB.getHabitsWithTodayStatus(userId, date),
+      status: 'complete' as const,
+    }),
+  ),
 };
 const mockTasksDB = {
   getTodayTasks: vi.fn(),
@@ -252,6 +258,23 @@ describe('GET /api/dashboard', () => {
     expect(response.status).toBe(400);
     const data = await response.json();
     expect(data.error).toContain('Invalid date format');
+  });
+
+  it('should return the defined 500 response when required snapshot data fails', async () => {
+    vi.mocked(mockHabitsDB.getHabitsWithTodayStatus).mockResolvedValue([]);
+    vi.mocked(mockTasksDB.getTodayTasks).mockRejectedValueOnce(
+      new Error('required tasks unavailable'),
+    );
+
+    const request = new NextRequest(
+      'http://localhost:3000/api/dashboard?date=2026-02-09',
+    );
+    const response = await GET(request);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Failed to fetch dashboard data',
+    });
   });
 
   it('should return dashboard data even when getAllUserLogs fails', async () => {

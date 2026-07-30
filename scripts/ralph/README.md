@@ -24,17 +24,18 @@ reflogs, unrelated history, or writable metadata.
   repair budget, then parks the green PR for human review and continues with
   another unrelated issue on the ready dependency frontier. Dependents remain
   blocked until their PR is actually merged.
-- `AutoMerge` waits for required GitHub checks and required review approvals.
+- `AutoMerge` waits for all reported GitHub checks and required review approvals.
   It merges without bypass only when the diff is classified low risk, the PR is
   conflict-free, and every gate passes. High-risk work must still pass required
   checks (including bounded check-failure repairs) before it is parked for a
   human merge while the single worker continues through unrelated ready issues.
 
-Automatic merging uses a narrow allowlist. Only pure calendar/reminder domain
-modules, their validations, and their focused tests may qualify as low risk.
-Every other path—including application routes, persistence, controller, CI,
-dependencies, authentication, finance, migrations, and configuration—stops at
-a PR for human review.
+Automatic merging uses a sensitive-scope denylist. Ordinary application,
+domain, persistence, and test changes may qualify as low risk after every test,
+review, check, conflict, and ambiguity gate passes. Controller and CI changes,
+dependencies, authentication and credentials, finance and payments, database
+migrations, privileged administration, destructive issue scope, and deployment
+or compiler configuration always stop at a PR for human review.
 
 ## Prerequisites
 
@@ -100,11 +101,22 @@ beside the existing issue logs for debugging. Live output is observational
 only: the structured result file and controller verification gates remain the
 authority for commits, PRs, checks, and merges.
 
-Worker model policy is controller-owned and explicit: implementation and repair
-sessions use `gpt-5.6-sol` with medium reasoning effort, while independent
-reviews use `gpt-5.6-sol` with high reasoning effort. Because workers run with
+Worker model policy is controller-owned and explicit. Implementation and repair
+sessions use `gpt-5.6-sol` with high reasoning effort. Initial and final
+exhaustive reviews use `gpt-5.6-sol` with xhigh reasoning effort, while bounded
+repair-delta reviews use high reasoning effort. Because workers run with
 `--ignore-user-config`, personal Codex defaults cannot silently change this
 policy.
+
+The exhaustive review uses the immutable `code-review` skill as its review
+discipline. The controller launches four separate read-only Codex sessions in
+parallel for Standards, Spec, Security/Data Integrity, and Tests/Regression,
+then validates and deterministically aggregates their independent reports. A
+structured result must prove that every axis, ticket requirement, and changed
+file was reviewed, and must include a traceability row for each changed
+observable contract. The controller rejects incomplete or internally
+inconsistent specialist or aggregate reports. Repair-delta review similarly
+launches separate Repair Ledger and Regression specialists.
 
 There is exactly one controller process and one implementation worker at a
 time. A process lock prevents a second local controller. A time-limited GitHub
@@ -133,6 +145,11 @@ safety checks pass. The queue then continues with an unrelated ready issue.
 Safety findings—including secret detection, forbidden scope or paths, unsafe
 links or history, and controller-integrity failures—still stop the entire run.
 
+Candidate changes beyond the approved ticket are not terminal safety findings
+when the exact safe repair is to remove or revert those extra changes to the
+issue base. They use the bounded repair loop. Here, forbidden scope means that
+completing the ticket itself requires changes outside its approved boundary.
+
 ## Recovery
 
 Durable state, prompts, verification logs, PR metadata, and summaries live
@@ -147,13 +164,79 @@ implementation, verification, commit, push, PR, checks, and merge. Re-running
 the same command reconciles the recorded branch, worktree, commit, PR, and
 merged SHA instead of starting duplicate work.
 
+Before selecting new work, Ralph also reconciles every open PR recorded in its
+durable state. It fingerprints the exact PR head and check generation, repairs
+controller-owned metadata, reruns cancelled GitHub Actions checks, and batches
+all remaining failed-check evidence into one bounded coding repair. Pending and
+completed actions are recorded before and after each side effect so a restart
+resumes rather than duplicates it. Check reruns have their own bounded budget;
+they do not consume coding repair attempts. A repaired PR still passes the
+normal check, review, conflict, risk, and merge gates. A green failed draft may
+re-enter one bounded, exhaustive verification and review cycle when its original
+blocker is a worker or ticket-specific verification finding. Ralph promotes the
+draft only after that cycle passes; safety, ambiguity, controller infrastructure,
+explicitly non-repairable findings, exhausted attempts, and high-risk merges
+remain human-gated. Unrelated ready issues may continue.
+
+Before repairing or re-verifying an existing PR, Ralph verifies that the exact
+PR head contains the latest remote `main`. A clean stale branch is updated with
+GitHub's expected-head update API under a durable, bounded receipt; the new head
+is adopted only after Git proves it contains both the requested main SHA and the
+previous PR head. Adoption always forces full local verification and exhaustive
+independent review before any merge decision. If `main` advances while an update
+is pending, Ralph finishes the recorded update idempotently before requesting the
+next one. A dirty recovery checkout is safety-scanned and preserved as explicitly
+unverified Draft work first; protected-path or secret-bearing changes stop the
+controller without publication. A base conflict is human-gated rather than sent
+through coding repair. GitHub's asynchronous branch update is polled before a
+bounded retry is consumed. Immediately before merge, Ralph fetches `origin/main`
+again; if it advanced, the PR returns to the same durable base-sync and full
+verification cycle.
+
+Ticket-specific infrastructure and protected-scope blockers do not consume a
+coding attempt merely to re-verify a new, green PR head. Safe in-scope changes
+completed before either blocker are committed and pushed to the draft instead
+of leaving a dirty worktree that stops the queue. A protected workflow or
+controller change still requires supervised handling; Ralph never grants an
+ordinary issue worker write access to `.github/**` or `scripts/ralph/**`.
+
+Ticket-specific PostgreSQL fixtures opt into the controller-owned disposable
+database gate by placing the exact marker `-- ralph-ci: true` in their first 12
+lines. `scripts/ci/run-ralph-sql-tests.sh` discovers marked fixtures in stable
+path order, rejects psql meta-commands and dangerous server/role primitives,
+clears the process environment, and runs accepted fixtures as a dedicated
+non-superuser role. Both local-Supabase PR jobs execute them with
+`ON_ERROR_STOP=1`. This gives ordinary workers a narrow test-data-only path to
+request real database verification without granting workflow, controller, or
+secret authority.
+
+Controller-executed SQL and its enforcement code are immutable to ticket
+workers. The worker sandbox mounts `.github/**`, `scripts/ralph/**`, the Ralph
+SQL runner and policy, `supabase/tests/e2e_local_authenticated_grants.sql`, and
+`supabase/tests/finance_cushion_rls.sql` read-only. Database migrations,
+`supabase/config.toml`, and `supabase/seed.sql` are also controller-protected
+because CI necessarily applies them with elevated database authority; migration
+tickets remain supervised Drafts instead of delegating that authority to
+ordinary issue content. The controller independently
+rejects any resulting diff that reaches one of those paths before committing or
+publishing a failed attempt. Marked fixtures may use procedural assertion blocks
+because they run only with the cleared environment and constrained
+`ralph_ci_test` database role; direct connection APIs and privilege-bearing
+constructs remain rejected by policy.
+
 Implementation, verification, review, and required-check waits are bounded.
 Transient network and rate-limit failures use a bounded retry count and
 backoff. Concrete test, TypeScript, independent-review, required-PR-check, and
 full-suite timeout findings may use up to `MaximumRepairAttempts` genuinely
-fresh, isolated repair sessions before the issue is parked. Every repair is
-re-run through the complete local verification, independent review, and PR-check
-gates. The default full-suite timeout is 3600 seconds. Ambiguity, unsafe scope,
+fresh, isolated repair sessions before the issue is parked. An exhaustive
+review persists every finding in a durable ledger so one repair session can
+address the complete batch. A durable pending/completed handshake prevents a
+crash-partial repair from entering verification; recovery starts another fresh,
+bounded repair until a worker completes. Ralph then runs controller-owned related tests,
+TypeScript comparison, and a high-effort delta review against that ledger. A
+successful repair still has to pass the full Vitest suite, TypeScript
+comparison, and a final xhigh exhaustive review before publication. The default
+full-suite timeout is 3600 seconds. Ambiguity, unsafe scope,
 conflicts, ownership failures, and policy denials are never repaired or retried
 automatically. A failed or human-gated issue does not unblock its dependents,
 but it also does not prevent the controller from selecting an unrelated ready

@@ -75,6 +75,7 @@ export async function recoverPreservationCommit({
       "-C",
       worktreePath,
       "diff",
+      "--no-renames",
       "--name-only",
       "-z",
       baseSha,
