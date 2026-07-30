@@ -150,6 +150,7 @@ export function selectE2ETests(changedFiles) {
     chromiumSpecs,
     runway,
     visual,
+    supabase: full || visual || chromiumSpecs.length > 0,
   };
 
   return { ...selection, label: e2eSelectionLabel(selection) };
@@ -191,6 +192,7 @@ export function formatGitHubOutputs(selection) {
     `e2e_specs=${selection.chromiumSpecs.join(",")}`,
     `e2e_runway=${selection.runway}`,
     `e2e_visual=${selection.visual}`,
+    `e2e_supabase=${selection.supabase}`,
     `e2e_label=${selection.label}`,
   ].join("\n");
 }

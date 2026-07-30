@@ -13,6 +13,7 @@ describe("E2E test selection", () => {
       chromiumSpecs: [],
       runway: false,
       visual: false,
+      supabase: false,
       label: "not needed",
     });
   });
@@ -53,6 +54,7 @@ describe("E2E test selection", () => {
         full: false,
         chromiumSpecs: [],
         runway: true,
+        supabase: false,
         label: "finance",
       });
   });
@@ -108,6 +110,7 @@ describe("E2E test selection", () => {
         e2e: true,
         full: false,
         visual: true,
+        supabase: true,
       });
     }
   });
@@ -131,6 +134,7 @@ describe("E2E test selection", () => {
       ],
       runway: true,
       visual: false,
+      supabase: true,
       label: "habits + tasks + dashboard + finance",
     });
   });
@@ -143,6 +147,7 @@ describe("E2E test selection", () => {
         "e2e_specs=e2e/dashboard.spec.ts",
         "e2e_runway=false",
         "e2e_visual=false",
+        "e2e_supabase=true",
         "e2e_label=dashboard",
       ].join("\n"));
   });
