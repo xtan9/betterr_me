@@ -444,10 +444,7 @@ export function planPullRequestRecovery(snapshot) {
   ) {
     if (snapshot.mergeStateStatus === "DIRTY") {
       return conflictRecoveryPlan(
-        {
-          ...snapshot,
-          latestMainSha: snapshot.pendingBaseUpdate.baseSha,
-        },
+        snapshot,
         "pull-request base update requires conflict resolution",
       );
     }
