@@ -94,15 +94,11 @@ jobs:
         with:
           version: 2.109.1
 
-      - name: Start disposable Supabase for pull-request E2E
+      - name: Start disposable Supabase and apply migrations
         if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
         run: >-
           supabase start
           --exclude analytics,edge-runtime,functions,imgproxy,inbucket,meta,storage,studio,vector
-
-      - name: Reset disposable database with feature migration
-        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
-        run: supabase db reset --local --yes --no-seed
 
       - name: Install PostgreSQL client for pull-request RLS gate
         if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
