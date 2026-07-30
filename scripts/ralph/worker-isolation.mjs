@@ -202,12 +202,14 @@ export function isolatedCodexReadablePaths({
   gitMetadataRoot,
   dependencyRoot,
   workerHome,
+  protectedPaths = [],
 }) {
   return [
     ...(readOnly ? [worktreePath] : []),
     ...(!readOnly && gitMetadataRoot ? [gitMetadataRoot] : []),
     dependencyRoot,
     workerHome,
+    ...protectedPaths,
   ];
 }
 
