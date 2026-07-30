@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { runCli } from "../../../scripts/ralph/v2/cli.mjs";
-import { createRalphRuntime } from "../../../scripts/ralph/v2/runtime.mjs";
+import { createRalphRuntimeCore } from "../../../scripts/ralph/v2/runtime.mjs";
 import { createStopBoundaryAdapters } from "./stop-boundary-adapters.mjs";
 
 const separator = process.argv.indexOf("--");
@@ -9,7 +9,7 @@ if (separator < 3) {
 }
 
 const config = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-const runtime = createRalphRuntime({
+const runtime = createRalphRuntimeCore({
   repositoryPath: config.repositoryPath,
   runtimePath: config.runtimePath,
   ...createStopBoundaryAdapters(config),

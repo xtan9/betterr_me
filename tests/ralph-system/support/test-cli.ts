@@ -42,7 +42,35 @@ export function createSystemScenario(
     >;
     crashPoint?: string;
     holdWorker?: boolean;
+    implementationTimeoutMilliseconds?: number;
     raceControllers?: boolean;
+    pullRequestChecks?: Array<Record<string, unknown>>;
+    pullRequestCheckSequence?: Array<Array<Record<string, unknown>>>;
+    mergeUpdatesMain?: boolean;
+    repairWorkerChanges?: Array<{ path: string; content: string }>;
+    repairExpectedChanges?: Array<{
+      path: string;
+      content: string;
+      mode: string;
+      status: string;
+    }>;
+    pullRequestReviewRequired?: boolean;
+    pullRequestReviewDecision?: string;
+    advanceMainAfterPullRequest?: { path: string; content: string };
+    pullRequestMergeStateStatusWhenBehind?: "CLEAN" | "DIRTY";
+    workerResultByIssue?: Record<string, {
+      kind: "completed" | "blocked" | "failed";
+      ambiguous?: boolean;
+      blockerKind?: string;
+      summary?: string;
+    }>;
+    repairWorkerResultByIssue?: Record<string, {
+      kind: "completed" | "blocked" | "failed";
+      ambiguous?: boolean;
+      blockerKind?: string;
+      summary?: string;
+    }>;
+    initialPullRequests?: Array<Record<string, unknown>>;
   },
 ) {
   const configPath = path.join(world.root, "system-config.json");
@@ -70,8 +98,14 @@ export function createSystemScenario(
         sessions: [],
         claims: [],
         claimRequests: [],
-        pullRequests: [],
+        claimRefreshRequests: [],
+        pullRequests: input.initialPullRequests ?? [],
         pullRequestRequests: [],
+        readyPullRequestRequests: [],
+        mergeRequests: [],
+        retryCheckRequests: [],
+        controllerRepairRequests: [],
+        baseUpdateRequests: [],
         verificationRequests: [],
       },
       null,

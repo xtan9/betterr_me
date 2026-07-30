@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { runCli } from "../../../scripts/ralph/v2/cli.mjs";
-import { createRalphRuntime } from "../../../scripts/ralph/v2/runtime.mjs";
+import { createRalphRuntimeCore } from "../../../scripts/ralph/v2/runtime.mjs";
 import { createTestAdapters } from "./test-adapters.mjs";
 import { createSurvivingProcessWorker } from "./surviving-worker-adapter.mjs";
 
@@ -14,7 +14,7 @@ if (separator < 3) {
 const configPath = process.argv[2];
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 const adapters = createTestAdapters(config);
-const runtime = createRalphRuntime({
+const runtime = createRalphRuntimeCore({
   repositoryPath: config.repositoryPath,
   runtimePath: config.runtimePath,
   ...adapters,

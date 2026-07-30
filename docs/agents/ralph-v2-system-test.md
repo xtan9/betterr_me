@@ -36,6 +36,32 @@ must return an authoritative receipt only after the complete process tree is
 dead. These guarantees belong to the production worker supervisor and are
 tested with real child processes, not assumed from an in-memory mock.
 
+The supervisor is trusted controller infrastructure and is a different process
+from both the Ralph controller and the issue-controlled Codex child. The
+supervisor, never the controller, owns the durable session reservation and the
+OS containment unit. Multiple inert supervisor clients may contend after a
+crash, but only one authorized Codex child may launch. A session is
+launch-once: if that child exits without a completion receipt, the session is
+durably `interrupted`; a retry must use a new attempt/session ID and consume its
+own retry budget. STOP closes an unstarted reservation or terminates a started
+containment unit under the same operation-keyed, idempotent protocol. Success
+means the containment unit proves zero remaining processes, not merely that a
+recorded PID no longer exists.
+
+Issue-controlled Codex never receives controller state, GitHub/network
+credentials, or a writable capability before the supervisor wins ownership.
+On Windows this requires a retained Job Object with breakaway disabled; in WSL
+it requires an equivalently retained process group/cgroup identity. PID lookup
+followed by `taskkill` is not an authoritative containment proof.
+
+Verification evidence has two trust layers. A controller-owned executor runs
+the exact commands in an immutable plan and hashes its own output artifacts;
+isolated reviewer sessions produce reports that are bound to the same candidate
+tree, sanitized requirements snapshot, review policy, and immutable skill
+fingerprints. A shape-correct receipt fabricated by the verifier fixture is not
+release evidence. Passed and failed receipts are accepted only after the
+verifier supervisor proves its complete process tree is dead.
+
 The system suite has a dedicated Node configuration and is excluded from the
 normal application suite so candidate verification cannot recursively launch
 Ralph. Import purity is checked in a poisoned fresh process before orchestration

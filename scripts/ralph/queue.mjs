@@ -636,10 +636,9 @@ export function buildInternalPullRequestBody({
   summary,
   risk,
 }) {
-  const safeSummary = neutralizeClosingKeywords(String(summary)).replaceAll(
-    "@",
-    "@\u200b",
-  );
+  const safeSummary = redactCredentialPatterns(
+    neutralizeClosingKeywords(String(summary)),
+  ).replaceAll("@", "@\u200b");
   return `## Delivery classification
 
 - [ ] User-visible product delivery

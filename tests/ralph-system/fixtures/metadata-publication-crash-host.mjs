@@ -54,10 +54,10 @@ fs.linkSync = function linkSyncWithPublicationBarrier(
 };
 
 const adapters = createTestAdapters(config);
-const { createRalphRuntime } = await import(
+const { createRalphRuntimeCore } = await import(
   "../../../scripts/ralph/v2/runtime.mjs"
 );
-const runtime = createRalphRuntime({
+const runtime = createRalphRuntimeCore({
   repositoryPath: config.repositoryPath,
   runtimePath: config.runtimePath,
   ...adapters,

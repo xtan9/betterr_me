@@ -303,7 +303,7 @@ describe("Ralph v2 surviving implementation worker recovery", () => {
     }
   });
 
-  it("does not duplicate execution when the controller crashes before worker registration", async () => {
+  it("allows inert wrappers to contend but grants implementation and mutation authority to at most one", async () => {
     const world = createGitWorld();
     const expectedChanges = [
       {
@@ -330,7 +330,7 @@ describe("Ralph v2 surviving implementation worker recovery", () => {
     const configPath = path.join(world.root, "system-config.json");
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
     config.survivingWorker = {
-      holdBeforeOwnership: true,
+      holdBeforeTransfer: true,
       holdBeforeMutation: true,
     };
     fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
@@ -418,9 +418,18 @@ describe("Ralph v2 surviving implementation worker recovery", () => {
     try {
       const first = startHost(RUN_ARGUMENTS);
       await waitUntil(
-        () => readRecords(spawnedPath).length === 1,
-        "the first worker to spawn before ownership",
+        () =>
+          readRecords(spawnedPath).length === 1 ||
+          first.child.exitCode !== null ||
+          first.child.signalCode !== null,
+        "the first inert wrapper or a diagnostic controller exit",
       );
+      if (readRecords(spawnedPath).length !== 1) {
+        const earlyExit = await first.completion;
+        throw new Error(
+          `controller exited before its inert wrapper started: ${earlyExit.stderr.join("\n")}`,
+        );
+      }
       const originalSpawn = readRecords(spawnedPath)[0];
       expect(readRecords(startsPath)).toEqual([]);
       expect(readRecords(mutationsPath)).toEqual([]);
@@ -451,18 +460,23 @@ describe("Ralph v2 surviving implementation worker recovery", () => {
           ) ||
           recovered.child.exitCode !== null ||
           recovered.child.signalCode !== null,
-        "recovery to attach to starting work or spawn a contender",
+        "recovery to spawn an inert contender",
       );
-      expect(processIsAlive(originalSpawn.processId)).toBe(true);
+      const wrappersBeforeTransfer = readRecords(spawnedPath);
+      expect(wrappersBeforeTransfer.length).toBeGreaterThanOrEqual(2);
+      expect(wrappersBeforeTransfer).toContainEqual(originalSpawn);
+      expect(
+        wrappersBeforeTransfer.every(
+          (wrapper) => wrapper.kind === "inert-wrapper",
+        ),
+      ).toBe(true);
       expect(readRecords(startsPath)).toEqual([]);
       expect(readRecords(mutationsPath)).toEqual([]);
 
       release(ownershipReleasePath);
       await waitUntil(
         () =>
-          readRecords(startsPath).length >= 2 ||
-          (readRecords(startsPath).length === 1 &&
-            readRecords(attachmentsPath).length >= 1) ||
+          readRecords(startsPath).length >= 1 ||
           readRecords(errorsPath).length >= 1 ||
           recovered.child.exitCode !== null ||
           recovered.child.signalCode !== null,
@@ -529,9 +543,14 @@ describe("Ralph v2 surviving implementation worker recovery", () => {
       });
 
       const owners = readRecords(startsPath);
+      const spawnedWorkers = readRecords(spawnedPath);
       const mutations = readRecords(mutationsPath);
       const receipts = readRecords(receiptsPath);
       expect(owners).toHaveLength(1);
+      expect(spawnedWorkers.length).toBeGreaterThanOrEqual(2);
+      expect(new Set(spawnedWorkers.map((worker) => worker.workerId)).size).toBe(
+        spawnedWorkers.length,
+      );
       expect(Math.max(...owners.map((owner) => owner.activeWorkers))).toBe(1);
       expect(owners[0].sessionId).toBe(stableSessionId);
       expect(mutations).toEqual([

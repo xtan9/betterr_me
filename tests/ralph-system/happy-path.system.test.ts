@@ -112,6 +112,7 @@ describe("Ralph v2 system delivery", () => {
     worlds.push(world);
     const result = runImportProbe(world, [
         path.resolve("scripts/ralph/v2/cli.mjs"),
+        path.resolve("scripts/ralph/v2/production-runtime.mjs"),
         path.resolve("scripts/ralph/v2/runtime.mjs"),
     ]);
     expect(result.error).toBeUndefined();

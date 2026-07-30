@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { runCli } from "../../../scripts/ralph/v2/cli.mjs";
-import { createRalphRuntime } from "../../../scripts/ralph/v2/runtime.mjs";
+import { createRalphRuntimeCore } from "../../../scripts/ralph/v2/runtime.mjs";
 import { createTestAdapters } from "./test-adapters.mjs";
 
 const separator = process.argv.indexOf("--");
@@ -23,9 +23,10 @@ if (
   }
 }
 const adapters = createTestAdapters(config);
-const runtime = createRalphRuntime({
+const runtime = createRalphRuntimeCore({
   repositoryPath: config.repositoryPath,
   runtimePath: config.runtimePath,
+  implementationTimeoutMilliseconds: config.implementationTimeoutMilliseconds,
   ...adapters,
 });
 

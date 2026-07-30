@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export const WORKER_PROTECTED_PATHS = Object.freeze([
   ".github",
   ".gitattributes",
@@ -20,8 +22,36 @@ export const WORKER_PROTECTED_PATHS = Object.freeze([
 ]);
 
 const SUPABASE_MIGRATION_ROOT = "supabase/migrations";
-const NEW_SUPABASE_MIGRATION =
-  /^supabase\/migrations\/\d{14}_[a-z0-9]+(?:_[a-z0-9]+)*\.sql$/;
+export const WORKER_POLICY_CONTRACT = Object.freeze({
+  schemaVersion: 1,
+  protectedPaths: WORKER_PROTECTED_PATHS,
+  agentsFilePattern: "(^|/)agents\\.md$",
+  environmentFilePattern: "(^|/)\\.env(?:\\.|$)",
+  packageManagerFilePattern:
+    "(^|/)(?:package\\.json|pnpm-lock\\.yaml|package-lock\\.json|yarn\\.lock)$",
+  privateKeyFilePattern: "\\.(?:pem|key|p12|pfx)$",
+  newSupabaseMigrationPattern:
+    "^supabase/migrations/\\d{14}_[a-z0-9]+(?:_[a-z0-9]+)*\\.sql$",
+  trustedMigrationLimit: 1,
+  trustedMigrationStatus: "A",
+});
+export const WORKER_POLICY_SHA256 = createHash("sha256")
+  .update(JSON.stringify(WORKER_POLICY_CONTRACT))
+  .digest("hex");
+
+const AGENTS_FILE = new RegExp(WORKER_POLICY_CONTRACT.agentsFilePattern);
+const ENVIRONMENT_FILE = new RegExp(
+  WORKER_POLICY_CONTRACT.environmentFilePattern,
+);
+const PACKAGE_MANAGER_FILE = new RegExp(
+  WORKER_POLICY_CONTRACT.packageManagerFilePattern,
+);
+const PRIVATE_KEY_FILE = new RegExp(
+  WORKER_POLICY_CONTRACT.privateKeyFilePattern,
+);
+const NEW_SUPABASE_MIGRATION = new RegExp(
+  WORKER_POLICY_CONTRACT.newSupabaseMigrationPattern,
+);
 
 function normalizeRepositoryPath(filePath) {
   return String(filePath ?? "")
@@ -33,16 +63,10 @@ function normalizeRepositoryPath(filePath) {
 export function workerProtectedPath(filePath) {
   const normalized = normalizeRepositoryPath(filePath);
   if (!normalized) return false;
-  if (/(^|\/)agents\.md$/.test(normalized)) return true;
-  if (/(^|\/)\.env(?:\.|$)/.test(normalized)) return true;
-  if (
-    /(^|\/)(?:package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/.test(
-      normalized,
-    )
-  ) {
-    return true;
-  }
-  if (/\.(?:pem|key|p12|pfx)$/.test(normalized)) return true;
+  if (AGENTS_FILE.test(normalized)) return true;
+  if (ENVIRONMENT_FILE.test(normalized)) return true;
+  if (PACKAGE_MANAGER_FILE.test(normalized)) return true;
+  if (PRIVATE_KEY_FILE.test(normalized)) return true;
   return WORKER_PROTECTED_PATHS.some((protectedPath) => {
     const candidate = protectedPath.toLowerCase();
     return normalized === candidate || normalized.startsWith(`${candidate}/`);

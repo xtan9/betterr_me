@@ -125,6 +125,40 @@ export function createGitWorkspace({ repositoryPath, runtimePath }) {
       return { baseSha, branch, worktreePath };
     },
 
+    planPullRequestAdoption({ issueNumber, expectedHeadSha }) {
+      const branch = issueBranch(issueNumber);
+      if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(expectedHeadSha)) {
+        throw new Error("existing pull-request head failed integrity validation");
+      }
+      runGit(repositoryRoot, [
+        "fetch",
+        "--prune",
+        "origin",
+        "+refs/heads/main:refs/remotes/origin/main",
+        `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+      ]);
+      const remoteHead = gitLine(repositoryRoot, [
+        "rev-parse",
+        `refs/remotes/origin/${branch}`,
+      ]);
+      if (remoteHead !== expectedHeadSha) {
+        throw new Error("existing pull-request head changed before adoption");
+      }
+      const latestMainSha = gitLine(repositoryRoot, ["rev-parse", "origin/main"]);
+      const baseSha = gitLine(repositoryRoot, [
+        "merge-base",
+        expectedHeadSha,
+        latestMainSha,
+      ]);
+      return {
+        baseSha,
+        branch,
+        worktreePath,
+        headSha: expectedHeadSha,
+        latestMainSha,
+      };
+    },
+
     ensureCheckout({ number, baseSha, branch, worktreePath: recordedWorktreePath }) {
       assertManagedGeneration(
         {
@@ -163,6 +197,69 @@ export function createGitWorkspace({ repositoryPath, runtimePath }) {
         throw new Error(`worktree base changed: ${observedBase} != ${baseSha}`);
       }
       return { baseSha, branch, worktreePath };
+    },
+
+    restorePullRequestCheckout({ issueNumber, branch, headSha }) {
+      if (branch !== issueBranch(issueNumber)) {
+        throw new Error("refusing to restore an unmanaged pull-request branch");
+      }
+      runGit(repositoryRoot, [
+        "fetch",
+        "--prune",
+        "origin",
+        `refs/heads/${branch}:refs/remotes/origin/${branch}`,
+      ]);
+      const remoteHead = gitLine(repositoryRoot, [
+        "rev-parse",
+        `refs/remotes/origin/${branch}`,
+      ]);
+      if (remoteHead !== headSha) {
+        throw new Error("pull-request head changed before repair checkout");
+      }
+      fs.mkdirSync(worktreeRoot, { recursive: true });
+      if (fs.existsSync(worktreePath)) {
+        const observedBranch = gitLine(worktreePath, ["branch", "--show-current"]);
+        const observedHead = gitLine(worktreePath, ["rev-parse", "HEAD"]);
+        if (observedBranch !== branch || observedHead !== headSha) {
+          throw new Error("existing repair checkout has the wrong generation");
+        }
+        return { worktreePath, headSha };
+      }
+      const localHead = optionalGitLine(repositoryRoot, [
+        "rev-parse",
+        "--verify",
+        `refs/heads/${branch}`,
+      ]);
+      if (localHead && localHead !== headSha) {
+        throw new Error("local repair branch changed before restoration");
+      }
+      runGit(
+        repositoryRoot,
+        localHead
+          ? ["worktree", "add", worktreePath, branch]
+          : ["worktree", "add", "-b", branch, worktreePath, headSha],
+      );
+      return { worktreePath, headSha };
+    },
+
+    beginConflictRepair({ issueNumber, branch, headSha, latestMainSha }) {
+      this.restorePullRequestCheckout({ issueNumber, branch, headSha });
+      runGit(repositoryRoot, ["fetch", "--prune", "origin", "main"]);
+      const observedMain = gitLine(repositoryRoot, ["rev-parse", "origin/main"]);
+      if (observedMain !== latestMainSha) {
+        throw new Error("latest main changed before conflict repair");
+      }
+      const merged = runGit(
+        worktreePath,
+        ["merge", "--no-commit", "--no-ff", latestMainSha],
+        { allowFailure: true },
+      );
+      const conflicts = runGit(worktreePath, ["diff", "--name-only", "--diff-filter=U"])
+        .stdout.trim().split(/\r?\n/).filter(Boolean);
+      if (merged.status === 0 || conflicts.length === 0) {
+        throw new Error("expected a real merge conflict but none was observed");
+      }
+      return { worktreePath, conflicts };
     },
 
     activeCheckoutExists({
@@ -262,6 +359,61 @@ export function createGitWorkspace({ repositoryPath, runtimePath }) {
       return { headSha };
     },
 
+    amendRepair({ issueNumber, previousHeadSha, candidateTreeSha }) {
+      const branch = issueBranch(issueNumber);
+      if (
+        gitLine(worktreePath, ["branch", "--show-current"]) !== branch ||
+        gitLine(worktreePath, ["rev-parse", "HEAD"]) !== previousHeadSha
+      ) {
+        throw new Error("repair checkout changed before verified amendment");
+      }
+      runGit(worktreePath, ["commit", "--amend", "--no-edit"]);
+      const headSha = gitLine(worktreePath, ["rev-parse", "HEAD"]);
+      const treeSha = gitLine(worktreePath, ["rev-parse", `${headSha}^{tree}`]);
+      if (treeSha !== candidateTreeSha || headSha === previousHeadSha) {
+        throw new Error("verified repair amendment has the wrong tree");
+      }
+      return { headSha };
+    },
+
+    commitConflictRepair({ issueNumber, previousHeadSha, latestMainSha, candidateTreeSha }) {
+      if (
+        gitLine(worktreePath, ["branch", "--show-current"]) !== issueBranch(issueNumber) ||
+        gitLine(worktreePath, ["rev-parse", "HEAD"]) !== previousHeadSha
+      ) {
+        throw new Error("conflict-repair checkout changed before commit");
+      }
+      runGit(worktreePath, ["commit", "--message", `fix: resolve conflict for issue #${issueNumber}`]);
+      const headSha = gitLine(worktreePath, ["rev-parse", "HEAD"]);
+      const treeSha = gitLine(worktreePath, ["rev-parse", `${headSha}^{tree}`]);
+      const parents = gitLine(worktreePath, ["show", "-s", "--format=%P", headSha]).split(/\s+/);
+      if (treeSha !== candidateTreeSha || !parents.includes(previousHeadSha) || !parents.includes(latestMainSha)) {
+        throw new Error("verified conflict repair has the wrong tree or parents");
+      }
+      return { headSha };
+    },
+
+    pushRepair({ issueNumber, branch, previousHeadSha, headSha }) {
+      if (branch !== issueBranch(issueNumber)) {
+        throw new Error("refusing to push an unmanaged repair branch");
+      }
+      runGit(worktreePath, [
+        "push",
+        `--force-with-lease=refs/heads/${branch}:${previousHeadSha}`,
+        "origin",
+        `${headSha}:refs/heads/${branch}`,
+      ]);
+      const observed = gitLine(repositoryRoot, [
+        "ls-remote",
+        "--heads",
+        "origin",
+        `refs/heads/${branch}`,
+      ]).split(/\s+/)[0];
+      if (observed !== headSha) {
+        throw new Error("remote repair head did not match the verified amendment");
+      }
+    },
+
     findVerifiedCommit({ issueNumber, branch, baseSha, candidateTreeSha }) {
       if (branch !== issueBranch(issueNumber)) {
         throw new Error("refusing to inspect an unmanaged Ralph issue branch");
@@ -340,6 +492,20 @@ export function createGitWorkspace({ repositoryPath, runtimePath }) {
         `refs/heads/${branch}`,
       ]);
       return output ? output.split(/\s+/)[0] : null;
+    },
+
+    remoteMainContains(headSha) {
+      if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(headSha)) {
+        throw new Error("refusing to inspect an invalid merged head");
+      }
+      runGit(repositoryRoot, ["fetch", "--prune", "origin", "main"]);
+      const mainSha = gitLine(repositoryRoot, ["rev-parse", "origin/main"]);
+      const ancestry = runGit(
+        repositoryRoot,
+        ["merge-base", "--is-ancestor", headSha, mainSha],
+        { allowFailure: true },
+      );
+      return { mainSha, contains: ancestry.status === 0 };
     },
 
     park({ issueNumber, branch, expectedHead }) {

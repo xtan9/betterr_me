@@ -668,6 +668,18 @@ Reserve repairable=false for a genuine unresolved product decision with material
     expect(body).toContain("Closes #101");
   });
 
+  it("redacts credentials from a controller-owned PR summary", () => {
+    const body = buildInternalPullRequestBody({
+      issueNumber: 101,
+      issueUrl: "https://github.com/example/repo/issues/101",
+      summary: `Completed with github_pat_${"a".repeat(24)}.`,
+      risk: { level: "low", reasons: [] },
+    });
+
+    expect(body).toContain("[REDACTED]");
+    expect(body).not.toContain("github_pat_");
+  });
+
   it("redacts a credential before any caller truncates the text", () => {
     const credential = `github_pat_${"a".repeat(24)}`;
     const redacted = redactCredentialPatterns(`${"x".repeat(3988)}${credential}`)

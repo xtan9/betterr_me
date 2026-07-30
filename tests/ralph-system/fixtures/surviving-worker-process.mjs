@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -6,11 +6,13 @@ import {
   writeFileDurably,
 } from "./test-primitives.mjs";
 import { createWorkerSessionRegistry } from "../../../scripts/ralph/v2/worker-session-registry.mjs";
+import { readProcessIdentity } from "../../../scripts/ralph/v2/state-store.mjs";
 
-const [configPath, sessionId, worktreePath] = process.argv.slice(2);
-if (!configPath || !sessionId || !worktreePath) {
+const [configPath, sessionId, worktreePath, workerId, supervisorId] =
+  process.argv.slice(2);
+if (!configPath || !sessionId || !worktreePath || !workerId || !supervisorId) {
   throw new Error(
-    "usage: surviving-worker-process.mjs <config> <session> <worktree>",
+    "usage: surviving-worker-process.mjs <config> <session> <worktree> <worker-id> <supervisor-id>",
   );
 }
 
@@ -20,14 +22,12 @@ const activeDirectory = path.join(fixtureRoot, "active");
 const spawnedDirectory = path.join(fixtureRoot, "spawned");
 const startDirectory = path.join(fixtureRoot, "starts");
 const mutationDirectory = path.join(fixtureRoot, "mutations");
-const attachmentDirectory = path.join(fixtureRoot, "attachments");
 const receiptDirectory = path.join(fixtureRoot, "receipts");
 const errorDirectory = path.join(fixtureRoot, "errors");
 const releasePath = path.join(fixtureRoot, "release");
 const ownershipReleasePath = path.join(fixtureRoot, "ownership-release");
 const mutationReleasePath = path.join(fixtureRoot, "mutation-release");
 const sessionKey = createHash("sha256").update(sessionId).digest("hex");
-const workerId = `${process.pid}-${randomUUID()}`;
 const activePath = path.join(activeDirectory, `${workerId}.json`);
 const sessionRegistry = createWorkerSessionRegistry(fixtureRoot);
 
@@ -54,41 +54,68 @@ async function waitForRelease(filePath, description) {
 }
 
 try {
+  const currentProcessIdentity = readProcessIdentity(process.pid);
+  if (!currentProcessIdentity) {
+    throw new Error("surviving worker process identity is unavailable");
+  }
+  record(spawnedDirectory, {
+    kind: "inert-wrapper",
+    workerId,
+    processId: process.pid,
+    processIdentity: currentProcessIdentity,
+    parentProcessId: process.ppid,
+    sessionId,
+  });
+
   const expectedWorktree = path.join(config.runtimePath, "worktrees", "current");
   if (path.resolve(worktreePath) !== path.resolve(expectedWorktree)) {
     throw new Error("surviving worker received the wrong checkout");
   }
 
-  record(spawnedDirectory, {
-    workerId,
-    processId: process.pid,
-    parentProcessId: process.ppid,
-    sessionId,
-  });
-  if (config.survivingWorker?.holdBeforeOwnership) {
-    await waitForRelease(ownershipReleasePath, "execution ownership release");
+  const ownershipDeadline = Date.now() + 20_000;
+  let owner;
+  while (Date.now() < ownershipDeadline) {
+    owner = sessionRegistry.inspect(sessionId);
+    if (
+      owner?.workerId === workerId &&
+      owner.processId === process.pid
+    ) {
+      break;
+    }
+    if (
+      owner &&
+      owner.workerId !== supervisorId &&
+      owner.workerId !== workerId
+    ) {
+      process.exit(0);
+    }
+    await sleep(20);
+  }
+  if (
+    owner?.workerId !== workerId ||
+    owner.processId !== process.pid ||
+    owner.processIdentity !== readProcessIdentity(process.pid)
+  ) {
+    throw new Error("surviving worker never received execution ownership");
   }
 
-  const ownership = sessionRegistry.claim({
-    sessionId,
-    workerId,
-    processIdentity: `fixture-process:${process.pid}`,
-  });
-  if (!ownership.acquired) {
-    record(attachmentDirectory, {
-      processId: process.pid,
-      sessionId,
-      workerId,
-      ownerWorkerId: ownership.owner.workerId,
-    });
-    await waitForRelease(releasePath, "the execution owner's completion");
-    process.exit(0);
+  if (config.survivingWorker?.holdBeforeOwnership) {
+    await waitForRelease(ownershipReleasePath, "execution ownership release");
   }
 
   fs.mkdirSync(activeDirectory, { recursive: true });
   writeFileDurably(
     activePath,
-    `${JSON.stringify({ workerId, processId: process.pid, sessionId }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        workerId,
+        processId: process.pid,
+        processIdentity: owner.processIdentity,
+        sessionId,
+      },
+      null,
+      2,
+    )}\n`,
   );
 
   record(startDirectory, {
@@ -102,6 +129,16 @@ try {
     await waitForRelease(mutationReleasePath, "mutation release");
   } else {
     await waitForRelease(releasePath, "completion release");
+  }
+
+  const mutationOwner = sessionRegistry.inspect(sessionId);
+  const mutationProcessIdentity = readProcessIdentity(process.pid);
+  if (
+    mutationOwner?.workerId !== workerId ||
+    mutationOwner.processId !== process.pid ||
+    mutationOwner.processIdentity !== mutationProcessIdentity
+  ) {
+    throw new Error("surviving worker lost execution ownership before mutation");
   }
 
   for (const change of config.workerChanges) {

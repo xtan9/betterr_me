@@ -26,6 +26,8 @@ import {
   workerGitSmokeCommand,
 } from "../../scripts/ralph/worker-isolation.mjs";
 import {
+  WORKER_POLICY_CONTRACT,
+  WORKER_POLICY_SHA256,
   WORKER_PROTECTED_PATHS,
   issueAllowsNewSupabaseMigration,
   isSupabaseMigrationPath,
@@ -57,6 +59,16 @@ function gitWithoutStdin(args: string[], options: { input?: string } = {}) {
 }
 
 describe("Ralph sanitized worker Git view", () => {
+  it("fingerprints the exact controller-owned worker path policy", () => {
+    expect(WORKER_POLICY_CONTRACT).toMatchObject({
+      schemaVersion: 1,
+      protectedPaths: WORKER_PROTECTED_PATHS,
+      trustedMigrationLimit: 1,
+      trustedMigrationStatus: "A",
+    });
+    expect(WORKER_POLICY_SHA256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   it("repairs only immutable Linux esbuild binaries without making them writable", () => {
     const root = "/var/lib/betterr-me-ralph/deps-source/node_modules";
     const selector = "*/node_modules/@esbuild/linux-x64/bin/esbuild";

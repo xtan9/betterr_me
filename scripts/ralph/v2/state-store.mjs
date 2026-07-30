@@ -123,6 +123,9 @@ function procProcessIdentity(processId) {
 }
 
 export function readProcessIdentity(processId) {
+  if (!Number.isSafeInteger(processId) || processId <= 0) {
+    throw new Error("process ID failed integrity validation");
+  }
   if (process.platform === "win32") return windowsProcessIdentity(processId);
   if (fs.existsSync("/proc/self/stat")) return procProcessIdentity(processId);
   throw new Error(
@@ -183,7 +186,7 @@ function controllerMutexEndpoint(runtimePath) {
   );
 }
 
-async function acquireControllerMutex(runtimePath) {
+async function acquireControllerMutex(runtimePath, ifActiveReturnNull = false) {
   fs.mkdirSync(runtimePath, { recursive: true });
   const endpoint = controllerMutexEndpoint(runtimePath);
   const server = net.createServer((socket) => socket.destroy());
@@ -203,6 +206,7 @@ async function acquireControllerMutex(runtimePath) {
     });
   } catch (error) {
     if (error?.code === "EADDRINUSE") {
+      if (ifActiveReturnNull) return null;
       throw new Error("Ralph controller OS mutex is active", { cause: error });
     }
     throw new Error("Ralph controller OS mutex could not be acquired", {
@@ -407,8 +411,12 @@ export function createStateStore(runtimePath) {
       return admission;
     },
 
-    async acquireControllerLease() {
-      const mutex = await acquireControllerMutex(runtimePath);
+    async acquireControllerLease({ ifActiveReturnNull = false } = {}) {
+      const mutex = await acquireControllerMutex(
+        runtimePath,
+        ifActiveReturnNull,
+      );
+      if (!mutex) return null;
       let token;
       try {
         fs.mkdirSync(runtimePath, { recursive: true });

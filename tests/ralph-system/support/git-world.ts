@@ -77,7 +77,7 @@ export function createGitWorld() {
       fs.rmSync(resolvedRoot, {
         recursive: true,
         force: true,
-        maxRetries: 5,
+        maxRetries: 50,
         retryDelay: 100,
       });
     },
