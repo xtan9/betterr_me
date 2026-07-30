@@ -5,10 +5,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   assertCheckoutCleaned,
   assertPublishedCandidate,
-  assertSingleDeliveryGitTransaction,
+  deliveryGitMutations,
 } from "./support/assertions";
 import { createGitWorld, git } from "./support/git-world";
 import { createSystemScenario } from "./support/test-cli";
+import { createSafeEnvironment } from "./fixtures/test-primitives.mjs";
 
 const worlds: Array<ReturnType<typeof createGitWorld>> = [];
 
@@ -54,28 +55,69 @@ function createHappyPathScenario() {
   return { world, scenario, expectedChanges };
 }
 
+function runImportProbe(world: ReturnType<typeof createGitWorld>, modules: string[]) {
+  const fixtureDirectory = fileURLToPath(
+    new URL("./fixtures", import.meta.url),
+  );
+  const fixturePath = path.join(fixtureDirectory, "import-purity.mjs");
+  return spawnSync(
+    process.execPath,
+    [
+      "--permission",
+      `--allow-fs-read=${fixtureDirectory}`,
+      `--allow-fs-read=${path.resolve("scripts/ralph")}`,
+      fixturePath,
+      ...modules,
+    ],
+    {
+      cwd: world.controllerPath,
+      encoding: "utf8",
+      timeout: 10_000,
+      windowsHide: true,
+      env: createSafeEnvironment(process.env, {
+        HOME: world.root,
+        USERPROFILE: world.root,
+      }),
+    },
+  );
+}
+
 describe("Ralph v2 system delivery", () => {
   it("imports its public orchestration modules without side effects", () => {
-    const fixturePath = fileURLToPath(
-      new URL("./fixtures/import-purity.mjs", import.meta.url),
-    );
-    const result = spawnSync(
-      process.execPath,
-      [
-        fixturePath,
+    const world = createGitWorld();
+    worlds.push(world);
+    const result = runImportProbe(world, [
         path.resolve("scripts/ralph/v2/cli.mjs"),
         path.resolve("scripts/ralph/v2/runtime.mjs"),
-      ],
-      {
-        encoding: "utf8",
-        timeout: 10_000,
-        windowsHide: true,
-      },
-    );
+    ]);
     expect(result.error).toBeUndefined();
     expect(result.signal).toBeNull();
     expect(result.status, result.stderr).toBe(0);
+    expect(result.stderr).toBe("");
     expect(result.stdout).toBe("imports are inert\n");
+  });
+
+  it("rejects deliberately impure imports in every protected capability class", () => {
+    const world = createGitWorld();
+    worlds.push(world);
+    const fixtureDirectory = fileURLToPath(
+      new URL("./fixtures", import.meta.url),
+    );
+    for (const fixture of [
+      "impure-fs-read.mjs",
+      "impure-fs-write.mjs",
+      "impure-child.mjs",
+      "impure-network.mjs",
+    ]) {
+      const result = runImportProbe(world, [path.join(fixtureDirectory, fixture)]);
+      expect(result.error).toBeUndefined();
+      expect(result.signal).toBeNull();
+      expect(result.status, fixture).not.toBe(0);
+      expect(result.stderr).toMatch(/forbidden operation|ERR_ACCESS_DENIED/);
+    }
+    expect(
+      git(world.controllerPath, ["status", "--porcelain"]).stdout,
+    ).toBe("");
   });
 
   it("publishes one verified Draft from latest main exactly once across fresh processes", () => {
@@ -147,7 +189,8 @@ describe("Ralph v2 system delivery", () => {
       workerPath: externalState.sessions[0].worktreePath,
     });
 
-    expect(scenario.inspectEvents().map((event) => event.kind)).toEqual([
+    const events = scenario.inspectEvents();
+    expect(events.map((event) => event.kind)).toEqual([
       "issue-claimed",
       "worker-started",
       "worker-completed",
@@ -156,7 +199,11 @@ describe("Ralph v2 system delivery", () => {
       "remote-head-observed",
       "draft-pr-created",
     ]);
-    assertSingleDeliveryGitTransaction(scenario.inspectGitTrace());
+    expect(events[4]).toMatchObject({
+      oldSha: "0000000000000000000000000000000000000000",
+      newSha: pullRequest.headSha,
+      ref: `refs/heads/${pullRequest.headBranch}`,
+    });
 
     const status = scenario.run(["status", "--json"]);
     expect(status.exitCode, status.stderr.join("\n")).toBe(0);
@@ -209,6 +256,7 @@ describe("Ralph v2 system delivery", () => {
       verificationRequests: [],
     });
     expect(scenario.inspectEvents()).toEqual([]);
+    expect(deliveryGitMutations(scenario.inspectGitTrace())).toEqual([]);
     expect(
       git(world.remotePath, [
         "for-each-ref",

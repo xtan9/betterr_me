@@ -1,4 +1,5 @@
 import childProcess from "node:child_process";
+import dgram from "node:dgram";
 import dns from "node:dns";
 import fs from "node:fs";
 import http from "node:http";
@@ -18,40 +19,81 @@ function forbidden(operation) {
   };
 }
 
-function calledByModuleLoader() {
-  return new Error().stack?.includes("node:internal/modules/esm/load") ?? false;
+function calledByModuleLoaderThroughNodeFs() {
+  const frames = new Error().stack?.split("\n") ?? [];
+  const immediateCaller = frames[3] ?? "";
+  const callerParent = frames[4] ?? "";
+  return (
+    immediateCaller.includes("node:internal/modules/esm/load") ||
+    (immediateCaller.includes("node:fs:") &&
+      callerParent.includes("node:internal/modules/esm/load"))
+  );
 }
 
-for (const operation of ["exec", "execFile", "fork", "spawn", "spawnSync"]) {
+for (const operation of [
+  "exec",
+  "execFile",
+  "execFileSync",
+  "execSync",
+  "fork",
+  "spawn",
+  "spawnSync",
+]) {
   childProcess[operation] = forbidden(`child_process.${operation}`);
 }
 
 const originalOpenSync = fs.openSync;
 fs.openSync = (...args) => {
-  if (calledByModuleLoader()) return originalOpenSync(...args);
+  if (calledByModuleLoaderThroughNodeFs()) return originalOpenSync(...args);
   return forbidden("fs.openSync")();
 };
 const originalReadFileSync = fs.readFileSync;
 fs.readFileSync = (...args) => {
-  if (calledByModuleLoader()) return originalReadFileSync(...args);
+  if (calledByModuleLoaderThroughNodeFs()) return originalReadFileSync(...args);
   return forbidden("fs.readFileSync")();
 };
 
 for (const operation of [
+  "access",
+  "accessSync",
   "appendFile",
   "appendFileSync",
+  "chmod",
+  "chmodSync",
+  "chown",
+  "chownSync",
+  "copyFile",
+  "copyFileSync",
   "createReadStream",
   "createWriteStream",
   "existsSync",
+  "lstat",
+  "lstatSync",
   "mkdir",
   "mkdirSync",
+  "mkdtemp",
+  "mkdtempSync",
+  "opendir",
+  "opendirSync",
   "readFile",
   "readdir",
   "readdirSync",
+  "readlink",
+  "readlinkSync",
+  "realpath",
+  "realpathSync",
+  "rename",
+  "renameSync",
   "rm",
   "rmSync",
   "stat",
   "statSync",
+  "symlink",
+  "symlinkSync",
+  "truncate",
+  "truncateSync",
+  "unlink",
+  "unlinkSync",
   "writeFile",
   "writeFileSync",
 ]) {
@@ -59,13 +101,26 @@ for (const operation of [
 }
 
 for (const operation of [
+  "access",
   "appendFile",
+  "chmod",
+  "chown",
+  "copyFile",
+  "lstat",
   "mkdir",
+  "mkdtemp",
   "open",
+  "opendir",
   "readFile",
   "readdir",
+  "readlink",
+  "realpath",
+  "rename",
   "rm",
   "stat",
+  "symlink",
+  "truncate",
+  "unlink",
   "writeFile",
 ]) {
   fs.promises[operation] = forbidden(`fs.promises.${operation}`);
@@ -81,7 +136,9 @@ for (const operation of ["connect", "createConnection"]) {
 tls.connect = forbidden("tls.connect");
 for (const operation of ["lookup", "resolve", "resolve4", "resolve6"]) {
   dns[operation] = forbidden(`dns.${operation}`);
+  dns.promises[operation] = forbidden(`dns.promises.${operation}`);
 }
+dgram.createSocket = forbidden("dgram.createSocket");
 workerThreads.Worker = class ForbiddenWorker {
   constructor() {
     throw new Error("import performed forbidden operation: worker_threads.Worker");

@@ -100,22 +100,44 @@ export function assertCheckoutCleaned(input: {
   );
 }
 
-export function assertSingleDeliveryGitTransaction(
+export function deliveryGitMutations(
   traceEvents: Array<{ event?: string; argv?: string[] }>,
 ) {
-  const commands = traceEvents
-    .filter((event) => event.event === "start" && Array.isArray(event.argv))
-    .map((event) => event.argv ?? []);
-  const count = (command: string, argument?: string) =>
-    commands.filter((argv) => {
-      const commandIndex = argv.indexOf(command);
-      if (commandIndex < 0) return false;
-      return argument === undefined || argv[commandIndex + 1] === argument;
-    }).length;
-
-  expect(count("worktree", "add")).toBe(1);
-  expect(count("commit")).toBe(1);
-  expect(count("push")).toBe(1);
-  expect(count("worktree", "remove")).toBe(1);
-  expect(count("branch", "-D")).toBe(1);
+  const exits = new Map(
+    traceEvents
+      .filter((event) => event.event === "exit" && "sid" in event)
+      .map((event) => [
+        (event as { sid: string }).sid,
+        (event as { code?: number }).code,
+      ]),
+  );
+  return traceEvents
+    .filter(
+      (event): event is { event: string; sid: string; argv: string[] } =>
+        event.event === "start" &&
+        "sid" in event &&
+        typeof event.sid === "string" &&
+        Array.isArray(event.argv) &&
+        exits.get(event.sid) === 0,
+    )
+    .flatMap((event) => {
+      const argv = event.argv;
+      const worktree = argv.indexOf("worktree");
+      if (worktree >= 0 && ["add", "move", "remove"].includes(argv[worktree + 1])) {
+        return [`worktree-${argv[worktree + 1]}`];
+      }
+      if (argv.includes("commit") || argv.includes("commit-tree")) return ["commit"];
+      if (argv.includes("push")) return ["push"];
+      if (argv.includes("update-ref")) return ["update-ref"];
+      const branch = argv.indexOf("branch");
+      if (
+        branch >= 0 &&
+        argv.slice(branch + 1).some((argument) =>
+          ["-d", "-D", "--delete", "--force"].includes(argument)
+        )
+      ) {
+        return ["branch-delete"];
+      }
+      return [];
+    });
 }

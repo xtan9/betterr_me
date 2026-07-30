@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createSafeEnvironment } from "../fixtures/test-primitives.mjs";
 
 type GitWorld = {
   controllerPath: string;
@@ -75,19 +76,15 @@ export function createSystemScenario(
         process.execPath,
         [hostPath, configPath, "--", ...args],
         {
-          cwd: process.cwd(),
+          cwd: world.controllerPath,
           encoding: "utf8",
           timeout: 30_000,
           windowsHide: true,
-          env: {
-            ...process.env,
-            GCM_INTERACTIVE: "Never",
-            GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null",
-            GIT_CONFIG_NOSYSTEM: "1",
-            GIT_TERMINAL_PROMPT: "0",
+          env: createSafeEnvironment(process.env, {
             GIT_TRACE2_EVENT: world.gitTracePath,
-            RALPH_V2_SYSTEM_TEST: "1",
-          },
+            HOME: world.root,
+            USERPROFILE: world.root,
+          }),
         },
       );
       if (result.error || result.signal) {

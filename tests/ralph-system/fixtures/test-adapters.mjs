@@ -1,33 +1,6 @@
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-
-function git(cwd, args, allowFailure = false) {
-  const result = spawnSync("git", args, {
-    cwd,
-    encoding: "utf8",
-    windowsHide: true,
-    timeout: 10_000,
-    env: {
-      ...process.env,
-      GCM_INTERACTIVE: "Never",
-      GIT_TERMINAL_PROMPT: "0",
-    },
-  });
-  if (result.error || result.signal) {
-    throw new Error(
-      `git ${args.join(" ")} did not exit normally: ${
-        result.error?.message ?? `signal ${result.signal}`
-      }`,
-    );
-  }
-  if (!allowFailure && result.status !== 0) {
-    throw new Error(
-      `git ${args.join(" ")} failed: ${result.stderr || result.stdout}`,
-    );
-  }
-  return result;
-}
+import { assertPathWithin, runGit as git } from "./test-primitives.mjs";
 
 function readState(config) {
   return JSON.parse(fs.readFileSync(config.externalStatePath, "utf8"));
@@ -146,6 +119,16 @@ export function createTestAdapters(config) {
       );
     },
     async createDraftPullRequest(input) {
+      const currentWorktree = path.join(config.runtimePath, "worktrees", "current");
+      if (!fs.existsSync(currentWorktree)) {
+        throw new Error("Ralph cleaned the worktree before creating the PR");
+      }
+      const localBranch = git(currentWorktree, ["branch", "--show-current"])
+        .stdout.trim();
+      const localHead = git(currentWorktree, ["rev-parse", "HEAD"]).stdout.trim();
+      if (localBranch !== input.headBranch || localHead !== input.headSha) {
+        throw new Error("local delivery checkout changed before PR creation");
+      }
       const remoteHead = resolveRemoteHead(config, input.headBranch);
       appendEvent(config, {
         kind: "remote-head-observed",
@@ -211,12 +194,11 @@ export function createTestAdapters(config) {
 
       try {
         for (const change of config.workerChanges) {
-          const worktreeRoot = path.resolve(input.worktreePath);
-          const destination = path.resolve(worktreeRoot, change.path);
-          const relative = path.relative(worktreeRoot, destination);
-          if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
-            throw new Error(`worker change escapes its worktree: ${change.path}`);
-          }
+          const destination = assertPathWithin(
+            input.worktreePath,
+            path.join(input.worktreePath, change.path),
+            "worker change",
+          );
           fs.mkdirSync(path.dirname(destination), { recursive: true });
           fs.writeFileSync(destination, change.content);
         }
@@ -236,6 +218,11 @@ export function createTestAdapters(config) {
 
   const verifier = {
     async verify(input) {
+      const preVerificationHead = git(input.worktreePath, ["rev-parse", "HEAD"])
+        .stdout.trim();
+      if (preVerificationHead !== config.mainSha) {
+        throw new Error("candidate was committed before verification completed");
+      }
       if (resolveRemoteHead(config, input.headBranch, true) !== null) {
         throw new Error("candidate was pushed before verification completed");
       }
