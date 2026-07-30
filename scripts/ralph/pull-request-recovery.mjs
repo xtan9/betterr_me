@@ -6,7 +6,7 @@ import {
 } from "./queue.mjs";
 
 const CONTROLLER_OWNED_CHECKS = new Set(["release-scope-evidence"]);
-const RECOVERY_POLICY_VERSION = 2;
+const RECOVERY_POLICY_VERSION = 3;
 function normalizedChecks(checks) {
   return [...(Array.isArray(checks) ? checks : [])]
     .map((check) => ({
@@ -67,6 +67,18 @@ export function pullRequestRecoveryFingerprint(snapshot) {
     stage: snapshot.stage,
     originalFailureKind: snapshot.originalFailureKind ?? null,
     checksAvailable: snapshot.checksAvailable !== false,
+    latestMainSha: snapshot.latestMainSha ?? null,
+    headContainsLatestMain: snapshot.headContainsLatestMain !== false,
+    headContainsPendingBase: snapshot.headContainsPendingBase === true,
+    headContainsPendingPreviousHead:
+      snapshot.headContainsPendingPreviousHead === true,
+    baseUpdateRequiresVerification:
+      snapshot.baseUpdateRequiresVerification === true,
+    baseUpdateBlockedByDirtyWorktree:
+      snapshot.baseUpdateBlockedByDirtyWorktree === true,
+    pendingBaseUpdate: snapshot.pendingBaseUpdate ?? null,
+    pendingPrRepair: snapshot.pendingPrRepair ?? null,
+    baseUpdateRetryReady: snapshot.baseUpdateRetryReady !== false,
     checks: normalizedChecks(snapshot.checks),
   };
   return crypto
@@ -201,6 +213,55 @@ export function blockedRepairPostPushDisposition(snapshot, expectedHead) {
   return snapshot.headRefOid === expectedHead ? "verified" : "wait-head";
 }
 
+export function pullRequestBaseUpdateDisposition({
+  pending,
+  observedHead,
+  headContainsPendingBase,
+  headContainsPendingPreviousHead,
+}) {
+  if (!pending) return { action: "none" };
+  if (observedHead === pending.previousHead) return { action: "wait" };
+  if (
+    headContainsPendingBase === true &&
+    headContainsPendingPreviousHead === true
+  ) {
+    return {
+      action: "adopt",
+      headSha: observedHead,
+      baseSha: pending.baseSha,
+    };
+  }
+  return { action: "unsafe" };
+}
+
+export function baseUpdateReviewResetPatch(issueState, at) {
+  const findingLedger = Array.isArray(issueState?.reviewFindingLedger)
+    ? issueState.reviewFindingLedger
+    : [];
+  const history = Array.isArray(issueState?.supersededReviewFindingLedgers)
+    ? issueState.supersededReviewFindingLedgers
+    : [];
+  return {
+    reviewFindingLedger: null,
+    reviewBaselineTreeSha: null,
+    reviewRepairPending: null,
+    ...(findingLedger.length > 0
+      ? {
+          supersededReviewFindingLedgers: [
+            ...history.slice(-9),
+            {
+              findingLedger,
+              baselineTreeSha: issueState.reviewBaselineTreeSha ?? null,
+              repairPending: issueState.reviewRepairPending ?? null,
+              supersededAt: at,
+              reason: "pull-request base updated before forced exhaustive review",
+            },
+          ],
+        }
+      : {}),
+  };
+}
+
 function recoveryPlan(snapshot, action, details = {}) {
   return {
     issueNumber: snapshot.issueNumber,
@@ -211,6 +272,17 @@ function recoveryPlan(snapshot, action, details = {}) {
     action,
     risk: snapshot.risk,
     riskReasons: snapshot.riskReasons ?? [],
+    latestMainSha: snapshot.latestMainSha ?? null,
+    headContainsLatestMain: snapshot.headContainsLatestMain !== false,
+    headContainsPendingBase: snapshot.headContainsPendingBase === true,
+    headContainsPendingPreviousHead:
+      snapshot.headContainsPendingPreviousHead === true,
+    baseUpdateRequiresVerification:
+      snapshot.baseUpdateRequiresVerification === true,
+    baseUpdateBlockedByDirtyWorktree:
+      snapshot.baseUpdateBlockedByDirtyWorktree === true,
+    pendingBaseUpdate: snapshot.pendingBaseUpdate ?? null,
+    pendingPrRepair: snapshot.pendingPrRepair ?? null,
     consumesCodingAttempt: action === "code-repair",
     ...details,
   };
@@ -237,6 +309,50 @@ export function planPullRequestRecovery(snapshot) {
   ) {
     return recoveryPlan(snapshot, "refresh", {
       reason: "pull request head changed since durable state was recorded",
+    });
+  }
+  if (snapshot.pendingPrRepair) {
+    return recoveryPlan(snapshot, "reconcile-pending-repair", {
+      reason: "finish the durable interrupted pull-request repair transaction",
+    });
+  }
+  if (
+    snapshot.pendingBaseUpdate &&
+    snapshot.headSha === snapshot.pendingBaseUpdate.previousHead
+  ) {
+    if (snapshot.baseUpdateRetryReady === false) {
+      return recoveryPlan(snapshot, "wait", {
+        reason: "waiting for GitHub to apply the pending base update",
+      });
+    }
+    return recoveryPlan(snapshot, "update-base", {
+      reason: "resume the durable pending pull-request base update",
+      latestMainSha: snapshot.pendingBaseUpdate.baseSha,
+    });
+  }
+  if (snapshot.headContainsLatestMain === false) {
+    if (snapshot.baseUpdateBlockedByDirtyWorktree) {
+      if (
+        snapshot.originalFailureKind &&
+        !draftFailurePolicy(snapshot.originalFailureKind).reverify
+      ) {
+        return recoveryPlan(snapshot, "human-gate", {
+          reason:
+            "interrupted work retains a stricter unresolved draft blocker",
+        });
+      }
+      return recoveryPlan(snapshot, "preserve-dirty-repair", {
+        reason: "preserve interrupted repair before updating the pull-request base",
+      });
+    }
+    if (snapshot.mergeStateStatus === "DIRTY") {
+      return recoveryPlan(snapshot, "human-gate", {
+        reason: "pull request conflicts with the latest main branch",
+      });
+    }
+    return recoveryPlan(snapshot, "update-base", {
+      reason: "pull request does not contain the latest main branch",
+      latestMainSha: snapshot.latestMainSha,
     });
   }
   if (snapshot.mergeStateStatus === "DIRTY") {
@@ -340,6 +456,14 @@ export function planPullRequestRecovery(snapshot) {
     return recoveryPlan(snapshot, "human-gate", {
       reason: "required checks failed after the bounded coding repair budget",
       failedChecks: failures.map((check) => check.name).sort(),
+    });
+  }
+
+  if (snapshot.baseUpdateRequiresVerification) {
+    const failurePolicy = draftFailurePolicy(snapshot.originalFailureKind);
+    return recoveryPlan(snapshot, "reverify-draft", {
+      promoteDraftAfterVerification:
+        snapshot.isDraft === true && failurePolicy.promoteAfterVerification,
     });
   }
 

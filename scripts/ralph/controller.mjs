@@ -82,11 +82,13 @@ import {
   reviewRecoveryPlan,
 } from "./review-protocol.mjs";
 import {
+  baseUpdateReviewResetPatch,
   blockedRepairPostPushDisposition,
   blockedRepairPreservationRecoveryAction,
   blockedRepairRecoveryReceipt,
   blockedRepairRecoveryReceiptMatches,
   canAdoptLegacyProtectedScopeRepair,
+  pullRequestBaseUpdateDisposition,
   pullRequestCheckRetryKey,
   pullRequestRecoveryErrorDisposition,
   reconcilePullRequestBacklog,
@@ -1260,6 +1262,88 @@ async function inspectPullRequestRecovery(candidate, state, controllerOptions) {
     (pullRequest.files ?? []).map((file) => file.path),
     candidate,
   );
+  await runTransient(
+    "git.exe",
+    ["-C", repositoryRoot, "fetch", "origin", "--prune"],
+    controllerOptions,
+    { timeoutSeconds: 120 },
+  );
+  const latestMainSha = (
+    await git(["-C", repositoryRoot, "rev-parse", `origin/${baseBranch}`])
+  ).stdout.trim();
+  const headContainsLatestMainResult = await runProcess(
+    "git.exe",
+    [
+      "-C",
+      repositoryRoot,
+      "merge-base",
+      "--is-ancestor",
+      latestMainSha,
+      pullRequest.headRefOid,
+    ],
+    { timeoutSeconds: 30 },
+  );
+  if (![0, 1].includes(headContainsLatestMainResult.code)) {
+    throw Object.assign(
+      new Error("unable to compare the pull-request head with latest main"),
+      { failureKind: "infrastructure" },
+    );
+  }
+  let baseUpdateBlockedByDirtyWorktree = false;
+  if (issueState.worktreePath && fs.existsSync(issueState.worktreePath)) {
+    baseUpdateBlockedByDirtyWorktree = Boolean(
+      (
+        await git([
+          "-C",
+          issueState.worktreePath,
+          "status",
+          "--porcelain",
+        ])
+      ).stdout.trim(),
+    );
+  }
+  let headContainsPendingBase = false;
+  let headContainsPendingPreviousHead = false;
+  if (issueState.pendingBaseUpdate?.baseSha) {
+    const pendingBaseResult = await runProcess(
+      "git.exe",
+      [
+        "-C",
+        repositoryRoot,
+        "merge-base",
+        "--is-ancestor",
+        issueState.pendingBaseUpdate.baseSha,
+        pullRequest.headRefOid,
+      ],
+      { timeoutSeconds: 30 },
+    );
+    if (![0, 1].includes(pendingBaseResult.code)) {
+      throw Object.assign(
+        new Error("unable to verify the pending PR base update"),
+        { failureKind: "infrastructure" },
+      );
+    }
+    headContainsPendingBase = pendingBaseResult.code === 0;
+    const pendingPreviousHeadResult = await runProcess(
+      "git.exe",
+      [
+        "-C",
+        repositoryRoot,
+        "merge-base",
+        "--is-ancestor",
+        issueState.pendingBaseUpdate.previousHead,
+        pullRequest.headRefOid,
+      ],
+      { timeoutSeconds: 30 },
+    );
+    if (![0, 1].includes(pendingPreviousHeadResult.code)) {
+      throw Object.assign(
+        new Error("unable to verify the pending PR previous head"),
+        { failureKind: "infrastructure" },
+      );
+    }
+    headContainsPendingPreviousHead = pendingPreviousHeadResult.code === 0;
+  }
   let originalFailureKind = issueState.failureKind;
   if (originalFailureKind === "worker-blocked") {
     const legacyReceipt = await observedBlockedRepairRecoveryReceipt(
@@ -1292,6 +1376,19 @@ async function inspectPullRequestRecovery(candidate, state, controllerOptions) {
     maximumTransientAttempts: controllerOptions.maximumTransientAttempts,
     originalFailureKind,
     checksAvailable: !noChecksReported,
+    latestMainSha,
+    headContainsLatestMain: headContainsLatestMainResult.code === 0,
+    headContainsPendingBase,
+    headContainsPendingPreviousHead,
+    baseUpdateRequiresVerification:
+      issueState.baseUpdateRequiresVerification === true,
+    baseUpdateBlockedByDirtyWorktree,
+    pendingBaseUpdate: issueState.pendingBaseUpdate ?? null,
+    pendingPrRepair: issueState.pendingPrRepair ?? null,
+    baseUpdateRetryReady:
+      issueState.pendingBaseUpdate?.status !== "requested" ||
+      !issueState.pendingBaseUpdate?.nextAttemptAt ||
+      Date.parse(issueState.pendingBaseUpdate.nextAttemptAt) <= Date.now(),
     checks: checks.map((check) => ({
       ...check,
       provider: checkRunId(check) ? "github-actions" : "unknown",
@@ -1727,6 +1824,126 @@ async function reconcilePullRequestRecoveryBacklog(
       if (plan.action === "wait") {
         return { status: plan.action, reason: plan.reason ?? null };
       }
+      if (plan.action === "reconcile-pending-repair") {
+        state = await reconcilePendingPullRequestRepair(
+          state,
+          issue,
+          controllerOptions,
+        );
+        return {
+          status: "refresh",
+          reason: "finished the durable interrupted pull-request repair transaction",
+        };
+      }
+      if (plan.action === "preserve-dirty-repair") {
+        const existingFailurePolicy = draftFailurePolicy(issueState.failureKind);
+        const preservedFailureKind = existingFailurePolicy.preserveBlockedRepair
+          ? issueState.failureKind
+          : "interrupted-repair";
+        const failure = Object.assign(
+          new Error("preserving interrupted pull-request repair before base synchronization"),
+          {
+            failureKind: preservedFailureKind,
+            stopReason:
+              "Ralph was interrupted with an uncommitted repair. The allowed-scope changes are being preserved in this Draft PR and must be fully reverified after synchronization with latest main.",
+          },
+        );
+        state = await preserveBlockedPullRequestRepair(
+          state,
+          issue,
+          actor,
+          controllerOptions,
+          failure,
+        );
+        return {
+          status: "refresh",
+          reason: "preserved interrupted repair as an unverified draft",
+        };
+      }
+      if (plan.action === "update-base") {
+        if (!plan.latestMainSha) {
+          throw Object.assign(
+            new Error("pull-request base update is missing the exact main SHA"),
+            { failureKind: "safety" },
+          );
+        }
+        if (issueState.worktreePath && fs.existsSync(issueState.worktreePath)) {
+          const changes = (
+            await git([
+              "-C",
+              issueState.worktreePath,
+              "status",
+              "--porcelain",
+            ])
+          ).stdout.trim();
+          if (changes) {
+            throw Object.assign(
+              new Error("refusing to update a PR base while its recovery worktree is dirty"),
+              { failureKind: "safety" },
+            );
+          }
+          state = await releasePublishedCheckout(state, issue);
+          issueState = state.issues[String(issue.issueNumber)];
+        }
+        const pending = issueState.pendingBaseUpdate;
+        if (
+          pending &&
+          (pending.previousHead !== plan.headSha ||
+            pending.baseSha !== plan.latestMainSha)
+        ) {
+          throw Object.assign(
+            new Error("pending PR base update does not match the observed head and main"),
+            { failureKind: "safety" },
+          );
+        }
+        const attempts = (pending?.attempts ?? 0) + 1;
+        if (attempts > controllerOptions.maximumTransientAttempts) {
+          const reason = "pull-request base update did not become observable within bounded attempts";
+          state = await parkPullRequestRecoveryGate(
+            state,
+            issue,
+            "update-base",
+            reason,
+          );
+          return { status: "human-gate", reason };
+        }
+        state = moveIssue(state, issue.issueNumber, issueState.stage, {
+          pendingBaseUpdate: {
+            previousHead: plan.headSha,
+            baseSha: plan.latestMainSha,
+            attempts,
+            status: "requesting",
+            requestedAt: new Date().toISOString(),
+          },
+        });
+        await gh(
+          [
+            "api",
+            "--method",
+            "PUT",
+            `repos/${owner}/${repo}/pulls/${plan.prNumber}/update-branch`,
+            "-f",
+            `expected_head_sha=${plan.headSha}`,
+          ],
+          controllerOptions,
+          { timeoutSeconds: 120 },
+        );
+        issueState = state.issues[String(issue.issueNumber)];
+        state = moveIssue(state, issue.issueNumber, issueState.stage, {
+          pendingBaseUpdate: {
+            ...issueState.pendingBaseUpdate,
+            status: "requested",
+            confirmedAt: new Date().toISOString(),
+            nextAttemptAt: new Date(
+              Date.now() + Math.max(15, controllerOptions.pollSeconds) * 1000,
+            ).toISOString(),
+          },
+        });
+        return {
+          status: "wait",
+          reason: "requested an idempotent update to latest main",
+        };
+      }
       if (plan.action === "human-gate") {
         const reason = plan.reason ?? "pull request requires human review";
         state = await parkPullRequestRecoveryGate(
@@ -1738,6 +1955,44 @@ async function reconcilePullRequestRecoveryBacklog(
         return { status: "human-gate", reason };
       }
       if (plan.action === "refresh") {
+        if (issueState.pendingBaseUpdate) {
+          const pending = issueState.pendingBaseUpdate;
+          const disposition = pullRequestBaseUpdateDisposition({
+            pending,
+            observedHead: plan.headSha,
+            headContainsPendingBase: plan.headContainsPendingBase,
+            headContainsPendingPreviousHead:
+              plan.headContainsPendingPreviousHead,
+          });
+          if (disposition.action === "wait") {
+            return { status: "wait", reason: "waiting for PR base update head" };
+          }
+          if (disposition.action !== "adopt") {
+            throw Object.assign(
+              new Error("updated pull-request head does not contain the requested main SHA"),
+              { failureKind: "safety" },
+            );
+          }
+          const adoptedAt = new Date().toISOString();
+          state = moveIssue(state, issue.issueNumber, issueState.stage, {
+            commit: disposition.headSha,
+            baseSha: disposition.baseSha,
+            prRepairBaseSha: disposition.headSha,
+            ...baseUpdateReviewResetPatch(issueState, adoptedAt),
+            pendingBaseUpdate: null,
+            baseUpdateRequiresVerification: true,
+            prRecovery: null,
+            transientCheckAttempt: null,
+            transientCheckRetry: null,
+            controllerCheckAttempt: null,
+            controllerCheckRetry: null,
+            baseUpdatedAt: adoptedAt,
+          });
+          return {
+            status: "refresh",
+            reason: "adopted the exact head updated to latest main",
+          };
+        }
         if (
           issueState.pendingPrRepair?.commit &&
           issueState.pendingPrRepair.commit === plan.headSha
@@ -1962,6 +2217,10 @@ async function reconcilePullRequestRecoveryBacklog(
           state = await verifyIssue(state, issue, controllerOptions, {
             force: true,
             stage: "pr-repairing",
+          });
+          issueState = state.issues[String(issue.issueNumber)];
+          state = moveIssue(state, issue.issueNumber, issueState.stage, {
+            baseUpdateRequiresVerification: false,
           });
         } catch (error) {
           verificationFailure = error;
@@ -3728,10 +3987,17 @@ async function preserveBlockedPullRequestRepair(
   const stopReason = redactFailureSummary(
     failure.stopReason ?? failure.message ?? "ticket-specific verification is unavailable",
   );
-  state = moveIssue(state, number, "pr-repairing", {
-    blockedPrFailureKind: failure.failureKind,
-    blockedPrStopReason: stopReason,
-  });
+  state = saveState(
+    reopenIssueForPullRequestRecovery(
+      state,
+      number,
+      {
+        blockedPrFailureKind: failure.failureKind,
+        blockedPrStopReason: stopReason,
+      },
+      new Date().toISOString(),
+    ),
+  );
   state = await assertClaimOwnership(state, issue, actor, controllerOptions);
   let issueState = state.issues[String(number)];
   const worktreePath = issueState.worktreePath;
@@ -4691,6 +4957,39 @@ async function waitAndMaybeMerge(state, issue, actor, controllerOptions) {
     });
   }
   status(`Required review gates passed on PR #${issueState.prNumber}.`);
+  await runTransient(
+    "git.exe",
+    ["-C", repositoryRoot, "fetch", "origin", "--prune"],
+    controllerOptions,
+    { timeoutSeconds: 120 },
+  );
+  const latestMainSha = (
+    await git(["-C", repositoryRoot, "rev-parse", `origin/${baseBranch}`])
+  ).stdout.trim();
+  const containsLatestMain = await runProcess(
+    "git.exe",
+    [
+      "-C",
+      repositoryRoot,
+      "merge-base",
+      "--is-ancestor",
+      latestMainSha,
+      issueState.commit,
+    ],
+    { timeoutSeconds: 30 },
+  );
+  if (![0, 1].includes(containsLatestMain.code)) {
+    throw Object.assign(
+      new Error("unable to recheck latest main before merge"),
+      { failureKind: "infrastructure" },
+    );
+  }
+  if (containsLatestMain.code === 1) {
+    return moveIssue(state, number, "manual-review", {
+      stopReason:
+        "main advanced after verification; returning this PR to durable base synchronization",
+    });
+  }
   const pr = review.pr;
   const gate = evaluateMergeGate({
     mode: controllerOptions.mode,
@@ -4877,6 +5176,10 @@ async function completePullRequestLifecycle(
         issue,
         controllerOptions,
       );
+      const verifiedIssueState = state.issues[String(number)];
+      state = moveIssue(state, number, verifiedIssueState.stage, {
+        baseUpdateRequiresVerification: false,
+      });
       pendingPullRequestFailure = null;
     } catch (error) {
       pendingPullRequestFailure = error;

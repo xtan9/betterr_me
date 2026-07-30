@@ -178,6 +178,21 @@ draft only after that cycle passes; safety, ambiguity, controller infrastructure
 explicitly non-repairable findings, exhausted attempts, and high-risk merges
 remain human-gated. Unrelated ready issues may continue.
 
+Before repairing or re-verifying an existing PR, Ralph verifies that the exact
+PR head contains the latest remote `main`. A clean stale branch is updated with
+GitHub's expected-head update API under a durable, bounded receipt; the new head
+is adopted only after Git proves it contains both the requested main SHA and the
+previous PR head. Adoption always forces full local verification and exhaustive
+independent review before any merge decision. If `main` advances while an update
+is pending, Ralph finishes the recorded update idempotently before requesting the
+next one. A dirty recovery checkout is safety-scanned and preserved as explicitly
+unverified Draft work first; protected-path or secret-bearing changes stop the
+controller without publication. A base conflict is human-gated rather than sent
+through coding repair. GitHub's asynchronous branch update is polled before a
+bounded retry is consumed. Immediately before merge, Ralph fetches `origin/main`
+again; if it advanced, the PR returns to the same durable base-sync and full
+verification cycle.
+
 Ticket-specific infrastructure and protected-scope blockers do not consume a
 coding attempt merely to re-verify a new, green PR head. Safe in-scope changes
 completed before either blocker are committed and pushed to the draft instead

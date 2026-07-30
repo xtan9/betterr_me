@@ -425,6 +425,7 @@ describe("Ralph durable state and policy", () => {
     expect(shouldParkIssueFailure("ambiguous")).toBe(true);
     expect(shouldParkIssueFailure("worker-blocked")).toBe(true);
     expect(shouldParkIssueFailure("ticket-infrastructure")).toBe(true);
+    expect(shouldParkIssueFailure("interrupted-repair")).toBe(true);
     expect(shouldParkIssueFailure("pr-checks")).toBe(true);
     expect(shouldParkIssueFailure("tests-timeout")).toBe(true);
     expect(shouldParkIssueFailure("merge-conflict")).toBe(true);
@@ -475,6 +476,12 @@ describe("Ralph durable state and policy", () => {
       shouldPreserveBlockedPullRequestRepair(
         "pr-repairing",
         "protected-scope",
+      ),
+    ).toBe(true);
+    expect(
+      shouldPreserveBlockedPullRequestRepair(
+        "pr-repairing",
+        "interrupted-repair",
       ),
     ).toBe(true);
     expect(
