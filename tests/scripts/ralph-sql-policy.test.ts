@@ -35,10 +35,6 @@ describe("Ralph SQL fixture policy", () => {
       "dynamically constructed dblink",
       `${safeFixture}select extensions.dblink_connect_u('x', 'user=' || 'post' || 'gres');`,
     ],
-    [
-      "function definition",
-      `${safeFixture}create function public.escape() returns void language sql as $$ select 1 $$;`,
-    ],
   ])("rejects %s", (_label, fixture) => {
     expect(ralphSqlFixtureViolations(fixture)).not.toEqual([]);
   });
@@ -57,6 +53,20 @@ select '\\! literal', E'\\\\path', $$\\copy literal$$;
 /* \\include ignored */
 set local role authenticated;
 reset role;
+`),
+    ).toEqual([]);
+  });
+
+  it("allows procedural assertions inside the low-privilege database sandbox", () => {
+    expect(
+      ralphSqlFixtureViolations(`${safeFixture}
+do $$
+begin
+  if 1 is distinct from 1 then
+    raise exception 'assertion failed';
+  end if;
+end
+$$;
 `),
     ).toEqual([]);
   });

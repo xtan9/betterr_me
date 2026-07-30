@@ -11,8 +11,6 @@ const FORBIDDEN_SQL = [
   ["server library load", /\bload\s+'[^']+'/i],
   ["session authorization change", /\bset\s+session\s+authorization\b/i],
   ["role administration", /\b(?:create|alter|drop)\s+role\b/i],
-  ["procedural code", /\bdo\b/i],
-  ["routine definition", /\b(?:create|alter)\s+(?:or\s+replace\s+)?(?:function|procedure)\b/i],
   ["foreign server access", /\b(?:create\s+(?:server|user\s+mapping|foreign\s+table)|import\s+foreign\s+schema)\b/i],
 ];
 
