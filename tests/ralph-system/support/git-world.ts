@@ -44,6 +44,12 @@ export function createGitWorld() {
     git(root, ["clone", remotePath, controllerPath]);
     git(controllerPath, ["config", "user.name", "Ralph System Test"]);
     git(controllerPath, ["config", "user.email", "ralph-system@example.invalid"]);
+    git(seedPath, ["remote", "add", "origin", remotePath]);
+    fs.appendFileSync(path.join(seedPath, "README.md"), "\nLatest remote main.\n");
+    git(seedPath, ["add", "README.md"]);
+    git(seedPath, ["commit", "-m", "advance remote main"]);
+    git(seedPath, ["push", "origin", "main"]);
+    fs.rmSync(eventLogPath, { force: true });
   } catch (error) {
     fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     throw error;
@@ -56,7 +62,8 @@ export function createGitWorld() {
     runtimePath,
     eventLogPath,
     gitTracePath,
-    mainSha: git(controllerPath, ["rev-parse", "origin/main"]).stdout.trim(),
+    staleMainSha: git(controllerPath, ["rev-parse", "origin/main"]).stdout.trim(),
+    mainSha: git(remotePath, ["rev-parse", "refs/heads/main"]).stdout.trim(),
     cleanup() {
       const temporaryDirectory = fs.realpathSync.native(os.tmpdir());
       const resolvedRoot = assertPathWithin(

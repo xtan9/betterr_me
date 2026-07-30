@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 
 const ENVIRONMENT_ALLOWLIST = [
@@ -43,6 +44,31 @@ export function assertPathWithin(root, candidate, purpose) {
   const relative = path.relative(resolvedRoot, resolvedCandidate);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error(`${purpose} escapes ${resolvedRoot}: ${resolvedCandidate}`);
+  }
+
+  const realRoot = fs.realpathSync.native(resolvedRoot);
+  let existingAncestor = resolvedCandidate;
+  while (!fs.existsSync(existingAncestor)) {
+    const parent = path.dirname(existingAncestor);
+    if (parent === existingAncestor) {
+      throw new Error(`${purpose} has no existing ancestor: ${resolvedCandidate}`);
+    }
+    existingAncestor = parent;
+  }
+  const realAncestor = fs.realpathSync.native(existingAncestor);
+  const realCandidate = path.resolve(
+    realAncestor,
+    path.relative(existingAncestor, resolvedCandidate),
+  );
+  const realRelative = path.relative(realRoot, realCandidate);
+  const comparableRelative =
+    process.platform === "win32" ? realRelative.toLowerCase() : realRelative;
+  if (
+    !comparableRelative ||
+    comparableRelative.startsWith("..") ||
+    path.isAbsolute(realRelative)
+  ) {
+    throw new Error(`${purpose} escapes real path ${realRoot}: ${realCandidate}`);
   }
   return resolvedCandidate;
 }

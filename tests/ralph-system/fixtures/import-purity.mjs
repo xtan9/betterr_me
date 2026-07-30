@@ -21,13 +21,11 @@ function forbidden(operation) {
 
 function calledByModuleLoaderThroughNodeFs() {
   const frames = new Error().stack?.split("\n") ?? [];
-  const immediateCaller = frames[3] ?? "";
-  const callerParent = frames[4] ?? "";
-  return (
-    immediateCaller.includes("node:internal/modules/esm/load") ||
-    (immediateCaller.includes("node:fs:") &&
-      callerParent.includes("node:internal/modules/esm/load"))
-  );
+  for (const frame of frames.slice(3)) {
+    if (frame.includes("node:fs:")) continue;
+    return frame.includes("node:internal/modules/esm/load");
+  }
+  return false;
 }
 
 for (const operation of [
@@ -42,88 +40,23 @@ for (const operation of [
   childProcess[operation] = forbidden(`child_process.${operation}`);
 }
 
-const originalOpenSync = fs.openSync;
-fs.openSync = (...args) => {
-  if (calledByModuleLoaderThroughNodeFs()) return originalOpenSync(...args);
-  return forbidden("fs.openSync")();
-};
-const originalReadFileSync = fs.readFileSync;
-fs.readFileSync = (...args) => {
-  if (calledByModuleLoaderThroughNodeFs()) return originalReadFileSync(...args);
-  return forbidden("fs.readFileSync")();
-};
-
-for (const operation of [
-  "access",
-  "accessSync",
-  "appendFile",
-  "appendFileSync",
-  "chmod",
-  "chmodSync",
-  "chown",
-  "chownSync",
-  "copyFile",
-  "copyFileSync",
-  "createReadStream",
-  "createWriteStream",
-  "existsSync",
-  "lstat",
-  "lstatSync",
-  "mkdir",
-  "mkdirSync",
-  "mkdtemp",
-  "mkdtempSync",
-  "opendir",
-  "opendirSync",
-  "readFile",
-  "readdir",
-  "readdirSync",
-  "readlink",
-  "readlinkSync",
-  "realpath",
-  "realpathSync",
-  "rename",
-  "renameSync",
-  "rm",
-  "rmSync",
-  "stat",
-  "statSync",
-  "symlink",
-  "symlinkSync",
-  "truncate",
-  "truncateSync",
-  "unlink",
-  "unlinkSync",
-  "writeFile",
-  "writeFileSync",
-]) {
-  fs[operation] = forbidden(`fs.${operation}`);
+for (const [operation, value] of Object.entries(fs)) {
+  const descriptor = Object.getOwnPropertyDescriptor(fs, operation);
+  if (typeof value === "function" && descriptor?.writable === true) {
+    fs[operation] = (...args) => {
+      if (calledByModuleLoaderThroughNodeFs()) {
+        return Reflect.apply(value, fs, args);
+      }
+      return forbidden(`fs.${operation}`)();
+    };
+  }
 }
 
-for (const operation of [
-  "access",
-  "appendFile",
-  "chmod",
-  "chown",
-  "copyFile",
-  "lstat",
-  "mkdir",
-  "mkdtemp",
-  "open",
-  "opendir",
-  "readFile",
-  "readdir",
-  "readlink",
-  "realpath",
-  "rename",
-  "rm",
-  "stat",
-  "symlink",
-  "truncate",
-  "unlink",
-  "writeFile",
-]) {
-  fs.promises[operation] = forbidden(`fs.promises.${operation}`);
+for (const [operation, value] of Object.entries(fs.promises)) {
+  const descriptor = Object.getOwnPropertyDescriptor(fs.promises, operation);
+  if (typeof value === "function" && descriptor?.writable === true) {
+    fs.promises[operation] = forbidden(`fs.promises.${operation}`);
+  }
 }
 
 for (const httpModule of [http, https]) {

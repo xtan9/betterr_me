@@ -77,7 +77,7 @@ export function assertPublishedCandidate(input: {
 export function assertCheckoutCleaned(input: {
   controllerPath: string;
   runtimePath: string;
-  mainSha: string;
+  controllerHeadSha: string;
   issueBranch: string;
   workerPath: string;
 }) {
@@ -96,12 +96,17 @@ export function assertCheckoutCleaned(input: {
   ).toBe("");
   expect(git(input.controllerPath, ["status", "--porcelain"]).stdout).toBe("");
   expect(git(input.controllerPath, ["rev-parse", "HEAD"]).stdout.trim()).toBe(
-    input.mainSha,
+    input.controllerHeadSha,
   );
 }
 
 export function deliveryGitMutations(
-  traceEvents: Array<{ event?: string; argv?: string[] }>,
+  traceEvents: Array<{
+    event?: string;
+    argv?: string[];
+    sid?: string;
+    code?: number;
+  }>,
 ) {
   const exits = new Map(
     traceEvents
@@ -123,20 +128,43 @@ export function deliveryGitMutations(
     .flatMap((event) => {
       const argv = event.argv;
       const worktree = argv.indexOf("worktree");
-      if (worktree >= 0 && ["add", "move", "remove"].includes(argv[worktree + 1])) {
+      if (
+        worktree >= 0 &&
+        ["add", "lock", "move", "prune", "remove", "repair", "unlock"].includes(
+          argv[worktree + 1],
+        )
+      ) {
         return [`worktree-${argv[worktree + 1]}`];
       }
-      if (argv.includes("commit") || argv.includes("commit-tree")) return ["commit"];
-      if (argv.includes("push")) return ["push"];
-      if (argv.includes("update-ref")) return ["update-ref"];
+      for (const mutation of [
+        "add",
+        "checkout",
+        "cherry-pick",
+        "clean",
+        "commit",
+        "commit-tree",
+        "fetch",
+        "merge",
+        "push",
+        "rebase",
+        "reset",
+        "restore",
+        "switch",
+        "update-ref",
+        "write-tree",
+      ]) {
+        if (argv.includes(mutation)) return [mutation];
+      }
       const branch = argv.indexOf("branch");
       if (
         branch >= 0 &&
-        argv.slice(branch + 1).some((argument) =>
-          ["-d", "-D", "--delete", "--force"].includes(argument)
+        argv.slice(branch + 1).some(
+          (argument) =>
+            ["-d", "-D", "--delete", "--force"].includes(argument) ||
+            argument.startsWith("codex/issue-"),
         )
       ) {
-        return ["branch-delete"];
+        return ["branch-mutation"];
       }
       return [];
     });

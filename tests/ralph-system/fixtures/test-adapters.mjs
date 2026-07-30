@@ -32,6 +32,61 @@ function resolveRemoteHead(config, headBranch, allowMissing = false) {
   return result.status === 0 ? result.stdout.trim() : null;
 }
 
+function normalizedPath(filePath) {
+  const normalized = path.normalize(fs.realpathSync.native(filePath));
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function commitObjectShas(repositoryPath) {
+  return git(repositoryPath, [
+    "cat-file",
+    "--batch-all-objects",
+    "--batch-check=%(objectname) %(objecttype)",
+  ]).stdout
+    .trim()
+    .split(/\r?\n/)
+    .filter((line) => line.endsWith(" commit"))
+    .map((line) => line.split(" ")[0])
+    .sort();
+}
+
+function assertWorkerCheckout(config, input) {
+  const expectedPath = path.join(config.runtimePath, "worktrees", "current");
+  if (
+    normalizedPath(input.worktreePath) !== normalizedPath(expectedPath) ||
+    input.baseSha !== config.mainSha
+  ) {
+    throw new Error("worker received the wrong checkout generation");
+  }
+  const matchingWorktree = git(config.repositoryPath, [
+    "worktree",
+    "list",
+    "--porcelain",
+  ]).stdout
+    .trim()
+    .split(/\r?\n\r?\n/)
+    .map((block) => Object.fromEntries(
+      block.split(/\r?\n/).map((line) => {
+        const separator = line.indexOf(" ");
+        return separator < 0
+          ? [line, true]
+          : [line.slice(0, separator), line.slice(separator + 1)];
+      }),
+    ))
+    .find(
+      (entry) =>
+        typeof entry.worktree === "string" &&
+        normalizedPath(entry.worktree) === normalizedPath(expectedPath),
+    );
+  if (
+    !matchingWorktree ||
+    matchingWorktree.HEAD !== config.mainSha ||
+    matchingWorktree.branch !== `refs/heads/codex/issue-${input.issue.number}`
+  ) {
+    throw new Error("worker checkout is not the expected linked worktree");
+  }
+}
+
 function assertNoCheckoutBeforeClaim(config) {
   const worktreeCount = (
     git(config.repositoryPath, ["worktree", "list", "--porcelain"])
@@ -98,6 +153,13 @@ export function createTestAdapters(config) {
     },
     async claimIssue(input) {
       assertNoCheckoutBeforeClaim(config);
+      if (
+        !config.issues.some((issue) => issue.number === input.issueNumber) ||
+        typeof input.operationId !== "string" ||
+        !input.operationId.includes(`issue-${input.issueNumber}`)
+      ) {
+        throw new Error("Ralph claimed an issue outside the ready generation");
+      }
       appendEvent(config, {
         kind: "issue-claimed",
         issueNumber: input.issueNumber,
@@ -119,6 +181,9 @@ export function createTestAdapters(config) {
       );
     },
     async createDraftPullRequest(input) {
+      if (!config.issues.some((issue) => issue.number === input.issueNumber)) {
+        throw new Error("Ralph published the wrong issue");
+      }
       const currentWorktree = path.join(config.runtimePath, "worktrees", "current");
       if (!fs.existsSync(currentWorktree)) {
         throw new Error("Ralph cleaned the worktree before creating the PR");
@@ -173,6 +238,17 @@ export function createTestAdapters(config) {
 
   const worker = {
     async implement(input) {
+      const expectedIssue = config.issues.find(
+        (issue) => issue.number === input.issue?.number,
+      );
+      if (
+        !expectedIssue ||
+        input.issue.title !== expectedIssue.title ||
+        input.issue.body !== expectedIssue.body
+      ) {
+        throw new Error("worker received the wrong issue requirements");
+      }
+      assertWorkerCheckout(config, input);
       changeState(config, (state) => {
         state.activeWorkers += 1;
         state.maximumActiveWorkers = Math.max(
@@ -182,6 +258,7 @@ export function createTestAdapters(config) {
         state.sessions.push({
           sessionId: input.sessionId,
           issueNumber: input.issue.number,
+          issue: structuredClone(input.issue),
           worktreePath: input.worktreePath,
           baseSha: git(input.worktreePath, ["rev-parse", "HEAD"]).stdout.trim(),
         });
@@ -225,6 +302,11 @@ export function createTestAdapters(config) {
       }
       if (resolveRemoteHead(config, input.headBranch, true) !== null) {
         throw new Error("candidate was pushed before verification completed");
+      }
+      const expectedCommitObjects = commitObjectShas(config.remotePath);
+      const actualCommitObjects = commitObjectShas(config.repositoryPath);
+      if (JSON.stringify(actualCommitObjects) !== JSON.stringify(expectedCommitObjects)) {
+        throw new Error("candidate commit object existed before verification completed");
       }
       const observedTreeSha = git(config.repositoryPath, [
         "rev-parse",
