@@ -2,6 +2,7 @@
 set -euo pipefail
 
 database_url="${RALPH_SQL_TEST_DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
+auth_admin_database_url="${RALPH_SQL_TEST_AUTH_ADMIN_DATABASE_URL:-postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres}"
 list_only=false
 if [[ "${1:-}" == "--list" ]]; then
   list_only=true
@@ -41,22 +42,200 @@ runner_database_url="postgresql://ralph_ci_test:${runner_password}@127.0.0.1:543
 env -i PATH="$safe_path" HOME="$safe_home" LANG=C psql "$database_url" \
   -v ON_ERROR_STOP=1 \
   -v runner_password="$runner_password" <<'SQL'
-create extension if not exists dblink with schema extensions;
 do $block$
+declare
+  runner_role pg_roles%rowtype;
+  legacy_wrapper_owner name;
+  dblink_schema name;
 begin
-  if not exists (select 1 from pg_roles where rolname = 'ralph_ci_test') then
+  select * into runner_role
+  from pg_roles
+  where rolname = 'ralph_ci_test';
+  if not found then
     execute 'create role ralph_ci_test login password ''ralph-ci-disposable-only'' nosuperuser nocreatedb nocreaterole noinherit';
+  elsif runner_role.rolsuper
+      or runner_role.rolcreatedb
+      or runner_role.rolcreaterole
+      or runner_role.rolinherit
+      or runner_role.rolreplication
+      or runner_role.rolbypassrls then
+    raise exception 'runner role has unsafe attributes';
+  end if;
+  if exists (
+    select 1
+    from pg_auth_members membership
+    join pg_roles granted_role on granted_role.oid = membership.roleid
+    where membership.member = (
+      select oid from pg_roles where rolname = 'ralph_ci_test'
+    )
+      and granted_role.rolname not in ('authenticated', 'anon')
+  ) then
+    raise exception 'runner role has unsafe memberships';
+  end if;
+
+  select pg_get_userbyid(routine.proowner)
+  into legacy_wrapper_owner
+  from pg_proc as routine
+  join pg_namespace as namespace on namespace.oid = routine.pronamespace
+  where namespace.nspname = 'public'
+    and routine.proname = 'ralph_ci_open_connection'
+    and pg_get_function_identity_arguments(routine.oid) = 'connection_name text';
+
+  if legacy_wrapper_owner = current_user then
+    drop function public.ralph_ci_open_connection(text);
+  elsif legacy_wrapper_owner is not null
+      and legacy_wrapper_owner <> 'supabase_admin' then
+    raise exception 'runner connection helper has unexpected owner: %',
+      legacy_wrapper_owner;
+  end if;
+
+  select namespace.nspname
+  into dblink_schema
+  from pg_extension as extension
+  join pg_namespace as namespace on namespace.oid = extension.extnamespace
+  where extension.extname = 'dblink';
+
+  if dblink_schema is not null and dblink_schema <> 'extensions' then
+    if to_regnamespace('extensions') is null then
+      raise exception 'extensions schema is unavailable for dblink';
+    end if;
+    alter extension dblink set schema extensions;
   end if;
 end
 $block$;
-alter role ralph_ci_test password 'ralph-ci-disposable-only'
-  nosuperuser nocreatedb nocreaterole noinherit;
+alter role ralph_ci_test login password 'ralph-ci-disposable-only';
 grant authenticated, anon to ralph_ci_test;
-grant usage, create on schema public to ralph_ci_test;
-grant usage on schema auth, extensions to ralph_ci_test;
-grant all privileges on all tables in schema public, auth to ralph_ci_test;
-grant all privileges on all sequences in schema public, auth to ralph_ci_test;
-grant execute on all functions in schema public, auth to ralph_ci_test;
+revoke create on schema public from ralph_ci_test;
+grant usage on schema public to ralph_ci_test;
+grant all privileges on all tables in schema public to ralph_ci_test;
+grant all privileges on all sequences in schema public to ralph_ci_test;
+do $block$
+declare
+  function_signature text;
+begin
+  for function_signature in
+    select routine.oid::regprocedure::text
+    from pg_proc as routine
+    join pg_namespace as namespace on namespace.oid = routine.pronamespace
+    cross join lateral aclexplode(
+      coalesce(routine.proacl, acldefault('f', routine.proowner))
+    ) as privilege
+    where namespace.nspname = 'public'
+      and privilege.grantee = (
+        select oid from pg_roles where rolname = 'ralph_ci_test'
+      )
+      and privilege.privilege_type = 'EXECUTE'
+      and has_function_privilege(
+        current_user,
+        routine.oid,
+        'EXECUTE WITH GRANT OPTION'
+      )
+  loop
+    execute format(
+      'revoke execute on function %s from ralph_ci_test',
+      function_signature
+    );
+  end loop;
+end
+$block$;
+SQL
+
+env -i PATH="$safe_path" HOME="$safe_home" LANG=C \
+  psql "$auth_admin_database_url" -v ON_ERROR_STOP=1 <<'SQL'
+create extension if not exists dblink with schema extensions;
+grant usage on schema extensions to ralph_ci_test;
+
+-- Remove grants issued by the legacy runner before exposing the narrow helpers.
+-- PostgreSQL ACLs are persistent, so merely omitting the old GRANT statements is
+-- insufficient when this script upgrades an existing disposable database.
+revoke usage on schema auth from ralph_ci_test;
+revoke all privileges on all tables in schema auth from ralph_ci_test;
+revoke all privileges on all sequences in schema auth from ralph_ci_test;
+revoke execute on all functions in schema auth from ralph_ci_test;
+do $block$
+declare
+  function_signature text;
+begin
+  for function_signature in
+    select routine.oid::regprocedure::text
+    from pg_proc as routine
+    join pg_namespace as namespace on namespace.oid = routine.pronamespace
+    cross join lateral aclexplode(
+      coalesce(routine.proacl, acldefault('f', routine.proowner))
+    ) as privilege
+    where namespace.nspname = 'public'
+      and privilege.grantee = (
+        select oid from pg_roles where rolname = 'ralph_ci_test'
+      )
+      and privilege.privilege_type = 'EXECUTE'
+      and has_function_privilege(
+        current_user,
+        routine.oid,
+        'EXECUTE WITH GRANT OPTION'
+      )
+  loop
+    execute format(
+      'revoke execute on function %s from ralph_ci_test',
+      function_signature
+    );
+  end loop;
+
+  if exists (
+    select 1
+    from pg_proc as routine
+    join pg_namespace as namespace on namespace.oid = routine.pronamespace
+    cross join lateral aclexplode(
+      coalesce(routine.proacl, acldefault('f', routine.proowner))
+    ) as privilege
+    where namespace.nspname = 'public'
+      and privilege.grantee = (
+        select oid from pg_roles where rolname = 'ralph_ci_test'
+      )
+      and privilege.privilege_type = 'EXECUTE'
+  ) then
+    raise exception 'runner retains an unexpected direct public function grant';
+  end if;
+end
+$block$;
+
+create or replace function public.ralph_ci_create_auth_user(
+  test_user_id uuid,
+  test_email text
+)
+returns void
+language sql
+security definer
+set search_path = pg_catalog, auth
+as $function$
+  insert into auth.users (
+    id,
+    instance_id,
+    aud,
+    role,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    raw_app_meta_data,
+    raw_user_meta_data,
+    created_at,
+    updated_at
+  ) values (
+    test_user_id,
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    test_email,
+    'not-used',
+    now(),
+    '{}'::jsonb,
+    '{}'::jsonb,
+    now(),
+    now()
+  ) on conflict (id) do nothing;
+$function$;
+revoke all on function public.ralph_ci_create_auth_user(uuid, text) from public;
+grant execute on function public.ralph_ci_create_auth_user(uuid, text)
+  to ralph_ci_test;
 
 -- Extension installation grants EXECUTE to PUBLIC. Remove that ambient access and
 -- expose only operations on connections opened by the fixed low-privilege wrapper.
@@ -109,11 +288,13 @@ begin
   end if;
   return extensions.dblink_connect(
     connection_name,
-    'host=127.0.0.1 port=54322 dbname=postgres user=ralph_ci_test password=ralph-ci-disposable-only'
+    'hostaddr=' || host(inet_server_addr())
+      || ' port=' || inet_server_port()
+      || ' dbname=' || current_database()
+      || ' user=ralph_ci_test password=ralph-ci-disposable-only'
   );
 end
 $function$;
-alter function public.ralph_ci_open_connection(text) owner to postgres;
 revoke all on function public.ralph_ci_open_connection(text) from public;
 grant execute on function public.ralph_ci_open_connection(text) to ralph_ci_test;
 SQL

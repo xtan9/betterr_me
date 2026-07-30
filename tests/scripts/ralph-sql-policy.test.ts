@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { ralphSqlFixtureViolations } from "../../scripts/ci/ralph-sql-policy.mjs";
@@ -8,7 +10,94 @@ select public.some_ticket_function();
 rollback;
 `;
 
+const runnerScript = fs.readFileSync(
+  path.resolve(process.cwd(), "scripts/ci/run-ralph-sql-tests.sh"),
+  "utf8",
+);
+
 describe("Ralph SQL fixture policy", () => {
+  it("reuses an existing constrained runner role without privileged ALTER clauses", () => {
+    expect(runnerScript).not.toMatch(
+      /alter role ralph_ci_test[\s\S]{0,160}\bnosuperuser\b/i,
+    );
+    expect(runnerScript).toContain("runner role has unsafe attributes");
+    expect(runnerScript).toContain("runner role has unsafe memberships");
+  });
+
+  it("opens fixture concurrency sessions on the database server endpoint", () => {
+    expect(runnerScript).toContain("hostaddr=' || host(inet_server_addr())");
+    expect(runnerScript).toContain("' port=' || inet_server_port()");
+    expect(runnerScript).not.toContain("host=127.0.0.1 port=54322 dbname=postgres");
+  });
+
+  it("uses the local Supabase admin boundary for auth and extension grants", () => {
+    expect(runnerScript).toContain(
+      "auth_admin_database_url=\"${RALPH_SQL_TEST_AUTH_ADMIN_DATABASE_URL:-postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres}\"",
+    );
+    expect(runnerScript).toContain('psql "$auth_admin_database_url"');
+    expect(runnerScript).toContain(
+      "alter extension dblink set schema extensions",
+    );
+  });
+
+  it("exposes narrow test-user setup without granting direct auth-table writes", () => {
+    expect(runnerScript).toContain(
+      "create or replace function public.ralph_ci_create_auth_user(",
+    );
+    expect(runnerScript).not.toContain(
+      "grant all privileges on all tables in schema auth to ralph_ci_test",
+    );
+    expect(runnerScript).not.toContain(
+      "grant usage, create on schema public to ralph_ci_test",
+    );
+    expect(runnerScript).toContain(
+      "revoke create on schema public from ralph_ci_test",
+    );
+    expect(runnerScript).toContain(
+      "revoke usage on schema auth from ralph_ci_test",
+    );
+    expect(runnerScript).toContain(
+      "revoke all privileges on all tables in schema auth from ralph_ci_test",
+    );
+    expect(runnerScript).toContain(
+      "revoke all privileges on all sequences in schema auth from ralph_ci_test",
+    );
+    expect(runnerScript).toContain(
+      "revoke execute on all functions in schema auth from ralph_ci_test",
+    );
+  });
+
+  it("removes ambient public-function execution before granting runner helpers", () => {
+    expect(runnerScript).not.toContain(
+      "grant execute on all functions in schema public to ralph_ci_test",
+    );
+    expect(runnerScript).not.toContain(
+      "revoke execute on all functions in schema public from ralph_ci_test",
+    );
+    expect(runnerScript).toMatch(
+      /has_function_privilege\(\s*current_user,\s*routine\.oid,\s*'EXECUTE WITH GRANT OPTION'\s*\)/,
+    );
+    expect(runnerScript).toContain(
+      "revoke execute on function %s from ralph_ci_test",
+    );
+    expect(runnerScript).toContain(
+      "runner retains an unexpected direct public function grant",
+    );
+    expect(runnerScript).toContain(
+      "grant execute on function public.ralph_ci_create_auth_user(uuid, text)",
+    );
+    expect(runnerScript).toContain(
+      "grant execute on function public.ralph_ci_open_connection(text) to ralph_ci_test",
+    );
+  });
+
+  it("removes the legacy postgres-owned connection helper before admin bootstrap", () => {
+    expect(runnerScript).toContain(
+      "drop function public.ralph_ci_open_connection(text)",
+    );
+    expect(runnerScript).toContain("legacy_wrapper_owner = current_user");
+  });
+
   it("accepts a marked transactional fixture", () => {
     expect(ralphSqlFixtureViolations(safeFixture)).toEqual([]);
   });
