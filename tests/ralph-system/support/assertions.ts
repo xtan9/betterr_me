@@ -9,18 +9,18 @@ export function assertPublishedCandidate(input: {
   headBranch: string;
   headSha: string;
   verifiedTreeShas: string[];
+  expectedChanges: Array<{
+    path: string;
+    content: string;
+    mode: string;
+    status: string;
+  }>;
 }) {
   const remoteHead = git(input.remotePath, [
     "rev-parse",
     `refs/heads/${input.headBranch}`,
   ]).stdout.trim();
   expect(remoteHead).toBe(input.headSha);
-  expect(
-    git(input.remotePath, [
-      "show",
-      `${remoteHead}:src/issue-499.txt`,
-    ]).stdout,
-  ).toBe("approved fixture\n");
   expect(
     git(input.remotePath, ["merge-base", input.mainSha, remoteHead]).stdout.trim(),
   ).toBe(input.mainSha);
@@ -31,16 +31,30 @@ export function assertPublishedCandidate(input: {
       `${input.mainSha}..${remoteHead}`,
     ]).stdout.trim(),
   ).toBe("1");
-  expect(
-    git(input.remotePath, [
-      "diff-tree",
-      "--no-commit-id",
-      "--name-status",
-      "-r",
-      input.mainSha,
-      remoteHead,
-    ]).stdout.trim(),
-  ).toBe("A\tsrc/issue-499.txt");
+
+  const actualChanges = git(input.remotePath, [
+    "diff-tree",
+    "--no-commit-id",
+    "--name-status",
+    "-r",
+    input.mainSha,
+    remoteHead,
+  ]).stdout.trim().split(/\r?\n/).filter(Boolean).sort();
+  expect(actualChanges).toEqual(
+    input.expectedChanges
+      .map((change) => `${change.status}\t${change.path}`)
+      .sort(),
+  );
+
+  for (const change of input.expectedChanges) {
+    expect(
+      git(input.remotePath, ["show", `${remoteHead}:${change.path}`]).stdout,
+    ).toBe(change.content);
+    expect(
+      git(input.remotePath, ["ls-tree", remoteHead, "--", change.path])
+        .stdout.trim(),
+    ).toMatch(new RegExp(`^${change.mode} blob [0-9a-f]+\\t${change.path}$`));
+  }
 
   const committedTreeSha = git(input.remotePath, [
     "show",
@@ -84,4 +98,24 @@ export function assertCheckoutCleaned(input: {
   expect(git(input.controllerPath, ["rev-parse", "HEAD"]).stdout.trim()).toBe(
     input.mainSha,
   );
+}
+
+export function assertSingleDeliveryGitTransaction(
+  traceEvents: Array<{ event?: string; argv?: string[] }>,
+) {
+  const commands = traceEvents
+    .filter((event) => event.event === "start" && Array.isArray(event.argv))
+    .map((event) => event.argv ?? []);
+  const count = (command: string, argument?: string) =>
+    commands.filter((argv) => {
+      const commandIndex = argv.indexOf(command);
+      if (commandIndex < 0) return false;
+      return argument === undefined || argv[commandIndex + 1] === argument;
+    }).length;
+
+  expect(count("worktree", "add")).toBe(1);
+  expect(count("commit")).toBe(1);
+  expect(count("push")).toBe(1);
+  expect(count("worktree", "remove")).toBe(1);
+  expect(count("branch", "-D")).toBe(1);
 }

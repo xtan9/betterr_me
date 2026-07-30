@@ -2,21 +2,57 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { runCli } from "../../scripts/ralph/v2/cli.mjs";
-import { createRalphRuntime } from "../../scripts/ralph/v2/runtime.mjs";
-import { createFakeGitHub } from "./support/fake-github";
-import { createGitWorld, git } from "./support/git-world";
-import { createScriptedWorker } from "./support/scripted-worker";
 import {
   assertCheckoutCleaned,
   assertPublishedCandidate,
+  assertSingleDeliveryGitTransaction,
 } from "./support/assertions";
+import { createGitWorld, git } from "./support/git-world";
+import { createSystemScenario } from "./support/test-cli";
 
 const worlds: Array<ReturnType<typeof createGitWorld>> = [];
 
 afterEach(() => {
-  for (const world of worlds.splice(0)) world.cleanup();
+  const failures: unknown[] = [];
+  for (const world of worlds.splice(0)) {
+    try {
+      world.cleanup();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, "failed to clean Ralph system worlds");
+  }
 });
+
+function createHappyPathScenario() {
+  const world = createGitWorld();
+  worlds.push(world);
+  const expectedChanges = [
+    {
+      path: "src/issue-499.txt",
+      content: "approved fixture\n",
+      mode: "100644",
+      status: "A",
+    },
+  ];
+  const scenario = createSystemScenario(world, {
+    issues: [
+      {
+        number: 499,
+        title: "Add the system-test fixture",
+        body: "Create src/issue-499.txt containing the approved fixture text.",
+      },
+    ],
+    workerChanges: expectedChanges.map(({ path: changePath, content }) => ({
+      path: changePath,
+      content,
+    })),
+    expectedChanges,
+  });
+  return { world, scenario, expectedChanges };
+}
 
 describe("Ralph v2 system delivery", () => {
   it("imports its public orchestration modules without side effects", () => {
@@ -42,164 +78,90 @@ describe("Ralph v2 system delivery", () => {
     expect(result.stdout).toBe("imports are inert\n");
   });
 
-  it("publishes one verified Draft from latest main without duplicate effects or a leftover checkout", async () => {
-    const world = createGitWorld();
-    worlds.push(world);
-    const events: Array<{ kind: string; [key: string]: unknown }> = [];
-    const github = createFakeGitHub(
-      [
-        {
-          number: 499,
-          title: "Add the system-test fixture",
-          body: "Create src/issue-499.txt containing the approved fixture text.",
-        },
-      ],
-      {
-        events,
-        resolveRemoteHead: (headBranch) =>
-          git(world.remotePath, [
-            "rev-parse",
-            `refs/heads/${headBranch}`,
-          ]).stdout.trim(),
-      },
-    );
-    const worker = createScriptedWorker([
-      { path: "src/issue-499.txt", content: "approved fixture\n" },
-    ], events);
-    const verifiedTreeShas: string[] = [];
-    const createRuntime = () =>
-      createRalphRuntime({
-        repositoryPath: world.controllerPath,
-        runtimePath: world.runtimePath,
-        github,
-        worker,
-        verifier: {
-          async verify(input: { candidateTreeSha: string }) {
-            const observedTreeSha = git(world.controllerPath, [
-              "rev-parse",
-              `${input.candidateTreeSha}^{tree}`,
-            ]).stdout.trim();
-            expect(
-              git(world.controllerPath, [
-                "diff-tree",
-                "--no-commit-id",
-                "--name-status",
-                "-r",
-                world.mainSha,
-                observedTreeSha,
-              ]).stdout.trim(),
-            ).toBe("A\tsrc/issue-499.txt");
-            expect(
-              git(world.controllerPath, [
-                "show",
-                `${observedTreeSha}:src/issue-499.txt`,
-              ]).stdout,
-            ).toBe("approved fixture\n");
-            verifiedTreeShas.push(observedTreeSha);
-            events.push({ kind: "candidate-verified", treeSha: observedTreeSha });
-            return {
-              kind: "passed" as const,
-              candidateTreeSha: observedTreeSha,
-            };
-          },
-        },
-        clock: { now: () => new Date("2026-07-30T12:00:00.000Z") },
-      });
+  it("publishes one verified Draft from latest main exactly once across fresh processes", () => {
+    const { world, scenario, expectedChanges } = createHappyPathScenario();
 
-    const output: string[] = [];
-    const errors: string[] = [];
-    expect(
-      await runCli(
-        ["run", "--mode", "PrOnly", "--max-issues", "1", "--json"],
-        {
-          runtime: createRuntime(),
-          stdout: (line: string) => output.push(line),
-          stderr: (line: string) => errors.push(line),
-        },
-      ),
-    ).toBe(0);
-    expect(JSON.parse(output.at(-1) ?? "null")).toMatchObject({
-      kind: "run-finished",
-      issuesStarted: 1,
-    });
+    const firstRun = scenario.run([
+      "run",
+      "--mode",
+      "PrOnly",
+      "--max-issues",
+      "1",
+      "--json",
+    ]);
+    expect(firstRun.exitCode, firstRun.stderr.join("\n")).toBe(0);
+    expect(firstRun.stderr).toEqual([]);
+    expect(firstRun.stdout).not.toEqual([]);
 
-    const firstRunOutputLength = output.length;
-    expect(
-      await runCli(
-        ["run", "--mode", "PrOnly", "--max-issues", "1", "--json"],
-        {
-          runtime: createRuntime(),
-          stdout: (line: string) => output.push(line),
-          stderr: (line: string) => errors.push(line),
-        },
-      ),
-    ).toBe(0);
-    expect(JSON.parse(output.at(-1) ?? "null")).toMatchObject({
-      kind: "run-finished",
-      issuesStarted: 0,
-    });
-    expect(output.length).toBeGreaterThan(firstRunOutputLength);
-    expect(errors).toEqual([]);
+    const secondRun = scenario.run([
+      "run",
+      "--mode",
+      "PrOnly",
+      "--max-issues",
+      "1",
+      "--json",
+    ]);
+    expect(secondRun.exitCode, secondRun.stderr.join("\n")).toBe(0);
+    expect(secondRun.stderr).toEqual([]);
 
-    const workerState = worker.inspect();
-    expect(workerState.activeWorkers).toBe(0);
-    expect(workerState.maximumActiveWorkers).toBe(1);
-    expect(workerState.sessions).toHaveLength(1);
-    expect(workerState.sessions[0]).toMatchObject({
+    const externalState = scenario.inspectExternalState();
+    expect(externalState.activeWorkers).toBe(0);
+    expect(externalState.maximumActiveWorkers).toBe(1);
+    expect(externalState.sessions).toHaveLength(1);
+    expect(externalState.sessions[0]).toMatchObject({
       issueNumber: 499,
       baseSha: world.mainSha,
     });
-    expect(workerState.sessions[0].worktreePath).not.toBe(world.controllerPath);
+    expect(externalState.sessions[0].worktreePath).not.toBe(world.controllerPath);
+    expect(externalState.claims).toHaveLength(1);
+    expect(externalState.claimRequests).toHaveLength(1);
+    expect(externalState.pullRequests).toHaveLength(1);
+    expect(externalState.pullRequestRequests).toHaveLength(1);
+    expect(externalState.verificationRequests).toHaveLength(1);
 
-    const githubState = github.inspect();
-    expect(githubState.claims).toHaveLength(1);
-    expect(githubState.claimRequests).toHaveLength(1);
-    expect(githubState.pullRequests).toHaveLength(1);
-    expect(githubState.pullRequestRequests).toHaveLength(1);
-    expect(githubState.pullRequests[0]).toMatchObject({
+    const pullRequest = externalState.pullRequests[0];
+    expect(pullRequest).toMatchObject({
       issueNumber: 499,
       draft: true,
       baseBranch: "main",
     });
-    expect(githubState.pullRequests[0].body).toMatch(
+    expect(pullRequest.body).toMatch(
       /\b(?:closes|fixes|resolves)\s+#499\b/i,
     );
-
-    const pullRequest = githubState.pullRequests[0];
     const remoteHead = assertPublishedCandidate({
       remotePath: world.remotePath,
       mainSha: world.mainSha,
       headBranch: pullRequest.headBranch,
       headSha: pullRequest.headSha,
-      verifiedTreeShas,
+      verifiedTreeShas: externalState.verificationRequests.map(
+        (verification: { candidateTreeSha: string }) =>
+          verification.candidateTreeSha,
+      ),
+      expectedChanges,
     });
     assertCheckoutCleaned({
       controllerPath: world.controllerPath,
       runtimePath: world.runtimePath,
       mainSha: world.mainSha,
       issueBranch: pullRequest.headBranch,
-      workerPath: workerState.sessions[0].worktreePath,
+      workerPath: externalState.sessions[0].worktreePath,
     });
 
-    const eventKinds = events.map((event) => event.kind);
-    expect(eventKinds).toEqual([
+    expect(scenario.inspectEvents().map((event) => event.kind)).toEqual([
       "issue-claimed",
       "worker-started",
       "worker-completed",
       "candidate-verified",
+      "remote-ref-updated",
       "remote-head-observed",
       "draft-pr-created",
     ]);
+    assertSingleDeliveryGitTransaction(scenario.inspectGitTrace());
 
-    const statusOutput: string[] = [];
-    expect(
-      await runCli(["status", "--json"], {
-        runtime: createRuntime(),
-        stdout: (line: string) => statusOutput.push(line),
-        stderr: (line: string) => errors.push(line),
-      }),
-    ).toBe(0);
-    expect(JSON.parse(statusOutput.at(-1) ?? "null")).toMatchObject({
+    const status = scenario.run(["status", "--json"]);
+    expect(status.exitCode, status.stderr.join("\n")).toBe(0);
+    expect(status.stderr).toEqual([]);
+    expect(JSON.parse(status.stdout.at(-1) ?? "null")).toMatchObject({
       workerLease: null,
       issues: [
         {
@@ -211,19 +173,48 @@ describe("Ralph v2 system delivery", () => {
         },
       ],
     });
-    expect(errors).toEqual([]);
+  });
 
-    const stopOutput: string[] = [];
-    expect(
-      await runCli(["stop", "--json"], {
-        runtime: createRuntime(),
-        stdout: (line: string) => stopOutput.push(line),
-        stderr: (line: string) => errors.push(line),
-      }),
-    ).toBe(0);
-    expect(JSON.parse(stopOutput.at(-1) ?? "null")).toMatchObject({
-      kind: "stop-requested",
+  it("persists stop and performs no delivery effect on a later run", () => {
+    const { world, scenario } = createHappyPathScenario();
+
+    const stop = scenario.run(["stop", "--json"]);
+    expect(stop.exitCode, stop.stderr.join("\n")).toBe(0);
+    expect(stop.stderr).toEqual([]);
+
+    const status = scenario.run(["status", "--json"]);
+    expect(status.exitCode, status.stderr.join("\n")).toBe(0);
+    expect(JSON.parse(status.stdout.at(-1) ?? "null")).toMatchObject({
+      stopRequested: true,
+      workerLease: null,
+      issues: [],
     });
-    expect(errors).toEqual([]);
+
+    const run = scenario.run([
+      "run",
+      "--mode",
+      "PrOnly",
+      "--max-issues",
+      "1",
+      "--json",
+    ]);
+    expect(run.exitCode, run.stderr.join("\n")).toBe(0);
+    expect(run.stderr).toEqual([]);
+    expect(scenario.inspectExternalState()).toMatchObject({
+      sessions: [],
+      claims: [],
+      claimRequests: [],
+      pullRequests: [],
+      pullRequestRequests: [],
+      verificationRequests: [],
+    });
+    expect(scenario.inspectEvents()).toEqual([]);
+    expect(
+      git(world.remotePath, [
+        "for-each-ref",
+        "--format=%(refname:short)",
+        "refs/heads",
+      ]).stdout.trim(),
+    ).toBe("main");
   });
 });
