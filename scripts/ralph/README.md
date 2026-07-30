@@ -179,7 +179,9 @@ re-enter one bounded, exhaustive verification and review cycle when its original
 blocker is a worker or ticket-specific verification finding. Ralph promotes the
 draft only after that cycle passes; safety, ambiguity, controller infrastructure,
 explicitly non-repairable findings, exhausted attempts, and high-risk merges
-remain human-gated. Unrelated ready issues may continue.
+remain human-gated. Unrelated ready issues may continue. If an unpublished issue
+already owns the single implementation worktree, Ralph resumes that issue before
+starting backlog recovery that also needs the worktree.
 
 Before repairing or re-verifying an existing PR, Ralph verifies that the exact
 PR head contains the latest remote `main`. A clean stale branch is updated with
@@ -190,11 +192,13 @@ independent review before any merge decision. If `main` advances while an update
 is pending, Ralph finishes the recorded update idempotently before requesting the
 next one. A dirty recovery checkout is safety-scanned and preserved as explicitly
 unverified Draft work first; protected-path or secret-bearing changes stop the
-controller without publication. A base conflict is human-gated rather than sent
-through coding repair. GitHub's asynchronous branch update is polled before a
-bounded retry is consumed. Immediately before merge, Ralph fetches `origin/main`
-again; if it advanced, the PR returns to the same durable base-sync and full
-verification cycle.
+controller without publication. A base conflict enters the bounded fresh
+conflict-repair path against the exact latest `main`; it becomes human-gated only
+after the repair budget is exhausted or another genuine safety or review gate
+blocks it. GitHub's asynchronous branch update is polled before a bounded retry
+is consumed. Immediately before merge, Ralph fetches `origin/main` again; if it
+advanced, the PR returns to the same durable base-sync and full verification
+cycle.
 
 Ticket-specific infrastructure and protected-scope blockers do not consume a
 coding attempt merely to re-verify a new, green PR head. Safe in-scope changes
