@@ -635,6 +635,10 @@ from dblink_get_result('refresh_a') as result(outcome text);
 insert into reuse_race_outcomes
 select 'current', outcome
 from dblink_get_result('refresh_b') as result(outcome text);
+-- libpq keeps an asynchronous connection busy until its trailing empty result
+-- is consumed, even after the query's row result has been read.
+select * from dblink_get_result('refresh_a') as exhausted(outcome text);
+select * from dblink_get_result('refresh_b') as exhausted(outcome text);
 
 do $$
 begin
@@ -704,6 +708,8 @@ from dblink_get_result('refresh_a') as result(outcome text);
 insert into same_token_outcomes
 select outcome
 from dblink_get_result('refresh_b') as result(outcome text);
+select * from dblink_get_result('refresh_a') as exhausted(outcome text);
+select * from dblink_get_result('refresh_b') as exhausted(outcome text);
 
 do $$
 begin
