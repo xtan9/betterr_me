@@ -15,6 +15,7 @@ import {
   pullRequestRecoveryErrorDisposition,
   pullRequestRecoveryFingerprint,
   reconcilePullRequestBacklog,
+  requiredCheckEvidence,
   staleBlockedRepairPreservationPatch,
 } from "../../scripts/ralph/pull-request-recovery.mjs";
 import {
@@ -40,6 +41,129 @@ const snapshot = (overrides = {}) => ({
 });
 
 describe("Ralph pull-request recovery planning", () => {
+  it("waits for explicitly required external evidence to appear and pass", () => {
+    expect(requiredCheckEvidence([], ["e2e-tests"])).toEqual({
+      ready: false,
+      missing: ["e2e-tests"],
+      notPassed: [],
+    });
+    expect(
+      requiredCheckEvidence(
+        [{ name: "e2e-tests", bucket: "pending" }],
+        ["e2e-tests"],
+      ),
+    ).toEqual({ ready: false, missing: [], notPassed: ["e2e-tests"] });
+    expect(
+      requiredCheckEvidence(
+        [{ name: "e2e-tests", bucket: "skipping" }],
+        ["e2e-tests"],
+      ),
+    ).toEqual({ ready: false, missing: [], notPassed: ["e2e-tests"] });
+    expect(
+      requiredCheckEvidence(
+        [{ name: "e2e-tests", bucket: "pass" }],
+        ["e2e-tests"],
+      ),
+    ).toEqual({ ready: true, missing: [], notPassed: [] });
+  });
+
+  it("handles every required E2E evidence state without hiding failures", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [],
+          checksAvailable: false,
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("wait");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [{ name: "e2e-tests", bucket: "pending", state: "IN_PROGRESS" }],
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("wait");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [
+            {
+              name: "e2e-tests",
+              bucket: "fail",
+              state: "FAILURE",
+              provider: "github-actions",
+              runId: "201",
+            },
+          ],
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("code-repair");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [
+            {
+              name: "e2e-tests",
+              bucket: "cancel",
+              state: "CANCELLED",
+              provider: "github-actions",
+              runId: "202",
+            },
+          ],
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("retry-checks");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [{ name: "e2e-tests", bucket: "skipping", state: "SKIPPED" }],
+          requiredCheckEvidenceReady: false,
+        }),
+      ),
+    ).toMatchObject({
+      action: "wait",
+      reason: "required external verification evidence has not passed",
+    });
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [
+            {
+              name: "quality",
+              bucket: "fail",
+              state: "FAILURE",
+              provider: "github-actions",
+              runId: "203",
+            },
+          ],
+          checksAvailable: true,
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("code-repair");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [
+            {
+              name: "quality",
+              bucket: "cancel",
+              state: "CANCELLED",
+              provider: "github-actions",
+              runId: "204",
+            },
+          ],
+          checksAvailable: true,
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("retry-checks");
+  });
+
   it("preserves the exact merged head for final checkout cleanup", () => {
     expect(
       mergedPullRequestFromRecoverySnapshot(

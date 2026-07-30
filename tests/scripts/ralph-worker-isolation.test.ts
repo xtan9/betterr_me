@@ -22,7 +22,12 @@ import {
 } from "../../scripts/ralph/worker-isolation.mjs";
 import {
   WORKER_PROTECTED_PATHS,
+  issueAllowsNewSupabaseMigration,
+  isSupabaseMigrationPath,
+  isTopLevelSupabaseSqlFixturePath,
+  workerChangePolicyViolation,
   workerProtectedPath,
+  workerProtectedPathsForIssue,
 } from "../../scripts/ralph/worker-path-policy.mjs";
 
 const gitCommand = process.platform === "win32" ? "git.exe" : "git";
@@ -98,6 +103,59 @@ describe("Ralph sanitized worker Git view", () => {
     "tests/ticket.test.ts",
   ])("allows ordinary ticket path %s", (filePath) => {
     expect(workerProtectedPath(filePath)).toBe(false);
+  });
+
+  it("allows one new migration only for an explicitly trusted queue entry", () => {
+    const issue = { trustedWorkerPolicy: { newSupabaseMigrations: 1 } };
+    expect(issueAllowsNewSupabaseMigration(issue)).toBe(true);
+    expect(workerProtectedPathsForIssue(issue)).not.toContain("supabase/migrations");
+    expect(
+      workerChangePolicyViolation(
+        [
+          {
+            status: "A",
+            path: "supabase/migrations/20260730050000_delete_event_atomically.sql",
+          },
+        ],
+        issue,
+      ),
+    ).toBeNull();
+    expect(
+      workerChangePolicyViolation(
+        [
+          {
+            status: "A",
+            path: "supabase/migrations/20260730050000_delete_event_atomically.sql",
+          },
+        ],
+        {},
+      ),
+    ).toContain("controller-protected");
+  });
+
+  it.each([
+    [[{ status: "M", path: "supabase/migrations/20260701000000_old.sql" }]],
+    [[{ status: "A", path: "supabase/migrations/not_timestamped.sql" }]],
+    [[{ status: "A", path: "supabase/migrations/20260730050000_DROP_TABLE.SQL" }]],
+    [[
+      { status: "A", path: "supabase/migrations/20260730050000_first.sql" },
+      { status: "A", path: "supabase/migrations/20260730050001_second.sql" },
+    ]],
+    [[{ status: "M", path: ".github/workflows/ci.yml" }]],
+  ])("rejects unsafe trusted migration scope %#", (changes) => {
+    expect(
+      workerChangePolicyViolation(changes, {
+        trustedWorkerPolicy: { newSupabaseMigrations: 1 },
+      }),
+    ).not.toBeNull();
+  });
+
+  it("matches the migration scope consistently without weakening filename case", () => {
+    expect(isSupabaseMigrationPath("SUPABASE\\MIGRATIONS\\FILE.SQL")).toBe(true);
+    expect(isSupabaseMigrationPath("supabase/tests/file.sql")).toBe(false);
+    expect(isTopLevelSupabaseSqlFixturePath("supabase/tests/file.sql")).toBe(true);
+    expect(isTopLevelSupabaseSqlFixturePath("supabase/tests/file.SQL")).toBe(false);
+    expect(isTopLevelSupabaseSqlFixturePath("SUPABASE/tests/file.sql")).toBe(false);
   });
 
   it("keeps every protected source path in the worker read-only overlay", () => {
