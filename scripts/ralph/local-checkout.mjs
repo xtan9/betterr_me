@@ -95,6 +95,9 @@ export async function cleanupIssueCheckout({
   worktreeRoot,
   issueNumber,
   issueState,
+  recoveryWorktreePath,
+  expectedRecoveryHead,
+  beforeWorktreeRemove,
   git,
 }) {
   if (!issueState?.branch && !issueState?.worktreePath) {
@@ -102,9 +105,30 @@ export async function cleanupIssueCheckout({
   }
   assertManagedBranch(issueNumber, issueState.branch);
 
+  let cleanupWorktreePath = issueState.worktreePath;
+  let expectedHead = issueState.commit;
+  if (
+    !cleanupWorktreePath &&
+    recoveryWorktreePath &&
+    expectedRecoveryHead &&
+    fs.existsSync(recoveryWorktreePath)
+  ) {
+    const candidatePath = assertManagedPath(worktreeRoot, recoveryWorktreePath);
+    const candidateBranch = (
+      await git(["-C", candidatePath, "branch", "--show-current"])
+    ).stdout.trim();
+    if (candidateBranch !== issueState.branch) {
+      throw new Error(
+        `refusing recovered cleanup for ${candidatePath}; it is on ${candidateBranch || "detached HEAD"}`,
+      );
+    }
+    cleanupWorktreePath = candidatePath;
+    expectedHead = expectedRecoveryHead;
+  }
+
   let worktreeRemoved = false;
-  if (issueState.worktreePath) {
-    const worktreePath = assertManagedPath(worktreeRoot, issueState.worktreePath);
+  if (cleanupWorktreePath) {
+    const worktreePath = assertManagedPath(worktreeRoot, cleanupWorktreePath);
     if (fs.existsSync(worktreePath)) {
       const branch = (
         await git(["-C", worktreePath, "branch", "--show-current"])
@@ -118,14 +142,15 @@ export async function cleanupIssueCheckout({
       if (status) {
         throw new Error(`refusing to remove dirty worktree ${worktreePath}`);
       }
-      if (issueState.commit) {
+      if (expectedHead) {
         const head = (
           await git(["-C", worktreePath, "rev-parse", "HEAD"])
         ).stdout.trim();
-        if (head !== issueState.commit) {
+        if (head !== expectedHead) {
           throw new Error(`refusing to remove ${worktreePath}; HEAD changed`);
         }
       }
+      await beforeWorktreeRemove?.(worktreePath);
       await git([
         "-C",
         repositoryRoot,
