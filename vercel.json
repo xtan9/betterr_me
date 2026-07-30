@@ -1,1 +1,3 @@
-{}
+{
+  "ignoreCommand": "node scripts/ci/vercel-ignore-build.mjs"
+}
