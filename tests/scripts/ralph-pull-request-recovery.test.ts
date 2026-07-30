@@ -7,6 +7,7 @@ import {
   blockedRepairRecoveryReceipt,
   blockedRepairRecoveryReceiptMatches,
   canAdoptLegacyProtectedScopeRepair,
+  mergedPullRequestFromRecoverySnapshot,
   planPullRequestRecovery,
   pullRequestBaseUpdateDisposition,
   pullRequestCheckRetryKey,
@@ -38,6 +39,35 @@ const snapshot = (overrides = {}) => ({
 });
 
 describe("Ralph pull-request recovery planning", () => {
+  it("preserves the exact merged head for final checkout cleanup", () => {
+    expect(
+      mergedPullRequestFromRecoverySnapshot(
+        { prNumber: 521 },
+        {
+          headSha: "merged-head",
+          url: "https://example.test/pull/521",
+          mergedAt: "2026-07-29T20:00:00.000Z",
+          mergeCommit: { oid: "merge-commit" },
+        },
+      ),
+    ).toEqual({
+      number: 521,
+      url: "https://example.test/pull/521",
+      mergedAt: "2026-07-29T20:00:00.000Z",
+      mergeCommit: { oid: "merge-commit" },
+      headRefOid: "merged-head",
+    });
+  });
+
+  it("fails closed when merged recovery lacks the PR head", () => {
+    expect(() =>
+      mergedPullRequestFromRecoverySnapshot(
+        { prNumber: 521 },
+        { mergeCommit: { oid: "merge-commit" } },
+      ),
+    ).toThrow("merged pull-request recovery snapshot is missing its head SHA");
+  });
+
   it("invalidates an old preservation receipt when new dirty repair work exists", () => {
     const issueState = {
       blockedPrRepairRecovery: { headSha: "old-head" },

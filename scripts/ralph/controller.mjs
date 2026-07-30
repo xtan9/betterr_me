@@ -88,6 +88,7 @@ import {
   blockedRepairRecoveryReceipt,
   blockedRepairRecoveryReceiptMatches,
   canAdoptLegacyProtectedScopeRepair,
+  mergedPullRequestFromRecoverySnapshot,
   pullRequestBaseUpdateDisposition,
   pullRequestCheckRetryKey,
   pullRequestRecoveryErrorDisposition,
@@ -1096,7 +1097,7 @@ async function reconcileRemoteCompletions(
           "--repo",
           repository,
           "--json",
-          "number,state,mergedAt,mergeCommit,url",
+          "number,state,mergedAt,mergeCommit,headRefOid,url",
         ],
         controllerOptions,
       );
@@ -1130,7 +1131,11 @@ async function reconcileRemoteCompletions(
     status(`Rebuilding completed state for issue #${issue.issueNumber}.`);
     const issueState = state.issues[String(issue.issueNumber)];
     const cleanup = persist
-      ? await localCheckoutCleanupPatch(issue.issueNumber, issueState)
+      ? await localCheckoutCleanupPatch(
+          issue.issueNumber,
+          issueState,
+          merged.headRefOid,
+        )
       : { worktreeRemoved: false, branchDeleted: false };
     const completed = [...state.completed, issue.issueNumber];
     const mergedPatch = {
@@ -1812,12 +1817,7 @@ async function reconcilePullRequestRecoveryBacklog(
         state = await finalizeMergedPullRequest(
           state,
           issue,
-          {
-            number: plan.prNumber,
-            url: snapshot.url,
-            mergedAt: snapshot.mergedAt,
-            mergeCommit: snapshot.mergeCommit,
-          },
+          mergedPullRequestFromRecoverySnapshot(plan, snapshot),
           controllerOptions,
         );
         return { status: "merged" };
@@ -4360,7 +4360,11 @@ async function finalizeMergedPullRequest(
     mergedPr.mergeCommit.oid,
     `origin/${baseBranch}`,
   ]);
-  const cleanup = await localCheckoutCleanupPatch(number, issueState);
+  const cleanup = await localCheckoutCleanupPatch(
+    number,
+    issueState,
+    mergedPr.headRefOid,
+  );
   const completed = state.completed.includes(number)
     ? state.completed
     : [...state.completed, number];
@@ -4375,15 +4379,19 @@ async function finalizeMergedPullRequest(
   return state;
 }
 
-async function localCheckoutCleanupPatch(issueNumber, issueState) {
-  if (issueState?.worktreePath && fs.existsSync(issueState.worktreePath)) {
-    await removeControllerDependencyLink(issueState.worktreePath);
-  }
+async function localCheckoutCleanupPatch(
+  issueNumber,
+  issueState,
+  expectedRecoveryHead,
+) {
   const cleanup = await cleanupIssueCheckout({
     repositoryRoot,
     worktreeRoot,
     issueNumber,
     issueState,
+    recoveryWorktreePath: activeIssueWorktreePath(worktreeRoot),
+    expectedRecoveryHead,
+    beforeWorktreeRemove: removeControllerDependencyLink,
     git,
   });
   removeSanitizedWorkerGitView(workerGitRoot, issueNumber);
@@ -4914,7 +4922,7 @@ async function waitAndMaybeMerge(state, issue, actor, controllerOptions) {
       "--repo",
       repository,
       "--json",
-      "state,mergedAt,mergeCommit,url",
+      "state,mergedAt,mergeCommit,headRefOid,url",
     ],
     controllerOptions,
   );
@@ -5052,7 +5060,7 @@ async function waitAndMaybeMerge(state, issue, actor, controllerOptions) {
         "--repo",
         repository,
         "--json",
-        "state,mergedAt,mergeCommit,url",
+        "state,mergedAt,mergeCommit,headRefOid,url",
       ],
       controllerOptions,
     );
@@ -5295,7 +5303,7 @@ async function processOne(state, actor, controllerOptions) {
         "--repo",
         repository,
         "--json",
-        "state,mergedAt,mergeCommit,url",
+        "state,mergedAt,mergeCommit,headRefOid,url",
       ],
       controllerOptions,
     );
@@ -5636,7 +5644,7 @@ async function processOne(state, actor, controllerOptions) {
             "--repo",
             repository,
             "--json",
-            "state,mergedAt,mergeCommit,url",
+            "state,mergedAt,mergeCommit,headRefOid,url",
           ],
           controllerOptions,
         );

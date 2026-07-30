@@ -122,6 +122,19 @@ export function pullRequestRecoveryErrorDisposition({
   return "human-gate";
 }
 
+export function mergedPullRequestFromRecoverySnapshot(plan, snapshot) {
+  if (!snapshot.headSha) {
+    throw new Error("merged pull-request recovery snapshot is missing its head SHA");
+  }
+  return {
+    number: plan.prNumber,
+    url: snapshot.url,
+    mergedAt: snapshot.mergedAt,
+    mergeCommit: snapshot.mergeCommit,
+    headRefOid: snapshot.headSha,
+  };
+}
+
 export function blockedRepairRecoveryReceipt(input) {
   const result = input?.result;
   if (
