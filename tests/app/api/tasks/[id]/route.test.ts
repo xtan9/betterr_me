@@ -13,6 +13,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 const mockTasksDB = {
   getTask: vi.fn(),
+  createTask: vi.fn(),
   updateTask: vi.fn(),
   deleteTask: vi.fn(),
 };
@@ -108,6 +109,20 @@ describe("PATCH /api/tasks/[id]", () => {
     });
 
     expect(response.status).toBe(400);
+  });
+
+  it("should reject a completion timestamp without completion intent", async () => {
+    const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
+      method: "PATCH",
+      body: JSON.stringify({ completed_at: "2026-07-28T12:00:00.000Z" }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(mockTasksDB.updateTask).not.toHaveBeenCalled();
   });
 
   it("should update completion_difficulty with valid value", async () => {

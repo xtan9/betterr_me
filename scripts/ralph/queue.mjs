@@ -257,38 +257,113 @@ export function failureDisposition(stage, pullRequestMerged, failureKind) {
   return "failed";
 }
 
+const DRAFT_FAILURE_POLICIES = Object.freeze({
+  "interrupted-repair": Object.freeze({
+    reverify: true,
+    reverifyWithoutRepairBudget: true,
+    preserveBlockedRepair: true,
+    promoteAfterVerification: true,
+  }),
+  "worker-blocked": Object.freeze({
+    reverify: true,
+    reverifyWithoutRepairBudget: false,
+    preserveBlockedRepair: false,
+    promoteAfterVerification: true,
+  }),
+  "ticket-infrastructure": Object.freeze({
+    reverify: true,
+    reverifyWithoutRepairBudget: true,
+    preserveBlockedRepair: true,
+    promoteAfterVerification: true,
+  }),
+  "review-ticket-infrastructure": Object.freeze({
+    reverify: true,
+    reverifyWithoutRepairBudget: true,
+    preserveBlockedRepair: true,
+    promoteAfterVerification: true,
+  }),
+  "protected-scope": Object.freeze({
+    reverify: true,
+    reverifyWithoutRepairBudget: true,
+    preserveBlockedRepair: true,
+    promoteAfterVerification: false,
+  }),
+});
+
+const DEFAULT_DRAFT_FAILURE_POLICY = Object.freeze({
+  reverify: false,
+  reverifyWithoutRepairBudget: false,
+  preserveBlockedRepair: false,
+  promoteAfterVerification: false,
+});
+
+export function draftFailurePolicy(failureKind) {
+  return DRAFT_FAILURE_POLICIES[failureKind] ?? DEFAULT_DRAFT_FAILURE_POLICY;
+}
+
 export function shouldPreserveBlockedPullRequestRepair(stage, failureKind) {
   return (
     stage === "pr-repairing" &&
-    ["ticket-infrastructure", "review-ticket-infrastructure"].includes(failureKind)
+    draftFailurePolicy(failureKind).preserveBlockedRepair
   );
 }
 
-const LOW_RISK_PATHS = [
-  /^lib\/calendar\//,
-  /^lib\/reminders\//,
-  /^lib\/validations\/(calendar-events|reminders)\.ts$/,
-  /^tests\/lib\/calendar\//,
-  /^tests\/lib\/reminders\//,
-  /^tests\/lib\/validations\/(calendar-events|reminders)\.test\.ts$/,
+const SENSITIVE_PATHS = [
+  /^\.github\/(?:workflows|actions)\//,
+  /^(?:\.circleci\/|\.gitlab-ci\.|azure-pipelines\.|\.buildkite\/|ci\/)/,
+  /^scripts\/ralph\//,
+  /^scripts\/(?:ci|build|release|deploy)\//,
+  /(?:^|\/)migrations?\//,
+  /\.sql$/,
+  /(?:^|\/)(?:security|secure|crypto|cryptography)(?:\/|[-.])/,
+  /(?:^|\/)(?:schema|schemas)(?:\/|[-.])/,
+  /(?:^|\/)(?:auth|oauth|authentication|authorization)(?:\/|[-.])/,
+  /(?:^|\/)(?:password|passkey|api[-_]?keys?|session|csrf|mfa|2fa)(?:\/|[-.])/,
+  /(?:^|\/)(?:admin|administration|administrative|privileged)(?:\/|[-.])/,
+  /(?:^|\/)(?:secret|token|credential|permission)s?(?:\/|[-.])/,
+  /(?:^|\/)(?:billing|finance|financial|payment)s?(?:\/|[-.])/,
+  /(?:^|\/)(?:stripe|paypal|paddle)(?:\/|[-.])/,
+  /(?:^|\/)(?:delete|deletion|purge|erase|destroy|truncate|drop)(?:\/|[-.])/,
+  /(?:^|\/)(?:package(?:-lock)?\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|yarn\.lock|bun\.lockb?)$/,
+  /(?:^|\/)(?:config|configuration)\//,
+  /^(?:tsconfig(?:\.[^/]+)?\.json|vercel\.json|turbo\.json)$/,
+  /(?:^|\/)[^/]+\.config\.(?:js|cjs|mjs|ts|json)$/,
+  /^(?:dockerfile|docker-compose\.[^/]+|netlify\.toml|fly\.toml|render\.yaml|railway\.json|wrangler\.toml|serverless\.ya?ml|jenkinsfile)$/,
+  /\.ya?ml$/,
+  /^\.[^/]+$/,
+  /(?:^|\/)\.env(?:\.|$)/,
 ];
+const ORDINARY_CHANGE_PATH = /^(?:app|components|lib|tests)\//;
 const HIGH_RISK_WORDS =
-  /\b(auth|oauth|authorization|credential|secret|token|permission|migration|schema|finance|payment|destructive|delete|deletion)\b/i;
+  /\b(auth|oauth|authentication|authorization|authorize|security|password|passkey|api[- ]?keys?|credential|secret|token|permission|privileged|admin|administration|migration|schema|finance|financial|billing|payment|stripe|paypal|paddle|destructive|delete|deletion|purge|erase|destroy|truncate|drop|dependency|dependencies|compiler|configuration|deployment|deploy|continuous integration|ci)\b/i;
 
 export function classifyChangeRisk(paths, issue = {}) {
-  const normalizedPaths = paths.map((file) => file.replaceAll("\\", "/").toLowerCase());
-  const nonAllowlistedPaths = normalizedPaths.filter(
-    (file) => !LOW_RISK_PATHS.some((pattern) => pattern.test(file)),
+  const normalizedPaths = paths
+    .map((file) => file.replaceAll("\\", "/").toLowerCase())
+    .sort();
+  const sensitivePaths = normalizedPaths.filter(
+    (file) => SENSITIVE_PATHS.some((pattern) => pattern.test(file)),
+  );
+  const nonOrdinaryPaths = normalizedPaths.filter(
+    (file) => !ORDINARY_CHANGE_PATH.test(file),
   );
   const issueText = `${issue.title ?? ""}\n${issue.whatToBuild ?? ""}`;
   const issueRisk = HIGH_RISK_WORDS.test(issueText);
 
-  if (normalizedPaths.length === 0 || nonAllowlistedPaths.length > 0 || issueRisk) {
+  if (
+    normalizedPaths.length === 0 ||
+    nonOrdinaryPaths.length > 0 ||
+    sensitivePaths.length > 0 ||
+    issueRisk
+  ) {
     return {
       level: "high",
       reasons: [
         ...(normalizedPaths.length === 0 ? ["no changed files to classify"] : []),
-        ...nonAllowlistedPaths.map((file) => `path is not on the low-risk allowlist: ${file}`),
+        ...nonOrdinaryPaths.map(
+          (file) => `path is outside ordinary application code: ${file}`,
+        ),
+        ...sensitivePaths.map((file) => `sensitive change path: ${file}`),
         ...(issueRisk ? ["high-risk issue language"] : []),
       ],
     };
@@ -372,6 +447,8 @@ export function shouldParkIssueFailure(failureKind) {
     "ambiguous",
     "worker-blocked",
     "ticket-infrastructure",
+    "protected-scope",
+    "interrupted-repair",
   ].includes(failureKind);
 }
 
@@ -430,7 +507,7 @@ export function workerResultFailureKind(result) {
   if (result?.blockerKind === "ticket-infrastructure") {
     return "ticket-infrastructure";
   }
-  if (result?.blockerKind === "protected-scope") return "worker-blocked";
+  if (result?.blockerKind === "protected-scope") return "protected-scope";
   if (result?.blockerKind === "safety") return "safety";
   if (result?.ambiguous || result?.blockerKind === "requirements") {
     return "ambiguous";
@@ -445,7 +522,12 @@ export function buildFailedAttemptPullRequestBody({
   failureSummary,
   repairAttempts,
 }) {
-  return `## Status
+  return `## Delivery classification
+
+- [ ] User-visible product delivery
+- [x] Internal, operational, or infrastructure-only change
+
+## Status
 
 **Draft failed attempt — do not merge.** Ralph preserved this branch for supervised recovery after an automated gate stopped the issue.
 
@@ -471,11 +553,145 @@ Closes #${issueNumber}
 `;
 }
 
+export function reopenIssueForPullRequestRecovery(
+  state,
+  issueNumber,
+  patch,
+  now,
+) {
+  const current = state.issues?.[String(issueNumber)];
+  if (
+    !current ||
+    !["pr-open", "checks-passed", "pr-repairing", "manual-review", "failed"].includes(
+      current.stage,
+    ) ||
+    !current.prNumber ||
+    !current.branch
+  ) {
+    throw new Error(
+      `issue #${issueNumber} is not eligible for pull-request recovery`,
+    );
+  }
+  return {
+    ...state,
+    updatedAt: now,
+    issues: {
+      ...state.issues,
+      [String(issueNumber)]: {
+        ...current,
+        ...patch,
+        stage: "pr-repairing",
+        prRecoveryOriginalStage:
+          current.prRecoveryOriginalStage ?? current.stage,
+        updatedAt: now,
+      },
+    },
+  };
+}
+
+export function buildInternalPullRequestBody({
+  issueNumber,
+  issueUrl,
+  summary,
+  risk,
+}) {
+  const safeSummary = neutralizeClosingKeywords(String(summary)).replaceAll(
+    "@",
+    "@\u200b",
+  );
+  return `## Delivery classification
+
+- [ ] User-visible product delivery
+- [x] Internal, operational, or infrastructure-only change
+
+## Product scope source
+
+${issueUrl}
+
+## Summary
+
+${safeSummary}
+
+## Verification
+
+- Full Vitest suite passed locally.
+- No new TypeScript diagnostics beyond the captured baseline.
+- Independent Codex review passed.
+- Risk classification: **${risk.level}**${risk.reasons.length ? ` — ${risk.reasons.join("; ")}` : ""}.
+
+## Reviewer release-scope check
+
+- [ ] I reconciled every approved user-visible capability in the scope source to a row above.
+- [ ] Each mapped file is part of this PR, and each verification is runnable against this delivery.
+
+Closes #${issueNumber}
+`;
+}
+
 export function neutralizeClosingKeywords(value) {
   return String(value).replace(
     /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+(?=(?:[\w.-]+\/[\w.-]+)?#\d+)/gi,
     "references ",
   );
+}
+
+export function redactCredentialPatterns(value) {
+  return String(value)
+    .replace(
+      /-----BEGIN ((?:RSA |EC |OPENSSH )?PRIVATE KEY)-----[\s\S]*?-----END \1-----/g,
+      "[REDACTED]",
+    )
+    .replace(
+      /github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}/g,
+      "[REDACTED]",
+    );
+}
+
+export function recordCheckRetryAttempt(issueState, plan, kind) {
+  if (!['controller', 'transient'].includes(kind)) {
+    throw new Error(`unsupported check retry kind ${kind}`);
+  }
+  const attemptField = `${kind}CheckAttempt`;
+  const retryField = `${kind}CheckRetry`;
+  if (issueState[attemptField]?.fingerprint === plan.fingerprint) {
+    return issueState;
+  }
+  return {
+    ...issueState,
+    [attemptField]: { fingerprint: plan.fingerprint },
+    [retryField]: {
+      key: plan.retryKey,
+      attempts:
+        issueState[retryField]?.key === plan.retryKey
+          ? issueState[retryField].attempts + 1
+          : 1,
+    },
+  };
+}
+
+export function isPullRequestRecoveryCandidate(issueState) {
+  return Boolean(
+    issueState?.prNumber &&
+      [
+        "pr-open",
+        "checks-passed",
+        "pr-repairing",
+        "manual-review",
+        "failed",
+      ].includes(issueState.stage),
+  );
+}
+
+export function selectPullRequestRecoveryCandidates(candidates, issueStates) {
+  const reserved = [];
+  for (const candidate of candidates) {
+    const issueState = issueStates?.[String(candidate.issueNumber)];
+    if (issueState?.worktreePath) reserved.push(candidate);
+  }
+  if (reserved.length > 1) {
+    throw new Error("multiple PR recovery candidates reserve the single worktree");
+  }
+  return reserved.length === 1 ? reserved : [...candidates];
 }
 
 export function testVerificationFailureKind(error) {
