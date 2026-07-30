@@ -213,6 +213,21 @@ export function blockedRepairPostPushDisposition(snapshot, expectedHead) {
   return snapshot.headRefOid === expectedHead ? "verified" : "wait-head";
 }
 
+export function staleBlockedRepairPreservationPatch(
+  issueState,
+  checkoutDirty,
+) {
+  if (checkoutDirty !== true || !issueState?.blockedPrDraftVerifiedAt) {
+    return null;
+  }
+  return {
+    blockedPrRepairRecovery: null,
+    blockedPrRepairPushedAt: null,
+    blockedPrCommentedAt: null,
+    blockedPrDraftVerifiedAt: null,
+  };
+}
+
 export function pullRequestBaseUpdateDisposition({
   pending,
   observedHead,
@@ -245,6 +260,10 @@ export function baseUpdateReviewResetPatch(issueState, at) {
     reviewFindingLedger: null,
     reviewBaselineTreeSha: null,
     reviewRepairPending: null,
+    blockedPrRepairRecovery: null,
+    blockedPrRepairPushedAt: null,
+    blockedPrCommentedAt: null,
+    blockedPrDraftVerifiedAt: null,
     ...(findingLedger.length > 0
       ? {
           supersededReviewFindingLedgers: [

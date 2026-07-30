@@ -9,6 +9,8 @@ export const WORKER_PROTECTED_PATHS = Object.freeze([
   "supabase/seed.sql",
   "supabase/tests/e2e_local_authenticated_grants.sql",
   "supabase/tests/finance_cushion_rls.sql",
+  "supabase/tests/oauth_refresh_token_lifecycle.sql",
+  "supabase/tests/oauth_refresh_token_upgrade.sql",
   "AGENTS.md",
   "package.json",
   "pnpm-lock.yaml",
