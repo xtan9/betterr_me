@@ -14,6 +14,11 @@
  */
 const { BASE_URL, PUBLIC_PATHS, PROTECTED_PATHS } = require('./scripts/lighthouse-config');
 
+const numberOfRuns = Number.parseInt(process.env.LHCI_NUMBER_OF_RUNS ?? '3', 10);
+if (!Number.isInteger(numberOfRuns) || numberOfRuns < 1) {
+  throw new Error('LHCI_NUMBER_OF_RUNS must be a positive integer.');
+}
+
 module.exports = {
   ci: {
     collect: {
@@ -21,7 +26,7 @@ module.exports = {
       puppeteerScript: './scripts/lighthouse-auth.js',
       startServerCommand: 'pnpm start',
       startServerReadyPattern: 'Ready in',
-      numberOfRuns: 3,
+      numberOfRuns,
       settings: {
         // No preset = default mobile throttling (simulated slow 4G + 4x CPU)
         onlyCategories: ['performance', 'accessibility', 'best-practices', 'seo'],
