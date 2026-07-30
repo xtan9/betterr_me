@@ -210,10 +210,19 @@ non-superuser role. Both local-Supabase PR jobs execute them with
 request real database verification without granting workflow, controller, or
 secret authority.
 
+Marked fixtures that need an authenticated identity call the runner-owned
+`public.ralph_ci_create_auth_user(uuid, text)` helper. The helper can create
+only a minimal disposable auth row; the fixture role receives no direct write
+access to `auth` tables. Concurrent fixtures open named sessions through
+`public.ralph_ci_open_connection(text)`, which reconnects as the same
+non-superuser role to the current disposable database server.
+
 Controller-executed SQL and its enforcement code are immutable to ticket
 workers. The worker sandbox mounts `.github/**`, `scripts/ralph/**`, the Ralph
 SQL runner and policy, `supabase/tests/e2e_local_authenticated_grants.sql`, and
-`supabase/tests/finance_cushion_rls.sql` read-only. Database migrations,
+`supabase/tests/finance_cushion_rls.sql`, OAuth lifecycle fixtures, and the
+`supabase/tests/ralph_ci_runner_security.sql` enforcement fixture read-only.
+Database migrations,
 `supabase/config.toml`, and `supabase/seed.sql` are also controller-protected
 because CI necessarily applies them with elevated database authority; migration
 tickets remain supervised Drafts instead of delegating that authority to
