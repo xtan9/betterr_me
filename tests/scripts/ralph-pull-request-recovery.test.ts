@@ -512,7 +512,7 @@ describe("Ralph pull-request recovery planning", () => {
     ).toMatchObject({
       action: "resolve-conflict",
       headSha: "head-1",
-      latestMainSha: "main-2",
+      latestMainSha: "main-3",
       consumesCodingAttempt: true,
     });
   });
