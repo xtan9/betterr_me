@@ -33,6 +33,9 @@
     "title": "Delete calendar events without orphaning reminders",
     "url": "https://github.com/xtan9/betterr_me/issues/499",
     "blockers": [481, 491],
+    "trustedWorkerPolicy": {
+      "newSupabaseMigrations": 1
+    },
     "testSeam": "The scheduling lifecycle's public delete interface and its observable event/reminder cleanup outcome.",
     "whatToBuild": "Deleting a calendar event closes the event/reminder lifecycle in one operation without orphaned reminders or ambiguous partial outcomes.",
     "acceptanceCriteria": [

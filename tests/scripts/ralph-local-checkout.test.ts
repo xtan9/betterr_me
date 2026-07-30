@@ -7,6 +7,7 @@ import path from "node:path";
 import {
   cleanupIssueCheckout,
   parkFailedIssueCheckout,
+  prepareConflictRepair,
   recoverPreservationCommit,
 } from "../../scripts/ralph/local-checkout.mjs";
 
@@ -73,6 +74,78 @@ afterEach(() => {
 });
 
 describe("Ralph local checkout lifecycle", () => {
+  it("prepares an idempotent conflict repair against the exact latest main", async () => {
+    const { repositoryRoot, worktreeRoot, git, checked } = createRepository();
+    const worktreePath = path.join(worktreeRoot, "current");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    checked([
+      "worktree",
+      "add",
+      "-b",
+      "codex/issue-101",
+      worktreePath,
+      "main",
+    ]);
+    fs.writeFileSync(path.join(worktreePath, "README.md"), "issue change\n");
+    checked(["-C", worktreePath, "add", "README.md"]);
+    checked(["-C", worktreePath, "commit", "-m", "issue change"]);
+    const expectedHead = checked(["-C", worktreePath, "rev-parse", "HEAD"]);
+    fs.writeFileSync(path.join(repositoryRoot, "README.md"), "main change\n");
+    checked(["add", "README.md"]);
+    checked(["commit", "-m", "main change"]);
+    const latestMainSha = checked(["rev-parse", "main"]);
+
+    const request = {
+      worktreeRoot,
+      worktreePath,
+      issueNumber: 101,
+      expectedHead,
+      latestMainSha,
+      git,
+    };
+    await expect(prepareConflictRepair(request)).resolves.toEqual({
+      status: "conflicted",
+      paths: ["README.md"],
+    });
+    await expect(prepareConflictRepair(request)).resolves.toEqual({
+      status: "conflicted",
+      paths: ["README.md"],
+    });
+    expect(checked(["-C", worktreePath, "rev-parse", "HEAD"])).toBe(
+      expectedHead,
+    );
+    expect(checked(["-C", worktreePath, "rev-parse", "MERGE_HEAD"])).toBe(
+      latestMainSha,
+    );
+  });
+
+  it("aborts a clean exact-base merge without leaving the checkout dirty", async () => {
+    const { repositoryRoot, worktreeRoot, git, checked } = createRepository();
+    const worktreePath = path.join(worktreeRoot, "current");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    checked(["worktree", "add", "-b", "codex/issue-102", worktreePath, "main"]);
+    fs.writeFileSync(path.join(worktreePath, "issue.txt"), "issue\n");
+    checked(["-C", worktreePath, "add", "issue.txt"]);
+    checked(["-C", worktreePath, "commit", "-m", "issue change"]);
+    const expectedHead = checked(["-C", worktreePath, "rev-parse", "HEAD"]);
+    fs.writeFileSync(path.join(repositoryRoot, "main.txt"), "main\n");
+    checked(["add", "main.txt"]);
+    checked(["commit", "-m", "main change"]);
+
+    await expect(
+      prepareConflictRepair({
+        worktreeRoot,
+        worktreePath,
+        issueNumber: 102,
+        expectedHead,
+        latestMainSha: checked(["rev-parse", "main"]),
+        git,
+      }),
+    ).resolves.toEqual({ status: "clean", paths: [] });
+    expect(checked(["-C", worktreePath, "status", "--porcelain"])).toBe("");
+    expect(checked(["-C", worktreePath, "rev-parse", "HEAD"])).toBe(expectedHead);
+  });
+
   it("removes a merged worktree and its local issue branch", async () => {
     const { repositoryRoot, worktreeRoot, git, checked } = createRepository();
     const worktreePath = path.join(worktreeRoot, "current");
