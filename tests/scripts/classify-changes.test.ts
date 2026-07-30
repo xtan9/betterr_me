@@ -87,6 +87,32 @@ function classifyPush(
   );
 }
 
+function classifyManualDispatch() {
+  const repository = mkdtempSync(join(tmpdir(), "better-me-ci-classifier-"));
+  temporaryRepositories.push(repository);
+
+  cpSync(resolve("scripts/ci"), join(repository, "scripts/ci"), {
+    recursive: true,
+  });
+  const outputPath = join(repository, "github-output.txt");
+
+  execFileSync(bashExecutable, ["scripts/ci/classify-changes.sh"], {
+    cwd: repository,
+    env: {
+      ...process.env,
+      EVENT_NAME: "workflow_dispatch",
+      GITHUB_OUTPUT: outputPath,
+    },
+  });
+
+  return Object.fromEntries(
+    readFileSync(outputPath, "utf8")
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => line.split("=", 2)),
+  );
+}
+
 afterEach(() => {
   for (const repository of temporaryRepositories.splice(0)) {
     rmSync(repository, { recursive: true, force: true });
@@ -94,6 +120,15 @@ afterEach(() => {
 });
 
 describe("CI change classification", () => {
+  it("runs the full Chromium E2E suite for a manual dispatch", () => {
+    expect(classifyManualDispatch()).toMatchObject({
+      e2e: "true",
+      e2e_full: "true",
+      e2e_label: "full Chromium",
+      e2e_specs: "",
+    });
+  });
+
   it("skips duplicate quality checks for a push already validated by a pull request", () => {
     expect(classifyPush(true)).toMatchObject({
       quality: "false",
