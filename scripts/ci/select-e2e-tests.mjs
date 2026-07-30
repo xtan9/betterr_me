@@ -15,11 +15,17 @@ const SPECS = {
 const CHROMIUM_SPEC_PATHS = new Set(Object.values(SPECS));
 const DIRECT_CHROMIUM_SPEC = /^e2e\/[A-Za-z0-9][A-Za-z0-9._/-]*\.spec\.ts$/;
 
+const SPEC_LABEL_GROUPS = [
+  ["habits", [SPECS.completeHabit, SPECS.createHabit]],
+  ["tasks", [SPECS.taskDetail, SPECS.tasksList]],
+  ["dashboard", [SPECS.dashboard]],
+  ["locale", [SPECS.locale]],
+  ["layout", [SPECS.accessibility, SPECS.crossBrowser, SPECS.responsive]],
+];
+
 const FULL_SUITE_PATTERNS = [
   /^\.github\/actions\//,
-  /^\.github\/workflows\/e2e\.yml$/,
   /^(?:package\.json|pnpm-lock\.yaml|next\.config\.ts|playwright\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs)$/,
-  /^scripts\/ci\/(?:classify-changes\.sh|select-e2e-tests\.mjs)$/,
   /^e2e\/(?:auth\.setup|constants|global-setup|global-teardown)\.ts$/,
   /^e2e\/(?:helpers|pages)\//,
   /^supabase\//,
@@ -34,6 +40,13 @@ const FULL_SUITE_PATTERNS = [
 ];
 
 const FEATURE_MAPPINGS = [
+  {
+    patterns: [
+      /^\.github\/workflows\/e2e\.yml$/,
+      /^scripts\/ci\/(?:classify-changes\.sh|select-e2e-tests\.mjs)$/,
+    ],
+    specs: [SPECS.dashboard],
+  },
   {
     patterns: [
       /^app\/(?:api\/habits|habits)\//,
@@ -136,13 +149,45 @@ export function selectE2ETests(changedFiles) {
   }
 
   const chromiumSpecs = [...specs].sort();
-  return {
+  const selection = {
     e2e: full || runway || visual || chromiumSpecs.length > 0,
     full,
     chromiumSpecs,
     runway,
     visual,
+    supabase: full || visual || chromiumSpecs.length > 0,
   };
+
+  return { ...selection, label: e2eSelectionLabel(selection) };
+}
+
+export function e2eSelectionLabel(selection) {
+  if (!selection.e2e) return "not needed";
+
+  const labels = [];
+  if (selection.full) {
+    labels.push("full Chromium");
+  } else {
+    const selectedSpecs = new Set(selection.chromiumSpecs);
+    const groupedSpecs = new Set();
+
+    for (const [label, specs] of SPEC_LABEL_GROUPS) {
+      if (specs.some((spec) => selectedSpecs.has(spec))) labels.push(label);
+      for (const spec of specs) groupedSpecs.add(spec);
+    }
+
+    for (const spec of selection.chromiumSpecs) {
+      if (!groupedSpecs.has(spec)) {
+        labels.push(
+          spec.split("/").at(-1).replace(/\.spec\.ts$/, "").replaceAll("-", " "),
+        );
+      }
+    }
+  }
+
+  if (selection.runway) labels.push("finance");
+  if (selection.visual) labels.push("visual regression");
+  return labels.join(" + ") || "selected specs";
 }
 
 export function formatGitHubOutputs(selection) {
@@ -152,6 +197,8 @@ export function formatGitHubOutputs(selection) {
     `e2e_specs=${selection.chromiumSpecs.join(",")}`,
     `e2e_runway=${selection.runway}`,
     `e2e_visual=${selection.visual}`,
+    `e2e_supabase=${selection.supabase}`,
+    `e2e_label=${selection.label}`,
   ].join("\n");
 }
 

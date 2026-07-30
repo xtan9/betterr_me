@@ -6,12 +6,18 @@ if [[ "${EVENT_NAME:-}" != "pull_request" ]]; then
   {
     echo "quality=true"
     echo "full_tests=true"
+    echo "full_lint=true"
+    echo "changed_tests=false"
+    echo "quality_smoke_tests="
+    echo "quality_label=full suite"
     echo "migrations=true"
     echo "e2e=true"
     echo "e2e_full=true"
     echo "e2e_specs="
     echo "e2e_runway=false"
     echo "e2e_visual=false"
+    echo "e2e_supabase=true"
+    echo "e2e_label=full Chromium"
     echo "performance=true"
     echo "base_sha=${BASE_SHA:-}"
   } >> "$GITHUB_OUTPUT"
@@ -23,12 +29,18 @@ if [[ -z "${BASE_SHA:-}" || -z "${HEAD_SHA:-}" ]]; then
   {
     echo "quality=true"
     echo "full_tests=true"
+    echo "full_lint=true"
+    echo "changed_tests=false"
+    echo "quality_smoke_tests="
+    echo "quality_label=full suite"
     echo "migrations=true"
     echo "e2e=true"
     echo "e2e_full=true"
     echo "e2e_specs="
     echo "e2e_runway=false"
     echo "e2e_visual=false"
+    echo "e2e_supabase=true"
+    echo "e2e_label=full Chromium"
     echo "performance=true"
     echo "base_sha=${BASE_SHA:-}"
   } >> "$GITHUB_OUTPUT"
@@ -42,20 +54,8 @@ matches() {
   grep -Eq "$1" <<< "$changed_files"
 }
 
-quality=false
-full_tests=false
 migrations=false
 performance=false
-
-# Source, tests, executable scripts, or tool configuration can affect lint/unit tests.
-if matches '^(app|components|emails|hooks|i18n|lib|scripts|tests)/|\.(c|m)?(j|t)sx?$|^(package\.json|pnpm-lock\.yaml|tsconfig\.json|vitest\.config\.ts|eslint\.config\.mjs|next\.config\.ts|proxy\.ts|\.github/workflows/ci\.yml)$'; then
-  quality=true
-fi
-
-# Dependency/test-runner/global setup changes invalidate Vitest's related-test graph.
-if matches '^(package\.json|pnpm-lock\.yaml|vitest\.config\.ts|tsconfig\.json|tests/setup\.ts|tests/setup-mock-helpers\.test\.ts|\.github/workflows/ci\.yml|scripts/ci/classify-changes\.sh)$'; then
-  full_tests=true
-fi
 
 if matches '^supabase/migrations/|^\.github/workflows/ci\.yml$'; then
   migrations=true
@@ -69,9 +69,11 @@ e2e_outputs="$(printf '%s\n' "$changed_files" | node scripts/ci/select-e2e-tests
 printf '%s\n' "$e2e_outputs"
 printf '%s\n' "$e2e_outputs" >> "$GITHUB_OUTPUT"
 
+quality_outputs="$(printf '%s\n' "$changed_files" | node scripts/ci/select-quality-checks.mjs)"
+printf '%s\n' "$quality_outputs"
+printf '%s\n' "$quality_outputs" >> "$GITHUB_OUTPUT"
+
 {
-  echo "quality=$quality"
-  echo "full_tests=$full_tests"
   echo "migrations=$migrations"
   echo "performance=$performance"
   echo "base_sha=$BASE_SHA"

@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   changes:
+    name: Detect E2E scope
     runs-on: ubuntu-latest
     outputs:
       e2e: ${{ steps.classify.outputs.e2e }}
@@ -25,6 +26,8 @@ jobs:
       e2e_specs: ${{ steps.classify.outputs.e2e_specs }}
       e2e_runway: ${{ steps.classify.outputs.e2e_runway }}
       e2e_visual: ${{ steps.classify.outputs.e2e_visual }}
+      e2e_supabase: ${{ steps.classify.outputs.e2e_supabase }}
+      e2e_label: ${{ steps.classify.outputs.e2e_label }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,32 +41,9 @@ jobs:
         shell: bash
         run: bash scripts/ci/classify-changes.sh
 
-  check-secrets:
-    needs: changes
-    if: needs.changes.outputs.e2e == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Require authenticated E2E secrets outside pull requests
-        if: ${{ github.event_name != 'pull_request' }}
-        uses: ./.github/actions/check-secrets
-        with:
-          supabase-url: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          supabase-anon-key: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          e2e-email: ${{ secrets.E2E_TEST_EMAIL }}
-          e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
-          preview-url: ${{ secrets.E2E_PREVIEW_URL }}
-          require-preview-url: ${{ github.event_name != 'pull_request' }}
-          vercel-automation-bypass-secret: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-          require-vercel-automation-bypass-secret: "true"
-      - name: Confirm isolated pull-request verification contract
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          echo "Pull-request E2E uses a disposable local Supabase database."
-          echo "Production Supabase secrets and E2E_PREVIEW_URL are not used for authenticated PR browser traffic."
-
   e2e-tests:
-    needs: [changes, check-secrets]
+    name: E2E (${{ needs.changes.outputs.e2e_label }})
+    needs: changes
     if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -85,6 +65,19 @@ jobs:
           test "$actual_sha" = "$PR_HEAD_SHA"
           echo "Checked out exact pull-request head: $actual_sha"
 
+      - name: Require authenticated E2E secrets outside pull requests
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: ./.github/actions/check-secrets
+        with:
+          supabase-url: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          e2e-email: ${{ secrets.E2E_TEST_EMAIL }}
+          e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
+          preview-url: ${{ secrets.E2E_PREVIEW_URL }}
+          require-preview-url: "true"
+          vercel-automation-bypass-secret: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          require-vercel-automation-bypass-secret: "true"
+
       - name: Use configured preview deployment for non-pull-request E2E
         if: ${{ github.event_name != 'pull_request' }}
         shell: bash
@@ -96,39 +89,37 @@ jobs:
           echo "Using configured preview URL for $GITHUB_EVENT_NAME: $STATIC_PREVIEW_URL"
 
       - name: Setup disposable Supabase for pull-request E2E
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
         uses: supabase/setup-cli@v1
         with:
           version: 2.109.1
 
-      - name: Start disposable Supabase for pull-request E2E
-        if: ${{ github.event_name == 'pull_request' }}
-        run: supabase start
-
-      - name: Reset disposable database with feature migration
-        if: ${{ github.event_name == 'pull_request' }}
-        run: supabase db reset --local --yes --no-seed
+      - name: Start disposable Supabase and apply migrations
+        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
+        run: >-
+          supabase start
+          --exclude analytics,edge-runtime,functions,imgproxy,inbucket,meta,storage,studio,vector
 
       - name: Install PostgreSQL client for pull-request RLS gate
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
         run: sudo apt-get update && sudo apt-get install --yes postgresql-client
 
       - name: Prepare disposable authenticated E2E table grants
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
         run: >-
           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
           -v ON_ERROR_STOP=1
           -f supabase/tests/e2e_local_authenticated_grants.sql
 
       - name: Execute two-user finance cushion RLS fixture
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
         run: >-
           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
           -v ON_ERROR_STOP=1
           -f supabase/tests/finance_cushion_rls.sql
 
       - name: Execute opted-in Ralph SQL fixtures
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
         run: bash scripts/ci/run-ralph-sql-tests.sh
 
       - name: Setup pnpm
@@ -143,8 +134,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Configure disposable Supabase E2E target
+      - name: Restore Next.js build cache
         if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-e2e-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-e2e-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      - name: Configure disposable Supabase E2E target
+        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -208,6 +208,7 @@ jobs:
           fi
 
       - name: Build application
+        if: ${{ github.event_name == 'pull_request' }}
         run: pnpm build
 
       - name: Run E2E tests
@@ -245,7 +246,3 @@ jobs:
           path: playwright-report/
           retention-days: 1
           compression-level: 9
-
-      - name: Stop disposable Supabase
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        run: supabase stop --no-backup

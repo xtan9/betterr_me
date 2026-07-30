@@ -13,30 +13,38 @@ describe("E2E test selection", () => {
       chromiumSpecs: [],
       runway: false,
       visual: false,
+      supabase: false,
+      label: "not needed",
     });
   });
 
   it("selects habit and dashboard coverage for habit changes", () => {
-    expect(selectE2ETests(["components/habits/habit-card.tsx"]).chromiumSpecs)
+    const selection = selectE2ETests(["components/habits/habit-card.tsx"]);
+    expect(selection.chromiumSpecs)
       .toEqual([
         "e2e/complete-habit.spec.ts",
         "e2e/create-habit.spec.ts",
         "e2e/dashboard.spec.ts",
       ]);
+    expect(selection.label).toBe("habits + dashboard");
   });
 
   it("selects task and dashboard coverage for task changes", () => {
-    expect(selectE2ETests(["app/api/tasks/[id]/route.ts"]).chromiumSpecs)
+    const selection = selectE2ETests(["app/api/tasks/[id]/route.ts"]);
+    expect(selection.chromiumSpecs)
       .toEqual([
         "e2e/dashboard.spec.ts",
         "e2e/task-detail.spec.ts",
         "e2e/tasks-list.spec.ts",
       ]);
+    expect(selection.label).toBe("tasks + dashboard");
   });
 
   it("selects only the dashboard spec for dashboard-only changes", () => {
     expect(selectE2ETests(["lib/dashboard/dashboard-snapshot.ts"]).chromiumSpecs)
       .toEqual(["e2e/dashboard.spec.ts"]);
+    expect(selectE2ETests(["lib/dashboard/dashboard-snapshot.ts"]).label)
+      .toBe("dashboard");
   });
 
   it("uses the dedicated runway project for finance changes", () => {
@@ -46,6 +54,8 @@ describe("E2E test selection", () => {
         full: false,
         chromiumSpecs: [],
         runway: true,
+        supabase: false,
+        label: "finance",
       });
   });
 
@@ -73,6 +83,23 @@ describe("E2E test selection", () => {
       "supabase/migrations/20260729000000_change.sql",
     ]) {
       expect(selectE2ETests([file])).toMatchObject({ e2e: true, full: true });
+      expect(selectE2ETests([file]).label).toBe("full Chromium");
+    }
+  });
+
+  it("runs a dashboard pipeline smoke test for E2E workflow changes", () => {
+    for (const file of [
+      ".github/workflows/e2e.yml",
+      "scripts/ci/classify-changes.sh",
+      "scripts/ci/select-e2e-tests.mjs",
+    ]) {
+      expect(selectE2ETests([file])).toMatchObject({
+        e2e: true,
+        full: false,
+        chromiumSpecs: ["e2e/dashboard.spec.ts"],
+        supabase: true,
+        label: "dashboard",
+      });
     }
   });
 
@@ -99,6 +126,7 @@ describe("E2E test selection", () => {
         e2e: true,
         full: false,
         visual: true,
+        supabase: true,
       });
     }
   });
@@ -122,6 +150,8 @@ describe("E2E test selection", () => {
       ],
       runway: true,
       visual: false,
+      supabase: true,
+      label: "habits + tasks + dashboard + finance",
     });
   });
 
@@ -133,6 +163,8 @@ describe("E2E test selection", () => {
         "e2e_specs=e2e/dashboard.spec.ts",
         "e2e_runway=false",
         "e2e_visual=false",
+        "e2e_supabase=true",
+        "e2e_label=dashboard",
       ].join("\n"));
   });
 });
