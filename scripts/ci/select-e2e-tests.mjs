@@ -25,7 +25,7 @@ const SPEC_LABEL_GROUPS = [
 
 const FULL_SUITE_PATTERNS = [
   /^\.github\/actions\//,
-  /^(?:package\.json|pnpm-lock\.yaml|next\.config\.ts|playwright\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs)$/,
+  /^(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|next\.config\.ts|playwright\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs)$/,
   /^e2e\/(?:auth\.setup|constants|global-setup|global-teardown)\.ts$/,
   /^e2e\/(?:helpers|pages)\//,
   /^supabase\//,

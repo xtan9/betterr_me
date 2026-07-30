@@ -15,6 +15,7 @@ export const WORKER_PROTECTED_PATHS = Object.freeze([
   "AGENTS.md",
   "package.json",
   "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
   "package-lock.json",
   "yarn.lock",
 ]);
@@ -36,7 +37,7 @@ export function workerProtectedPath(filePath) {
   if (/(^|\/)agents\.md$/.test(normalized)) return true;
   if (/(^|\/)\.env(?:\.|$)/.test(normalized)) return true;
   if (
-    /(^|\/)(?:package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/.test(
+    /(^|\/)(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|package-lock\.json|yarn\.lock)$/.test(
       normalized,
     )
   ) {

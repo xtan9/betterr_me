@@ -88,7 +88,7 @@ if matches '^supabase/migrations/|^\.github/workflows/ci\.yml$'; then
   migrations=true
 fi
 
-if matches '^(app|components|emails|hooks|i18n|lib|public)/|^\.github/actions/|^(package\.json|pnpm-lock\.yaml|next\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs|lighthouserc\.js|\.github/workflows/performance\.yml|scripts/analyze-bundle\.ts)$'; then
+if matches '^(app|components|emails|hooks|i18n|lib|public)/|^\.github/actions/|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|next\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs|lighthouserc\.js|\.github/workflows/performance\.yml|scripts/analyze-bundle\.ts)$'; then
   performance=true
 fi
 

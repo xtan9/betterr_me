@@ -30,7 +30,11 @@ describe("quality check selection", () => {
   });
 
   it("runs the full suite for global test and lint configuration", () => {
-    for (const file of ["package.json", "tsconfig.json"]) {
+    for (const file of [
+      "package.json",
+      "pnpm-workspace.yaml",
+      "tsconfig.json",
+    ]) {
       expect(selectQualityChecks([file])).toMatchObject({
         quality: true,
         fullTests: true,

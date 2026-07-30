@@ -157,6 +157,7 @@ describe("Ralph sanitized worker Git view", () => {
     "supabase/tests/oauth_refresh_token_upgrade.sql",
     "supabase/tests/ralph_ci_runner_security.sql",
     "AGENTS.md",
+    "pnpm-workspace.yaml",
     ".env.local",
     "nested/private.pem",
   ])("protects controller-trusted worker path %s", (filePath) => {

@@ -23,7 +23,11 @@ function git(repository: string, ...args: string[]) {
   }).trim();
 }
 
-function createRepositoryWithGlobalConfigChange() {
+function createRepositoryWithGlobalConfigChange(
+  file = "package.json",
+  initialContents = "{}\n",
+  changedContents = '{"private":true}\n',
+) {
   const repository = mkdtempSync(join(tmpdir(), "better-me-ci-classifier-"));
   temporaryRepositories.push(repository);
 
@@ -33,13 +37,13 @@ function createRepositoryWithGlobalConfigChange() {
   git(repository, "init", "--quiet");
   git(repository, "config", "user.email", "ci@example.test");
   git(repository, "config", "user.name", "CI Test");
-  writeFileSync(join(repository, "package.json"), "{}\n");
+  writeFileSync(join(repository, file), initialContents);
   git(repository, "add", ".");
   git(repository, "commit", "--quiet", "-m", "base");
   const baseSha = git(repository, "rev-parse", "HEAD");
 
-  writeFileSync(join(repository, "package.json"), '{"private":true}\n');
-  git(repository, "add", "package.json");
+  writeFileSync(join(repository, file), changedContents);
+  git(repository, "add", file);
   git(repository, "commit", "--quiet", "-m", "change package config");
 
   return {
@@ -49,9 +53,18 @@ function createRepositoryWithGlobalConfigChange() {
   };
 }
 
-function classifyPush(validatedByPullRequest: boolean) {
+function classifyPush(
+  validatedByPullRequest: boolean,
+  file = "package.json",
+  initialContents = "{}\n",
+  changedContents = '{"private":true}\n',
+) {
   const { repository, baseSha, headSha } =
-    createRepositoryWithGlobalConfigChange();
+    createRepositoryWithGlobalConfigChange(
+      file,
+      initialContents,
+      changedContents,
+    );
   const outputPath = join(repository, "github-output.txt");
 
   execFileSync(bashExecutable, ["scripts/ci/classify-changes.sh"], {
@@ -96,6 +109,22 @@ describe("CI change classification", () => {
       quality: "true",
       full_tests: "true",
       full_lint: "true",
+    });
+  });
+
+  it("treats pnpm workspace policy as global CI and build configuration", () => {
+    expect(classifyPush(
+      false,
+      "pnpm-workspace.yaml",
+      "allowBuilds: {}\n",
+      "allowBuilds:\n  esbuild: true\n",
+    )).toMatchObject({
+      quality: "true",
+      full_tests: "true",
+      full_lint: "true",
+      e2e: "true",
+      e2e_full: "true",
+      performance: "true",
     });
   });
 });

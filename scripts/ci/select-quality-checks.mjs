@@ -3,16 +3,16 @@ import { pathToFileURL } from "node:url";
 const QUALITY_PATTERNS = [
   /^(?:app|components|emails|hooks|i18n|lib|scripts|tests)\//,
   /\.(?:c|m)?(?:j|t)sx?$/,
-  /^(?:package\.json|pnpm-lock\.yaml|tsconfig\.json|vitest\.config\.ts|eslint\.config\.mjs|next\.config\.ts|proxy\.ts)$/,
+  /^(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig\.json|vitest\.config\.ts|eslint\.config\.mjs|next\.config\.ts|proxy\.ts)$/,
   /^\.github\/workflows\/(?:ci|e2e|production-smoke|scheduled-failure-alerts)\.yml$/,
 ];
 
 const FULL_TEST_PATTERNS = [
-  /^(?:package\.json|pnpm-lock\.yaml|vitest\.config\.ts|tsconfig\.json|tests\/setup\.ts|tests\/setup-mock-helpers\.test\.ts)$/,
+  /^(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|vitest\.config\.ts|tsconfig\.json|tests\/setup\.ts|tests\/setup-mock-helpers\.test\.ts)$/,
 ];
 
 const FULL_LINT_PATTERNS = [
-  /^(?:package\.json|pnpm-lock\.yaml|eslint\.config\.mjs|tsconfig\.json)$/,
+  /^(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|eslint\.config\.mjs|tsconfig\.json)$/,
 ];
 
 const CI_ONLY_PATTERNS = [

@@ -16,6 +16,7 @@ on:
       - "scripts/stryker-changed.mjs"
       - ".github/workflows/mutation-testing.yml"
       - "package.json"
+      - "pnpm-workspace.yaml"
   schedule:
     # Mondays at 03:00 UTC — full baseline on main, catches cross-file drift
     # a per-PR changed-files run would miss.
