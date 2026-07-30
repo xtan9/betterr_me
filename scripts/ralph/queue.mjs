@@ -193,6 +193,35 @@ export function isIssueActive(issueState) {
     !isIssueParked(issueState);
 }
 
+function stateIssueEntries(issueStates) {
+  return Object.entries(issueStates ?? {}).map(([number, issue]) => {
+    const issueNumber = Number(number);
+    if (
+      !Number.isSafeInteger(issueNumber) ||
+      issueNumber <= 0 ||
+      String(issueNumber) !== number
+    ) {
+      throw new Error(`invalid durable issue key ${number}`);
+    }
+    return { ...issue, issueNumber };
+  });
+}
+
+export function selectActiveStateIssue(issueStates) {
+  const issues = stateIssueEntries(issueStates);
+  const worktreeOwners = issues.filter((issue) => issue.worktreePath);
+  if (worktreeOwners.length > 1) {
+    throw new Error("multiple issues reserve the single worktree");
+  }
+  if (worktreeOwners.length === 1) {
+    if (!isIssueActive(worktreeOwners[0])) {
+      throw new Error("an inactive issue reserves the single worktree");
+    }
+    return worktreeOwners[0];
+  }
+  return issues.find((issue) => isIssueActive(issue));
+}
+
 export function issueStageAtLeast(issueState, stage) {
   const currentIndex = ISSUE_STAGES.indexOf(issueState?.stage);
   const targetIndex = ISSUE_STAGES.indexOf(stage);
@@ -695,15 +724,19 @@ export function isPullRequestRecoveryCandidate(issueState) {
 }
 
 export function selectPullRequestRecoveryCandidates(candidates, issueStates) {
-  const reserved = [];
-  for (const candidate of candidates) {
-    const issueState = issueStates?.[String(candidate.issueNumber)];
-    if (issueState?.worktreePath) reserved.push(candidate);
+  const worktreeOwners = stateIssueEntries(issueStates).filter(
+    (issue) => issue.worktreePath,
+  );
+  if (worktreeOwners.length > 1) {
+    throw new Error("multiple issues reserve the single worktree");
   }
-  if (reserved.length > 1) {
-    throw new Error("multiple PR recovery candidates reserve the single worktree");
+  if (worktreeOwners.length === 1) {
+    const reserved = candidates.find(
+      (candidate) => candidate.issueNumber === worktreeOwners[0].issueNumber,
+    );
+    return reserved ? [reserved] : [];
   }
-  return reserved.length === 1 ? reserved : [...candidates];
+  return [...candidates];
 }
 
 export function testVerificationFailureKind(error) {
