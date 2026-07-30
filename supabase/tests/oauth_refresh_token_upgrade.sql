@@ -1,8 +1,38 @@
 -- Run after `supabase db reset` against a disposable local instance.
--- This transaction temporarily replaces the migrated table with its legacy
--- shape, reapplies the production migration, verifies the upgrade, then
+-- This transaction temporarily downgrades the empty migrated table to its
+-- legacy shape, reapplies the production migration, verifies the upgrade, then
 -- restores the reset database exactly.
 begin;
+
+delete from auth.users
+where id = '49200000-0000-0000-0000-000000000001';
+
+insert into auth.users (
+  id,
+  instance_id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at
+)
+values (
+  '49200000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000000',
+  'authenticated',
+  'authenticated',
+  'oauth-refresh-upgrade@example.test',
+  crypt('not-used', gen_salt('bf')),
+  now(),
+  '{}'::jsonb,
+  '{}'::jsonb,
+  now(),
+  now()
+);
 
 drop function resolve_oauth_refresh_token_context(text, text, timestamptz);
 drop function rotate_oauth_refresh_token(
@@ -14,34 +44,11 @@ drop function rotate_oauth_refresh_token(
 );
 drop function cleanup_oauth_refresh_token_families(timestamptz, timestamptz);
 
+drop index idx_refresh_tokens_family;
 alter table oauth_refresh_tokens
-  rename to oauth_refresh_tokens_after_upgrade_test;
-alter index oauth_refresh_tokens_pkey
-  rename to oauth_refresh_tokens_after_upgrade_test_pkey;
-alter index oauth_refresh_tokens_token_hash_key
-  rename to oauth_refresh_tokens_after_upgrade_test_token_hash_key;
-alter index idx_refresh_tokens_user
-  rename to idx_refresh_tokens_after_upgrade_test_user;
-alter index idx_refresh_tokens_expires
-  rename to idx_refresh_tokens_after_upgrade_test_expires;
-alter index idx_refresh_tokens_family
-  rename to idx_refresh_tokens_after_upgrade_test_family;
-
-create table oauth_refresh_tokens (
-  id uuid primary key default gen_random_uuid(),
-  token_hash text not null unique,
-  user_id uuid not null,
-  scopes text[] not null default '{read,write}',
-  expires_at timestamptz not null,
-  revoked boolean not null default false,
-  replaced_by_hash text,
-  created_at timestamptz not null default now(),
-  client_id text
-);
-
-create index idx_refresh_tokens_user on oauth_refresh_tokens (user_id);
-create index idx_refresh_tokens_expires on oauth_refresh_tokens (expires_at);
-alter table oauth_refresh_tokens enable row level security;
+  drop constraint oauth_refresh_tokens_revoked_at_present,
+  drop column family_id,
+  drop column revoked_at;
 
 insert into oauth_refresh_tokens (
   id,
