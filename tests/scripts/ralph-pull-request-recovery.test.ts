@@ -7,6 +7,7 @@ import {
   blockedRepairRecoveryReceipt,
   blockedRepairRecoveryReceiptMatches,
   canAdoptLegacyProtectedScopeRepair,
+  completedConflictRepairPatch,
   mergedPullRequestFromRecoverySnapshot,
   planPullRequestRecovery,
   pullRequestBaseUpdateDisposition,
@@ -14,6 +15,7 @@ import {
   pullRequestRecoveryErrorDisposition,
   pullRequestRecoveryFingerprint,
   reconcilePullRequestBacklog,
+  requiredCheckEvidence,
   staleBlockedRepairPreservationPatch,
 } from "../../scripts/ralph/pull-request-recovery.mjs";
 import {
@@ -39,6 +41,129 @@ const snapshot = (overrides = {}) => ({
 });
 
 describe("Ralph pull-request recovery planning", () => {
+  it("waits for explicitly required external evidence to appear and pass", () => {
+    expect(requiredCheckEvidence([], ["e2e-tests"])).toEqual({
+      ready: false,
+      missing: ["e2e-tests"],
+      notPassed: [],
+    });
+    expect(
+      requiredCheckEvidence(
+        [{ name: "e2e-tests", bucket: "pending" }],
+        ["e2e-tests"],
+      ),
+    ).toEqual({ ready: false, missing: [], notPassed: ["e2e-tests"] });
+    expect(
+      requiredCheckEvidence(
+        [{ name: "e2e-tests", bucket: "skipping" }],
+        ["e2e-tests"],
+      ),
+    ).toEqual({ ready: false, missing: [], notPassed: ["e2e-tests"] });
+    expect(
+      requiredCheckEvidence(
+        [{ name: "e2e-tests", bucket: "pass" }],
+        ["e2e-tests"],
+      ),
+    ).toEqual({ ready: true, missing: [], notPassed: [] });
+  });
+
+  it("handles every required E2E evidence state without hiding failures", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [],
+          checksAvailable: false,
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("wait");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [{ name: "e2e-tests", bucket: "pending", state: "IN_PROGRESS" }],
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("wait");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [
+            {
+              name: "e2e-tests",
+              bucket: "fail",
+              state: "FAILURE",
+              provider: "github-actions",
+              runId: "201",
+            },
+          ],
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("code-repair");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [
+            {
+              name: "e2e-tests",
+              bucket: "cancel",
+              state: "CANCELLED",
+              provider: "github-actions",
+              runId: "202",
+            },
+          ],
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("retry-checks");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [{ name: "e2e-tests", bucket: "skipping", state: "SKIPPED" }],
+          requiredCheckEvidenceReady: false,
+        }),
+      ),
+    ).toMatchObject({
+      action: "wait",
+      reason: "required external verification evidence has not passed",
+    });
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [
+            {
+              name: "quality",
+              bucket: "fail",
+              state: "FAILURE",
+              provider: "github-actions",
+              runId: "203",
+            },
+          ],
+          checksAvailable: true,
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("code-repair");
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          checks: [
+            {
+              name: "quality",
+              bucket: "cancel",
+              state: "CANCELLED",
+              provider: "github-actions",
+              runId: "204",
+            },
+          ],
+          checksAvailable: true,
+          requiredCheckEvidenceReady: false,
+        }),
+      ).action,
+    ).toBe("retry-checks");
+  });
+
   it("preserves the exact merged head for final checkout cleanup", () => {
     expect(
       mergedPullRequestFromRecoverySnapshot(
@@ -352,7 +477,7 @@ describe("Ralph pull-request recovery planning", () => {
     ).toBe("preserve-dirty-repair");
   });
 
-  it("human-gates a stale PR that conflicts with latest main", () => {
+  it("repairs a stale PR that conflicts with latest main", () => {
     expect(
       planPullRequestRecovery(
         snapshot({
@@ -362,9 +487,119 @@ describe("Ralph pull-request recovery planning", () => {
         }),
       ),
     ).toMatchObject({
-      action: "human-gate",
+      action: "resolve-conflict",
       reason: "pull request conflicts with the latest main branch",
+      latestMainSha: "main-2",
+      consumesCodingAttempt: true,
     });
+  });
+
+  it("converts a rejected durable base update into conflict repair", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          mergeStateStatus: "DIRTY",
+          latestMainSha: "main-3",
+          headContainsLatestMain: false,
+          pendingBaseUpdate: {
+            previousHead: "head-1",
+            baseSha: "main-2",
+            attempts: 3,
+            status: "requesting",
+          },
+        }),
+      ),
+    ).toMatchObject({
+      action: "resolve-conflict",
+      headSha: "head-1",
+      latestMainSha: "main-2",
+      consumesCodingAttempt: true,
+    });
+  });
+
+  it("human-gates merge conflicts only after bounded conflict repairs are exhausted", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          mergeStateStatus: "DIRTY",
+          latestMainSha: "main-2",
+          headContainsLatestMain: false,
+          conflictRepairAttempts: 5,
+          maximumRepairAttempts: 5,
+        }),
+      ),
+    ).toMatchObject({
+      action: "human-gate",
+      reason:
+        "pull request conflicts with the latest main branch; conflict repair exhausted its bounded retry budget",
+      consumesCodingAttempt: false,
+    });
+  });
+
+  it("resumes the exact durable conflict repair after a controller restart", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          mergeStateStatus: "DIRTY",
+          latestMainSha: "main-2",
+          headContainsLatestMain: false,
+          baseUpdateBlockedByDirtyWorktree: true,
+          pendingConflictRepair: {
+            previousHead: "head-1",
+            baseSha: "main-2",
+            attempt: 2,
+            status: "prepared",
+          },
+        }),
+      ),
+    ).toMatchObject({
+      action: "resolve-conflict",
+      headSha: "head-1",
+      latestMainSha: "main-2",
+      conflictRepairAttempt: 2,
+      consumesCodingAttempt: true,
+    });
+  });
+
+  it("finishes an exact conflict transaction even when main advances again", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          latestMainSha: "main-3",
+          pendingConflictRepair: {
+            previousHead: "head-1",
+            baseSha: "main-2",
+            attempt: 2,
+            status: "prepared",
+          },
+        }),
+      ),
+    ).toMatchObject({
+      action: "resolve-conflict",
+      latestMainSha: "main-2",
+      conflictRepairAttempt: 2,
+    });
+  });
+
+  it("reconciles an interrupted conflict push before inspecting its old head", () => {
+    expect(
+      planPullRequestRecovery(
+        snapshot({
+          headSha: "repaired-head",
+          expectedHeadSha: "head-1",
+          pendingPrRepair: {
+            previousCommit: "head-1",
+            commit: "repaired-head",
+          },
+          pendingConflictRepair: {
+            previousHead: "head-1",
+            baseSha: "main-2",
+            attempt: 2,
+            status: "verified",
+          },
+        }),
+      ).action,
+    ).toBe("reconcile-pending-repair");
   });
   it("waits for GitHub to observe an exact blocked-repair push", () => {
     expect(
@@ -396,6 +631,59 @@ describe("Ralph pull-request recovery planning", () => {
         failureKind: "protected-scope",
       }),
     ).toBe("preserve-blocked-repair");
+  });
+
+  it.each(["network", "rate-limit", "check-poll"])(
+    "stops without human-gating a durable recovery after exhausted %s retries",
+    (failureKind) => {
+      expect(
+        pullRequestRecoveryErrorDisposition({
+          action: "resolve-conflict",
+          stage: "pr-repairing",
+          failureKind,
+        }),
+      ).toBe("fatal");
+    },
+  );
+
+  it("atomically completes a conflict repair after an exact push", () => {
+    expect(
+      completedConflictRepairPatch(
+        {
+          baseSha: "main-2",
+          repairAttempts: 2,
+          preConflictRepairAttempts: 5,
+          pendingBaseUpdate: { baseSha: "main-2" },
+          pendingConflictRepair: {
+            previousHead: "head-1",
+            baseSha: "main-2",
+            attempt: 2,
+          },
+        },
+        "head-1",
+        "2026-07-29T12:00:00.000Z",
+      ),
+    ).toEqual({
+      pendingConflictRepair: null,
+      pendingBaseUpdate: null,
+      baseUpdateRequiresVerification: false,
+      conflictResolvedAt: "2026-07-29T12:00:00.000Z",
+      repairAttempts: 5,
+      preConflictRepairAttempts: null,
+    });
+    expect(
+      completedConflictRepairPatch(
+        {
+          baseSha: "main-2",
+          pendingConflictRepair: {
+            previousHead: "different-head",
+            baseSha: "main-2",
+          },
+        },
+        "head-1",
+        "2026-07-29T12:00:00.000Z",
+      ),
+    ).toEqual({});
   });
 
   it("adopts an exact blocked repair result left dirty by a controller crash", () => {
@@ -877,12 +1165,14 @@ describe("Ralph pull-request recovery planning", () => {
         snapshot({
           originalFailureKind: "worker-blocked",
           mergeStateStatus: "DIRTY",
+          latestMainSha: "main-2",
           checks: passingChecks,
         }),
       ),
     ).toMatchObject({
-      action: "human-gate",
-      reason: "pull request has merge conflicts",
+      action: "resolve-conflict",
+      latestMainSha: "main-2",
+      consumesCodingAttempt: true,
     });
   });
 

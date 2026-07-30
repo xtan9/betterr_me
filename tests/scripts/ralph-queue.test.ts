@@ -74,6 +74,28 @@ describe("Ralph queue selection", () => {
     );
   });
 
+  it("accepts only the explicit bounded trusted worker policy", () => {
+    const issue = {
+      issueNumber: 101,
+      blockers: [],
+      trustedWorkerPolicy: { newSupabaseMigrations: 1 },
+    };
+    expect(() => validateQueueState([issue], { completed: [] })).not.toThrow();
+    for (const trustedWorkerPolicy of [
+      { newSupabaseMigrations: 2 },
+      { newSupabaseMigrations: 1, workflows: true },
+      {},
+      "newSupabaseMigrations",
+    ]) {
+      expect(() =>
+        validateQueueState(
+          [{ ...issue, trustedWorkerPolicy }],
+          { completed: [] },
+        ),
+      ).toThrow("invalid trusted worker policy");
+    }
+  });
+
   it("selects the first incomplete issue whose blockers are complete", () => {
     expect(selectNextIssue(queue, { completed: [] })).toEqual(queue[0]);
     expect(selectNextIssue(queue, { completed: [101] })).toEqual(queue[1]);
