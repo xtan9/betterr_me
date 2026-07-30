@@ -31,6 +31,18 @@ export function validateQueueState(queue, state) {
     if (!Array.isArray(issue.blockers)) {
       throw new Error(`issue #${issue.issueNumber} must contain a blockers array`);
     }
+    if (issue.trustedWorkerPolicy !== undefined) {
+      const policy = issue.trustedWorkerPolicy;
+      if (
+        !policy ||
+        typeof policy !== "object" ||
+        Array.isArray(policy) ||
+        Object.keys(policy).length !== 1 ||
+        policy.newSupabaseMigrations !== 1
+      ) {
+        throw new Error(`issue #${issue.issueNumber} has an invalid trusted worker policy`);
+      }
+    }
   }
 
   for (const issue of queue) {
