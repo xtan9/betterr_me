@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Nightly full lint and unit suite before E2E and performance audits.
+    - cron: '0 5 * * *'
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
