@@ -167,6 +167,10 @@ jobs:
           -v ON_ERROR_STOP=1
           -f supabase/tests/finance_cushion_rls.sql
 
+      - name: Execute opted-in Ralph SQL fixtures
+        if: ${{ github.event_name == 'pull_request' }}
+        run: bash scripts/ci/run-ralph-sql-tests.sh
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
@@ -300,6 +304,9 @@ jobs:
           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
           -v ON_ERROR_STOP=1
           -f supabase/tests/finance_cushion_rls.sql
+
+      - name: Execute opted-in Ralph SQL fixtures
+        run: bash scripts/ci/run-ralph-sql-tests.sh
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

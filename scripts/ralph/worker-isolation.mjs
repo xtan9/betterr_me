@@ -1,13 +1,115 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export function workerCodexModelArguments({ readOnly }) {
+export function workerCodexModelArguments({
+  readOnly,
+  reviewKind = "exhaustive",
+}) {
+  const effort = readOnly
+    ? reviewKind === "delta"
+      ? "high"
+      : "xhigh"
+    : "high";
   return [
     "--model",
     "gpt-5.6-sol",
     "-c",
-    `model_reasoning_effort=${JSON.stringify(readOnly ? "high" : "medium")}`,
+    `model_reasoning_effort=${JSON.stringify(effort)}`,
   ];
+}
+
+function codexEventTypes(eventLog) {
+  return new Set(
+    String(eventLog ?? "")
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      if (!line.trim()) return [];
+      try {
+        const type = JSON.parse(line).type;
+        return typeof type === "string" ? [type] : [];
+      } catch {
+        return [];
+      }
+    }),
+  );
+}
+
+export function codexSessionStarted(eventLog) {
+  return codexEventTypes(eventLog).has("thread.started");
+}
+
+export function codexStartupEventsReady(eventLog) {
+  const types = codexEventTypes(eventLog);
+  return types.has("thread.started") && types.has("turn.started");
+}
+
+export function processExitCode({ code, successfulStop }) {
+  return successfulStop ? 0 : (code ?? -1);
+}
+
+export function isolatedCodexAuthInstallRequired({ runtimeExists, sourceIsNewer }) {
+  if (typeof runtimeExists !== "boolean" || typeof sourceIsNewer !== "boolean") {
+    throw new Error("isolated auth reconciliation evidence must be boolean");
+  }
+  return !runtimeExists || sourceIsNewer;
+}
+
+export function isolatedCodexRuntimeConfiguration({
+  workerHome,
+  codexHome,
+  sourceAuthPath,
+}) {
+  for (const [label, value] of [
+    ["worker home", workerHome],
+    ["Codex runtime", codexHome],
+    ["source auth path", sourceAuthPath],
+  ]) {
+    if (typeof value !== "string" || !path.posix.isAbsolute(value)) {
+      throw new Error(`isolated ${label} must be an absolute Linux path`);
+    }
+  }
+
+  const relativeRuntime = path.posix.relative(workerHome, codexHome);
+  if (
+    relativeRuntime === "" ||
+    (!relativeRuntime.startsWith("../") && relativeRuntime !== "..")
+  ) {
+    throw new Error(
+      "isolated Codex runtime must be outside the agent-readable worker home",
+    );
+  }
+
+  const authPath = path.posix.join(codexHome, "auth.json");
+  const configPath = path.posix.join(codexHome, "config.toml");
+  return {
+    environment: [`CODEX_HOME=${codexHome}`],
+    sourceAuthPath,
+    authPath,
+    configPath,
+    directoryProvisionCommand: [
+      "install",
+      "-d",
+      "-m",
+      "700",
+      "-o",
+      "65534",
+      "-g",
+      "65534",
+      codexHome,
+    ],
+    authInstallCommand: [
+      "install",
+      "-m",
+      "600",
+      "-o",
+      "65534",
+      "-g",
+      "65534",
+      sourceAuthPath,
+      authPath,
+    ],
+    configRemovalCommand: ["/bin/rm", "-f", configPath],
+  };
 }
 
 export function unprivilegedWslCommandArguments({
@@ -100,12 +202,14 @@ export function isolatedCodexReadablePaths({
   gitMetadataRoot,
   dependencyRoot,
   workerHome,
+  protectedPaths = [],
 }) {
   return [
     ...(readOnly ? [worktreePath] : []),
     ...(!readOnly && gitMetadataRoot ? [gitMetadataRoot] : []),
     dependencyRoot,
     workerHome,
+    ...protectedPaths,
   ];
 }
 

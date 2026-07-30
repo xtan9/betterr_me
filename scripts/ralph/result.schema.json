@@ -20,7 +20,14 @@
     },
     "blockerKind": {
       "type": "string",
-      "enum": ["none", "requirements", "infrastructure", "safety"]
+      "enum": [
+        "none",
+        "requirements",
+        "infrastructure",
+        "ticket-infrastructure",
+        "protected-scope",
+        "safety"
+      ]
     },
     "summary": {
       "type": "string"

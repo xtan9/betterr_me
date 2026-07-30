@@ -13,6 +13,11 @@ import {
 import { isGraduationEligible } from '@/lib/habits/graduation';
 import { log } from '@/lib/logger';
 
+export interface HabitsWithTodayStatusAcquisition {
+  habits: HabitWithTodayStatus[];
+  status: 'complete' | 'degraded';
+}
+
 export class HabitsDB {
   constructor(private supabase: SupabaseClient) {}
 
@@ -241,6 +246,21 @@ export class HabitsDB {
    * Used for dashboard view
    */
   async getHabitsWithTodayStatus(userId: string, date?: string): Promise<HabitWithTodayStatus[]> {
+    const acquisition = await this.getHabitsWithTodayStatusAcquisition(
+      userId,
+      date,
+    );
+    return acquisition.habits;
+  }
+
+  /**
+   * Get habits with today's completion status and expose whether optional
+   * history-based enrichment was available.
+   */
+  async getHabitsWithTodayStatusAcquisition(
+    userId: string,
+    date?: string,
+  ): Promise<HabitsWithTodayStatusAcquisition> {
     const today = date || getLocalDateString();
 
     // Get all habits (active, paused, formed) so the UI can filter by tab
@@ -270,6 +290,7 @@ export class HabitsDB {
 
     // Stryker disable next-line ArrayDeclaration: initial empty array is only observable when the try below throws before line 281; in the catch we leave windowLogs untouched and downstream .forEach iterates whatever is present. A non-empty default like ["Stryker was here"] yields a row whose .habit_id is undefined and .completed is undefined, so the filter/map/forEach logic produces the same output as []. Behaviorally equivalent.
     let windowLogs: Array<{ habit_id: string; logged_date: string; completed: boolean }> = [];
+    let status: HabitsWithTodayStatusAcquisition['status'] = 'complete';
     try {
       const { data, error } = await this.supabase
         .from('habit_logs')
@@ -282,6 +303,7 @@ export class HabitsDB {
       // Stryker disable next-line ArrayDeclaration: when data is null, fallback to ["Stryker was here"] gives a single string "row". Downstream forEach reads .habit_id and .logged_date on the string — both undefined — so the row is effectively ignored by monthlyCompletions and produces no useful logsByHabit entry (key `undefined`). Observable output (monthly rate, eligibility) is identical to [].
       windowLogs = data ?? [];
     } catch (err) {
+      status = 'degraded';
       log.warn(
         '[habits] 90-day logs query failed; monthly rate + nudges will be empty',
         { userId, error: String(err) },
@@ -354,7 +376,7 @@ export class HabitsDB {
     };
 
     // Add today status and monthly rate to each habit
-    return habits.map(habit => {
+    const habitsWithTodayStatus = habits.map(habit => {
       const scheduled = getScheduledDays(habit.frequency);
       const completed = monthlyCompletions.get(habit.id) || 0;
       const eligible = isGraduationEligible({
@@ -375,6 +397,8 @@ export class HabitsDB {
         graduation_eligible: eligible,
       };
     });
+
+    return { habits: habitsWithTodayStatus, status };
   }
 
   /**

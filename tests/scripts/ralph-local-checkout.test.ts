@@ -201,4 +201,40 @@ describe("Ralph local checkout lifecycle", () => {
       }),
     ).resolves.toEqual({ failureCommit, changedFiles: ["attempt.txt"] });
   });
+
+  it("reports both sides of a rename for protected-path validation", async () => {
+    const { worktreeRoot, git, checked } = createRepository();
+    const worktreePath = path.join(worktreeRoot, "current");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    const baseSha = checked(["rev-parse", "main"]);
+    checked([
+      "worktree",
+      "add",
+      "-b",
+      "codex/issue-102",
+      worktreePath,
+      "main",
+    ]);
+    checked(["-C", worktreePath, "mv", "README.md", "attempt.txt"]);
+    checked([
+      "-C",
+      worktreePath,
+      "commit",
+      "-m",
+      "wip: preserve failed issue #102",
+    ]);
+    const failureCommit = checked(["-C", worktreePath, "rev-parse", "HEAD"]);
+
+    await expect(
+      recoverPreservationCommit({
+        worktreePath,
+        baseSha,
+        expectedSubject: "wip: preserve failed issue #102",
+        git,
+      }),
+    ).resolves.toEqual({
+      failureCommit,
+      changedFiles: ["README.md", "attempt.txt"],
+    });
+  });
 });
