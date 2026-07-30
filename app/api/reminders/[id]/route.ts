@@ -4,6 +4,17 @@ import { RemindersDB } from "@/lib/db";
 import { reminderUpdateSchema } from "@/lib/validations/reminders";
 import { validateRequestBody } from "@/lib/validations/api";
 import { log } from "@/lib/logger";
+import {
+  CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR,
+  isCalendarEventReminder,
+} from "@/lib/reminders/lifecycle-policy";
+
+function lifecycleConflict() {
+  return NextResponse.json(
+    { error: CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR },
+    { status: 409 },
+  );
+}
 
 /**
  * PATCH /api/reminders/[id]
@@ -29,6 +40,48 @@ export async function PATCH(
     if (!validation.success) return validation.response;
 
     const remindersDB = new RemindersDB(supabase);
+    const existing = await remindersDB.getReminder(user.id, id);
+    if (!existing) {
+      return NextResponse.json({ error: "Reminder not found" }, { status: 404 });
+    }
+    if (isCalendarEventReminder(existing.source_type)) {
+      const update = validation.data;
+      const keys = Object.keys(update);
+      if (
+        (update.status === "pending" || update.status === "snoozed") &&
+        update.sent_at !== undefined &&
+        update.sent_at !== null
+      ) {
+        return NextResponse.json(
+          { error: "A snoozed reminder cannot set sent_at" },
+          { status: 400 },
+        );
+      }
+      const isTerminalTransition =
+        (update.status === "sent" || update.status === "failed") &&
+        keys.every((key) => ["status", "sent_at"].includes(key));
+      const isSnoozeTransition =
+        update.status === "pending" &&
+        typeof update.fire_at === "string" &&
+        keys.every((key) => ["status", "fire_at", "sent_at"].includes(key));
+      const isLegacySnoozeTransition =
+        update.status === "snoozed" &&
+        keys.every((key) => ["status", "sent_at"].includes(key));
+      if (!isTerminalTransition && !isSnoozeTransition && !isLegacySnoozeTransition) {
+        return lifecycleConflict();
+      }
+      const reminder = await remindersDB.transitionCalendarEventReminder(
+        user.id,
+        id,
+        isSnoozeTransition
+          ? { status: "pending", fire_at: update.fire_at, sent_at: update.sent_at }
+          : {
+              status: update.status as "sent" | "failed" | "snoozed",
+              sent_at: update.sent_at,
+            },
+      );
+      return NextResponse.json({ reminder });
+    }
     const reminder = await remindersDB.updateReminder(
       user.id,
       id,
@@ -65,6 +118,13 @@ export async function DELETE(
     }
 
     const remindersDB = new RemindersDB(supabase);
+    const existing = await remindersDB.getReminder(user.id, id);
+    if (!existing) {
+      return NextResponse.json({ error: "Reminder not found" }, { status: 404 });
+    }
+    if (isCalendarEventReminder(existing.source_type)) {
+      return lifecycleConflict();
+    }
     await remindersDB.deleteReminder(user.id, id);
 
     return NextResponse.json({ success: true });

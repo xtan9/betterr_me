@@ -674,12 +674,16 @@ export function highestLeverageActions(
   );
   const target =
     simulation.months_covered !== null && simulation.months_covered < 3 ? 3 : 6;
+  const firstMonth = simulation.months[0];
+  const effectiveResources = firstMonth
+    ? firstMonth.opening_balance_cents + firstMonth.one_time_funds_cents
+    : simulation.starting_resources_cents;
   return {
     largestReducibleCategory: largest?.reducible > 0 ? largest : null,
     targetMonths: target,
     cashGapCents: Math.max(
       0,
-      monthlyBurn * target - simulation.starting_resources_cents,
+      monthlyBurn * target - effectiveResources,
     ),
   };
 }

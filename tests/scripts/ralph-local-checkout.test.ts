@@ -123,6 +123,125 @@ describe("Ralph local checkout lifecycle", () => {
     ).resolves.toEqual({ worktreeRemoved: false, branchDeleted: false });
   });
 
+  it("recovers cleanup when persisted state lost the active worktree path", async () => {
+    const { repositoryRoot, worktreeRoot, git, checked } = createRepository();
+    const worktreePath = path.join(worktreeRoot, "current");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    checked([
+      "worktree",
+      "add",
+      "-b",
+      "codex/issue-101",
+      worktreePath,
+      "main",
+    ]);
+    const head = checked(["-C", worktreePath, "rev-parse", "HEAD"]);
+
+    await cleanupIssueCheckout({
+      repositoryRoot,
+      worktreeRoot,
+      issueNumber: 101,
+      issueState: {
+        branch: "codex/issue-101",
+        worktreePath: null,
+        commit: "persisted-stale-commit",
+      },
+      recoveryWorktreePath: worktreePath,
+      expectedRecoveryHead: head,
+      git,
+    });
+
+    expect(fs.existsSync(worktreePath)).toBe(false);
+    expect(
+      spawnSync(
+        gitCommand,
+        ["show-ref", "--verify", "--quiet", "refs/heads/codex/issue-101"],
+        { cwd: repositoryRoot },
+      ).status,
+    ).toBe(1);
+  });
+
+  it("refuses recovered cleanup when the active HEAD is not the merged PR head", async () => {
+    const { repositoryRoot, worktreeRoot, git, checked } = createRepository();
+    const worktreePath = path.join(worktreeRoot, "current");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    checked([
+      "worktree",
+      "add",
+      "-b",
+      "codex/issue-101",
+      worktreePath,
+      "main",
+    ]);
+
+    await expect(
+      cleanupIssueCheckout({
+        repositoryRoot,
+        worktreeRoot,
+        issueNumber: 101,
+        issueState: {
+          branch: "codex/issue-101",
+          worktreePath: null,
+          commit: "persisted-stale-commit",
+        },
+        recoveryWorktreePath: worktreePath,
+        expectedRecoveryHead: "different-merged-pr-head",
+        git,
+      }),
+    ).rejects.toThrow(`refusing to remove ${worktreePath}; HEAD changed`);
+
+    expect(fs.existsSync(worktreePath)).toBe(true);
+    expect(
+      spawnSync(
+        gitCommand,
+        ["show-ref", "--verify", "--quiet", "refs/heads/codex/issue-101"],
+        { cwd: repositoryRoot },
+      ).status,
+    ).toBe(0);
+  });
+
+  it("refuses recovered cleanup when the active worktree is on another branch", async () => {
+    const { repositoryRoot, worktreeRoot, git, checked } = createRepository();
+    const worktreePath = path.join(worktreeRoot, "current");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    checked(["branch", "codex/issue-101", "main"]);
+    checked([
+      "worktree",
+      "add",
+      "-b",
+      "codex/issue-102",
+      worktreePath,
+      "main",
+    ]);
+    const head = checked(["-C", worktreePath, "rev-parse", "HEAD"]);
+
+    await expect(
+      cleanupIssueCheckout({
+        repositoryRoot,
+        worktreeRoot,
+        issueNumber: 101,
+        issueState: {
+          branch: "codex/issue-101",
+          worktreePath: null,
+        },
+        recoveryWorktreePath: worktreePath,
+        expectedRecoveryHead: head,
+        git,
+      }),
+    ).rejects.toThrow(
+      `refusing recovered cleanup for ${worktreePath}; it is on codex/issue-102`,
+    );
+
+    expect(fs.existsSync(worktreePath)).toBe(true);
+    expect(
+      spawnSync(
+        gitCommand,
+        ["show-ref", "--verify", "--quiet", "refs/heads/codex/issue-101"],
+        { cwd: repositoryRoot },
+      ).status,
+    ).toBe(0);
+  });
+
   it("moves an uncommitted failed attempt out of the reusable worker slot", async () => {
     const { repositoryRoot, worktreeRoot, git, checked } = createRepository();
     const worktreePath = path.join(worktreeRoot, "current");
@@ -200,5 +319,41 @@ describe("Ralph local checkout lifecycle", () => {
         git,
       }),
     ).resolves.toEqual({ failureCommit, changedFiles: ["attempt.txt"] });
+  });
+
+  it("reports both sides of a rename for protected-path validation", async () => {
+    const { worktreeRoot, git, checked } = createRepository();
+    const worktreePath = path.join(worktreeRoot, "current");
+    fs.mkdirSync(worktreeRoot, { recursive: true });
+    const baseSha = checked(["rev-parse", "main"]);
+    checked([
+      "worktree",
+      "add",
+      "-b",
+      "codex/issue-102",
+      worktreePath,
+      "main",
+    ]);
+    checked(["-C", worktreePath, "mv", "README.md", "attempt.txt"]);
+    checked([
+      "-C",
+      worktreePath,
+      "commit",
+      "-m",
+      "wip: preserve failed issue #102",
+    ]);
+    const failureCommit = checked(["-C", worktreePath, "rev-parse", "HEAD"]);
+
+    await expect(
+      recoverPreservationCommit({
+        worktreePath,
+        baseSha,
+        expectedSubject: "wip: preserve failed issue #102",
+        git,
+      }),
+    ).resolves.toEqual({
+      failureCommit,
+      changedFiles: ["README.md", "attempt.txt"],
+    });
   });
 });

@@ -34,3 +34,8 @@ begin
   end loop;
 end
 $$;
+
+-- Keep the refresh-token database lifecycle gate attached to both disposable
+-- Supabase workflow paths that execute this fixture.
+\ir oauth_refresh_token_upgrade.sql
+\ir oauth_refresh_token_lifecycle.sql

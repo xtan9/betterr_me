@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth/api-key';
-import { TasksDB } from '@/lib/db';
 import { log } from '@/lib/logger';
+import { createTaskWrites } from '@/lib/tasks/writes';
 
 /**
  * POST /api/tasks/[id]/toggle
@@ -19,9 +19,12 @@ export async function POST(
     }
     const { userId, supabase } = auth;
 
-    const tasksDB = new TasksDB(supabase);
-    const task = await tasksDB.toggleTaskCompletion(id, userId);
-    return NextResponse.json({ task });
+    const outcome = await createTaskWrites(supabase).execute({
+      type: 'toggle-completion',
+      taskId: id,
+      userId,
+    });
+    return NextResponse.json({ task: outcome.task });
   } catch (error: unknown) {
     log.error('PATCH /api/tasks/[id]/toggle error', error);
 
