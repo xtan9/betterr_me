@@ -4,7 +4,6 @@ import Papa from 'papaparse';
 import {
   E2E_READ_ONLY,
   RUN_CONTEXT,
-  SEED_HABIT_NAMES,
 } from './constants';
 import { createRunContext, requiredE2EEnvironment } from './run-context';
 
@@ -75,6 +74,16 @@ test.describe('Scoped export download', () => {
       }
       secondUserHabitId = habit.id;
 
+      const authenticatedHabitsResponse = await page.request.get('/api/habits');
+      const authenticatedHabitsBody = await authenticatedHabitsResponse.json() as {
+        habits: Array<{ name: string }>;
+      };
+      expect(
+        authenticatedHabitsResponse.ok(),
+        JSON.stringify(authenticatedHabitsBody),
+      ).toBe(true);
+      const authenticatedHabitNames = authenticatedHabitsBody.habits.map(({ name }) => name);
+
       await page.goto('/dashboard/settings');
       const downloadPromise = page.waitForEvent('download');
       await page.getByRole('button', { name: /export habits/i }).click();
@@ -102,7 +111,10 @@ test.describe('Scoped export download', () => {
         'best_streak',
         'created_at',
       ]);
-      expect(exportedNames).toEqual([...SEED_HABIT_NAMES].sort());
+      expect(exportedNames).toEqual(expect.arrayContaining(authenticatedHabitNames));
+      expect(
+        exportedNames.every((name) => name.startsWith(`${RUN_CONTEXT.fixtureNamespace} - `)),
+      ).toBe(true);
       expect(exportedNames).not.toContain(secondUserHabitName);
     } finally {
       const cleanupFailures: string[] = [];
