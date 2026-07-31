@@ -1,0 +1,54 @@
+[
+  {
+    "path": "calendar_event_reminder_lifecycle.sql",
+    "domain": "calendar",
+    "role": "admin",
+    "cleanup": "transactional",
+    "adminReason": "creates disposable auth identities before asserting application-role behavior"
+  },
+  {
+    "path": "calendar_event_reminder_update_lifecycle.sql",
+    "domain": "calendar",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
+    "path": "control_plane_authorization.sql",
+    "domain": "control-plane",
+    "role": "admin",
+    "cleanup": "transactional",
+    "adminReason": "seeds control-plane membership and disposable auth identities for role assertions"
+  },
+  {
+    "path": "finance_cushion_rls.sql",
+    "domain": "finance",
+    "role": "admin",
+    "cleanup": "transactional",
+    "adminReason": "creates disposable auth identities before switching to application roles for RLS assertions"
+  },
+  {
+    "path": "oauth_refresh_token_upgrade.sql",
+    "domain": "oauth",
+    "role": "admin",
+    "cleanup": "transactional",
+    "adminReason": "temporarily reapplies a production migration to a downgraded disposable schema"
+  },
+  {
+    "path": "oauth_refresh_token_lifecycle.sql",
+    "domain": "oauth",
+    "role": "admin",
+    "cleanup": "self-cleaning",
+    "adminReason": "opens independent sessions and manages disposable auth rows for concurrency assertions"
+  },
+  {
+    "path": "ralph_ci_runner_security.sql",
+    "domain": "runner",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
+    "path": "e2e_local_authenticated_grants.sql",
+    "kind": "support",
+    "reason": "prepares disposable browser-test grants and is not an acceptance fixture"
+  }
+]

@@ -89,16 +89,23 @@ jobs:
           -v ON_ERROR_STOP=1
           -f supabase/tests/e2e_local_authenticated_grants.sql
 
-      - name: Execute two-user finance cushion RLS fixture
+      - name: Execute registered SQL acceptance fixtures
         if: ${{ github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
-        run: >-
-          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
-          -v ON_ERROR_STOP=1
-          -f supabase/tests/finance_cushion_rls.sql
+        run: bash scripts/ci/run-sql-fixtures.sh
 
-      - name: Execute opted-in Ralph SQL fixtures
+      - name: Verify SQL fixture runner failure diagnostics
         if: ${{ github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
-        run: bash scripts/ci/run-ralph-sql-tests.sh
+        run: bash scripts/ci/verify-sql-fixture-runner.sh
+
+      - name: Upload SQL fixture diagnostics
+        if: ${{ failure() && github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sql-fixture-failure-${{ github.run_id }}
+          path: ${{ runner.temp }}/sql-fixtures/
+          if-no-files-found: warn
+          retention-days: 3
+          compression-level: 9
 
       - name: Setup Node.js, pnpm, and dependencies
         uses: ./.github/actions/setup-node-pnpm

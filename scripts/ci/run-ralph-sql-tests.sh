@@ -4,31 +4,63 @@ set -euo pipefail
 database_url="${RALPH_SQL_TEST_DATABASE_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
 auth_admin_database_url="${RALPH_SQL_TEST_AUTH_ADMIN_DATABASE_URL:-postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres}"
 list_only=false
-if [[ "${1:-}" == "--list" ]]; then
-  list_only=true
-elif [[ -n "${1:-}" ]]; then
-  echo "usage: $0 [--list]" >&2
-  exit 2
-fi
+bootstrap_only=false
+skip_bootstrap=false
+requested_fixtures=()
+while (( $# > 0 )); do
+  case "$1" in
+    --list)
+      list_only=true
+      shift
+      ;;
+    --bootstrap-only)
+      bootstrap_only=true
+      shift
+      ;;
+    --skip-bootstrap)
+      skip_bootstrap=true
+      shift
+      ;;
+    --fixture)
+      if [[ -z "${2:-}" ]]; then
+        echo "--fixture requires a path" >&2
+        exit 2
+      fi
+      requested_fixtures+=("$2")
+      shift 2
+      ;;
+    *)
+      echo "usage: $0 [--list] [--bootstrap-only|--skip-bootstrap] [--fixture path ...]" >&2
+      exit 2
+      ;;
+  esac
+done
 
 mapfile -d '' fixtures < <(
   find supabase/tests -maxdepth 1 -type f -name '*.sql' -print0 | sort -z
 )
 
 selected=()
-for fixture in "${fixtures[@]}"; do
-  if head -n 12 "$fixture" | grep -Fqx -- '-- ralph-ci: true'; then
+if (( ${#requested_fixtures[@]} > 0 )); then
+  for fixture in "${requested_fixtures[@]}"; do
     node scripts/ci/ralph-sql-policy.mjs --validate "$fixture"
     selected+=("$fixture")
-  fi
-done
+  done
+else
+  for fixture in "${fixtures[@]}"; do
+    if head -n 12 "$fixture" | grep -Fqx -- '-- ralph-ci: true'; then
+      node scripts/ci/ralph-sql-policy.mjs --validate "$fixture"
+      selected+=("$fixture")
+    fi
+  done
+fi
 
 if $list_only; then
   printf '%s\n' "${selected[@]}"
   exit 0
 fi
 
-if (( ${#selected[@]} == 0 )); then
+if (( ${#selected[@]} == 0 )) && ! $bootstrap_only; then
   echo "No Ralph SQL fixtures opted into disposable-database CI."
   exit 0
 fi
@@ -39,6 +71,7 @@ trap 'rm -rf -- "$safe_home"' EXIT
 runner_password='ralph-ci-disposable-only'
 runner_database_url="postgresql://ralph_ci_test:${runner_password}@127.0.0.1:54322/postgres"
 
+if ! $skip_bootstrap; then
 env -i PATH="$safe_path" HOME="$safe_home" LANG=C psql "$database_url" \
   -v ON_ERROR_STOP=1 \
   -v runner_password="$runner_password" <<'SQL'
@@ -298,6 +331,11 @@ $function$;
 revoke all on function public.ralph_ci_open_connection(text) from public;
 grant execute on function public.ralph_ci_open_connection(text) to ralph_ci_test;
 SQL
+fi
+
+if $bootstrap_only; then
+  exit 0
+fi
 
 for fixture in "${selected[@]}"; do
   echo "Running Ralph SQL fixture: $fixture"
