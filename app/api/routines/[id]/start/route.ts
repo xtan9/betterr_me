@@ -44,15 +44,7 @@ export async function POST(
     const conversion = new RoutineToWorkoutConversion(
       new SupabaseRoutineWorkoutStore(supabase),
     );
-    let workout;
-    try {
-      workout = await conversion.start(user.id, routine);
-    } catch (err) {
-      if (err instanceof Error && err.message === "You already have an active workout") {
-        return NextResponse.json({ error: err.message }, { status: 409 });
-      }
-      throw err;
-    }
+    const workout = await conversion.start(user.id, routine);
 
     // 3. Update routine's last_performed_at (best-effort, do not fail the request)
     try {

@@ -52,6 +52,10 @@ export class UnsupportedRoutineDataError extends Error {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 /**
  * Converts a routine template into one complete workout session.
  *
@@ -65,6 +69,12 @@ export class RoutineToWorkoutConversion {
     userId: string,
     routine: RoutineWithExercises,
   ): Promise<WorkoutWithExercises> {
+    if (!isRecord(routine) || !Array.isArray(routine.exercises)) {
+      throw new UnsupportedRoutineDataError(
+        "Routine contains unsupported source data",
+      );
+    }
+
     const routineValidation = routineCreateSchema.safeParse({
       name: routine.name,
       notes: routine.notes,
@@ -75,7 +85,20 @@ export class RoutineToWorkoutConversion {
       );
     }
 
-    const exercises = [...routine.exercises]
+    const routineExercises = routine.exercises.map((routineExercise) => {
+      if (
+        !isRecord(routineExercise) ||
+        !isRecord(routineExercise.exercise) ||
+        typeof routineExercise.exercise.exercise_type !== "string"
+      ) {
+        throw new UnsupportedRoutineDataError(
+          "Routine exercise contains unsupported source data",
+        );
+      }
+      return routineExercise;
+    });
+
+    const exercises = [...routineExercises]
       .sort((left, right) => left.sort_order - right.sort_order)
       .map((routineExercise): ConvertedRoutineExercise => {
         if (

@@ -244,6 +244,58 @@ describe("RoutineToWorkoutConversion.start", () => {
     await expect(store.activeWorkout()).resolves.toBeNull();
   });
 
+  it("returns the defined failure for a malformed exercise collection", async () => {
+    const store = new InMemoryRoutineWorkoutStore();
+    const routine = routineWith([]);
+    (routine as { exercises: unknown }).exercises = null;
+
+    await expect(
+      new RoutineToWorkoutConversion(store).start("user-1", routine),
+    ).rejects.toEqual(
+      new UnsupportedRoutineDataError(
+        "Routine contains unsupported source data",
+      ),
+    );
+    await expect(store.activeWorkout()).resolves.toBeNull();
+  });
+
+  it("returns the defined failure for a malformed exercise entry", async () => {
+    const store = new InMemoryRoutineWorkoutStore();
+    const routine = routineWith([]);
+    routine.exercises = [null as never];
+
+    await expect(
+      new RoutineToWorkoutConversion(store).start("user-1", routine),
+    ).rejects.toEqual(
+      new UnsupportedRoutineDataError(
+        "Routine exercise contains unsupported source data",
+      ),
+    );
+    await expect(store.activeWorkout()).resolves.toBeNull();
+  });
+
+  it("returns the defined failure for missing nested exercise data", async () => {
+    const store = new InMemoryRoutineWorkoutStore();
+    const routine = routineWith([
+      routineExercise({
+        id: "routine-exercise-1",
+        exercise_id: BENCH_PRESS_ID,
+        exercise_type: "weight_reps",
+        sort_order: 10,
+      }),
+    ]);
+    routine.exercises[0].exercise = null as never;
+
+    await expect(
+      new RoutineToWorkoutConversion(store).start("user-1", routine),
+    ).rejects.toEqual(
+      new UnsupportedRoutineDataError(
+        "Routine exercise contains unsupported source data",
+      ),
+    );
+    await expect(store.activeWorkout()).resolves.toBeNull();
+  });
+
   it("rejects an invalid target set count before creating workout state", async () => {
     const store = new InMemoryRoutineWorkoutStore();
     const routine = routineWith([

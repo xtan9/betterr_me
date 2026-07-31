@@ -3,31 +3,9 @@
 -- The transaction rolls back all synthetic identities and workout data.
 begin;
 
-insert into auth.users (
-  id,
-  instance_id,
-  aud,
-  role,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  created_at,
-  updated_at
-)
-values (
+select public.ralph_ci_create_auth_user(
   '48500000-0000-4000-8000-000000000001',
-  '00000000-0000-0000-0000-000000000000',
-  'authenticated',
-  'authenticated',
-  'routine-workout@example.test',
-  crypt('not-used', gen_salt('bf')),
-  now(),
-  '{}'::jsonb,
-  '{}'::jsonb,
-  now(),
-  now()
+  'routine-workout@example.test'
 );
 
 insert into public.exercises (
@@ -85,26 +63,6 @@ begin
     '[
       {
         "exercise": {
-          "exercise_id": "48500000-0000-4000-8000-000000000003",
-          "sort_order": 20,
-          "notes": "Hold steady",
-          "rest_timer_seconds": 45
-        },
-        "sets": [
-          {
-            "set_number": 1,
-            "set_type": "normal",
-            "weight_kg": null,
-            "reps": null,
-            "duration_seconds": 60,
-            "distance_meters": null,
-            "is_completed": false,
-            "rpe": null
-          }
-        ]
-      },
-      {
-        "exercise": {
           "exercise_id": "48500000-0000-4000-8000-000000000002",
           "sort_order": 10,
           "notes": "Pause at the bottom",
@@ -132,6 +90,26 @@ begin
             "rpe": null
           }
         ]
+      },
+      {
+        "exercise": {
+          "exercise_id": "48500000-0000-4000-8000-000000000003",
+          "sort_order": 10,
+          "notes": "Hold steady",
+          "rest_timer_seconds": 45
+        },
+        "sets": [
+          {
+            "set_number": 1,
+            "set_type": "normal",
+            "weight_kg": null,
+            "reps": null,
+            "duration_seconds": 60,
+            "distance_meters": null,
+            "is_completed": false,
+            "rpe": null
+          }
+        ]
       }
     ]'::jsonb
   );
@@ -151,7 +129,7 @@ begin
     or (outcome->'exercises'->0->'sets'->1->>'set_number')::integer <> 2
     or outcome->'exercises'->1->>'exercise_id'
       <> '48500000-0000-4000-8000-000000000003'
-    or (outcome->'exercises'->1->>'sort_order')::double precision <> 20
+    or (outcome->'exercises'->1->>'sort_order')::double precision <> 10
     or jsonb_array_length(outcome->'exercises'->1->'sets') <> 1
     or (outcome->'exercises'->1->'sets'->0->>'duration_seconds')::integer <> 60
   then

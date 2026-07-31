@@ -16,6 +16,7 @@ DECLARE
   created_workout_exercise public.workout_exercises;
   requested_exercise JSONB;
   requested_set JSONB;
+  complete_exercises JSONB := '[]'::JSONB;
   complete_workout JSONB;
 BEGIN
   IF auth.uid() IS DISTINCT FROM p_user_id THEN
@@ -83,46 +84,35 @@ BEGIN
         (requested_set->>'rpe')::SMALLINT
       );
     END LOOP;
+
+    complete_exercises := complete_exercises || jsonb_build_array(
+      to_jsonb(created_workout_exercise)
+      || jsonb_build_object(
+        'exercise',
+        (
+          SELECT to_jsonb(exercise_row)
+          FROM public.exercises AS exercise_row
+          WHERE exercise_row.id = created_workout_exercise.exercise_id
+        ),
+        'sets',
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              to_jsonb(workout_set_row)
+              ORDER BY workout_set_row.set_number
+            )
+            FROM public.workout_sets AS workout_set_row
+            WHERE workout_set_row.workout_exercise_id =
+              created_workout_exercise.id
+          ),
+          '[]'::JSONB
+        )
+      )
+    );
   END LOOP;
 
-  SELECT
-    to_jsonb(workout_row)
-    || jsonb_build_object(
-      'exercises',
-      COALESCE(
-        (
-          SELECT jsonb_agg(
-            to_jsonb(workout_exercise_row)
-            || jsonb_build_object(
-              'exercise',
-              to_jsonb(exercise_row),
-              'sets',
-              COALESCE(
-                (
-                  SELECT jsonb_agg(
-                    to_jsonb(workout_set_row)
-                    ORDER BY workout_set_row.set_number
-                  )
-                  FROM public.workout_sets AS workout_set_row
-                  WHERE workout_set_row.workout_exercise_id =
-                    workout_exercise_row.id
-                ),
-                '[]'::JSONB
-              )
-            )
-            ORDER BY workout_exercise_row.sort_order
-          )
-          FROM public.workout_exercises AS workout_exercise_row
-          JOIN public.exercises AS exercise_row
-            ON exercise_row.id = workout_exercise_row.exercise_id
-          WHERE workout_exercise_row.workout_id = workout_row.id
-        ),
-        '[]'::JSONB
-      )
-    )
-  INTO complete_workout
-  FROM public.workouts AS workout_row
-  WHERE workout_row.id = created_workout.id;
+  complete_workout := to_jsonb(created_workout)
+    || jsonb_build_object('exercises', complete_exercises);
 
   RETURN complete_workout;
 END;
