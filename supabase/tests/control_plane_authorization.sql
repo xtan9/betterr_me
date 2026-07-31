@@ -8,6 +8,46 @@ from control_plane.audit_events_id_seq
 
 begin;
 
+-- Keep the assertion outside the exception handler. If the statement succeeds,
+-- the assertion's own P0001 must propagate instead of being mistaken for the
+-- database outcome under test.
+create function pg_temp.expect_sqlstate(statement text, expected_state text, failure_message text)
+returns void
+language plpgsql
+as $$
+declare
+  actual_state text;
+begin
+  begin
+    execute statement;
+  exception when others then
+    get stacked diagnostics actual_state = returned_sqlstate;
+    if actual_state = expected_state then
+      return;
+    end if;
+    raise exception '%: expected SQLSTATE %, got %', failure_message, expected_state, actual_state;
+  end;
+  raise exception '%: expected SQLSTATE %, but statement succeeded', failure_message, expected_state;
+end;
+$$;
+
+-- Regression guard: a successful operation must surface the helper's assertion
+-- rather than let the helper catch its own exception and report a false pass.
+do $$
+declare
+  caught_message text;
+begin
+  begin
+    perform pg_temp.expect_sqlstate('select 1', '42501', 'regression guard');
+  exception when raise_exception then
+    caught_message := sqlerrm;
+  end;
+  if caught_message is distinct from 'regression guard: expected SQLSTATE 42501, but statement succeeded' then
+    raise exception 'expected-sqlstate regression guard failed: %', coalesce(caught_message, 'no exception');
+  end if;
+end;
+$$;
+
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'cp-manager@example.test', crypt('not-used', gen_salt('bf')), now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
@@ -98,31 +138,31 @@ end $$;
 
 -- Unauthenticated and ordinary customers are denied every public RPC and all direct CRUD.
 select set_config('request.jwt.claim.sub', '', true);
-do $$ begin perform public.control_plane_list_members(); raise exception 'unauthenticated list members allowed'; exception when insufficient_privilege then null; end $$;
-do $$ begin perform public.control_plane_list_work_items(); raise exception 'unauthenticated list work allowed'; exception when insufficient_privilege then null; end $$;
-do $$ begin perform public.control_plane_create_work_item('no'); raise exception 'unauthenticated create allowed'; exception when insufficient_privilege then null; end $$;
-do $$ begin perform public.control_plane_assign_work_item(gen_random_uuid()); raise exception 'unauthenticated assign allowed'; exception when insufficient_privilege then null; end $$;
-do $$ begin perform public.control_plane_transition_work_item(gen_random_uuid(), 'active_sprint'); raise exception 'unauthenticated transition allowed'; exception when insufficient_privilege then null; end $$;
+select pg_temp.expect_sqlstate('select public.control_plane_list_members()', '42501', 'unauthenticated list members allowed');
+select pg_temp.expect_sqlstate('select public.control_plane_list_work_items()', '42501', 'unauthenticated list work allowed');
+select pg_temp.expect_sqlstate($sql$select public.control_plane_create_work_item('no')$sql$, '42501', 'unauthenticated create allowed');
+select pg_temp.expect_sqlstate('select public.control_plane_assign_work_item(gen_random_uuid())', '42501', 'unauthenticated assign allowed');
+select pg_temp.expect_sqlstate($sql$select public.control_plane_transition_work_item(gen_random_uuid(), 'active_sprint')$sql$, '42501', 'unauthenticated transition allowed');
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
-do $$ begin perform public.control_plane_list_members(); raise exception 'customer list members allowed'; exception when insufficient_privilege then null; end $$;
-do $$ begin perform public.control_plane_list_work_items(); raise exception 'customer list work allowed'; exception when insufficient_privilege then null; end $$;
-do $$ begin perform public.control_plane_create_work_item('no'); raise exception 'customer create allowed'; exception when insufficient_privilege then null; end $$;
-do $$ begin perform public.control_plane_assign_work_item(gen_random_uuid()); raise exception 'customer assign allowed'; exception when insufficient_privilege then null; end $$;
-do $$ begin perform public.control_plane_transition_work_item(gen_random_uuid(), 'active_sprint'); raise exception 'customer transition allowed'; exception when insufficient_privilege then null; end $$;
+select pg_temp.expect_sqlstate('select public.control_plane_list_members()', '42501', 'customer list members allowed');
+select pg_temp.expect_sqlstate('select public.control_plane_list_work_items()', '42501', 'customer list work allowed');
+select pg_temp.expect_sqlstate($sql$select public.control_plane_create_work_item('no')$sql$, '42501', 'customer create allowed');
+select pg_temp.expect_sqlstate('select public.control_plane_assign_work_item(gen_random_uuid())', '42501', 'customer assign allowed');
+select pg_temp.expect_sqlstate($sql$select public.control_plane_transition_work_item(gen_random_uuid(), 'active_sprint')$sql$, '42501', 'customer transition allowed');
 do $$ declare t text; begin foreach t in array array['members','work_items','work_item_blockers','work_item_evidence','audit_events'] loop
-  begin execute format('select * from control_plane.%I', t); raise exception 'direct select allowed on %', t; exception when insufficient_privilege then null; end;
-  begin execute format('insert into control_plane.%I default values', t); raise exception 'direct insert allowed on %', t; exception when insufficient_privilege then null; end;
-  begin execute format('update control_plane.%I set created_at = created_at', t); raise exception 'direct update allowed on %', t; exception when insufficient_privilege then null; end;
-  begin execute format('delete from control_plane.%I', t); raise exception 'direct delete allowed on %', t; exception when insufficient_privilege then null; end;
+  perform pg_temp.expect_sqlstate(format('select * from control_plane.%I', t), '42501', format('direct select allowed on %s', t));
+  perform pg_temp.expect_sqlstate(format('insert into control_plane.%I default values', t), '42501', format('direct insert allowed on %s', t));
+  perform pg_temp.expect_sqlstate(format('update control_plane.%I set created_at = created_at', t), '42501', format('direct update allowed on %s', t));
+  perform pg_temp.expect_sqlstate(format('delete from control_plane.%I', t), '42501', format('direct delete allowed on %s', t));
 end loop; end $$;
 
 -- Agents/reviewers may read through the public RPC but cannot execute any manager mutation.
 do $$ declare actor uuid; label text; target uuid := gen_random_uuid(); begin
   foreach actor in array array['10000000-0000-0000-0000-000000000002'::uuid, '10000000-0000-0000-0000-000000000003'::uuid] loop
     perform set_config('request.jwt.claim.sub', actor::text, true); perform public.control_plane_list_work_items();
-    begin perform public.control_plane_create_work_item('no'); raise exception 'non-manager create allowed'; exception when insufficient_privilege then null; end;
-    begin perform public.control_plane_assign_work_item(target, actor); raise exception 'non-manager assign allowed'; exception when insufficient_privilege then null; end;
-    begin perform public.control_plane_transition_work_item(target, 'active_sprint'); raise exception 'non-manager transition allowed'; exception when insufficient_privilege then null; end;
+    perform pg_temp.expect_sqlstate($sql$select public.control_plane_create_work_item('no')$sql$, '42501', 'non-manager create allowed');
+    perform pg_temp.expect_sqlstate(format('select public.control_plane_assign_work_item(%L, %L)', target, actor), '42501', 'non-manager assign allowed');
+    perform pg_temp.expect_sqlstate(format('select public.control_plane_transition_work_item(%L, %L)', target, 'active_sprint'), '42501', 'non-manager transition allowed');
   end loop;
 end $$;
 
@@ -152,11 +192,11 @@ do $$ declare created record; assigned record; transitioned record; manager_id u
   if not exists (select 1 from control_plane.audit_events where work_item_id=created.id and actor_id=manager_id and action='work_item.transitioned' and payload = jsonb_build_object('to', 'active_sprint')) then raise exception 'transition audit actor/payload incorrect'; end if;
   if (select count(*) from control_plane.audit_events where work_item_id=created.id and action='work_item.transitioned') <> 1 then raise exception 'transition audit count incorrect'; end if;
 end $$;
-do $$ begin perform public.control_plane_create_work_item('disabled', '10000000-0000-0000-0000-000000000005'); raise exception 'disabled assignee accepted'; exception when check_violation then null; end $$;
-do $$ begin perform public.control_plane_create_work_item('wrong-role', '10000000-0000-0000-0000-000000000003'); raise exception 'reviewer assignee accepted'; exception when check_violation then null; end $$;
+select pg_temp.expect_sqlstate($sql$select public.control_plane_create_work_item('disabled', '10000000-0000-0000-0000-000000000005')$sql$, '23514', 'disabled assignee accepted');
+select pg_temp.expect_sqlstate($sql$select public.control_plane_create_work_item('wrong-role', '10000000-0000-0000-0000-000000000003')$sql$, '23514', 'reviewer assignee accepted');
 reset role;
-do $$ begin update control_plane.audit_events set action='tampered'; raise exception 'audit update allowed'; exception when raise_exception then null; end $$;
-do $$ begin delete from control_plane.audit_events; raise exception 'audit delete allowed'; exception when raise_exception then null; end $$;
+select pg_temp.expect_sqlstate($sql$update control_plane.audit_events set action='tampered'$sql$, 'P0001', 'audit update allowed');
+select pg_temp.expect_sqlstate('delete from control_plane.audit_events', 'P0001', 'audit delete allowed');
 
 rollback;
 
