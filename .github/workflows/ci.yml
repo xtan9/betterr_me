@@ -167,7 +167,7 @@ jobs:
   ci-gate:
     name: CI Gate
     needs: [changes, lint-and-test, check-migrations]
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout gate policy
