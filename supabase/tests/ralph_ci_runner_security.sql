@@ -23,6 +23,7 @@ begin
       and privilege.privilege_type = 'EXECUTE'
       and routine.proname not in (
         'ralph_ci_create_auth_user',
+        'ralph_ci_delete_auth_profile',
         'ralph_ci_delete_auth_user',
         'ralph_ci_open_connection'
       )
@@ -34,7 +35,11 @@ $block$;
 
 select public.ralph_ci_create_auth_user(
   '00000000-0000-0000-0000-000000000901',
-  'ralph-runner-security@example.invalid'
+  'ralph-runner-security@example.test'
+);
+
+select public.ralph_ci_delete_auth_profile(
+  '00000000-0000-0000-0000-000000000901'
 );
 
 rollback;

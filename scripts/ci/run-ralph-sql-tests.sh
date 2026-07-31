@@ -270,6 +270,37 @@ revoke all on function public.ralph_ci_create_auth_user(uuid, text) from public;
 grant execute on function public.ralph_ci_create_auth_user(uuid, text)
   to ralph_ci_test;
 
+create or replace function public.ralph_ci_delete_auth_profile(
+  test_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, auth
+as $function$
+declare
+  test_email text;
+begin
+  select email
+  into test_email
+  from auth.users
+  where id = test_user_id;
+
+  if test_email is null or test_email not like '%@example.test' then
+    raise exception 'Ralph CI profile helper requires a disposable auth user';
+  end if;
+
+  delete from public.profiles
+  where id = test_user_id;
+  if not found then
+    raise exception 'Ralph CI disposable profile is missing';
+  end if;
+end
+$function$;
+revoke all on function public.ralph_ci_delete_auth_profile(uuid) from public;
+grant execute on function public.ralph_ci_delete_auth_profile(uuid)
+  to ralph_ci_test;
+
 create or replace function public.ralph_ci_delete_auth_user(
   test_user_id uuid
 )
