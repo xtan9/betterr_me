@@ -43,7 +43,12 @@ describe("QuietHoursSettings", () => {
     vi.clearAllMocks();
     mockSWRData = null;
     mockMutate.mockResolvedValue(undefined);
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        profile: { preferences: {} },
+      }),
+    });
   });
 
   it("renders quiet hours title and switch", () => {
@@ -156,9 +161,18 @@ describe("QuietHoursSettings", () => {
   });
 
   it("sends null when quiet hours are disabled on save", async () => {
+    mockSWRData = {
+      profile: {
+        preferences: {
+          quiet_hours_start: "22:00",
+          quiet_hours_end: "07:00",
+        },
+      },
+    };
     render(<QuietHoursSettings />);
 
-    // Click save with switch off
+    fireEvent.click(screen.getByRole("switch"));
+
     fireEvent.click(screen.getByText("quietHours.save"));
 
     await waitFor(() => {
@@ -168,5 +182,42 @@ describe("QuietHoursSettings", () => {
     const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(callBody.quiet_hours_start).toBeNull();
     expect(callBody.quiet_hours_end).toBeNull();
+  });
+
+  it("sends only the quiet-hours key that changed", async () => {
+    mockSWRData = {
+      profile: {
+        preferences: {
+          quiet_hours_start: "23:00",
+          quiet_hours_end: "08:00",
+        },
+      },
+    };
+    render(<QuietHoursSettings />);
+
+    fireEvent.change(screen.getByLabelText("quietHours.startTime"), {
+      target: { value: "21:30" },
+    });
+    fireEvent.click(screen.getByText("quietHours.save"));
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({
+      quiet_hours_start: "21:30",
+    });
+  });
+
+  it("does not offer a save when quiet hours are unchanged", () => {
+    mockSWRData = {
+      profile: {
+        preferences: {
+          quiet_hours_start: "23:00",
+          quiet_hours_end: "08:00",
+        },
+      },
+    };
+
+    render(<QuietHoursSettings />);
+
+    expect(screen.getByText("quietHours.save").closest("button")).toBeDisabled();
   });
 });

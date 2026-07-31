@@ -91,6 +91,29 @@ describe('PATCH /api/profile/preferences', () => {
     });
   });
 
+  it('should accept email notifications as a partial preference intent', async () => {
+    const updatedProfile = {
+      id: 'user-123',
+      preferences: {
+        theme: 'system',
+        email_notifications_enabled: true,
+      },
+    };
+    vi.mocked(mockProfilesDB.updatePreferences).mockResolvedValue(updatedProfile as any);
+
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ email_notifications_enabled: true }),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response.status).toBe(200);
+    expect(mockProfilesDB.updatePreferences).toHaveBeenCalledWith('user-123', {
+      email_notifications_enabled: true,
+    });
+  });
+
   it('should validate theme', async () => {
     const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
       method: 'PATCH',

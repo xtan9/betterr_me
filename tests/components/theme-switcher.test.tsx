@@ -5,8 +5,18 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 
 // Mock next-themes
 const mockSetTheme = vi.fn();
+const mockMutateProfile = vi.fn();
 let mockTheme = 'system';
 let mockResolvedTheme: string | undefined = 'light';
+let mockProfileData: Record<string, unknown> | undefined;
+
+vi.mock('swr', () => ({
+  default: () => ({
+    data: mockProfileData,
+    error: undefined,
+    mutate: mockMutateProfile,
+  }),
+}));
 
 vi.mock('next-themes', () => ({
   useTheme: () => ({
@@ -21,6 +31,14 @@ describe('ThemeSwitcher', () => {
     vi.clearAllMocks();
     mockTheme = 'system';
     mockResolvedTheme = 'light';
+    mockProfileData = undefined;
+    mockMutateProfile.mockResolvedValue(undefined);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        profile: { preferences: { theme: 'dark' } },
+      }),
+    }));
   });
 
   it('renders theme switcher button after mounting', async () => {
@@ -114,6 +132,27 @@ describe('ThemeSwitcher', () => {
 
     await waitFor(() => {
       expect(mockSetTheme).toHaveBeenCalledWith('dark');
+    });
+  });
+
+  it('submits only the selected theme for an authenticated profile', async () => {
+    mockProfileData = {
+      profile: {
+        preferences: { theme: 'system' },
+      },
+    };
+    const user = userEvent.setup();
+    render(<ThemeSwitcher />);
+
+    await user.click(await screen.findByRole('button'));
+    await user.click(await screen.findByText('Dark'));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/profile/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: 'dark' }),
+      });
     });
   });
 

@@ -24,7 +24,8 @@ select public.update_profile_preferences(
     "date_format": "MM/DD/YYYY",
     "week_start_day": 1,
     "theme": "system",
-    "weight_unit": "kg"
+    "weight_unit": "kg",
+    "email_notifications_enabled": false
   }'::jsonb
 );
 
@@ -136,10 +137,29 @@ begin
     "date_format": "MM/DD/YYYY",
     "week_start_day": 0,
     "theme": "system",
-    "weight_unit": "lbs"
+    "weight_unit": "lbs",
+    "email_notifications_enabled": false
   }'::jsonb then
     raise exception
       'overlapping partial updates did not preserve unrelated keys: %',
+      accepted_preferences;
+  end if;
+end
+$$;
+
+do $$
+declare
+  accepted_preferences jsonb;
+begin
+  accepted_preferences := public.update_profile_preferences(
+    '48600000-0000-0000-0000-000000000001',
+    '{"email_notifications_enabled":true}'::jsonb
+  )->'preferences';
+
+  if accepted_preferences->>'email_notifications_enabled' <> 'true'
+    or accepted_preferences->>'weight_unit' <> 'lbs'
+    or accepted_preferences->>'week_start_day' <> '0' then
+    raise exception 'email preference intent did not preserve unrelated keys: %',
       accepted_preferences;
   end if;
 end

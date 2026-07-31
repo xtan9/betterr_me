@@ -70,27 +70,12 @@ export async function PATCH(request: NextRequest) {
       updates.avatar_url = validation.data.avatar_url?.trim() || null;
     }
 
-    if (validation.data.email_notifications_enabled !== undefined) {
-      updates.email_notifications_enabled = validation.data.email_notifications_enabled;
-    }
-
     if (validation.data.timezone !== undefined) {
       updates.timezone = validation.data.timezone?.trim() || null;
     }
 
     const profilesDB = new ProfilesDB(supabase);
-    let profile: Profile | undefined;
-
-    if (Object.keys(updates).length > 0) {
-      profile = await profilesDB.updateProfile(user.id, updates);
-    }
-
-    if (validation.data.preferences !== undefined) {
-      profile = await profilesDB.updatePreferences(
-        user.id,
-        validation.data.preferences
-      );
-    }
+    const profile: Profile = await profilesDB.updateProfile(user.id, updates);
 
     return NextResponse.json({ profile });
   } catch (error: unknown) {

@@ -16,10 +16,7 @@ import { ApiKeysSection } from "./api-keys-section";
 import { CheckCircle, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { fetcher } from "@/lib/fetcher";
-import {
-  profilePreferenceIntents,
-  type PreferenceIntent,
-} from "@/lib/profile-preference-cache";
+import { submitProfilePreferenceIntent } from "@/lib/submit-profile-preference-intent";
 
 interface Profile {
   id: string;
@@ -62,8 +59,6 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
   const handleSave = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
-    let trackedIntent: PreferenceIntent | undefined;
-
     try {
       const intent: {
         week_start_day?: number;
@@ -75,36 +70,10 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
       if ((data?.profile.preferences.weight_unit ?? "kg") !== weightUnit) {
         intent.weight_unit = weightUnit;
       }
-      const intentHandle = profilePreferenceIntents.begin(intent);
-      trackedIntent = intentHandle;
-      const response = await fetch("/api/profile/preferences", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(intent),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to save");
-      }
-
-      const acceptedOutcome = (await response.json()) as { profile: Profile };
-      await mutate(
-        (cached) =>
-          profilePreferenceIntents.accept(
-            intentHandle,
-            acceptedOutcome,
-            cached,
-          ),
-        { revalidate: false },
-      );
-      await mutate().catch((error) => {
-        console.error("Failed to revalidate accepted settings:", error);
-        return mutate(() => undefined, { revalidate: false });
-      });
+      await submitProfilePreferenceIntent(intent, mutate);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      if (trackedIntent) profilePreferenceIntents.reject(trackedIntent);
       console.error("Failed to save settings:", err);
       toast.error(t("toast.saveError"));
     } finally {

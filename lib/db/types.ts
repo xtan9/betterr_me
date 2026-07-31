@@ -27,6 +27,7 @@ export interface ProfilePreferences {
   weight_unit: "kg" | "lbs";
   quiet_hours_start?: string | null;  // HH:MM format
   quiet_hours_end?: string | null;    // HH:MM format
+  email_notifications_enabled?: boolean;
 }
 
 export type ProfileInsert = Omit<

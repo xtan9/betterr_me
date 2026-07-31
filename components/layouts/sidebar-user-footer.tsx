@@ -3,9 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import useSWR from "swr";
 import { toast } from "sonner";
-import { useTheme } from "next-themes";
 import { useLocale, useTranslations } from "next-intl";
 import {
   Settings,
@@ -16,7 +14,6 @@ import {
   Languages,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { fetcher } from "@/lib/fetcher";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -34,14 +31,7 @@ import {
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
 import { SIDEBAR_TRANSITION, SIDEBAR_HOVER } from "@/lib/sidebar-styles";
-
-interface ProfileData {
-  profile: {
-    full_name: string | null;
-    avatar_url: string | null;
-    email: string;
-  };
-}
+import { useProfileTheme } from "@/lib/hooks/use-profile-theme";
 
 const locales = [
   { code: "en", name: "English" },
@@ -65,8 +55,7 @@ interface SidebarUserFooterProps {
 }
 
 export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterProps) {
-  const { data, error } = useSWR<ProfileData>("/api/profile", fetcher);
-  const { theme, setTheme } = useTheme();
+  const { data, error, theme, selectTheme } = useProfileTheme();
   const locale = useLocale();
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
@@ -208,7 +197,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
                 <DropdownMenuLabel>{tSidebar("theme")}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={theme}
-                  onValueChange={setTheme}
+                  onValueChange={selectTheme}
                 >
                   <DropdownMenuRadioItem value="light">
                     <Sun className="mr-2 size-4" /> {tSidebar("themeLight")}
