@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, POST } from '@/app/api/calendar-events/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetUserEvents, mockCreateEvent } = vi.hoisted(() => ({
+const { mockAuthenticateRequest, mockEnsureProfile, mockGetUserEvents, mockCreateEvent } = vi.hoisted(() => ({
+  mockAuthenticateRequest: vi.fn(),
+  mockEnsureProfile: vi.fn(),
   mockGetUserEvents: vi.fn(),
   mockCreateEvent: vi.fn(),
 }));
@@ -11,18 +13,8 @@ const { mockExpandEventsForRange } = vi.hoisted(() => ({
   mockExpandEventsForRange: vi.fn(),
 }));
 
-const { mockEnsureProfile } = vi.hoisted(() => ({
-  mockEnsureProfile: vi.fn(),
-}));
-
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn(() => ({
-        data: { user: { id: 'user-123', email: 'test@example.com' } },
-      })),
-    },
-  })),
+vi.mock('@/lib/auth/authenticated-request', () => ({
+  authenticateRequest: mockAuthenticateRequest,
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -44,7 +36,27 @@ vi.mock('@/lib/db/ensure-profile', () => ({
   ensureProfile: mockEnsureProfile,
 }));
 
-import { createClient } from '@/lib/supabase/server';
+const mockSupabase = {};
+
+function authenticated() {
+  return {
+    ok: true as const,
+    outcome: 'authenticated' as const,
+    principal: {
+      type: 'user' as const,
+      userId: 'user-123',
+      credential: 'cookie' as const,
+      profile: {
+        email: 'test@example.com',
+        fullName: 'Test User',
+        avatarUrl: null,
+      },
+    },
+    permissions: ['read', 'write'] as const,
+    requiredPermission: 'read' as const,
+    client: mockSupabase,
+  };
+}
 
 const mockEvent = {
   id: 'evt-1',
@@ -73,19 +85,16 @@ const mockEvent = {
 describe('GET /api/calendar-events', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn(() => ({
-          data: { user: { id: 'user-123', email: 'test@example.com' } },
-        })),
-      },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue(authenticated());
   });
 
   it('should return 401 when user is not authenticated', async () => {
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: false,
+      outcome: 'anonymous',
+      error: 'Unauthorized',
+      status: 401,
+    });
 
     const request = new NextRequest(
       'http://localhost:3000/api/calendar-events?start_date=2026-04-01&end_date=2026-04-30'
@@ -93,6 +102,21 @@ describe('GET /api/calendar-events', () => {
     const response = await GET(request);
 
     expect(response.status).toBe(401);
+  });
+
+  it('declares read access for cookie credentials', async () => {
+    mockGetUserEvents.mockResolvedValue([]);
+    mockExpandEventsForRange.mockReturnValue([]);
+
+    const request = new NextRequest(
+      'http://localhost:3000/api/calendar-events?start_date=2026-04-01&end_date=2026-04-30'
+    );
+    await GET(request);
+
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(request, {
+      allowedCredentials: ['cookie'],
+      requiredPermission: 'read',
+    });
   });
 
   it('should return 400 when start_date is missing', async () => {
@@ -152,20 +176,16 @@ describe('GET /api/calendar-events', () => {
 describe('POST /api/calendar-events', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn(() => ({
-          data: { user: { id: 'user-123', email: 'test@example.com' } },
-        })),
-      },
-    } as any);
-    mockEnsureProfile.mockResolvedValue(undefined);
+    mockAuthenticateRequest.mockResolvedValue(authenticated());
   });
 
   it('should return 401 when unauthenticated', async () => {
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: false,
+      outcome: 'anonymous',
+      error: 'Unauthorized',
+      status: 401,
+    });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events', {
       method: 'POST',
@@ -178,6 +198,25 @@ describe('POST /api/calendar-events', () => {
     const response = await POST(request);
 
     expect(response.status).toBe(401);
+  });
+
+  it('declares write access for cookie credentials', async () => {
+    mockCreateEvent.mockResolvedValue({ event: mockEvent, reminders: [] });
+    const request = new NextRequest('http://localhost:3000/api/calendar-events', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Test Event',
+        start_date: '2026-04-01',
+        end_date: '2026-04-01',
+      }),
+    });
+
+    await POST(request);
+
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(request, {
+      allowedCredentials: ['cookie'],
+      requiredPermission: 'write',
+    });
   });
 
   it('should return 400 for invalid body (missing title)', async () => {
@@ -360,9 +399,8 @@ describe('POST /api/calendar-events', () => {
     expect(data.error).toBe('Failed to create calendar event');
   });
 
-  it('should call ensureProfile before creating event', async () => {
+  it('provisions a missing profile from the authenticated principal', async () => {
     mockCreateEvent.mockResolvedValue({ event: mockEvent, reminders: [] });
-
     const request = new NextRequest('http://localhost:3000/api/calendar-events', {
       method: 'POST',
       body: JSON.stringify({
@@ -371,9 +409,22 @@ describe('POST /api/calendar-events', () => {
         end_date: '2026-04-01',
       }),
     });
+
     const response = await POST(request);
 
     expect(response.status).toBe(201);
-    expect(mockEnsureProfile).toHaveBeenCalled();
+    expect(mockEnsureProfile).toHaveBeenCalledWith(
+      mockSupabase,
+      {
+        id: 'user-123',
+        email: 'test@example.com',
+        fullName: 'Test User',
+        avatarUrl: null,
+      },
+    );
+    expect(mockEnsureProfile.mock.invocationCallOrder[0]).toBeLessThan(
+      mockCreateEvent.mock.invocationCallOrder[0],
+    );
   });
+
 });

@@ -2,21 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, PATCH, DELETE } from '@/app/api/calendar-events/[id]/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetEvent, mockDeleteEvent, mockUpdateSchedule, mockDeleteSchedule } = vi.hoisted(() => ({
+const { mockAuthenticateRequest, mockGetEvent, mockDeleteEvent, mockUpdateSchedule, mockDeleteSchedule } = vi.hoisted(() => ({
+  mockAuthenticateRequest: vi.fn(),
   mockGetEvent: vi.fn(),
   mockDeleteEvent: vi.fn(),
   mockUpdateSchedule: vi.fn(),
   mockDeleteSchedule: vi.fn(),
 }));
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn(() => ({
-        data: { user: { id: 'user-123', email: 'test@example.com' } },
-      })),
-    },
-  })),
+vi.mock('@/lib/auth/authenticated-request', () => ({
+  authenticateRequest: mockAuthenticateRequest,
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -33,7 +28,25 @@ vi.mock('@/lib/scheduling/lifecycle', () => ({
   },
 }));
 
-import { createClient } from '@/lib/supabase/server';
+const mockSupabase = {};
+
+function authenticated(requiredPermission: 'read' | 'write' = 'read') {
+  return {
+    ok: true as const,
+    outcome: 'authenticated' as const,
+    principal: { type: 'user' as const, userId: 'user-123', credential: 'cookie' as const },
+    permissions: ['read', 'write'] as const,
+    requiredPermission,
+    client: mockSupabase,
+  };
+}
+
+const unauthorized = {
+  ok: false as const,
+  outcome: 'anonymous' as const,
+  error: 'Unauthorized' as const,
+  status: 401 as const,
+};
 
 const mockEvent = {
   id: '550e8400-e29b-41d4-a716-446655440001',
@@ -64,24 +77,28 @@ const params = Promise.resolve({ id: '550e8400-e29b-41d4-a716-446655440001' });
 describe('GET /api/calendar-events/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn(() => ({
-          data: { user: { id: 'user-123', email: 'test@example.com' } },
-        })),
-      },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue(authenticated('read'));
   });
 
   it('should return 401 when unauthenticated', async () => {
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue(unauthorized);
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001');
     const response = await GET(request, { params });
 
     expect(response.status).toBe(401);
+  });
+
+  it('declares read access for cookie credentials', async () => {
+    mockGetEvent.mockResolvedValue(mockEvent);
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001');
+
+    await GET(request, { params });
+
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(request, {
+      allowedCredentials: ['cookie'],
+      requiredPermission: 'read',
+    });
   });
 
   it('should return event for valid ID', async () => {
@@ -123,19 +140,11 @@ describe('GET /api/calendar-events/[id]', () => {
 describe('PATCH /api/calendar-events/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn(() => ({
-          data: { user: { id: 'user-123', email: 'test@example.com' } },
-        })),
-      },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue(authenticated('write'));
   });
 
   it('should return 401 when unauthenticated', async () => {
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue(unauthorized);
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'PATCH',
@@ -144,6 +153,21 @@ describe('PATCH /api/calendar-events/[id]', () => {
     const response = await PATCH(request, { params });
 
     expect(response.status).toBe(401);
+  });
+
+  it('declares write access for cookie credentials', async () => {
+    mockUpdateSchedule.mockResolvedValue({ event: mockEvent, reminders: [] });
+    const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'Updated' }),
+    });
+
+    await PATCH(request, { params });
+
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(request, {
+      allowedCredentials: ['cookie'],
+      requiredPermission: 'write',
+    });
   });
 
   it('should return 400 for empty update body', async () => {
@@ -391,19 +415,11 @@ describe('PATCH /api/calendar-events/[id]', () => {
 describe('DELETE /api/calendar-events/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn(() => ({
-          data: { user: { id: 'user-123', email: 'test@example.com' } },
-        })),
-      },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue(authenticated('write'));
   });
 
   it('should return 401 when unauthenticated', async () => {
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue(unauthorized);
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'DELETE',
@@ -496,13 +512,7 @@ describe('Invalid UUID handling', () => {
 describe('PATCH /api/calendar-events/[id] — field mapping', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn(() => ({
-          data: { user: { id: 'user-123', email: 'test@example.com' } },
-        })),
-      },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue(authenticated('write'));
     mockUpdateSchedule.mockResolvedValue({ event: mockEvent, reminders: [] });
   });
 
@@ -554,13 +564,7 @@ describe('PATCH /api/calendar-events/[id] — field mapping', () => {
 describe('PATCH /api/calendar-events/[id] — atomic reminder reconciliation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn(() => ({
-          data: { user: { id: 'user-123', email: 'test@example.com' } },
-        })),
-      },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue(authenticated('write'));
   });
 
   it('moves the event through the lifecycle that returns reconciled reminders', async () => {

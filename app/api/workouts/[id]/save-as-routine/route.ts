@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { WorkoutsDB } from "@/lib/db/workouts";
-import { WorkoutToRoutineConversion } from "@/lib/fitness/routine-workout-conversion";
-import { SupabaseRoutineWorkoutStore } from "@/lib/fitness/supabase-routine-workout-store";
+import { authenticateRequest } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
+import { createRoutineWorkoutRequests } from "@/lib/fitness/routine-workout-requests";
 import { validateRequestBody } from "@/lib/validations/api";
 import { saveAsRoutineSchema } from "@/lib/validations/routine";
 import { log } from "@/lib/logger";
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * POST /api/workouts/[id]/save-as-routine
@@ -19,39 +23,28 @@ export async function POST(
   const { id: workoutId } = await params;
 
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     // Validate body
     const body = await request.json();
     const validation = validateRequestBody(body, saveAsRoutineSchema);
     if (!validation.success) return validation.response;
 
-    // Fetch workout with exercises and sets via DB class
-    const workoutsDB = new WorkoutsDB(supabase);
-    const workout = await workoutsDB.getWorkoutWithExercises(workoutId);
-
-    if (!workout) {
+    const routine = await createRoutineWorkoutRequests(supabase).save(
+      userId,
+      workoutId,
+      validation.data.name,
+    );
+    if (!routine) {
       return NextResponse.json(
         { error: "Workout not found" },
         { status: 404 }
       );
     }
-
-    const conversion = new WorkoutToRoutineConversion(
-      new SupabaseRoutineWorkoutStore(supabase),
-    );
-    const routine = await conversion.save(
-      user.id,
-      validation.data.name,
-      workout,
-    );
 
     return NextResponse.json({ routine }, { status: 201 });
   } catch (error) {
