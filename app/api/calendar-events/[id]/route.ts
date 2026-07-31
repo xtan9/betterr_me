@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { CalendarEventsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { calendarEventUpdateSchema } from '@/lib/validations/calendar-events';
@@ -8,6 +9,16 @@ import { log } from '@/lib/logger';
 import type { CalendarEventUpdate } from '@/lib/db/types';
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/calendar-events/[id]
@@ -22,17 +33,14 @@ export async function GET(
     if (!uuidRegex.test(id)) {
       return NextResponse.json({ error: 'Invalid event ID format' }, { status: 400 });
     }
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const db = new CalendarEventsDB(supabase);
-    const event = await db.getEvent(id, user.id);
+    const event = await db.getEvent(id, userId);
 
     if (!event) {
       return NextResponse.json({ error: 'Calendar event not found' }, { status: 404 });
@@ -60,14 +68,11 @@ export async function PATCH(
     if (!uuidRegex.test(id)) {
       return NextResponse.json({ error: 'Invalid event ID format' }, { status: 400 });
     }
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 
@@ -123,7 +128,7 @@ export async function PATCH(
     }
 
     const lifecycle = new SchedulingLifecycle(supabase);
-    const outcome = await lifecycle.update(user.id, id, {
+    const outcome = await lifecycle.update(userId, id, {
       event: updates,
       ...(data.reminders !== undefined
         ? {
@@ -167,17 +172,14 @@ export async function DELETE(
     if (!uuidRegex.test(id)) {
       return NextResponse.json({ error: 'Invalid event ID format' }, { status: 400 });
     }
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const lifecycle = new SchedulingLifecycle(supabase);
-    const outcome = await lifecycle.delete(user.id, id);
+    const outcome = await lifecycle.delete(userId, id);
 
     return NextResponse.json(outcome);
   } catch (error) {

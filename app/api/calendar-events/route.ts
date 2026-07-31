@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { CalendarEventsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { calendarEventCreateSchema } from '@/lib/validations/calendar-events';
@@ -8,6 +9,16 @@ import { log } from '@/lib/logger';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import type { CalendarEventInsert } from '@/lib/db/types';
 import { SchedulingLifecycle } from '@/lib/scheduling/lifecycle';
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/calendar-events
@@ -19,14 +30,11 @@ import { SchedulingLifecycle } from '@/lib/scheduling/lifecycle';
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const searchParams = request.nextUrl.searchParams;
     const startDate = searchParams.get('start_date');
@@ -47,7 +55,7 @@ export async function GET(request: NextRequest) {
     }
 
     const db = new CalendarEventsDB(supabase);
-    const events = await db.getUserEvents(user.id, startDate, endDate);
+    const events = await db.getUserEvents(userId, startDate, endDate);
     const expanded = expandEventsForRange(events, startDate, endDate);
 
     return NextResponse.json({ events: expanded });
@@ -66,14 +74,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 
@@ -81,8 +86,10 @@ export async function POST(request: NextRequest) {
     const validation = validateRequestBody(body, calendarEventCreateSchema);
     if (!validation.success) return validation.response;
 
-    // Ensure user profile exists (required by FK constraint)
-    await ensureProfile(supabase, user);
+    await ensureProfile(supabase, {
+      id: userId,
+      ...auth.principal.profile,
+    });
 
     // Build insert data from validated fields
     const insertData: Omit<CalendarEventInsert, 'user_id'> = {
@@ -113,7 +120,7 @@ export async function POST(request: NextRequest) {
     }
 
     const lifecycle = new SchedulingLifecycle(supabase);
-    const outcome = await lifecycle.create(user.id, {
+    const outcome = await lifecycle.create(userId, {
       event: insertData,
       reminders: (validation.data.reminders ?? []).map((reminder) => ({
         ...reminder,

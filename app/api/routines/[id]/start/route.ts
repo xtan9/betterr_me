@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { RoutinesDB } from "@/lib/db/routines";
-import {
-  RoutineToWorkoutConversion,
-} from "@/lib/fitness/routine-workout-conversion";
-import { SupabaseRoutineWorkoutStore } from "@/lib/fitness/supabase-routine-workout-store";
+import { authenticateRequest } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
+import { createRoutineWorkoutRequests } from "@/lib/fitness/routine-workout-requests";
 import { log } from "@/lib/logger";
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * POST /api/routines/[id]/start
@@ -14,45 +16,27 @@ import { log } from "@/lib/logger";
  * Returns 409 if the user already has an active workout.
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: routineId } = await params;
-  const supabase = await createClient();
 
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { principal: { userId }, client: supabase } = auth;
 
-    // 1. Fetch routine with exercises
-    const routinesDB = new RoutinesDB(supabase);
-    const routine = await routinesDB.getRoutine(routineId);
-
-    if (!routine) {
+    const workout = await createRoutineWorkoutRequests(supabase).start(
+      userId,
+      routineId,
+    );
+    if (!workout) {
       return NextResponse.json(
         { error: "Routine not found" },
         { status: 404 }
       );
-    }
-
-    // 2. Convert the complete routine through the route-independent lifecycle.
-    const conversion = new RoutineToWorkoutConversion(
-      new SupabaseRoutineWorkoutStore(supabase),
-    );
-    const workout = await conversion.start(user.id, routine);
-
-    // 3. Update routine's last_performed_at (best-effort, do not fail the request)
-    try {
-      await routinesDB.updateRoutine(routineId, {
-        last_performed_at: new Date().toISOString(),
-      });
-    } catch (err) {
-      log.error("Failed to update routine last_performed_at", err, { routineId });
     }
 
     return NextResponse.json({ workout }, { status: 201 });

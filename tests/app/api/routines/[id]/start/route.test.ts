@@ -3,31 +3,21 @@ import { NextRequest } from "next/server";
 
 // --- Hoisted mocks ---
 const {
-  mockGetUser,
-  mockGetRoutine,
-  mockUpdateRoutine,
-  mockRpc,
+  mockAuthenticateRequest,
+  mockStart,
 } = vi.hoisted(() => ({
-  mockGetUser: vi.fn(),
-  mockGetRoutine: vi.fn(),
-  mockUpdateRoutine: vi.fn(),
-  mockRpc: vi.fn(),
+  mockAuthenticateRequest: vi.fn(),
+  mockStart: vi.fn(),
 }));
 
-const mockSupabase = {
-  auth: { getUser: mockGetUser },
-  rpc: mockRpc,
-};
+const mockSupabase = {};
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(() => mockSupabase),
+vi.mock("@/lib/auth/authenticated-request", () => ({
+  authenticateRequest: mockAuthenticateRequest,
 }));
 
-vi.mock("@/lib/db/routines", () => ({
-  RoutinesDB: class {
-    getRoutine = mockGetRoutine;
-    updateRoutine = mockUpdateRoutine;
-  },
+vi.mock("@/lib/fitness/routine-workout-requests", () => ({
+  createRoutineWorkoutRequests: () => ({ start: mockStart }),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -35,33 +25,6 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { POST } from "@/app/api/routines/[id]/start/route";
-
-// --- Helpers ---
-
-function makeRoutine() {
-  return {
-    id: "48500000-0000-4000-8000-000000000001",
-    name: "Push Day",
-    exercises: [
-      {
-        id: "re-1",
-        exercise_id: "48500000-0000-4000-8000-000000000002",
-        sort_order: 1,
-        target_sets: 3,
-        target_reps: 10,
-        target_weight_kg: 60,
-        target_duration_seconds: null,
-        rest_timer_seconds: 90,
-        notes: null,
-        exercise: {
-          id: "48500000-0000-4000-8000-000000000002",
-          name: "Bench Press",
-          exercise_type: "weight_reps",
-        },
-      },
-    ],
-  };
-}
 
 function callPOST(routineId: string) {
   const request = new NextRequest(
@@ -76,19 +39,21 @@ function callPOST(routineId: string) {
 describe("POST /api/routines/[id]/start", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
-    mockGetRoutine.mockResolvedValue(makeRoutine());
-    mockRpc.mockResolvedValue({
-      data: {
-        id: "w-1",
-        user_id: "user-123",
-        title: "Push Day",
-        status: "in_progress",
-        exercises: [],
-      },
-      error: null,
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: true,
+      outcome: "authenticated",
+      principal: { type: "user", userId: "user-123", credential: "cookie" },
+      permissions: ["read", "write"],
+      requiredPermission: "write",
+      client: mockSupabase,
     });
-    mockUpdateRoutine.mockResolvedValue({});
+    mockStart.mockResolvedValue({
+      id: "w-1",
+      user_id: "user-123",
+      title: "Push Day",
+      status: "in_progress",
+      exercises: [],
+    });
   });
 
   it("creates workout from routine (201)", async () => {
@@ -98,11 +63,16 @@ describe("POST /api/routines/[id]/start", () => {
     expect(response.status).toBe(201);
     expect(data.workout).toBeDefined();
     expect(data.workout.id).toBe("w-1");
-    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockStart).toHaveBeenCalledWith("user-123", "routine-1");
   });
 
   it("returns 401 for unauthenticated user", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } });
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: false,
+      outcome: "anonymous",
+      error: "Unauthorized",
+      status: 401,
+    });
 
     const response = await callPOST("routine-1");
     const data = await response.json();
@@ -111,8 +81,22 @@ describe("POST /api/routines/[id]/start", () => {
     expect(data.error).toBe("Unauthorized");
   });
 
+  it("declares write access for cookie credentials", async () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/routines/routine-1/start",
+      { method: "POST" },
+    );
+
+    await POST(request, { params: Promise.resolve({ id: "routine-1" }) });
+
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(request, {
+      allowedCredentials: ["cookie"],
+      requiredPermission: "write",
+    });
+  });
+
   it("returns 404 for non-existent routine", async () => {
-    mockGetRoutine.mockResolvedValue(null);
+    mockStart.mockResolvedValue(null);
 
     const response = await callPOST("nonexistent");
     const data = await response.json();
@@ -122,12 +106,9 @@ describe("POST /api/routines/[id]/start", () => {
   });
 
   it("returns 409 when active workout exists", async () => {
-    mockRpc.mockResolvedValue({
-      data: null,
-      error: {
-        code: "23505",
-        message: 'duplicate key value violates unique constraint "idx_workouts_active"',
-      },
+    mockStart.mockRejectedValue({
+      code: "23505",
+      message: 'duplicate key value violates unique constraint "idx_workouts_active"',
     });
 
     const response = await callPOST("routine-1");
@@ -138,22 +119,8 @@ describe("POST /api/routines/[id]/start", () => {
     });
   });
 
-  it("updateRoutine failure does not delete the workout (fix 1a)", async () => {
-    mockUpdateRoutine.mockRejectedValue(new Error("Update failed"));
-
-    const response = await callPOST("routine-1");
-    const data = await response.json();
-
-    // The workout should still be returned successfully
-    expect(response.status).toBe(201);
-    expect(data.workout.id).toBe("w-1");
-  });
-
   it("returns 500 when the atomic conversion fails", async () => {
-    mockRpc.mockResolvedValue({
-      data: null,
-      error: { message: "Insert failed", code: "42000" },
-    });
+    mockStart.mockRejectedValue({ message: "Insert failed", code: "42000" });
 
     const response = await callPOST("routine-1");
 

@@ -1,37 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockGetUser, mockGetWorkoutWithExercises, mockSave } = vi.hoisted(
+const { mockAuthenticateRequest, mockSave } = vi.hoisted(
   () => ({
-    mockGetUser: vi.fn(),
-    mockGetWorkoutWithExercises: vi.fn(),
+    mockAuthenticateRequest: vi.fn(),
     mockSave: vi.fn(),
   }),
 );
 
-const mockSupabase = {
-  auth: { getUser: mockGetUser },
-  rpc: vi.fn(),
-};
+const mockSupabase = {};
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(() => mockSupabase),
+vi.mock("@/lib/auth/authenticated-request", () => ({
+  authenticateRequest: mockAuthenticateRequest,
 }));
 
-vi.mock("@/lib/db/workouts", () => ({
-  WorkoutsDB: class {
-    getWorkoutWithExercises = mockGetWorkoutWithExercises;
-  },
-}));
-
-vi.mock("@/lib/fitness/routine-workout-conversion", () => ({
-  WorkoutToRoutineConversion: class {
-    save = mockSave;
-  },
-}));
-
-vi.mock("@/lib/fitness/supabase-routine-workout-store", () => ({
-  SupabaseRoutineWorkoutStore: class {},
+vi.mock("@/lib/fitness/routine-workout-requests", () => ({
+  createRoutineWorkoutRequests: () => ({ save: mockSave }),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -54,10 +38,13 @@ function callPOST(request: NextRequest, workoutId: string) {
 describe("POST /api/workouts/[id]/save-as-routine", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
-    mockGetWorkoutWithExercises.mockResolvedValue({
-      id: "workout-1",
-      exercises: [],
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: true,
+      outcome: "authenticated",
+      principal: { type: "user", userId: "user-123", credential: "cookie" },
+      permissions: ["read", "write"],
+      requiredPermission: "write",
+      client: mockSupabase,
     });
     mockSave.mockResolvedValue({
       id: "routine-1",
@@ -68,9 +55,6 @@ describe("POST /api/workouts/[id]/save-as-routine", () => {
   });
 
   it("delegates the complete conversion and returns its routine", async () => {
-    const workout = { id: "workout-1", exercises: [] };
-    mockGetWorkoutWithExercises.mockResolvedValue(workout);
-
     const response = await callPOST(
       makeRequest("workout-1", { name: "My Routine" }),
       "workout-1",
@@ -82,13 +66,18 @@ describe("POST /api/workouts/[id]/save-as-routine", () => {
     });
     expect(mockSave).toHaveBeenCalledWith(
       "user-123",
+      "workout-1",
       "My Routine",
-      workout,
     );
   });
 
   it("returns 401 for an unauthenticated user", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } });
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: false,
+      outcome: "anonymous",
+      error: "Unauthorized",
+      status: 401,
+    });
 
     const response = await callPOST(
       makeRequest("workout-1", { name: "My Routine" }),
@@ -99,8 +88,19 @@ describe("POST /api/workouts/[id]/save-as-routine", () => {
     expect(mockSave).not.toHaveBeenCalled();
   });
 
+  it("declares write access for cookie credentials", async () => {
+    const request = makeRequest("workout-1", { name: "My Routine" });
+
+    await callPOST(request, "workout-1");
+
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(request, {
+      allowedCredentials: ["cookie"],
+      requiredPermission: "write",
+    });
+  });
+
   it("returns 404 when the workout does not exist", async () => {
-    mockGetWorkoutWithExercises.mockResolvedValue(null);
+    mockSave.mockResolvedValue(null);
 
     const response = await callPOST(
       makeRequest("missing", { name: "My Routine" }),
@@ -108,7 +108,7 @@ describe("POST /api/workouts/[id]/save-as-routine", () => {
     );
 
     expect(response.status).toBe(404);
-    expect(mockSave).not.toHaveBeenCalled();
+    expect(mockSave).toHaveBeenCalledWith("user-123", "missing", "My Routine");
   });
 
   it("returns one failure response when atomic conversion fails", async () => {
