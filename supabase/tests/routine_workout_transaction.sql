@@ -297,7 +297,9 @@ begin
 end
 $$;
 
--- A late foreign-key failure rolls back the routine and its first exercise.
+-- A late exercise-reference failure rolls back the routine and its first
+-- exercise. Depending on policy ordering, PostgreSQL can reject the missing
+-- reference at the RLS check or foreign-key seam.
 do $$
 begin
   perform public.save_workout_as_routine(
@@ -331,6 +333,7 @@ begin
   raise exception 'workout conversion unexpectedly succeeded';
 exception
   when foreign_key_violation then null;
+  when insufficient_privilege then null;
 end
 $$;
 
