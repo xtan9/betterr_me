@@ -140,3 +140,25 @@ BEGIN
   );
 END;
 $$;
+
+-- SECURITY INVOKER keeps the existing row-level policies authoritative. Grant
+-- only the table operations used by this lifecycle and expose the RPC only to
+-- authenticated callers.
+GRANT SELECT, INSERT, UPDATE ON public.habits TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.habit_logs TO authenticated;
+GRANT SELECT, INSERT ON public.habit_milestones TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.set_habit_completion_atomically(
+  UUID,
+  UUID,
+  DATE,
+  BOOLEAN,
+  DATE
+) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.set_habit_completion_atomically(
+  UUID,
+  UUID,
+  DATE,
+  BOOLEAN,
+  DATE
+) TO authenticated;
