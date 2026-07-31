@@ -19,6 +19,8 @@ function emergencyBroadClassification(error) {
       e2eVisual: true,
       e2eSupabase: true,
       performance: true,
+      mutation: true,
+      mutationScopes: [],
     },
     labels: { quality: "full suite", e2e: "full Chromium + finance + screenshot comparison" },
     reasons: [`classifier startup error: ${error}; running broad validation.`],

@@ -129,10 +129,10 @@ const peakReps = Math.max(...reps);
 ## Running mutation tests
 
 ```bash
-# Full run (~15 min for lib/db scope)
+# Full run across the central mutation scope
 pnpm mutation-test
 
-# Changed files only vs origin/main — what CI runs per PR (~2-5 min)
+# Changed mutation scope vs origin/main — what CI runs per PR
 pnpm mutation-test:changed
 
 # Narrow to one file for iteration
@@ -143,7 +143,16 @@ Reports land at `reports/mutation/mutation.html`. GitHub Actions uploads both
 per-PR and weekly reports as `mutation-report-pr` / `mutation-report-full`
 artifacts.
 
-**CI gate:** any PR touching `lib/db/**`, `tests/lib/db/**`, `tests/helpers/mock-supabase.ts`, `tests/setup.ts`, or `stryker.config.mjs` triggers the per-PR Stryker job. The `thresholds.break = 85` config fails the job if mutation score drops below 85%. A scheduled Monday 03:00 UTC run executes the full scope and catches cross-file regressions a per-PR run would miss.
+**Conditional CI signal:** the ownership registry in
+`scripts/ci/classify-changes.mjs` selects the per-PR mutation job. Its central
+scope covers implementations and tests under `lib/db/**`,
+`lib/recurring-tasks/**`, and `lib/habits/**`, plus the shared mutation harness
+and configuration files. Implementation changes mutate the exact changed source
+files; test-only changes mutate their owning scope. The same registry builds
+Stryker's full `mutate` and `testFiles` configuration, so workflow selection and
+the executed command cannot silently omit habits. The signal remains advisory,
+not a required merge check. A scheduled Monday 03:00 UTC run executes the full
+scope and catches cross-file regressions a per-PR run would miss.
 
 ### Scheduled full-run policy and diagnostics
 
@@ -218,7 +227,7 @@ Established patterns (see examples in `tests/lib/db/`):
 
 ## Conditional test selection
 
-Pull-request CI, E2E, and performance workflows all consume the structured report
+Pull-request CI, E2E, mutation, and performance workflows all consume the structured report
 from `scripts/ci/classify-changes.mjs` through its fail-safe runner. The ownership
 registry is the only path-policy source. The classifier logs and emits a JSON
 report containing changed paths,
@@ -234,7 +243,8 @@ pnpm exec vitest run tests/scripts/classify-changes.test.ts \
   tests/scripts/detect-pull-request-validated-push.test.ts \
   tests/scripts/gate-policy.test.ts \
   tests/scripts/github-actions-runtime-policy.test.ts \
-  tests/scripts/quality-signal-contracts.test.ts
+  tests/scripts/quality-signal-contracts.test.ts \
+  tests/scripts/stryker-changed.test.ts
 ```
 
 This verifies every tracked path has an owner and covers renames, deletions,
