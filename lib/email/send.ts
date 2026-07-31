@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { ProfilesDB } from '@/lib/db';
 import type { ReminderSourceType } from '@/lib/db/types';
 import { log } from '@/lib/logger';
+import { emailNotificationsEnabled } from '@/lib/profile-preferences';
 
 // Action URL map per source type
 const ACTION_URLS: Record<ReminderSourceType, (date?: string) => string> = {
@@ -42,7 +43,7 @@ export async function sendReminderEmail(
     }
 
     // Check email preference
-    if (!profile.email_notifications_enabled) {
+    if (!emailNotificationsEnabled(profile)) {
       return { success: true, skipped: true };
     }
 

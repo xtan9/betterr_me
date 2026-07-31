@@ -14,6 +14,7 @@ export const preferencesSchema = z
     weight_unit: z.enum(WEIGHT_UNITS).optional(),
     quiet_hours_start: quietHoursTimeSchema.optional(),
     quiet_hours_end: quietHoursTimeSchema.optional(),
+    email_notifications_enabled: z.boolean().optional(),
   })
   .strict()
   .refine((data) => Object.keys(data).length > 0, {

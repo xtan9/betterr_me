@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SidebarUserFooter } from "@/components/layouts/sidebar-user-footer";
 
 // Hoisted mocks
-const { mockSWRReturn, mockSetTheme, mockPush, mockSignOut } = vi.hoisted(
+const { mockSWRReturn, mockMutateProfile, mockSetTheme, mockPush, mockSignOut } = vi.hoisted(
   () => ({
     mockSWRReturn: {
       data: {
@@ -17,6 +17,7 @@ const { mockSWRReturn, mockSetTheme, mockPush, mockSignOut } = vi.hoisted(
       error: undefined,
       isLoading: false,
     },
+    mockMutateProfile: vi.fn(),
     mockSetTheme: vi.fn(),
     mockPush: vi.fn(),
     mockSignOut: vi.fn().mockResolvedValue({}),
@@ -25,7 +26,7 @@ const { mockSWRReturn, mockSetTheme, mockPush, mockSignOut } = vi.hoisted(
 
 // Mock SWR
 vi.mock("swr", () => ({
-  default: () => mockSWRReturn,
+  default: () => ({ ...mockSWRReturn, mutate: mockMutateProfile }),
 }));
 
 // Mock sonner toast
@@ -178,6 +179,7 @@ describe("SidebarUserFooter", () => {
     mockSWRReturn.isLoading = false;
     mockSWRReturn.error = undefined;
     mockSetTheme.mockReset();
+    mockMutateProfile.mockReset().mockResolvedValue(undefined);
     mockPush.mockReset();
     mockSignOut.mockReset().mockResolvedValue({});
     radioGroupOnValueChange = undefined;
@@ -266,7 +268,13 @@ describe("SidebarUserFooter", () => {
     expect(screen.getByText(/themeSystem/)).toBeInTheDocument();
   });
 
-  it("calls setTheme when theme option is clicked", () => {
+  it("persists a theme preference when a theme option is clicked", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        profile: { preferences: { theme: "dark" } },
+      }),
+    }));
     render(<SidebarUserFooter />);
 
     const darkButton = screen
@@ -276,6 +284,13 @@ describe("SidebarUserFooter", () => {
 
     fireEvent.click(darkButton!);
     expect(mockSetTheme).toHaveBeenCalledWith("dark");
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith("/api/profile/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme: "dark" }),
+      });
+    });
   });
 
   it("renders language options", () => {

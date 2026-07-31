@@ -27,7 +27,11 @@ vi.mock("swr", () => ({
   default: (key: string | null) => {
     if (key === "/api/profile") {
       return {
-        data: { profile: { email_notifications_enabled: false } },
+        data: {
+          profile: {
+            preferences: { email_notifications_enabled: false },
+          },
+        },
         mutate: mockMutateProfile,
       };
     }
@@ -64,6 +68,7 @@ let mockHookReturn = {
 describe("NotificationSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockMutateProfile.mockResolvedValue(undefined);
     mockHookReturn = {
       permission: "default",
       isSubscribed: false,
@@ -73,7 +78,12 @@ describe("NotificationSettings", () => {
       unsubscribe: mockUnsubscribe,
       sendTest: mockSendTest,
     };
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        profile: { preferences: { email_notifications_enabled: true } },
+      }),
+    });
   });
 
   it("renders title and description", () => {
@@ -212,7 +222,15 @@ describe("NotificationSettings", () => {
     ).toBeInTheDocument();
   });
 
-  it("calls PATCH /api/profile with email_notifications_enabled when email toggle is clicked", async () => {
+  it("submits an email-notification preference intent", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        profile: {
+          preferences: { email_notifications_enabled: true },
+        },
+      }),
+    });
     render(<NotificationSettings />);
     const emailToggle = document.getElementById(
       "email-notifications-toggle"
@@ -222,7 +240,7 @@ describe("NotificationSettings", () => {
     fireEvent.click(emailToggle);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/profile", {
+      expect(mockFetch).toHaveBeenCalledWith("/api/profile/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email_notifications_enabled: true }),
@@ -272,7 +290,20 @@ describe("NotificationSettings", () => {
     });
   });
 
-  it("mutates profile data after email toggle", async () => {
+  it("caches the accepted profile after an email toggle", async () => {
+    const accepted = {
+      profile: {
+        id: "user-123",
+        preferences: {
+          theme: "dark",
+          email_notifications_enabled: true,
+        },
+      },
+    };
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(accepted),
+    });
     render(<NotificationSettings />);
     const emailToggle = document.getElementById(
       "email-notifications-toggle"
@@ -283,5 +314,8 @@ describe("NotificationSettings", () => {
     await waitFor(() => {
       expect(mockMutateProfile).toHaveBeenCalled();
     });
+    const [cacheUpdater, options] = mockMutateProfile.mock.calls[0];
+    expect(options).toEqual({ revalidate: false });
+    expect(cacheUpdater()).toEqual(accepted);
   });
 });

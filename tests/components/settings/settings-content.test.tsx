@@ -169,13 +169,10 @@ describe("SettingsContent preference intents", () => {
     fireEvent.click(screen.getByText("choose-sunday"));
     fireEvent.click(screen.getByText("save"));
 
-    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(2));
     const [cacheUpdater, options] = mockMutate.mock.calls[0];
     expect(options).toEqual({ revalidate: false });
     expect(cacheUpdater()).toEqual(accepted);
-    const [clearCache, clearOptions] = mockMutate.mock.calls[2];
-    expect(clearOptions).toEqual({ revalidate: false });
-    expect(clearCache()).toBeUndefined();
     expect(screen.getByText("saved")).toBeInTheDocument();
   });
 });

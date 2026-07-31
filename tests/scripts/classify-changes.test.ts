@@ -186,6 +186,9 @@ describe("conditional test classifier", () => {
     ["export", "app/api/export/route.ts"],
     ["settings", "components/settings/account-settings.tsx"],
     ["settings", "lib/profile-preference-cache.ts"],
+    ["settings", "lib/hooks/use-profile-theme.ts"],
+    ["settings", "lib/profile-preferences.ts"],
+    ["settings", "lib/submit-profile-preference-intent.ts"],
     ["cron", "app/api/cron/dispatch-reminders/route.ts"],
     ["control-plane", "app/control-plane/page.tsx"],
   ])("selects browser validation for the %s product area", (owner, path) => {

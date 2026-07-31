@@ -181,11 +181,10 @@ describe('PATCH /api/profile', () => {
     expect(response.status).toBe(401);
   });
 
-  it('should reject preferences combined with other profile fields', async () => {
+  it('should reject legacy preference persistence fields', async () => {
     const request = new NextRequest('http://localhost:3000/api/profile', {
       method: 'PATCH',
       body: JSON.stringify({
-        avatar_url: 'https://example.com/a.png',
         preferences: { theme: 'dark' },
         email_notifications_enabled: true,
       }),

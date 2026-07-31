@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 // Hoist mock functions
-const { mockVerifyToken, mockUpdateProfile } = vi.hoisted(() => ({
+const { mockVerifyToken, mockUpdatePreferences } = vi.hoisted(() => ({
   mockVerifyToken: vi.fn(),
-  mockUpdateProfile: vi.fn(),
+  mockUpdatePreferences: vi.fn(),
 }));
 
 // Mock unsubscribe module
@@ -20,7 +20,7 @@ vi.mock('@/lib/supabase/admin', () => ({
 // Mock profiles DB
 vi.mock('@/lib/db', () => ({
   ProfilesDB: class {
-    updateProfile = mockUpdateProfile;
+    updatePreferences = mockUpdatePreferences;
   },
 }));
 
@@ -59,7 +59,7 @@ describe('GET /api/email/unsubscribe', () => {
 
   it('returns 200 and disables email notifications with valid token', async () => {
     mockVerifyToken.mockReturnValue('user-123');
-    mockUpdateProfile.mockResolvedValue({});
+    mockUpdatePreferences.mockResolvedValue({});
 
     const request = new NextRequest('http://localhost:3000/api/email/unsubscribe?token=valid-token');
     const response = await GET(request);
@@ -68,14 +68,14 @@ describe('GET /api/email/unsubscribe', () => {
     const text = await response.text();
     expect(text).toContain('Unsubscribed');
     expect(text).toContain('re-enable them in your settings');
-    expect(mockUpdateProfile).toHaveBeenCalledWith('user-123', {
+    expect(mockUpdatePreferences).toHaveBeenCalledWith('user-123', {
       email_notifications_enabled: false,
     });
   });
 
-  it('returns 500 when updateProfile throws', async () => {
+  it('returns 500 when updatePreferences throws', async () => {
     mockVerifyToken.mockReturnValue('user-123');
-    mockUpdateProfile.mockRejectedValue(new Error('DB error'));
+    mockUpdatePreferences.mockRejectedValue(new Error('DB error'));
 
     const request = new NextRequest('http://localhost:3000/api/email/unsubscribe?token=valid-token');
     const response = await GET(request);

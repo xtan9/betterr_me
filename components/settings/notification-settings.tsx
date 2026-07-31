@@ -18,6 +18,9 @@ import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { toast } from "sonner";
 
 import { fetcher } from "@/lib/fetcher";
+import type { Profile } from "@/lib/db/types";
+import { emailNotificationsEnabled } from "@/lib/profile-preferences";
+import { submitProfilePreferenceIntent } from "@/lib/submit-profile-preference-intent";
 import { QuietHoursSettings } from "./quiet-hours-settings";
 import { ReminderDefaultsSettings } from "./reminder-defaults-settings";
 
@@ -42,11 +45,11 @@ export function NotificationSettings() {
   const deviceCount: number = subsData?.count ?? 0;
 
   // Fetch profile for email notification preference
-  const { data: profileData, mutate: mutateProfile } = useSWR(
+  const { data: profileData, mutate: mutateProfile } = useSWR<{ profile: Profile }>(
     "/api/profile",
     fetcher
   );
-  const emailEnabled = profileData?.profile?.email_notifications_enabled ?? false;
+  const emailEnabled = emailNotificationsEnabled(profileData?.profile);
   const [isEmailToggling, setIsEmailToggling] = useState(false);
 
   const handleToggle = async (checked: boolean) => {
@@ -78,15 +81,10 @@ export function NotificationSettings() {
   const handleEmailToggle = async (checked: boolean) => {
     setIsEmailToggling(true);
     try {
-      const response = await fetch("/api/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email_notifications_enabled: checked }),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to update email preference");
-      }
-      mutateProfile();
+      await submitProfilePreferenceIntent(
+        { email_notifications_enabled: checked },
+        mutateProfile,
+      );
       toast.success(checked ? t("emailEnabled") : t("emailDisabled"));
     } catch {
       toast.error(t("emailToggleError"));
