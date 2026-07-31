@@ -399,6 +399,7 @@ describe("RoutinesDB", () => {
         target_reps: 8,
         target_weight_kg: 100,
         target_duration_seconds: 60,
+        target_distance_meters: 500,
         rest_timer_seconds: 120,
         notes: "form focus",
       });
@@ -411,6 +412,7 @@ describe("RoutinesDB", () => {
         target_reps: 8,
         target_weight_kg: 100,
         target_duration_seconds: 60,
+        target_distance_meters: 500,
         rest_timer_seconds: 120,
         notes: "form focus",
       });

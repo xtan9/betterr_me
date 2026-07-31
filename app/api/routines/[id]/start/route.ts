@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { RoutinesDB } from "@/lib/db/routines";
 import {
   RoutineToWorkoutConversion,
-} from "@/lib/fitness/routine-to-workout";
+} from "@/lib/fitness/routine-workout-conversion";
 import { SupabaseRoutineWorkoutStore } from "@/lib/fitness/supabase-routine-workout-store";
 import { log } from "@/lib/logger";
 

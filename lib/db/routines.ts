@@ -166,6 +166,7 @@ export class RoutinesDB {
       target_reps?: number | null;
       target_weight_kg?: number | null;
       target_duration_seconds?: number | null;
+      target_distance_meters?: number | null;
       rest_timer_seconds?: number;
       notes?: string | null;
     }
@@ -196,6 +197,7 @@ export class RoutinesDB {
         target_reps: data.target_reps ?? null,
         target_weight_kg: data.target_weight_kg ?? null,
         target_duration_seconds: data.target_duration_seconds ?? null,
+        target_distance_meters: data.target_distance_meters ?? null,
         rest_timer_seconds: data.rest_timer_seconds ?? 90,
         notes: data.notes ?? null,
       })
@@ -220,6 +222,7 @@ export class RoutinesDB {
       target_reps?: number | null;
       target_weight_kg?: number | null;
       target_duration_seconds?: number | null;
+      target_distance_meters?: number | null;
       rest_timer_seconds?: number;
       notes?: string | null;
       sort_order?: number;

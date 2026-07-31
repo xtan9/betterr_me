@@ -29,6 +29,12 @@ export const routineExerciseAddSchema = z.object({
     .max(86400)
     .nullable()
     .optional(),
+  target_distance_meters: z
+    .number()
+    .min(0)
+    .max(999999.99)
+    .nullable()
+    .optional(),
   rest_timer_seconds: z.number().int().min(0).max(600).default(90),
   notes: z.string().max(2000).nullable().optional(),
 });
@@ -44,6 +50,12 @@ export const routineExerciseUpdateSchema = z
       .int()
       .min(0)
       .max(86400)
+      .nullable()
+      .optional(),
+    target_distance_meters: z
+      .number()
+      .min(0)
+      .max(999999.99)
       .nullable()
       .optional(),
     rest_timer_seconds: z.number().int().min(0).max(600).optional(),

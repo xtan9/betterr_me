@@ -679,6 +679,7 @@ export interface RoutineExercise {
   target_reps: number | null;
   target_weight_kg: number | null;
   target_duration_seconds: number | null;
+  target_distance_meters: number | null;
   rest_timer_seconds: number;
   notes: string | null;
   created_at: string;
