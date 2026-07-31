@@ -1,4 +1,10 @@
-import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type APIResponse,
+  type Page,
+} from '@playwright/test';
 import { E2E_READ_ONLY, FIXTURE_REGISTRY, RUN_CONTEXT } from './constants';
 import { registerFixtureId } from './run-context';
 
@@ -31,6 +37,10 @@ async function readTask(request: APIRequestContext, taskId: string): Promise<Tas
   return body.task;
 }
 
+function kanbanColumn(page: Page, name: 'To Do' | 'In Progress') {
+  return page.getByRole('heading', { name }).locator('../..');
+}
+
 test('moves a run-owned task, persists its placement, and preserves it after project deletion', async ({ page }) => {
   const projectName = RUN_CONTEXT.ownedName('Kanban deletion project');
   const taskTitle = RUN_CONTEXT.ownedName('Kanban movable task');
@@ -61,18 +71,15 @@ test('moves a run-owned task, persists its placement, and preserves it after pro
     await page.goto(`/projects/${project.id}/kanban`);
     await expect(page.getByRole('heading', { name: projectName })).toBeVisible();
 
-    const todoColumn = page.getByRole('heading', { name: 'To Do' }).locator('../..');
-    const inProgressColumn = page.getByRole('heading', { name: 'In Progress' }).locator('../..');
+    const todoColumn = kanbanColumn(page, 'To Do');
+    const inProgressColumn = kanbanColumn(page, 'In Progress');
     await todoColumn.getByText(taskTitle, { exact: true }).dragTo(inProgressColumn);
 
     await expect(inProgressColumn.getByText(taskTitle, { exact: true })).toBeVisible();
     await expect.poll(async () => (await readTask(page.request, task!.id)).status).toBe('in_progress');
 
     await page.reload();
-    const reloadedInProgressColumn = page
-      .getByRole('heading', { name: 'In Progress' })
-      .locator('../..');
-    await expect(reloadedInProgressColumn.getByText(taskTitle, { exact: true })).toBeVisible();
+    await expect(inProgressColumn.getByText(taskTitle, { exact: true })).toBeVisible();
 
     await page.getByRole('link', { name: 'Back to Tasks' }).click();
     await expect(page).toHaveURL(/\/tasks$/);
