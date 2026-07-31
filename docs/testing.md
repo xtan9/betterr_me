@@ -145,6 +145,60 @@ artifacts.
 
 **CI gate:** any PR touching `lib/db/**`, `tests/lib/db/**`, `tests/helpers/mock-supabase.ts`, `tests/setup.ts`, or `stryker.config.mjs` triggers the per-PR Stryker job. The `thresholds.break = 85` config fails the job if mutation score drops below 85%. A scheduled Monday 03:00 UTC run executes the full scope and catches cross-file regressions a per-PR run would miss.
 
+### Scheduled full-run policy and diagnostics
+
+The weekly and manual full mutation job is advisory. It has a 60-minute job
+budget. The Stryker command has an explicit 50-minute limit inside a 52-minute
+step, leaving the rest of the job budget for process cleanup, diagnostics,
+report upload, and runner cleanup. Mutation workflow concurrency is explicitly
+non-cancelling: an in-flight scheduled baseline is preserved instead of being
+replaced by a newer run.
+
+The `Publish full mutation diagnostic` step writes one category to the Actions
+job summary and log:
+
+- `failure` when Stryker returns a non-zero result;
+- `timeout` when GitHub stops the Stryker step at 50 minutes;
+- `cancellation` when the workflow is cancelled externally;
+- `infrastructure interruption` when the mutation step never produces a normal
+  outcome; or
+- `success` when the declared full scope completes.
+
+GitHub's workflow conclusion remains the fallback diagnostic when a runner is
+lost before a summary can be written: `stale` and `startup_failure` identify
+infrastructure interruption, while `cancelled` identifies external cancellation.
+
+#### July 2026 cancellation evidence
+
+The scheduled runs from May 4 through July 20 (twelve runs, ending with
+[run 29721456552](https://github.com/xtan9/betterr_me/actions/runs/29721456552))
+all entered `Run full Stryker` successfully and were cancelled at the job's
+60-minute limit. For example, run 29721456552 started Stryker at 06:22:08 UTC
+and GitHub cancelled that step at 07:21:56 UTC. This timing, repeated at the
+configured boundary, identifies job timeout rather than a test failure or
+concurrency cancellation as the cause.
+
+The legacy Money model was still included by the broad `lib/db/**/*.ts` scope
+in those runs. After that model and its DB tests were removed, the same declared
+mutation globs covered a materially smaller codebase. The next scheduled full
+scope [run 30243225170](https://github.com/xtan9/betterr_me/actions/runs/30243225170)
+completed successfully on July 27 in 20 minutes 27 seconds, within both the new
+50-minute step budget and the unchanged 60-minute job budget.
+
+A representative `pnpm mutation-test` run for issue #587 also completed on a
+Windows development host in 34 minutes 11 seconds. It exercised all 36 files in
+the declared scope (3,640 mutants and 948 initial tests) and finished with a
+95.89% mutation score against the 85% break threshold. The slower of the local
+and hosted observations therefore retains almost sixteen minutes of step-budget
+headroom.
+
+For follow-up observation, inspect the next two Monday runs. Confirm each job
+summary reports `success`, the Stryker step stays below 50 minutes, and the
+`mutation-report-full` artifact contains `reports/mutation/mutation.html`. If a
+run does not complete, use its summary category first and the workflow
+conclusion fallback above; record duration and the last completed step before
+changing either budget.
+
 ## Mocking reference
 
 Established patterns (see examples in `tests/lib/db/`):
