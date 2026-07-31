@@ -178,6 +178,22 @@ describe("conditional test classifier", () => {
     expect(unowned).toEqual([]);
   });
 
+  it("treats secret expiration metadata as CI policy", () => {
+    const result = classifyChanges([{
+      status: "M",
+      path: ".github/secret-expirations.json",
+    }]);
+
+    expect(result.fallback).toBe(false);
+    expect(result.ownershipMatches[0]).toMatchObject({ owners: ["ci-policy"] });
+    expect(result.suites).toMatchObject({
+      quality: true,
+      e2e: true,
+      e2eFull: false,
+      e2eSupabase: true,
+    });
+  });
+
   it.each([
     ["calendar", "components/calendar/month-grid.tsx"],
     ["journal", "app/journal/page.tsx"],
