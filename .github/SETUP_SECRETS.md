@@ -46,7 +46,7 @@ If the workflow fails:
 The controlled production and manual preview workflow requires:
 
 - Repository secret `VERCEL_TOKEN`: a scoped Vercel access token for the project
-  owner or team.
+  owner or team. Record its expiration and rotate the secret before it expires.
 - Repository variable `VERCEL_ORG_ID`: the `orgId` from the project's
   `.vercel/project.json` after running `vercel link` locally.
 - Repository variable `VERCEL_PROJECT_ID`: the `projectId` from the same file.
