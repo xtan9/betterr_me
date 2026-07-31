@@ -6,6 +6,7 @@ const mockGetUserEvents = vi.fn();
 const mockCreateEvent = vi.fn();
 const mockUpdateEvent = vi.fn();
 const mockLifecycleUpdate = vi.fn();
+const mockLifecycleDelete = vi.fn();
 const mockGetEvent = vi.fn();
 const mockDeleteEvent = vi.fn();
 
@@ -19,9 +20,10 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-vi.mock("@/lib/scheduling/create", () => ({
+vi.mock("@/lib/scheduling/lifecycle", () => ({
   SchedulingLifecycle: class {
     update = mockLifecycleUpdate;
+    delete = mockLifecycleDelete;
   },
 }));
 
@@ -95,27 +97,21 @@ describe("calendarTools", () => {
     });
   });
 
-  it("deleteEvent verifies existence then deletes", async () => {
+  it("deleteEvent returns the atomic lifecycle cleanup outcome", async () => {
     const ctx = makeCtx();
-    mockGetEvent.mockResolvedValue({ id: "e1" });
-    mockDeleteEvent.mockResolvedValue(undefined);
+    const outcome = {
+      event_id: "e1",
+      deleted: true,
+      reminders_deleted: 1,
+    };
+    mockLifecycleDelete.mockResolvedValue(outcome);
     const result = await findTool("deleteEvent").execute(
       { eventId: "e1" },
       ctx,
     );
-    expect(mockGetEvent).toHaveBeenCalledWith("e1", "user-123");
-    expect(mockDeleteEvent).toHaveBeenCalledWith("e1", "user-123");
-    expect(result).toEqual({ success: true });
-  });
-
-  it("deleteEvent returns error when not found", async () => {
-    const ctx = makeCtx();
-    mockGetEvent.mockResolvedValue(null);
-    const result = await findTool("deleteEvent").execute(
-      { eventId: "e999" },
-      ctx,
-    );
-    expect(result).toEqual({ error: "Event not found" });
+    expect(mockLifecycleDelete).toHaveBeenCalledWith("user-123", "e1");
+    expect(result).toEqual(outcome);
+    expect(mockGetEvent).not.toHaveBeenCalled();
     expect(mockDeleteEvent).not.toHaveBeenCalled();
   });
 });

@@ -31,7 +31,7 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/scheduling/create', () => ({
+vi.mock('@/lib/scheduling/lifecycle', () => ({
   SchedulingLifecycle: class {
     create = mockCreateEvent;
   },

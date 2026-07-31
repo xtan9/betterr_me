@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { CalendarEventsDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { calendarEventUpdateSchema } from '@/lib/validations/calendar-events';
-import { SchedulingLifecycle } from '@/lib/scheduling/create';
+import { SchedulingLifecycle } from '@/lib/scheduling/lifecycle';
 import { log } from '@/lib/logger';
 import type { CalendarEventUpdate } from '@/lib/db/types';
 
@@ -176,10 +176,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const db = new CalendarEventsDB(supabase);
-    await db.deleteEvent(id, user.id);
+    const lifecycle = new SchedulingLifecycle(supabase);
+    const outcome = await lifecycle.delete(user.id, id);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json(outcome);
   } catch (error) {
     log.error('DELETE /api/calendar-events/[id] error', error);
     return NextResponse.json({ error: 'Failed to delete calendar event' }, { status: 500 });

@@ -7,7 +7,7 @@ import { expandEventsForRange } from '@/lib/calendar/recurrence';
 import { log } from '@/lib/logger';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import type { CalendarEventInsert } from '@/lib/db/types';
-import { SchedulingLifecycle } from '@/lib/scheduling/create';
+import { SchedulingLifecycle } from '@/lib/scheduling/lifecycle';
 
 /**
  * GET /api/calendar-events

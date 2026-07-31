@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SchedulingLifecycle } from "@/lib/scheduling/create";
-import type { UpdateScheduleRequest } from "@/lib/scheduling/create";
+import { SchedulingLifecycle } from "@/lib/scheduling/lifecycle";
+import type { UpdateScheduleRequest } from "@/lib/scheduling/lifecycle";
 import type { CalendarEvent, Reminder } from "@/lib/db/types";
 
 const unsupportedInternalRecurrenceUpdate: UpdateScheduleRequest = {
@@ -196,6 +196,39 @@ describe("SchedulingLifecycle.update", () => {
         event: { start_time: "11:00:00" },
         reminders: [],
       }),
+    ).rejects.toBe(error);
+  });
+});
+
+describe("SchedulingLifecycle.delete", () => {
+  it("returns the database cleanup outcome", async () => {
+    const outcome = {
+      event_id: "event-123",
+      deleted: true,
+      reminders_deleted: 1,
+    };
+    const rpc = vi.fn().mockResolvedValue({ data: outcome, error: null });
+    const lifecycle = new SchedulingLifecycle({ rpc } as never);
+
+    const result = await lifecycle.delete("user-123", "event-123");
+
+    expect(result).toEqual(outcome);
+    expect(rpc).toHaveBeenCalledWith(
+      "delete_calendar_event_with_reminders",
+      {
+        p_user_id: "user-123",
+        p_event_id: "event-123",
+      },
+    );
+  });
+
+  it("throws the database error", async () => {
+    const error = new Error("delete lifecycle failed");
+    const rpc = vi.fn().mockResolvedValue({ data: null, error });
+    const lifecycle = new SchedulingLifecycle({ rpc } as never);
+
+    await expect(
+      lifecycle.delete("user-123", "event-123"),
     ).rejects.toBe(error);
   });
 });

@@ -36,10 +36,15 @@ export interface UpdateScheduleRequest {
 
 export type UpdateScheduleOutcome = CreateScheduleOutcome;
 
+export interface DeleteScheduleOutcome {
+  event_id: string;
+  deleted: boolean;
+  reminders_deleted: number;
+}
+
 /**
- * Creates an event and its requested reminders as one database transaction.
- * The RPC is the transaction boundary: it either returns the complete schedule
- * or raises, rolling back every insert made by the function.
+ * Coordinates event and reminder changes through database transaction
+ * boundaries so callers receive one complete lifecycle outcome.
  */
 export class SchedulingLifecycle {
   constructor(private supabase: SupabaseClient) {}
@@ -78,5 +83,21 @@ export class SchedulingLifecycle {
 
     if (error) throw error;
     return data as UpdateScheduleOutcome;
+  }
+
+  async delete(
+    userId: string,
+    eventId: string,
+  ): Promise<DeleteScheduleOutcome> {
+    const { data, error } = await this.supabase.rpc(
+      "delete_calendar_event_with_reminders",
+      {
+        p_user_id: userId,
+        p_event_id: eventId,
+      },
+    );
+
+    if (error) throw error;
+    return data as DeleteScheduleOutcome;
   }
 }

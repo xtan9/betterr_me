@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, PATCH, DELETE } from '@/app/api/calendar-events/[id]/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetEvent, mockDeleteEvent, mockUpdateSchedule } = vi.hoisted(() => ({
+const { mockGetEvent, mockDeleteEvent, mockUpdateSchedule, mockDeleteSchedule } = vi.hoisted(() => ({
   mockGetEvent: vi.fn(),
   mockDeleteEvent: vi.fn(),
   mockUpdateSchedule: vi.fn(),
+  mockDeleteSchedule: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -25,9 +26,10 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/scheduling/create', () => ({
+vi.mock('@/lib/scheduling/lifecycle', () => ({
   SchedulingLifecycle: class {
     update = mockUpdateSchedule;
+    delete = mockDeleteSchedule;
   },
 }));
 
@@ -411,8 +413,12 @@ describe('DELETE /api/calendar-events/[id]', () => {
     expect(response.status).toBe(401);
   });
 
-  it('should delete event successfully', async () => {
-    mockDeleteEvent.mockResolvedValue(undefined);
+  it('should return the atomic lifecycle cleanup outcome', async () => {
+    mockDeleteSchedule.mockResolvedValue({
+      event_id: '550e8400-e29b-41d4-a716-446655440001',
+      deleted: true,
+      reminders_deleted: 1,
+    });
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'DELETE',
@@ -421,12 +427,20 @@ describe('DELETE /api/calendar-events/[id]', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
-    expect(mockDeleteEvent).toHaveBeenCalledWith('550e8400-e29b-41d4-a716-446655440001', 'user-123');
+    expect(data).toEqual({
+      event_id: '550e8400-e29b-41d4-a716-446655440001',
+      deleted: true,
+      reminders_deleted: 1,
+    });
+    expect(mockDeleteSchedule).toHaveBeenCalledWith(
+      'user-123',
+      '550e8400-e29b-41d4-a716-446655440001',
+    );
+    expect(mockDeleteEvent).not.toHaveBeenCalled();
   });
 
   it('should return 500 on DB error', async () => {
-    mockDeleteEvent.mockRejectedValue(new Error('DB connection failed'));
+    mockDeleteSchedule.mockRejectedValue(new Error('DB connection failed'));
 
     const request = new NextRequest('http://localhost:3000/api/calendar-events/550e8400-e29b-41d4-a716-446655440001', {
       method: 'DELETE',

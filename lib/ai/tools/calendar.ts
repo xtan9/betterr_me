@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CalendarEventsDB } from "@/lib/db";
-import { SchedulingLifecycle } from "@/lib/scheduling/create";
+import { SchedulingLifecycle } from "@/lib/scheduling/lifecycle";
 import type { ToolDefinition, ToolContext } from "./types";
 
 type AiEventReminder =
@@ -144,11 +144,8 @@ export function calendarTools(): ToolDefinition[] {
         eventId: z.string().describe("The event ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new CalendarEventsDB(ctx.supabase);
-        const event = await db.getEvent(params.eventId, ctx.userId);
-        if (!event) return { error: "Event not found" };
-        await db.deleteEvent(params.eventId, ctx.userId);
-        return { success: true };
+        const lifecycle = new SchedulingLifecycle(ctx.supabase);
+        return lifecycle.delete(ctx.userId, params.eventId);
       },
     },
   ];
