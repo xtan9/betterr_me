@@ -30,7 +30,7 @@ const completedOutcome = {
   completed: true,
   currentStreak: 7,
   bestStreak: 12,
-  milestone: { status: "recorded", threshold: 7 },
+  milestones: [{ status: "recorded", threshold: 7 }],
 };
 
 function request(body: Record<string, unknown>) {
@@ -57,7 +57,7 @@ describe("POST /api/habits/[id]/toggle", () => {
       log: { id: "log-1", completed: false },
       completed: false,
       currentStreak: 6,
-      milestone: { status: "not_reached" },
+      milestones: [],
     });
   });
 
@@ -89,9 +89,13 @@ describe("POST /api/habits/[id]/toggle", () => {
       userId: "user-123",
       date: "2026-02-03",
     });
-    expect(body.completed).toBe(false);
-    expect(body.currentStreak).toBe(6);
-    expect(body.milestone).toEqual({ status: "not_reached" });
+    expect(body).toEqual({
+      log: { id: "log-1", completed: false },
+      completed: false,
+      currentStreak: 6,
+      bestStreak: 12,
+      milestones: [],
+    });
   });
 
   it("returns 400 for invalid date format", async () => {
@@ -139,7 +143,7 @@ describe("POST /api/habits/[id]/toggle", () => {
   it("returns milestone failure as a successful completion outcome", async () => {
     mockComplete.mockResolvedValue({
       ...completedOutcome,
-      milestone: { status: "failed", threshold: 7 },
+      milestones: [{ status: "failed", threshold: 7 }],
     });
 
     const response = await POST(
@@ -148,9 +152,9 @@ describe("POST /api/habits/[id]/toggle", () => {
     );
 
     expect(response.status).toBe(200);
-    expect((await response.json()).milestone).toEqual({
-      status: "failed",
-      threshold: 7,
+    expect(await response.json()).toEqual({
+      ...completedOutcome,
+      milestones: [{ status: "failed", threshold: 7 }],
     });
   });
 });

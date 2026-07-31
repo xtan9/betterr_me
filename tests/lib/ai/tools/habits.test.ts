@@ -101,7 +101,7 @@ describe("habitTools", () => {
       completed: true,
       currentStreak: 5,
       bestStreak: 10,
-      milestone: { status: "not_reached" },
+      milestones: [],
     });
     const result = await findTool("logHabit").execute(
       { habitId: "h1", date: "2026-04-10", completed: true },
@@ -117,7 +117,7 @@ describe("habitTools", () => {
       completed: true,
       currentStreak: 5,
       bestStreak: 10,
-      milestone: { status: "not_reached" },
+      milestones: [],
     });
   });
 
@@ -128,7 +128,7 @@ describe("habitTools", () => {
       completed: false,
       currentStreak: 4,
       bestStreak: 10,
-      milestone: { status: "not_reached" },
+      milestones: [],
     });
     const params = {
       habitId: "h1",
@@ -141,9 +141,12 @@ describe("habitTools", () => {
 
     expect(mockUncomplete).toHaveBeenCalledTimes(2);
     expect(mockComplete).not.toHaveBeenCalled();
-    expect(retry).toMatchObject({
+    expect(retry).toEqual({
+      currentStreak: 4,
+      bestStreak: 10,
       completed: false,
       log: { completed: false },
+      milestones: [],
     });
   });
 

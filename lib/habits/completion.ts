@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { HabitLog } from "@/lib/db/types";
 import { HabitMilestonesDB } from "@/lib/db/habit-milestones";
 import {
-  isMilestoneStreak,
+  MILESTONE_THRESHOLDS,
   type MilestoneThreshold,
 } from "@/lib/habits/milestones";
 import { log } from "@/lib/logger";
@@ -15,7 +15,6 @@ export interface HabitCompletionIntent {
 }
 
 export type HabitMilestoneOutcome =
-  | { status: "not_reached" }
   | { status: "recorded"; threshold: MilestoneThreshold }
   | { status: "already_recorded"; threshold: MilestoneThreshold }
   | { status: "failed"; threshold: MilestoneThreshold };
@@ -25,14 +24,14 @@ export interface HabitCompletionOutcome {
   completed: boolean;
   currentStreak: number;
   bestStreak: number;
-  milestone: HabitMilestoneOutcome;
+  milestones: HabitMilestoneOutcome[];
 }
 
 export interface HabitCompletionDependencies {
   setCompletionAtomically(
     intent: HabitCompletionIntent,
     completed: boolean,
-  ): Promise<Omit<HabitCompletionOutcome, "milestone">>;
+  ): Promise<Omit<HabitCompletionOutcome, "milestones">>;
   recordMilestone(
     habitId: string,
     userId: string,
@@ -61,7 +60,7 @@ export class HabitCompletion {
 
     return {
       ...criticalOutcome,
-      milestone: await this.resolveMilestone(
+      milestones: await this.resolveMilestones(
         intent,
         criticalOutcome.completed,
         criticalOutcome.currentStreak,
@@ -69,29 +68,34 @@ export class HabitCompletion {
     };
   }
 
-  private async resolveMilestone(
+  private async resolveMilestones(
     intent: HabitCompletionIntent,
     completed: boolean,
     currentStreak: number,
-  ): Promise<HabitMilestoneOutcome> {
-    if (!completed || !isMilestoneStreak(currentStreak)) {
-      return { status: "not_reached" };
-    }
+  ): Promise<HabitMilestoneOutcome[]> {
+    if (!completed) return [];
 
-    try {
-      const recorded = await this.dependencies.recordMilestone(
-        intent.habitId,
-        intent.userId,
-        currentStreak,
-      );
-      return {
-        status: recorded ? "recorded" : "already_recorded",
-        threshold: currentStreak,
-      };
-    } catch (error) {
-      this.dependencies.reportMilestoneFailure(error, intent.habitId);
-      return { status: "failed", threshold: currentStreak };
-    }
+    const reachedThresholds = MILESTONE_THRESHOLDS.filter(
+      (threshold) => threshold <= currentStreak,
+    );
+    return Promise.all(
+      reachedThresholds.map(async (threshold) => {
+        try {
+          const recorded = await this.dependencies.recordMilestone(
+            intent.habitId,
+            intent.userId,
+            threshold,
+          );
+          return {
+            status: recorded ? "recorded" : "already_recorded",
+            threshold,
+          };
+        } catch (error) {
+          this.dependencies.reportMilestoneFailure(error, intent.habitId);
+          return { status: "failed", threshold };
+        }
+      }),
+    );
   }
 }
 

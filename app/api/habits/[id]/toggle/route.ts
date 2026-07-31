@@ -58,7 +58,7 @@ export async function POST(
       currentStreak: result.currentStreak,
       bestStreak: result.bestStreak,
       completed: result.completed,
-      milestone: result.milestone,
+      milestones: result.milestones,
     });
   } catch (error: unknown) {
     log.error('POST /api/habits/[id]/toggle error', error);

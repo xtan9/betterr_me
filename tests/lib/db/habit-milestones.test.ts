@@ -30,11 +30,31 @@ describe('HabitMilestonesDB', () => {
         milestonesDB.recordMilestone(mockHabitId, mockUserId, 7)
       ).resolves.toBe(true);
 
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('habit_milestones');
-      expect(mockSupabaseClient.upsert).toHaveBeenCalledWith(
-        { habit_id: mockHabitId, user_id: mockUserId, milestone: 7 },
-        { onConflict: 'habit_id,milestone', ignoreDuplicates: true }
-      );
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: 'habit_milestones',
+          method: 'from',
+          args: ['habit_milestones'],
+        },
+        {
+          table: 'habit_milestones',
+          method: 'upsert',
+          args: [
+            { habit_id: mockHabitId, user_id: mockUserId, milestone: 7 },
+            { onConflict: 'habit_id,milestone', ignoreDuplicates: true },
+          ],
+        },
+        {
+          table: 'habit_milestones',
+          method: 'select',
+          args: ['id'],
+        },
+        {
+          table: 'habit_milestones',
+          method: 'maybeSingle',
+          args: [],
+        },
+      ]);
     });
 
     it('reports an existing milestone without rewriting it', async () => {

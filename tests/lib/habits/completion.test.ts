@@ -52,7 +52,7 @@ describe("HabitCompletion", () => {
       completed: true,
       currentStreak: 7,
       bestStreak: 7,
-      milestone: { status: "recorded", threshold: 7 },
+      milestones: [{ status: "recorded", threshold: 7 }],
     });
     expect(dependencies.setCompletionAtomically).toHaveBeenCalledWith(
       {
@@ -92,7 +92,7 @@ describe("HabitCompletion", () => {
       completed: false,
       currentStreak: 6,
       bestStreak: 7,
-      milestone: { status: "not_reached" },
+      milestones: [],
     });
     expect(dependencies.setCompletionAtomically).toHaveBeenCalledWith(
       {
@@ -127,11 +127,12 @@ describe("HabitCompletion", () => {
     expect([...milestones]).toEqual([7]);
     expect(dependencies.setCompletionAtomically).toHaveBeenCalledTimes(2);
     expect(dependencies.recordMilestone).toHaveBeenCalledTimes(2);
-    expect(first.milestone).toEqual({ status: "recorded", threshold: 7 });
-    expect(retry.milestone).toEqual({
-      status: "already_recorded",
-      threshold: 7,
-    });
+    expect(first.milestones).toEqual([
+      { status: "recorded", threshold: 7 },
+    ]);
+    expect(retry.milestones).toEqual([
+      { status: "already_recorded", threshold: 7 },
+    ]);
   });
 
   it("reports milestone failure without failing the completed habit outcome", async () => {
@@ -148,7 +149,9 @@ describe("HabitCompletion", () => {
     });
 
     expect(outcome.completed).toBe(true);
-    expect(outcome.milestone).toEqual({ status: "failed", threshold: 7 });
+    expect(outcome.milestones).toEqual([
+      { status: "failed", threshold: 7 },
+    ]);
     expect(dependencies.reportMilestoneFailure).toHaveBeenCalledWith(
       milestoneError,
       habit.id,
@@ -175,8 +178,12 @@ describe("HabitCompletion", () => {
 
     expect(dependencies.setCompletionAtomically).toHaveBeenCalledTimes(2);
     expect(dependencies.recordMilestone).toHaveBeenCalledTimes(2);
-    expect(failed.milestone).toEqual({ status: "failed", threshold: 7 });
-    expect(retry.milestone).toEqual({ status: "recorded", threshold: 7 });
+    expect(failed.milestones).toEqual([
+      { status: "failed", threshold: 7 },
+    ]);
+    expect(retry.milestones).toEqual([
+      { status: "recorded", threshold: 7 },
+    ]);
   });
 
   it("does not re-record an existing threshold after a different completion", async () => {
@@ -193,10 +200,54 @@ describe("HabitCompletion", () => {
 
     expect(dependencies.setCompletionAtomically).toHaveBeenCalledTimes(1);
     expect(dependencies.recordMilestone).toHaveBeenCalledTimes(1);
-    expect(outcome.milestone).toEqual({
-      status: "already_recorded",
-      threshold: 7,
+    expect(outcome.milestones).toEqual([
+      { status: "already_recorded", threshold: 7 },
+    ]);
+  });
+
+  it("records every reached threshold when a historical completion closes a gap", async () => {
+    const dependencies = makeDependencies({
+      setCompletionAtomically: vi.fn().mockResolvedValue({
+        log: completedLog,
+        completed: true,
+        currentStreak: 15,
+        bestStreak: 15,
+      }),
+      recordMilestone: vi
+        .fn()
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true),
     });
+    const completion = new HabitCompletion(dependencies);
+
+    const outcome = await completion.complete({
+      habitId: habit.id,
+      userId: habit.user_id,
+      date: "2026-07-20",
+    });
+
+    expect(outcome).toEqual({
+      log: completedLog,
+      completed: true,
+      currentStreak: 15,
+      bestStreak: 15,
+      milestones: [
+        { status: "already_recorded", threshold: 7 },
+        { status: "recorded", threshold: 14 },
+      ],
+    });
+    expect(dependencies.recordMilestone).toHaveBeenNthCalledWith(
+      1,
+      habit.id,
+      habit.user_id,
+      7,
+    );
+    expect(dependencies.recordMilestone).toHaveBeenNthCalledWith(
+      2,
+      habit.id,
+      habit.user_id,
+      14,
+    );
   });
 
   it("fails when the atomic lifecycle reports that the habit does not exist", async () => {
@@ -234,7 +285,7 @@ describe("HabitCompletion", () => {
       date: "2026-07-29",
     });
 
-    expect(outcome.milestone).toEqual({ status: "not_reached" });
+    expect(outcome.milestones).toEqual([]);
     expect(dependencies.recordMilestone).not.toHaveBeenCalled();
   });
 
@@ -257,11 +308,13 @@ describe("HabitCompletion", () => {
   });
 
   it("serializes concurrent completion intents so the log and streak share the final intent", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime("2026-07-29T12:00:00-07:00");
     let transaction = Promise.resolve();
     let persisted = {
       log: { ...completedLog, completed: false },
       completed: false,
-      current_streak: 6,
+      current_streak: 5,
       best_streak: 7,
     };
     const rpc = vi.fn(
@@ -274,7 +327,7 @@ describe("HabitCompletion", () => {
           persisted = {
             log: { ...completedLog, completed: args.p_completed },
             completed: args.p_completed,
-            current_streak: args.p_completed ? 7 : 6,
+            current_streak: args.p_completed ? 6 : 5,
             best_streak: 7,
           };
           return { data: persisted, error: null };
@@ -292,35 +345,79 @@ describe("HabitCompletion", () => {
       date: "2026-07-29",
     };
 
-    const [completed, uncompleted] = await Promise.all([
-      completion.complete(intent),
-      completion.uncomplete(intent),
-    ]);
+    try {
+      const [completed, uncompleted] = await Promise.all([
+        completion.complete(intent),
+        completion.uncomplete(intent),
+      ]);
 
-    expect(completed).toMatchObject({
-      completed: true,
-      currentStreak: 7,
-      log: { completed: true },
+      expect(completed).toEqual({
+        log: { ...completedLog, completed: true },
+        completed: true,
+        currentStreak: 6,
+        bestStreak: 7,
+        milestones: [],
+      });
+      expect(uncompleted).toEqual({
+        log: { ...completedLog, completed: false },
+        completed: false,
+        currentStreak: 5,
+        bestStreak: 7,
+        milestones: [],
+      });
+      expect(persisted).toEqual({
+        log: { ...completedLog, completed: false },
+        completed: false,
+        current_streak: 5,
+        best_streak: 7,
+      });
+      expect(rpc).toHaveBeenNthCalledWith(1, "set_habit_completion_atomically", {
+        p_habit_id: habit.id,
+        p_user_id: habit.user_id,
+        p_logged_date: "2026-07-29",
+        p_completed: true,
+        p_today: "2026-07-29",
+      });
+      expect(rpc).toHaveBeenNthCalledWith(2, "set_habit_completion_atomically", {
+        p_habit_id: habit.id,
+        p_user_id: habit.user_id,
+        p_logged_date: "2026-07-29",
+        p_completed: false,
+        p_today: "2026-07-29",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("surfaces an atomic RPC error before attempting milestones", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime("2026-07-29T12:00:00-07:00");
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "atomic completion unavailable" },
     });
-    expect(uncompleted).toMatchObject({
-      completed: false,
-      currentStreak: 6,
-      log: { completed: false },
-    });
-    expect(persisted).toMatchObject({
-      completed: false,
-      current_streak: 6,
-      log: { completed: false },
-    });
-    expect(rpc).toHaveBeenNthCalledWith(
-      1,
-      "set_habit_completion_atomically",
-      expect.objectContaining({ p_completed: true }),
-    );
-    expect(rpc).toHaveBeenNthCalledWith(
-      2,
-      "set_habit_completion_atomically",
-      expect.objectContaining({ p_completed: false }),
-    );
+    const completion = createHabitCompletion({
+      rpc,
+    } as unknown as SupabaseClient);
+
+    try {
+      await expect(
+        completion.complete({
+          habitId: habit.id,
+          userId: habit.user_id,
+          date: "2026-07-29",
+        }),
+      ).rejects.toThrow("atomic completion unavailable");
+      expect(rpc).toHaveBeenCalledWith("set_habit_completion_atomically", {
+        p_habit_id: habit.id,
+        p_user_id: habit.user_id,
+        p_logged_date: "2026-07-29",
+        p_completed: true,
+        p_today: "2026-07-29",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
