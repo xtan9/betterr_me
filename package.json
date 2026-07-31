@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:chromium": "playwright test --project=chromium",
+    "test:e2e:project-organization": "node scripts/e2e/run-project-organization.mjs",
     "test:e2e:firefox": "playwright test --project=firefox",
     "test:e2e:webkit": "playwright test --project=webkit",
     "test:e2e:mobile": "playwright test --project=mobile-chrome --project=mobile-safari --project=mobile-small",
