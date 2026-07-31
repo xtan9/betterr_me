@@ -47,6 +47,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "routine_workout_transaction.sql",
+    "domain": "workouts",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "e2e_local_authenticated_grants.sql",
     "kind": "support",
     "reason": "prepares disposable browser-test grants and is not an acceptance fixture"
