@@ -104,6 +104,16 @@ describe("SQL fixture registry", () => {
     ]);
   });
 
+  it("selects the planning and work-management RLS group by domain", () => {
+    const registry = loadSqlFixtureRegistry();
+    const selected = selectSqlFixtures(registry, {
+      domain: "planning-work-management",
+    });
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0].path).toBe("planning_work_management_rls.sql");
+  });
+
   it("accepts a registered transactional fixture", () => {
     const root = createFixtureRepository(
       [
