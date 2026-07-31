@@ -23,6 +23,7 @@ begin
     'recurring_tasks',
     'projects',
     'journal_entries',
+    'journal_entry_links',
     'workouts'
   ] loop
     if to_regclass(format('public.%I', table_name)) is not null then
