@@ -2,51 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   availableScenarios,
   applyExpenseReduction,
-  calculateCushion,
   createDefaultRunwayAnswers,
   createDraftEnvelope,
   estimateMonthlyTakeHome,
   expenseTotals,
   migrateRunwayAnswers,
   normalizeExpenseToMonthly,
-  parseDollarsToCents,
   parseDraftEnvelope,
   simulateHouseholdRunway,
+  toFinanceCushionView,
   withCurrentLifestyleExpenses,
   type HouseholdRunwayAnswers,
 } from "@/lib/finance/cushion";
-
-const inputs = (resources: number, expenses: number, income = 0) => ({
-  liquid_resources_cents: resources,
-  monthly_essential_expenses_cents: expenses,
-  monthly_continuing_income_cents: income,
-});
-
-describe("legacy cushion calculation", () => {
-  it.each([
-    [299, 100, 2.99, "urgent"],
-    [300, 100, 3, "building"],
-    [600, 100, 6, "stronger"],
-  ])("classifies %s / %s", (resources, expenses, months, state) => {
-    const result = calculateCushion(inputs(resources, expenses));
-    expect(result.months_covered).toBe(months);
-    expect(result.planning_state).toBe(state);
-  });
-
-  it("uses a sustainable result when continuing income covers costs", () => {
-    expect(calculateCushion(inputs(0, 400, 400)).months_covered).toBeNull();
-  });
-});
-
-describe("parseDollarsToCents", () => {
-  it.each([["0", 0], ["12.3", 1230], ["1,000.00", 100000]])(
-    "parses %s",
-    (value, expected) => expect(parseDollarsToCents(value)).toBe(expected),
-  );
-  it.each(["", "-1", "1.234", "one"])("rejects %s", (value) => {
-    expect(parseDollarsToCents(value)).toBeNull();
-  });
-});
 
 function runway(overrides?: Partial<HouseholdRunwayAnswers>) {
   const answers = createDefaultRunwayAnswers(
@@ -265,6 +232,31 @@ describe("adaptive scenarios", () => {
 });
 
 describe("estimates, drafts, and migration", () => {
+  it("preserves retained cushion inputs as reviewable versioned answers", () => {
+    const view = toFinanceCushionView({
+      id: "plan-1",
+      user_id: "user-1",
+      liquid_resources_cents: 900_000,
+      monthly_essential_expenses_cents: 300_000,
+      monthly_continuing_income_cents: 50_000,
+      answers: null,
+      created_at: "2026-07-01T00:00:00.000Z",
+      updated_at: "2026-07-31T00:00:00.000Z",
+    });
+
+    expect(view.answers).toMatchObject({
+      schema_version: 4,
+      region: "",
+      available_cash: { cents: 900_000, confidence: "confirmed" },
+      expense_mode: "quick",
+      quick_expenses: {
+        current_monthly_cents: 300_000,
+        interruption_monthly_cents: 300_000,
+      },
+      other_income_sources: [{ monthly_cents: 50_000 }],
+    });
+  });
+
   it("separates 2026 US federal, state, Social Security, and Medicare estimates", () => {
     const estimate = estimateMonthlyTakeHome({ country: "US", region: "CA", amountCents: 12_000_000, period: "annual", filingStatus: "single" });
     expect(estimate.annual_federal_income_tax_cents).toBe(1_757_000);

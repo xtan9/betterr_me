@@ -1,6 +1,7 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createDefaultRunwayAnswers } from "@/lib/finance/cushion";
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -19,8 +20,21 @@ vi.mock("@/lib/finance/repository", () => ({
   getRunwaySnapshots: mocks.getRunwaySnapshots,
 }));
 vi.mock("@/components/finance/household-runway", () => ({
-  HouseholdRunway: ({ isAuthenticated }: { isAuthenticated: boolean }) => (
-    <div data-testid="household-runway" data-authenticated={isAuthenticated} />
+  HouseholdRunway: ({
+    isAuthenticated,
+    hasSavedPlan,
+    initialAdjustments,
+  }: {
+    isAuthenticated: boolean;
+    hasSavedPlan: boolean;
+    initialAdjustments: unknown;
+  }) => (
+    <div
+      data-testid="household-runway"
+      data-authenticated={isAuthenticated}
+      data-saved={hasSavedPlan}
+      data-adjustments={JSON.stringify(initialAdjustments)}
+    />
   ),
 }));
 vi.mock("@/components/layouts/sidebar-shell", () => ({
@@ -58,6 +72,41 @@ describe("FinanceCushionPage", () => {
     expect(screen.queryByTestId("sidebar-shell")).not.toBeInTheDocument();
     expect(screen.getByTestId("household-runway")).toHaveAttribute(
       "data-authenticated",
+      "false",
+    );
+  });
+
+  it("hydrates adjustments from the persisted assessment", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mocks.getFinanceCushion.mockResolvedValue({
+      answers: createDefaultRunwayAnswers(
+        new Date("2026-07-31T00:00:00.000Z"),
+      ),
+      latest_result: {
+        success: true,
+        adjustments: { added_cash_cents: 125_000 },
+      },
+    });
+
+    render(await FinanceCushionPage());
+
+    expect(screen.getByTestId("household-runway")).toHaveAttribute(
+      "data-adjustments",
+      expect.stringContaining('"added_cash_cents":125000'),
+    );
+  });
+
+  it("does not mark a retained row without versioned answers as saved", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    mocks.getFinanceCushion.mockResolvedValue({
+      answers: null,
+      latest_result: null,
+    });
+
+    render(await FinanceCushionPage());
+
+    expect(screen.getByTestId("household-runway")).toHaveAttribute(
+      "data-saved",
       "false",
     );
   });

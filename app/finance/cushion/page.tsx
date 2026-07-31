@@ -4,13 +4,18 @@ import {
   getFinanceCushion,
   getRunwaySnapshots,
 } from "@/lib/finance/repository";
-import {
-  createDefaultRunwayAnswers,
-  type HouseholdRunwayAnswers,
-} from "@/lib/finance/cushion";
 import { HouseholdRunway } from "@/components/finance/household-runway";
 import { SidebarShell } from "@/components/layouts/sidebar-shell";
 import { hasEnvVars } from "@/lib/utils";
+import { runwayAdjustmentsSchema } from "@/lib/validations/finance-cushion";
+
+function persistedAdjustments(result: unknown) {
+  if (!result || typeof result !== "object" || !("adjustments" in result)) {
+    return null;
+  }
+  const parsed = runwayAdjustmentsSchema.safeParse(result.adjustments);
+  return parsed.success ? parsed.data : null;
+}
 
 export const metadata: Metadata = {
   title: "Household Runway | BetterR.me",
@@ -26,50 +31,12 @@ export const metadata: Metadata = {
   },
 };
 
-function migrateLegacy(
-  record: Awaited<ReturnType<typeof getFinanceCushion>>,
-): HouseholdRunwayAnswers | null {
-  if (!record) return null;
-  if (record.answers) return record.answers;
-  const answers = createDefaultRunwayAnswers(new Date(record.updated_at));
-  answers.available_cash = {
-    cents: record.liquid_resources_cents,
-    confidence: "confirmed",
-  };
-  if (record.monthly_continuing_income_cents > 0) {
-    answers.other_income_sources = [
-      {
-        id: "legacy-continuing-income",
-        type: "other",
-        label: "Previous continuing income",
-        monthly_cents: record.monthly_continuing_income_cents,
-        confidence: "needs_review",
-      },
-    ];
-  }
-  answers.mine = {
-    ...answers.mine,
-    employment: "unemployed",
-    entered_amount_cents: 0,
-    monthly_take_home_cents: 0,
-    estimated_monthly_take_home_cents: 0,
-    take_home_source: "user_confirmed",
-    confidence: "confirmed",
-  };
-  answers.expense_mode = "quick";
-  answers.quick_expenses = {
-    current_monthly_cents: record.monthly_essential_expenses_cents,
-    interruption_monthly_cents: record.monthly_essential_expenses_cents,
-    confidence: "confirmed",
-  };
-  return answers;
-}
-
 export default async function FinanceCushionPage() {
   if (!hasEnvVars) {
     return (
       <HouseholdRunway
         initialAnswers={null}
+        initialAdjustments={null}
         isAuthenticated={false}
         hasSavedPlan={false}
         initialSnapshots={[]}
@@ -88,9 +55,10 @@ export default async function FinanceCushionPage() {
     : [null, []];
   const runway = (
     <HouseholdRunway
-      initialAnswers={migrateLegacy(cushion)}
+      initialAnswers={cushion?.answers ?? null}
+      initialAdjustments={persistedAdjustments(cushion?.latest_result)}
       isAuthenticated={Boolean(user)}
-      hasSavedPlan={Boolean(cushion)}
+      hasSavedPlan={Boolean(cushion?.answers)}
       initialSnapshots={snapshots}
     />
   );

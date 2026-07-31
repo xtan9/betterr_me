@@ -25,20 +25,15 @@ import { MoneyField } from "@/components/finance/runway-money-field";
 import { ResultExperience } from "@/components/finance/household-runway-result";
 import {
   EXPENSE_CATEGORIES,
-  RUNWAY_MODEL_VERSION,
   RUNWAY_STEP_IDS,
-  availableScenarios,
   createDefaultRunwayAnswers,
   currencyForCountry,
   estimateMonthlyTakeHome,
   expenseCategoryTotals,
   expenseTotals,
   formatCents,
-  highestLeverageActions,
   monthlyIncomeTotal,
   applyExpenseReduction,
-  simulateHouseholdRunway,
-  withCurrentLifestyleExpenses,
   type EmploymentStatus,
   type ExpenseCategory,
   type ExpenseFrequency,
@@ -55,6 +50,8 @@ import {
   type RunwaySnapshotSummary,
   type RunwayStepId,
 } from "@/lib/finance/cushion";
+import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
+import { downloadHouseholdRunwayAssessment } from "@/lib/finance/household-runway-download";
 import {
   EXPENSE_ITEM_TYPES,
   type ExpenseItemType,
@@ -108,6 +105,7 @@ type AssetKey = (typeof ASSET_KEYS)[number];
 
 interface HouseholdRunwayProps {
   initialAnswers: HouseholdRunwayAnswers | null;
+  initialAdjustments: RunwayAdjustments | null;
   isAuthenticated: boolean;
   hasSavedPlan: boolean;
   initialSnapshots: RunwaySnapshotSummary[];
@@ -149,19 +147,32 @@ function employmentIncome(
 
 export function HouseholdRunway({
   initialAnswers,
+  initialAdjustments,
   isAuthenticated,
   hasSavedPlan,
   initialSnapshots,
 }: HouseholdRunwayProps) {
   const t = useTranslations("householdRunway");
   const locale = useLocale();
+  const initialAssessment = useMemo(
+    () =>
+      initialAnswers
+        ? assessHouseholdRunway({
+            answers: initialAnswers,
+            adjustments: initialAdjustments ?? undefined,
+          })
+        : null,
+    [initialAdjustments, initialAnswers],
+  );
   const [answers, setAnswers] = useState<HouseholdRunwayAnswers>(
     () => initialAnswers ?? createDefaultRunwayAnswers(),
   );
   const [stepId, setStepId] = useState<RunwayStepId>(
-    initialAnswers ? "result" : "location",
+    initialAssessment?.success ? "result" : "location",
   );
-  const [completed, setCompleted] = useState(Boolean(initialAnswers));
+  const [completed, setCompleted] = useState(
+    Boolean(initialAssessment?.success),
+  );
   const [hydrated, setHydrated] = useState(false);
   const [hasLocalDraft, setHasLocalDraft] = useState(false);
   const [snapshots, setSnapshots] = useState(initialSnapshots);
@@ -172,17 +183,23 @@ export function HouseholdRunway({
   const [activeExpenseCategory, setActiveExpenseCategory] =
     useState<ExpenseCategory | null>(null);
   const [scenario, setScenario] = useState<RunwayScenario>(() =>
-    initialAnswers ? availableScenarios(initialAnswers)[0].id : "mine_stops",
+    initialAssessment?.success
+      ? initialAssessment.firstScenario.scenario
+      : "mine_stops",
   );
-  const [adjustments, setAdjustments] = useState<RunwayAdjustments>(() => ({
-    ...EMPTY_ADJUSTMENTS,
-    usable_illiquid_investments_cents:
-      initialAnswers?.extreme_access.illiquid_investments_cents ?? 0,
-    usable_retirement_tax_deferred_cents:
-      initialAnswers?.extreme_access.retirement_tax_deferred_cents ?? 0,
-    usable_retirement_tax_free_cents:
-      initialAnswers?.extreme_access.retirement_tax_free_cents ?? 0,
-  }));
+  const [adjustments, setAdjustments] = useState<RunwayAdjustments>(() =>
+    initialAdjustments
+      ? { ...initialAdjustments }
+      : {
+          ...EMPTY_ADJUSTMENTS,
+          usable_illiquid_investments_cents:
+            initialAnswers?.extreme_access.illiquid_investments_cents ?? 0,
+          usable_retirement_tax_deferred_cents:
+            initialAnswers?.extreme_access.retirement_tax_deferred_cents ?? 0,
+          usable_retirement_tax_free_cents:
+            initialAnswers?.extreme_access.retirement_tax_free_cents ?? 0,
+        },
+  );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(hasSavedPlan);
   const landingTracked = useRef(false);
@@ -195,10 +212,18 @@ export function HouseholdRunway({
     };
     const draft = readRunwayDraft();
     if (draft && !initialAnswers) {
+      const draftAssessment = assessHouseholdRunway({ answers: draft.answers });
+      const completedDraftIsValid = draft.completed && draftAssessment.success;
       setAnswers(draft.answers);
-      setStepId(draft.step_id);
-      setCompleted(draft.completed);
-      setScenario(availableScenarios(draft.answers)[0].id);
+      setStepId(
+        draft.completed && !completedDraftIsValid ? "location" : draft.step_id,
+      );
+      setCompleted(completedDraftIsValid);
+      setScenario(
+        draftAssessment.success
+          ? draftAssessment.firstScenario.scenario
+          : "mine_stops",
+      );
       setHasLocalDraft(true);
       setAdjustments((current) => ({
         ...current,
@@ -255,43 +280,17 @@ export function HouseholdRunway({
     heading?.focus({ preventScroll: true });
   }, [hydrated, showLanding, stepId]);
 
-  const scenarios = useMemo(() => availableScenarios(answers), [answers]);
-  const baseline = useMemo(
-    () => simulateHouseholdRunway(answers, scenario),
-    [answers, scenario],
-  );
-  const preview = useMemo(
-    () => simulateHouseholdRunway(answers, scenario, adjustments),
-    [adjustments, answers, scenario],
-  );
-  const currentLifestyle = useMemo(
-    () => simulateHouseholdRunway(withCurrentLifestyleExpenses(answers), scenario),
-    [answers, scenario],
-  );
-  const extreme = useMemo(
+  const assessment = useMemo(
     () =>
-      simulateHouseholdRunway(answers, scenario, {
-        usable_illiquid_investments_cents:
-          answers.extreme_access.illiquid_investments_cents,
-        usable_retirement_tax_deferred_cents:
-          answers.extreme_access.retirement_tax_deferred_cents,
-        usable_retirement_tax_free_cents:
-          answers.extreme_access.retirement_tax_free_cents,
-      }),
-    [answers, scenario],
+      stepId === "review" || stepId === "result"
+        ? assessHouseholdRunway({ answers, adjustments })
+        : null,
+    [adjustments, answers, stepId],
   );
-  const scenarioResults = useMemo(
-    () =>
-      scenarios.map((option) => ({
-        scenario: option.id,
-        result: simulateHouseholdRunway(answers, option.id),
-      })),
-    [answers, scenarios],
-  );
-  const actions = useMemo(
-    () => highestLeverageActions(answers, preview),
-    [answers, preview],
-  );
+  const selectedAssessment = assessment?.success
+    ? (assessment.scenarios.find((item) => item.scenario === scenario) ??
+      assessment.firstScenario)
+    : null;
 
   const update = (patch: Partial<HouseholdRunwayAnswers>) => {
     setSaved(false);
@@ -458,8 +457,12 @@ export function HouseholdRunway({
     }
     setError("");
     if (stepId === "review") {
+      if (!assessment?.success) {
+        setError(t("validation.assessment"));
+        return;
+      }
       setCompleted(true);
-      setScenario(scenarios[0].id);
+      setScenario(assessment.firstScenario.scenario);
       trackRunwayEvent("completed", stepId);
     }
     setStepId(adjacentStep(stepId, 1));
@@ -486,6 +489,7 @@ export function HouseholdRunway({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           answers,
+          adjustments,
           status: "completed",
           attribution: runwayAttribution(),
           create_snapshot: true,
@@ -560,53 +564,32 @@ export function HouseholdRunway({
   };
 
   const download = () => {
-    const reportActions = [
-      actions.cashGapCents > 0
-        ? `${t("actionsPlan.cashTarget", { months: actions.targetMonths })}: ${formatCents(actions.cashGapCents, locale, answers.currency)}`
-        : null,
-      actions.largestReducibleCategory
-        ? `${t("actionsPlan.largest")}: ${t(`expenseCategories.${actions.largestReducibleCategory.category}`)} (${formatCents(actions.largestReducibleCategory.reducible, locale, answers.currency)})`
-        : null,
-      answers.expense_mode === "quick"
-        ? t("precision.expenses")
-        : answers.mine.take_home_source === "estimated" ||
-            answers.partner?.take_home_source === "estimated"
-          ? t("precision.takeHome")
-          : t("precision.complete"),
-    ].filter(Boolean);
-    const content = [
-      "BetterR.me Household Runway",
-      `Model: ${RUNWAY_MODEL_VERSION}`,
-      `Location: ${answers.country} · ${runwayRegionLabel(answers.country, answers.region, locale) ?? answers.region}`,
-      `Cash: ${formatCents(answers.available_cash.cents, locale, answers.currency)}`,
-      `Liquid investments: ${formatCents(answers.assets.liquid_investments.cents, locale, answers.currency)}`,
-      `Continuing monthly income: ${formatCents(monthlyIncomeTotal(answers), locale, answers.currency)}`,
-      `Current monthly expenses: ${formatCents(expenseTotals(answers).current, locale, answers.currency)}`,
-      `Interruption monthly expenses: ${formatCents(expenseTotals(answers).interruption, locale, answers.currency)}`,
-      "",
-      "Scenarios",
-      ...scenarioResults.map(({ scenario: itemScenario, result }) =>
-        `${t(`scenarios.${itemScenario}`)}: ${result.sustainable ? t("comparison.sustainable") : `${(result.months_covered ?? 0).toFixed(1)} ${t("whatIf.months")}`}`,
-      ),
-      "",
-      "Assumptions",
-      "Easy-to-withdraw investments are included at 100%.",
-      `Excluded assets: ${formatCents(baseline.excluded_assets_cents, locale, answers.currency)}`,
-      "What-if changes stay out of the saved baseline until you explicitly apply them.",
-      "",
-      "Priority actions",
-      ...reportActions.slice(0, 3).map((action, index) => `${index + 1}. ${action}`),
-      "",
-      "Educational scenario estimate only; not tax, investment, legal, eligibility, or financial advice.",
-    ].join("\n");
-    const url = URL.createObjectURL(
-      new Blob([content], { type: "text/plain;charset=utf-8" }),
-    );
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "household-runway-plan.txt";
-    anchor.click();
-    URL.revokeObjectURL(url);
+    if (!assessment?.success) {
+      setError(t("save.downloadError"));
+      return;
+    }
+    const result = downloadHouseholdRunwayAssessment(assessment, {
+      location: `${answers.country} · ${runwayRegionLabel(answers.country, answers.region, locale) ?? answers.region}`,
+      formatMoney: (cents) =>
+        formatCents(cents, locale, answers.currency),
+      formatScenario: (itemScenario) => t(`scenarios.${itemScenario}`),
+      formatSimulation: (simulation) =>
+        simulation.sustainable
+          ? t("comparison.sustainable")
+          : `${(simulation.months_covered ?? 0).toFixed(1)} ${t("whatIf.months")}`,
+      formatCashTarget: (months, cents) =>
+        `${t("actionsPlan.cashTarget", { months })}: ${formatCents(cents, locale, answers.currency)}`,
+      formatLargestReduction: (category, cents) =>
+        `${t("actionsPlan.largest")}: ${t(`expenseCategories.${category}`)} (${formatCents(cents, locale, answers.currency)})`,
+      precisionAdvice:
+        answers.expense_mode === "quick"
+          ? t("precision.expenses")
+          : answers.mine.take_home_source === "estimated" ||
+              answers.partner?.take_home_source === "estimated"
+            ? t("precision.takeHome")
+            : t("precision.complete"),
+    });
+    if (!result.success) setError(t("save.downloadError"));
   };
 
   if (!hydrated) {
@@ -631,24 +614,24 @@ export function HouseholdRunway({
           onPrimary={() => startInterview(false)}
           onStartOver={confirmStartOver}
         />
-      ) : stepId === "result" ? (
+      ) : stepId === "result" && assessment?.success && selectedAssessment ? (
         <ResultExperience
           t={t}
           locale={locale}
           answers={answers}
-          scenarios={scenarios.map((item) => item.id)}
+          scenarios={assessment.scenarios.map((item) => item.scenario)}
           scenario={scenario}
           setScenario={(value) => {
             setScenario(value);
             trackRunwayEvent("result_interaction", "scenario_switch");
           }}
-          baseline={baseline}
-          preview={preview}
-          currentLifestyle={currentLifestyle}
-          extreme={extreme}
+          baseline={selectedAssessment.baseline}
+          preview={selectedAssessment.adjusted}
+          currentLifestyle={selectedAssessment.comparisons.currentLifestyle}
+          extreme={selectedAssessment.comparisons.extremeMode}
           adjustments={adjustments}
           setAdjustments={setAdjustments}
-          actions={actions}
+          actions={selectedAssessment.advice}
           onApply={applyWhatIf}
           onReset={() =>
             setAdjustments({

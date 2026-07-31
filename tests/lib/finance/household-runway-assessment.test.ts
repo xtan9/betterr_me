@@ -321,7 +321,7 @@ describe("Household Runway Assessment", () => {
     });
   });
 
-  it("should use one effective date when startDate is omitted", () => {
+  it("should derive an omitted startDate from the versioned answers", () => {
     vi.useFakeTimers();
     vi.setSystemTime("2026-07-26T00:00:00.000Z");
     const now = vi.spyOn(Date, "now");
@@ -332,7 +332,7 @@ describe("Household Runway Assessment", () => {
         startDate: new Date("2026-07-26T00:00:00.000Z"),
       });
 
-      expect(now).toHaveBeenCalledTimes(1);
+      expect(now).not.toHaveBeenCalled();
       expect(outcome.success).toBe(true);
       expect(explicitDateOutcome.success).toBe(true);
       if (!outcome.success || !explicitDateOutcome.success) return;

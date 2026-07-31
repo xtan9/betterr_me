@@ -49,6 +49,11 @@ export type HouseholdRunwayAssessmentOutcome =
       validationIssues: HouseholdRunwayAssessmentValidationIssue[];
     };
 
+export type SuccessfulHouseholdRunwayAssessment = Extract<
+  HouseholdRunwayAssessmentOutcome,
+  { success: true }
+>;
+
 /**
  * Assess every supported household runway scenario from one normalized input.
  *
@@ -107,7 +112,8 @@ export function assessHouseholdRunway(
   if (relationalIssues.length > 0) {
     return { success: false, validationIssues: relationalIssues };
   }
-  const effectiveStartDate = parsedInput.data.startDate ?? new Date(Date.now());
+  const effectiveStartDate =
+    parsedInput.data.startDate ?? new Date(answers.updated_at);
   const scenarios = availableScenarios(answers).map(({ id }) => {
     const baseline = simulateHouseholdRunway(
       answers,

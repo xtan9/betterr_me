@@ -914,70 +914,78 @@ export function parseDraftEnvelope(
   }
 }
 
-/** Legacy V1 compatibility retained for deployed API records and migrations. */
-export type CushionPlanningState = "urgent" | "building" | "stronger";
-export interface CushionInputs {
+interface RequiredCushionColumns {
   liquid_resources_cents: number;
   monthly_essential_expenses_cents: number;
   monthly_continuing_income_cents: number;
 }
-export interface CushionCalculation {
-  monthly_shortfall_cents: number;
-  months_covered: number | null;
-  planning_state: CushionPlanningState;
-}
-export interface FinanceCushionRecord extends CushionInputs {
+export interface FinanceCushionRecord extends RequiredCushionColumns {
   id: string;
   user_id: string;
   created_at: string;
   updated_at: string;
   answers?: unknown;
-  latest_result?: RunwaySimulation | null;
+  latest_result?: unknown;
   model_version?: string;
   status?: string;
 }
 export type FinanceCushionView = Omit<FinanceCushionRecord, "answers"> & {
   answers: HouseholdRunwayAnswers | null;
-  calculation: CushionCalculation;
 };
 export const FINANCE_CUSHION_COLUMNS =
   "id, user_id, liquid_resources_cents, monthly_essential_expenses_cents, monthly_continuing_income_cents, answers, latest_result, model_version, status, created_at, updated_at";
-export function calculateCushion(inputs: CushionInputs): CushionCalculation {
-  const shortfall = Math.max(
-    inputs.monthly_essential_expenses_cents -
-      inputs.monthly_continuing_income_cents,
-    0,
+
+function persistedCushionAnswers(
+  record: FinanceCushionRecord,
+): HouseholdRunwayAnswers | null {
+  const versioned = migrateRunwayAnswers(
+    record.answers,
+    new Date(record.updated_at),
+    { allowIncompleteRegion: true },
   );
-  if (shortfall === 0)
-    return {
-      monthly_shortfall_cents: 0,
-      months_covered: null,
-      planning_state: "stronger",
-    };
-  const months =
-    Math.floor((inputs.liquid_resources_cents / shortfall) * 100) / 100;
-  return {
-    monthly_shortfall_cents: shortfall,
-    months_covered: months,
-    planning_state:
-      months < 3 ? "urgent" : months < 6 ? "building" : "stronger",
+  if (versioned || record.answers != null) return versioned;
+
+  const answers = createDefaultRunwayAnswers(new Date(record.updated_at));
+  answers.available_cash = {
+    cents: record.liquid_resources_cents,
+    confidence: "confirmed",
   };
+  if (record.monthly_continuing_income_cents > 0) {
+    answers.other_income_sources = [
+      {
+        id: "retained-continuing-income",
+        type: "other",
+        label: "Previous continuing income",
+        monthly_cents: record.monthly_continuing_income_cents,
+        confidence: "needs_review",
+      },
+    ];
+  }
+  answers.mine = {
+    ...answers.mine,
+    employment: "unemployed",
+    monthly_take_home_cents: 0,
+    estimated_monthly_take_home_cents: 0,
+    entered_amount_cents: 0,
+    take_home_source: "user_confirmed",
+    confidence: "confirmed",
+  };
+  answers.expense_mode = "quick";
+  answers.quick_expenses = {
+    current_monthly_cents: record.monthly_essential_expenses_cents,
+    interruption_monthly_cents: record.monthly_essential_expenses_cents,
+    confidence: "confirmed",
+  };
+  return answers;
 }
+
 export function toFinanceCushionView(
   record: FinanceCushionRecord,
 ): FinanceCushionView {
   return {
     ...record,
-    answers: migrateRunwayAnswers(record.answers),
-    calculation: calculateCushion(record),
+    answers: persistedCushionAnswers(record),
   };
-}
-export function parseDollarsToCents(value: string): number | null {
-  const normalized = value.trim().replace(/,/g, "");
-  if (!/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;
-  const [whole, fraction = ""] = normalized.split(".");
-  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  return Number.isSafeInteger(cents) ? cents : null;
 }
 export function formatCents(
   cents: number,
