@@ -1,5 +1,11 @@
 -- Run after `supabase db reset` against the local instance. This is intentionally
 -- transactional, so it leaves no test identities or control-plane data behind.
+select
+  last_value as audit_events_sequence_value,
+  is_called as audit_events_sequence_called
+from control_plane.audit_events_id_seq
+\gset
+
 begin;
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
@@ -153,3 +159,9 @@ do $$ begin update control_plane.audit_events set action='tampered'; raise excep
 do $$ begin delete from control_plane.audit_events; raise exception 'audit delete allowed'; exception when raise_exception then null; end $$;
 
 rollback;
+
+select setval(
+  'control_plane.audit_events_id_seq',
+  :'audit_events_sequence_value'::bigint,
+  :'audit_events_sequence_called'::boolean
+);

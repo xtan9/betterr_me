@@ -118,7 +118,14 @@ export function createReviewRequest({
   stagedDiff,
   changedFiles,
   reviewKind,
-  findingLedger = [],
+  findingLedger = /** @type {Array<{
+    id: string,
+    axis: string,
+    location: string,
+    problem: string,
+    evidence: string,
+    safeRepair: string,
+  }>} */ ([]),
 }) {
   if (!issue || !Number.isInteger(issue.issueNumber)) {
     throw new Error("review request requires an approved issue");

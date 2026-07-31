@@ -230,7 +230,7 @@ describe("useActiveWorkout", () => {
       id: "s-1",
       workout_exercise_id: "we-1",
       reps: 12,
-      weight: 55,
+      weight_kg: 55,
       is_completed: false,
     };
     mockFetch.mockResolvedValue({
@@ -243,7 +243,7 @@ describe("useActiveWorkout", () => {
     await act(async () => {
       await result.current.actions.updateSet("we-1", "s-1", {
         reps: 12,
-        weight: 55,
+        weight_kg: 55,
       });
     });
 

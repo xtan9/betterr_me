@@ -30,6 +30,7 @@ import {
   reopenIssueForPullRequestRecovery,
   redactCredentialPatterns,
   recordCheckRetryAttempt,
+  selectActiveStateIssue,
   selectNextLiveIssue,
   selectNextLiveIssueStatus,
   selectNextIssue,
@@ -359,6 +360,34 @@ describe("Ralph durable state and policy", () => {
     expect(isIssueActive({ stage: "failed" })).toBe(false);
     expect(isIssueActive({ stage: "merged" })).toBe(false);
   });
+
+  it("resumes the sole worktree owner before earlier active PR state", () => {
+    expect(
+      selectActiveStateIssue({
+        "490": { stage: "pr-open", worktreePath: null },
+        "499": { stage: "implemented", worktreePath: "managed/current" },
+      }),
+    ).toMatchObject({ issueNumber: 499, stage: "implemented" });
+  });
+
+  it("fails closed when an inactive issue unexpectedly owns the worktree", () => {
+    expect(() =>
+      selectActiveStateIssue({
+        "499": { stage: "merged", worktreePath: "managed/current" },
+      }),
+    ).toThrow("an inactive issue reserves the single worktree");
+  });
+
+  it.each(["0491", "491.0", "not-an-issue"])(
+    "rejects non-canonical durable issue key %s",
+    (issueKey) => {
+      expect(() =>
+        selectActiveStateIssue({
+          [issueKey]: { stage: "implemented", worktreePath: "managed/current" },
+        }),
+      ).toThrow(`invalid durable issue key ${issueKey}`);
+    },
+  );
 
   it("continues the single-worker queue after terminal issue outcomes", () => {
     expect(shouldContinueQueue("merged")).toBe(true);
@@ -712,7 +741,7 @@ Reserve repairable=false for a genuine unresolved product decision with material
         "491": { worktreePath: "managed/current" },
         "492": { worktreePath: "managed/other" },
       }),
-    ).toThrow("multiple PR recovery candidates reserve the single worktree");
+    ).toThrow("multiple issues reserve the single worktree");
   });
 
   it("reopens only a published PR stage for exact-head recovery", () => {
@@ -930,7 +959,7 @@ Reserve repairable=false for a genuine unresolved product decision with material
     ],
   ])("fails closed at the merge boundary", (overrides, reason) => {
     expect(
-      evaluateMergeGate({
+      evaluateMergeGate(Object.assign({
         mode: "AutoMerge",
         risk: "low",
         checksPassed: true,
@@ -938,8 +967,7 @@ Reserve repairable=false for a genuine unresolved product decision with material
         reviewDecision: "",
         mergeState: "CLEAN",
         ambiguous: false,
-        ...overrides,
-      }),
+      }, overrides)),
     ).toEqual({ canMerge: false, reason });
   });
 

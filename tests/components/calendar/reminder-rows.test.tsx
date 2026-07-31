@@ -18,10 +18,10 @@ vi.stubGlobal("crypto", {
 });
 
 describe("ReminderRows", () => {
-  let mockOnChange: ReturnType<typeof vi.fn>;
+  let mockOnChange: (rows: ReminderRowData[]) => void;
 
   beforeEach(() => {
-    mockOnChange = vi.fn();
+    mockOnChange = vi.fn<(rows: ReminderRowData[]) => void>();
   });
 
   it("renders 'Add reminder' button", () => {

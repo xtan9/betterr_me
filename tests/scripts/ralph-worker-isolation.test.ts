@@ -148,15 +148,21 @@ describe("Ralph sanitized worker Git view", () => {
     "scripts/ralph/controller.mjs",
     "scripts/ci/ralph-sql-policy.mjs",
     "scripts/ci/run-ralph-sql-tests.sh",
+    "scripts/ci/run-sql-fixtures.sh",
+    "scripts/ci/sql-fixture-registry.mjs",
+    "scripts/ci/verify-sql-fixture-runner.sh",
     "supabase/migrations/20260729000001_ticket.sql",
     "supabase/config.toml",
     "supabase/seed.sql",
     "supabase/tests/e2e_local_authenticated_grants.sql",
+    "supabase/tests/calendar_event_reminder_lifecycle.sql",
+    "supabase/tests/control_plane_authorization.sql",
     "supabase/tests/finance_cushion_rls.sql",
     "supabase/tests/oauth_refresh_token_lifecycle.sql",
     "supabase/tests/oauth_refresh_token_upgrade.sql",
     "supabase/tests/ralph_ci_runner_security.sql",
     "AGENTS.md",
+    "pnpm-workspace.yaml",
     ".env.local",
     "nested/private.pem",
   ])("protects controller-trusted worker path %s", (filePath) => {
@@ -418,7 +424,12 @@ describe("Ralph sanitized worker Git view", () => {
         environment: [],
         command: "/usr/local/bin/codex",
         args: [],
-        ...override,
+        ...(override as unknown as Partial<{
+          home: string;
+          environment: string[];
+          command: string;
+          args: string[];
+        }>),
       }),
     ).toThrowError(new Error(expectedMessage));
   });

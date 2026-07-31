@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GET } from '@/app/auth/callback/route';
 
 // Mock the server-side Supabase client
@@ -22,16 +22,14 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 describe('GET /auth/callback', () => {
-  const originalEnv = process.env.NODE_ENV;
-
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogError.mockClear();
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
   });
 
   it('should exchange code for session and redirect to origin on success in development', async () => {
@@ -99,7 +97,7 @@ describe('GET /auth/callback', () => {
   });
 
   it('should use x-forwarded-host in production environment', async () => {
-    process.env.NODE_ENV = 'production';
+    vi.stubEnv('NODE_ENV', 'production');
     mockExchangeCodeForSession.mockResolvedValue({ error: null });
 
     const request = new Request('http://localhost:3000/auth/callback?code=test-code', {
@@ -113,7 +111,7 @@ describe('GET /auth/callback', () => {
   });
 
   it('should use origin in production when no x-forwarded-host', async () => {
-    process.env.NODE_ENV = 'production';
+    vi.stubEnv('NODE_ENV', 'production');
     mockExchangeCodeForSession.mockResolvedValue({ error: null });
 
     const request = new Request('http://localhost:3000/auth/callback?code=test-code');

@@ -16,6 +16,7 @@ on:
       - "scripts/stryker-changed.mjs"
       - ".github/workflows/mutation-testing.yml"
       - "package.json"
+      - "pnpm-workspace.yaml"
   schedule:
     # Mondays at 03:00 UTC — full baseline on main, catches cross-file drift
     # a per-PR changed-files run would miss.
@@ -30,7 +31,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # Need full history so the diff vs origin/main works.
           fetch-depth: 0
@@ -38,24 +39,15 @@ jobs:
       - name: Fetch base ref
         run: git fetch origin main:refs/remotes/origin/main
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js, pnpm, and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Run Stryker on changed files
         run: pnpm mutation-test:changed
 
       - name: Upload mutation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: mutation-report-pr
           path: reports/mutation/
@@ -71,26 +63,17 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js, pnpm, and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Run full Stryker
         run: pnpm mutation-test
 
       - name: Upload mutation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: mutation-report-full
           path: reports/mutation/

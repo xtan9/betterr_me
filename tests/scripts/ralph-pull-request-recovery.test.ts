@@ -1329,6 +1329,36 @@ describe("Ralph pull-request backlog reconciliation", () => {
     });
   });
 
+  it("defers PR recovery while an unpublished active issue owns the worktree", () => {
+    const candidates = [
+      snapshot({ issueNumber: 491 }),
+      snapshot({ issueNumber: 492 }),
+    ];
+
+    expect(
+      selectPullRequestRecoveryCandidates(candidates, {
+        "491": { worktreePath: null },
+        "492": { worktreePath: null },
+        "499": {
+          stage: "implemented",
+          worktreePath: "managed/current",
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it("fails closed when durable state assigns the worktree to multiple issues", () => {
+    expect(() =>
+      selectPullRequestRecoveryCandidates(
+        [snapshot({ issueNumber: 491 })],
+        {
+          "491": { worktreePath: "managed/current" },
+          "499": { worktreePath: "managed/current" },
+        },
+      ),
+    ).toThrow("multiple issues reserve the single worktree");
+  });
+
   it("runs sequentially and skips an already completed idempotency key", async () => {
     const order: string[] = [];
     const records = new Map<string, { status: string }>();
