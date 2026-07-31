@@ -7,7 +7,7 @@ fixture='ralph_ci_runner_security'
 
 reset_failure_probe() {
   psql "$database_url" -X -q -v ON_ERROR_STOP=1 \
-    -c "alter role ralph_ci_test reset betterr.sql_fixture_failure_probe" \
+    -c "alter role ralph_ci_test reset application_name" \
     >/dev/null 2>&1 || true
 }
 trap reset_failure_probe EXIT
@@ -16,7 +16,7 @@ SQL_FIXTURE_RESULTS_DIR="$results_root/passing" \
   bash scripts/ci/run-sql-fixtures.sh --fixture "$fixture"
 
 psql "$database_url" -X -q -v ON_ERROR_STOP=1 \
-  -c "alter role ralph_ci_test set betterr.sql_fixture_failure_probe = 'on'"
+  -c "alter role ralph_ci_test set application_name = 'betterr-sql-fixture-failure-probe'"
 
 if SQL_FIXTURE_RESULTS_DIR="$results_root/failing" \
   bash scripts/ci/run-sql-fixtures.sh --fixture "$fixture"; then

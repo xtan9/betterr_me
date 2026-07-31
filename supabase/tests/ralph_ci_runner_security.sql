@@ -5,7 +5,7 @@ begin;
 
 do $block$
 begin
-  if current_setting('betterr.sql_fixture_failure_probe', true) = 'on' then
+  if current_setting('application_name') = 'betterr-sql-fixture-failure-probe' then
     raise exception 'intentional SQL fixture runner failure probe';
   end if;
 
