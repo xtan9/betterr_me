@@ -2,17 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/habits/[id]/toggle/route";
 
-const { mockComplete, mockUncomplete } = vi.hoisted(() => ({
+const { mockAuthenticateRequest, mockClient, mockComplete, mockUncomplete } = vi.hoisted(() => ({
+  mockAuthenticateRequest: vi.fn(),
+  mockClient: { from: vi.fn() },
   mockComplete: vi.fn(),
   mockUncomplete: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })),
-    },
-  })),
+vi.mock("@/lib/auth/authenticated-request", () => ({
+  authenticateRequest: mockAuthenticateRequest,
 }));
 
 vi.mock("@/lib/habits/completion", () => ({
@@ -21,8 +19,6 @@ vi.mock("@/lib/habits/completion", () => ({
     uncomplete: mockUncomplete,
   })),
 }));
-
-import { createClient } from "@/lib/supabase/server";
 
 const params = Promise.resolve({ id: "habit-1" });
 const completedOutcome = {
@@ -46,11 +42,11 @@ function request(body: Record<string, unknown>) {
 describe("POST /api/habits/[id]/toggle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })),
-      },
-    } as never);
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: true,
+      principal: { type: "user", userId: "user-123", credential: "cookie" },
+      client: mockClient,
+    });
     mockComplete.mockResolvedValue(completedOutcome);
     mockUncomplete.mockResolvedValue({
       ...completedOutcome,
@@ -68,6 +64,10 @@ describe("POST /api/habits/[id]/toggle", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(expect.any(Request), {
+      allowedCredentials: ["cookie"],
+      requiredPermission: "write",
+    });
     expect(mockComplete).toHaveBeenCalledWith({
       habitId: "habit-1",
       userId: "user-123",
@@ -128,9 +128,11 @@ describe("POST /api/habits/[id]/toggle", () => {
   });
 
   it("returns 401 when unauthenticated", async () => {
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
-    } as never);
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: false,
+      error: "Unauthorized",
+      status: 401,
+    });
 
     const response = await POST(
       request({ date: "2026-02-03", completed: true }),
@@ -139,6 +141,28 @@ describe("POST /api/habits/[id]/toggle", () => {
 
     expect(response.status).toBe(401);
   });
+
+  it.each([
+    ["Invalid credentials", 401, "Unauthorized", 401],
+    ["Server misconfigured", 500, "Failed to toggle habit", 500],
+  ])(
+    "preserves the habit error contract for %s",
+    async (authError, authStatus, expectedError, expectedStatus) => {
+      mockAuthenticateRequest.mockResolvedValue({
+        ok: false,
+        error: authError,
+        status: authStatus,
+      });
+
+      const response = await POST(
+        request({ date: "2026-02-03", completed: true }),
+        { params },
+      );
+
+      expect(response.status).toBe(expectedStatus);
+      await expect(response.json()).resolves.toEqual({ error: expectedError });
+    },
+  );
 
   it("returns milestone failure as a successful completion outcome", async () => {
     mockComplete.mockResolvedValue({

@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, POST } from '@/app/api/tasks/route';
 import { NextRequest } from 'next/server';
 
-const { mockEnsureProfile } = vi.hoisted(() => ({
+const { mockEnsureProfile, mockGetUser } = vi.hoisted(() => ({
   mockEnsureProfile: vi.fn(),
+  mockGetUser: vi.fn(),
 }));
 const apiKeyMocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -32,7 +33,7 @@ const mockSupabaseFrom = vi.fn(() => mockSortOrderChain);
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => ({
     auth: {
-      getUser: vi.fn(() => ({ data: { user: { id: 'user-123', email: 'test@example.com' } } })),
+      getUser: mockGetUser,
     },
     from: mockSupabaseFrom,
   })),
@@ -72,6 +73,10 @@ import { hashApiKey } from '@/lib/auth/api-key';
 describe('GET /api/tasks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-123', email: 'test@example.com' } },
+      error: null,
+    });
     vi.stubEnv('API_KEY_HMAC_SECRET', 'test-hmac-secret');
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://test.supabase.co');
     vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-role-key');
@@ -193,8 +198,18 @@ describe('POST /api/tasks', () => {
     mockSortOrderChain.limit.mockReturnThis();
     mockSortOrderChain.maybeSingle.mockResolvedValue({ data: null, error: null });
     mockSupabaseFrom.mockReturnValue(mockSortOrderChain);
+    mockGetUser.mockResolvedValue({
+      data: {
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          user_metadata: { full_name: 'Test User', avatar_url: 'avatar.png' },
+        },
+      },
+      error: null,
+    });
     vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123', email: 'test@example.com' } } })) },
+      auth: { getUser: mockGetUser },
       from: mockSupabaseFrom,
     } as any);
     mockEnsureProfile.mockResolvedValue(undefined);
@@ -275,7 +290,13 @@ describe('POST /api/tasks', () => {
 
     const response = await POST(request);
     expect(response.status).toBe(201);
-    expect(mockEnsureProfile).toHaveBeenCalled();
+    expect(mockGetUser).toHaveBeenCalledTimes(1);
+    expect(mockEnsureProfile).toHaveBeenCalledWith(expect.anything(), {
+      id: 'user-123',
+      email: 'test@example.com',
+      fullName: 'Test User',
+      avatarUrl: 'avatar.png',
+    });
   });
 
   it('should create task with status=todo, section=personal, and sort_order by default', async () => {

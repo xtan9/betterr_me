@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from '@/app/api/dashboard/route';
 import { NextRequest } from 'next/server';
 
+const { mockAuthenticateRequest } = vi.hoisted(() => ({
+  mockAuthenticateRequest: vi.fn(),
+}));
+
+vi.mock('@/lib/auth/authenticated-request', () => ({
+  authenticateRequest: mockAuthenticateRequest,
+}));
+
 // Chainable Supabase query mock for workout queries
 function createChainableMock(result: any = { data: null, count: 0 }) {
   const chain: any = {};
@@ -13,17 +21,6 @@ function createChainableMock(result: any = { data: null, count: 0 }) {
   chain.catch = () => chain;
   return chain;
 }
-
-const mockWorkoutChain = createChainableMock({ data: null, count: 0 });
-
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })),
-    },
-    from: vi.fn(() => mockWorkoutChain),
-  })),
-}));
 
 const mockHabitsDB = {
   getHabitsWithTodayStatus: vi.fn(),
@@ -70,15 +67,18 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-import { createClient } from '@/lib/supabase/server';
-
 describe('GET /api/dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
+    const client = {
       auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
       from: vi.fn(() => createChainableMock({ data: null, count: 0 })),
-    } as any);
+    } as any;
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: true,
+      principal: { type: 'user', userId: 'user-123', credential: 'cookie' },
+      client,
+    });
     vi.mocked(mockHabitLogsDB.getAllUserLogs).mockResolvedValue([]);
     vi.mocked(mockMilestonesDB.getTodaysMilestones).mockResolvedValue([]);
   });
@@ -189,6 +189,10 @@ describe('GET /api/dashboard', () => {
     const request = new NextRequest('http://localhost:3000/api/dashboard?date=2026-02-01');
     await GET(request);
 
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(expect.any(Request), {
+      allowedCredentials: ['cookie'],
+      requiredPermission: 'read',
+    });
     expect(mockHabitsDB.getHabitsWithTodayStatus).toHaveBeenCalledWith('user-123', '2026-02-01');
     expect(mockTasksDB.getTodayTasks).toHaveBeenCalledWith('user-123', '2026-02-01');
   });
@@ -408,14 +412,38 @@ describe('GET /api/dashboard', () => {
   });
 
   it('should return 401 if not authenticated', async () => {
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
-      from: vi.fn(() => createChainableMock()),
-    } as any);
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: false,
+      error: 'Unauthorized',
+      status: 401,
+    });
 
     const request = new NextRequest('http://localhost:3000/api/dashboard');
     const response = await GET(request);
 
     expect(response.status).toBe(401);
   });
+
+  it.each([
+    ['Invalid credentials', 401, 'Unauthorized', 401],
+    ['Server misconfigured', 500, 'Failed to fetch dashboard data', 500],
+  ])(
+    'preserves the dashboard error contract for %s',
+    async (authError, authStatus, expectedError, expectedStatus) => {
+      mockAuthenticateRequest.mockResolvedValue({
+        ok: false,
+        error: authError,
+        status: authStatus,
+      });
+
+      const response = await GET(
+        new NextRequest('http://localhost:3000/api/dashboard', {
+          headers: { authorization: 'Bearer invalid' },
+        }),
+      );
+
+      expect(response.status).toBe(expectedStatus);
+      await expect(response.json()).resolves.toEqual({ error: expectedError });
+    },
+  );
 });
