@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { UIMessage } from "ai";
 import { log } from "@/lib/logger";
 
@@ -31,6 +31,17 @@ export function useChatPersistence(
   mutateConversations: () => void,
 ) {
   const prevStatusRef = useRef(status);
+  const retrySaveRef = useRef<(() => Promise<void>) | null>(null);
+  const [persistenceError, setPersistenceError] = useState<Error | null>(null);
+
+  const retryPersistence = useCallback(() => {
+    void retrySaveRef.current?.();
+  }, []);
+
+  const clearPersistenceError = useCallback(() => {
+    retrySaveRef.current = null;
+    setPersistenceError(null);
+  }, []);
 
   useEffect(() => {
     const wasStreaming =
@@ -63,11 +74,12 @@ export function useChatPersistence(
       if (!userMsg || !userContent?.trim()) return;
 
       const saveMessages = async () => {
-        let convId = activeConversationId;
+        setPersistenceError(null);
+        try {
+          let convId = activeConversationId;
 
-        // Create conversation if this is the first message (new chat)
-        if (!convId) {
-          try {
+          // Create conversation if this is the first message (new chat)
+          if (!convId) {
             const data = await fetchJSON("/api/conversations", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -76,13 +88,8 @@ export function useChatPersistence(
             convId = data.conversation.id;
             setActiveConversationId(convId);
             window.history.replaceState(null, "", `/chat?id=${convId}`);
-          } catch (err) {
-            log.error("[chat] Failed to create conversation", err);
-            return;
           }
-        }
 
-        try {
           await fetchJSONWithRetry(`/api/conversations/${convId}/turns`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -93,32 +100,38 @@ export function useChatPersistence(
               assistantModel: selectedModel,
             }),
           });
+          retrySaveRef.current = null;
+
+          // Auto-generate title after first exchange (exactly 2 messages)
+          if (messages.length === 2) {
+            fetchJSON(`/api/conversations/${convId}/title`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userMessage: userContent,
+                assistantMessage: assistantContent,
+              }),
+            })
+              .then(() => mutateConversations())
+              .catch((err) => log.error("[chat] Failed to generate title", err));
+          }
+
+          // Refresh conversation list to update updated_at ordering
+          mutateConversations();
         } catch (err) {
-          log.error("[chat] Failed to save completed turn", err);
-          return;
+          const failure =
+            err instanceof Error
+              ? err
+              : new Error("Failed to save completed turn");
+          log.error("[chat] Failed to save completed turn", failure);
+          setPersistenceError(failure);
         }
-
-        // Auto-generate title after first exchange (exactly 2 messages)
-        if (messages.length === 2) {
-          fetchJSON(`/api/conversations/${convId}/title`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userMessage: userContent,
-              assistantMessage: assistantContent,
-            }),
-          })
-            .then(() => mutateConversations())
-            .catch((err) => log.error("[chat] Failed to generate title", err));
-        }
-
-        // Refresh conversation list to update updated_at ordering
-        mutateConversations();
       };
 
-      saveMessages().catch((err) =>
-        log.error("[chat] Unexpected error in saveMessages", err)
-      );
+      retrySaveRef.current = saveMessages;
+      void saveMessages();
     }
   }, [status, messages, activeConversationId, mutateConversations, selectedModel, setActiveConversationId]);
+
+  return { persistenceError, retryPersistence, clearPersistenceError };
 }

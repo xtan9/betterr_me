@@ -83,6 +83,14 @@ vi.mock("@/components/chat/chat-input", () => ({
         >
           Stop
         </button>
+        <button
+          data-testid="mock-model-change"
+          onClick={() =>
+            (props.onModelChange as (modelId: string) => void)("gpt-5.6-sol")
+          }
+        >
+          Change model
+        </button>
       </div>
     ),
 }));
@@ -560,6 +568,157 @@ describe("ChatContent", () => {
     });
   });
 
+  it("shows a recoverable error when completed-turn persistence fails", async () => {
+    const msgs = [
+      makeMessage("stable-turn-id", "user", "hi"),
+      makeMessage("2", "assistant", "hello there"),
+    ];
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "streaming" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    let turnAttempts = 0;
+    const turnBodies: unknown[] = [];
+    const mockFetch = vi.fn((url: string, init?: RequestInit) => {
+      if (url === "/api/conversations/conv-save-error/turns") {
+        turnAttempts += 1;
+        turnBodies.push(JSON.parse(init?.body as string));
+        return Promise.resolve({
+          json: () =>
+            Promise.resolve(
+              turnAttempts <= 2
+                ? { outcome: "failed", error: "temporary failure" }
+                : { outcome: "saved", messages: [] },
+            ),
+          ok: turnAttempts > 2,
+          status: turnAttempts <= 2 ? 500 : 201,
+        });
+      }
+      return Promise.resolve({
+        json: () => Promise.resolve({ messages: [] }),
+        ok: true,
+        status: 200,
+      });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { rerender } = render(
+      <ChatContent conversationId="conv-save-error" />,
+    );
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+    rerender(<ChatContent conversationId="conv-save-error" />);
+
+    expect(await screen.findByText("error.generic")).toBeInTheDocument();
+    expect(turnAttempts).toBe(2);
+
+    fireEvent.click(screen.getByText("error.retry"));
+
+    await waitFor(() => expect(turnAttempts).toBe(3));
+    expect(turnBodies).toEqual([
+      expect.objectContaining({ turnId: "stable-turn-id" }),
+      expect.objectContaining({ turnId: "stable-turn-id" }),
+      expect.objectContaining({ turnId: "stable-turn-id" }),
+    ]);
+    await waitFor(() =>
+      expect(screen.queryByText("error.generic")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("persists the model selected when the turn was submitted", async () => {
+    const msgs = [
+      makeMessage("model-turn-id", "user", "hi"),
+      makeMessage("2", "assistant", "hello there"),
+    ];
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "streaming" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+
+    let rejectModelUpdate!: (error: Error) => void;
+    const modelUpdate = new Promise<Response>((_resolve, reject) => {
+      rejectModelUpdate = reject;
+    });
+    const mockFetch = vi.fn((url: string, init?: RequestInit) => {
+      if (
+        url === "/api/conversations/conv-model/turns" &&
+        init?.method === "POST"
+      ) {
+        return Promise.resolve({
+          json: () => Promise.resolve({ outcome: "saved", messages: [] }),
+          ok: true,
+          status: 201,
+        });
+      }
+      if (url === "/api/conversations/conv-model" && init?.method === "PATCH") {
+        return modelUpdate;
+      }
+      return Promise.resolve({
+        json: () => Promise.resolve({ messages: [] }),
+        ok: true,
+        status: 200,
+      });
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const { rerender } = render(<ChatContent conversationId="conv-model" />);
+    fireEvent.click(screen.getByTestId("mock-model-change"));
+    expect(screen.getByTestId("chat-input")).toHaveAttribute(
+      "data-model-id",
+      "gpt-5.6-sol",
+    );
+    fireEvent.click(screen.getByTestId("mock-send"));
+
+    rejectModelUpdate(new Error("model update failed"));
+    await waitFor(() =>
+      expect(screen.getByTestId("chat-input")).toHaveAttribute(
+        "data-model-id",
+        "gpt-5.4-mini",
+      ),
+    );
+
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+    rerender(<ChatContent conversationId="conv-model" />);
+
+    await waitFor(() => {
+      const turnCall = mockFetch.mock.calls.find(
+        ([url, init]) =>
+          url === "/api/conversations/conv-model/turns" &&
+          (init as RequestInit | undefined)?.method === "POST",
+      );
+      expect(turnCall).toBeTruthy();
+      expect(JSON.parse((turnCall![1] as RequestInit).body as string)).toEqual(
+        expect.objectContaining({ assistantModel: "gpt-5.6-sol" }),
+      );
+    });
+  });
+
   it("triggers title generation after first exchange (exactly 2 messages)", async () => {
     const msgs = [
       makeMessage("1", "user", "hi"),
@@ -675,11 +834,10 @@ describe("ChatContent", () => {
 
     // Wait a tick to ensure effect has run
     await waitFor(() => {
-      // Should NOT have made a POST to /messages (content is empty)
+      // Should NOT have attempted to persist an incomplete turn.
       const saveCall = mockFetch.mock.calls.find(
         (call: unknown[]) =>
-          typeof call[0] === "string" &&
-          call[0].includes("/messages") &&
+          call[0] === "/api/conversations/conv-empty/turns" &&
           typeof call[1] === "object" &&
           (call[1] as RequestInit).method === "POST"
       );
