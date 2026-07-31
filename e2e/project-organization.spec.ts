@@ -41,6 +41,38 @@ function kanbanColumn(page: Page, name: 'To Do' | 'In Progress') {
   return page.getByRole('heading', { name }).locator('../..');
 }
 
+async function moveTaskToInProgress(page: Page, taskTitle: string) {
+  const source = kanbanColumn(page, 'To Do').getByRole('button', {
+    name: taskTitle,
+    exact: true,
+  });
+  const destination = kanbanColumn(page, 'In Progress');
+  const sourceBox = await source.boundingBox();
+  const destinationBox = await destination.boundingBox();
+  if (!sourceBox || !destinationBox) {
+    throw new Error('Kanban drag requires visible source and destination bounds');
+  }
+
+  const sourcePoint = {
+    x: sourceBox.x + sourceBox.width / 2,
+    y: sourceBox.y + sourceBox.height / 2,
+  };
+  const destinationPoint = {
+    x: destinationBox.x + destinationBox.width / 2,
+    y: destinationBox.y + 100,
+  };
+
+  await page.mouse.move(sourcePoint.x, sourcePoint.y);
+  await page.mouse.down();
+  try {
+    await page.mouse.move(sourcePoint.x + 12, sourcePoint.y, { steps: 3 });
+    await page.mouse.move(destinationPoint.x, destinationPoint.y, { steps: 20 });
+    await expect(page.getByRole('status')).toContainText('in_progress');
+  } finally {
+    await page.mouse.up();
+  }
+}
+
 test('moves a run-owned task, persists its placement, and preserves it after project deletion', async ({ page }) => {
   const projectName = RUN_CONTEXT.ownedName('Kanban deletion project');
   const taskTitle = RUN_CONTEXT.ownedName('Kanban movable task');
@@ -71,9 +103,8 @@ test('moves a run-owned task, persists its placement, and preserves it after pro
     await page.goto(`/projects/${project.id}/kanban`);
     await expect(page.getByRole('heading', { name: projectName })).toBeVisible();
 
-    const todoColumn = kanbanColumn(page, 'To Do');
     const inProgressColumn = kanbanColumn(page, 'In Progress');
-    await todoColumn.getByText(taskTitle, { exact: true }).dragTo(inProgressColumn);
+    await moveTaskToInProgress(page, taskTitle);
 
     await expect(inProgressColumn.getByText(taskTitle, { exact: true })).toBeVisible();
     await expect.poll(async () => (await readTask(page.request, task!.id)).status).toBe('in_progress');
