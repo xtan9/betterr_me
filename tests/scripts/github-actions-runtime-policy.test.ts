@@ -168,4 +168,21 @@ updates:
       directSetup: [],
     });
   });
+
+  it("keeps scheduled mutation runs observable within their runtime budget", () => {
+    const mutationWorkflow = workflowFiles.find(
+      ({ name }) => name === "workflows/mutation-testing.yml",
+    )?.contents;
+
+    expect(mutationWorkflow).toBeDefined();
+    expect(mutationWorkflow).toMatch(
+      /concurrency:[\s\S]*?group: mutation-testing-\$\{\{ github\.event_name \}\}-\$\{\{ github\.ref \}\}[\s\S]*?cancel-in-progress: false/,
+    );
+    expect(mutationWorkflow).toMatch(
+      /mutation-full:[\s\S]*?timeout-minutes: 60[\s\S]*?id: full-mutation[\s\S]*?timeout-minutes: 52[\s\S]*?timeout --signal=TERM --kill-after=30s 50m pnpm mutation-test[\s\S]*?conclusion="timed_out"[\s\S]*?name: Publish full mutation diagnostic/,
+    );
+    expect(mutationWorkflow).toContain(
+      "run: node scripts/ci/scheduled-workflow-diagnostic.mjs",
+    );
+  });
 });
