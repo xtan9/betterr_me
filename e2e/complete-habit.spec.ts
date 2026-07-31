@@ -40,9 +40,16 @@ test.describe('Complete Habit Flow - Toggle', () => {
 
     const checkbox = targetCheckbox(page);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
+    const toggleFinished = page.waitForResponse((response) => {
+      const request = response.request();
+      return request.method() === 'POST' && new URL(response.url()).pathname.endsWith('/toggle');
+    });
     const wasChecked = await toggleAndVerify(checkbox);
+    await toggleFinished;
 
-    await page.waitForLoadState('networkidle');
+    const toggledState = wasChecked ? 'unchecked' : 'checked';
+    await expect(checkbox).toHaveAttribute('data-state', toggledState, { timeout: 10000 });
+
     await page.reload();
     await page.waitForSelector('[role="checkbox"]', { timeout: 10000 });
 

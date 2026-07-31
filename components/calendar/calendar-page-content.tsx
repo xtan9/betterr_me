@@ -175,7 +175,12 @@ export function CalendarPageContent() {
         ? domainEvent.id.split(":")[2]
         : domainEvent.start_date;
 
-      const result = await dispatch(action, domainEvent._sourceId, date);
+      const result = await dispatch(
+        action,
+        domainEvent._sourceId,
+        date,
+        !domainEvent._completed,
+      );
       if (!result.success) {
         console.error("Calendar inline action failed:", result.error);
       }

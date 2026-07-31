@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { HabitsDB, HabitLogsDB } from "@/lib/db";
 import type { HabitFrequency } from "@/lib/db";
+import { createHabitCompletion } from "@/lib/habits/completion";
 import type { ToolDefinition, ToolContext } from "./types";
 
 export function habitTools(): ToolDefinition[] {
@@ -34,14 +35,22 @@ export function habitTools(): ToolDefinition[] {
     },
     {
       name: "logHabit",
-      description: "Toggle a habit's completion status for a given date",
+      description: "Set a habit's completion status for a given date",
       parameters: z.object({
         habitId: z.string().describe("The habit ID"),
         date: z.string().describe("Date in YYYY-MM-DD format"),
+        completed: z.boolean().describe("The desired completion state"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new HabitLogsDB(ctx.supabase);
-        return db.toggleLog(params.habitId, ctx.userId, params.date);
+        const completion = createHabitCompletion(ctx.supabase);
+        const intent = {
+          habitId: params.habitId,
+          userId: ctx.userId,
+          date: params.date,
+        };
+        return params.completed
+          ? completion.complete(intent)
+          : completion.uncomplete(intent);
       },
     },
     {
