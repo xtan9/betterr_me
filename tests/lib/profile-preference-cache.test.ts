@@ -8,6 +8,7 @@ type Outcome = {
   profile: {
     id: string;
     full_name: string | null;
+    updated_at: string;
     preferences: Record<string, unknown>;
   };
 };
@@ -15,16 +16,18 @@ type Outcome = {
 const outcome = (
   fullName: string,
   preferences: Record<string, unknown>,
+  updatedAt = "2026-07-30T12:00:02.000000+00:00",
 ): Outcome => ({
   profile: {
     id: "user-123",
     full_name: fullName,
+    updated_at: updatedAt,
     preferences,
   },
 });
 
 describe("accepted profile preference outcomes", () => {
-  it("uses the accepted server profile instead of unrelated cached values", () => {
+  it("preserves cached profile fields while using server preferences", () => {
     const accepted = outcome("New server name", {
       theme: "dark",
       weight_unit: "kg",
@@ -35,10 +38,37 @@ describe("accepted profile preference outcomes", () => {
         outcome("Stale cached name", {
           theme: "light",
           weight_unit: "lbs",
-        }),
+        }, "2026-07-30T12:00:01.000000+00:00"),
         accepted,
       ),
-    ).toEqual(accepted);
+    ).toEqual(
+      outcome("Stale cached name", {
+        theme: "dark",
+        weight_unit: "kg",
+      }, "2026-07-30T12:00:01.000000+00:00"),
+    );
+  });
+
+  it("does not let stale cached preferences override another caller", () => {
+    const cached = outcome("Current name", {
+      theme: "dark",
+      weight_unit: "lbs",
+    });
+
+    expect(
+      mergeAcceptedPreferenceOutcome(
+        cached,
+        outcome("Stale name", {
+          theme: "light",
+          weight_unit: "kg",
+        }, "2026-07-30T12:00:01.000000+00:00"),
+      ),
+    ).toEqual(
+      outcome("Current name", {
+        theme: "light",
+        weight_unit: "kg",
+      }),
+    );
   });
 
   it("preserves only accepted local intents whose responses are newer", () => {
@@ -60,12 +90,13 @@ describe("accepted profile preference outcomes", () => {
         week_start_day: 0,
         weight_unit: "kg",
         theme: "light",
-      }),
+      }, "2026-07-30T12:00:01.000000+00:00"),
+      newerOutcome,
     );
 
     expect(newerOutcome.profile.preferences.weight_unit).toBe("lbs");
     expect(reorderedOlderOutcome).toEqual(
-      outcome("Stale name", {
+      outcome("Current name", {
         week_start_day: 0,
         weight_unit: "lbs",
         theme: "light",
@@ -78,7 +109,7 @@ describe("accepted profile preference outcomes", () => {
     const first = coordinator.begin({ week_start_day: 0 });
     const second = coordinator.begin({ weight_unit: "lbs" });
 
-    coordinator.accept(
+    const firstOutcome = coordinator.accept(
       first,
       outcome("Current name", {
         week_start_day: 0,
@@ -94,10 +125,11 @@ describe("accepted profile preference outcomes", () => {
           week_start_day: 1,
           weight_unit: "lbs",
           theme: "light",
-        }),
+        }, "2026-07-30T12:00:01.000000+00:00"),
+        firstOutcome,
       ),
     ).toEqual(
-      outcome("Stale name", {
+      outcome("Current name", {
         week_start_day: 0,
         weight_unit: "lbs",
         theme: "light",
@@ -110,7 +142,7 @@ describe("accepted profile preference outcomes", () => {
     const first = coordinator.begin({ theme: "light" });
     const second = coordinator.begin({ theme: "dark" });
 
-    coordinator.accept(
+    const firstOutcome = coordinator.accept(
       first,
       outcome("Current name", {
         theme: "light",
@@ -125,6 +157,7 @@ describe("accepted profile preference outcomes", () => {
           theme: "dark",
           weight_unit: "kg",
         }),
+        firstOutcome,
       ),
     ).toEqual(
       outcome("Current name", {

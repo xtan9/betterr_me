@@ -1,4 +1,6 @@
-type PreferencePatch = Record<string, unknown>;
+import type { PreferencesValues } from "@/lib/validations/preferences";
+
+type PreferencePatch = PreferencesValues;
 
 export interface PreferenceIntent {
   readonly sequence: number;
@@ -12,19 +14,30 @@ interface TrackedIntent extends PreferenceIntent {
 export function mergeAcceptedPreferenceOutcome<
   Outcome extends { profile: { preferences: object } },
 >(
-  _cached: Outcome | undefined,
+  cached: Outcome | undefined,
   accepted: Outcome,
   acceptedLocalIntents: readonly PreferencePatch[] = [],
 ): Outcome {
-  if (acceptedLocalIntents.length === 0) return accepted;
+  const reconciled = cached
+    ? {
+        ...accepted,
+        ...cached,
+        profile: {
+          ...accepted.profile,
+          ...cached.profile,
+          preferences: accepted.profile.preferences,
+        },
+      }
+    : accepted;
+  if (acceptedLocalIntents.length === 0) return reconciled;
 
   return {
-    ...accepted,
+    ...reconciled,
     profile: {
-      ...accepted.profile,
+      ...reconciled.profile,
       preferences: Object.assign(
         {},
-        accepted.profile.preferences,
+        reconciled.profile.preferences,
         ...acceptedLocalIntents,
       ),
     },
@@ -53,6 +66,7 @@ export class ProfilePreferenceIntentCoordinator {
   accept<Outcome extends { profile: { preferences: object } }>(
     intent: PreferenceIntent,
     accepted: Outcome,
+    cached?: Outcome,
   ): Outcome {
     const tracked = this.intents.get(intent.sequence);
     if (tracked) tracked.accepted = true;
@@ -75,7 +89,7 @@ export class ProfilePreferenceIntentCoordinator {
       .filter((patch) => Object.keys(patch).length > 0);
 
     const outcome = mergeAcceptedPreferenceOutcome(
-      undefined,
+      cached,
       accepted,
       otherAcceptedIntents,
     );

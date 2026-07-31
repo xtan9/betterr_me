@@ -57,7 +57,8 @@ export function QuietHoursSettings() {
         quiet_hours_start: enabled ? start : null,
         quiet_hours_end: enabled ? end : null,
       };
-      trackedIntent = profilePreferenceIntents.begin(intent);
+      const intentHandle = profilePreferenceIntents.begin(intent);
+      trackedIntent = intentHandle;
       const response = await fetch("/api/profile/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -69,16 +70,18 @@ export function QuietHoursSettings() {
       }
 
       const acceptedOutcome = (await response.json()) as { profile: Profile };
-      const cacheOutcome = profilePreferenceIntents.accept(
-        trackedIntent,
-        acceptedOutcome,
-      );
       await mutate(
-        () => cacheOutcome,
+        (cached) =>
+          profilePreferenceIntents.accept(
+            intentHandle,
+            acceptedOutcome,
+            cached,
+          ),
         { revalidate: false },
       );
-      void mutate().catch((error) => {
+      await mutate().catch((error) => {
         console.error("Failed to revalidate accepted quiet hours:", error);
+        return mutate(() => undefined, { revalidate: false });
       });
       toast.success(t("quietHours.saved"));
     } catch (error) {

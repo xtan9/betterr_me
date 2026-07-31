@@ -25,6 +25,7 @@ interface Profile {
   id: string;
   email: string;
   full_name: string | null;
+  updated_at: string;
   preferences: {
     date_format: string;
     week_start_day: number;
@@ -74,7 +75,8 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
       if ((data?.profile.preferences.weight_unit ?? "kg") !== weightUnit) {
         intent.weight_unit = weightUnit;
       }
-      trackedIntent = profilePreferenceIntents.begin(intent);
+      const intentHandle = profilePreferenceIntents.begin(intent);
+      trackedIntent = intentHandle;
       const response = await fetch("/api/profile/preferences", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -86,16 +88,18 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
       }
 
       const acceptedOutcome = (await response.json()) as { profile: Profile };
-      const cacheOutcome = profilePreferenceIntents.accept(
-        trackedIntent,
-        acceptedOutcome,
-      );
       await mutate(
-        () => cacheOutcome,
+        (cached) =>
+          profilePreferenceIntents.accept(
+            intentHandle,
+            acceptedOutcome,
+            cached,
+          ),
         { revalidate: false },
       );
-      void mutate().catch((error) => {
+      await mutate().catch((error) => {
         console.error("Failed to revalidate accepted settings:", error);
+        return mutate(() => undefined, { revalidate: false });
       });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);

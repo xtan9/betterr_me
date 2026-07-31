@@ -1,55 +1,42 @@
--- Run after `supabase db reset --local` with:
--- psql postgresql://postgres:postgres@127.0.0.1:54322/postgres \
---   -v ON_ERROR_STOP=1 -f supabase/tests/atomic_profile_preference_updates.sql
---
--- This exercises the public RPC against PostgreSQL, including two overlapping
--- partial updates. Synthetic data and the test-only trigger are removed.
+-- ralph-ci: true
+-- Exercises validation, ownership, atomic merge, and concurrent writes through
+-- the public preference RPC using only the disposable constrained test role.
 
-create extension if not exists dblink with schema extensions;
-
-insert into auth.users (
-  id,
-  instance_id,
-  aud,
-  role,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  created_at,
-  updated_at
-)
-values (
+select public.ralph_ci_create_auth_user(
   '48600000-0000-0000-0000-000000000001',
-  '00000000-0000-0000-0000-000000000000',
-  'authenticated',
-  'authenticated',
-  'atomic-preferences@example.test',
-  crypt('not-used', gen_salt('bf')),
-  now(),
-  '{}'::jsonb,
-  '{}'::jsonb,
-  now(),
-  now()
+  'atomic-preferences@example.test'
+);
+select public.ralph_ci_create_auth_user(
+  '48600000-0000-0000-0000-000000000002',
+  'other-atomic-preferences@example.test'
 );
 
-update public.profiles
-set preferences = '{
-  "date_format": "MM/DD/YYYY",
-  "week_start_day": 1,
-  "theme": "system",
-  "weight_unit": "kg"
-}'::jsonb
-where id = '48600000-0000-0000-0000-000000000001';
+set role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"48600000-0000-0000-0000-000000000001"}',
+  false
+);
+
+select public.update_profile_preferences(
+  '48600000-0000-0000-0000-000000000001',
+  '{
+    "date_format": "MM/DD/YYYY",
+    "week_start_day": 1,
+    "theme": "system",
+    "weight_unit": "kg"
+  }'::jsonb
+);
 
 do $$
 declare
   before_invalid_patch jsonb;
+  after_invalid_patch jsonb;
 begin
-  select preferences into before_invalid_patch
-  from public.profiles
-  where id = '48600000-0000-0000-0000-000000000001';
+  before_invalid_patch := public.update_profile_preferences(
+    '48600000-0000-0000-0000-000000000001',
+    '{"date_format":"MM/DD/YYYY"}'::jsonb
+  )->'preferences';
 
   begin
     perform public.update_profile_preferences(
@@ -61,74 +48,89 @@ begin
     when invalid_parameter_value then null;
   end;
 
-  if (
-    select preferences
-    from public.profiles
-    where id = '48600000-0000-0000-0000-000000000001'
-  ) <> before_invalid_patch then
+  after_invalid_patch := public.update_profile_preferences(
+    '48600000-0000-0000-0000-000000000001',
+    '{"date_format":"MM/DD/YYYY"}'::jsonb
+  )->'preferences';
+  if after_invalid_patch <> before_invalid_patch then
     raise exception 'invalid patch partially changed the profile';
   end if;
+
+  begin
+    perform public.update_profile_preferences(
+      '48600000-0000-0000-0000-000000000002',
+      '{"theme":"dark"}'::jsonb
+    );
+    raise exception 'cross-user preference patch unexpectedly succeeded';
+  exception
+    when raise_exception then
+      if sqlerrm <> 'Cannot update preferences for another user' then
+        raise;
+      end if;
+  end;
 end
 $$;
 
-create function public.test_pause_atomic_preference_update()
-returns trigger
-language plpgsql
-set search_path = ''
-as $$
-begin
-  if new.id = '48600000-0000-0000-0000-000000000001'
-    and new.preferences->>'week_start_day' = '0' then
-    perform pg_catalog.pg_sleep(0.4);
-  end if;
-  return new;
-end
-$$;
-
-create trigger test_pause_atomic_preference_update
-before update on public.profiles
-for each row execute function public.test_pause_atomic_preference_update();
-
-select extensions.dblink_connect(
-  'atomic_preference_writer',
-  format(
-    'host=%s port=%s dbname=%I user=postgres password=postgres',
-    inet_server_addr(),
-    inet_server_port(),
-    current_database()
-  )
-);
+reset role;
+select public.ralph_ci_open_connection('atomic-preference-writer');
 
 select extensions.dblink_send_query(
-  'atomic_preference_writer',
+  'atomic-preference-writer',
   $query$
-    select public.update_profile_preferences(
-      '48600000-0000-0000-0000-000000000001',
-      '{"week_start_day":0}'::jsonb
+    with request_context as materialized (
+      select set_config(
+        'request.jwt.claims',
+        '{"sub":"48600000-0000-0000-0000-000000000001"}',
+        false
+      )
+    ),
+    updated as materialized (
+      select public.update_profile_preferences(
+        '48600000-0000-0000-0000-000000000001',
+        '{"week_start_day":0}'::jsonb
+      ) profile
+      from request_context
+    ),
+    paused as materialized (
+      select pg_sleep(0.4) from updated
     )
+    select updated.profile from updated cross join paused
   $query$
 );
 
 select pg_sleep(0.1);
 
+set role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"48600000-0000-0000-0000-000000000001"}',
+  false
+);
 select public.update_profile_preferences(
   '48600000-0000-0000-0000-000000000001',
   '{"weight_unit":"lbs"}'::jsonb
 );
+reset role;
 
 select *
-from extensions.dblink_get_result('atomic_preference_writer')
+from extensions.dblink_get_result('atomic-preference-writer')
   as result(profile jsonb);
+select extensions.dblink_disconnect('atomic-preference-writer');
 
-select extensions.dblink_disconnect('atomic_preference_writer');
-
+set role authenticated;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"48600000-0000-0000-0000-000000000001"}',
+  false
+);
 do $$
 declare
   accepted_preferences jsonb;
 begin
-  select preferences into accepted_preferences
-  from public.profiles
-  where id = '48600000-0000-0000-0000-000000000001';
+  accepted_preferences := public.update_profile_preferences(
+    '48600000-0000-0000-0000-000000000001',
+    '{"date_format":"MM/DD/YYYY"}'::jsonb
+  )->'preferences';
 
   if accepted_preferences <> '{
     "date_format": "MM/DD/YYYY",
@@ -142,8 +144,11 @@ begin
   end if;
 end
 $$;
+reset role;
 
-drop trigger test_pause_atomic_preference_update on public.profiles;
-drop function public.test_pause_atomic_preference_update();
-delete from auth.users
-where id = '48600000-0000-0000-0000-000000000001';
+select public.ralph_ci_delete_auth_user(
+  '48600000-0000-0000-0000-000000000001'
+);
+select public.ralph_ci_delete_auth_user(
+  '48600000-0000-0000-0000-000000000002'
+);

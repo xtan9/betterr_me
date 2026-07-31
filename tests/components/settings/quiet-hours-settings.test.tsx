@@ -88,6 +88,7 @@ describe("QuietHoursSettings", () => {
   it("sends only the quiet-hours intent and caches the accepted profile", async () => {
     const acceptedProfile = {
       id: "user-123",
+      updated_at: "2026-07-30T12:00:02.000000+00:00",
       preferences: {
         theme: "dark",
         weight_unit: "kg",
@@ -122,6 +123,7 @@ describe("QuietHoursSettings", () => {
     expect(cacheUpdater()).toEqual({
       profile: {
         id: "user-123",
+        updated_at: "2026-07-30T12:00:02.000000+00:00",
         preferences: {
           theme: "dark",
           weight_unit: "kg",

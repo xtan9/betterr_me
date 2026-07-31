@@ -95,6 +95,7 @@ const initialProfile = {
     id: "user-123",
     email: "person@example.test",
     full_name: "Person",
+    updated_at: "2026-07-30T12:00:01.000000+00:00",
     preferences: {
       date_format: "MM/DD/YYYY",
       week_start_day: 1,
@@ -148,6 +149,7 @@ describe("SettingsContent preference intents", () => {
       profile: {
         ...initialProfile.profile,
         full_name: "New server name",
+        updated_at: "2026-07-30T12:00:02.000000+00:00",
         preferences: {
           ...initialProfile.profile.preferences,
           week_start_day: 0,
@@ -167,10 +169,13 @@ describe("SettingsContent preference intents", () => {
     fireEvent.click(screen.getByText("choose-sunday"));
     fireEvent.click(screen.getByText("save"));
 
-    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(3));
     const [cacheUpdater, options] = mockMutate.mock.calls[0];
     expect(options).toEqual({ revalidate: false });
     expect(cacheUpdater()).toEqual(accepted);
+    const [clearCache, clearOptions] = mockMutate.mock.calls[2];
+    expect(clearOptions).toEqual({ revalidate: false });
+    expect(clearCache()).toBeUndefined();
     expect(screen.getByText("saved")).toBeInTheDocument();
   });
 });
