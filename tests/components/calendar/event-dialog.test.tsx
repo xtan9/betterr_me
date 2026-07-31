@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import { axe } from "vitest-axe";
 import * as axeMatchers from "vitest-axe/matchers";
 import { EventDialog } from "@/components/calendar/event-dialog";
@@ -43,6 +49,31 @@ function makeEvent(
     created_at: "2026-04-01T00:00:00Z",
     updated_at: "2026-04-01T00:00:00Z",
     is_virtual: false,
+    ...overrides,
+  };
+}
+
+function makeReminder(
+  overrides: Partial<{
+    id: string;
+    reminder_type: "relative" | "absolute";
+    relative_minutes: number | null;
+    absolute_time: string | null;
+    channels: ("push" | "email")[];
+    status: "pending" | "sent" | "failed" | "snoozed";
+  }> = {},
+) {
+  return {
+    id: "rem-1",
+    user_id: "u1",
+    source_type: "calendar_event",
+    source_id: "e1",
+    reminder_type: "relative" as const,
+    relative_minutes: 15,
+    absolute_time: null,
+    channels: ["push"] as ("push" | "email")[],
+    status: "pending" as const,
+    created_at: "2026-04-01T00:00:00Z",
     ...overrides,
   };
 }
@@ -151,6 +182,7 @@ describe("EventDialog", () => {
     render(<EventDialog {...defaultProps} event={makeEvent()} />);
 
     const saveButton = screen.getByText("eventDialog.save");
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
     fireEvent.click(saveButton);
 
     await waitFor(() => {
@@ -158,6 +190,171 @@ describe("EventDialog", () => {
         "/api/calendar-events/e1",
         expect.objectContaining({ method: "PATCH" }),
       );
+    });
+  });
+
+  it("does not submit an edit until the current event reminders finish loading", async () => {
+    let resolveReminders!: (value: {
+      ok: boolean;
+      json: () => Promise<{ reminders: never[] }>;
+    }) => void;
+    mockFetch.mockImplementation((url: string, _opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders?")) {
+        return new Promise((resolve) => {
+          resolveReminders = resolve;
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ event: { id: "e1" } }),
+      });
+    });
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+
+    const saveButton = screen.getByText("eventDialog.save");
+    expect(saveButton).toBeDisabled();
+    fireEvent.click(saveButton);
+    expect(
+      mockFetch.mock.calls.some(([, opts]) => opts?.method === "PATCH"),
+    ).toBe(false);
+
+    resolveReminders({
+      ok: true,
+      json: () => Promise.resolve({ reminders: [] }),
+    });
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
+  });
+
+  it("requires reminders to reload before saving when the same event is reopened", async () => {
+    const reminderLoads: Array<
+      (value: {
+        ok: boolean;
+        json: () => Promise<{ reminders: never[] }>;
+      }) => void
+    > = [];
+    mockFetch.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/api/reminders?")) {
+        return new Promise((resolve) => reminderLoads.push(resolve));
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ event: { id: "e1" } }),
+      });
+    });
+    const event = makeEvent();
+    const { rerender } = render(
+      <EventDialog {...defaultProps} event={event} />,
+    );
+    reminderLoads[0]({
+      ok: true,
+      json: () => Promise.resolve({ reminders: [] }),
+    });
+    await waitFor(() =>
+      expect(screen.getByText("eventDialog.save")).not.toBeDisabled(),
+    );
+
+    rerender(
+      <EventDialog {...defaultProps} event={event} isOpen={false} />,
+    );
+    rerender(
+      <EventDialog {...defaultProps} event={event} isOpen />,
+    );
+
+    expect(screen.getByText("eventDialog.save")).toBeDisabled();
+    expect(reminderLoads).toHaveLength(2);
+  });
+
+  it("ignores reminders loaded for an event that is no longer selected", async () => {
+    const pending = new Map<
+      string,
+      (value: {
+        ok: boolean;
+        json: () => Promise<{ reminders: object[] }>;
+      }) => void
+    >();
+    mockFetch.mockImplementation((url: string, _opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders?")) {
+        const eventId = new URL(url, "https://example.test").searchParams.get(
+          "source_id",
+        )!;
+        return new Promise((resolve) => pending.set(eventId, resolve));
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ event: { id: "e2" } }),
+      });
+    });
+
+    const { rerender } = render(
+      <EventDialog {...defaultProps} event={makeEvent()} />,
+    );
+    rerender(
+      <EventDialog
+        {...defaultProps}
+        event={makeEvent({ id: "e2", title: "Second event" })}
+      />,
+    );
+
+    pending.get("e2")!({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          reminders: [
+            {
+              id: "e2-reminder",
+              reminder_type: "relative",
+              relative_minutes: 30,
+              absolute_time: null,
+              channels: ["email"],
+              status: "pending",
+            },
+          ],
+        }),
+    });
+    await waitFor(() =>
+      expect(screen.getByText("eventDialog.save")).not.toBeDisabled(),
+    );
+
+    await act(async () => {
+      pending.get("e1")!({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            reminders: [
+              {
+                id: "e1-reminder",
+                reminder_type: "relative",
+                relative_minutes: 15,
+                absolute_time: null,
+                channels: ["push"],
+                status: "pending",
+              },
+            ],
+          }),
+      });
+      await Promise.resolve();
+    });
+    expect(screen.getByLabelText("reminders.typeLabel")).toHaveTextContent(
+      "reminders.30min",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "eventDialog.save" }),
+    );
+
+    await waitFor(() => {
+      const patch = mockFetch.mock.calls.find(
+        ([url, opts]) =>
+          url === "/api/calendar-events/e2" && opts?.method === "PATCH",
+      );
+      expect(JSON.parse(patch![1]?.body as string).reminders).toEqual([
+        {
+          reminder_type: "relative",
+          relative_minutes: 30,
+          absolute_time: null,
+          channels: ["email"],
+        },
+      ]);
     });
   });
 
@@ -259,11 +456,14 @@ describe("EventDialog", () => {
       // The reminder fetch should have been attempted
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/reminders?"),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
 
     // Submit the form
-    fireEvent.click(screen.getByText("eventDialog.save"));
+    const saveButton = screen.getByText("eventDialog.save");
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
+    fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
@@ -271,6 +471,13 @@ describe("EventDialog", () => {
         expect.objectContaining({ method: "PATCH" }),
       );
     });
+    const eventPatch = mockFetch.mock.calls.find(
+      ([url, opts]) =>
+        url === "/api/calendar-events/e1" && opts?.method === "PATCH",
+    );
+    expect(JSON.parse(eventPatch![1]?.body as string)).not.toHaveProperty(
+      "reminders",
+    );
 
     // Wait a bit for any potential reminder calls
     await waitFor(() => {
@@ -479,18 +686,8 @@ describe("EventDialog", () => {
     expect(blueSwatch.className).toContain("scale-110");
   });
 
-  it("loads existing reminders in edit mode and issues PATCH for unchanged reminders", async () => {
-    const reminder = {
-      id: "rem-1",
-      user_id: "u1",
-      source_type: "calendar_event",
-      source_id: "e1",
-      reminder_type: "relative",
-      relative_minutes: 15,
-      absolute_time: null,
-      channels: ["push"],
-      created_at: "2026-04-01T00:00:00Z",
-    };
+  it("submits loaded reminder intent in the atomic event update", async () => {
+    const reminder = makeReminder();
     mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
       if (typeof url === "string" && url.includes("/api/reminders?source_type")) {
         return Promise.resolve({
@@ -503,9 +700,6 @@ describe("EventDialog", () => {
           ok: true,
           json: () => Promise.resolve({ event: { id: "e1" } }),
         });
-      }
-      if (typeof url === "string" && url.includes("/api/reminders/rem-1") && opts?.method === "PATCH") {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
@@ -520,11 +714,167 @@ describe("EventDialog", () => {
     fireEvent.click(screen.getByText("eventDialog.save"));
 
     await waitFor(() => {
-      const patchReminder = mockFetch.mock.calls.find(
+      const patchEvent = mockFetch.mock.calls.find(
         ([url, opts]) =>
-          typeof url === "string" && url.includes("/api/reminders/rem-1") && opts?.method === "PATCH",
+          url === "/api/calendar-events/e1" && opts?.method === "PATCH",
       );
-      expect(patchReminder).toBeDefined();
+      expect(patchEvent).toBeDefined();
+      expect(JSON.parse(patchEvent![1]?.body as string).reminders).toEqual([
+        {
+          reminder_type: "relative",
+          relative_minutes: 15,
+          absolute_time: null,
+          channels: ["push"],
+        },
+      ]);
+      expect(
+        mockFetch.mock.calls.some(
+          ([url, opts]) =>
+            typeof url === "string" &&
+            url.includes("/api/reminders/rem-1") &&
+            opts?.method === "PATCH",
+        ),
+      ).toBe(false);
+    });
+  });
+
+  it("submits changed reminder intent through the atomic event update", async () => {
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders?source_type")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ reminders: [makeReminder()] }),
+        });
+      }
+      if (url === "/api/calendar-events/e1" && opts?.method === "PATCH") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ event: { id: "e1" } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Email")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("Email"));
+    fireEvent.click(screen.getByText("eventDialog.save"));
+
+    await waitFor(() => {
+      const patchEvent = mockFetch.mock.calls.find(
+        ([url, opts]) =>
+          url === "/api/calendar-events/e1" && opts?.method === "PATCH",
+      );
+      expect(JSON.parse(patchEvent![1]?.body as string).reminders).toEqual([
+        {
+          reminder_type: "relative",
+          relative_minutes: 15,
+          absolute_time: null,
+          channels: ["push", "email"],
+        },
+      ]);
+    });
+    expect(
+      mockFetch.mock.calls.some(
+        ([url, opts]) =>
+          typeof url === "string" &&
+          url.startsWith("/api/reminders") &&
+          ["POST", "PATCH", "DELETE"].includes(opts?.method ?? ""),
+      ),
+    ).toBe(false);
+  });
+
+  it("removes loaded reminder intent through the atomic event update", async () => {
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders?source_type")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ reminders: [makeReminder()] }),
+        });
+      }
+      if (url === "/api/calendar-events/e1" && opts?.method === "PATCH") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ event: { id: "e1" } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("reminders.remove")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("reminders.remove"));
+    fireEvent.click(screen.getByText("eventDialog.save"));
+
+    await waitFor(() => {
+      const patchEvent = mockFetch.mock.calls.find(
+        ([url, opts]) =>
+          url === "/api/calendar-events/e1" && opts?.method === "PATCH",
+      );
+      expect(JSON.parse(patchEvent![1]?.body as string).reminders).toEqual([]);
+    });
+    expect(
+      mockFetch.mock.calls.some(
+        ([url, opts]) =>
+          typeof url === "string" &&
+          url.startsWith("/api/reminders") &&
+          ["POST", "PATCH", "DELETE"].includes(opts?.method ?? ""),
+      ),
+    ).toBe(false);
+  });
+
+  it("excludes terminal reminders from rendered and submitted pending intent", async () => {
+    const reminders = [
+      makeReminder(),
+      makeReminder({ id: "rem-sent", relative_minutes: 30, status: "sent" }),
+      makeReminder({ id: "rem-failed", relative_minutes: 60, status: "failed" }),
+      makeReminder({ id: "rem-snoozed", relative_minutes: 1440, status: "snoozed" }),
+    ];
+    mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/api/reminders?source_type")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ reminders }),
+        });
+      }
+      if (url === "/api/calendar-events/e1" && opts?.method === "PATCH") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ event: { id: "e1" } }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    });
+
+    render(<EventDialog {...defaultProps} event={makeEvent()} />);
+
+    await waitFor(() =>
+      expect(screen.getAllByLabelText("reminders.typeLabel")).toHaveLength(1),
+    );
+    expect(screen.getByLabelText("reminders.typeLabel")).toHaveTextContent(
+      "reminders.15min",
+    );
+    fireEvent.click(screen.getByText("eventDialog.save"));
+
+    await waitFor(() => {
+      const patchEvent = mockFetch.mock.calls.find(
+        ([url, opts]) =>
+          url === "/api/calendar-events/e1" && opts?.method === "PATCH",
+      );
+      expect(JSON.parse(patchEvent![1]?.body as string).reminders).toEqual([
+        {
+          reminder_type: "relative",
+          relative_minutes: 15,
+          absolute_time: null,
+          channels: ["push"],
+        },
+      ]);
     });
   });
 
@@ -534,8 +884,7 @@ describe("EventDialog", () => {
     expect(defaultProps.onClose).toHaveBeenCalledOnce();
   });
 
-  it("warns via toast when a reminder save request fails", async () => {
-    // Existing reminder: PATCH will reject
+  it("keeps the dialog open when the atomic event/reminder update fails", async () => {
     const reminder = {
       id: "rem-fail",
       user_id: "u1",
@@ -545,6 +894,7 @@ describe("EventDialog", () => {
       relative_minutes: 15,
       absolute_time: null,
       channels: ["push"],
+      status: "pending",
       created_at: "2026-04-01T00:00:00Z",
     };
     mockFetch.mockImplementation((url: string, opts?: RequestInit) => {
@@ -554,20 +904,14 @@ describe("EventDialog", () => {
           json: () => Promise.resolve({ reminders: [reminder] }),
         });
       }
-      if (typeof url === "string" && url.includes("/api/calendar-events/e1") && opts?.method === "PATCH") {
+      if (url === "/api/calendar-events/e1" && opts?.method === "PATCH") {
         return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ event: { id: "e1" } }),
+          ok: false,
+          json: () => Promise.resolve({ error: "Atomic update failed" }),
         });
-      }
-      if (typeof url === "string" && url.includes("/api/reminders/rem-fail") && opts?.method === "PATCH") {
-        return Promise.reject(new Error("reminder patch failed"));
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
-
-    const { toast } = await import("sonner");
-    const warningSpy = vi.spyOn(toast, "warning").mockImplementation(() => "" as never);
 
     render(<EventDialog {...defaultProps} event={makeEvent()} />);
 
@@ -579,9 +923,10 @@ describe("EventDialog", () => {
     fireEvent.click(screen.getByText("eventDialog.save"));
 
     await waitFor(() => {
-      expect(warningSpy).toHaveBeenCalledWith("eventDialog.reminderSaveWarning");
+      expect(screen.getByText("Atomic update failed")).toBeInTheDocument();
     });
-    warningSpy.mockRestore();
+    expect(defaultProps.onSaved).not.toHaveBeenCalled();
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
 
   it("closes the dialog via Dialog onOpenChange (e.g. ESC key)", () => {

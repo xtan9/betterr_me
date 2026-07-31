@@ -4,6 +4,10 @@ import { RemindersDB } from "@/lib/db";
 import { reminderCreateSchema } from "@/lib/validations/reminders";
 import { validateRequestBody } from "@/lib/validations/api";
 import { computeFireAt } from "@/lib/reminders/fire-at";
+import {
+  CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR,
+  isCalendarEventReminder,
+} from "@/lib/reminders/lifecycle-policy";
 import { log } from "@/lib/logger";
 import { z } from "zod";
 
@@ -88,6 +92,13 @@ export async function POST(request: NextRequest) {
     if (!validation.success) return validation.response;
 
     const { event_start_time, ...reminderData } = validation.data;
+
+    if (isCalendarEventReminder(reminderData.source_type)) {
+      return NextResponse.json(
+        { error: CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR },
+        { status: 409 },
+      );
+    }
 
     const fireAt = computeFireAt(
       {

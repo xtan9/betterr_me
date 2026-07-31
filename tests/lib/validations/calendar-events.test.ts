@@ -255,6 +255,92 @@ describe('calendarEventUpdateSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts a reminder-only update with an omitted non-applicable field', () => {
+    const result = calendarEventUpdateSchema.safeParse({
+      reminders: [{
+        reminder_type: 'relative',
+        relative_minutes: 30,
+        channels: ['push'],
+      }],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({
+        reminders: [{
+          reminder_type: 'relative',
+          relative_minutes: 30,
+          channels: ['push'],
+        }],
+      });
+    }
+  });
+
+  it('accepts an empty reminder collection as a reminder-only removal', () => {
+    const result = calendarEventUpdateSchema.safeParse({ reminders: [] });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({ reminders: [] });
+    }
+  });
+
+  it('rejects a relative reminder without relative_minutes', () => {
+    const result = calendarEventUpdateSchema.safeParse({
+      reminders: [{
+        reminder_type: 'relative',
+        channels: ['push'],
+      }],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.errors.map((error) => error.message)).toContain(
+        'relative_minutes is required for relative reminders',
+      );
+    }
+  });
+
+  it('rejects an absolute reminder without absolute_time', () => {
+    const result = calendarEventUpdateSchema.safeParse({
+      reminders: [{
+        reminder_type: 'absolute',
+        channels: ['push'],
+      }],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.errors.map((error) => error.message)).toContain(
+        'absolute_time is required for absolute reminders',
+      );
+    }
+  });
+
+  it('rejects an absolute reminder with a malformed absolute_time', () => {
+    const result = calendarEventUpdateSchema.safeParse({
+      reminders: [{
+        reminder_type: 'absolute',
+        absolute_time: 'tomorrow morning',
+        channels: ['push'],
+      }],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a reminder without a delivery channel', () => {
+    const result = calendarEventUpdateSchema.safeParse({
+      reminders: [{
+        reminder_type: 'relative',
+        relative_minutes: 15,
+        channels: [],
+      }],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it('should reject empty object', () => {
     const result = calendarEventUpdateSchema.safeParse({});
     expect(result.success).toBe(false);

@@ -8,16 +8,32 @@ import {
   codexStartupEventsReady,
   codexSessionStarted,
   ensureSanitizedWorkerGitView,
+  immutableDependencyExecutableDiscoveryArguments,
+  immutableDependencyExecutablePaths,
+  immutableDependencyExecutableRepairArguments,
+  immutableDependencyExecutableStatArguments,
+  immutableDependencyExecutableStatsAreSafe,
   isolatedCodexAuthInstallRequired,
+  isolatedCodexReadablePaths,
   isolatedCodexRuntimeConfiguration,
   processExitCode,
   removeSanitizedWorkerGitView,
+  sanitizedWorkerGitViewRecoveryAction,
   unprivilegedWslCommandArguments,
   unprivilegedWslIdentityIsSafe,
   unprivilegedWslIdentityProbeArguments,
   workerCodexModelArguments,
   workerGitSmokeCommand,
 } from "../../scripts/ralph/worker-isolation.mjs";
+import {
+  WORKER_PROTECTED_PATHS,
+  issueAllowsNewSupabaseMigration,
+  isSupabaseMigrationPath,
+  isTopLevelSupabaseSqlFixturePath,
+  workerChangePolicyViolation,
+  workerProtectedPath,
+  workerProtectedPathsForIssue,
+} from "../../scripts/ralph/worker-path-policy.mjs";
 
 const gitCommand = process.platform === "win32" ? "git.exe" : "git";
 
@@ -41,6 +57,199 @@ function gitWithoutStdin(args: string[], options: { input?: string } = {}) {
 }
 
 describe("Ralph sanitized worker Git view", () => {
+  it("repairs only immutable Linux esbuild binaries without making them writable", () => {
+    const root = "/var/lib/betterr-me-ralph/deps-source/node_modules";
+    const selector = "*/node_modules/@esbuild/linux-x64/bin/esbuild";
+    const binaries = [
+      `${root}/.pnpm/@esbuild+linux-x64@0.27.2/node_modules/@esbuild/linux-x64/bin/esbuild`,
+      `${root}/.pnpm/@esbuild+linux-x64@0.27.3/node_modules/@esbuild/linux-x64/bin/esbuild`,
+    ];
+    expect(immutableDependencyExecutableDiscoveryArguments(root)).toEqual([
+      "find",
+      root,
+      "-path",
+      selector,
+      "-type",
+      "f",
+      "-print",
+    ]);
+    expect(
+      immutableDependencyExecutablePaths(`${binaries.join("\n")}\n`, root),
+    ).toEqual(binaries);
+    expect(immutableDependencyExecutableStatArguments(binaries)).toEqual([
+      "stat",
+      "-c",
+      "%U:%G:%a",
+      ...binaries,
+    ]);
+    expect(immutableDependencyExecutableRepairArguments(binaries)).toEqual([
+      "chmod",
+      "0555",
+      ...binaries,
+    ]);
+    expect(
+      immutableDependencyExecutableStatsAreSafe(
+        "root:root:444\nroot:root:555\n",
+        binaries.length,
+      ),
+    ).toBe(true);
+    expect(
+      immutableDependencyExecutableStatsAreSafe(
+        "root:root:555\nroot:root:555\n",
+        binaries.length,
+        "555",
+      ),
+    ).toBe(true);
+    expect(
+      immutableDependencyExecutableStatsAreSafe(
+        "nobody:root:444\nroot:root:555\n",
+        binaries.length,
+      ),
+    ).toBe(false);
+    expect(
+      immutableDependencyExecutableStatsAreSafe(
+        "root:root:555\nroot:root:755\n",
+        binaries.length,
+        "555",
+      ),
+    ).toBe(false);
+    expect(() =>
+      immutableDependencyExecutablePaths("/tmp/esbuild\n", root),
+    ).toThrow("unexpected immutable esbuild path");
+  });
+
+  it("rebuilds stale metadata only before the durable merge begins", () => {
+    expect(
+      sanitizedWorkerGitViewRecoveryAction({
+        mergeActive: false,
+        recordedBaseSha: "old-head",
+        expectedBaseSha: "pr-head",
+      }),
+    ).toBe("rebuild");
+    expect(
+      sanitizedWorkerGitViewRecoveryAction({
+        mergeActive: true,
+        recordedBaseSha: "pr-head",
+        expectedBaseSha: "pr-head",
+      }),
+    ).toBe("adopt");
+    expect(
+      sanitizedWorkerGitViewRecoveryAction({
+        mergeActive: true,
+        recordedBaseSha: "old-head",
+        expectedBaseSha: "pr-head",
+      }),
+    ).toBe("unsafe");
+  });
+
+  it.each([
+    ".github/workflows/e2e.yml",
+    ".gitattributes",
+    "scripts/ralph/controller.mjs",
+    "scripts/ci/ralph-sql-policy.mjs",
+    "scripts/ci/run-ralph-sql-tests.sh",
+    "scripts/ci/run-sql-fixtures.sh",
+    "scripts/ci/sql-fixture-registry.mjs",
+    "scripts/ci/verify-sql-fixture-runner.sh",
+    "supabase/migrations/20260729000001_ticket.sql",
+    "supabase/config.toml",
+    "supabase/seed.sql",
+    "supabase/tests/e2e_local_authenticated_grants.sql",
+    "supabase/tests/calendar_event_reminder_lifecycle.sql",
+    "supabase/tests/control_plane_authorization.sql",
+    "supabase/tests/finance_cushion_rls.sql",
+    "supabase/tests/oauth_refresh_token_lifecycle.sql",
+    "supabase/tests/oauth_refresh_token_upgrade.sql",
+    "supabase/tests/ralph_ci_runner_security.sql",
+    "AGENTS.md",
+    "pnpm-workspace.yaml",
+    ".env.local",
+    "nested/private.pem",
+  ])("protects controller-trusted worker path %s", (filePath) => {
+    expect(workerProtectedPath(filePath)).toBe(true);
+  });
+
+  it.each([
+    "app/api/tasks/route.ts",
+    "supabase/tests/ticket_fixture.sql",
+    "tests/ticket.test.ts",
+  ])("allows ordinary ticket path %s", (filePath) => {
+    expect(workerProtectedPath(filePath)).toBe(false);
+  });
+
+  it("allows one new migration only for an explicitly trusted queue entry", () => {
+    const issue = { trustedWorkerPolicy: { newSupabaseMigrations: 1 } };
+    expect(issueAllowsNewSupabaseMigration(issue)).toBe(true);
+    expect(workerProtectedPathsForIssue(issue)).not.toContain("supabase/migrations");
+    expect(
+      workerChangePolicyViolation(
+        [
+          {
+            status: "A",
+            path: "supabase/migrations/20260730050000_delete_event_atomically.sql",
+          },
+        ],
+        issue,
+      ),
+    ).toBeNull();
+    expect(
+      workerChangePolicyViolation(
+        [
+          {
+            status: "A",
+            path: "supabase/migrations/20260730050000_delete_event_atomically.sql",
+          },
+        ],
+        {},
+      ),
+    ).toContain("controller-protected");
+  });
+
+  it.each([
+    [[{ status: "M", path: "supabase/migrations/20260701000000_old.sql" }]],
+    [[{ status: "A", path: "supabase/migrations/not_timestamped.sql" }]],
+    [[{ status: "A", path: "supabase/migrations/20260730050000_DROP_TABLE.SQL" }]],
+    [[
+      { status: "A", path: "supabase/migrations/20260730050000_first.sql" },
+      { status: "A", path: "supabase/migrations/20260730050001_second.sql" },
+    ]],
+    [[{ status: "M", path: ".github/workflows/ci.yml" }]],
+  ])("rejects unsafe trusted migration scope %#", (changes) => {
+    expect(
+      workerChangePolicyViolation(changes, {
+        trustedWorkerPolicy: { newSupabaseMigrations: 1 },
+      }),
+    ).not.toBeNull();
+  });
+
+  it("matches the migration scope consistently without weakening filename case", () => {
+    expect(isSupabaseMigrationPath("SUPABASE\\MIGRATIONS\\FILE.SQL")).toBe(true);
+    expect(isSupabaseMigrationPath("supabase/tests/file.sql")).toBe(false);
+    expect(isTopLevelSupabaseSqlFixturePath("supabase/tests/file.sql")).toBe(true);
+    expect(isTopLevelSupabaseSqlFixturePath("supabase/tests/file.SQL")).toBe(false);
+    expect(isTopLevelSupabaseSqlFixturePath("SUPABASE/tests/file.sql")).toBe(false);
+  });
+
+  it("keeps every protected source path in the worker read-only overlay", () => {
+    const protectedPaths = WORKER_PROTECTED_PATHS.map(
+      (relativePath) => `/worktree/${relativePath}`,
+    );
+    expect(
+      isolatedCodexReadablePaths({
+        readOnly: false,
+        worktreePath: "/worktree",
+        gitMetadataRoot: "/git-view/.git",
+        dependencyRoot: "/dependencies",
+        workerHome: "/worker-home",
+        protectedPaths,
+      }),
+    ).toEqual([
+      "/git-view/.git",
+      "/dependencies",
+      "/worker-home",
+      ...protectedPaths,
+    ]);
+  });
   it.each([
     [1, true, 0],
     [137, true, 0],
@@ -215,7 +424,12 @@ describe("Ralph sanitized worker Git view", () => {
         environment: [],
         command: "/usr/local/bin/codex",
         args: [],
-        ...override,
+        ...(override as unknown as Partial<{
+          home: string;
+          environment: string[];
+          command: string;
+          args: string[];
+        }>),
       }),
     ).toThrowError(new Error(expectedMessage));
   });
@@ -268,14 +482,24 @@ describe("Ralph sanitized worker Git view", () => {
     expect(unprivilegedWslIdentityIsSafe("Uid:\t65534\n")).toBe(false);
   });
 
-  it("pins Sol with medium implementation effort and high review effort", () => {
+  it("pins Sol with high coding, xhigh exhaustive review, and high delta review effort", () => {
     expect(workerCodexModelArguments({ readOnly: false })).toEqual([
       "--model",
       "gpt-5.6-sol",
       "-c",
-      'model_reasoning_effort="medium"',
+      'model_reasoning_effort="high"',
     ]);
-    expect(workerCodexModelArguments({ readOnly: true })).toEqual([
+    expect(
+      workerCodexModelArguments({ readOnly: true, reviewKind: "exhaustive" }),
+    ).toEqual([
+      "--model",
+      "gpt-5.6-sol",
+      "-c",
+      'model_reasoning_effort="xhigh"',
+    ]);
+    expect(
+      workerCodexModelArguments({ readOnly: true, reviewKind: "delta" }),
+    ).toEqual([
       "--model",
       "gpt-5.6-sol",
       "-c",

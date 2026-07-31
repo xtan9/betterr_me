@@ -22,7 +22,7 @@ const mockSortOrderChain = {
   order: vi.fn().mockReturnThis(),
   limit: vi.fn().mockReturnThis(),
   maybeSingle: vi.fn<
-    () => Promise<{ data: { sort_order: number } | null; error: null }>
+    () => Promise<{ data: { sort_order: number } | null; error: unknown }>
   >(() => Promise.resolve({ data: null, error: null })),
 };
 
@@ -52,6 +52,8 @@ vi.mock('@supabase/supabase-js', async (importOriginal) => {
 const mockTasksDB = {
   getUserTasks: vi.fn(),
   createTask: vi.fn(),
+  getTask: vi.fn(),
+  updateTask: vi.fn(),
 };
 
 vi.mock('@/lib/db', () => ({

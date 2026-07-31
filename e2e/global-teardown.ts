@@ -1,113 +1,72 @@
+import { rmSync } from 'node:fs';
+import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
+import { E2E_READ_ONLY, FIXTURE_REGISTRY, RUN_CONTEXT } from './constants';
+import { cleanupRegisteredFixtures, requiredE2EEnvironment } from './run-context';
 
-const TEST_DATA_PREFIX = 'E2E Test -';
-
-/**
- * Global teardown for E2E tests.
- * Deletes all habits (and their logs) and tasks matching the "E2E Test -"
- * prefix so each test run starts with a clean slate.
- *
- * This teardown warns gracefully on missing credentials — a
- * teardown failure should never mask actual test results.
- */
 async function globalTeardown() {
-  try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const testEmail = process.env.E2E_TEST_EMAIL;
-    const testPassword = process.env.E2E_TEST_PASSWORD;
-
-    if (!supabaseUrl || !supabaseAnonKey || !testEmail || !testPassword) {
-      console.warn('[teardown] Missing env vars — skipping cleanup');
-      return;
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: testEmail,
-      password: testPassword,
-    });
-
-    if (authError) {
-      console.error('[teardown] Auth failed:', authError.message);
-      return;
-    }
-
-    try {
-      const { data: habits, error: fetchError } = await supabase
-        .from('habits')
-        .select('id, name')
-        .ilike('name', `${TEST_DATA_PREFIX}%`);
-
-      if (fetchError) {
-        console.error('[teardown] Failed to fetch test habits:', fetchError.message);
-        return;
-      }
-
-      if (!habits || habits.length === 0) {
-        console.log('[teardown] No test habits to clean up');
-        return;
-      }
-
-      const habitIds = habits.map((h) => h.id);
-      console.log(`[teardown] Cleaning up ${habits.length} test habit(s)...`);
-
-      // habit_logs has ON DELETE CASCADE from habits, so explicit deletion is
-      // not strictly necessary. We do it anyway as a defensive measure in case
-      // the cascade is ever removed.
-      const { error: logsError } = await supabase
-        .from('habit_logs')
-        .delete()
-        .in('habit_id', habitIds);
-
-      if (logsError) {
-        console.error('[teardown] Failed to delete logs:', logsError.message);
-        // Continue — cascade on habit deletion will clean up logs anyway
-      }
-
-      const { error: deleteError } = await supabase
-        .from('habits')
-        .delete()
-        .in('id', habitIds);
-
-      if (deleteError) {
-        console.error('[teardown] Failed to delete habits:', deleteError.message);
-      } else {
-        console.log(`[teardown] Cleaned up ${habits.length} test habit(s)`);
-      }
-
-      // --- Clean up test tasks ---
-      const { data: tasks, error: taskFetchError } = await supabase
-        .from('tasks')
-        .select('id, title')
-        .ilike('title', `${TEST_DATA_PREFIX}%`);
-
-      if (taskFetchError) {
-        console.error('[teardown] Failed to fetch test tasks:', taskFetchError.message);
-      } else if (!tasks || tasks.length === 0) {
-        console.log('[teardown] No test tasks to clean up');
-      } else {
-        const taskIds = tasks.map((t) => t.id);
-        console.log(`[teardown] Cleaning up ${tasks.length} test task(s)...`);
-
-        const { error: taskDeleteError } = await supabase
-          .from('tasks')
-          .delete()
-          .in('id', taskIds);
-
-        if (taskDeleteError) {
-          console.error('[teardown] Failed to delete tasks:', taskDeleteError.message);
-        } else {
-          console.log(`[teardown] Cleaned up ${tasks.length} test task(s)`);
-        }
-      }
-    } finally {
-      await supabase.auth.signOut();
-    }
-  } catch (err) {
-    console.error('[teardown] Unexpected error during cleanup:', err);
+  if (E2E_READ_ONLY) {
+    console.log(`[teardown] ${RUN_CONTEXT.runId} was read-only; no cleanup is needed`);
+    return;
   }
+
+  const supabase = createClient(
+    requiredE2EEnvironment('NEXT_PUBLIC_SUPABASE_URL', 'teardown'),
+    requiredE2EEnvironment('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'teardown'),
+  );
+  const failures: Error[] = [];
+
+  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    email: RUN_CONTEXT.identityEmail(requiredE2EEnvironment('E2E_TEST_EMAIL', 'teardown')),
+    password: requiredE2EEnvironment('E2E_TEST_PASSWORD', 'teardown'),
+  });
+  if (authError || !authData.user) {
+    throw new Error(`[teardown] Auth failed: ${authError?.message ?? 'no user returned'}`);
+  }
+
+  try {
+    await cleanupRegisteredFixtures(FIXTURE_REGISTRY, {
+      habits: async (id) => {
+        const recordFailures: string[] = [];
+        const { error: logsError } = await supabase.from('habit_logs').delete().eq('habit_id', id);
+        if (logsError) recordFailures.push(`log deletion failed: ${logsError.message}`);
+        const { error: habitError } = await supabase.from('habits').delete().eq('id', id);
+        if (habitError) recordFailures.push(`habit deletion failed: ${habitError.message}`);
+        if (recordFailures.length > 0) throw new Error(recordFailures.join('; '));
+      },
+      tasks: async (id) => {
+        const { error } = await supabase.from('tasks').delete().eq('id', id);
+        if (error) throw new Error(`task deletion failed: ${error.message}`);
+      },
+    });
+  } catch (error) {
+    failures.push(error instanceof Error ? error : new Error(String(error)));
+  }
+
+  const { error: signOutError } = await supabase.auth.signOut();
+  if (signOutError) failures.push(new Error(`sign-out failed: ${signOutError.message}`));
+
+  const serviceRoleKey = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRoleKey) {
+    failures.push(new Error('missing E2E_SUPABASE_SERVICE_ROLE_KEY for run identity cleanup'));
+  } else {
+    const admin = createClient(
+      requiredE2EEnvironment('NEXT_PUBLIC_SUPABASE_URL', 'teardown'),
+      serviceRoleKey,
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    );
+    const { error: identityError } = await admin.auth.admin.deleteUser(authData.user.id);
+    if (identityError) failures.push(new Error(`identity deletion failed: ${identityError.message}`));
+  }
+
+  if (failures.length > 0) {
+    throw new Error(
+      `[teardown] Cleanup failed for ${RUN_CONTEXT.runId}:\n${failures.map((error) => error.message).join('\n')}`,
+    );
+  }
+
+  rmSync(path.dirname(FIXTURE_REGISTRY), { force: true, recursive: true });
+  console.log(`[teardown] Cleaned exact registered fixtures for ${RUN_CONTEXT.runId}`);
 }
 
 export default globalTeardown;

@@ -153,6 +153,63 @@ describe("RemindersDB", () => {
     });
   });
 
+  describe("getReminder", () => {
+    it("returns one user-owned reminder", async () => {
+      const expected = makeReminder();
+      mockSupabaseClient.setMockResponse(expected);
+
+      await expect(db.getReminder(USER_ID, REMINDER_ID)).resolves.toEqual(
+        expected,
+      );
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "reminders", method: "from", args: ["reminders"] },
+        { table: "reminders", method: "select", args: ["*"] },
+        { table: "reminders", method: "eq", args: ["id", REMINDER_ID] },
+        { table: "reminders", method: "eq", args: ["user_id", USER_ID] },
+        { table: "reminders", method: "maybeSingle", args: [] },
+      ]);
+    });
+
+    it("returns null when the reminder does not exist", async () => {
+      mockSupabaseClient.setMockResponse(null);
+
+      await expect(db.getReminder(USER_ID, REMINDER_ID)).resolves.toBeNull();
+    });
+  });
+
+  describe("transitionCalendarEventReminder", () => {
+    it("calls the narrow delivery transition RPC", async () => {
+      const expected = makeReminder({ status: "pending", fire_at: "2026-04-01T08:00:00Z" });
+      const single = vi.fn().mockResolvedValue({ data: expected, error: null });
+      const rpc = vi.fn().mockReturnValue({ single });
+      const isolatedDb = new RemindersDB({ rpc } as never);
+
+      await expect(
+        isolatedDb.transitionCalendarEventReminder(USER_ID, REMINDER_ID, {
+          status: "pending",
+          fire_at: "2026-04-01T08:00:00Z",
+        }),
+      ).resolves.toEqual(expected);
+      expect(rpc).toHaveBeenCalledWith("transition_calendar_event_reminder", {
+        p_user_id: USER_ID,
+        p_reminder_id: REMINDER_ID,
+        p_status: "pending",
+        p_fire_at: "2026-04-01T08:00:00Z",
+        p_sent_at: null,
+      });
+      expect(single).toHaveBeenCalledOnce();
+    });
+
+    it("throws when the delivery transition RPC fails", async () => {
+      const single = vi.fn().mockResolvedValue({ data: null, error: new Error("transition failed") });
+      const rpc = vi.fn().mockReturnValue({ single });
+      const isolatedDb = new RemindersDB({ rpc } as never);
+      await expect(
+        isolatedDb.transitionCalendarEventReminder(USER_ID, REMINDER_ID, { status: "sent" }),
+      ).rejects.toThrow("transition failed");
+    });
+  });
+
   // ─── getPendingReminders ────────────────────────────────────────────────────
   describe("getPendingReminders", () => {
     const BEFORE = "2026-03-30T10:00:00Z";

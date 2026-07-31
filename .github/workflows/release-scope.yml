@@ -12,7 +12,7 @@ jobs:
   release-scope-evidence:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Fetch PR scope and changed files
         env:
           GH_TOKEN: ${{ github.token }}
@@ -21,4 +21,6 @@ jobs:
           gh pr view "$PR_NUMBER" --json body --jq .body > pr-body.md
           gh api --paginate "repos/${{ github.repository }}/pulls/$PR_NUMBER/files" --jq '.[].filename' > changed-files.txt
       - name: Validate capability-to-evidence map
-        run: node scripts/validate-release-scope.mjs pr-body.md changed-files.txt
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: node scripts/validate-release-scope.mjs pr-body.md changed-files.txt "$PR_AUTHOR"

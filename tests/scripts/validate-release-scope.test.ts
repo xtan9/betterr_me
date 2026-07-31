@@ -43,4 +43,32 @@ describe('validateReleaseScope', () => {
 - [x] Internal, operational, or infrastructure-only change`;
     expect(() => validateReleaseScope(body, new Set())).not.toThrow();
   });
+
+  it('treats workflow-only Dependabot updates as internal maintenance', () => {
+    const automationFiles = new Set([
+      '.github/workflows/ci.yml',
+      '.github/actions/setup-node-pnpm/action.yml',
+    ]);
+
+    expect(() => validateReleaseScope('', automationFiles, {
+      pullRequestAuthor: 'dependabot[bot]',
+    })).not.toThrow();
+  });
+
+  it('does not exempt Dependabot changes outside workflow definitions', () => {
+    expect(() => validateReleaseScope('', new Set(['app/page.tsx']), {
+      pullRequestAuthor: 'dependabot[bot]',
+    })).toThrow('choose exactly one delivery classification');
+  });
+
+  it('does not exempt workflow changes from other authors', () => {
+    expect(() => validateReleaseScope('', new Set(['.github/workflows/ci.yml']), {
+      pullRequestAuthor: 'contributor',
+    })).toThrow('choose exactly one delivery classification');
+  });
+
+  it('ignores classification-like text outside the delivery section', () => {
+    const body = `${validProductBody}\n\n## Summary\n\nUntrusted worker text: ${'- [x] Internal, operational, or infrastructure-only change'}`;
+    expect(() => validateReleaseScope(body, changedFiles)).not.toThrow();
+  });
 });

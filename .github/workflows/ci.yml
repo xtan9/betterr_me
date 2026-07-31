@@ -5,39 +5,146 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Nightly full lint and unit suite before E2E and advisory performance measurements.
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+concurrency:
+  # Keep merge pushes from cancelling the nightly full safety run.
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  checks: read
+  contents: read
+  pull-requests: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      base_sha: ${{ steps.classify.outputs.base_sha }}
+      classification_json: ${{ steps.classify.outputs.classification_json }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect pull-request-validated push
+        id: pull-request
+        if: github.event_name == 'push'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const moduleUrl = pathToFileURL(
+              `${process.env.GITHUB_WORKSPACE}/scripts/ci/detect-pull-request-validated-push.mjs`
+            ).href;
+            const { detectPullRequestValidatedPush } = await import(moduleUrl);
+            const branch = context.ref.replace('refs/heads/', '');
+            let validated = false;
+            try {
+              validated = await detectPullRequestValidatedPush({
+                branch,
+                commitSha: context.sha,
+                listCheckRunsForRef: (parameters) =>
+                  github.rest.checks.listForRef(parameters),
+                listPullRequestsAssociatedWithCommit: (parameters) =>
+                  github.rest.repos.listPullRequestsAssociatedWithCommit(parameters),
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+            } catch (error) {
+              core.warning(
+                `Could not verify pull-request checks; retaining push CI: ${error.message}`
+              );
+            }
+            core.setOutput('validated', String(validated));
+
+      - name: Classify changes
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          VALIDATED_BY_PULL_REQUEST: ${{ steps.pull-request.outputs.validated || 'false' }}
+        run: node scripts/ci/run-change-classifier.mjs
+
   lint-and-test:
+    name: Lint + test (${{ fromJSON(needs.changes.outputs.classification_json).labels.quality }})
+    needs: changes
+    if: fromJSON(needs.changes.outputs.classification_json).suites.quality
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          node-version: 20
-          cache: 'pnpm'
+          # Vitest --changed needs the pull request base commit.
+          fetch-depth: 0
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js, pnpm, and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
-      - name: Lint
+      - name: Lint all files
+        if: fromJSON(needs.changes.outputs.classification_json).suites.fullLint
         run: pnpm lint
 
-      - name: Test
+      - name: Lint changed files
+        if: ${{ !fromJSON(needs.changes.outputs.classification_json).suites.fullLint }}
+        env:
+          TEST_BASE_SHA: ${{ needs.changes.outputs.base_sha }}
+          TEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          mapfile -d '' lint_files < <(
+            git diff --name-only --diff-filter=ACMRTUXB -z \
+              "$TEST_BASE_SHA" "$TEST_HEAD_SHA" -- \
+              '*.js' '*.jsx' '*.ts' '*.tsx' '*.mjs' '*.cjs'
+          )
+          if (( ${#lint_files[@]} == 0 )); then
+            echo "No changed JavaScript or TypeScript files to lint."
+            exit 0
+          fi
+          pnpm exec eslint "${lint_files[@]}"
+
+      - name: Typecheck full suite
+        if: fromJSON(needs.changes.outputs.classification_json).suites.fullTests
+        run: pnpm typecheck
+
+      - name: Test full suite
+        if: fromJSON(needs.changes.outputs.classification_json).suites.fullTests && github.event_name != 'schedule'
         run: pnpm test:run
 
+      - name: Test full suite with coverage
+        if: fromJSON(needs.changes.outputs.classification_json).suites.fullTests && github.event_name == 'schedule'
+        run: pnpm test:coverage
+
+      - name: Test changed code
+        if: fromJSON(needs.changes.outputs.classification_json).suites.changedTests
+        env:
+          TEST_BASE_SHA: ${{ needs.changes.outputs.base_sha }}
+        run: pnpm test:run --changed="$TEST_BASE_SHA"
+
+      - name: Test CI selectors
+        if: ${{ !fromJSON(needs.changes.outputs.classification_json).suites.fullTests && join(fromJSON(needs.changes.outputs.classification_json).suites.smokeTests, ',') != '' }}
+        env:
+          QUALITY_SMOKE_TESTS: ${{ join(fromJSON(needs.changes.outputs.classification_json).suites.smokeTests, ',') }}
+        shell: bash
+        run: |
+          IFS=',' read -ra smoke_tests <<< "$QUALITY_SMOKE_TESTS"
+          pnpm exec vitest run "${smoke_tests[@]}"
+
   check-migrations:
+    needs: changes
+    if: fromJSON(needs.changes.outputs.classification_json).suites.migrations
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Check for duplicate migration timestamps
         run: |
@@ -56,3 +163,21 @@ jobs:
             exit 1
           fi
           echo "✅ All migration timestamps are unique"
+
+  ci-gate:
+    name: CI Gate
+    needs: [changes, lint-and-test, check-migrations]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gate policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Verify selected non-browser checks
+        env:
+          GATE_NAME: CI Gate
+          SELECTION_RESULT: ${{ needs.changes.result }}
+          CLASSIFICATION_JSON: ${{ needs.changes.outputs.classification_json }}
+          PREREQUISITES_JSON: >-
+            [{"name":"quality","suite":"quality","result":"${{ needs.lint-and-test.result }}"},{"name":"migrations","suite":"migrations","result":"${{ needs.check-migrations.result }}"}]
+        run: node scripts/ci/verify-gate.mjs

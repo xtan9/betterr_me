@@ -1,10 +1,10 @@
-name: Update Visual Snapshots
+name: Produce Visual Comparison Baselines
 
 on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch to update snapshots on'
+        description: 'Branch on which to produce screenshot baselines'
         required: true
         default: 'main'
 
@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   update-snapshots:
+    name: Produce screenshot baselines
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -27,22 +28,13 @@ jobs:
       E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.branch }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js, pnpm, and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
@@ -50,10 +42,10 @@ jobs:
       - name: Build application
         run: pnpm build
 
-      - name: Update snapshots
+      - name: Produce screenshot baselines
         run: npx playwright test --project=visual-regression --update-snapshots
 
-      - name: Commit updated snapshots
+      - name: Commit produced screenshot baselines
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -62,7 +54,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add e2e/visual-regression.spec.ts-snapshots/
           git diff --staged --quiet && echo "No snapshot changes" && exit 0
-          git commit -m "test: update visual regression baselines from CI
+          git commit -m "test: produce screenshot comparison baselines in CI
 
           Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
           git push

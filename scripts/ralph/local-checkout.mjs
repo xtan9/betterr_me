@@ -40,6 +40,107 @@ async function localBranchExists(repositoryRoot, branch, git) {
   }
 }
 
+async function optionalGitLine(args, git) {
+  try {
+    return (await git(args)).stdout.trim();
+  } catch (error) {
+    if (error?.result?.code === 1) return null;
+    throw error;
+  }
+}
+
+export async function prepareConflictRepair({
+  worktreeRoot,
+  worktreePath,
+  issueNumber,
+  expectedHead,
+  latestMainSha,
+  git,
+}) {
+  const branch = expectedIssueBranch(issueNumber);
+  const resolvedWorktree = assertManagedPath(worktreeRoot, worktreePath);
+  if (!fs.existsSync(resolvedWorktree)) {
+    throw new Error(`cannot prepare conflict repair in missing ${resolvedWorktree}`);
+  }
+  const observedBranch = (
+    await git(["-C", resolvedWorktree, "branch", "--show-current"])
+  ).stdout.trim();
+  assertManagedBranch(issueNumber, observedBranch);
+  const observedHead = (
+    await git(["-C", resolvedWorktree, "rev-parse", "HEAD"])
+  ).stdout.trim();
+  if (observedHead !== expectedHead) {
+    throw new Error(`refusing conflict repair for ${branch}; HEAD changed`);
+  }
+
+  const mergeHead = await optionalGitLine(
+    ["-C", resolvedWorktree, "rev-parse", "--quiet", "--verify", "MERGE_HEAD"],
+    git,
+  );
+  if (mergeHead) {
+    if (mergeHead !== latestMainSha) {
+      throw new Error(`refusing conflict repair for ${branch}; MERGE_HEAD changed`);
+    }
+    const paths = (
+      await git([
+        "-C",
+        resolvedWorktree,
+        "diff",
+        "--name-only",
+        "--diff-filter=U",
+        "-z",
+      ])
+    ).stdout
+      .split("\0")
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right, "en"));
+    return { status: paths.length > 0 ? "conflicted" : "resolved", paths };
+  }
+
+  const status = (
+    await git(["-C", resolvedWorktree, "status", "--porcelain"])
+  ).stdout.trim();
+  if (status) {
+    throw new Error(`refusing conflict repair for ${branch}; worktree is dirty`);
+  }
+
+  try {
+    await git([
+      "-C",
+      resolvedWorktree,
+      "merge",
+      "--no-commit",
+      "--no-ff",
+      latestMainSha,
+    ]);
+    await git(["-C", resolvedWorktree, "merge", "--abort"]);
+    return { status: "clean", paths: [] };
+  } catch (error) {
+    if (error?.result?.code !== 1) throw error;
+  }
+
+  const preparedMergeHead = (
+    await git(["-C", resolvedWorktree, "rev-parse", "--verify", "MERGE_HEAD"])
+  ).stdout.trim();
+  const paths = (
+    await git([
+      "-C",
+      resolvedWorktree,
+      "diff",
+      "--name-only",
+      "--diff-filter=U",
+      "-z",
+    ])
+  ).stdout
+    .split("\0")
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right, "en"));
+  if (preparedMergeHead !== latestMainSha || paths.length === 0) {
+    throw new Error(`conflict repair for ${branch} did not reach a verified conflict state`);
+  }
+  return { status: "conflicted", paths };
+}
+
 export function activeIssueWorktreePath(worktreeRoot) {
   return path.join(worktreeRoot, "current");
 }
@@ -75,6 +176,7 @@ export async function recoverPreservationCommit({
       "-C",
       worktreePath,
       "diff",
+      "--no-renames",
       "--name-only",
       "-z",
       baseSha,
@@ -94,6 +196,9 @@ export async function cleanupIssueCheckout({
   worktreeRoot,
   issueNumber,
   issueState,
+  recoveryWorktreePath = /** @type {string | null} */ (null),
+  expectedRecoveryHead = /** @type {string | null} */ (null),
+  beforeWorktreeRemove = /** @type {((worktreePath: string) => void | Promise<void>) | null} */ (null),
   git,
 }) {
   if (!issueState?.branch && !issueState?.worktreePath) {
@@ -101,9 +206,30 @@ export async function cleanupIssueCheckout({
   }
   assertManagedBranch(issueNumber, issueState.branch);
 
+  let cleanupWorktreePath = issueState.worktreePath;
+  let expectedHead = issueState.commit;
+  if (
+    !cleanupWorktreePath &&
+    recoveryWorktreePath &&
+    expectedRecoveryHead &&
+    fs.existsSync(recoveryWorktreePath)
+  ) {
+    const candidatePath = assertManagedPath(worktreeRoot, recoveryWorktreePath);
+    const candidateBranch = (
+      await git(["-C", candidatePath, "branch", "--show-current"])
+    ).stdout.trim();
+    if (candidateBranch !== issueState.branch) {
+      throw new Error(
+        `refusing recovered cleanup for ${candidatePath}; it is on ${candidateBranch || "detached HEAD"}`,
+      );
+    }
+    cleanupWorktreePath = candidatePath;
+    expectedHead = expectedRecoveryHead;
+  }
+
   let worktreeRemoved = false;
-  if (issueState.worktreePath) {
-    const worktreePath = assertManagedPath(worktreeRoot, issueState.worktreePath);
+  if (cleanupWorktreePath) {
+    const worktreePath = assertManagedPath(worktreeRoot, cleanupWorktreePath);
     if (fs.existsSync(worktreePath)) {
       const branch = (
         await git(["-C", worktreePath, "branch", "--show-current"])
@@ -117,14 +243,15 @@ export async function cleanupIssueCheckout({
       if (status) {
         throw new Error(`refusing to remove dirty worktree ${worktreePath}`);
       }
-      if (issueState.commit) {
+      if (expectedHead) {
         const head = (
           await git(["-C", worktreePath, "rev-parse", "HEAD"])
         ).stdout.trim();
-        if (head !== issueState.commit) {
+        if (head !== expectedHead) {
           throw new Error(`refusing to remove ${worktreePath}; HEAD changed`);
         }
       }
+      await beforeWorktreeRemove?.(worktreePath);
       await git([
         "-C",
         repositoryRoot,

@@ -9,8 +9,7 @@ import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { taskUpdateSchema } from '@/lib/validations/task';
 import { editScopeSchema } from '@/lib/validations/recurring-task';
-import { syncTaskUpdate } from '@/lib/tasks/sync';
-import type { TaskUpdate } from '@/lib/db/types';
+import { createTaskWrites } from '@/lib/tasks/writes';
 
 /**
  * GET /api/tasks/[id]
@@ -79,8 +78,14 @@ export async function PATCH(
       const validation = validateRequestBody(body, taskUpdateSchema);
       if (!validation.success) return validation.response;
 
-      const recurringTasksDB = new RecurringTasksDB(supabase);
-      await recurringTasksDB.updateInstanceWithScope(id, userId, scopeResult.data, validation.data);
+      const writes = createTaskWrites(supabase, { scopedUpdates: true });
+      await writes.execute({
+        type: 'update',
+        taskId: id,
+        userId,
+        scope: scopeResult.data,
+        values: validation.data,
+      });
       return NextResponse.json({ success: true });
     }
 
@@ -88,55 +93,22 @@ export async function PATCH(
     const validation = validateRequestBody(body, taskUpdateSchema);
     if (!validation.success) return validation.response;
 
-    // Build update object from validated data
-    const updates: TaskUpdate = {};
-
-    if (validation.data.title !== undefined) {
-      updates.title = validation.data.title.trim();
-    }
-
-    if (validation.data.description !== undefined) {
-      updates.description = validation.data.description?.trim() || null;
-    }
-
-    if (validation.data.is_completed !== undefined) {
-      updates.is_completed = validation.data.is_completed;
-    }
-
-    if (validation.data.priority !== undefined) {
-      updates.priority = validation.data.priority;
-    }
-
-    if (validation.data.due_date !== undefined) {
-      updates.due_date = validation.data.due_date || null;
-    }
-
-    if (validation.data.due_time !== undefined) {
-      updates.due_time = validation.data.due_time || null;
-    }
-
-    if (validation.data.completion_difficulty !== undefined) {
-      updates.completion_difficulty = validation.data.completion_difficulty;
-    }
-
-    if (validation.data.status !== undefined) {
-      updates.status = validation.data.status;
-    }
-    if (validation.data.section !== undefined) {
-      updates.section = validation.data.section;
-    }
-    if (validation.data.sort_order !== undefined) {
-      updates.sort_order = validation.data.sort_order;
-    }
-    if (validation.data.project_id !== undefined) {
-      updates.project_id = validation.data.project_id;
-    }
-
-    // Apply sync to keep status/is_completed consistent
-    const syncedUpdates = syncTaskUpdate(updates);
-    const tasksDB = new TasksDB(supabase);
-    const task = await tasksDB.updateTask(id, userId, syncedUpdates);
-    return NextResponse.json({ task });
+    const writes = createTaskWrites(supabase);
+    const outcome = validation.data.sort_order !== undefined
+      && Object.keys(validation.data).length === 1
+      ? await writes.execute({
+        type: 'order',
+        taskId: id,
+        userId,
+        sortOrder: validation.data.sort_order,
+      })
+      : await writes.execute({
+        type: 'update',
+        taskId: id,
+        userId,
+        values: validation.data,
+      });
+    return NextResponse.json({ task: outcome.task });
   } catch (error: unknown) {
     log.error('PATCH /api/tasks/[id] error', error);
 

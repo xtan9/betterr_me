@@ -1,12 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export function workerCodexModelArguments({ readOnly }) {
+export function workerCodexModelArguments({
+  readOnly,
+  reviewKind = "exhaustive",
+}) {
+  const effort = readOnly
+    ? reviewKind === "delta"
+      ? "high"
+      : "xhigh"
+    : "high";
   return [
     "--model",
     "gpt-5.6-sol",
     "-c",
-    `model_reasoning_effort=${JSON.stringify(readOnly ? "high" : "medium")}`,
+    `model_reasoning_effort=${JSON.stringify(effort)}`,
   ];
 }
 
@@ -106,9 +114,9 @@ export function isolatedCodexRuntimeConfiguration({
 
 export function unprivilegedWslCommandArguments({
   home,
-  environment = [],
+  environment = /** @type {string[]} */ ([]),
   command,
-  args = [],
+  args = /** @type {string[]} */ ([]),
 }) {
   if (typeof home !== "string" || !home.startsWith("/")) {
     throw new Error("unprivileged WSL home must be an absolute Linux path");
@@ -194,16 +202,20 @@ export function isolatedCodexReadablePaths({
   gitMetadataRoot,
   dependencyRoot,
   workerHome,
+  protectedPaths = /** @type {string[]} */ ([]),
 }) {
   return [
     ...(readOnly ? [worktreePath] : []),
     ...(!readOnly && gitMetadataRoot ? [gitMetadataRoot] : []),
     dependencyRoot,
     workerHome,
+    ...protectedPaths,
   ];
 }
 
-export function isolatedCodexFilesystemConfig(extraReadable = []) {
+export function isolatedCodexFilesystemConfig(
+  extraReadable = /** @type {string[]} */ ([]),
+) {
   return `{${[
     [":root", "deny"],
     [":minimal", "read"],
@@ -212,6 +224,94 @@ export function isolatedCodexFilesystemConfig(extraReadable = []) {
   ]
     .map(([key, value]) => `${JSON.stringify(key)}=${JSON.stringify(value)}`)
     .join(",")}}`;
+}
+
+const IMMUTABLE_ESBUILD_SELECTOR =
+  "*/node_modules/@esbuild/linux-x64/bin/esbuild";
+
+function immutableDependencyFindArguments(dependencyRoot) {
+  if (typeof dependencyRoot !== "string" || !dependencyRoot.startsWith("/")) {
+    throw new Error("immutable dependency root must be an absolute Linux path");
+  }
+  return [
+    "find",
+    dependencyRoot,
+    "-path",
+    IMMUTABLE_ESBUILD_SELECTOR,
+    "-type",
+    "f",
+  ];
+}
+
+export function immutableDependencyExecutableDiscoveryArguments(
+  dependencyRoot,
+) {
+  return [...immutableDependencyFindArguments(dependencyRoot), "-print"];
+}
+
+export function immutableDependencyExecutablePaths(output, dependencyRoot) {
+  immutableDependencyFindArguments(dependencyRoot);
+  const prefix = `${dependencyRoot}/.pnpm/`;
+  const suffix = "/node_modules/@esbuild/linux-x64/bin/esbuild";
+  const paths = String(output ?? "")
+    .split(/\r?\n/)
+    .filter(Boolean);
+  for (const executablePath of paths) {
+    const packageDirectory = executablePath.slice(
+      prefix.length,
+      executablePath.length - suffix.length,
+    );
+    if (
+      !executablePath.startsWith(prefix) ||
+      !executablePath.endsWith(suffix) ||
+      !/^@esbuild\+linux-x64@[^/]+$/.test(packageDirectory)
+    ) {
+      throw new Error(`unexpected immutable esbuild path ${executablePath}`);
+    }
+  }
+  if (new Set(paths).size !== paths.length) {
+    throw new Error("duplicate immutable esbuild path");
+  }
+  return paths.sort();
+}
+
+function assertExecutablePaths(executablePaths) {
+  if (
+    !Array.isArray(executablePaths) ||
+    executablePaths.length === 0 ||
+    executablePaths.some(
+      (executablePath) =>
+        typeof executablePath !== "string" || !executablePath.startsWith("/"),
+    )
+  ) {
+    throw new Error("immutable esbuild paths must be non-empty absolute paths");
+  }
+}
+
+export function immutableDependencyExecutableStatArguments(executablePaths) {
+  assertExecutablePaths(executablePaths);
+  return ["stat", "-c", "%U:%G:%a", ...executablePaths];
+}
+
+export function immutableDependencyExecutableRepairArguments(executablePaths) {
+  assertExecutablePaths(executablePaths);
+  return ["chmod", "0555", ...executablePaths];
+}
+
+export function immutableDependencyExecutableStatsAreSafe(
+  output,
+  expectedCount,
+  expectedMode = /** @type {string | null} */ (null),
+) {
+  if (!Number.isInteger(expectedCount) || expectedCount < 1) return false;
+  const lines = String(output ?? "")
+    .split(/\r?\n/)
+    .filter(Boolean);
+  if (lines.length !== expectedCount) return false;
+  const pattern = expectedMode === null
+    ? /^root:root:[0-7]{3,4}$/
+    : new RegExp(`^root:root:${expectedMode}$`);
+  return lines.every((line) => pattern.test(line));
 }
 
 export function workerGitEnvironment({ gitDirectory, worktreePath }) {
@@ -235,6 +335,15 @@ export function workerGitViewPath(workerGitRoot, issueNumber) {
     throw new Error("issue number must be a positive integer");
   }
   return path.join(workerGitRoot, `issue-${issueNumber}`);
+}
+
+export function sanitizedWorkerGitViewRecoveryAction({
+  mergeActive,
+  recordedBaseSha,
+  expectedBaseSha,
+}) {
+  if (mergeActive !== true) return "rebuild";
+  return recordedBaseSha === expectedBaseSha ? "adopt" : "unsafe";
 }
 
 function sanitizedConfig() {

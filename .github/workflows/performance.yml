@@ -1,17 +1,42 @@
-name: Performance Audit
+name: Performance Measurements (Advisory)
 
 on:
   pull_request:
     branches: [main]
+  schedule:
+    # Nightly full measurement at 07:00 UTC.
+    - cron: '0 7 * * *'
   workflow_dispatch:
 
+concurrency:
+  group: performance-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      classification_json: ${{ steps.classify.outputs.classification_json }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Classify changes
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/ci/run-change-classifier.mjs
+
   check-secrets:
+    needs: changes
+    if: fromJSON(needs.changes.outputs.classification_json).suites.performance
     runs-on: ubuntu-latest
     outputs:
       has-secrets: ${{ steps.check.outputs.has-secrets }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Check required secrets
         id: check
         uses: ./.github/actions/check-secrets
@@ -24,8 +49,9 @@ jobs:
           require-preview-url: "true"
 
   lighthouse:
-    needs: check-secrets
-    if: ${{ needs.check-secrets.outputs.has-secrets == 'true' }}
+    name: Bundle and Lighthouse budgets (advisory)
+    needs: [changes, check-secrets]
+    if: ${{ fromJSON(needs.changes.outputs.classification_json).suites.performance && needs.check-secrets.outputs.has-secrets == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -34,51 +60,26 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
       E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+      # PRs favor a one-sample smoke measurement; nightly/manual runs collect
+      # three samples across the full URL set. See docs/quality-signals.md.
+      LHCI_NUMBER_OF_RUNS: ${{ github.event_name == 'pull_request' && '1' || '3' }}
+      LHCI_SMOKE_ONLY: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
 
     steps:
-      # Skip all subsequent steps when required secrets are not configured.
-      # IMPORTANT: All steps below must include the check-secrets skip condition.
-      - name: Check required secrets
-        id: check-secrets
-        run: |
-          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] || \
-             [ -z "$E2E_TEST_EMAIL" ] || [ -z "$E2E_TEST_PASSWORD" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping performance audit — required secrets are not configured."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout
-        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Setup pnpm
-        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js, pnpm, and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Build application
-        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         run: pnpm build
 
       - name: Analyze bundle size
-        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
         run: pnpm perf:bundle
 
-      - name: Run Lighthouse CI
-        if: ${{ steps.check-secrets.outputs.skip != 'true' }}
-        uses: treosh/lighthouse-ci-action@v12
+      - name: Measure Lighthouse budgets
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
           configPath: './lighthouserc.js'
           uploadArtifacts: false

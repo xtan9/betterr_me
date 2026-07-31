@@ -7,6 +7,7 @@ import {
   analyzeTypeScriptRun,
   buildOvernightSummary,
   buildFailedAttemptPullRequestBody,
+  buildInternalPullRequestBody,
   chooseClaimWinner,
   classifyChangeRisk,
   createExternalVerificationGate,
@@ -20,14 +21,20 @@ import {
   findNewTypeScriptDiagnostics,
   findDuplicateMigrationPrefixes,
   isIssueActive,
+  isPullRequestRecoveryCandidate,
   independentReviewClassificationContract,
   independentReviewFailureKind,
   neutralizeClosingKeywords,
   preserveExternalFailureKind,
   pullRequestCheckDisposition,
+  reopenIssueForPullRequestRecovery,
+  redactCredentialPatterns,
+  recordCheckRetryAttempt,
+  selectActiveStateIssue,
   selectNextLiveIssue,
   selectNextLiveIssueStatus,
   selectNextIssue,
+  selectPullRequestRecoveryCandidates,
   selectRecoveryBase,
   reviewFailureKind,
   shouldRepairFailure,
@@ -66,6 +73,28 @@ describe("Ralph queue selection", () => {
     expect(selectNextIssue(architectureQueue, { completed: [] }).issueNumber).toBe(
       481,
     );
+  });
+
+  it("accepts only the explicit bounded trusted worker policy", () => {
+    const issue = {
+      issueNumber: 101,
+      blockers: [],
+      trustedWorkerPolicy: { newSupabaseMigrations: 1 },
+    };
+    expect(() => validateQueueState([issue], { completed: [] })).not.toThrow();
+    for (const trustedWorkerPolicy of [
+      { newSupabaseMigrations: 2 },
+      { newSupabaseMigrations: 1, workflows: true },
+      {},
+      "newSupabaseMigrations",
+    ]) {
+      expect(() =>
+        validateQueueState(
+          [{ ...issue, trustedWorkerPolicy }],
+          { completed: [] },
+        ),
+      ).toThrow("invalid trusted worker policy");
+    }
   });
 
   it("selects the first incomplete issue whose blockers are complete", () => {
@@ -332,6 +361,34 @@ describe("Ralph durable state and policy", () => {
     expect(isIssueActive({ stage: "merged" })).toBe(false);
   });
 
+  it("resumes the sole worktree owner before earlier active PR state", () => {
+    expect(
+      selectActiveStateIssue({
+        "490": { stage: "pr-open", worktreePath: null },
+        "499": { stage: "implemented", worktreePath: "managed/current" },
+      }),
+    ).toMatchObject({ issueNumber: 499, stage: "implemented" });
+  });
+
+  it("fails closed when an inactive issue unexpectedly owns the worktree", () => {
+    expect(() =>
+      selectActiveStateIssue({
+        "499": { stage: "merged", worktreePath: "managed/current" },
+      }),
+    ).toThrow("an inactive issue reserves the single worktree");
+  });
+
+  it.each(["0491", "491.0", "not-an-issue"])(
+    "rejects non-canonical durable issue key %s",
+    (issueKey) => {
+      expect(() =>
+        selectActiveStateIssue({
+          [issueKey]: { stage: "implemented", worktreePath: "managed/current" },
+        }),
+      ).toThrow(`invalid durable issue key ${issueKey}`);
+    },
+  );
+
   it("continues the single-worker queue after terminal issue outcomes", () => {
     expect(shouldContinueQueue("merged")).toBe(true);
     expect(shouldContinueQueue("awaiting-human")).toBe(true);
@@ -419,6 +476,7 @@ describe("Ralph durable state and policy", () => {
     expect(shouldParkIssueFailure("ambiguous")).toBe(true);
     expect(shouldParkIssueFailure("worker-blocked")).toBe(true);
     expect(shouldParkIssueFailure("ticket-infrastructure")).toBe(true);
+    expect(shouldParkIssueFailure("interrupted-repair")).toBe(true);
     expect(shouldParkIssueFailure("pr-checks")).toBe(true);
     expect(shouldParkIssueFailure("tests-timeout")).toBe(true);
     expect(shouldParkIssueFailure("merge-conflict")).toBe(true);
@@ -443,7 +501,7 @@ describe("Ralph durable state and policy", () => {
       blockerKind: "protected-scope",
       ambiguous: true,
     });
-    expect(protectedScopeRefusal).toBe("worker-blocked");
+    expect(protectedScopeRefusal).toBe("protected-scope");
     expect(shouldParkIssueFailure(protectedScopeRefusal)).toBe(true);
     expect(
       workerResultFailureKind({ blockerKind: "safety", ambiguous: true }),
@@ -463,6 +521,18 @@ describe("Ralph durable state and policy", () => {
       shouldPreserveBlockedPullRequestRepair(
         "pr-repairing",
         "review-ticket-infrastructure",
+      ),
+    ).toBe(true);
+    expect(
+      shouldPreserveBlockedPullRequestRepair(
+        "pr-repairing",
+        "protected-scope",
+      ),
+    ).toBe(true);
+    expect(
+      shouldPreserveBlockedPullRequestRepair(
+        "pr-repairing",
+        "interrupted-repair",
       ),
     ).toBe(true);
     expect(
@@ -495,7 +565,12 @@ describe("Ralph durable state and policy", () => {
     );
 
     expect(schema.required).toEqual([
+      "reviewKind",
+      "complete",
       "status",
+      "axes",
+      "coverage",
+      "findings",
       "blockingFindings",
       "repairable",
       "blockerKind",
@@ -511,6 +586,31 @@ describe("Ralph durable state and policy", () => {
       type: "string",
       pattern: "\\S",
     });
+    expect(schema.properties.reviewKind.enum).toEqual(["exhaustive", "delta"]);
+    expect(schema.properties.axes.items.properties.id.enum).toEqual([
+      "standards",
+      "spec",
+      "security",
+      "tests",
+      "repair-ledger",
+      "regression",
+    ]);
+    expect(schema.properties.axes.minItems).toBe(1);
+    expect(schema.properties.coverage.items.required).toEqual([
+      "id",
+      "subject",
+      "implementationEvidence",
+      "testEvidence",
+      "verdict",
+    ]);
+    expect(schema.properties.findings.items.required).toEqual([
+      "id",
+      "axis",
+      "location",
+      "problem",
+      "evidence",
+      "safeRepair",
+    ]);
     expect(schema.properties.blockerKind.enum).toEqual([
       "none",
       "code",
@@ -521,7 +621,7 @@ describe("Ralph durable state and policy", () => {
       "scope",
       "safety",
     ]);
-    expect(schema.allOf).toBeUndefined();
+    expect(schema.additionalProperties).toBe(false);
   });
 
   it("requires evidence before a reviewer can call work unrepairable", () => {
@@ -543,11 +643,173 @@ Reserve repairable=false for a genuine unresolved product decision with material
       failureSummary: "Independent review found a blocking defect.",
       repairAttempts: 2,
     });
+    expect(body).toContain('## Delivery classification');
+    expect(body).toContain('- [x] Internal, operational, or infrastructure-only change');
+    expect(body).toContain('- [ ] User-visible product delivery');
 
     expect(body).toContain("Draft failed attempt — do not merge");
     expect(body).toContain("Independent review found a blocking defect.");
     expect(body).toContain("Repair attempts: **2**");
     expect(body).toContain("Closes #101");
+  });
+
+  it("builds a canonical internal PR body without honoring worker closing keywords", () => {
+    const body = buildInternalPullRequestBody({
+      issueNumber: 101,
+      issueUrl: "https://github.com/example/repo/issues/101",
+      summary: "Done. Closes #999 and ping @everyone.",
+      risk: { level: "low", reasons: [] },
+    });
+
+    expect(body).toContain("- [x] Internal, operational, or infrastructure-only change");
+    expect(body).toContain("references #999");
+    expect(body).not.toContain("Closes #999");
+    expect(body).toContain("@\u200beveryone");
+    expect(body).toContain("Closes #101");
+  });
+
+  it("redacts a credential before any caller truncates the text", () => {
+    const credential = `github_pat_${"a".repeat(24)}`;
+    const redacted = redactCredentialPatterns(`${"x".repeat(3988)}${credential}`)
+      .slice(0, 4000);
+
+    expect(redacted).toContain("[REDACTED]");
+    expect(redacted).not.toContain("github_pat_");
+  });
+
+  it("counts a check retry fingerprint exactly once across crash replay", () => {
+    const plan = { fingerprint: "generation-1", retryKey: "head-and-runs" };
+    const first = recordCheckRetryAttempt({}, plan, "controller");
+    const replay = recordCheckRetryAttempt(first, plan, "controller");
+    const nextGeneration = recordCheckRetryAttempt(
+      replay,
+      { ...plan, fingerprint: "generation-2" },
+      "controller",
+    );
+
+    expect(first.controllerCheckRetry.attempts).toBe(1);
+    expect(replay).toBe(first);
+    expect(nextGeneration.controllerCheckRetry.attempts).toBe(2);
+  });
+
+  it("excludes incomplete publication transactions from PR backlog recovery", () => {
+    expect(
+      isPullRequestRecoveryCandidate({ stage: "failure-publishing", prNumber: 201 }),
+    ).toBe(false);
+    expect(
+      isPullRequestRecoveryCandidate({ stage: "parking", prNumber: 201 }),
+    ).toBe(false);
+    expect(
+      isPullRequestRecoveryCandidate({ stage: "failed", prNumber: 201 }),
+    ).toBe(true);
+    expect(
+      isPullRequestRecoveryCandidate({ stage: "manual-review", prNumber: 201 }),
+    ).toBe(true);
+  });
+
+  it("reconciles only the PR that owns the preserved single worktree", () => {
+    const candidates = [
+      { issueNumber: 491 },
+      { issueNumber: 492 },
+      { issueNumber: 493 },
+    ];
+    const issueStates = {
+      "491": { stage: "failed", worktreePath: null },
+      "492": { stage: "pr-repairing", worktreePath: "managed/current" },
+      "493": { stage: "manual-review", worktreePath: null },
+    };
+
+    expect(
+      selectPullRequestRecoveryCandidates(candidates, issueStates).map(
+        ({ issueNumber }) => issueNumber,
+      ),
+    ).toEqual([492]);
+    expect(candidates.map(({ issueNumber }) => issueNumber)).toEqual([
+      491,
+      492,
+      493,
+    ]);
+    expect(
+      selectPullRequestRecoveryCandidates(candidates, {
+        "491": { worktreePath: null },
+        "492": { worktreePath: null },
+        "493": { worktreePath: null },
+      }).map(({ issueNumber }) => issueNumber),
+    ).toEqual([491, 492, 493]);
+    expect(() =>
+      selectPullRequestRecoveryCandidates(candidates, {
+        "491": { worktreePath: "managed/current" },
+        "492": { worktreePath: "managed/other" },
+      }),
+    ).toThrow("multiple issues reserve the single worktree");
+  });
+
+  it("reopens only a published PR stage for exact-head recovery", () => {
+    const state = {
+      completed: [],
+      issues: {
+        "101": {
+          stage: "failed",
+          prNumber: 201,
+          branch: "codex/issue-101",
+        },
+      },
+    };
+    expect(
+      reopenIssueForPullRequestRecovery(
+        state,
+        101,
+        { commit: "head-1", worktreePath: "managed" },
+        "2026-07-29T10:00:00Z",
+      ).issues["101"],
+    ).toMatchObject({
+      stage: "pr-repairing",
+      prRecoveryOriginalStage: "failed",
+      commit: "head-1",
+      worktreePath: "managed",
+    });
+    expect(() =>
+      reopenIssueForPullRequestRecovery(
+        {
+          completed: [],
+          issues: { "101": { stage: "implementing" } },
+        },
+        101,
+        {},
+        "2026-07-29T10:00:00Z",
+      ),
+    ).toThrow("not eligible");
+
+    const retained = {
+      completed: [],
+      issues: {
+        "101": {
+          stage: "manual-review",
+          prNumber: 201,
+          branch: "codex/issue-101",
+          worktreePath: "managed",
+          commit: "head-1",
+        },
+      },
+    };
+    const reopened = reopenIssueForPullRequestRecovery(
+      retained,
+      101,
+      { commit: "head-1", worktreePath: "managed" },
+      "2026-07-29T10:00:00Z",
+    );
+    const replayed = reopenIssueForPullRequestRecovery(
+      reopened,
+      101,
+      { commit: "head-1", worktreePath: "managed" },
+      "2026-07-29T10:01:00Z",
+    );
+    expect(replayed.issues["101"]).toMatchObject({
+      stage: "pr-repairing",
+      prRecoveryOriginalStage: "manual-review",
+      worktreePath: "managed",
+      commit: "head-1",
+    });
   });
 
   it("neutralizes local and cross-repository issue-closing keywords", () => {
@@ -697,7 +959,7 @@ Reserve repairable=false for a genuine unresolved product decision with material
     ],
   ])("fails closed at the merge boundary", (overrides, reason) => {
     expect(
-      evaluateMergeGate({
+      evaluateMergeGate(Object.assign({
         mode: "AutoMerge",
         risk: "low",
         checksPassed: true,
@@ -705,37 +967,88 @@ Reserve repairable=false for a genuine unresolved product decision with material
         reviewDecision: "",
         mergeState: "CLEAN",
         ambiguous: false,
-        ...overrides,
-      }),
+      }, overrides)),
     ).toEqual({ canMerge: false, reason });
   });
 
-  it("allows automatic merge only for an explicit low-risk path allowlist", () => {
+  it("reserves human review for genuinely sensitive change paths", () => {
     for (const file of [
       "scripts/ralph/queue.mjs",
       ".github/workflows/ci.yml",
       "supabase/migrations/20260728000000_change.sql",
       "app/api/oauth/token/route.ts",
+      "lib/auth/request-context.ts",
+      "lib/authentication/session.ts",
+      "lib/admin/users.ts",
+      "lib/administration/users.ts",
+      "lib/security/csrf.ts",
+      "lib/db/schema.ts",
+      "drizzle/migrations/0001.sql",
       "tsconfig.json",
+      "vite.config.ts",
       "vercel.json",
+      "pnpm-workspace.yaml",
+      "packages/ui/package.json",
+      "scripts/ci/check.ts",
+      "scripts/validate-release-scope.mjs",
+      "scripts/lighthouse-config.js",
+      "tooling/custom-runner.js",
+      ".github/actions/setup/action.yml",
+      "serverless.yml",
+      ".babelrc",
       "lib/billing/stripe.ts",
-      "lib/db/calendar-events.ts",
+      "lib/finance/household-runway-assessment.ts",
+      "lib/financial/ledger.ts",
+      "lib/accounts/password-reset.ts",
+      "lib/accounts/passkey.ts",
+      "lib/accounts/api-key.ts",
+      "lib/db/api-keys.ts",
+      "app/api/api-keys/route.ts",
+      "components/settings/api-keys-section.tsx",
+      "lib/stripe.ts",
     ]) {
       expect(classifyChangeRisk([file], { title: "Routine change" }).level).toBe(
         "high",
       );
     }
+    for (const file of [
+      "lib/calendar/create-event.ts",
+      "app/api/tasks/route.ts",
+      "lib/tasks/writes.ts",
+      "app/dashboard/page.tsx",
+      "lib/dashboard/dashboard-snapshot.ts",
+      "lib/db/calendar-events.ts",
+      "tests/lib/tasks/writes.test.ts",
+    ]) {
+      expect(classifyChangeRisk([file], { title: "Routine change" }).level).toBe(
+        "low",
+      );
+    }
     expect(
-      classifyChangeRisk(["lib/calendar/create-event.ts"], {
-        title: "Create a calendar event",
+      classifyChangeRisk(["lib/dashboard/dashboard-snapshot.ts"], {
+        title: "Delete customer credentials during account teardown",
       }).level,
-    ).toBe("low");
+    ).toBe("high");
     expect(
-      classifyChangeRisk(
-        ["lib/calendar/create-event.ts", "tests/lib/calendar/create-event.test.ts"],
-        { title: "Create a calendar event" },
-      ).level,
-    ).toBe("low");
+      classifyChangeRisk(["lib/data/purge-user.ts"], {
+        title: "Purge customer records",
+      }).level,
+    ).toBe("high");
+    expect(
+      classifyChangeRisk(["lib/dashboard/dashboard-snapshot.ts"], {
+        title: "Rotate API keys",
+      }).level,
+    ).toBe("high");
+  });
+
+  it("classifies the same sensitive file set deterministically", () => {
+    const files = [
+      "lib/finance/household-runway-assessment.ts",
+      "lib/auth/request-context.ts",
+    ];
+    expect(classifyChangeRisk(files, { title: "Routine change" })).toEqual(
+      classifyChangeRisk([...files].reverse(), { title: "Routine change" }),
+    );
   });
 
   it("retries only transient failures and respects the cap", () => {

@@ -1,0 +1,30 @@
+# SQL acceptance fixtures
+
+`pnpm test:db` is the standard database-test command. It validates
+`registry.json`, selects acceptance fixtures in registry order, and executes
+them against the disposable local Supabase PostgreSQL database.
+The command refuses any database URL outside the local Supabase endpoint on
+port 54322.
+
+Use `pnpm test:db -- --domain calendar` or
+`pnpm test:db -- --fixture reminder_update` for targeted verification. Use
+`pnpm test:db -- --list` to inspect the selected plan without connecting to a
+database.
+
+Every top-level `.sql` file in this directory must have one registry entry.
+Acceptance entries declare their domain, cleanup contract, and whether they run
+as the dedicated constrained role or require the disposable database
+administrator. Administrative fixtures require a least-privilege explanation.
+Non-acceptance setup files use `kind: "support"` with a reason and are never
+silently treated as passing database tests.
+
+New fixtures may register only for the `constrained` role. The runner
+code hard-codes the reviewed legacy fixtures allowed to use `admin` or
+`support`, so editing registry data cannot elevate a ticket-authored fixture or
+exclude it from execution.
+
+The runner clears the fixture process environment, records output and database
+snapshots under `${RUNNER_TEMP}/sql-fixtures` in CI (or `.artifacts/sql-fixtures`
+locally), and compares row counts and schema fingerprints after every fixture.
+On fixture or cleanup failure it leaves the disposable database running and
+prints the diagnostics directory.

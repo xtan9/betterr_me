@@ -2,9 +2,118 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
+    "reviewKind": {
+      "type": "string",
+      "enum": ["exhaustive", "delta"]
+    },
+    "complete": {
+      "type": "boolean"
+    },
     "status": {
       "type": "string",
       "enum": ["pass", "findings"]
+    },
+    "axes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "standards",
+              "spec",
+              "security",
+              "tests",
+              "repair-ledger",
+              "regression"
+            ]
+          },
+          "complete": { "type": "boolean" },
+          "evidenceReviewed": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1
+          },
+          "findingIds": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "required": ["id", "complete", "evidenceReviewed", "findingIds"],
+        "additionalProperties": false
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "subject": { "type": "string", "minLength": 1 },
+          "implementationEvidence": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1
+          },
+          "testEvidence": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1
+          },
+          "verdict": {
+            "type": "string",
+            "enum": ["pass", "findings"]
+          }
+        },
+        "required": [
+          "id",
+          "subject",
+          "implementationEvidence",
+          "testEvidence",
+          "verdict"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9-]*-\\d{3}$"
+          },
+          "axis": {
+            "type": "string",
+            "enum": [
+              "standards",
+              "spec",
+              "security",
+              "tests",
+              "repair-ledger",
+              "regression"
+            ]
+          },
+          "location": { "type": "string", "minLength": 1 },
+          "problem": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "string", "minLength": 1 },
+          "safeRepair": { "type": "string", "minLength": 1 }
+        },
+        "required": [
+          "id",
+          "axis",
+          "location",
+          "problem",
+          "evidence",
+          "safeRepair"
+        ],
+        "additionalProperties": false
+      }
     },
     "blockingFindings": {
       "type": "array",
@@ -35,11 +144,17 @@
       "minItems": 1
     },
     "summary": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     }
   },
   "required": [
+    "reviewKind",
+    "complete",
     "status",
+    "axes",
+    "coverage",
+    "findings",
     "blockingFindings",
     "repairable",
     "blockerKind",
