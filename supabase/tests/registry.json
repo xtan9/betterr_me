@@ -39,6 +39,12 @@
     "adminReason": "creates disposable auth identities before switching to application roles for RLS assertions"
   },
   {
+    "path": "habit_completion_lifecycle.sql",
+    "domain": "habits",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "oauth_refresh_token_upgrade.sql",
     "domain": "oauth",
     "role": "admin",

@@ -1,6 +1,8 @@
 name: E2E Tests
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   schedule:
@@ -210,7 +212,7 @@ jobs:
   e2e-gate:
     name: E2E Gate
     needs: [changes, e2e-tests]
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout gate policy

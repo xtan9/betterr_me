@@ -25,3 +25,8 @@ export const habitUpdateSchema = habitFormSchema
   });
 
 export type HabitUpdateValues = z.infer<typeof habitUpdateSchema>;
+
+export const habitCompletionSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format. Use YYYY-MM-DD").optional(),
+  completed: z.boolean(),
+});

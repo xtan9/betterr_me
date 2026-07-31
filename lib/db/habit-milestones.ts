@@ -6,15 +6,22 @@ import { getNextDateString } from '@/lib/utils';
 export class HabitMilestonesDB {
   constructor(private supabase: SupabaseClient) {}
 
-  async recordMilestone(habitId: string, userId: string, milestone: MilestoneThreshold): Promise<void> {
-    const { error } = await this.supabase
+  async recordMilestone(
+    habitId: string,
+    userId: string,
+    milestone: MilestoneThreshold,
+  ): Promise<boolean> {
+    const { data, error } = await this.supabase
       .from('habit_milestones')
       .upsert(
         { habit_id: habitId, user_id: userId, milestone },
-        { onConflict: 'habit_id,milestone' }
-      );
+        { onConflict: 'habit_id,milestone', ignoreDuplicates: true }
+      )
+      .select('id')
+      .maybeSingle();
 
     if (error) throw error;
+    return data !== null;
   }
 
   async getHabitMilestones(habitId: string, userId: string): Promise<HabitMilestone[]> {
