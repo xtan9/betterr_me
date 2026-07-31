@@ -1,15 +1,18 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 
-import {
-  authenticateRequest,
-  MCP_REQUEST_POLICY,
-} from "@/lib/auth/authenticated-request";
+import { authenticateRequest } from "@/lib/auth/authenticated-request";
 import {
   sanitizedAuthFailureContext,
+  type AuthenticatedRequestPolicy,
   type AuthenticatedRequestError,
 } from "@/lib/auth/request-context";
 import { log } from "@/lib/logger";
 import { registerTools } from "@/lib/mcp/tools";
+
+const MCP_REQUEST_POLICY = {
+  allowedCredentials: ["mcp"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
 
 const handler = createMcpHandler(
   (server) => {

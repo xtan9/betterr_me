@@ -93,12 +93,19 @@ import {
   generateApiKey,
   hashApiKey,
 } from '@/lib/auth/api-key';
-import {
-  authenticateRequest,
-  USER_API_READ_POLICY,
-  USER_API_WRITE_POLICY,
-} from '@/lib/auth/authenticated-request';
+import { authenticateRequest } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { NextRequest } from 'next/server';
+
+const USER_API_READ_POLICY = {
+  allowedCredentials: ['apiKey', 'cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const USER_API_WRITE_POLICY = {
+  allowedCredentials: ['apiKey', 'cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 // ---------------------------------------------------------------------------
 // generateApiKey
@@ -192,8 +199,10 @@ describe('authenticateRequest', () => {
 
     expect(result).toEqual({
       ok: true,
+      outcome: 'authenticated',
       principal: { userId: 'user-123', credential: 'cookie' },
       permissions: ['read', 'write'],
+      permission: 'read',
       client: mockCookieClient,
     });
   });
@@ -230,8 +239,10 @@ describe('authenticateRequest', () => {
 
     expect(result).toEqual({
       ok: true,
+      outcome: 'authenticated',
       principal: { userId: 'user-789', credential: 'apiKey' },
       permissions: ['read', 'write'],
+      permission: 'read',
       client: mockServiceClient,
     });
     expect(serviceQueryLog).toEqual([
@@ -291,8 +302,10 @@ describe('authenticateRequest', () => {
 
     expect(result).toEqual({
       ok: true,
+      outcome: 'authenticated',
       principal: { userId: 'api-key-user', credential: 'apiKey' },
       permissions: ['read', 'write'],
+      permission: 'read',
       client: mockServiceClient,
     });
     expect(mockGetUser).not.toHaveBeenCalled();
@@ -342,8 +355,10 @@ describe('authenticateRequest', () => {
 
     expect(result).toEqual({
       ok: true,
+      outcome: 'authenticated',
       principal: { userId: 'cookie-user', credential: 'cookie' },
       permissions: ['read', 'write'],
+      permission: 'read',
       client: mockCookieClient,
     });
     expect(mockServiceFrom).not.toHaveBeenCalled();
@@ -464,8 +479,10 @@ describe('authenticateRequest', () => {
 
     expect(result).toEqual({
       ok: true,
+      outcome: 'authenticated',
       principal: { userId: 'api-key-user', credential: 'apiKey' },
       permissions: ['read', 'write'],
+      permission: 'read',
       client: mockServiceClient,
     });
     expect(mockLogError).toHaveBeenCalledWith(

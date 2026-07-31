@@ -52,8 +52,10 @@ describe("resolveAuthenticatedRequestContext", () => {
 
     expect(result).toEqual({
       ok: true,
+      outcome: "authenticated",
       principal: { userId: "user-123", credential: "apiKey" },
       permissions: ["read", "write"],
+      permission: "read",
       client: privilegedClient,
     });
   });
@@ -218,11 +220,13 @@ describe("resolveAuthenticatedRequestContext", () => {
 
       expect(result).toEqual({
         ok: true,
+        outcome: "authenticated",
         principal: { userId: `${credential}-user`, credential },
         permissions:
           credential === "admin"
             ? ["read", "write", "admin"]
             : ["read", "write"],
+        permission: credential === "admin" ? "admin" : "read",
         client: privilegedClient,
       });
     },

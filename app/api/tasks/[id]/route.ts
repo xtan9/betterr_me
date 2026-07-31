@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  authenticateRequest,
-  USER_API_READ_POLICY,
-  USER_API_WRITE_POLICY,
-} from '@/lib/auth/authenticated-request';
+import { authenticateRequest } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { TasksDB, RecurringTasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { taskUpdateSchema } from '@/lib/validations/task';
 import { editScopeSchema } from '@/lib/validations/recurring-task';
 import { createTaskWrites } from '@/lib/tasks/writes';
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['apiKey', 'cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['apiKey', 'cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/tasks/[id]
@@ -21,7 +28,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const auth = await authenticateRequest(request, USER_API_READ_POLICY);
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
@@ -54,7 +61,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const auth = await authenticateRequest(request, USER_API_WRITE_POLICY);
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
@@ -134,7 +141,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const auth = await authenticateRequest(request, USER_API_WRITE_POLICY);
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }

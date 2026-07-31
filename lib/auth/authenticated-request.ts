@@ -19,26 +19,6 @@ import { verifyMcpTokenCredential } from "@/lib/mcp/token";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
-export const USER_API_READ_POLICY = {
-  allowedCredentials: ["apiKey", "cookie"],
-  requiredPermission: "read",
-} as const satisfies AuthenticatedRequestPolicy;
-
-export const USER_API_WRITE_POLICY = {
-  allowedCredentials: ["apiKey", "cookie"],
-  requiredPermission: "write",
-} as const satisfies AuthenticatedRequestPolicy;
-
-export const ADMIN_REQUEST_POLICY = {
-  allowedCredentials: ["admin"],
-  requiredPermission: "admin",
-} as const satisfies AuthenticatedRequestPolicy;
-
-export const MCP_REQUEST_POLICY = {
-  allowedCredentials: ["mcp"],
-  requiredPermission: "read",
-} as const satisfies AuthenticatedRequestPolicy;
-
 function classifyUserError(
   error: AuthError,
   credential: "cookie" | "admin",
@@ -87,6 +67,29 @@ export async function authenticateCookieCredential(
 export async function authenticateAdminCredential(
   request: Request,
 ): Promise<CredentialOutcome<SupabaseClient>> {
+  const suppliedAdminSecret = request.headers.get("x-admin-secret");
+  if (suppliedAdminSecret !== null) {
+    const configuredAdminSecret = process.env.ADMIN_SYNC_SECRET;
+    if (!configuredAdminSecret) {
+      log.error("[auth] Admin secret credential is not configured");
+      return { outcome: "misconfigured" };
+    }
+    if (suppliedAdminSecret !== configuredAdminSecret) {
+      return { outcome: "invalid" };
+    }
+
+    return {
+      outcome: "authenticated",
+      principal: {
+        userId: "admin-sync-secret",
+        credential: "admin",
+        clientId: "admin-sync-secret",
+      },
+      permissions: ["read", "write", "admin"],
+      client: createAdminClient(),
+    };
+  }
+
   if (request.headers.has("authorization")) return { outcome: "anonymous" };
 
   const client = await createServerClient();

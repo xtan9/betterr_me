@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  authenticateRequest,
-  USER_API_WRITE_POLICY,
-} from '@/lib/auth/authenticated-request';
+import { authenticateRequest } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { log } from '@/lib/logger';
 import { createTaskWrites } from '@/lib/tasks/writes';
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['apiKey', 'cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * POST /api/tasks/[id]/toggle
@@ -16,7 +19,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const auth = await authenticateRequest(request, USER_API_WRITE_POLICY);
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }

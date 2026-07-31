@@ -42,8 +42,10 @@ export type AuthenticatedRequestPolicy = {
 
 export type AuthenticatedRequestContext<Client = SupabaseClient> = {
   ok: true;
+  outcome: "authenticated";
   principal: AuthenticatedPrincipal;
   permissions: readonly RequestPermission[];
+  permission: RequestPermission;
   client: Client;
 };
 
@@ -166,8 +168,10 @@ export async function resolveAuthenticatedRequestContext<Client>(
 
     return {
       ok: true,
+      outcome: "authenticated",
       principal: result.principal,
       permissions: result.permissions,
+      permission: policy.requiredPermission,
       client: result.client,
     };
   }

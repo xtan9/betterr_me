@@ -68,6 +68,7 @@ import {
 describe("authenticated request adapters", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://test.supabase.co");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key");
     vi.stubEnv("API_KEY_HMAC_SECRET", "mcp-token-secret");
@@ -213,6 +214,28 @@ describe("authenticated request adapters", () => {
       { table: "profiles", method: "eq", args: ["id", "admin-123"] },
       { table: "profiles", method: "single", args: [] },
     ]);
+  });
+
+  it("resolves the configured admin sync secret at the admin adapter boundary", async () => {
+    vi.stubEnv("ADMIN_SYNC_SECRET", "sync-secret");
+
+    const result = await authenticateAdminCredential(
+      new Request("https://example.test/admin", {
+        headers: { "x-admin-secret": "sync-secret" },
+      }),
+    );
+
+    expect(result).toEqual({
+      outcome: "authenticated",
+      principal: {
+        userId: "admin-sync-secret",
+        credential: "admin",
+        clientId: "admin-sync-secret",
+      },
+      permissions: ["read", "write", "admin"],
+      client: mocks.serviceClient,
+    });
+    expect(mocks.getUser).not.toHaveBeenCalled();
   });
 
   it("maps a non-admin session to forbidden at the admin adapter boundary", async () => {
