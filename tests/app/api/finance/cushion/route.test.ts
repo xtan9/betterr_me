@@ -48,14 +48,37 @@ describe("/api/finance/cushion", () => {
     expect(getRunwaySnapshots).toHaveBeenCalledWith(mockSupabase, user.id);
   });
 
-  it("recalculates on the server and creates an idempotent snapshot", async () => {
+  it("saves one complete server assessment and creates an idempotent snapshot from it", async () => {
     vi.mocked(saveHouseholdRunwayPlan).mockResolvedValue(savedCushion);
-    const request = new NextRequest("http://localhost:3000/api/finance/cushion", { method: "PUT", body: JSON.stringify({ answers, status: "completed", attribution: { campaign: "youtube" }, create_snapshot: true, snapshot_action_id: "74a303ae-1ba3-4ab5-beb9-5317eb94c790", snapshot_trigger: "imported" }), headers: { "content-type": "application/json" } });
+    const request = new NextRequest("http://localhost:3000/api/finance/cushion", { method: "PUT", body: JSON.stringify({ answers, adjustments: { added_cash_cents: 125_000 }, status: "completed", attribution: { campaign: "youtube" }, create_snapshot: true, snapshot_action_id: "74a303ae-1ba3-4ab5-beb9-5317eb94c790", snapshot_trigger: "imported" }), headers: { "content-type": "application/json" } });
     const response = await PUT(request);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ snapshots: [] });
-    expect(saveHouseholdRunwayPlan).toHaveBeenCalledWith(mockSupabase, user.id, expect.objectContaining({ answers, result: expect.objectContaining({ months_covered: 5 }) }));
-    expect(appendRunwaySnapshot).toHaveBeenCalledWith(mockSupabase, expect.objectContaining({ planId: "cushion-a", userId: user.id }));
+    expect(saveHouseholdRunwayPlan).toHaveBeenCalledWith(
+      mockSupabase,
+      user.id,
+      expect.objectContaining({
+        assessment: expect.objectContaining({
+          success: true,
+          answers,
+          adjustments: expect.objectContaining({ added_cash_cents: 125_000 }),
+          firstScenario: expect.objectContaining({
+            baseline: expect.objectContaining({ months_covered: 5 }),
+          }),
+          scenarios: [
+            expect.objectContaining({ scenario: "current" }),
+          ],
+        }),
+      }),
+    );
+    expect(appendRunwaySnapshot).toHaveBeenCalledWith(
+      mockSupabase,
+      expect.objectContaining({
+        planId: "cushion-a",
+        userId: user.id,
+        assessment: expect.objectContaining({ success: true }),
+      }),
+    );
   });
 
   it("rejects negative values and retirement usable amounts above balances", async () => {

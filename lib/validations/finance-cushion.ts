@@ -221,6 +221,7 @@ const attributionSchema = z
 export const financeCushionPlanSchema = z
   .object({
     answers: householdRunwayAnswersSchema,
+    adjustments: runwayAdjustmentsSchema.default({}),
     status: z.enum(["in_progress", "completed"]),
     attribution: attributionSchema.default({}),
     create_snapshot: z.boolean().default(false),
@@ -259,14 +260,4 @@ export const financeCushionEventSchema = z
   })
   .strict();
 
-// Retained for legacy V1 callers and focused compatibility tests.
-export const financeCushionInputSchema = z
-  .object({
-    liquid_resources_cents: cents,
-    monthly_essential_expenses_cents: cents.min(1),
-    monthly_continuing_income_cents: cents.default(0),
-  })
-  .strict();
-
-export type FinanceCushionInput = z.output<typeof financeCushionInputSchema>;
 export type FinanceCushionPlanInput = z.output<typeof financeCushionPlanSchema>;

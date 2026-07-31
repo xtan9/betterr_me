@@ -6,10 +6,7 @@ import {
   getRunwaySnapshots,
   saveHouseholdRunwayPlan,
 } from "@/lib/finance/repository";
-import {
-  availableScenarios,
-  simulateHouseholdRunway,
-} from "@/lib/finance/cushion";
+import { assessHouseholdRunway } from "@/lib/finance/household-runway-assessment";
 import { validateRequestBody } from "@/lib/validations/api";
 import { financeCushionPlanSchema } from "@/lib/validations/finance-cushion";
 import { log } from "@/lib/logger";
@@ -51,14 +48,24 @@ export async function PUT(request: NextRequest) {
       financeCushionPlanSchema,
     );
     if (!validation.success) return validation.response;
-    const scenario = availableScenarios(validation.data.answers)[0].id;
-    const result = simulateHouseholdRunway(validation.data.answers, scenario);
+    const assessment = assessHouseholdRunway({
+      answers: validation.data.answers,
+      adjustments: validation.data.adjustments,
+    });
+    if (!assessment.success) {
+      return NextResponse.json(
+        {
+          error: "Invalid household runway assessment",
+          issues: assessment.validationIssues,
+        },
+        { status: 400 },
+      );
+    }
     const cushion = await saveHouseholdRunwayPlan(
       context.supabase,
       context.user.id,
       {
-        answers: validation.data.answers,
-        result,
+        assessment,
         status: validation.data.status,
         attribution: validation.data.attribution ?? {},
       },
@@ -73,10 +80,13 @@ export async function PUT(request: NextRequest) {
         userId: context.user.id,
         actionId: validation.data.snapshot_action_id,
         trigger: validation.data.snapshot_trigger,
-        result,
+        assessment,
       });
     }
-    const snapshots = await getRunwaySnapshots(context.supabase, context.user.id);
+    const snapshots = await getRunwaySnapshots(
+      context.supabase,
+      context.user.id,
+    );
     return NextResponse.json({ cushion, snapshots });
   } catch (error) {
     log.error("[household-runway] PUT failed", error);

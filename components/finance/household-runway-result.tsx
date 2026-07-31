@@ -10,13 +10,13 @@ import { trackRunwayEvent } from "@/lib/finance/runway-analytics-client";
 import {
   RUNWAY_MODEL_VERSION,
   formatCents,
-  highestLeverageActions,
   type HouseholdRunwayAnswers,
   type RunwayAdjustments,
   type RunwayScenario,
   type RunwaySimulation,
   type RunwaySnapshotSummary,
 } from "@/lib/finance/cushion";
+import type { HouseholdRunwayScenarioAssessment } from "@/lib/finance/household-runway-assessment";
 
 function primarySentence(simulation: RunwaySimulation, t: ReturnType<typeof useTranslations>) {
   if (simulation.sustainable) return t("result.sustainable");
@@ -60,7 +60,7 @@ export function ResultExperience({
   extreme: RunwaySimulation;
   adjustments: RunwayAdjustments;
   setAdjustments: (adjustments: RunwayAdjustments) => void;
-  actions: ReturnType<typeof highestLeverageActions>;
+  actions: HouseholdRunwayScenarioAssessment["advice"];
   onApply: () => void;
   onReset: () => void;
   onEdit: () => void;

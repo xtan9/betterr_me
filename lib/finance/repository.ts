@@ -5,10 +5,11 @@ import {
   toFinanceCushionView,
   type FinanceCushionRecord,
   type FinanceCushionView,
-  type HouseholdRunwayAnswers,
-  type RunwaySimulation,
   type RunwaySnapshotSummary,
 } from "@/lib/finance/cushion";
+import type {
+  SuccessfulHouseholdRunwayAssessment,
+} from "@/lib/finance/household-runway-assessment";
 
 export async function getFinanceCushion(
   supabase: SupabaseClient,
@@ -27,34 +28,35 @@ export async function saveHouseholdRunwayPlan(
   supabase: SupabaseClient,
   userId: string,
   input: {
-    answers: HouseholdRunwayAnswers;
-    result: RunwaySimulation;
+    assessment: SuccessfulHouseholdRunwayAssessment;
     status: "in_progress" | "completed";
     attribution: Record<string, string | undefined>;
   },
 ): Promise<FinanceCushionView> {
-  const legacy = {
-    liquid_resources_cents: input.result.starting_resources_cents,
+  const { answers } = input.assessment;
+  const baselineResult = input.assessment.firstScenario.baseline;
+  const requiredCushionColumns = {
+    liquid_resources_cents: baselineResult.starting_resources_cents,
     monthly_essential_expenses_cents: Math.max(
       1,
-      input.result.interruption_expenses_cents,
+      baselineResult.interruption_expenses_cents,
     ),
     monthly_continuing_income_cents:
-      input.result.continuing_monthly_income_cents,
+      baselineResult.continuing_monthly_income_cents,
   };
   const { data, error } = await supabase
     .from("finance_cushions")
     .upsert(
       {
         user_id: userId,
-        ...legacy,
-        answers: input.answers,
-        latest_result: input.result,
+        ...requiredCushionColumns,
+        answers,
+        latest_result: input.assessment,
         model_version: RUNWAY_MODEL_VERSION,
         status: input.status,
-        country: input.answers.country,
-        region: input.answers.region,
-        currency: input.answers.currency,
+        country: answers.country,
+        region: answers.region,
+        currency: answers.currency,
         attribution: input.attribution,
         completed_at:
           input.status === "completed" ? new Date().toISOString() : null,
@@ -74,19 +76,20 @@ export async function appendRunwaySnapshot(
     userId: string;
     actionId: string;
     trigger: "completed" | "updated" | "imported";
-    result: RunwaySimulation;
+    assessment: SuccessfulHouseholdRunwayAssessment;
   },
 ) {
+  const baselineResult = input.assessment.firstScenario.baseline;
   const { error } = await supabase.from("finance_cushion_snapshots").upsert(
     {
       plan_id: input.planId,
       user_id: input.userId,
       action_id: input.actionId,
       trigger: input.trigger,
-      scenario: input.result.scenario,
-      months_covered: input.result.months_covered,
-      sustainable: input.result.sustainable,
-      result: input.result,
+      scenario: baselineResult.scenario,
+      months_covered: baselineResult.months_covered,
+      sustainable: baselineResult.sustainable,
+      result: input.assessment,
       model_version: RUNWAY_MODEL_VERSION,
     },
     { onConflict: "plan_id,action_id", ignoreDuplicates: true },

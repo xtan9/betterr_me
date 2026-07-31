@@ -38,7 +38,7 @@ const en = {
   },
   fields: { selectRegion: "Select a state, province, or region" },
   actions: { clearConfirm: "Clear every answer saved in this browser? This cannot be undone." },
-  validation: { expensesCurrent: "Enter at least one current monthly commitment before continuing." },
+  validation: { expensesCurrent: "Enter at least one current monthly commitment before continuing.", assessment: "We could not assess these answers. Review them and try again." },
   income: {
     useEstimate: "Use this estimate",
     enterActual: "Enter my actual take-home pay",
@@ -110,6 +110,7 @@ const en = {
   whatIf: { useIlliquid: "Usable hard-to-withdraw investments", useDeferred: "Usable tax-deferred retirement", useTaxFree: "Usable tax-free-qualified retirement", appliedIncome: "Additional dependable income", expectedFundsHelp: "Preview only. It cannot be applied to the baseline until the amount and arrival are confirmed.", retirementHelp: "Extreme mode uses only the amount you say would actually be available. Consider taxes, penalties, account rules, and timing before entering it." },
   regional: { title: "Local first steps" },
   precision: { complete: "Your core inputs are confirmed. Revisit them whenever income, cash, or commitments change." },
+  save: { downloadError: "The assessment could not be downloaded. Your result was not changed." },
   method: { excluded: "Hard-to-withdraw investments, retirement accounts, and home equity are excluded unless you explicitly enter a usable amount in What-if or extreme mode." },
 };
 
