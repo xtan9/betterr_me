@@ -179,7 +179,8 @@ pnpm exec vitest run tests/scripts/classify-changes.test.ts \
   tests/scripts/run-change-classifier.test.ts \
   tests/scripts/detect-pull-request-validated-push.test.ts \
   tests/scripts/gate-policy.test.ts \
-  tests/scripts/github-actions-runtime-policy.test.ts
+  tests/scripts/github-actions-runtime-policy.test.ts \
+  tests/scripts/quality-signal-contracts.test.ts
 ```
 
 This verifies every tracked path has an owner and covers renames, deletions,
@@ -188,6 +189,12 @@ area, conservative fallbacks, stable aggregate gate names, and fail-closed gate
 results. It intentionally does not run the complete Playwright suite; the
 classifier selects the dashboard smoke spec for its own changes in pull-request
 CI.
+
+The optional visual, accessibility, and performance signal contracts are
+documented in [Quality signals](quality-signals.md). The focused contract test
+above checks their workflow names, reported terminology, documentation shape,
+and continued separation from the repository's required gate names without
+running Playwright.
 
 ## Browser test portfolio
 

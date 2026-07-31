@@ -5,7 +5,7 @@ on:
     workflows:
       - CI
       - E2E Tests
-      - Performance Audit
+      - Performance Measurements (Advisory)
       - Mutation Testing
       - Dispatch Reminders
     types: [completed]

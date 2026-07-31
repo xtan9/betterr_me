@@ -127,7 +127,7 @@ describe("CI change classification", () => {
     expect(classifyManualDispatch()).toMatchObject({
       e2e: "true",
       e2e_full: "true",
-      e2e_label: "full Chromium + finance + visual regression",
+      e2e_label: "full Chromium + finance + screenshot comparison",
       e2e_specs: "",
     });
   });
@@ -275,6 +275,7 @@ describe("conditional test classifier", () => {
       "tests/scripts/detect-pull-request-validated-push.test.ts",
       "tests/scripts/gate-policy.test.ts",
       "tests/scripts/github-actions-runtime-policy.test.ts",
+      "tests/scripts/quality-signal-contracts.test.ts",
       "tests/scripts/run-change-classifier.test.ts",
     ]);
 
@@ -290,6 +291,7 @@ describe("conditional test classifier", () => {
         "tests/scripts/detect-pull-request-validated-push.test.ts",
         "tests/scripts/gate-policy.test.ts",
         "tests/scripts/github-actions-runtime-policy.test.ts",
+        "tests/scripts/quality-signal-contracts.test.ts",
         "tests/scripts/run-change-classifier.test.ts",
       ],
     });

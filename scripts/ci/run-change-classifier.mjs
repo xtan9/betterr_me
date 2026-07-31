@@ -20,7 +20,7 @@ function emergencyBroadClassification(error) {
       e2eSupabase: true,
       performance: true,
     },
-    labels: { quality: "full suite", e2e: "full Chromium + finance + visual regression" },
+    labels: { quality: "full suite", e2e: "full Chromium + finance + screenshot comparison" },
     reasons: [`classifier startup error: ${error}; running broad validation.`],
     skipReasons: {
       changedTests: "The complete unit-test suite supersedes changed-test selection.",

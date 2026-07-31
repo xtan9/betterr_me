@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Nightly full lint and unit suite before E2E and performance audits.
+    # Nightly full lint and unit suite before E2E and advisory performance measurements.
     - cron: '0 5 * * *'
   workflow_dispatch:
 
