@@ -161,3 +161,26 @@ Established patterns (see examples in `tests/lib/db/`):
 - **`next-intl`**: `vi.mock("next-intl", () => ({ useTranslations: () => (key) => key }))` or wrap with `NextIntlClientProvider`.
 - **SWR**: `vi.mock("swr", () => ({ default: (...args) => mockUseSWR(...args) }))`.
 - **Date/time**: `vi.useFakeTimers()` + `vi.setSystemTime("2026-04-15T12:00:00Z")` + `vi.useRealTimers()` in `finally`.
+
+## Conditional test selection
+
+Pull-request CI, E2E, and performance workflows all consume the structured report
+from `scripts/ci/classify-changes.mjs` through its fail-safe runner. The ownership
+registry is the only path-policy source. The classifier logs and emits a JSON
+report containing changed paths,
+matched owners, selected suites, fallback reasons, and reasons for intentional
+skips. Missing comparison SHAs, unreadable or ambiguous diffs, and unregistered
+application paths select the broad validation set.
+
+When changing the classifier, run its targeted policy verification:
+
+```bash
+pnpm exec vitest run tests/scripts/classify-changes.test.ts \
+  tests/scripts/run-change-classifier.test.ts
+```
+
+This verifies every tracked path has an owner and covers renames, deletions,
+test-only and workflow-only changes, mixed-risk diffs, each registered product
+area, and conservative fallbacks. It intentionally does not run the complete
+Playwright suite; the classifier selects the dashboard smoke spec for its own
+changes in pull-request CI.

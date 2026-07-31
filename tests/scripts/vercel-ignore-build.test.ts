@@ -39,7 +39,7 @@ describe("Vercel ignored build classification", () => {
     ".github/workflows/ci.yml",
     "docs/architecture.md",
     "e2e/dashboard.spec.ts",
-    "scripts/ci/classify-changes.sh",
+    "scripts/ci/classify-changes.mjs",
     "supabase/migrations/20260729000000_change.sql",
     "tests/app/journal/page.test.tsx",
     "README.md",
@@ -55,8 +55,8 @@ describe("Vercel ignored build classification", () => {
   it("skips a change containing only non-runtime files", () => {
     expect(classifyVercelBuild([
       ".github/workflows/e2e.yml",
-      "tests/scripts/select-e2e-tests.test.ts",
-      "scripts/ci/select-e2e-tests.mjs",
+      "tests/scripts/classify-changes.test.ts",
+      "scripts/ci/classify-changes.mjs",
     ]).build).toBe(false);
   });
 

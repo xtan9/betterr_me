@@ -16,7 +16,7 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      performance: ${{ steps.classify.outputs.performance }}
+      classification_json: ${{ steps.classify.outputs.classification_json }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -27,12 +27,11 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        shell: bash
-        run: bash scripts/ci/classify-changes.sh
+        run: node scripts/ci/run-change-classifier.mjs
 
   check-secrets:
     needs: changes
-    if: needs.changes.outputs.performance == 'true'
+    if: fromJSON(needs.changes.outputs.classification_json).suites.performance
     runs-on: ubuntu-latest
     outputs:
       has-secrets: ${{ steps.check.outputs.has-secrets }}
@@ -51,7 +50,7 @@ jobs:
 
   lighthouse:
     needs: [changes, check-secrets]
-    if: ${{ needs.changes.outputs.performance == 'true' && needs.check-secrets.outputs.has-secrets == 'true' }}
+    if: ${{ fromJSON(needs.changes.outputs.classification_json).suites.performance && needs.check-secrets.outputs.has-secrets == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

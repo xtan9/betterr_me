@@ -20,13 +20,7 @@ jobs:
     name: Detect E2E scope
     runs-on: ubuntu-latest
     outputs:
-      e2e: ${{ steps.classify.outputs.e2e }}
-      e2e_full: ${{ steps.classify.outputs.e2e_full }}
-      e2e_specs: ${{ steps.classify.outputs.e2e_specs }}
-      e2e_runway: ${{ steps.classify.outputs.e2e_runway }}
-      e2e_visual: ${{ steps.classify.outputs.e2e_visual }}
-      e2e_supabase: ${{ steps.classify.outputs.e2e_supabase }}
-      e2e_label: ${{ steps.classify.outputs.e2e_label }}
+      classification_json: ${{ steps.classify.outputs.classification_json }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -37,13 +31,12 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        shell: bash
-        run: bash scripts/ci/classify-changes.sh
+        run: node scripts/ci/run-change-classifier.mjs
 
   e2e-tests:
-    name: E2E (${{ needs.changes.outputs.e2e_label }})
+    name: E2E (${{ fromJSON(needs.changes.outputs.classification_json).labels.e2e }})
     needs: changes
-    if: needs.changes.outputs.e2e == 'true'
+    if: fromJSON(needs.changes.outputs.classification_json).suites.e2e
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -74,37 +67,37 @@ jobs:
           e2e-password: ${{ secrets.E2E_TEST_PASSWORD }}
 
       - name: Setup disposable Supabase for pull-request E2E
-        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
+        if: ${{ github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
         with:
           version: 2.109.1
 
       - name: Start disposable Supabase and apply migrations
-        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
+        if: ${{ github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
         run: >-
           supabase start
           --exclude analytics,edge-runtime,functions,imgproxy,inbucket,meta,storage,studio,vector
 
       - name: Install PostgreSQL client for pull-request RLS gate
-        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
+        if: ${{ github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
         run: sudo apt-get update && sudo apt-get install --yes postgresql-client
 
       - name: Prepare disposable authenticated E2E table grants
-        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
+        if: ${{ github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
         run: >-
           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
           -v ON_ERROR_STOP=1
           -f supabase/tests/e2e_local_authenticated_grants.sql
 
       - name: Execute two-user finance cushion RLS fixture
-        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
+        if: ${{ github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
         run: >-
           psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
           -v ON_ERROR_STOP=1
           -f supabase/tests/finance_cushion_rls.sql
 
       - name: Execute opted-in Ralph SQL fixtures
-        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
+        if: ${{ github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
         run: bash scripts/ci/run-ralph-sql-tests.sh
 
       - name: Setup Node.js, pnpm, and dependencies
@@ -119,7 +112,7 @@ jobs:
             ${{ runner.os }}-nextjs-e2e-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Configure disposable Supabase E2E target
-        if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.e2e_supabase == 'true' }}
+        if: ${{ github.event_name == 'pull_request' && fromJSON(needs.changes.outputs.classification_json).suites.e2eSupabase }}
         shell: bash
         run: |
           set -euo pipefail
@@ -181,10 +174,10 @@ jobs:
 
       - name: Run E2E tests
         env:
-          E2E_FULL: ${{ needs.changes.outputs.e2e_full }}
-          E2E_SPECS: ${{ needs.changes.outputs.e2e_specs }}
-          E2E_RUNWAY: ${{ needs.changes.outputs.e2e_runway }}
-          E2E_VISUAL: ${{ needs.changes.outputs.e2e_visual }}
+          E2E_FULL: ${{ fromJSON(needs.changes.outputs.classification_json).suites.e2eFull }}
+          E2E_SPECS: ${{ join(fromJSON(needs.changes.outputs.classification_json).suites.e2eSpecs, ',') }}
+          E2E_RUNWAY: ${{ fromJSON(needs.changes.outputs.classification_json).suites.e2eRunway }}
+          E2E_VISUAL: ${{ fromJSON(needs.changes.outputs.classification_json).suites.e2eVisual }}
         shell: bash
         run: |
           set -euo pipefail
@@ -225,7 +218,7 @@ jobs:
       - name: Verify selected E2E checks
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
-          E2E_NEEDED: ${{ needs.changes.outputs.e2e }}
+          E2E_NEEDED: ${{ fromJSON(needs.changes.outputs.classification_json).suites.e2e }}
           E2E_RESULT: ${{ needs.e2e-tests.result }}
         shell: bash
         run: |
