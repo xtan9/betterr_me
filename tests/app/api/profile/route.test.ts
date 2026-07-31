@@ -39,8 +39,7 @@ describe('GET /api/profile', () => {
     };
     vi.mocked(mockProfilesDB.getProfile).mockResolvedValue(mockProfile as any);
 
-    const request = new NextRequest('http://localhost:3000/api/profile');
-    const response = await GET(request);
+    const response = await GET();
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -51,8 +50,7 @@ describe('GET /api/profile', () => {
   it('should return 404 if profile not found', async () => {
     vi.mocked(mockProfilesDB.getProfile).mockResolvedValue(null);
 
-    const request = new NextRequest('http://localhost:3000/api/profile');
-    const response = await GET(request);
+    const response = await GET();
 
     expect(response.status).toBe(404);
   });
@@ -62,8 +60,7 @@ describe('GET /api/profile', () => {
       auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
     } as any);
 
-    const request = new NextRequest('http://localhost:3000/api/profile');
-    const response = await GET(request);
+    const response = await GET();
 
     expect(response.status).toBe(401);
   });
@@ -74,8 +71,7 @@ describe('GET /api/profile', () => {
     } as any);
     vi.mocked(mockProfilesDB.getProfile).mockRejectedValue(new Error('db error'));
 
-    const request = new NextRequest('http://localhost:3000/api/profile');
-    const response = await GET(request);
+    const response = await GET();
     const data = await response.json();
 
     expect(response.status).toBe(500);

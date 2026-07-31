@@ -188,11 +188,15 @@ $$;
 
 -- Isolate the rollback case from the successful schedules above so its
 -- absence assertions only observe state created by the failing invocation.
+reset role;
+
 delete from public.reminders
 where user_id = '48100000-0000-0000-0000-000000000001';
 
 delete from public.calendar_events
 where user_id = '48100000-0000-0000-0000-000000000001';
+
+set local role authenticated;
 
 -- Force the required reminder insert to fail after the event insert. A
 -- statement-level exception must roll the entire function invocation back.

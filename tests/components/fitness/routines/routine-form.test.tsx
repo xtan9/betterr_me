@@ -137,7 +137,7 @@ const routineWithExercises = (): RoutineWithExercises =>
           updated_at: "2026-01-01T00:00:00Z",
         },
       },
-    ] as RoutineWithExercises["exercises"],
+    ] as unknown as RoutineWithExercises["exercises"],
   });
 
 describe("RoutineForm", () => {

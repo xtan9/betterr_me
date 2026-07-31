@@ -1,6 +1,6 @@
 /**
  * Lighthouse CI configuration
- * QA-005: Performance audit
+ * QA-005: Advisory performance measurements - Lighthouse budgets
  *
  * Uses default mobile throttling (simulated 4G + CPU slowdown)
  * to reflect real-world mobile usage for a habit tracker app.

@@ -3,6 +3,11 @@ import fs from 'node:fs';
 const USER_VISIBLE = '- [x] User-visible product delivery';
 const INTERNAL = '- [x] Internal, operational, or infrastructure-only change';
 const TABLE_HEADER = '| Approved user-visible capability | Changed file(s) | Runnable verification |';
+const DEPENDABOT_AUTHOR = 'dependabot[bot]';
+const DEPENDABOT_INTERNAL_PATHS = [
+  /^\.github\/workflows\/[^/]+\.ya?ml$/,
+  /^\.github\/actions\/.+\/action\.ya?ml$/,
+];
 
 function fail(message) {
   throw new Error(`Release capability map: ${message}`);
@@ -31,7 +36,17 @@ function tableRows(map) {
     .filter((cells) => cells.some((cell) => cell && !cell.startsWith('<!--')));
 }
 
-export function validateReleaseScope(body, changedFiles) {
+function isScopedDependabotUpdate(pullRequestAuthor, changedFiles) {
+  return pullRequestAuthor === DEPENDABOT_AUTHOR &&
+    changedFiles.size > 0 &&
+    [...changedFiles].every((path) =>
+      DEPENDABOT_INTERNAL_PATHS.some((pattern) => pattern.test(path))
+    );
+}
+
+export function validateReleaseScope(body, changedFiles, { pullRequestAuthor = '' } = {}) {
+  if (isScopedDependabotUpdate(pullRequestAuthor, changedFiles)) return;
+
   const classification = section(body, 'Delivery classification');
   const isUserVisible = classification.includes(USER_VISIBLE);
   const isInternal = classification.includes(INTERNAL);
@@ -65,13 +80,17 @@ export function validateReleaseScope(body, changedFiles) {
 }
 
 function main() {
-  const [bodyPath, filesPath] = process.argv.slice(2);
+  const [bodyPath, filesPath, pullRequestAuthor = ''] = process.argv.slice(2);
   if (!bodyPath || !filesPath) {
-    console.error('Usage: node scripts/validate-release-scope.mjs <pr-body-file> <changed-files-file>');
+    console.error('Usage: node scripts/validate-release-scope.mjs <pr-body-file> <changed-files-file> [pull-request-author]');
     process.exit(2);
   }
   try {
-    validateReleaseScope(fs.readFileSync(bodyPath, 'utf8'), new Set(fs.readFileSync(filesPath, 'utf8').split(/\r?\n/).filter(Boolean)));
+    validateReleaseScope(
+      fs.readFileSync(bodyPath, 'utf8'),
+      new Set(fs.readFileSync(filesPath, 'utf8').split(/\r?\n/).filter(Boolean)),
+      { pullRequestAuthor },
+    );
     console.log('Release capability map is complete.');
   } catch (error) {
     console.error(error.message);

@@ -196,9 +196,9 @@ export async function cleanupIssueCheckout({
   worktreeRoot,
   issueNumber,
   issueState,
-  recoveryWorktreePath,
-  expectedRecoveryHead,
-  beforeWorktreeRemove,
+  recoveryWorktreePath = /** @type {string | null} */ (null),
+  expectedRecoveryHead = /** @type {string | null} */ (null),
+  beforeWorktreeRemove = /** @type {((worktreePath: string) => void | Promise<void>) | null} */ (null),
   git,
 }) {
   if (!issueState?.branch && !issueState?.worktreePath) {

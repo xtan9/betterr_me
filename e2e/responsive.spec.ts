@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { DashboardPage } from './pages/dashboard.page';
 import { HabitsPage } from './pages/habits.page';
 import { CreateHabitPage } from './pages/create-habit.page';
@@ -7,19 +7,24 @@ import { CreateHabitPage } from './pages/create-habit.page';
  * QA-007: Mobile responsive testing
  * Tests layout-specific responsive behavior.
  *
- * Generic viewport tests (no horizontal scroll, no content overflow) have been removed
- * because Playwright device projects (mobile-chrome, mobile-safari, tablet, mobile-small)
- * already run ALL spec files at those viewports — the generic checks were redundant.
- *
- * This file now focuses on layout-specific assertions that device projects don't cover:
- * grid layouts, stacking behavior, input widths, touch targets, and navigation patterns.
+ * This file focuses on layout assertions that device projects alone cannot prove:
+ * document overflow, grid layouts, stacking behavior, input widths, touch targets,
+ * and navigation patterns.
  */
+
+async function expectNoHorizontalDocumentOverflow(page: Page) {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+}
 
 test.describe('Responsive - Dashboard Layout', () => {
   test('stat cards should use 2-column grid on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     const dashboard = new DashboardPage(page);
     await dashboard.goto();
+    await expectNoHorizontalDocumentOverflow(page);
 
     const cardCount = await dashboard.statCards.count();
     expect(cardCount).toBeGreaterThanOrEqual(2);
@@ -44,6 +49,7 @@ test.describe('Responsive - Dashboard Layout', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const dashboard = new DashboardPage(page);
     await dashboard.goto();
+    await expectNoHorizontalDocumentOverflow(page);
 
     const cards = dashboard.statCards;
     const cardCount = await cards.count();

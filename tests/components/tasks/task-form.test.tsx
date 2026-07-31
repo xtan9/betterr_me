@@ -81,7 +81,6 @@ const mockTask: Task = {
   description: 'Milk, eggs, bread',
   is_completed: false,
   priority: 2,
-  category: null,
   category_id: null,
   due_date: '2026-02-10',
   due_time: '14:30:00',

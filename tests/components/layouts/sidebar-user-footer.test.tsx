@@ -9,8 +9,8 @@ const { mockSWRReturn, mockSetTheme, mockPush, mockSignOut } = vi.hoisted(
     mockSWRReturn: {
       data: {
         profile: {
-          full_name: "Jane Doe",
-          avatar_url: null,
+          full_name: "Jane Doe" as string | null,
+          avatar_url: null as string | null,
           email: "jane@example.com",
         },
       },

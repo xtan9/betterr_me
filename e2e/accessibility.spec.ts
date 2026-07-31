@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { DashboardPage } from './pages/dashboard.page';
 import { HabitsPage } from './pages/habits.page';
 import { CreateHabitPage } from './pages/create-habit.page';
+import { E2E_READ_ONLY, SEED_HABIT_NAMES } from './constants';
 
 /**
  * QA-004: Accessibility audit
@@ -115,11 +116,12 @@ test.describe('Accessibility - Keyboard Navigation', () => {
   });
 
   test('should activate checkboxes with Space key', async ({ page }) => {
+    test.skip(E2E_READ_ONLY, 'Checkbox mutation requires disposable E2E state');
     const dashboard = new DashboardPage(page);
     await dashboard.goto();
 
     // Target a specific seed habit to avoid parallel contention with other test files
-    const checkbox = dashboard.habitCheckbox('E2E Test - Seed Habit 2');
+    const checkbox = dashboard.habitCheckbox(SEED_HABIT_NAMES[1]);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
     const wasChecked = await checkbox.getAttribute('data-state') === 'checked';

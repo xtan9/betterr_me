@@ -378,7 +378,7 @@ Migrations ──▶ HabitsDB ──▶ API Routes ──▶ HabitForm ──▶
 | QA-002 | E2E test: Complete habit flow | M | All | Playwright test passing |
 | QA-003 | E2E test: Dashboard load | M | All | Playwright test passing |
 | QA-004 | Accessibility audit | M | All | No critical issues |
-| QA-005 | Performance audit | M | All | Lighthouse >90 |
+| QA-005 | Advisory performance measurements | M | All | Bundle + Lighthouse budgets (see `docs/quality-signals.md`) |
 | QA-006 | Cross-browser testing | M | All | Chrome, Firefox, Safari |
 | QA-007 | Mobile responsive testing | M | All | Works on 375px+ |
 | QA-008 | Bug fixes from testing | L | QA-001 to QA-007 | All P0 bugs fixed |
@@ -948,7 +948,7 @@ jobs:
 - [ ] All tests passing
 - [ ] Migrations run successfully in staging
 - [ ] Manual smoke test of critical flows
-- [ ] Performance audit >90 Lighthouse
+- [ ] Advisory performance measurements remain within the documented bundle and Lighthouse budgets
 - [ ] Accessibility audit passing
 - [ ] i18n strings complete
 - [ ] Error tracking (Sentry) configured

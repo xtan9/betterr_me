@@ -45,10 +45,10 @@ import { POST } from "@/app/api/admin/sync-exercise-media/route";
 
 // --- Helpers ---
 function makeRequest(body?: Record<string, unknown>, headers?: Record<string, string>) {
-  const init: RequestInit = { method: "POST" };
-  if (body !== undefined) {
-    init.body = JSON.stringify(body);
-  }
+  const init = {
+    method: "POST",
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  };
   const req = new NextRequest("http://localhost:3000/api/admin/sync-exercise-media", init);
   if (headers) {
     Object.entries(headers).forEach(([k, v]) => {

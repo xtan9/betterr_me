@@ -29,7 +29,7 @@ A personal productivity web app — track habits, tasks, workouts, journal entri
 | Theming | next-themes (class-based dark mode) |
 | Email | Resend |
 | Push | Web Push (VAPID) |
-| Testing | Vitest + Testing Library + vitest-axe + Playwright |
+| Testing | Vitest + Testing Library + vitest-axe + Playwright ([quality-signal contracts](docs/quality-signals.md)) |
 | Package manager | pnpm |
 
 ## Getting Started
