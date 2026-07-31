@@ -36,6 +36,21 @@ afterEach(() => {
 });
 
 describe("SQL fixture registry", () => {
+  it("keeps the complete calendar lifecycle group registered in stable order", () => {
+    const registry = loadSqlFixtureRegistry(process.cwd());
+
+    expect(validateSqlFixtureRegistry(process.cwd(), registry)).toEqual([]);
+    expect(
+      selectSqlFixtures(registry, { domain: "calendar" }).map(
+        (entry: { path: string }) => entry.path,
+      ),
+    ).toEqual([
+      "calendar_event_reminder_lifecycle.sql",
+      "calendar_event_reminder_delete_lifecycle.sql",
+      "calendar_event_reminder_update_lifecycle.sql",
+    ]);
+  });
+
   it("selects acceptance fixtures in registry order with narrow filters", () => {
     const registry = [
       {

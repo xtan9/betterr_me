@@ -11,6 +11,10 @@ Use `pnpm test:db -- --domain calendar` or
 `pnpm test:db -- --list` to inspect the selected plan without connecting to a
 database.
 
+Use `pnpm test:db:calendar` for the bounded calendar lifecycle verification.
+It runs the registry and constrained-fixture policy tests, then executes only
+the registered `calendar` acceptance fixtures against disposable PostgreSQL.
+
 Every top-level `.sql` file in this directory must have one registry entry.
 Acceptance entries declare their domain, cleanup contract, and whether they run
 as the dedicated constrained role or require the disposable database
