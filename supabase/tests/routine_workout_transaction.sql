@@ -8,35 +8,40 @@ select public.ralph_ci_create_auth_user(
   'routine-workout@example.test'
 );
 
-insert into public.exercises (
-  id,
-  name,
-  muscle_group_primary,
-  equipment,
-  exercise_type
-)
-values
-  (
-    '48500000-0000-4000-8000-000000000002',
-    'Transaction bench press',
-    'chest',
-    'barbell',
-    'weight_reps'
-  ),
-  (
-    '48500000-0000-4000-8000-000000000003',
-    'Transaction plank',
-    'core',
-    'none',
-    'duration'
-  );
-
-set local role authenticated;
 select set_config(
   'request.jwt.claim.sub',
   '48500000-0000-4000-8000-000000000001',
   true
 );
+
+insert into public.exercises (
+  id,
+  user_id,
+  name,
+  muscle_group_primary,
+  equipment,
+  exercise_type,
+  is_custom
+)
+values
+  (
+    '48500000-0000-4000-8000-000000000002',
+    '48500000-0000-4000-8000-000000000001',
+    'Transaction bench press',
+    'chest',
+    'barbell',
+    'weight_reps',
+    true
+  ),
+  (
+    '48500000-0000-4000-8000-000000000003',
+    '48500000-0000-4000-8000-000000000001',
+    'Transaction plank',
+    'core',
+    'none',
+    'duration',
+    true
+  );
 
 insert into public.routines (
   id,
@@ -48,6 +53,8 @@ values (
   '48500000-0000-4000-8000-000000000001',
   'Transaction routine'
 );
+
+set local role authenticated;
 
 -- The production RPC returns the complete nested mapping in source order.
 do $$

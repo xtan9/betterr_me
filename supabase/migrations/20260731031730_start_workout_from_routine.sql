@@ -122,3 +122,13 @@ REVOKE ALL ON FUNCTION public.start_workout_from_routine(UUID, JSONB, JSONB)
   FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.start_workout_from_routine(UUID, JSONB, JSONB)
   TO authenticated;
+
+-- The RPC remains a security-invoker function, so authenticated callers need
+-- the narrow table privileges used by the conversion. Existing RLS policies
+-- continue to enforce workout ownership for every inserted and returned row.
+GRANT SELECT, INSERT ON TABLE
+  public.workouts,
+  public.workout_exercises,
+  public.workout_sets
+  TO authenticated;
+GRANT SELECT ON TABLE public.exercises TO authenticated;
