@@ -139,6 +139,69 @@ updates:
     expect(incompatiblePatterns).toEqual([]);
   });
 
+  it("keeps controlled production deployment gated and dormant during rollout", () => {
+    const workflow = readFileSync(
+      resolve(workflowDirectory, "vercel-production-deploy.yml"),
+      "utf8",
+    ).replaceAll("\r\n", "\n");
+
+    expect(workflow).toContain("workflows: [Database Migration]");
+    expect(workflow).toContain("github.event.workflow_run.event == 'workflow_run'");
+    expect(workflow).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(workflow).toContain("vars.VERCEL_CI_DEPLOY_ENABLED == 'true'");
+    expect(workflow).toContain("checks: read");
+    expect(workflow).toContain("secrets.VERCEL_TOKEN");
+    expect(workflow).toContain("vars.VERCEL_ORG_ID");
+    expect(workflow).toContain("vars.VERCEL_PROJECT_ID");
+    expect(workflow).toContain("Deploy through Vercel remote build");
+    expect(workflow).not.toContain("--prebuilt");
+    expect(workflow).toContain("Could not classify deployment paths; deploying after prerequisites");
+    expect(workflow).toContain("node scripts/ci/production-smoke.mjs --probe");
+
+    const migrationWorkflow = readFileSync(
+      resolve(workflowDirectory, "db-migrate.yml"),
+      "utf8",
+    ).replaceAll("\r\n", "\n");
+    expect(migrationWorkflow).toContain("workflows: [CI]");
+    expect(migrationWorkflow).toContain("github.event.workflow_run.event == 'push'");
+    expect(migrationWorkflow).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(migrationWorkflow).toContain("No migration changes; completing the prerequisite");
+
+    const ciWorkflow = readFileSync(
+      resolve(workflowDirectory, "ci.yml"),
+      "utf8",
+    ).replaceAll("\r\n", "\n");
+    expect(ciWorkflow).toContain("name: deployment-policy");
+    expect(ciWorkflow).toContain(
+      "node --test scripts/ci/production-deployment-policy.policy.mjs",
+    );
+
+    const legacySmokeWorkflow = readFileSync(
+      resolve(workflowDirectory, "production-smoke.yml"),
+      "utf8",
+    );
+    expect(legacySmokeWorkflow).toContain(
+      "if: vars.VERCEL_CI_DEPLOY_ENABLED != 'true'",
+    );
+  });
+
+  it("creates Vercel previews only through explicit manual dispatch", () => {
+    const workflow = readFileSync(
+      resolve(workflowDirectory, "vercel-production-deploy.yml"),
+      "utf8",
+    ).replaceAll("\r\n", "\n");
+
+    expect(workflow).toMatch(/on:\n  workflow_run:/);
+    expect(workflow).toMatch(/\n  workflow_dispatch:/);
+    expect(workflow).not.toMatch(/\n  (?:push|pull_request):/);
+    expect(workflow).toContain("- preview");
+    expect(workflow).toContain("- production");
+    expect(workflow).toContain("secrets.VERCEL_TOKEN");
+    expect(workflow).toContain("vars.VERCEL_ORG_ID");
+    expect(workflow).toContain("vars.VERCEL_PROJECT_ID");
+    expect(workflow).toContain("Force explicit manual deployment");
+  });
+
   it("uses the shared dependency setup action in every JavaScript job", () => {
     const sharedSetupPattern =
       /uses:\s*\.\/\.github\/actions\/setup-node-pnpm(?:\s|$)/g;
@@ -158,12 +221,14 @@ updates:
     expect({ sharedConsumers, directSetup }).toEqual({
       sharedConsumers: [
         "workflows/ci.yml",
+        "workflows/ci.yml",
         "workflows/cross-browser-smoke.yml",
         "workflows/e2e.yml",
         "workflows/mutation-testing.yml",
         "workflows/mutation-testing.yml",
         "workflows/performance.yml",
         "workflows/update-snapshots.yml",
+        "workflows/vercel-production-deploy.yml",
       ],
       directSetup: [],
     });

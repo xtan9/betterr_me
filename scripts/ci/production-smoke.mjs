@@ -84,12 +84,15 @@ export async function runProductionSmoke(options) {
 }
 
 async function main() {
-  const result = await runProductionSmoke({
+  const options = {
     repository: process.env.GITHUB_REPOSITORY,
     sha: process.env.GITHUB_SHA,
     token: process.env.GH_TOKEN,
     appUrl: process.env.APP_URL,
-  });
+  };
+  const result = process.argv.includes("--probe")
+    ? { action: "checked", checks: await smokeProduction(options) }
+    : await runProductionSmoke(options);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

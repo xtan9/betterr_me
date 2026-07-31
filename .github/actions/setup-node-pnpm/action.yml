@@ -1,6 +1,12 @@
 name: Setup Node.js, pnpm, and dependencies
 description: Install the repository's pinned pnpm and Node.js toolchain
 
+inputs:
+  install-dependencies:
+    description: Install the frozen dependency graph after setting up Node.js and pnpm
+    required: false
+    default: "true"
+
 runs:
   using: composite
   steps:
@@ -11,8 +17,10 @@ runs:
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
       with:
         node-version: 24
-        cache: "pnpm"
+        package-manager-cache: ${{ inputs.install-dependencies }}
+        cache: ${{ inputs.install-dependencies == 'true' && 'pnpm' || '' }}
 
     - name: Install dependencies
+      if: inputs.install-dependencies == 'true'
       shell: bash
       run: pnpm install --frozen-lockfile
