@@ -2,9 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   reconcileScheduledWorkflowIssue,
+  scheduledFailureDiagnostic,
   scheduledFailureIssueBody,
   scheduledFailureIssueTitle,
 } from "../../scripts/ci/reconcile-scheduled-workflow-issue.mjs";
+import {
+  mutationDiagnostic,
+} from "../../scripts/ci/scheduled-workflow-diagnostic.mjs";
 
 function scheduledRun(overrides = {}) {
   return {
@@ -35,6 +39,44 @@ function mockApi(openIssues: Array<{
 }
 
 describe("scheduled workflow failure issues", () => {
+  it("preserves an explicit command timeout when GitHub marks the step failed", () => {
+    expect(mutationDiagnostic({
+      reportedConclusion: "timed_out",
+      stepOutcome: "failure",
+      runCancelled: "false",
+    })).toEqual({
+      conclusion: "timed_out",
+      category: "timeout",
+      detail: "The mutation command exceeded its declared 50-minute limit.",
+    });
+  });
+
+  it("distinguishes cancellation and missing runner outcomes", () => {
+    expect(mutationDiagnostic({
+      reportedConclusion: "timed_out",
+      stepOutcome: "failure",
+      runCancelled: "true",
+    }).category).toBe("cancellation");
+    expect(mutationDiagnostic({
+      reportedConclusion: "",
+      stepOutcome: "skipped",
+      runCancelled: "false",
+    }).category).toBe("infrastructure interruption");
+  });
+
+  it.each([
+    ["failure", "failure"],
+    ["timed_out", "timeout"],
+    ["cancelled", "cancellation"],
+    ["stale", "infrastructure interruption"],
+    ["startup_failure", "infrastructure interruption"],
+  ])("classifies %s as %s", (conclusion, category) => {
+    expect(scheduledFailureDiagnostic(conclusion)).toBe(category);
+    expect(scheduledFailureIssueBody(scheduledRun({ conclusion }))).toContain(
+      `Diagnostic category: ${category}`,
+    );
+  });
+
   it("creates a triaged bug issue for the first scheduled failure", async () => {
     const api = mockApi();
     const run = scheduledRun();

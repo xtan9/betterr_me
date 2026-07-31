@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
+import { scheduledFailureDiagnostic } from "./scheduled-workflow-diagnostic.mjs";
+
+export { scheduledFailureDiagnostic } from "./scheduled-workflow-diagnostic.mjs";
+
 const FAILURE_CONCLUSIONS = new Set([
   "action_required",
   "cancelled",
@@ -15,7 +19,10 @@ export function scheduledFailureIssueTitle(workflowName) {
 }
 
 function runLine(run) {
-  return `Run [#${run.run_number}](${run.html_url}) finished with \`${run.conclusion}\` at ${run.updated_at}.`;
+  return [
+    `Run [#${run.run_number}](${run.html_url}) finished with \`${run.conclusion}\` at ${run.updated_at}.`,
+    `Diagnostic category: ${scheduledFailureDiagnostic(run.conclusion)}.`,
+  ].join(" ");
 }
 
 export function scheduledFailureIssueBody(run) {

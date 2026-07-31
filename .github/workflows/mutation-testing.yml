@@ -23,6 +23,12 @@ on:
     - cron: "0 3 * * 1"
   workflow_dispatch: {}
 
+concurrency:
+  # Mutation runs are advisory and infrequent. Preserve an in-flight baseline
+  # instead of replacing it with a newer run that has no diagnostic history.
+  group: mutation-testing-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # Per-PR: only mutate files changed vs origin/main. Typical runtime 2-5 min.
   mutation-changed:
@@ -69,7 +75,35 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Run full Stryker
-        run: pnpm mutation-test
+        id: full-mutation
+        # The command reports its own 50-minute timeout. The wider step and job
+        # limits reserve time for process cleanup, diagnostics, and artifacts.
+        timeout-minutes: 52
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=30s 50m pnpm mutation-test
+          mutation_status=$?
+          set -e
+
+          if [[ "$mutation_status" -eq 0 ]]; then
+            conclusion="success"
+          elif [[ "$mutation_status" -eq 124 || "$mutation_status" -eq 137 ]]; then
+            conclusion="timed_out"
+          else
+            conclusion="failure"
+          fi
+
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          exit "$mutation_status"
+
+      - name: Publish full mutation diagnostic
+        if: always()
+        env:
+          MUTATION_CONCLUSION: ${{ steps.full-mutation.outputs.conclusion }}
+          MUTATION_OUTCOME: ${{ steps.full-mutation.outcome }}
+          RUN_CANCELLED: ${{ cancelled() }}
+        run: node scripts/ci/scheduled-workflow-diagnostic.mjs
 
       - name: Upload mutation report
         if: always()
