@@ -3,8 +3,17 @@ import { ConversationsDB } from "@/lib/db";
 import { AVAILABLE_MODELS } from "@/lib/ai/models";
 import { initialConversationTitle } from "@/lib/chat/conversation-title";
 import { log } from "@/lib/logger";
-import { createClient } from "@/lib/supabase/server";
+import {
+  authenticateRequest,
+  cookieRouteErrorMessage,
+} from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { saveCompletedTurnSchema } from "@/lib/validations/chat";
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * POST /api/conversations/turns
@@ -12,17 +21,14 @@ import { saveCompletedTurnSchema } from "@/lib/validations/chat";
  */
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
       return NextResponse.json(
-        { outcome: "failed", error: "Unauthorized" },
-        { status: 401 },
+        { outcome: "failed", error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
       );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const parsed = saveCompletedTurnSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -43,7 +49,7 @@ export async function POST(request: Request) {
     }
 
     const result = await new ConversationsDB(supabase).createInitialTurn({
-      userId: user.id,
+      userId,
       turnId: parsed.data.turnId,
       userContent: parsed.data.userMessage,
       assistantContent: parsed.data.assistantMessage,

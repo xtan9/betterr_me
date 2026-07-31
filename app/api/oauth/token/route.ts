@@ -2,16 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
 import { log } from "@/lib/logger";
-import {
-  generateRefreshToken,
-  hashToken,
-  REFRESH_TOKEN_EXPIRY_DAYS,
-} from "@/lib/mcp/refresh-token";
-import { issueAccessToken } from "@/lib/oauth/access-token";
-import { createAuthorizationCodeExchanger } from "@/lib/oauth/authorization-code";
-import { createRefreshTokenRotator } from "@/lib/oauth/refresh-token";
-import { createSupabaseAuthorizationCodeStore } from "@/lib/oauth/supabase-authorization-code-store";
-import { createSupabaseRefreshTokenStore } from "@/lib/oauth/supabase-refresh-token-store";
+import { createOAuthCredentialLifecycle } from "@/lib/oauth/credential-lifecycle";
 import { oauthRefreshGrantSchema } from "@/lib/validations/oauth";
 
 
@@ -22,23 +13,6 @@ import { oauthRefreshGrantSchema } from "@/lib/validations/oauth";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ServiceClient = any;
-
-async function cleanupExpiredTokens(client: ServiceClient) {
-  try {
-    const { error } = await client.rpc("cleanup_oauth_refresh_token_families", {
-      expired_before: new Date(
-        Date.now() - 24 * 60 * 60 * 1000,
-      ).toISOString(),
-      revoked_before: new Date(
-        Date.now() - 7 * 24 * 60 * 60 * 1000,
-      ).toISOString(),
-    });
-    if (!error) return;
-    log.warn("[oauth] Refresh token cleanup failed", { error: String(error) });
-  } catch (error) {
-    log.warn("[oauth] Refresh token cleanup failed", { error: String(error) });
-  }
-}
 
 function oauthError(
   error: string,
@@ -95,11 +69,9 @@ async function handleRefreshToken(
   }
   const { refresh_token, client_id } = parsed.data;
 
-  const rotator = createRefreshTokenRotator({
-    store: createSupabaseRefreshTokenStore(serviceClient),
-    issueAccessToken,
-  });
-  const result = await rotator.rotate({
+  const result = await createOAuthCredentialLifecycle(
+    serviceClient,
+  ).rotateRefreshToken({
     refreshToken: refresh_token,
     clientId: client_id,
   });
@@ -113,8 +85,6 @@ async function handleRefreshToken(
     } satisfies Record<typeof result.error, string>;
     return oauthError("invalid_grant", descriptions[result.error], 401);
   }
-
-  await cleanupExpiredTokens(serviceClient);
 
   return NextResponse.json({
     access_token: result.credentials.accessToken,
@@ -174,37 +144,9 @@ export async function POST(request: NextRequest) {
       return oauthError("invalid_request", "client_id is required");
     }
 
-    const exchanger = createAuthorizationCodeExchanger({
-      store: createSupabaseAuthorizationCodeStore(serviceClient),
-      issueCredentials: async ({ clientId, userId, scopes }) => {
-        const accessToken = await issueAccessToken({
-          userId,
-          clientId,
-          scopes,
-        });
-        const rawRefreshToken = generateRefreshToken();
-        const refreshTokenHash = hashToken(rawRefreshToken);
-        const refreshExpiresAt = new Date(
-          Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
-        ).toISOString();
-        const { error } = await serviceClient
-          .from("oauth_refresh_tokens")
-          .insert({
-            token_hash: refreshTokenHash,
-            client_id: clientId,
-            user_id: userId,
-            scopes,
-            expires_at: refreshExpiresAt,
-          });
-        if (error) throw new Error("Failed to issue refresh token", { cause: error });
-        await cleanupExpiredTokens(serviceClient);
-        return {
-          ...accessToken,
-          refreshToken: rawRefreshToken,
-        };
-      },
-    });
-    const result = await exchanger.exchange({
+    const result = await createOAuthCredentialLifecycle(
+      serviceClient,
+    ).exchangeAuthorizationCode({
       code,
       clientId: client_id,
       redirectUri: redirect_uri,

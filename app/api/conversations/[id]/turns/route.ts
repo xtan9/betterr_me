@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
 import { ChatMessagesDB, ConversationsDB } from "@/lib/db";
 import { log } from "@/lib/logger";
-import { createClient } from "@/lib/supabase/server";
+import {
+  authenticateRequest,
+  cookieRouteErrorMessage,
+} from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { saveCompletedTurnSchema } from "@/lib/validations/chat";
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 export async function POST(
   request: Request,
@@ -10,17 +19,14 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
       return NextResponse.json(
-        { outcome: "failed", error: "Unauthorized" },
-        { status: 401 },
+        { outcome: "failed", error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
       );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const parsed = saveCompletedTurnSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -34,7 +40,7 @@ export async function POST(
     }
 
     const conversation = await new ConversationsDB(supabase).getConversation(id);
-    if (!conversation || conversation.user_id !== user.id) {
+    if (!conversation || conversation.user_id !== userId) {
       return NextResponse.json(
         { outcome: "failed", error: "Conversation not found" },
         { status: 404 },

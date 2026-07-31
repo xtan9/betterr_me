@@ -3,9 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { log } from "@/lib/logger";
 import { ACCESS_TOKEN_POLICY } from "@/lib/oauth/access-token";
-import { createAuthorizationCodeIssuer } from "@/lib/oauth/authorization-code";
-import { createSupabaseAuthorizationCodeStore } from "@/lib/oauth/supabase-authorization-code-store";
-import { createClient } from "@/lib/supabase/server";
+import { createOAuthCredentialLifecycle } from "@/lib/oauth/credential-lifecycle";
+import { authenticateRequest } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
+
+const AUTHORIZE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,12 +74,8 @@ export async function GET(request: NextRequest) {
 
     // --- Check session ---
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const auth = await authenticateRequest(request, AUTHORIZE_REQUEST_POLICY);
+    if (!auth.ok) {
       // Redirect to login with returnTo so user comes back after auth
       const currentUrl = request.nextUrl.toString();
       const loginUrl = new URL("/auth/login", request.nextUrl.origin);
@@ -89,22 +90,12 @@ export async function GET(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
 
-    // Clean up expired codes (non-blocking, log failures)
-    const { error: cleanupError } = await serviceClient
-      .from("oauth_codes")
-      .delete()
-      .lt("expires_at", new Date().toISOString());
-    if (cleanupError) {
-      log.error("Failed to clean up expired OAuth codes", cleanupError);
-    }
-
-    const issuer = createAuthorizationCodeIssuer({
-      store: createSupabaseAuthorizationCodeStore(serviceClient),
-    });
-    const { code } = await issuer.issue({
+    const { code } = await createOAuthCredentialLifecycle(
+      serviceClient,
+    ).issueAuthorizationCode({
       clientId,
       redirectUri,
-      userId: user.id,
+      userId: auth.principal.userId,
       scopes: [...ACCESS_TOKEN_POLICY.defaultScopes],
       codeChallenge,
       codeChallengeMethod: "S256",

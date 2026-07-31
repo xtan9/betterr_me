@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import {
+  authenticateRequest,
+  cookieRouteErrorMessage,
+} from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { ConversationsDB } from "@/lib/db";
 import { AVAILABLE_MODELS } from "@/lib/ai/models";
 import { log } from "@/lib/logger";
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * PATCH /api/conversations/[id]
@@ -14,14 +23,14 @@ export async function PATCH(
 ) {
   const { id } = await params;
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     let body;
     try {
@@ -64,7 +73,7 @@ export async function PATCH(
     }
 
     const conversationsDB = new ConversationsDB(supabase);
-    await conversationsDB.updateConversation(id, user.id, updates);
+    await conversationsDB.updateConversation(id, userId, updates);
     return NextResponse.json({ success: true });
   } catch (error) {
     log.error("[chat] Failed to update conversation", error, { id });
@@ -80,22 +89,22 @@ export async function PATCH(
  * Delete a conversation owned by the authenticated user
  */
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const conversationsDB = new ConversationsDB(supabase);
-    await conversationsDB.deleteConversation(id, user.id);
+    await conversationsDB.deleteConversation(id, userId);
     return new Response(null, { status: 204 });
   } catch (error) {
     log.error("DELETE /api/conversations/[id] error", error);

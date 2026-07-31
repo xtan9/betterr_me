@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { ProfilesDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { preferencesSchema } from '@/lib/validations/preferences';
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * PATCH /api/profile/preferences
@@ -11,14 +17,14 @@ import { preferencesSchema } from '@/lib/validations/preferences';
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 
@@ -27,7 +33,7 @@ export async function PATCH(request: NextRequest) {
     if (!validation.success) return validation.response;
 
     const profilesDB = new ProfilesDB(supabase);
-    const profile = await profilesDB.updatePreferences(user.id, validation.data);
+    const profile = await profilesDB.updatePreferences(userId, validation.data);
 
     return NextResponse.json({ profile });
   } catch (error: unknown) {

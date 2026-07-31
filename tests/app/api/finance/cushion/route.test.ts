@@ -2,14 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { createDefaultRunwayAnswers, simulateHouseholdRunway, toFinanceCushionView } from "@/lib/finance/cushion";
 import { GET, PUT } from "@/app/api/finance/cushion/route";
-import { createClient } from "@/lib/supabase/server";
 import { appendRunwaySnapshot, getFinanceCushion, getRunwaySnapshots, saveHouseholdRunwayPlan } from "@/lib/finance/repository";
 
-vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+const { mockAuthenticateRequest } = vi.hoisted(() => ({
+  mockAuthenticateRequest: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/authenticated-request", () => ({
+  authenticateRequest: mockAuthenticateRequest,
+  cookieRouteErrorMessage: (error: { error: string; status: number }) =>
+    error.status === 401 ? "Unauthorized" : error.error,
+}));
+
 vi.mock("@/lib/finance/repository", () => ({ appendRunwaySnapshot: vi.fn(), getFinanceCushion: vi.fn(), getRunwaySnapshots: vi.fn(), saveHouseholdRunwayPlan: vi.fn() }));
 
 const user = { id: "user-a" };
-const mockSupabase = { auth: { getUser: vi.fn() } };
+const mockSupabase = {};
 
 function validAnswers() {
   const answers = createDefaultRunwayAnswers(new Date("2026-07-26T00:00:00.000Z"));
@@ -28,20 +36,27 @@ const savedCushion = toFinanceCushionView({ id: "cushion-a", user_id: user.id, l
 describe("/api/finance/cushion", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user } });
-    vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: true,
+      principal: { type: "user", userId: user.id, credential: "cookie" },
+      client: mockSupabase,
+    });
     vi.mocked(getRunwaySnapshots).mockResolvedValue([]);
   });
 
   it("requires authentication", async () => {
-    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null } });
-    expect((await GET()).status).toBe(401);
+    mockAuthenticateRequest.mockResolvedValueOnce({
+      ok: false,
+      error: "Unauthorized",
+      status: 401,
+    });
+    expect((await GET(new NextRequest("http://localhost:3000/api/finance/cushion"))).status).toBe(401);
   });
 
   it("reads the current plan and history for its owner", async () => {
     vi.mocked(getFinanceCushion).mockResolvedValue(savedCushion);
     vi.mocked(getRunwaySnapshots).mockResolvedValue([{ id: "snapshot-a", trigger: "imported", scenario: "current", months_covered: 5, sustainable: false, model_version: "4.0.0", created_at: "2026-07-26T00:00:00.000Z" }]);
-    const response = await GET();
+    const response = await GET(new NextRequest("http://localhost:3000/api/finance/cushion"));
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ snapshots: [{ id: "snapshot-a" }] });
     expect(getFinanceCushion).toHaveBeenCalledWith(mockSupabase, user.id);

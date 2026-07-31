@@ -2,13 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PATCH } from '@/app/api/profile/preferences/route';
 import { NextRequest } from 'next/server';
 
-// Mock dependencies
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })),
-    },
-  })),
+const { mockAuthenticateRequest } = vi.hoisted(() => ({
+  mockAuthenticateRequest: vi.fn(),
+}));
+
+vi.mock('@/lib/auth/authenticated-request', () => ({
+  authenticateRequest: mockAuthenticateRequest,
+  cookieRouteErrorMessage: (error: { error: string; status: number }) =>
+    error.status === 401 ? 'Unauthorized' : error.error,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -25,14 +26,33 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-import { createClient } from '@/lib/supabase/server';
-
 describe('PATCH /api/profile/preferences', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: true,
+      principal: { type: 'user', userId: 'user-123', credential: 'cookie' },
+      client: {},
+    });
+  });
+
+  it('declares cookie write policy and consumes the shared request context', async () => {
+    vi.mocked(mockProfilesDB.updatePreferences).mockResolvedValue({
+      id: 'user-123',
+      preferences: { theme: 'dark' },
     } as any);
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ theme: 'dark' }),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response.status).toBe(200);
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(request, {
+      allowedCredentials: ['cookie'],
+      requiredPermission: 'write',
+    });
   });
 
   it('should update preferences', async () => {
@@ -158,9 +178,11 @@ describe('PATCH /api/profile/preferences', () => {
   });
 
   it('should return 401 when not authenticated', async () => {
-    vi.mocked(createClient).mockReturnValue({
-      auth: { getUser: vi.fn(() => ({ data: { user: null } })) },
-    } as any);
+    mockAuthenticateRequest.mockResolvedValueOnce({
+      ok: false,
+      error: 'Unauthorized',
+      status: 401,
+    });
 
     const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
       method: 'PATCH',
@@ -172,6 +194,25 @@ describe('PATCH /api/profile/preferences', () => {
 
     expect(response.status).toBe(401);
     expect(data.error).toBe('Unauthorized');
+  });
+
+  it('preserves the unauthorized contract for an invalid cookie', async () => {
+    mockAuthenticateRequest.mockResolvedValueOnce({
+      ok: false,
+      outcome: 'invalid',
+      error: 'Invalid credentials',
+      status: 401,
+    });
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({ theme: 'dark' }),
+    });
+
+    const response = await PATCH(request);
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' });
+    expect(mockProfilesDB.updatePreferences).not.toHaveBeenCalled();
   });
 
   it('should return 404 when profile not found', async () => {

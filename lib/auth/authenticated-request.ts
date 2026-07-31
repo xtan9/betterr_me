@@ -12,6 +12,7 @@ import {
   resolveAuthenticatedRequestContext,
   sanitizedAuthFailureContext,
   type AuthenticatedRequestAdapters,
+  type AuthenticatedRequestError,
   type AuthenticatedRequestPolicy,
   type CredentialOutcome,
 } from "@/lib/auth/request-context";
@@ -195,6 +196,11 @@ export const authenticatedRequestAdapters: AuthenticatedRequestAdapters = {
   adminSecret: authenticateAdminSecretCredential,
   mcp: authenticateMcpCredential,
 };
+
+/** Preserve the public error contract of cookie-only browser routes. */
+export function cookieRouteErrorMessage(error: AuthenticatedRequestError) {
+  return error.status === 401 ? "Unauthorized" : error.error;
+}
 
 export function authenticateRequest<Policy extends AuthenticatedRequestPolicy>(
   request: Request,

@@ -48,7 +48,7 @@ describe('GET /api/conversations', () => {
   it('returns 401 for unauthenticated requests', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/conversations"));
     expect(response.status).toBe(401);
   });
 
@@ -58,7 +58,7 @@ describe('GET /api/conversations', () => {
     ];
     mockGetUserConversations.mockResolvedValue(mockConversations);
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/conversations"));
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -69,7 +69,7 @@ describe('GET /api/conversations', () => {
   it('returns 500 on database error', async () => {
     mockGetUserConversations.mockRejectedValue(new Error('DB error'));
 
-    const response = await GET();
+    const response = await GET(new Request("http://localhost/api/conversations"));
     expect(response.status).toBe(500);
   });
 });
