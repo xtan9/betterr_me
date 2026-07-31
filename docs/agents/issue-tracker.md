@@ -63,7 +63,10 @@ The map is a single GitHub issue with child issues as tickets.
 - **Map:** An issue labeled `wayfinder:map`, containing Notes, Decisions-so-far, and Fog.
 - **Child ticket:** A GitHub sub-issue linked to the map. Where sub-issues are unavailable, link it through the map's task list and put `Part of #<map>` at the top of the child.
 - **Child labels:** `wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling`, or `wayfinder:task`.
-- **Blocking:** Prefer GitHub's native issue dependencies. Where unavailable, put `Blocked by: #<n>, #<n>` at the top of the child.
+- **Blocking:** Prefer GitHub's native issue dependencies. Where unavailable, add a
+  `## Blocked by` section at the top of the child with one bare issue reference per
+  bullet (for example, `- #123`). Do not wrap references in custom Markdown links;
+  bare references preserve GitHub's enriched rendering, including issue status.
 - **Frontier:** The first open, unassigned child in map order with no open blockers.
 - **Claim:** Assign the selected issue to the current user as the session's first write.
 - **Resolve:** Comment with the answer, close the child, and append a context pointer to the map's Decisions-so-far.

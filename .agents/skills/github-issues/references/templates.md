@@ -70,7 +70,9 @@ Copy and customize these templates for issue bodies.
 - [ ] [Subtask 3]
 
 ## Dependencies
-[Any blockers or related work]
+[Use one bare GitHub issue reference per bullet so GitHub shows issue status, or write "None"]
+
+- #<issue-number>
 
 ## Notes
 [Additional context or considerations]
