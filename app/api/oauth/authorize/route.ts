@@ -2,6 +2,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
 import { log } from "@/lib/logger";
+import { ACCESS_TOKEN_POLICY } from "@/lib/oauth/access-token";
 import { createAuthorizationCodeIssuer } from "@/lib/oauth/authorization-code";
 import { createSupabaseAuthorizationCodeStore } from "@/lib/oauth/supabase-authorization-code-store";
 import { createClient } from "@/lib/supabase/server";
@@ -11,8 +12,6 @@ import { createClient } from "@/lib/supabase/server";
 // ---------------------------------------------------------------------------
 
 const LOCALHOST_RE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/;
-const DEFAULT_OAUTH_SCOPES = ["read", "write"];
-
 function isValidRedirectUri(uri: string): boolean {
   return LOCALHOST_RE.test(uri);
 }
@@ -106,7 +105,7 @@ export async function GET(request: NextRequest) {
       clientId,
       redirectUri,
       userId: user.id,
-      scopes: [...DEFAULT_OAUTH_SCOPES],
+      scopes: [...ACCESS_TOKEN_POLICY.defaultScopes],
       codeChallenge,
       codeChallengeMethod: "S256",
     });

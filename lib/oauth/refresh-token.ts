@@ -3,8 +3,8 @@ import {
   hashToken,
   REFRESH_TOKEN_EXPIRY_DAYS,
 } from "@/lib/mcp/refresh-token";
+import type { AccessTokenCredential } from "@/lib/oauth/access-token";
 
-const ACCESS_TOKEN_EXPIRY_SECONDS = 3600;
 const REFRESH_TOKEN_EXPIRY_MS =
   REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 const UNUSED_REUSE_REPLACEMENT_HASH = "0".repeat(64);
@@ -57,7 +57,7 @@ export interface RefreshTokenRotatorDependencies {
   store: RefreshTokenRotationStore;
   now?: () => Date;
   generateToken?: () => string;
-  issueAccessToken(context: RefreshTokenContext): Promise<string>;
+  issueAccessToken(context: RefreshTokenContext): Promise<AccessTokenCredential>;
 }
 
 export interface RotateRefreshToken {
@@ -128,11 +128,8 @@ export function createRefreshTokenRotator({
       return {
         ok: true,
         credentials: {
-          accessToken,
-          tokenType: "bearer",
-          expiresIn: ACCESS_TOKEN_EXPIRY_SECONDS,
+          ...accessToken,
           refreshToken: nextRefreshToken,
-          scope: result.context.scopes.join(" "),
         },
       };
     },

@@ -1,14 +1,9 @@
-import crypto from "node:crypto";
-
 import { createClient } from "@supabase/supabase-js";
 
 import { log } from "@/lib/logger";
+import { verifyAccessToken } from "@/lib/oauth/access-token";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Mirrors @modelcontextprotocol/sdk AuthInfo so we don't need the SDK installed yet. */
+/** Mirrors @modelcontextprotocol/sdk AuthInfo. */
 export interface McpAuthInfo {
   token: string;
   scopes: string[];
@@ -16,118 +11,18 @@ export interface McpAuthInfo {
   extra: Record<string, unknown>;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function base64url(data: Buffer | string): string {
-  const buf = typeof data === "string" ? Buffer.from(data) : data;
-  return buf.toString("base64url");
-}
-
-/** Lazy singleton – only created when first needed. */
-let _serviceClient: ReturnType<typeof createClient> | null = null;
+let serviceClient: ReturnType<typeof createClient> | null = null;
 
 function getServiceClient() {
-  if (!_serviceClient) {
-    _serviceClient = createClient(
+  if (!serviceClient) {
+    serviceClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
     );
   }
-  return _serviceClient;
+  return serviceClient;
 }
 
-type McpTokenClaims = {
-  sub: string;
-  aud: "mcp";
-  exp?: number;
-  iat?: number;
-  client_id?: string;
-  scope?: string;
-};
-
-function isMcpTokenClaims(payload: unknown): payload is McpTokenClaims {
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    Array.isArray(payload)
-  ) {
-    return false;
-  }
-
-  const claims = payload as Record<string, unknown>;
-  return (
-    typeof claims.sub === "string" &&
-    claims.sub.length > 0 &&
-    claims.aud === "mcp" &&
-    (claims.exp === undefined ||
-      (typeof claims.exp === "number" && Number.isFinite(claims.exp))) &&
-    (claims.iat === undefined ||
-      (typeof claims.iat === "number" && Number.isFinite(claims.iat))) &&
-    (claims.client_id === undefined || typeof claims.client_id === "string") &&
-    (claims.scope === undefined || typeof claims.scope === "string")
-  );
-}
-
-// ---------------------------------------------------------------------------
-// signMcpToken
-// ---------------------------------------------------------------------------
-
-/**
- * Create an HS256 JWT access token for the MCP OAuth flow.
- *
- * - `sub`  = userId
- * - `aud`  = "mcp"
- * - `exp`  = iat + 3600 (1 hour)
- *
- * Signed with `API_KEY_HMAC_SECRET` using Node.js native crypto.
- */
-export async function signMcpToken(
-  userId: string,
-  clientId = userId,
-  scopes = ["read", "write"],
-): Promise<string> {
-  const secret = process.env.API_KEY_HMAC_SECRET;
-  if (!secret) {
-    throw new Error("API_KEY_HMAC_SECRET not configured");
-  }
-
-  const header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const now = Math.floor(Date.now() / 1000);
-  const payload = base64url(
-    JSON.stringify({
-      sub: userId,
-      client_id: clientId,
-      scope: scopes.join(" "),
-      aud: "mcp",
-      iat: now,
-      exp: now + 3600,
-    }),
-  );
-
-  const data = `${header}.${payload}`;
-  const signature = base64url(
-    crypto.createHmac("sha256", secret).update(data).digest(),
-  );
-
-  return `${data}.${signature}`;
-}
-
-// ---------------------------------------------------------------------------
-// verifyMcpToken
-// ---------------------------------------------------------------------------
-
-/**
- * Verify an MCP JWT token and return `{ userId }` or `null` on failure.
- *
- * Checks performed:
- * 1. Structural validity (3 parts)
- * 2. HMAC-SHA-256 signature
- * 3. `aud === "mcp"`
- * 4. If `exp` is present, token not expired (backwards-compat with legacy tokens)
- * 5. User exists in the `profiles` table (via service-role client)
- */
 export type McpTokenCredentialOutcome =
   | {
       outcome: "authenticated";
@@ -138,76 +33,20 @@ export type McpTokenCredentialOutcome =
   | { outcome: "invalid" }
   | { outcome: "misconfigured" };
 
+/** Apply the shared access-token policy and ensure its subject still exists. */
 export async function verifyMcpTokenCredential(
   bearerToken: string,
 ): Promise<McpTokenCredentialOutcome> {
-  const secret = process.env.API_KEY_HMAC_SECRET;
-  if (!secret) {
+  const verified = await verifyAccessToken(bearerToken);
+  if (verified.outcome === "misconfigured") {
     log.error("MCP token verification failed: API_KEY_HMAC_SECRET not configured");
-    return { outcome: "misconfigured" };
+    return verified;
+  }
+  if (verified.outcome === "invalid") {
+    log.warn("[mcp] Token rejected by access-token policy");
+    return verified;
   }
 
-  // 1. Split & decode
-  const parts = bearerToken.split(".");
-  if (parts.length !== 3) {
-    log.warn("[mcp] Token rejected: malformed structure");
-    return { outcome: "invalid" };
-  }
-
-  const [headerB64, payloadB64, signatureB64] = parts;
-
-  // 2. Verify signature
-  let expectedSig: string;
-  try {
-    const data = `${headerB64}.${payloadB64}`;
-    expectedSig = base64url(
-      crypto.createHmac("sha256", secret).update(data).digest(),
-    );
-  } catch (err) {
-    log.error("MCP token verification failed: signature computation error", err);
-    return { outcome: "misconfigured" };
-  }
-
-  const sigBuf = Buffer.from(signatureB64);
-  const expectedBuf = Buffer.from(expectedSig);
-  if (
-    sigBuf.length !== expectedBuf.length ||
-    !crypto.timingSafeEqual(sigBuf, expectedBuf)
-  ) {
-    log.warn("[mcp] Token rejected: invalid signature");
-    return { outcome: "invalid" };
-  }
-
-  // Decode payload
-  let payload: unknown;
-  try {
-    payload = JSON.parse(
-      Buffer.from(payloadB64, "base64url").toString(),
-    );
-  } catch {
-    log.warn("[mcp] Token rejected: invalid payload");
-    return { outcome: "invalid" };
-  }
-
-  if (!isMcpTokenClaims(payload)) {
-    log.warn("[mcp] Token rejected: malformed claims");
-    return { outcome: "invalid" };
-  }
-
-  // 3. Expiry check (optional — legacy tokens without exp are accepted)
-  const CLOCK_SKEW_SECONDS = 30;
-  if (payload.exp !== undefined) {
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp + CLOCK_SKEW_SECONDS <= now) {
-      log.warn("[mcp] Token rejected: expired", { exp: payload.exp });
-      return { outcome: "invalid" };
-    }
-  }
-
-  // 4. Subject (userId) must exist
-  const userId = payload.sub;
-
-  // 5. Verify user exists in profiles (separate try/catch for Supabase errors)
   try {
     if (
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -216,11 +55,10 @@ export async function verifyMcpTokenCredential(
       log.error("[mcp] Token verification configuration is incomplete");
       return { outcome: "misconfigured" };
     }
-    const supabase = getServiceClient();
-    const { data: profile, error } = await supabase
+    const { data: profile, error } = await getServiceClient()
       .from("profiles")
       .select("id")
-      .eq("id", userId)
+      .eq("id", verified.userId)
       .single();
 
     if (error) {
@@ -230,16 +68,16 @@ export async function verifyMcpTokenCredential(
         : { outcome: "misconfigured" };
     }
     if (!profile) return { outcome: "invalid" };
-  } catch (err) {
-    log.error("MCP token verification: Supabase connection error", err);
+  } catch (error) {
+    log.error("MCP token verification: Supabase connection error", error);
     return { outcome: "misconfigured" };
   }
 
   return {
     outcome: "authenticated",
-    userId,
-    clientId: payload.client_id ?? userId,
-    scopes: payload.scope?.split(/\s+/).filter(Boolean) ?? ["read", "write"],
+    userId: verified.userId,
+    clientId: verified.clientId,
+    scopes: verified.scopes,
   };
 }
 
@@ -255,16 +93,8 @@ export async function verifyMcpToken(
   };
 }
 
-// ---------------------------------------------------------------------------
-// verifyMcpAuth  –  adapter for withMcpAuth integration
-// ---------------------------------------------------------------------------
-
-/**
- * Verify the bearer token from an MCP request and return an AuthInfo-shaped
- * object, or `undefined` if authentication fails.
- */
 export async function verifyMcpAuth(
-  _req: Request,
+  _request: Request,
   bearerToken?: string,
 ): Promise<McpAuthInfo | undefined> {
   if (!bearerToken) {
