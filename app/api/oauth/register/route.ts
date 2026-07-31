@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}));
+    const body = await request.json();
 
     const clientId = crypto.randomUUID();
 
