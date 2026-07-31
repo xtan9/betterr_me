@@ -5,10 +5,6 @@ begin;
 
 do $block$
 begin
-  if current_setting('application_name') = 'betterr-sql-fixture-failure-probe' then
-    raise exception 'intentional SQL fixture runner failure probe';
-  end if;
-
   if has_schema_privilege(current_user, 'auth', 'usage') then
     raise exception 'Ralph SQL runner unexpectedly has auth schema usage';
   end if;
