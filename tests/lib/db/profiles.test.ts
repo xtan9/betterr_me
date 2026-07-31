@@ -144,71 +144,53 @@ describe("ProfilesDB", () => {
 
   // ─── updatePreferences ────────────────────────────────────────────────────
   describe("updatePreferences", () => {
-    it("merges new preferences with existing ones and preserves unchanged fields", async () => {
-      const base = makeProfile();
-      // Both getProfile (first .single()) and updateProfile (second .single())
-      // read from mockData. Use mockResolvedValueOnce so each awaited single
-      // resolves with distinct data/error — first with the current profile,
-      // then with the merged-updated profile.
-      const merged = makeProfile({
+    it("accepts a partial intent and returns the atomically updated profile", async () => {
+      const expected = makeProfile({
         preferences: {
-          ...base.preferences,
+          date_format: "MM/DD/YYYY",
+          week_start_day: 1,
           theme: "light",
+          weight_unit: "kg",
         },
       });
-      mockSupabaseClient.single
-        .mockResolvedValueOnce({ data: base, error: null })
-        .mockResolvedValueOnce({ data: merged, error: null });
+      const rpc = vi.fn().mockResolvedValue({ data: expected, error: null });
+      const rpcDB = new ProfilesDB({ rpc } as unknown as SupabaseClient);
 
-      const result = await db.updatePreferences(USER_ID, { theme: "light" });
+      const result = await rpcDB.updatePreferences(USER_ID, { theme: "light" });
 
-      // New field updated, old fields preserved — both matter:
-      // - A mutant that replaces the spread `...profile.preferences` with
-      //   `...{}` would drop date_format; this assertion catches it.
-      // - A mutant that flips the spread order so new values come first
-      //   would leave theme: 'dark'; asserting 'light' catches that.
-      expect(result.preferences.theme).toBe("light");
-      expect(result.preferences.date_format).toBe("MM/DD/YYYY");
-      expect(result.preferences.week_start_day).toBe(1);
-      expect(result.preferences.weight_unit).toBe("kg");
+      expect(rpc).toHaveBeenCalledWith("update_profile_preferences", {
+        profile_id: USER_ID,
+        preference_patch: { theme: "light" },
+      });
+      expect(result).toEqual(expected);
+    });
 
-      // Verify updateProfile was called with the exact merged object — this
-      // is the key assertion that catches any mutation to the merge logic
-      // in the source.
-      mockSupabaseClient.expectQuery({
-        table: "profiles",
-        method: "update",
-        args: [
-          {
-            preferences: {
-              date_format: "MM/DD/YYYY",
-              week_start_day: 1,
-              theme: "light",
-              weight_unit: "kg",
-            },
-          },
-        ],
+    it("rejects the intent without returning a profile when persistence fails", async () => {
+      const error = {
+        code: "P0002",
+        message: "Profile not found for user user-123",
+        details: null,
+        hint: null,
+      };
+      const rpc = vi.fn().mockResolvedValue({ data: null, error });
+      const rpcDB = new ProfilesDB({ rpc } as unknown as SupabaseClient);
+
+      const rejection = rpcDB.updatePreferences(USER_ID, { theme: "dark" });
+
+      await expect(rejection).rejects.toBeInstanceOf(Error);
+      await expect(rejection).rejects.toMatchObject({
+        code: "P0002",
+        message: "Profile not found for user user-123",
       });
     });
 
-    it("throws 'Profile not found' when the underlying getProfile returns null", async () => {
-      // getProfile returns null via PGRST116 path → throw 'Profile not found'.
-      mockSupabaseClient.setMockResponse(null, { code: "PGRST116" });
+    it("reports a missing profile when the RPC returns null without an error", async () => {
+      const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
+      const rpcDB = new ProfilesDB({ rpc } as unknown as SupabaseClient);
 
       await expect(
-        db.updatePreferences("nonexistent", { theme: "dark" }),
-      ).rejects.toThrow("Profile not found");
-    });
-
-    it("propagates errors from the underlying getProfile call", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "OTHER_ERROR",
-        message: "DB fail",
-      });
-
-      await expect(
-        db.updatePreferences(USER_ID, { theme: "dark" }),
-      ).rejects.toEqual({ code: "OTHER_ERROR", message: "DB fail" });
+        rpcDB.updatePreferences(USER_ID, { theme: "dark" }),
+      ).rejects.toThrow("Profile not found for user user-123");
     });
   });
 

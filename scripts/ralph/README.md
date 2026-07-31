@@ -24,7 +24,10 @@ reflogs, unrelated history, or writable metadata.
   repair budget, then parks the green PR for human review and continues with
   another unrelated issue on the ready dependency frontier. Dependents remain
   blocked until their PR is actually merged.
-- `AutoMerge` waits for all reported GitHub checks and required review approvals.
+- `AutoMerge` waits for all reported GitHub checks and any review approvals
+  configured by the repository ruleset. This solo-maintainer repository
+  intentionally configures zero required approving reviews; Ralph's independent
+  review gates still run before publication and merge.
   It merges without bypass only when the diff is classified low risk, the PR is
   conflict-free, and every gate passes. High-risk work must still pass required
   checks (including bounded check-failure repairs) before it is parked for a
@@ -220,7 +223,9 @@ verification without granting workflow, controller, or secret authority.
 Marked fixtures that need an authenticated identity call the runner-owned
 `public.ralph_ci_create_auth_user(uuid, text)` helper. The helper can create
 only a minimal disposable auth row; the fixture role receives no direct write
-access to `auth` tables. Concurrent fixtures open named sessions through
+access to `auth` tables. Self-cleaning fixtures remove only identities whose
+email ends in `@example.test` through
+`public.ralph_ci_delete_auth_user(uuid)`. Concurrent fixtures open named sessions through
 `public.ralph_ci_open_connection(text)`, which reconnects as the same
 non-superuser role to the current disposable database server.
 

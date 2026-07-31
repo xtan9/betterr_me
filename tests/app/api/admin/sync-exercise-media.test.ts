@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
+import { AuthRetryableFetchError } from "@supabase/supabase-js";
 
 // --- Hoisted mocks ---
 const {
@@ -45,10 +46,10 @@ import { POST } from "@/app/api/admin/sync-exercise-media/route";
 
 // --- Helpers ---
 function makeRequest(body?: Record<string, unknown>, headers?: Record<string, string>) {
-  const init = {
-    method: "POST",
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  };
+  const init: ConstructorParameters<typeof NextRequest>[1] = { method: "POST" };
+  if (body !== undefined) {
+    init.body = JSON.stringify(body);
+  }
   const req = new NextRequest("http://localhost:3000/api/admin/sync-exercise-media", init);
   if (headers) {
     Object.entries(headers).forEach(([k, v]) => {
@@ -150,7 +151,7 @@ describe("POST /api/admin/sync-exercise-media", () => {
     delete process.env.ADMIN_SYNC_SECRET;
   });
 
-  it("returns 403 when user is not authenticated and no valid secret", async () => {
+  it("returns 500 when an admin secret is supplied but not configured", async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
     const response = await POST(
@@ -158,8 +159,8 @@ describe("POST /api/admin/sync-exercise-media", () => {
     );
     const data = await response.json();
 
-    expect(response.status).toBe(403);
-    expect(data.error).toBe("Forbidden");
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Server misconfigured");
   });
 
   it("allows unauthenticated request with valid x-admin-secret", async () => {
@@ -175,7 +176,40 @@ describe("POST /api/admin/sync-exercise-media", () => {
     expect(response.status).toBe(200);
   });
 
-  it("returns 403 when x-admin-secret header does not match env var and user is not admin", async () => {
+  it("allows a valid x-admin-secret when admin authentication is unavailable", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthRetryableFetchError("Auth service unavailable", 503),
+    });
+    process.env.ADMIN_SYNC_SECRET = "test-secret";
+    setupCatalog();
+    setupAdminClient();
+
+    const response = await POST(
+      makeRequest({}, { "x-admin-secret": "test-secret" }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it("returns 401 when the supplied admin secret is invalid", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: null },
+      error: new AuthRetryableFetchError("Auth service unavailable", 503),
+    });
+    process.env.ADMIN_SYNC_SECRET = "test-secret";
+
+    const response = await POST(
+      makeRequest({}, { "x-admin-secret": "wrong-secret" }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Invalid credentials",
+    });
+  });
+
+  it("returns 401 when x-admin-secret header does not match env var", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
     setupProfileQuery("user");
     process.env.ADMIN_SYNC_SECRET = "real-secret";
@@ -185,11 +219,11 @@ describe("POST /api/admin/sync-exercise-media", () => {
     );
     const data = await response.json();
 
-    expect(response.status).toBe(403);
-    expect(data.error).toBe("Forbidden");
+    expect(response.status).toBe(401);
+    expect(data.error).toBe("Invalid credentials");
   });
 
-  it("returns 403 when ADMIN_SYNC_SECRET env var is not set and user is not admin", async () => {
+  it("returns 500 when ADMIN_SYNC_SECRET is not set but the header is supplied", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } });
     setupProfileQuery("user");
 
@@ -198,8 +232,8 @@ describe("POST /api/admin/sync-exercise-media", () => {
     );
     const data = await response.json();
 
-    expect(response.status).toBe(403);
-    expect(data.error).toBe("Forbidden");
+    expect(response.status).toBe(500);
+    expect(data.error).toBe("Server misconfigured");
   });
 
   it("returns 200 for admin user without secret header", async () => {

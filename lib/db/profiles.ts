@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import type { PreferencesValues } from '@/lib/validations/preferences';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Profile, ProfileUpdate } from './types';
 
@@ -43,18 +44,23 @@ export class ProfilesDB {
    */
   async updatePreferences(
     userId: string,
-    preferences: Partial<Profile['preferences']>
+    preferences: PreferencesValues
   ): Promise<Profile> {
-    // Get current profile to merge preferences
-    const profile = await this.getProfile(userId);
-    if (!profile) throw new Error('Profile not found');
+    const { data, error } = await this.supabase.rpc(
+      'update_profile_preferences',
+      {
+        profile_id: userId,
+        preference_patch: preferences,
+      }
+    );
 
-    const updatedPreferences = {
-      ...profile.preferences,
-      ...preferences,
-    };
-
-    return this.updateProfile(userId, { preferences: updatedPreferences });
+    if (error) {
+      const normalized = new Error(error.message);
+      Object.assign(normalized, error);
+      throw normalized;
+    }
+    if (!data) throw new Error(`Profile not found for user ${userId}`);
+    return data as Profile;
   }
 }
 
