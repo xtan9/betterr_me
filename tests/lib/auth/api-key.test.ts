@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const { mockLogError } = vi.hoisted(() => ({
+  mockLogError: vi.fn(),
+}));
+
 // Set env vars before importing the module under test
 process.env.API_KEY_HMAC_SECRET = 'test-secret-key-for-hmac-testing-purposes';
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
@@ -9,18 +13,19 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
 
 // Mock @/lib/logger
 vi.mock('@/lib/logger', () => ({
-  log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+  log: { error: mockLogError, warn: vi.fn(), info: vi.fn() },
 }));
 
 // ---------------------------------------------------------------------------
 // Mock Supabase server client (cookie auth path)
 // ---------------------------------------------------------------------------
 const mockGetUser = vi.fn();
+const mockCookieClient = {
+  auth: { getUser: mockGetUser },
+};
 
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn(() => ({
-    auth: { getUser: mockGetUser },
-  })),
+  createClient: vi.fn(() => mockCookieClient),
 }));
 
 // ---------------------------------------------------------------------------
@@ -30,33 +35,77 @@ const mockServiceSelect = vi.fn();
 const mockServiceEq = vi.fn();
 const mockServiceSingle = vi.fn();
 const mockServiceUpdate = vi.fn();
+const mockServiceUpdateEq = vi.fn();
 const mockServiceFrom = vi.fn();
+const mockServiceClient = {
+  from: mockServiceFrom,
+};
+const serviceQueryLog: Array<{
+  table: string;
+  method: string;
+  args: unknown[];
+}> = [];
 
 function setupServiceChain() {
-  mockServiceFrom.mockReturnValue({
-    select: mockServiceSelect,
-    update: mockServiceUpdate,
+  let table = '';
+  mockServiceFrom.mockImplementation((nextTable: string) => {
+    table = nextTable;
+    serviceQueryLog.push({ table, method: 'from', args: [nextTable] });
+    return {
+      select: mockServiceSelect,
+      update: mockServiceUpdate,
+    };
   });
-  mockServiceSelect.mockReturnValue({ eq: mockServiceEq });
-  mockServiceEq.mockReturnValue({ maybeSingle: mockServiceSingle });
-  // update chain for last_used_at fire-and-forget
-  mockServiceUpdate.mockReturnValue({
-    eq: vi.fn().mockReturnValue(Promise.resolve({ error: null })),
+  mockServiceSelect.mockImplementation((...args: unknown[]) => {
+    serviceQueryLog.push({ table, method: 'select', args });
+    return { eq: mockServiceEq };
   });
+  mockServiceEq.mockImplementation((...args: unknown[]) => {
+    serviceQueryLog.push({ table, method: 'eq', args });
+    return {
+      maybeSingle: (...singleArgs: unknown[]) => {
+        serviceQueryLog.push({
+          table,
+          method: 'maybeSingle',
+          args: singleArgs,
+        });
+        return mockServiceSingle(...singleArgs);
+      },
+    };
+  });
+  mockServiceUpdate.mockImplementation((...args: unknown[]) => {
+    serviceQueryLog.push({ table, method: 'update', args });
+    return {
+      eq: (...eqArgs: unknown[]) => {
+        serviceQueryLog.push({ table, method: 'eq', args: eqArgs });
+        return mockServiceUpdateEq(...eqArgs);
+      },
+    };
+  });
+  mockServiceUpdateEq.mockResolvedValue({ error: null });
 }
 
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: mockServiceFrom,
-  })),
+  createClient: vi.fn(() => mockServiceClient),
 }));
 
 import {
   generateApiKey,
   hashApiKey,
-  authenticateRequest,
 } from '@/lib/auth/api-key';
+import { authenticateRequest } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { NextRequest } from 'next/server';
+
+const USER_API_READ_POLICY = {
+  allowedCredentials: ['apiKey', 'cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const USER_API_WRITE_POLICY = {
+  allowedCredentials: ['apiKey', 'cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 // ---------------------------------------------------------------------------
 // generateApiKey
@@ -122,6 +171,7 @@ describe('hashApiKey', () => {
 describe('authenticateRequest', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    serviceQueryLog.length = 0;
     setupServiceChain();
   });
 
@@ -129,9 +179,14 @@ describe('authenticateRequest', () => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
 
     const request = new NextRequest('http://localhost:3000/api/tasks');
-    const result = await authenticateRequest(request);
+    const result = await authenticateRequest(request, USER_API_READ_POLICY);
 
-    expect(result).toEqual({ error: 'Unauthorized', status: 401 });
+    expect(result).toEqual({
+      ok: false,
+      outcome: 'anonymous',
+      error: 'Unauthorized',
+      status: 401,
+    });
   });
 
   it('returns AuthResult when valid cookie session exists', async () => {
@@ -140,11 +195,16 @@ describe('authenticateRequest', () => {
     });
 
     const request = new NextRequest('http://localhost:3000/api/tasks');
-    const result = await authenticateRequest(request);
+    const result = await authenticateRequest(request, USER_API_READ_POLICY);
 
-    expect(result).toHaveProperty('userId', 'user-123');
-    expect(result).toHaveProperty('permissions', 'read_write');
-    expect(result).toHaveProperty('supabase');
+    expect(result).toEqual({
+      ok: true,
+      outcome: 'authenticated',
+      principal: { type: 'user', userId: 'user-123', credential: 'cookie' },
+      permissions: ['read', 'write'],
+      requiredPermission: 'read',
+      client: mockCookieClient,
+    });
   });
 
   it('cookie auth returns permissions "read_write"', async () => {
@@ -153,13 +213,13 @@ describe('authenticateRequest', () => {
     });
 
     const request = new NextRequest('http://localhost:3000/api/tasks');
-    const result = await authenticateRequest(request);
+    const result = await authenticateRequest(request, USER_API_READ_POLICY);
 
-    expect('permissions' in result && result.permissions).toBe('read_write');
+    expect('permissions' in result && result.permissions).toEqual(['read', 'write']);
   });
 
   it('returns AuthResult for valid API key', async () => {
-    const { fullKey } = generateApiKey();
+    const { fullKey, keyHash } = generateApiKey();
 
     mockServiceSingle.mockResolvedValue({
       data: {
@@ -175,11 +235,260 @@ describe('authenticateRequest', () => {
       headers: { authorization: `Bearer ${fullKey}` },
     });
 
-    const result = await authenticateRequest(request);
+    const result = await authenticateRequest(request, USER_API_READ_POLICY);
 
-    expect(result).toHaveProperty('userId', 'user-789');
-    expect(result).toHaveProperty('permissions', 'read_write');
-    expect(result).toHaveProperty('supabase');
+    expect(result).toEqual({
+      ok: true,
+      outcome: 'authenticated',
+      principal: { type: 'user', userId: 'user-789', credential: 'apiKey' },
+      permissions: ['read', 'write'],
+      requiredPermission: 'read',
+      client: mockServiceClient,
+    });
+    expect(serviceQueryLog).toEqual([
+      { table: 'api_keys', method: 'from', args: ['api_keys'] },
+      {
+        table: 'api_keys',
+        method: 'select',
+        args: ['id, user_id, permissions, expires_at'],
+      },
+      {
+        table: 'api_keys',
+        method: 'eq',
+        args: ['key_hash', keyHash],
+      },
+      { table: 'api_keys', method: 'maybeSingle', args: [] },
+      { table: 'api_keys', method: 'from', args: ['api_keys'] },
+      {
+        table: 'api_keys',
+        method: 'update',
+        args: [
+          {
+            last_used_at: expect.stringMatching(
+              /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+            ),
+          },
+        ],
+      },
+      { table: 'api_keys', method: 'eq', args: ['id', 'key-1'] },
+    ]);
+  });
+
+  it('uses a valid API key instead of a valid cookie when both are present', async () => {
+    const { fullKey } = generateApiKey();
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'cookie-user' } },
+      error: null,
+    });
+    mockServiceSingle.mockResolvedValue({
+      data: {
+        id: 'key-1',
+        user_id: 'api-key-user',
+        permissions: 'read_write',
+        expires_at: null,
+      },
+      error: null,
+    });
+
+    const result = await authenticateRequest(
+      new NextRequest('http://localhost:3000/api/tasks', {
+        headers: {
+          authorization: `Bearer ${fullKey}`,
+          cookie: 'session=valid-cookie',
+        },
+      }),
+      USER_API_READ_POLICY,
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      outcome: 'authenticated',
+      principal: { type: 'user', userId: 'api-key-user', credential: 'apiKey' },
+      permissions: ['read', 'write'],
+      requiredPermission: 'read',
+      client: mockServiceClient,
+    });
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to a valid cookie when an API key is rejected', async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'cookie-user' } },
+      error: null,
+    });
+    mockServiceSingle.mockResolvedValue({ data: null, error: null });
+
+    const result = await authenticateRequest(
+      new NextRequest('http://localhost:3000/api/tasks', {
+        headers: {
+          authorization: 'Bearer brm_rejected',
+          cookie: 'session=valid-cookie',
+        },
+      }),
+      USER_API_READ_POLICY,
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      outcome: 'invalid',
+      error: 'Invalid credentials',
+      status: 401,
+    });
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a valid cookie for a non-API-key authorization header', async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'cookie-user' } },
+      error: null,
+    });
+
+    const result = await authenticateRequest(
+      new NextRequest('http://localhost:3000/api/tasks', {
+        headers: {
+          authorization: 'Bearer unrelated-token',
+          cookie: 'session=valid-cookie',
+        },
+      }),
+      USER_API_READ_POLICY,
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      outcome: 'authenticated',
+      principal: { type: 'user', userId: 'cookie-user', credential: 'cookie' },
+      permissions: ['read', 'write'],
+      requiredPermission: 'read',
+      client: mockCookieClient,
+    });
+    expect(mockServiceFrom).not.toHaveBeenCalled();
+  });
+
+  it('updates last_used_at after an API key is authorized', async () => {
+    const { fullKey } = generateApiKey();
+    mockServiceSingle.mockResolvedValue({
+      data: {
+        id: 'key-1',
+        user_id: 'api-key-user',
+        permissions: 'read_write',
+        expires_at: null,
+      },
+      error: null,
+    });
+
+    const result = await authenticateRequest(
+      new NextRequest('http://localhost:3000/api/tasks', {
+        headers: { authorization: `Bearer ${fullKey}` },
+      }),
+      USER_API_READ_POLICY,
+    );
+    await Promise.resolve();
+
+    expect(result.ok).toBe(true);
+    expect(mockServiceUpdate).toHaveBeenCalledTimes(1);
+    expect(mockServiceUpdate).toHaveBeenCalledWith({
+      last_used_at: expect.stringMatching(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+      ),
+    });
+    expect(mockServiceUpdateEq).toHaveBeenCalledTimes(1);
+    expect(mockServiceUpdateEq).toHaveBeenCalledWith('id', 'key-1');
+    expect(mockLogError).not.toHaveBeenCalled();
+  });
+
+  it('logs a last_used_at database error without failing authorization', async () => {
+    const updateError = { code: '08006', message: 'connection failure' };
+    const { fullKey } = generateApiKey();
+    mockServiceSingle.mockResolvedValue({
+      data: {
+        id: 'key-1',
+        user_id: 'api-key-user',
+        permissions: 'read_write',
+        expires_at: null,
+      },
+      error: null,
+    });
+    mockServiceUpdateEq.mockResolvedValue({ error: updateError });
+
+    const result = await authenticateRequest(
+      new NextRequest('http://localhost:3000/api/tasks', {
+        headers: { authorization: `Bearer ${fullKey}` },
+      }),
+      USER_API_READ_POLICY,
+    );
+    await Promise.resolve();
+
+    expect(result.ok).toBe(true);
+    expect(mockLogError).toHaveBeenCalledWith(
+      '[api-key] Failed to update last_used_at',
+      updateError,
+    );
+  });
+
+  it('logs a last_used_at network error without failing authorization', async () => {
+    const networkError = new Error('connection reset');
+    const { fullKey } = generateApiKey();
+    mockServiceSingle.mockResolvedValue({
+      data: {
+        id: 'key-1',
+        user_id: 'api-key-user',
+        permissions: 'read_write',
+        expires_at: null,
+      },
+      error: null,
+    });
+    mockServiceUpdateEq.mockRejectedValue(networkError);
+
+    const result = await authenticateRequest(
+      new NextRequest('http://localhost:3000/api/tasks', {
+        headers: { authorization: `Bearer ${fullKey}` },
+      }),
+      USER_API_READ_POLICY,
+    );
+    await Promise.resolve();
+
+    expect(result.ok).toBe(true);
+    expect(mockLogError).toHaveBeenCalledWith(
+      '[api-key] Failed to update last_used_at (network)',
+      networkError,
+    );
+  });
+
+  it('logs a synchronous last_used_at setup failure without failing authorization', async () => {
+    const setupError = new Error('update chain setup failed');
+    const { fullKey } = generateApiKey();
+    mockServiceSingle.mockResolvedValue({
+      data: {
+        id: 'key-1',
+        user_id: 'api-key-user',
+        permissions: 'read_write',
+        expires_at: null,
+      },
+      error: null,
+    });
+    mockServiceUpdate.mockImplementation(() => {
+      throw setupError;
+    });
+
+    const result = await authenticateRequest(
+      new NextRequest('http://localhost:3000/api/tasks', {
+        headers: { authorization: `Bearer ${fullKey}` },
+      }),
+      USER_API_READ_POLICY,
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      outcome: 'authenticated',
+      principal: { type: 'user', userId: 'api-key-user', credential: 'apiKey' },
+      permissions: ['read', 'write'],
+      requiredPermission: 'read',
+      client: mockServiceClient,
+    });
+    expect(mockLogError).toHaveBeenCalledWith(
+      '[api-key] Failed to update last_used_at (setup)',
+      setupError,
+    );
   });
 
   it('returns 401 for invalid API key (not found in DB)', async () => {
@@ -189,9 +498,14 @@ describe('authenticateRequest', () => {
       headers: { authorization: 'Bearer brm_invalidkey1234567890abcdef' },
     });
 
-    const result = await authenticateRequest(request);
+    const result = await authenticateRequest(request, USER_API_READ_POLICY);
 
-    expect(result).toEqual({ error: 'Invalid API key', status: 401 });
+    expect(result).toEqual({
+      ok: false,
+      outcome: 'invalid',
+      error: 'Invalid credentials',
+      status: 401,
+    });
   });
 
   it('returns 500 when API key DB lookup fails', async () => {
@@ -201,9 +515,14 @@ describe('authenticateRequest', () => {
       headers: { authorization: 'Bearer brm_invalidkey1234567890abcdef' },
     });
 
-    const result = await authenticateRequest(request);
+    const result = await authenticateRequest(request, USER_API_READ_POLICY);
 
-    expect(result).toEqual({ error: 'Internal server error', status: 500 });
+    expect(result).toEqual({
+      ok: false,
+      outcome: 'misconfigured',
+      error: 'Server misconfigured',
+      status: 500,
+    });
   });
 
   it('returns 401 for expired API key', async () => {
@@ -223,9 +542,14 @@ describe('authenticateRequest', () => {
       headers: { authorization: `Bearer ${fullKey}` },
     });
 
-    const result = await authenticateRequest(request);
+    const result = await authenticateRequest(request, USER_API_READ_POLICY);
 
-    expect(result).toEqual({ error: 'API key has expired', status: 401 });
+    expect(result).toEqual({
+      ok: false,
+      outcome: 'invalid',
+      error: 'Invalid credentials',
+      status: 401,
+    });
   });
 
   it('returns 403 for read-only key on write method', async () => {
@@ -246,11 +570,14 @@ describe('authenticateRequest', () => {
       headers: { authorization: `Bearer ${fullKey}` },
     });
 
-    const result = await authenticateRequest(request);
+    const result = await authenticateRequest(request, USER_API_WRITE_POLICY);
 
     expect(result).toEqual({
-      error: 'API key does not have write permission',
+      ok: false,
+      outcome: 'forbidden',
+      error: 'Forbidden',
       status: 403,
     });
+    expect(mockServiceUpdate).not.toHaveBeenCalled();
   });
 });

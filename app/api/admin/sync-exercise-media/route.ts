@@ -3,43 +3,30 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { loadCatalog } from "@/lib/exercisedb/catalog";
 import { downloadAndStoreGif } from "@/lib/exercisedb/gif-downloader";
 import { syncExerciseMediaSchema } from "@/lib/validations/exercise-media";
-import { requireAdminApi, AdminForbiddenError, AdminUnauthorizedError } from "@/lib/auth/admin";
+import { authenticateRequest } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { log } from "@/lib/logger";
 import { findBestMatch } from "string-similarity";
+
+const ADMIN_REQUEST_POLICY = {
+  allowedCredentials: ["adminSecret", "admin"],
+  requiredPermission: "admin",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * POST /api/admin/sync-exercise-media
  * Admin-only route: loads exercise catalog, upserts exercises,
  * downloads GIFs to Supabase Storage, and upserts exercise_media.
  *
- * Auth: admin role (via requireAdminApi) OR x-admin-secret header (for CLI/cron)
+ * Auth: admin role or x-admin-secret, both resolved by the route policy.
  *
  * Optional body: { dryRun?: boolean, skipGifs?: boolean }
  */
 export async function POST(request: NextRequest) {
   try {
-    // 1. Auth check: admin role OR secret header
-    let isAuthed = false;
-
-    try {
-      await requireAdminApi();
-      isAuthed = true;
-    } catch (error) {
-      if (
-        !(error instanceof AdminUnauthorizedError) &&
-        !(error instanceof AdminForbiddenError)
-      ) {
-        throw error;
-      }
-      // Not authenticated or not admin — fall through to secret check
-    }
-
-    if (!isAuthed) {
-      const adminSecret = process.env.ADMIN_SYNC_SECRET;
-      const headerSecret = request.headers.get("x-admin-secret");
-      if (!adminSecret || headerSecret !== adminSecret) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
+    const auth = await authenticateRequest(request, ADMIN_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
     // 2. Parse body
