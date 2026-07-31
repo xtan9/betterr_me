@@ -24,6 +24,7 @@ const CI_POLICY_TESTS = [
   "tests/scripts/detect-pull-request-validated-push.test.ts",
   "tests/scripts/gate-policy.test.ts",
   "tests/scripts/github-actions-runtime-policy.test.ts",
+  "tests/scripts/quality-signal-contracts.test.ts",
 ];
 
 export const OWNERSHIP_REGISTRY = [
@@ -270,7 +271,7 @@ function qualityLabel(suites) {
 
 function e2eLabel(suites) {
   if (!suites.e2e) return "not needed";
-  return [suites.e2eFull ? "full Chromium" : "", !suites.e2eFull && suites.e2eSpecs.length ? "selected Chromium" : "", suites.e2eRunway ? "finance" : "", suites.e2eVisual ? "visual regression" : ""].filter(Boolean).join(" + ");
+  return [suites.e2eFull ? "full Chromium" : "", !suites.e2eFull && suites.e2eSpecs.length ? "selected Chromium" : "", suites.e2eRunway ? "finance" : "", suites.e2eVisual ? "screenshot comparison" : ""].filter(Boolean).join(" + ");
 }
 
 export function formatGitHubOutputs(result, baseSha = "") {

@@ -1,10 +1,10 @@
-name: Performance Audit
+name: Performance Measurements (Advisory)
 
 on:
   pull_request:
     branches: [main]
   schedule:
-    # Nightly full audit at 07:00 UTC.
+    # Nightly full measurement at 07:00 UTC.
     - cron: '0 7 * * *'
   workflow_dispatch:
 
@@ -49,6 +49,7 @@ jobs:
           require-preview-url: "true"
 
   lighthouse:
+    name: Bundle and Lighthouse budgets (advisory)
     needs: [changes, check-secrets]
     if: ${{ fromJSON(needs.changes.outputs.classification_json).suites.performance && needs.check-secrets.outputs.has-secrets == 'true' }}
     runs-on: ubuntu-latest
@@ -59,7 +60,8 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
       E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
-      # PRs favor a fast smoke audit; nightly/manual runs retain the full baseline.
+      # PRs favor a one-sample smoke measurement; nightly/manual runs collect
+      # three samples across the full URL set. See docs/quality-signals.md.
       LHCI_NUMBER_OF_RUNS: ${{ github.event_name == 'pull_request' && '1' || '3' }}
       LHCI_SMOKE_ONLY: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
 
@@ -76,7 +78,7 @@ jobs:
       - name: Analyze bundle size
         run: pnpm perf:bundle
 
-      - name: Run Lighthouse CI
+      - name: Measure Lighthouse budgets
         uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
           configPath: './lighthouserc.js'
