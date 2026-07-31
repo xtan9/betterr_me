@@ -8,7 +8,11 @@ select public.ralph_ci_create_auth_user(
   'completed-turn@example.test'
 );
 
-set local role authenticated;
+select public.ralph_ci_create_auth_user(
+  '48900000-0000-0000-0000-000000000002',
+  'other-completed-turn@example.test'
+);
+
 select set_config(
   'request.jwt.claims',
   '{"sub":"48900000-0000-0000-0000-000000000001"}',
@@ -21,6 +25,90 @@ values (
   '48900000-0000-0000-0000-000000000001',
   'gpt-5.4-mini'
 );
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"48900000-0000-0000-0000-000000000002"}',
+  true
+);
+
+insert into public.conversations (id, user_id, model)
+values (
+  '48900000-0000-0000-0000-000000000020',
+  '48900000-0000-0000-0000-000000000002',
+  'gpt-5.4-mini'
+);
+
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"48900000-0000-0000-0000-000000000001"}',
+  true
+);
+
+do $$
+declare
+  function_signature text :=
+    'public.save_completed_chat_turn(uuid,text,text,text,text)';
+begin
+  if not has_function_privilege(
+    'authenticated',
+    function_signature,
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated role cannot execute completed-turn persistence';
+  end if;
+
+  if has_function_privilege('anon', function_signature, 'EXECUTE') then
+    raise exception 'anonymous role can execute completed-turn persistence';
+  end if;
+
+  if not exists (
+    select 1
+    from pg_catalog.pg_proc
+    where oid = function_signature::regprocedure
+      and prosecdef
+      and proconfig @> array['search_path=pg_catalog, public']::text[]
+  ) then
+    raise exception 'completed-turn persistence is not securely configured';
+  end if;
+end
+$$;
+
+set local role authenticated;
+
+do $$
+begin
+  perform public.save_completed_chat_turn(
+    '48900000-0000-0000-0000-000000000020',
+    'foreign-turn',
+    'This user does not own the conversation.',
+    'This response must not be persisted.',
+    'gpt-5.4-mini'
+  );
+  raise exception 'cross-user completed turn unexpectedly succeeded';
+exception
+  when raise_exception then
+    if sqlerrm <> 'Conversation not found' then
+      raise;
+    end if;
+end
+$$;
+
+reset role;
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.chat_messages
+    where conversation_id = '48900000-0000-0000-0000-000000000020'
+  ) then
+    raise exception 'cross-user completed turn persisted messages';
+  end if;
+end
+$$;
+
+set local role authenticated;
 
 do $$
 declare
@@ -54,6 +142,13 @@ begin
       retry_outcome;
   end if;
 
+end
+$$;
+
+reset role;
+
+do $$
+begin
   if (
     select count(*)
     from public.chat_messages
@@ -64,6 +159,8 @@ begin
   end if;
 end
 $$;
+
+set local role authenticated;
 
 do $$
 begin
@@ -80,6 +177,8 @@ exception
     null;
 end
 $$;
+
+reset role;
 
 do $$
 begin

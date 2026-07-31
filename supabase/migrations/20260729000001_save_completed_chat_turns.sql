@@ -29,7 +29,7 @@ CREATE UNIQUE INDEX chat_messages_conversation_turn_position_key
   ON chat_messages (conversation_id, turn_id, turn_position)
   WHERE turn_id IS NOT NULL;
 
-CREATE OR REPLACE FUNCTION save_completed_chat_turn(
+CREATE OR REPLACE FUNCTION public.save_completed_chat_turn(
   p_conversation_id UUID,
   p_turn_id TEXT,
   p_user_content TEXT,
@@ -38,7 +38,8 @@ CREATE OR REPLACE FUNCTION save_completed_chat_turn(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
-SET search_path = public
+SECURITY DEFINER
+SET search_path = pg_catalog, public
 AS $$
 DECLARE
   saved_messages JSONB;
@@ -124,3 +125,11 @@ BEGIN
   );
 END;
 $$;
+
+REVOKE ALL ON FUNCTION public.save_completed_chat_turn(
+  UUID, TEXT, TEXT, TEXT, TEXT
+) FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION public.save_completed_chat_turn(
+  UUID, TEXT, TEXT, TEXT, TEXT
+) TO authenticated;
