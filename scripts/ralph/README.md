@@ -24,7 +24,10 @@ reflogs, unrelated history, or writable metadata.
   repair budget, then parks the green PR for human review and continues with
   another unrelated issue on the ready dependency frontier. Dependents remain
   blocked until their PR is actually merged.
-- `AutoMerge` waits for all reported GitHub checks and required review approvals.
+- `AutoMerge` waits for all reported GitHub checks and any review approvals
+  configured by the repository ruleset. This solo-maintainer repository
+  intentionally configures zero required approving reviews; Ralph's independent
+  review gates still run before publication and merge.
   It merges without bypass only when the diff is classified low risk, the PR is
   conflict-free, and every gate passes. High-risk work must still pass required
   checks (including bounded check-failure repairs) before it is parked for a
