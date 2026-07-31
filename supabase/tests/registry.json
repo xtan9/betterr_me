@@ -13,6 +13,12 @@
     "adminReason": "creates disposable auth identities before asserting application-role behavior"
   },
   {
+    "path": "calendar_event_reminder_delete_lifecycle.sql",
+    "domain": "calendar",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "calendar_event_reminder_update_lifecycle.sql",
     "domain": "calendar",
     "role": "constrained",
