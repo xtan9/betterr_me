@@ -50,12 +50,18 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  try {
-    const parsed = requestSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-    }
 
+  let parsed: ReturnType<typeof requestSchema.safeParse>;
+  try {
+    parsed = requestSchema.safeParse(await request.json());
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  try {
     const input = parsed.data;
     const result = input.action === "create"
       ? await supabase.rpc("control_plane_create_work_item", {
@@ -81,6 +87,6 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ workItem: result.data });
   } catch {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: "Control Plane mutation denied" }, { status: 403 });
   }
 }

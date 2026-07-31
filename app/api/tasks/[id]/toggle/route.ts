@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest } from '@/lib/auth/api-key';
+import { authenticateRequest } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { log } from '@/lib/logger';
 import { createTaskWrites } from '@/lib/tasks/writes';
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['apiKey', 'cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * POST /api/tasks/[id]/toggle
@@ -13,11 +19,11 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const auth = await authenticateRequest(request);
-    if ('error' in auth) {
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { userId, supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const outcome = await createTaskWrites(supabase).execute({
       type: 'toggle-completion',

@@ -1,5 +1,11 @@
 [
   {
+    "path": "atomic_profile_preference_updates.sql",
+    "domain": "profile",
+    "role": "constrained",
+    "cleanup": "self-cleaning"
+  },
+  {
     "path": "calendar_event_reminder_lifecycle.sql",
     "domain": "calendar",
     "role": "admin",
@@ -9,6 +15,12 @@
   {
     "path": "calendar_event_reminder_update_lifecycle.sql",
     "domain": "calendar",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
+    "path": "completed_chat_turn_persistence.sql",
+    "domain": "chat",
     "role": "constrained",
     "cleanup": "transactional"
   },

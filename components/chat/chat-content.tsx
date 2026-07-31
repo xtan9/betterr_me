@@ -4,6 +4,7 @@ import {
   useMemo,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -54,6 +55,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL_ID);
+  const submittedTurnModelRef = useRef(selectedModel);
 
   // SWR for conversation list
   const { data: convData, mutate: mutateConversations } = useSWR<{
@@ -72,7 +74,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     [selectedModel, localDate, userTimezone]
   );
 
-  const { messages, sendMessage, setMessages, stop, status, error } = useChat({
+  const { messages, sendMessage, regenerate, setMessages, stop, status, error } = useChat({
     id: chatId,
     transport,
   });
@@ -112,7 +114,18 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   }, [chatId, setMessages]);
 
   // Save both user and assistant messages after stream completes (deferred persistence).
-  useChatPersistence(status, messages, activeConversationId, setActiveConversationId, selectedModel, mutateConversations);
+  const {
+    persistenceError,
+    retryPersistence,
+    clearPersistenceError,
+  } = useChatPersistence(
+    status,
+    messages,
+    activeConversationId,
+    setActiveConversationId,
+    submittedTurnModelRef.current,
+    mutateConversations,
+  );
 
   useEffect(() => {
     if (error) {
@@ -125,9 +138,10 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       // Just send to LLM — user message shown optimistically in useChat buffer.
       // Persistence (conversation creation + user + assistant messages) is handled
       // in the stream-complete effect, so a mid-stream refresh leaves no partial data.
+      submittedTurnModelRef.current = selectedModel;
       sendMessage({ text, files });
     },
-    [sendMessage]
+    [selectedModel, sendMessage]
   );
 
   const handleStop = useCallback(() => {
@@ -168,20 +182,20 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   }, [messages]);
 
   const handleRetry = useCallback(() => {
+    if (persistenceError) {
+      retryPersistence();
+      return;
+    }
     if (!lastUserMessage) return;
-    setMessages((prev) => {
-      const lastIdx = prev.length - 1;
-      if (lastIdx >= 0 && prev[lastIdx].role === "assistant") {
-        return prev.slice(0, lastIdx);
-      }
-      return prev;
-    });
-    sendMessage({ text: lastUserMessage });
-  }, [lastUserMessage, setMessages, sendMessage]);
+    submittedTurnModelRef.current = selectedModel;
+    regenerate();
+  }, [lastUserMessage, persistenceError, regenerate, retryPersistence, selectedModel]);
+
+  const displayedError = persistenceError ?? error;
 
   const errorMessage = useMemo(() => {
-    if (!error) return "";
-    const msg = error.message || "";
+    if (!displayedError) return "";
+    const msg = displayedError.message || "";
     if (msg.includes("Unauthorized") || msg.includes("401")) {
       return t("error.unauthorized");
     }
@@ -192,11 +206,11 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       return t("error.unavailable");
     }
     return t("error.generic");
-  }, [error, t]);
+  }, [displayedError, t]);
 
   const isRetryable = useMemo(() => {
-    if (!error) return false;
-    const msg = error.message || "";
+    if (!displayedError) return false;
+    const msg = displayedError.message || "";
     return (
       !msg.includes("Unauthorized") &&
       !msg.includes("401") &&
@@ -204,11 +218,12 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       !msg.includes("503") &&
       !msg.includes("authentication expired")
     );
-  }, [error]);
+  }, [displayedError]);
 
   // Conversation switching
   const handleSelectConversation = useCallback(
     (id: string) => {
+      clearPersistenceError();
       setActiveConversationId(id);
       setChatId(id);
       window.history.replaceState(null, "", `/chat?id=${id}`);
@@ -218,18 +233,19 @@ export function ChatContent({ conversationId }: ChatContentProps) {
       const isValid = storedModel && AVAILABLE_MODELS.some((m) => m.id === storedModel);
       setSelectedModel(isValid ? storedModel : DEFAULT_MODEL_ID);
     },
-    [conversations]
+    [clearPersistenceError, conversations]
   );
 
   // New chat
   const handleNewChat = useCallback(() => {
+    clearPersistenceError();
     setActiveConversationId(null);
     setChatId("new");
     setMessages([]);
     setSelectedModel(DEFAULT_MODEL_ID);
     window.history.replaceState(null, "", "/chat");
     setSidebarOpen(false);
-  }, [setMessages]);
+  }, [clearPersistenceError, setMessages]);
 
   // Rename conversation
   const handleRenameConversation = useCallback(
@@ -255,6 +271,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         await fetchJSON(`/api/conversations/${id}`, { method: "DELETE" });
         mutateConversations();
         if (id === activeConversationId) {
+          clearPersistenceError();
           setActiveConversationId(null);
           setChatId("new");
           setMessages([]);
@@ -264,7 +281,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
         log.error("[chat] Failed to delete conversation", err);
       }
     },
-    [activeConversationId, mutateConversations, setMessages]
+    [activeConversationId, clearPersistenceError, mutateConversations, setMessages]
   );
 
   return (
@@ -302,7 +319,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           <MessageList messages={messages} status={status} />
         )}
 
-        {error && (
+        {displayedError && (
           <div className="mx-4 mb-2 flex items-center gap-2 rounded-card bg-destructive/10 px-4 py-3 text-destructive text-body">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span className="flex-1">{errorMessage}</span>

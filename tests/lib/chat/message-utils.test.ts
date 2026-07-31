@@ -14,6 +14,9 @@ describe('message-utils', () => {
         conversation_id: 'c1',
         role: 'user',
         content: 'hello',
+        turn_id: null,
+        turn_position: null,
+        model: null,
         created_at: '2026-01-01T00:00:00Z',
       };
 
@@ -32,6 +35,9 @@ describe('message-utils', () => {
         conversation_id: 'c1',
         role: 'assistant',
         content: 'Hi there!',
+        turn_id: 'turn-1',
+        turn_position: 1,
+        model: 'gpt-5.4-mini',
         created_at: '2026-01-01T00:01:00Z',
       };
 
@@ -47,6 +53,9 @@ describe('message-utils', () => {
         conversation_id: 'c1',
         role: 'user',
         content: 'test',
+        turn_id: null,
+        turn_position: null,
+        model: null,
         created_at: '2026-06-15T12:30:00Z',
       };
 

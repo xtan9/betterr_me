@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { UIMessage } from "ai";
 import { log } from "@/lib/logger";
 
@@ -14,6 +14,14 @@ async function fetchJSON(url: string, init?: RequestInit) {
   return res.json();
 }
 
+async function fetchJSONWithRetry(url: string, init: RequestInit) {
+  try {
+    return await fetchJSON(url, init);
+  } catch {
+    return fetchJSON(url, init);
+  }
+}
+
 export function useChatPersistence(
   status: string,
   messages: UIMessage[],
@@ -23,6 +31,17 @@ export function useChatPersistence(
   mutateConversations: () => void,
 ) {
   const prevStatusRef = useRef(status);
+  const retrySaveRef = useRef<(() => Promise<void>) | null>(null);
+  const [persistenceError, setPersistenceError] = useState<Error | null>(null);
+
+  const retryPersistence = useCallback(() => {
+    void retrySaveRef.current?.();
+  }, []);
+
+  const clearPersistenceError = useCallback(() => {
+    retrySaveRef.current = null;
+    setPersistenceError(null);
+  }, []);
 
   useEffect(() => {
     const wasStreaming =
@@ -52,12 +71,14 @@ export function useChatPersistence(
               .join("")
           : null;
 
-      const saveMessages = async () => {
-        let convId = activeConversationId;
+      if (!userMsg || !userContent?.trim()) return;
 
-        // Create conversation if this is the first message (new chat)
-        if (!convId) {
-          try {
+      let convId = activeConversationId;
+      const saveMessages = async () => {
+        setPersistenceError(null);
+        try {
+          // Create conversation if this is the first message (new chat)
+          if (!convId) {
             const data = await fetchJSON("/api/conversations", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -66,58 +87,50 @@ export function useChatPersistence(
             convId = data.conversation.id;
             setActiveConversationId(convId);
             window.history.replaceState(null, "", `/chat?id=${convId}`);
-          } catch (err) {
-            log.error("[chat] Failed to create conversation", err);
-            return;
           }
-        }
 
-        // Save user message — abort the whole persistence if this fails
-        if (userContent) {
-          try {
-            await fetchJSON(`/api/conversations/${convId}/messages`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ role: "user", content: userContent }),
-            });
-          } catch (err) {
-            log.error("[chat] Failed to save user message", err);
-            return;
-          }
-        }
-
-        // Save assistant message
-        try {
-          await fetchJSON(`/api/conversations/${convId}/messages`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ role: "assistant", content: assistantContent }),
-          });
-        } catch (err) {
-          log.error("[chat] Failed to save assistant message", err);
-        }
-
-        // Auto-generate title after first exchange (exactly 2 messages)
-        if (messages.length === 2 && userContent) {
-          fetchJSON(`/api/conversations/${convId}/title`, {
+          await fetchJSONWithRetry(`/api/conversations/${convId}/turns`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              turnId: userMsg.id,
               userMessage: userContent,
               assistantMessage: assistantContent,
+              assistantModel: selectedModel,
             }),
-          })
-            .then(() => mutateConversations())
-            .catch((err) => log.error("[chat] Failed to generate title", err));
-        }
+          });
+          retrySaveRef.current = null;
 
-        // Refresh conversation list to update updated_at ordering
-        mutateConversations();
+          // Auto-generate title after first exchange (exactly 2 messages)
+          if (messages.length === 2) {
+            fetchJSON(`/api/conversations/${convId}/title`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userMessage: userContent,
+                assistantMessage: assistantContent,
+              }),
+            })
+              .then(() => mutateConversations())
+              .catch((err) => log.error("[chat] Failed to generate title", err));
+          }
+
+          // Refresh conversation list to update updated_at ordering
+          mutateConversations();
+        } catch (err) {
+          const failure =
+            err instanceof Error
+              ? err
+              : new Error("Failed to save completed turn");
+          log.error("[chat] Failed to save completed turn", failure);
+          setPersistenceError(failure);
+        }
       };
 
-      saveMessages().catch((err) =>
-        log.error("[chat] Unexpected error in saveMessages", err)
-      );
+      retrySaveRef.current = saveMessages;
+      void saveMessages();
     }
   }, [status, messages, activeConversationId, mutateConversations, selectedModel, setActiveConversationId]);
+
+  return { persistenceError, retryPersistence, clearPersistenceError };
 }

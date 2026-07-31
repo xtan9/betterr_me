@@ -30,6 +30,17 @@ still use the `github-issues` skill for issue operations.
 
 Set this to `yes` if the repository later begins treating external pull requests as feature requests.
 
+## Merge policy
+
+This is a solo-maintainer repository. The default-branch ruleset must not require
+an approving GitHub review, because the pull-request author cannot approve their
+own change. Keep pull requests, squash-only merges, strict `CI Gate` and `E2E Gate`
+status checks, deletion protection, and non-fast-forward protection enabled.
+
+Independent agent or local code review remains part of the implementation
+workflow, but its absence as a GitHub approval must not block an otherwise green,
+mergeable pull request.
+
 ## When a skill says "publish to the issue tracker"
 
 Create a GitHub issue through the `github-issues` skill.
