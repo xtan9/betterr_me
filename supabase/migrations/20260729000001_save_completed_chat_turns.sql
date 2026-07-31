@@ -4,10 +4,25 @@ ALTER TABLE chat_messages
   ADD COLUMN model TEXT;
 
 ALTER TABLE chat_messages
-  ADD CONSTRAINT chat_messages_turn_position_check
+  ADD CONSTRAINT chat_messages_completed_turn_shape_check
   CHECK (
     (turn_id IS NULL AND turn_position IS NULL)
-    OR (turn_id IS NOT NULL AND turn_position IN (0, 1))
+    OR (
+      turn_id IS NOT NULL
+      AND (
+        (
+          turn_position = 0
+          AND role = 'user'
+          AND model IS NULL
+        )
+        OR (
+          turn_position = 1
+          AND role = 'assistant'
+          AND model IS NOT NULL
+          AND btrim(model) <> ''
+        )
+      )
+    )
   );
 
 CREATE UNIQUE INDEX chat_messages_conversation_turn_position_key

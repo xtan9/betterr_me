@@ -1,38 +1,17 @@
+-- ralph-ci: true
 -- Run after `supabase db reset` against the local instance. The transaction
 -- leaves no test identity, conversation, or message data behind.
 begin;
 
-insert into auth.users (
-  id,
-  instance_id,
-  aud,
-  role,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  created_at,
-  updated_at
-)
-values (
+select public.ralph_ci_create_auth_user(
   '48900000-0000-0000-0000-000000000001',
-  '00000000-0000-0000-0000-000000000000',
-  'authenticated',
-  'authenticated',
-  'completed-turn@example.test',
-  crypt('not-used', gen_salt('bf')),
-  now(),
-  '{}'::jsonb,
-  '{}'::jsonb,
-  now(),
-  now()
+  'completed-turn@example.test'
 );
 
 set local role authenticated;
 select set_config(
-  'request.jwt.claim.sub',
-  '48900000-0000-0000-0000-000000000001',
+  'request.jwt.claims',
+  '{"sub":"48900000-0000-0000-0000-000000000001"}',
   true
 );
 
@@ -86,18 +65,14 @@ begin
 end
 $$;
 
-alter table public.chat_messages
-  add constraint completed_turn_forced_failure
-  check (content <> 'force assistant failure');
-
 do $$
 begin
   perform public.save_completed_chat_turn(
     '48900000-0000-0000-0000-000000000010',
     'turn-2',
     'This user row must roll back.',
-    'force assistant failure',
-    'gpt-5.4-mini'
+    'This assistant row is missing model metadata.',
+    null
   );
   raise exception 'failing completed turn unexpectedly succeeded';
 exception
