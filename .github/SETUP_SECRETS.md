@@ -48,7 +48,8 @@ The controlled production and manual preview workflow requires:
 - Repository secret `VERCEL_TOKEN`: a Vercel access token scoped to
   `xtan9's projects` -> `All Projects`. A token scoped only to `betterr-me`
   cannot retrieve the project settings required by the current CLI deployment
-  flow. Record its expiration and rotate the secret before it expires.
+  flow. Its non-sensitive expiration metadata is recorded in
+  `.github/secret-expirations.json`.
 - Repository variable `VERCEL_ORG_ID`: the `orgId` from the project's
   `.vercel/project.json` after running `vercel link` locally.
 - Repository variable `VERCEL_PROJECT_ID`: the `projectId` from the same file.
@@ -85,3 +86,22 @@ Use this rollout order:
 When the rollout variable is `true`, the legacy `Production Smoke` push job
 skips because the controlled deployment performs its own post-deploy smoke
 probe.
+
+## Expiration reminders
+
+`.github/workflows/secret-expiration-reminders.yml` checks the repository's
+declared credential metadata every Monday. It creates one deduplicated
+maintenance issue when a credential is within 60 days of expiration, and
+escalates the issue when a weekly check first finds it within 30 days, within 7
+days, or expired. It closes the issue after the manifest is updated with a
+rotated credential's new expiration date.
+
+GitHub does not expose secret values or provider expiration dates to this
+workflow. Whenever a repository credential is created or rotated, add or update
+its entry in `.github/secret-expirations.json` in the same pull request. The
+manifest may include credentials from any platform used by this repository, but
+must contain only non-sensitive metadata: the GitHub secret name, provider,
+expiration date, rotation URL, expected scope, and optional reminder thresholds.
+
+The workflow's `GITHUB_TOKEN` can manage only the reminder issue in this
+repository. It does not scan other repositories or provider accounts.

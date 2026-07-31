@@ -18,6 +18,13 @@ is also permitted to create, comment on, and close only its deduplicated
 automation with the repository-scoped `GITHUB_TOKEN`; interactive agents must
 still use the `github-issues` skill for issue operations.
 
+The secret-expiration reporter in
+`.github/workflows/secret-expiration-reminders.yml` may create, update, comment
+on, and close only the deduplicated `[Maintenance] Rotate expiring repository
+credentials` issue. It uses declared, non-sensitive metadata from
+`.github/secret-expirations.json` and the repository-scoped `GITHUB_TOKEN`;
+interactive agents must still use the `github-issues` skill.
+
 ## Conventions
 
 - Create, read, list, update, comment on, label, and close issues through the `github-issues` skill.
