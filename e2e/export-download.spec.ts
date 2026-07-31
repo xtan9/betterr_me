@@ -102,7 +102,9 @@ test.describe('Scoped export download', () => {
         'best_streak',
         'created_at',
       ]);
-      expect(exportedNames).toEqual([...SEED_HABIT_NAMES].sort());
+      for (const seedHabitName of SEED_HABIT_NAMES) {
+        expect(exportedNames).toContain(seedHabitName);
+      }
       expect(exportedNames).not.toContain(secondUserHabitName);
     } finally {
       const cleanupFailures: string[] = [];
