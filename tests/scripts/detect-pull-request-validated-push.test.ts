@@ -17,8 +17,8 @@ describe("pull-request-validated push detection", () => {
     const listCheckRunsForRef = vi.fn().mockResolvedValue({
       data: {
         check_runs: [
-          { conclusion: "success", name: "PR Gate", status: "completed" },
-          { conclusion: "success", name: "PR Gate", status: "completed" },
+          { conclusion: "success", name: "CI Gate", status: "completed" },
+          { conclusion: "success", name: "E2E Gate", status: "completed" },
         ],
       },
     });
@@ -59,8 +59,15 @@ describe("pull-request-validated push detection", () => {
 
     for (const check_runs of [
       [],
-      [{ conclusion: "failure", name: "PR Gate", status: "completed" }],
-      [{ conclusion: null, name: "PR Gate", status: "in_progress" }],
+      [{ conclusion: "success", name: "CI Gate", status: "completed" }],
+      [
+        { conclusion: "success", name: "CI Gate", status: "completed" },
+        { conclusion: "failure", name: "E2E Gate", status: "completed" },
+      ],
+      [
+        { conclusion: "success", name: "CI Gate", status: "completed" },
+        { conclusion: null, name: "E2E Gate", status: "in_progress" },
+      ],
     ]) {
       await expect(detectPullRequestValidatedPush({
         branch: "main",
@@ -75,5 +82,29 @@ describe("pull-request-validated push detection", () => {
         repo: "betterr_me",
       })).resolves.toBe(false);
     }
+  });
+
+  it("does not accept ambiguous duplicate gate checks", async () => {
+    const pullRequest = {
+      base: { ref: "main" },
+      head: { sha: "duplicate-gates" },
+      merged_at: "2026-07-30T15:14:11Z",
+    };
+    const check_runs = [
+      { conclusion: "success", name: "CI Gate", status: "completed" },
+      { conclusion: "success", name: "CI Gate", status: "completed" },
+      { conclusion: "success", name: "E2E Gate", status: "completed" },
+    ];
+
+    await expect(detectPullRequestValidatedPush({
+      branch: "main",
+      commitSha: "merged-with-duplicate-gates",
+      listCheckRunsForRef: vi.fn().mockResolvedValue({ data: { check_runs } }),
+      listPullRequestsAssociatedWithCommit: vi.fn().mockResolvedValue({
+        data: [pullRequest],
+      }),
+      owner: "xtan9",
+      repo: "betterr_me",
+    })).resolves.toBe(false);
   });
 });

@@ -272,6 +272,9 @@ describe("conditional test classifier", () => {
     const workflow = classifyChanges([{ status: "M", path: ".github/workflows/e2e.yml" }]);
     expect(workflow.suites.smokeTests).toEqual([
       "tests/scripts/classify-changes.test.ts",
+      "tests/scripts/detect-pull-request-validated-push.test.ts",
+      "tests/scripts/gate-policy.test.ts",
+      "tests/scripts/github-actions-runtime-policy.test.ts",
       "tests/scripts/run-change-classifier.test.ts",
     ]);
 
@@ -284,6 +287,9 @@ describe("conditional test classifier", () => {
       e2eSpecs: ["e2e/dashboard.spec.ts"],
       smokeTests: [
         "tests/scripts/classify-changes.test.ts",
+        "tests/scripts/detect-pull-request-validated-push.test.ts",
+        "tests/scripts/gate-policy.test.ts",
+        "tests/scripts/github-actions-runtime-policy.test.ts",
         "tests/scripts/run-change-classifier.test.ts",
       ],
     });

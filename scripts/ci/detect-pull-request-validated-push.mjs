@@ -53,15 +53,16 @@ export async function detectPullRequestValidatedPush({
       ref: pullRequest.head.sha,
       per_page: 100,
     });
-    const pullRequestGates = checks.check_runs.filter(
-      (checkRun) => checkRun.name === "PR Gate",
-    );
-    if (
-      pullRequestGates.length >= 2
-      && pullRequestGates.every((checkRun) =>
-        checkRun.status === "completed" && checkRun.conclusion === "success"
-      )
-    ) {
+    const requiredGateNames = ["CI Gate", "E2E Gate"];
+    const hasOneSuccessfulCheckPerGate = requiredGateNames.every((gateName) => {
+      const matchingChecks = checks.check_runs.filter(
+        (checkRun) => checkRun.name === gateName,
+      );
+      return matchingChecks.length === 1
+        && matchingChecks[0].status === "completed"
+        && matchingChecks[0].conclusion === "success";
+    });
+    if (hasOneSuccessfulCheckPerGate) {
       return true;
     }
   }
