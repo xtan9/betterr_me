@@ -18,6 +18,7 @@ const LAYOUT_SPECS = [SPECS.accessibility, SPECS.crossBrowser, SPECS.responsive]
 const CLASSIFIER_TESTS = [
   "tests/scripts/classify-changes.test.ts",
   "tests/scripts/run-change-classifier.test.ts",
+  "tests/scripts/stryker-changed.test.ts",
 ];
 const CI_POLICY_TESTS = [
   ...CLASSIFIER_TESTS,
@@ -25,6 +26,41 @@ const CI_POLICY_TESTS = [
   "tests/scripts/gate-policy.test.ts",
   "tests/scripts/github-actions-runtime-policy.test.ts",
   "tests/scripts/quality-signal-contracts.test.ts",
+];
+
+export const MUTATION_SCOPES = [
+  {
+    name: "database",
+    implementationPatterns: [/^lib\/db\/(?!index\.ts$|types\.ts$).+\.ts$/],
+    testPatterns: [/^tests\/lib\/db\/.+\.test\.ts$/],
+    mutate: ["lib/db/**/*.ts", "!lib/db/index.ts", "!lib/db/types.ts"],
+    testFiles: ["tests/lib/db/**/*.test.ts"],
+  },
+  {
+    name: "recurring-tasks",
+    implementationPatterns: [/^lib\/recurring-tasks\/(?!index\.ts$).+\.ts$/],
+    testPatterns: [/^tests\/lib\/recurring-tasks\/.+\.test\.ts$/],
+    mutate: ["lib/recurring-tasks/**/*.ts", "!lib/recurring-tasks/index.ts"],
+    testFiles: ["tests/lib/recurring-tasks/**/*.test.ts"],
+  },
+  {
+    name: "habits",
+    implementationPatterns: [/^lib\/habits\/.+\.ts$/],
+    testPatterns: [/^tests\/lib\/habits\/.+\.test\.ts$/],
+    mutate: ["lib/habits/**/*.ts"],
+    testFiles: ["tests/lib/habits/**/*.test.ts"],
+  },
+];
+
+const MUTATION_INFRASTRUCTURE_PATTERNS = [
+  /^tests\/helpers\/mock-supabase\.ts$/,
+  /^tests\/setup\.ts$/,
+  /^stryker\.config\.mjs$/,
+  /^scripts\/stryker-changed\.mjs$/,
+  /^scripts\/ci\/(?:classify-changes|mutation-selection|run-change-classifier)\.mjs$/,
+  /^\.github\/workflows\/mutation-testing\.yml$/,
+  /^package\.json$/,
+  /^pnpm-workspace\.yaml$/,
 ];
 
 export const OWNERSHIP_REGISTRY = [
@@ -47,6 +83,16 @@ export const OWNERSHIP_REGISTRY = [
   rule("other-product", [/^app\/api\/(?:api-keys|categories|insights|mcp|oauth|sidebar)\//, /^emails\//, /^public\//, /^lib\/(?:categories\/|data\/|db\/(?:api-keys|categories|insights|journal-entry-links)|mcp\/|oauth\/|scheduling\/|validations\/(?:api|api-key|category|csv-import|oauth|push))/,], fullE2E()),
   rule("database-platform", [/^supabase\//], { ...fullE2E({ fullTests: true }), migrations: true }),
   rule("e2e-tests", [/^e2e\//], product({ directE2E: true })),
+  ...MUTATION_SCOPES.map((scope) =>
+    rule(
+      `mutation-${scope.name}`,
+      [...scope.implementationPatterns, ...scope.testPatterns],
+      { mutationScopes: [scope.name] },
+    )
+  ),
+  rule("mutation-infrastructure", MUTATION_INFRASTRUCTURE_PATTERNS, {
+    mutationScopes: MUTATION_SCOPES.map(({ name }) => name),
+  }),
   rule("unit-tests", [/^tests\//], { quality: true, changedTests: true }),
   rule("ci-workflows", [/^\.github\/(?:actions|workflows)\//], { quality: true, smokeTests: CI_POLICY_TESTS, e2eSpecs: [SPECS.dashboard], e2eSupabase: true }),
   rule("dependency-automation", [/^\.github\/dependabot\.yml$/], { quality: true, smokeTests: CLASSIFIER_TESTS }),
@@ -92,6 +138,7 @@ function broadSelection(reason, changedPaths = []) {
       e2eVisual: true,
       e2eSupabase: true,
       performance: true,
+      mutationScopes: MUTATION_SCOPES.map(({ name }) => name),
     },
   });
 }
@@ -139,7 +186,7 @@ export function classifyChanges(records) {
   }
 
   const changedPaths = [...new Set(paths)];
-  const suiteSeed = { e2eSpecs: [], smokeTests: [] };
+  const suiteSeed = { e2eSpecs: [], smokeTests: [], mutationScopes: [] };
   const ownershipMatches = [];
   const reasons = [];
   const unclassifiedPaths = [];
@@ -176,7 +223,7 @@ export function classifyChanges(records) {
 
 function mergeSuites(target, source, path) {
   for (const [key, value] of Object.entries(source)) {
-    if (key === "e2eSpecs" || key === "smokeTests") {
+    if (key === "e2eSpecs" || key === "smokeTests" || key === "mutationScopes") {
       target[key].push(...value);
     } else if (key === "directE2E" && value) {
       if (/^e2e\/.+\.spec\.ts$/.test(path) && !/financial-cushion|visual-regression/.test(path)) target.e2eSpecs.push(path);
@@ -192,6 +239,7 @@ function mergeSuites(target, source, path) {
 function finalize({ changedPaths, ownershipMatches, reasons, fallback, suiteSeed }) {
   const e2eSpecs = [...new Set(suiteSeed.e2eSpecs ?? [])].sort();
   const smokeTests = [...new Set(suiteSeed.smokeTests ?? [])].sort();
+  const mutationScopes = [...new Set(suiteSeed.mutationScopes ?? [])].sort();
   const e2e = Boolean(suiteSeed.e2eFull || suiteSeed.e2eRunway || suiteSeed.e2eVisual || e2eSpecs.length);
   const quality = Boolean(suiteSeed.quality || suiteSeed.fullTests || suiteSeed.fullLint || smokeTests.length);
   const suites = {
@@ -208,6 +256,8 @@ function finalize({ changedPaths, ownershipMatches, reasons, fallback, suiteSeed
     e2eVisual: Boolean(suiteSeed.e2eVisual),
     e2eSupabase: Boolean(suiteSeed.e2eSupabase || suiteSeed.e2eFull || e2eSpecs.length),
     performance: Boolean(suiteSeed.performance),
+    mutation: mutationScopes.length > 0,
+    mutationScopes,
   };
   const skipReasons = {};
   if (!quality) skipReasons.quality = "No changed path is owned by a quality-test surface.";
@@ -229,6 +279,7 @@ function finalize({ changedPaths, ownershipMatches, reasons, fallback, suiteSeed
   if (!suites.e2eVisual) skipReasons.e2eVisual = "No visual-regression surface changed.";
   if (!suites.e2eSupabase) skipReasons.e2eSupabase = "Selected browser checks do not require Supabase.";
   if (!suites.performance) skipReasons.performance = "No product or performance-sensitive path changed.";
+  if (!suites.mutation) skipReasons.mutation = "No changed path is owned by a mutation-testing scope.";
   const labels = { quality: qualityLabel(suites), e2e: e2eLabel(suites) };
   return { changedPaths, ownershipMatches, suites, labels, reasons, skipReasons, fallback };
 }
@@ -292,6 +343,8 @@ export function formatGitHubOutputs(result, baseSha = "") {
     `e2e_supabase=${suites.e2eSupabase}`,
     `e2e_label=${e2eLabel(suites)}`,
     `performance=${suites.performance}`,
+    `mutation=${suites.mutation}`,
+    `mutation_scopes=${suites.mutationScopes.join(",")}`,
     `base_sha=${baseSha}`,
     `classification_json=${JSON.stringify(result)}`,
   ].join("\n");

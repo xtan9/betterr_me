@@ -1,8 +1,9 @@
 // @ts-check
-/** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
+import { MUTATION_SCOPES } from "./scripts/ci/classify-changes.mjs";
+
 const config = {
   _comment:
-    "Stryker mutation testing config. Scoped narrowly to lib/db — the most heavily tested area. " +
+    "Stryker mutation testing config. Scope comes from the central ownership policy. " +
     "See docs/superpowers/specs/2026-04-12-mutation-testing.md for rationale and CI recipe.",
   packageManager: "pnpm",
   testRunner: "vitest",
@@ -42,19 +43,8 @@ const config = {
   // Restrict the initial test run to the scoped unit tests. Running the full
   // suite slows startup and pulls in tests for app/ API routes that depend on
   // files outside the mutated scope.
-  testFiles: [
-    "tests/lib/db/**/*.test.ts",
-    "tests/lib/recurring-tasks/**/*.test.ts",
-    "tests/lib/habits/**/*.test.ts",
-  ],
-  mutate: [
-    "lib/db/**/*.ts",
-    "!lib/db/index.ts",
-    "!lib/db/types.ts",
-    "lib/recurring-tasks/**/*.ts",
-    "!lib/recurring-tasks/index.ts",
-    "lib/habits/**/*.ts",
-  ],
+  testFiles: MUTATION_SCOPES.flatMap((scope) => scope.testFiles),
+  mutate: MUTATION_SCOPES.flatMap((scope) => scope.mutate),
   // checkers: ["typescript"],
   // tsconfigFile: "tsconfig.json",
   reporters: ["html", "clear-text", "progress"],
