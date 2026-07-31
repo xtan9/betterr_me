@@ -19,6 +19,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "completed_chat_turn_persistence.sql",
+    "domain": "chat",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "control_plane_authorization.sql",
     "domain": "control-plane",
     "role": "admin",

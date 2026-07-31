@@ -11,6 +11,9 @@ describe('ChatMessagesDB', () => {
     conversation_id: mockConversationId,
     role: 'user',
     content: 'Hello, how are you?',
+    turn_id: null,
+    turn_position: null,
+    model: null,
     created_at: '2026-04-02T10:00:00Z',
   };
 
@@ -19,6 +22,9 @@ describe('ChatMessagesDB', () => {
     conversation_id: mockConversationId,
     role: 'assistant',
     content: 'I am doing well, thank you!',
+    turn_id: null,
+    turn_position: null,
+    model: null,
     created_at: '2026-04-02T10:00:01Z',
   };
 
@@ -34,9 +40,26 @@ describe('ChatMessagesDB', () => {
       const result = await db.getMessagesByConversation(mockConversationId);
 
       expect(result).toEqual([mockMessage, mockAssistantMessage]);
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('chat_messages');
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('conversation_id', mockConversationId);
-      expect(mockSupabaseClient.order).toHaveBeenCalledWith('created_at', { ascending: true });
+      mockSupabaseClient.expectQuery({
+        table: 'chat_messages',
+        method: 'select',
+        args: ['*'],
+      });
+      mockSupabaseClient.expectQuery({
+        table: 'chat_messages',
+        method: 'eq',
+        args: ['conversation_id', mockConversationId],
+      });
+      mockSupabaseClient.expectQuery({
+        table: 'chat_messages',
+        method: 'order',
+        args: ['created_at', { ascending: true }],
+      });
+      mockSupabaseClient.expectQuery({
+        table: 'chat_messages',
+        method: 'order',
+        args: ['turn_position', { ascending: true, nullsFirst: true }],
+      });
     });
 
     it('should return empty array when no messages', async () => {
@@ -118,6 +141,48 @@ describe('ChatMessagesDB', () => {
       await expect(
         db.createMessages([{ conversation_id: mockConversationId, role: 'user', content: 'test' }])
       ).rejects.toEqual({ message: 'Bulk insert error' });
+    });
+  });
+
+  describe('saveCompletedTurn', () => {
+    it('returns the atomic retry-safe persistence outcome', async () => {
+      const saved = {
+        outcome: 'already_saved' as const,
+        messages: [mockMessage, mockAssistantMessage],
+      };
+      const rpc = vi.fn().mockResolvedValue({ data: saved, error: null });
+      const turnDb = new ChatMessagesDB({ rpc } as any);
+
+      const result = await turnDb.saveCompletedTurn({
+        conversationId: mockConversationId,
+        turnId: 'turn-1',
+        userContent: 'Hello',
+        assistantContent: 'Hi there',
+        assistantModel: 'gpt-5.4-mini',
+      });
+
+      expect(result).toEqual(saved);
+      expect(rpc).toHaveBeenCalledWith('save_completed_chat_turn', {
+        p_conversation_id: mockConversationId,
+        p_turn_id: 'turn-1',
+        p_user_content: 'Hello',
+        p_assistant_content: 'Hi there',
+        p_assistant_model: 'gpt-5.4-mini',
+      });
+    });
+
+    it('throws when atomic turn persistence fails', async () => {
+      const error = { message: 'Atomic insert failed' };
+      const rpc = vi.fn().mockResolvedValue({ data: null, error });
+      const turnDb = new ChatMessagesDB({ rpc } as any);
+
+      await expect(turnDb.saveCompletedTurn({
+        conversationId: mockConversationId,
+        turnId: 'turn-1',
+        userContent: 'Hello',
+        assistantContent: 'Hi there',
+        assistantModel: 'gpt-5.4-mini',
+      })).rejects.toEqual(error);
     });
   });
 

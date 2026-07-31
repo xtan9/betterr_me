@@ -893,7 +893,17 @@ export interface ChatMessage {
   conversation_id: string;
   role: ChatRole;
   content: string;
+  turn_id: string | null;
+  turn_position: number | null;
+  model: string | null;
   created_at: string;
 }
 
-export type ChatMessageInsert = Omit<ChatMessage, 'id' | 'created_at'>;
+export type ChatMessageInsert = Omit<
+  ChatMessage,
+  'id' | 'created_at' | 'turn_id' | 'turn_position' | 'model'
+> & {
+  turn_id?: string | null;
+  turn_position?: number | null;
+  model?: string | null;
+};
