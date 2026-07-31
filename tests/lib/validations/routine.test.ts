@@ -158,9 +158,25 @@ describe("routineExerciseAddSchema", () => {
       target_reps: null,
       target_weight_kg: null,
       target_duration_seconds: null,
+      target_distance_meters: null,
       notes: null,
     });
     expect(result.success).toBe(true);
+  });
+
+  it("accepts and bounds a distance target", () => {
+    expect(
+      routineExerciseAddSchema.safeParse({
+        exercise_id: "550e8400-e29b-41d4-a716-446655440000",
+        target_distance_meters: 999999.99,
+      }).success,
+    ).toBe(true);
+    expect(
+      routineExerciseAddSchema.safeParse({
+        exercise_id: "550e8400-e29b-41d4-a716-446655440000",
+        target_distance_meters: 1_000_000,
+      }).success,
+    ).toBe(false);
   });
 });
 

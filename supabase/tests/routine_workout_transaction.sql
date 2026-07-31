@@ -39,7 +39,7 @@ values
     'Transaction plank',
     'core',
     'none',
-    'duration',
+    'distance_duration',
     true
   );
 
@@ -235,6 +235,123 @@ begin
     where workout.user_id = '48500000-0000-4000-8000-000000000001'
   ) then
     raise exception 'workout set remained after set creation failed';
+  end if;
+end
+$$;
+
+set local role authenticated;
+
+-- Saving the inverse conversion returns one complete nested routine in source
+-- order from the same transactional boundary.
+do $$
+declare
+  outcome jsonb;
+begin
+  outcome := public.save_workout_as_routine(
+    '48500000-0000-4000-8000-000000000001',
+    '{"name": "Saved transaction routine", "notes": "Reusable"}'::jsonb,
+    '[
+      {
+        "exercise_id": "48500000-0000-4000-8000-000000000002",
+        "sort_order": 10,
+        "target_sets": 2,
+        "target_reps": 5,
+        "target_weight_kg": 85,
+        "target_duration_seconds": null,
+        "target_distance_meters": null,
+        "rest_timer_seconds": 120,
+        "notes": "Pause at the bottom"
+      },
+      {
+        "exercise_id": "48500000-0000-4000-8000-000000000003",
+        "sort_order": 20,
+        "target_sets": 2,
+        "target_reps": null,
+        "target_weight_kg": null,
+        "target_duration_seconds": 60,
+        "target_distance_meters": 100,
+        "rest_timer_seconds": 45,
+        "notes": null
+      }
+    ]'::jsonb
+  );
+
+  if outcome->>'name' <> 'Saved transaction routine'
+    or outcome->>'notes' <> 'Reusable'
+    or jsonb_array_length(outcome->'exercises') <> 2
+    or outcome->'exercises'->0->>'exercise_id'
+      <> '48500000-0000-4000-8000-000000000002'
+    or (outcome->'exercises'->0->>'sort_order')::double precision <> 10
+    or (outcome->'exercises'->0->>'target_sets')::integer <> 2
+    or (outcome->'exercises'->0->>'target_reps')::integer <> 5
+    or (outcome->'exercises'->0->>'target_weight_kg')::numeric <> 85
+    or outcome->'exercises'->0->'exercise'->>'name'
+      <> 'Transaction bench press'
+    or outcome->'exercises'->1->>'exercise_id'
+      <> '48500000-0000-4000-8000-000000000003'
+    or (outcome->'exercises'->1->>'target_duration_seconds')::integer <> 60
+    or (outcome->'exercises'->1->>'target_distance_meters')::numeric <> 100
+  then
+    raise exception 'successful workout conversion was incorrect: %', outcome;
+  end if;
+end
+$$;
+
+-- A late foreign-key failure rolls back the routine and its first exercise.
+do $$
+begin
+  perform public.save_workout_as_routine(
+    '48500000-0000-4000-8000-000000000001',
+    '{"name": "Atomic saved routine", "notes": null}'::jsonb,
+    '[
+      {
+        "exercise_id": "48500000-0000-4000-8000-000000000002",
+        "sort_order": 10,
+        "target_sets": 2,
+        "target_reps": 8,
+        "target_weight_kg": 80,
+        "target_duration_seconds": null,
+        "target_distance_meters": null,
+        "rest_timer_seconds": 90,
+        "notes": null
+      },
+      {
+        "exercise_id": "48500000-0000-4000-8000-000000000099",
+        "sort_order": 20,
+        "target_sets": 1,
+        "target_reps": null,
+        "target_weight_kg": null,
+        "target_duration_seconds": 60,
+        "target_distance_meters": 100,
+        "rest_timer_seconds": 45,
+        "notes": null
+      }
+    ]'::jsonb
+  );
+  raise exception 'workout conversion unexpectedly succeeded';
+exception
+  when foreign_key_violation then null;
+end
+$$;
+
+reset role;
+
+do $$
+begin
+  if exists (
+    select 1 from public.routines
+    where name = 'Atomic saved routine'
+  ) then
+    raise exception 'routine remained after exercise creation failed';
+  end if;
+
+  if exists (
+    select 1
+    from public.routine_exercises as routine_exercise
+    join public.routines as routine on routine.id = routine_exercise.routine_id
+    where routine.name = 'Atomic saved routine'
+  ) then
+    raise exception 'routine exercise remained after conversion failed';
   end if;
 end
 $$;

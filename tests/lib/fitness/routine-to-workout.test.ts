@@ -4,7 +4,7 @@ import {
   UnsupportedRoutineDataError,
   type RoutineWorkoutSessionInput,
   type RoutineWorkoutStore,
-} from "@/lib/fitness/routine-to-workout";
+} from "@/lib/fitness/routine-workout-conversion";
 import type {
   RoutineWithExercises,
   WorkoutWithExercises,
@@ -44,6 +44,7 @@ function routineExercise(
     target_reps: null,
     target_weight_kg: null,
     target_duration_seconds: null,
+    target_distance_meters: null,
     rest_timer_seconds: 90,
     notes: null,
     created_at: "2026-07-29T00:00:00.000Z",
@@ -326,6 +327,8 @@ describe("RoutineToWorkoutConversion.start", () => {
     ["target weight above 99999.99", { target_weight_kg: 100_000 }],
     ["negative target duration", { target_duration_seconds: -1 }],
     ["target duration above 86400", { target_duration_seconds: 86_401 }],
+    ["negative target distance", { target_distance_meters: -0.01 }],
+    ["target distance above 999999.99", { target_distance_meters: 1_000_000 }],
     ["negative rest timer", { rest_timer_seconds: -1 }],
     ["rest timer above 600", { rest_timer_seconds: 601 }],
     ["notes above 2000 characters", { notes: "x".repeat(2001) }],
@@ -363,6 +366,7 @@ describe("RoutineToWorkoutConversion.start", () => {
           target_reps: 9_999,
           target_weight_kg: 99_999.99,
           target_duration_seconds: 86_400,
+          target_distance_meters: 999_999.99,
           rest_timer_seconds: 600,
           notes: "x".repeat(2_000),
         }),
@@ -394,6 +398,7 @@ describe("RoutineToWorkoutConversion.start", () => {
           target_reps: 0,
           target_weight_kg: 0,
           target_duration_seconds: 0,
+          target_distance_meters: 0,
           rest_timer_seconds: 0,
         }),
       ]),
