@@ -161,3 +161,85 @@ Established patterns (see examples in `tests/lib/db/`):
 - **`next-intl`**: `vi.mock("next-intl", () => ({ useTranslations: () => (key) => key }))` or wrap with `NextIntlClientProvider`.
 - **SWR**: `vi.mock("swr", () => ({ default: (...args) => mockUseSWR(...args) }))`.
 - **Date/time**: `vi.useFakeTimers()` + `vi.setSystemTime("2026-04-15T12:00:00Z")` + `vi.useRealTimers()` in `finally`.
+
+## Conditional test selection
+
+Pull-request CI, E2E, and performance workflows all consume the structured report
+from `scripts/ci/classify-changes.mjs` through its fail-safe runner. The ownership
+registry is the only path-policy source. The classifier logs and emits a JSON
+report containing changed paths,
+matched owners, selected suites, fallback reasons, and reasons for intentional
+skips. Missing comparison SHAs, unreadable or ambiguous diffs, and unregistered
+application paths select the broad validation set.
+
+When changing the classifier, run its targeted policy verification:
+
+```bash
+pnpm exec vitest run tests/scripts/classify-changes.test.ts \
+  tests/scripts/run-change-classifier.test.ts \
+  tests/scripts/detect-pull-request-validated-push.test.ts \
+  tests/scripts/gate-policy.test.ts \
+  tests/scripts/github-actions-runtime-policy.test.ts \
+  tests/scripts/quality-signal-contracts.test.ts
+```
+
+This verifies every tracked path has an owner and covers renames, deletions,
+test-only and workflow-only changes, mixed-risk diffs, each registered product
+area, conservative fallbacks, stable aggregate gate names, and fail-closed gate
+results. It intentionally does not run the complete Playwright suite; the
+classifier selects the dashboard smoke spec for its own changes in pull-request
+CI.
+
+The optional visual, accessibility, and performance signal contracts are
+documented in [Quality signals](quality-signals.md). The focused contract test
+above checks their workflow names, reported terminology, documentation shape,
+and continued separation from the repository's required gate names without
+running Playwright.
+
+## Browser test portfolio
+
+Chromium tests prove boundaries that require a real browser: navigation,
+browser APIs, HTTP integration, authentication, and persistence wiring. Pure
+input variants, calculations, validation, and component presentation belong in
+Vitest. One browser journey is enough when another case would exercise the same
+wiring with only different business-rule data.
+
+The July 2026 portfolio cleanup removed these redundant browser checks after
+confirming their replacement coverage:
+
+| Removed browser coverage | Replacement coverage |
+| --- | --- |
+| Weekdays, weekly, 2x/week, 3x/week, and custom habit creation variants | `tests/components/habits/frequency-selector.test.tsx` proves every selection payload; `tests/lib/validations/habit.test.ts` and `tests/app/api/habits/route.test.ts` prove accepted frequency shapes. The retained daily creation journey proves UI-to-HTTP persistence and redirect wiring. |
+| Habit category loop, empty-name validation, cancel, and repeated sequential creation | `tests/components/categories/category-picker.test.tsx`, `tests/components/habits/habit-form.test.tsx`, and `tests/app/habits/create-habit-page.test.tsx` prove selection, validation, cancellation, request, and redirect behavior. |
+| Dashboard skeleton, greeting, snapshot, checklist, motivation, and nav-presence cases | `tests/app/dashboard/dashboard-content.test.tsx`, the focused tests under `tests/components/dashboard/`, and `tests/components/layouts/app-sidebar.test.tsx` prove these presentation variants. |
+| Duplicate dashboard mobile, tablet, and desktop cases | `e2e/responsive.spec.ts` remains the browser boundary for representative responsive layout and overflow behavior. |
+| Duplicate dashboard habit toggle, uncomplete, streak-display, rapid-toggle, and progress-display cases | `tests/lib/db/habit-logs.test.ts`, `tests/app/dashboard/dashboard-content.test.tsx`, `tests/components/habits/habit-card.test.tsx`, and `tests/components/dashboard/habit-checklist.test.tsx` prove the business rules and presentation. Retained journeys cover both toggle surfaces and persistence after reload. |
+| Task-list heading, tabs, and sidebar-link presence | `tests/components/tasks/tasks-page-content.test.tsx` and `tests/components/layouts/app-sidebar.test.tsx` prove presentation; the retained Chromium case proves navigation to task creation. |
+| The 150-month Household Runway What-if input | `tests/lib/finance/cushion.test.ts` proves the exact long-run calculation. The retained browser journey proves interview state, What-if wiring, reset, browser history, and local persistence with one representative adjustment. |
+
+For a portfolio-only change, run the affected lower-level selections and only
+the retained Chromium journeys:
+
+```bash
+pnpm exec vitest run \
+  tests/components/habits/frequency-selector.test.tsx \
+  tests/components/categories/category-picker.test.tsx \
+  tests/components/habits/habit-form.test.tsx \
+  tests/app/habits/create-habit-page.test.tsx \
+  tests/lib/validations/habit.test.ts \
+  tests/app/api/habits/route.test.ts \
+  tests/app/dashboard/dashboard-content.test.tsx \
+  tests/components/dashboard/daily-snapshot.test.tsx \
+  tests/components/dashboard/habit-checklist.test.tsx \
+  tests/components/dashboard/motivation-message.test.tsx \
+  tests/components/habits/habit-card.test.tsx \
+  tests/components/tasks/tasks-page-content.test.tsx \
+  tests/components/layouts/app-sidebar.test.tsx \
+  tests/lib/db/habit-logs.test.ts \
+  tests/lib/finance/cushion.test.ts
+pnpm exec playwright test --project=chromium \
+  e2e/create-habit.spec.ts e2e/complete-habit.spec.ts \
+  e2e/dashboard.spec.ts e2e/tasks-list.spec.ts e2e/responsive.spec.ts
+pnpm exec playwright test --project=runway-public-desktop \
+  e2e/financial-cushion.spec.ts
+```

@@ -124,7 +124,7 @@ describe("useTasksRealtime", () => {
     );
 
     const eventTypes = mockOn.mock.calls.map(
-      (call: [string, { event: string }]) => call[1].event
+      (call) => (call[1] as { event: string }).event
     );
     expect(eventTypes).toContain("INSERT");
     expect(eventTypes).toContain("UPDATE");
@@ -137,7 +137,7 @@ describe("useTasksRealtime", () => {
     );
 
     const filters = mockOn.mock.calls.map(
-      (call: [string, { filter: string }]) => call[1].filter
+      (call) => (call[1] as { filter: string }).filter
     );
     expect(filters).toEqual([
       "project_id=eq.proj-1",

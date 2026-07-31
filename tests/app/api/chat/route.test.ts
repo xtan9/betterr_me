@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { mockStreamText, mockToUIMessageStreamResponse } = vi.hoisted(() => {
   const mockToUIMessageStreamResponse = vi.fn();
-  const mockStreamText = vi.fn(() => ({
+  const mockStreamText = vi.fn((_options: Record<string, unknown>) => ({
     toUIMessageStreamResponse: mockToUIMessageStreamResponse,
   }));
   return { mockStreamText, mockToUIMessageStreamResponse };
@@ -20,10 +20,16 @@ const { mockLogError, mockLogWarn } = vi.hoisted(() => ({
 
 const { mockConvertToModelMessages } = vi.hoisted(() => ({
   mockConvertToModelMessages: vi.fn(async (msgs: unknown[]) =>
-    msgs.map((m: { role?: string; parts?: { type: string; text: string }[] }) => ({
-      role: m.role,
-      content: m.parts?.find((p: { type: string }) => p.type === 'text')?.text ?? '',
-    }))
+    msgs.map((value) => {
+      const m = value as {
+        role?: string;
+        parts?: { type: string; text: string }[];
+      };
+      return {
+        role: m.role,
+        content: m.parts?.find((p) => p.type === 'text')?.text ?? '',
+      };
+    })
   ),
 }));
 
@@ -192,7 +198,11 @@ describe('POST /api/chat', () => {
       })
     );
     // Verify identity messages are prepended before user messages
-    const callArgs = mockStreamText.mock.calls[0][0];
+    const callArgs = mockStreamText.mock.calls[0][0] as {
+      maxOutputTokens: number;
+      messages: Array<{ role?: string; content?: unknown }>;
+      system?: unknown;
+    };
     expect(callArgs.maxOutputTokens).toBe(2048);
     expect(callArgs.messages[0]).toEqual(
       expect.objectContaining({ role: 'user', content: [{ type: 'text', text: 'Hi, who are you?' }] }),

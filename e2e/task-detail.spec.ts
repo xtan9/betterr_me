@@ -1,21 +1,22 @@
 import { test, expect } from '@playwright/test';
+import { E2E_READ_ONLY, RUN_CONTEXT, SEED_TASK_TITLE } from './constants';
+
+test.skip(E2E_READ_ONLY, 'Run-owned task journeys require disposable E2E state');
 
 /**
  * E2E tests for task detail and edit pages.
  *
  * These tests rely on the seed task created in global-setup.ts
- * ("E2E Test - Seed Task 1"). They fetch the task ID via the API,
+ * (a uniquely namespaced "Seed Task 1"). They fetch the task ID via the API,
  * then navigate to the detail/edit pages.
  */
 
-const SEED_TASK_TITLE = 'E2E Test - Seed Task 1';
-
-/** Fetch the seed task's ID via the API (prefix match to handle mid-rename state). */
+/** Fetch the run-owned seed task's ID via an exact title match. */
 async function getSeedTaskId(page: import('@playwright/test').Page): Promise<string> {
   const response = await page.request.get('/api/tasks');
   expect(response.ok()).toBe(true);
   const { tasks } = await response.json();
-  const seedTask = tasks.find((t: { title: string }) => t.title.startsWith(SEED_TASK_TITLE));
+  const seedTask = tasks.find((t: { title: string }) => t.title === SEED_TASK_TITLE);
   expect(seedTask).toBeDefined();
   return seedTask.id;
 }
@@ -138,7 +139,7 @@ test.describe('Task Edit Page', () => {
 
     // Update the title
     await titleInput.clear();
-    await titleInput.fill('E2E Test - Seed Task 1 Updated');
+    await titleInput.fill(RUN_CONTEXT.ownedName('Seed Task 1 Updated'));
 
     // Submit the form
     const saveButton = page.getByRole('button', { name: /save|update/i });

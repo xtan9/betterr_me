@@ -1,6 +1,6 @@
 /**
  * Bundle size analysis script
- * QA-005: Performance audit - Bundle analysis
+ * QA-005: Advisory performance measurements - bundle budgets
  *
  * Usage: tsx scripts/analyze-bundle.ts
  *

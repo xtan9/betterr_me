@@ -12,6 +12,12 @@ comments. Issue workers remain offline and must never invoke `gh` or receive
 GitHub credentials. This exception does not permit issue creation, label changes,
 body edits, or closing issues outside the linked pull-request merge behavior.
 
+The scheduled failure reporter in `.github/workflows/scheduled-failure-alerts.yml`
+is also permitted to create, comment on, and close only its deduplicated
+`[Bug] Scheduled … workflow failed` issues. It runs as trusted default-branch
+automation with the repository-scoped `GITHUB_TOKEN`; interactive agents must
+still use the `github-issues` skill for issue operations.
+
 ## Conventions
 
 - Create, read, list, update, comment on, label, and close issues through the `github-issues` skill.
