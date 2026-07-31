@@ -1,5 +1,12 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
+export type ProfileIdentity = Pick<User, "id"> & {
+  email?: string | null;
+  fullName?: string | null;
+  avatarUrl?: string | null;
+  user_metadata?: User["user_metadata"];
+};
+
 /**
  * Ensure a profile row exists for the given user.
  * If no profile exists, creates one with sensible defaults.
@@ -10,7 +17,7 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
  */
 export async function ensureProfile(
   supabase: SupabaseClient,
-  user: User
+  user: ProfileIdentity,
 ): Promise<void> {
   // Check if profile already exists
   const { data: existing, error: selectError } = await supabase
@@ -30,8 +37,8 @@ export async function ensureProfile(
 
   // Profile missing — create one
   const email = user.email ?? `no-email-${user.id}`;
-  const fullName = user.user_metadata?.full_name || null;
-  const avatarUrl = user.user_metadata?.avatar_url || null;
+  const fullName = user.fullName ?? user.user_metadata?.full_name ?? null;
+  const avatarUrl = user.avatarUrl ?? user.user_metadata?.avatar_url ?? null;
 
   const { error: insertError } = await supabase.from("profiles").insert({
     id: user.id,

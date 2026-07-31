@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { getLocalDateString } from '@/lib/utils';
 import { log } from '@/lib/logger';
 import { createHabitCompletion } from '@/lib/habits/completion';
 import { habitCompletionSchema } from '@/lib/validations/habit';
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * POST /api/habits/[id]/toggle
@@ -24,14 +30,13 @@ export async function POST(
 ) {
   try {
     const { id: habitId } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return auth.status === 401
+        ? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        : NextResponse.json({ error: 'Failed to toggle habit' }, { status: 500 });
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     // Get date from body (defaults to today)
     const parsedBody = habitCompletionSchema.safeParse(
@@ -48,7 +53,7 @@ export async function POST(
     const date = parsedBody.data.date || getLocalDateString();
 
     const completion = createHabitCompletion(supabase);
-    const intent = { habitId, userId: user.id, date };
+    const intent = { habitId, userId, date };
     const result = completed
       ? await completion.complete(intent)
       : await completion.uncomplete(intent);

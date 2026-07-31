@@ -18,6 +18,11 @@ type AuthenticatedUserPrincipal = {
     userId: string;
     credential: Credential;
     clientId?: string;
+    profile?: {
+      email: string | null;
+      fullName: string | null;
+      avatarUrl: string | null;
+    };
   };
 }[UserCredentialKind];
 

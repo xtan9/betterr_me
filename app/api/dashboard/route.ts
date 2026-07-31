@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { getLocalDateString } from '@/lib/utils';
 import { log } from '@/lib/logger';
 import { createSupabaseDashboardSnapshot } from '@/lib/dashboard/supabase-dashboard-snapshot';
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/dashboard
@@ -19,14 +25,16 @@ import { createSupabaseDashboardSnapshot } from '@/lib/dashboard/supabase-dashbo
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return auth.status === 401
+        ? NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        : NextResponse.json(
+          { error: 'Failed to fetch dashboard data' },
+          { status: 500 },
+        );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get('date') || getLocalDateString();
@@ -40,7 +48,7 @@ export async function GET(request: NextRequest) {
     }
 
     const outcome = await createSupabaseDashboardSnapshot(supabase).load({
-      userId: user.id,
+      userId,
       date,
     });
     if (outcome.status === 'failed') {

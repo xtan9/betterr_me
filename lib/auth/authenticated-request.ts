@@ -4,6 +4,7 @@ import {
   isAuthSessionMissingError,
   type AuthError,
   type SupabaseClient,
+  type User,
 } from "@supabase/supabase-js";
 
 import { authenticateApiKeyCredential } from "@/lib/auth/api-key";
@@ -40,6 +41,19 @@ function classifyUserError(
   return { outcome: "misconfigured" };
 }
 
+function authenticatedUserProfile(user: User) {
+  const fullName = user.user_metadata?.full_name;
+  const avatarUrl = user.user_metadata?.avatar_url;
+  if (user.email === undefined && fullName === undefined && avatarUrl === undefined) {
+    return undefined;
+  }
+  return {
+    email: user.email ?? null,
+    fullName: typeof fullName === "string" ? fullName : null,
+    avatarUrl: typeof avatarUrl === "string" ? avatarUrl : null,
+  };
+}
+
 export async function authenticateCookieCredential(
   request: Request,
 ): Promise<CredentialOutcome<SupabaseClient>> {
@@ -55,10 +69,16 @@ export async function authenticateCookieCredential(
 
   if (error) return classifyUserError(error, "cookie");
   if (!user) return { outcome: "anonymous" };
+  const profile = authenticatedUserProfile(user);
 
   return {
     outcome: "authenticated",
-    principal: { type: "user", userId: user.id, credential: "cookie" },
+    principal: {
+      type: "user",
+      userId: user.id,
+      credential: "cookie",
+      ...(profile && { profile }),
+    },
     permissions: ["read", "write"],
     client,
   };
