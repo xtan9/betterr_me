@@ -43,7 +43,7 @@ test.describe('Workout completion journey', () => {
       .eq('user_id', authData.user.id);
     if (deleteError) throw new Error(`workout cleanup failed: ${deleteError.message}`);
 
-    const { error: signOutError } = await supabase.auth.signOut();
+    const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
     if (signOutError) throw new Error(`workout cleanup sign-out failed: ${signOutError.message}`);
   });
 
