@@ -144,7 +144,7 @@ jobs:
         if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy'
         run: >-
           pnpm --silent dlx vercel@58.4.4 pull --yes
-          --environment="$DEPLOY_TARGET"
+          --environment="$DEPLOY_TARGET" --token="$VERCEL_TOKEN"
 
       - name: Deploy through Vercel remote build
         id: deploy-command
@@ -156,6 +156,7 @@ jobs:
           if [[ "$DEPLOY_TARGET" == "production" ]]; then
             args+=(--prod)
           fi
+          args+=(--token="$VERCEL_TOKEN")
           deployment_url="$(pnpm --silent dlx vercel@58.4.4 "${args[@]}")"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
 
