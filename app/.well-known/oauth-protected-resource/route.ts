@@ -3,10 +3,10 @@ import {
   metadataCorsOptionsRequestHandler,
 } from 'mcp-handler';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://betterr.me';
+import { getOAuthIssuer } from '@/lib/oauth/access-token';
 
 const handler = protectedResourceHandler({
-  authServerUrls: [BASE_URL],
+  authServerUrls: [getOAuthIssuer()],
 });
 
 const corsHandler = metadataCorsOptionsRequestHandler();

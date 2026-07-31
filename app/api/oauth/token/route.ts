@@ -7,7 +7,7 @@ import {
   hashToken,
   REFRESH_TOKEN_EXPIRY_DAYS,
 } from "@/lib/mcp/refresh-token";
-import { signMcpToken } from "@/lib/mcp/token";
+import { issueAccessToken } from "@/lib/oauth/access-token";
 import { createAuthorizationCodeExchanger } from "@/lib/oauth/authorization-code";
 import { createRefreshTokenRotator } from "@/lib/oauth/refresh-token";
 import { createSupabaseAuthorizationCodeStore } from "@/lib/oauth/supabase-authorization-code-store";
@@ -97,8 +97,7 @@ async function handleRefreshToken(
 
   const rotator = createRefreshTokenRotator({
     store: createSupabaseRefreshTokenStore(serviceClient),
-    issueAccessToken: ({ userId, clientId, scopes }) =>
-      signMcpToken(userId, clientId, scopes),
+    issueAccessToken,
   });
   const result = await rotator.rotate({
     refreshToken: refresh_token,
@@ -178,7 +177,11 @@ export async function POST(request: NextRequest) {
     const exchanger = createAuthorizationCodeExchanger({
       store: createSupabaseAuthorizationCodeStore(serviceClient),
       issueCredentials: async ({ clientId, userId, scopes }) => {
-        const accessToken = await signMcpToken(userId, clientId, scopes);
+        const accessToken = await issueAccessToken({
+          userId,
+          clientId,
+          scopes,
+        });
         const rawRefreshToken = generateRefreshToken();
         const refreshTokenHash = hashToken(rawRefreshToken);
         const refreshExpiresAt = new Date(
@@ -196,11 +199,8 @@ export async function POST(request: NextRequest) {
         if (error) throw new Error("Failed to issue refresh token", { cause: error });
         await cleanupExpiredTokens(serviceClient);
         return {
-          accessToken,
-          tokenType: "bearer" as const,
-          expiresIn: 3600,
+          ...accessToken,
           refreshToken: rawRefreshToken,
-          scope: scopes.join(" "),
         };
       },
     });

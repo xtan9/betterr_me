@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 import { hashToken } from '@/lib/mcp/refresh-token';
-import { signMcpToken } from '@/lib/mcp/token';
+import { issueAccessToken } from '@/lib/oauth/access-token';
 import { log } from '@/lib/logger';
 import { queueThenResponses, restoreMockSupabaseThen } from '../../../helpers/mock-supabase';
 import { mockSupabaseClient } from '../../../setup';
@@ -19,9 +19,14 @@ vi.mock('@/lib/logger', () => ({
   log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
-// Mock signMcpToken to return a predictable value
-vi.mock('@/lib/mcp/token', () => ({
-  signMcpToken: vi.fn().mockResolvedValue('mock-access-token'),
+// Mock the shared access-token policy boundary.
+vi.mock('@/lib/oauth/access-token', () => ({
+  issueAccessToken: vi.fn().mockResolvedValue({
+    accessToken: 'mock-access-token',
+    tokenType: 'bearer',
+    expiresIn: 3600,
+    scope: 'read write',
+  }),
 }));
 
 // Mock Supabase service client — chain: .update().eq().eq().select().single()
@@ -403,7 +408,7 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
         error_description: description,
       });
       expect(mockRpc).not.toHaveBeenCalled();
-      expect(signMcpToken).not.toHaveBeenCalled();
+      expect(issueAccessToken).not.toHaveBeenCalled();
       expect(mockSupabaseClient.queryLog).toEqual([]);
     },
   );
@@ -587,7 +592,7 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
       error: 'invalid_grant',
       error_description: description,
     });
-    expect(signMcpToken).not.toHaveBeenCalled();
+    expect(issueAccessToken).not.toHaveBeenCalled();
     expect(mockSupabaseClient.queryLog).toEqual([]);
   });
 
@@ -610,7 +615,7 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
       error: 'invalid_grant',
       error_description: 'Token reuse detected — token family revoked',
     });
-    expect(signMcpToken).not.toHaveBeenCalled();
+    expect(issueAccessToken).not.toHaveBeenCalled();
     expect(mockRpc).toHaveBeenNthCalledWith(
       1,
       'resolve_oauth_refresh_token_context',
@@ -658,12 +663,12 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
       error: 'invalid_grant',
       error_description: 'Token reuse detected — token family revoked',
     });
-    expect(signMcpToken).toHaveBeenCalledOnce();
-    expect(signMcpToken).toHaveBeenCalledWith(
-      'user-123',
-      'test-client',
-      ['read', 'write'],
-    );
+    expect(issueAccessToken).toHaveBeenCalledOnce();
+    expect(issueAccessToken).toHaveBeenCalledWith({
+      userId: 'user-123',
+      clientId: 'test-client',
+      scopes: ['read', 'write'],
+    });
     expect(mockRpc).toHaveBeenCalledTimes(2);
     expect(mockRpc).not.toHaveBeenCalledWith(
       'cleanup_oauth_refresh_token_families',
@@ -696,11 +701,11 @@ describe('POST /api/oauth/token — grant_type=refresh_token', () => {
       error: 'server_error',
       error_description: 'Internal server error',
     });
-    expect(signMcpToken).toHaveBeenCalledOnce();
-    expect(signMcpToken).toHaveBeenCalledWith(
-      'user-123',
-      'test-client',
-      ['read', 'write'],
-    );
+    expect(issueAccessToken).toHaveBeenCalledOnce();
+    expect(issueAccessToken).toHaveBeenCalledWith({
+      userId: 'user-123',
+      clientId: 'test-client',
+      scopes: ['read', 'write'],
+    });
   });
 });

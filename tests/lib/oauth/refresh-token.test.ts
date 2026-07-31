@@ -26,7 +26,12 @@ describe("refresh-token rotation lifecycle", () => {
           scopes: ["read", "write"],
         },
       });
-    const issueAccessToken = vi.fn().mockResolvedValue("access-token");
+    const issueAccessToken = vi.fn().mockResolvedValue({
+      accessToken: "access-token",
+      tokenType: "bearer",
+      expiresIn: 3600,
+      scope: "read write",
+    });
     const rotator = createRefreshTokenRotator({
       store: { resolve, rotate },
       now: () => new Date("2026-07-28T12:00:00.000Z"),

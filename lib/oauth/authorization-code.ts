@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 
+import type { AccessTokenCredential } from "@/lib/oauth/access-token";
+
 export const AUTHORIZATION_CODE_LIFETIME_MS = 5 * 60 * 1000;
 
 export type ProofKeyMethod = "S256";
@@ -42,12 +44,8 @@ export type ConsumeAuthorizationCodeResult =
   | { ok: true; record: AuthorizationCodeRecord }
   | { ok: false; error: AuthorizationCodeFailure };
 
-export interface CredentialOutcome {
-  accessToken: string;
-  tokenType: "bearer";
-  expiresIn: number;
+export interface CredentialOutcome extends AccessTokenCredential {
   refreshToken?: string;
-  scope: string;
 }
 
 export interface CredentialContext {

@@ -47,11 +47,23 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 import {
-  signMcpToken,
   verifyMcpToken,
   verifyMcpTokenCredential,
   verifyMcpAuth,
 } from '@/lib/mcp/token';
+import {
+  ACCESS_TOKEN_POLICY,
+  issueAccessToken,
+} from '@/lib/oauth/access-token';
+
+async function signMcpToken(
+  userId: string,
+  clientId = userId,
+  scopes: readonly string[] = ACCESS_TOKEN_POLICY.defaultScopes,
+): Promise<string> {
+  const credential = await issueAccessToken({ userId, clientId, scopes });
+  return credential.accessToken;
+}
 
 async function signPayload(payload: unknown): Promise<string> {
   const crypto = await import('node:crypto');
@@ -73,7 +85,7 @@ async function signPayload(payload: unknown): Promise<string> {
 // ---------------------------------------------------------------------------
 // signMcpToken
 // ---------------------------------------------------------------------------
-describe('signMcpToken', () => {
+describe('access-token issuance used by MCP verification', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -86,13 +98,16 @@ describe('signMcpToken', () => {
     parts.forEach((p) => expect(p.length).toBeGreaterThan(0));
   });
 
-  it('payload contains sub, aud:"mcp", iat, and exp (1 hour)', async () => {
+  it('payload contains the required issuer, subject, audience, client, scopes, and lifetime', async () => {
     const token = await signMcpToken('user-abc');
     const payloadB64 = token.split('.')[1];
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
 
+    expect(payload.iss).toBe('https://betterr.me');
     expect(payload.sub).toBe('user-abc');
     expect(payload.aud).toBe('mcp');
+    expect(payload.client_id).toBe('user-abc');
+    expect(payload.scope).toBe('read write');
     expect(typeof payload.iat).toBe('number');
     expect(typeof payload.exp).toBe('number');
     expect(payload.exp - payload.iat).toBe(3600);
@@ -147,7 +162,7 @@ describe('verifyMcpToken', () => {
     ]);
   });
 
-  it('legacy token without exp is accepted (backwards-compat)', async () => {
+  it('rejects a legacy token without the required policy claims', async () => {
     const crypto = await import('node:crypto');
     const secret = process.env.API_KEY_HMAC_SECRET!;
 
@@ -165,11 +180,7 @@ describe('verifyMcpToken', () => {
     const token = `${data}.${signature}`;
 
     const result = await verifyMcpToken(token);
-    expect(result).toEqual({
-      userId: 'user-123',
-      clientId: 'user-123',
-      scopes: ['read', 'write'],
-    });
+    expect(result).toBeNull();
   });
 
   it('token with expired exp returns null', async () => {
@@ -206,6 +217,36 @@ describe('verifyMcpToken', () => {
     expect(result).toBeNull();
   });
 
+  it('wrong issuer returns null', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = await signPayload({
+      iss: 'https://other-issuer.test',
+      sub: 'user-123',
+      aud: 'mcp',
+      client_id: 'client-123',
+      scope: 'read',
+      iat: now,
+      exp: now + 3600,
+    });
+
+    await expect(verifyMcpToken(token)).resolves.toBeNull();
+  });
+
+  it('rejects a signed token with a lifetime outside the shared policy', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = await signPayload({
+      iss: 'https://betterr.me',
+      sub: 'user-123',
+      aud: 'mcp',
+      client_id: 'client-123',
+      scope: 'read',
+      iat: now,
+      exp: now + 7200,
+    });
+
+    await expect(verifyMcpToken(token)).resolves.toBeNull();
+  });
+
   it('invalid signature returns null', async () => {
     const token = await signMcpToken('user-123');
     // Tamper with the signature
@@ -230,6 +271,7 @@ describe('verifyMcpToken', () => {
     ['a non-object payload', null],
     ['an array payload', []],
     ['a non-string subject', { sub: 123, aud: 'mcp' }],
+    ['a missing issuer', { sub: 'user-123', aud: 'mcp', client_id: 'client-123', scope: 'read', iat: 1, exp: 2 }],
     ['a non-string audience', { sub: 'user-123', aud: 123 }],
     ['a non-number expiry', { sub: 'user-123', aud: 'mcp', exp: 'never' }],
     ['a non-number issued-at time', { sub: 'user-123', aud: 'mcp', iat: 'now' }],
