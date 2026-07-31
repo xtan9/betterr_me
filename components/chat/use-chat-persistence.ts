@@ -33,6 +33,7 @@ export function useChatPersistence(
   const prevStatusRef = useRef(status);
   const retrySaveRef = useRef<(() => Promise<void>) | null>(null);
   const [persistenceError, setPersistenceError] = useState<Error | null>(null);
+  const [isPersisting, setIsPersisting] = useState(false);
 
   const retryPersistence = useCallback(() => {
     void retrySaveRef.current?.();
@@ -76,20 +77,13 @@ export function useChatPersistence(
       let convId = activeConversationId;
       const saveMessages = async () => {
         setPersistenceError(null);
+        setIsPersisting(true);
         try {
-          // Create conversation if this is the first message (new chat)
-          if (!convId) {
-            const data = await fetchJSON("/api/conversations", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ model: selectedModel }),
-            });
-            convId = data.conversation.id;
-            setActiveConversationId(convId);
-            window.history.replaceState(null, "", `/chat?id=${convId}`);
-          }
-
-          await fetchJSONWithRetry(`/api/conversations/${convId}/turns`, {
+          const isInitialTurn = convId === null;
+          const endpoint = isInitialTurn
+            ? "/api/conversations/turns"
+            : `/api/conversations/${convId}/turns`;
+          const savedTurn = await fetchJSONWithRetry(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -99,21 +93,15 @@ export function useChatPersistence(
               assistantModel: selectedModel,
             }),
           });
-          retrySaveRef.current = null;
 
-          // Auto-generate title after first exchange (exactly 2 messages)
-          if (messages.length === 2) {
-            fetchJSON(`/api/conversations/${convId}/title`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                userMessage: userContent,
-                assistantMessage: assistantContent,
-              }),
-            })
-              .then(() => mutateConversations())
-              .catch((err) => log.error("[chat] Failed to generate title", err));
+          // The first turn owns conversation creation, both messages, title
+          // assignment, and the stable navigation id in one server lifecycle.
+          if (isInitialTurn) {
+            convId = savedTurn.conversationId;
+            setActiveConversationId(convId);
+            window.history.replaceState(null, "", `/chat?id=${convId}`);
           }
+          retrySaveRef.current = null;
 
           // Refresh conversation list to update updated_at ordering
           mutateConversations();
@@ -124,6 +112,8 @@ export function useChatPersistence(
               : new Error("Failed to save completed turn");
           log.error("[chat] Failed to save completed turn", failure);
           setPersistenceError(failure);
+        } finally {
+          setIsPersisting(false);
         }
       };
 
@@ -132,5 +122,10 @@ export function useChatPersistence(
     }
   }, [status, messages, activeConversationId, mutateConversations, selectedModel, setActiveConversationId]);
 
-  return { persistenceError, retryPersistence, clearPersistenceError };
+  return {
+    persistenceError,
+    isPersisting,
+    retryPersistence,
+    clearPersistenceError,
+  };
 }

@@ -138,6 +138,11 @@ class MockQueryBuilder {
     this.record('range', args);
     return this;
   });
+  rpc = vi.fn((...args: unknown[]) => {
+    this.currentTable = null;
+    this.record('rpc', args);
+    return Promise.resolve({ data: this.mockData, error: this.mockError });
+  });
 
   // Terminal methods that return a promise
   single = vi.fn(() => {

@@ -1,5 +1,22 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Conversation, ConversationInsert, ConversationUpdate } from './types';
+import type { ChatMessage } from './types';
+
+export interface InitialTurn {
+  userId: string;
+  turnId: string;
+  userContent: string;
+  assistantContent: string;
+  assistantModel: string;
+  title: string;
+}
+
+export interface InitialTurnResult {
+  outcome: 'saved' | 'already_saved';
+  conversationId: string;
+  title: string;
+  messages: ChatMessage[];
+}
 
 export class ConversationsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -35,6 +52,19 @@ export class ConversationsDB {
       .single();
     if (error) throw error;
     return data;
+  }
+
+  async createInitialTurn(turn: InitialTurn): Promise<InitialTurnResult> {
+    const { data, error } = await this.supabase.rpc('save_initial_chat_turn', {
+      p_user_id: turn.userId,
+      p_turn_id: turn.turnId,
+      p_user_content: turn.userContent,
+      p_assistant_content: turn.assistantContent,
+      p_assistant_model: turn.assistantModel,
+      p_title: turn.title,
+    });
+    if (error) throw error;
+    return data as InitialTurnResult;
   }
 
   async updateConversation(id: string, userId: string, updates: ConversationUpdate): Promise<Conversation> {

@@ -94,6 +94,55 @@ describe('ConversationsDB', () => {
     });
   });
 
+  describe('createInitialTurn', () => {
+    it('returns the atomic retry-safe initial lifecycle outcome', async () => {
+      const saved = {
+        outcome: 'already_saved' as const,
+        conversationId: 'conv-123',
+        title: 'Plan my week',
+        messages: [],
+      };
+      mockSupabaseClient.setMockResponse(saved);
+
+      const result = await db.createInitialTurn({
+        userId: mockUserId,
+        turnId: 'turn-1',
+        userContent: 'Plan my week',
+        assistantContent: 'Let us start with your priorities.',
+        assistantModel: 'gpt-5.4-mini',
+        title: 'Plan my week',
+      });
+
+      expect(result).toEqual(saved);
+      mockSupabaseClient.expectQuery({
+        table: null,
+        method: 'rpc',
+        args: ['save_initial_chat_turn', {
+          p_user_id: mockUserId,
+          p_turn_id: 'turn-1',
+          p_user_content: 'Plan my week',
+          p_assistant_content: 'Let us start with your priorities.',
+          p_assistant_model: 'gpt-5.4-mini',
+          p_title: 'Plan my week',
+        }],
+      });
+    });
+
+    it('throws when the initial lifecycle RPC fails', async () => {
+      const error = { message: 'Atomic lifecycle failed' };
+      mockSupabaseClient.setMockResponse(null, error);
+
+      await expect(db.createInitialTurn({
+        userId: mockUserId,
+        turnId: 'turn-1',
+        userContent: 'Plan my week',
+        assistantContent: 'Let us start with your priorities.',
+        assistantModel: 'gpt-5.4-mini',
+        title: 'Plan my week',
+      })).rejects.toEqual(error);
+    });
+  });
+
   describe('updateConversation', () => {
     it('should update and return the conversation with user_id filter', async () => {
       const updated = { ...mockConversation, title: 'Updated Title' };

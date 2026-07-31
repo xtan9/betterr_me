@@ -70,7 +70,12 @@ vi.mock("@/components/chat/message-list", () => ({
 
 vi.mock("@/components/chat/chat-input", () => ({
   ChatInput: (props: Record<string, unknown>) => (
-      <div data-testid="chat-input" data-streaming={String(props.isStreaming)} data-model-id={String(props.modelId ?? "")}>
+      <div
+        data-testid="chat-input"
+        data-streaming={String(props.isStreaming)}
+        data-disabled={String(props.disabled ?? false)}
+        data-model-id={String(props.modelId ?? "")}
+      >
         <button
           data-testid="mock-send"
           onClick={() => (props.onSend as (t: string) => void)("hello")}
@@ -366,7 +371,7 @@ describe("ChatContent", () => {
     expect(sidebar).toHaveAttribute("data-active-id", "conv-abc");
   });
 
-  it("creates conversation in stream-complete effect when no conversation selected", async () => {
+  it("persists a new conversation and its first turn through one lifecycle request", async () => {
     const msgs = [
       makeMessage("1", "user", "hello"),
       makeMessage("2", "assistant", "hi there"),
@@ -383,8 +388,9 @@ describe("ChatContent", () => {
     });
 
     const mockFetch = vi.fn().mockResolvedValue({
-      json: () => Promise.resolve({ conversation: { id: "new-conv-id" }, message: {} }),
+      json: () => Promise.resolve({ conversationId: "new-conv-id", outcome: "saved" }),
       ok: true,
+      status: 201,
     });
     vi.stubGlobal("fetch", mockFetch);
 
@@ -404,21 +410,91 @@ describe("ChatContent", () => {
     rerender(<ChatContent />);
 
     await waitFor(() => {
-      // Should POST /api/conversations with model in body
+      // The server owns conversation creation, both messages, title assignment,
+      // and the stable navigation identifier in one lifecycle.
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/conversations",
-        expect.objectContaining({ method: "POST" })
+        "/api/conversations/turns",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            turnId: "1",
+            userMessage: "hello",
+            assistantMessage: "hi there",
+            assistantModel: "gpt-5.4-mini",
+          }),
+        }),
       );
     });
 
-    await waitFor(() => {
-      // Should also save the completed turn
-      const turnCalls = mockFetch.mock.calls.filter(
-        (call: unknown[]) =>
-          typeof call[0] === "string" && call[0].includes("/turns")
-      );
-      expect(turnCalls).toHaveLength(1);
+    expect(
+      mockFetch.mock.calls.some(
+        ([url]) => url === "/api/conversations/new-conv-id/turns",
+      ),
+    ).toBe(false);
+  });
+
+  it("blocks another turn until the initial lifecycle returns a stable id", async () => {
+    const msgs = [
+      makeMessage("first-turn", "user", "hello"),
+      makeMessage("assistant-1", "assistant", "hi there"),
+    ];
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "streaming" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
     });
+
+    let resolveLifecycle!: (response: Response) => void;
+    const lifecycleResponse = new Promise<Response>((resolve) => {
+      resolveLifecycle = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url === "/api/conversations/turns") return lifecycleResponse;
+      return Promise.resolve({
+        json: () => Promise.resolve({ conversations: [] }),
+        ok: true,
+        status: 200,
+      } as Response);
+    }));
+
+    const { rerender } = render(<ChatContent />);
+    mockUseChat.mockReturnValue({
+      messages: msgs,
+      sendMessage: mockSendMessage,
+      stop: mockStop,
+      status: "ready" as const,
+      error: undefined,
+      setMessages: mockSetMessages,
+      id: "test-chat",
+    });
+    rerender(<ChatContent />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("chat-input")).toHaveAttribute(
+        "data-disabled",
+        "true",
+      ),
+    );
+    fireEvent.click(screen.getByTestId("mock-send"));
+    expect(mockSendMessage).not.toHaveBeenCalled();
+
+    resolveLifecycle({
+      json: () =>
+        Promise.resolve({ outcome: "saved", conversationId: "conv-1" }),
+      ok: true,
+      status: 201,
+    } as Response);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("chat-input")).toHaveAttribute(
+        "data-disabled",
+        "false",
+      ),
+    );
   });
 
   it("fetches messages when conversationId is provided", async () => {
@@ -586,7 +662,7 @@ describe("ChatContent", () => {
     let turnAttempts = 0;
     const turnBodies: unknown[] = [];
     const mockFetch = vi.fn((url: string, init?: RequestInit) => {
-      if (url === "/api/conversations/new-conv-id/turns") {
+      if (url === "/api/conversations/turns") {
         turnAttempts += 1;
         turnBodies.push(JSON.parse(init?.body as string));
         return Promise.resolve({
@@ -594,18 +670,10 @@ describe("ChatContent", () => {
             Promise.resolve(
               turnAttempts <= 2
                 ? { outcome: "failed", error: "temporary failure" }
-                : { outcome: "saved", messages: [] },
+                : { outcome: "saved", conversationId: "new-conv-id", messages: [] },
             ),
           ok: turnAttempts > 2,
           status: turnAttempts <= 2 ? 500 : 201,
-        });
-      }
-      if (url === "/api/conversations" && init?.method === "POST") {
-        return Promise.resolve({
-          json: () =>
-            Promise.resolve({ conversation: { id: "new-conv-id" } }),
-          ok: true,
-          status: 201,
         });
       }
       return Promise.resolve({
@@ -630,16 +698,18 @@ describe("ChatContent", () => {
 
     expect(await screen.findByText("error.generic")).toBeInTheDocument();
     expect(turnAttempts).toBe(2);
+    expect(screen.getByTestId("chat-input")).toHaveAttribute(
+      "data-disabled",
+      "true",
+    );
 
     fireEvent.click(screen.getByText("error.retry"));
 
     await waitFor(() => expect(turnAttempts).toBe(3));
-    const conversationCreateCalls = mockFetch.mock.calls.filter(
-      ([url, init]) =>
-        url === "/api/conversations" &&
-        (init as RequestInit | undefined)?.method === "POST",
+    const lifecycleCalls = mockFetch.mock.calls.filter(
+      ([url]) => url === "/api/conversations/turns",
     );
-    expect(conversationCreateCalls).toHaveLength(1);
+    expect(lifecycleCalls).toHaveLength(3);
     expect(turnBodies).toEqual([
       expect.objectContaining({ turnId: "stable-turn-id" }),
       expect.objectContaining({ turnId: "stable-turn-id" }),
@@ -647,6 +717,10 @@ describe("ChatContent", () => {
     ]);
     await waitFor(() =>
       expect(screen.queryByText("error.generic")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("chat-input")).toHaveAttribute(
+      "data-disabled",
+      "false",
     );
   });
 
@@ -731,7 +805,7 @@ describe("ChatContent", () => {
     });
   });
 
-  it("triggers title generation after first exchange (exactly 2 messages)", async () => {
+  it("does not start separate title work for an existing-conversation turn", async () => {
     const msgs = [
       makeMessage("1", "user", "hi"),
       makeMessage("2", "assistant", "hello"),
@@ -767,14 +841,17 @@ describe("ChatContent", () => {
 
     rerender(<ChatContent conversationId="conv-title" />);
 
-    await waitFor(() => {
-      const titleCall = mockFetch.mock.calls.find(
-        (call: unknown[]) =>
-          typeof call[0] === "string" &&
-          call[0].includes("/title")
-      );
-      expect(titleCall).toBeTruthy();
-    });
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/conversations/conv-title/turns",
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+    expect(
+      mockFetch.mock.calls.some(
+        ([url]) => typeof url === "string" && url.includes("/title"),
+      ),
+    ).toBe(false);
   });
 
   it("clears state when deleting the active conversation", async () => {
