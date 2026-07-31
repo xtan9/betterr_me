@@ -30,12 +30,71 @@ vi.mock("@/lib/logger", () => ({
   log: { error: mocks.logError, warn: vi.fn(), info: vi.fn() },
 }));
 
-import { GET } from "@/app/mcp/route";
+import { DELETE, GET, POST } from "@/app/mcp/route";
 
 describe("MCP route authentication", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.handleRequest.mockImplementation(async () => Response.json({ ok: true }));
+  });
+
+  it.each([GET, POST, DELETE])(
+    "requires authorization for every MCP method",
+    async (handler) => {
+      mocks.authenticateRequest.mockResolvedValue({
+        ok: false,
+        outcome: "anonymous",
+        error: "Unauthorized",
+        status: 401,
+      });
+
+      const response = await handler(
+        new Request("https://betterr.example/mcp"),
+      );
+
+      expect(response.status).toBe(401);
+      expect(response.headers.get("www-authenticate")).toContain(
+        'resource_metadata="https://betterr.example/.well-known/oauth-protected-resource"',
+      );
+      expect(mocks.handleRequest).not.toHaveBeenCalled();
+    },
+  );
+
+  it("serves an authenticated bearer request through the protocol handler", async () => {
+    mocks.authenticateRequest.mockResolvedValue({
+      ok: true,
+      outcome: "authenticated",
+      principal: {
+        type: "user",
+        userId: "user-id",
+        credential: "mcp",
+        clientId: "desktop-client",
+      },
+      permissions: ["read", "write"],
+      requiredPermission: "read",
+      client: { name: "service-client" },
+    });
+    mocks.handleRequest.mockResolvedValue(new Response(null, { status: 204 }));
+    const request = new Request("https://betterr.example/mcp", {
+      method: "POST",
+      headers: { authorization: "Bearer valid-token" },
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(204);
+    expect(mocks.authenticateRequest).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ url: "https://betterr.example/mcp" }),
+      {
+        allowedCredentials: ["mcp"],
+        requiredPermission: "read",
+      },
+    );
+    expect(mocks.handleRequest).toHaveBeenCalledExactlyOnceWith(request);
+    expect(request.auth).toMatchObject({
+      token: "valid-token",
+      clientId: "desktop-client",
+    });
   });
 
   it("returns an invalid-credentials challenge for a rejected bearer token", async () => {
