@@ -131,12 +131,15 @@ describe("MCP route authentication", () => {
   it("maps an unexpected MCP handler failure to a logged 500 response", async () => {
     mocks.authenticateRequest.mockResolvedValue({
       ok: true,
+      outcome: "authenticated",
       principal: {
+        type: "user",
         userId: "mcp-user",
         credential: "mcp",
         clientId: "mcp-client",
       },
       permissions: ["read"],
+      requiredPermission: "read",
       client: { name: "service-client" },
     });
     mocks.handleRequest.mockRejectedValue(

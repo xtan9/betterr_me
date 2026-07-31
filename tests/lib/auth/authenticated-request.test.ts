@@ -61,6 +61,7 @@ vi.mock("@supabase/supabase-js", async (importOriginal) => {
 
 import {
   authenticateAdminCredential,
+  authenticateAdminSecretCredential,
   authenticateCookieCredential,
   authenticateMcpCredential,
 } from "@/lib/auth/authenticated-request";
@@ -87,7 +88,7 @@ describe("authenticated request adapters", () => {
 
     expect(result).toEqual({
       outcome: "authenticated",
-      principal: { userId: "cookie-user", credential: "cookie" },
+      principal: { type: "user", userId: "cookie-user", credential: "cookie" },
       permissions: ["read", "write"],
       client: cookieClient,
     });
@@ -107,7 +108,7 @@ describe("authenticated request adapters", () => {
 
     expect(result).toEqual({
       outcome: "authenticated",
-      principal: { userId: "cookie-user", credential: "cookie" },
+      principal: { type: "user", userId: "cookie-user", credential: "cookie" },
       permissions: ["read", "write"],
       client: cookieClient,
     });
@@ -204,7 +205,7 @@ describe("authenticated request adapters", () => {
 
     expect(result).toEqual({
       outcome: "authenticated",
-      principal: { userId: "admin-123", credential: "admin" },
+      principal: { type: "user", userId: "admin-123", credential: "admin" },
       permissions: ["read", "write", "admin"],
       client: mocks.serviceClient,
     });
@@ -219,7 +220,7 @@ describe("authenticated request adapters", () => {
   it("resolves the configured admin sync secret at the admin adapter boundary", async () => {
     vi.stubEnv("ADMIN_SYNC_SECRET", "sync-secret");
 
-    const result = await authenticateAdminCredential(
+    const result = await authenticateAdminSecretCredential(
       new Request("https://example.test/admin", {
         headers: { "x-admin-secret": "sync-secret" },
       }),
@@ -228,9 +229,9 @@ describe("authenticated request adapters", () => {
     expect(result).toEqual({
       outcome: "authenticated",
       principal: {
-        userId: "admin-sync-secret",
-        credential: "admin",
-        clientId: "admin-sync-secret",
+        type: "service",
+        serviceId: "admin-sync",
+        credential: "adminSecret",
       },
       permissions: ["read", "write", "admin"],
       client: mocks.serviceClient,
@@ -307,6 +308,7 @@ describe("authenticated request adapters", () => {
     expect(result).toEqual({
       outcome: "authenticated",
       principal: {
+        type: "user",
         userId: "mcp-user",
         credential: "mcp",
         clientId: "mcp-client",

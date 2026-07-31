@@ -58,7 +58,7 @@ export async function authenticateCookieCredential(
 
   return {
     outcome: "authenticated",
-    principal: { userId: user.id, credential: "cookie" },
+    principal: { type: "user", userId: user.id, credential: "cookie" },
     permissions: ["read", "write"],
     client,
   };
@@ -67,29 +67,6 @@ export async function authenticateCookieCredential(
 export async function authenticateAdminCredential(
   request: Request,
 ): Promise<CredentialOutcome<SupabaseClient>> {
-  const suppliedAdminSecret = request.headers.get("x-admin-secret");
-  if (suppliedAdminSecret !== null) {
-    const configuredAdminSecret = process.env.ADMIN_SYNC_SECRET;
-    if (!configuredAdminSecret) {
-      log.error("[auth] Admin secret credential is not configured");
-      return { outcome: "misconfigured" };
-    }
-    if (suppliedAdminSecret !== configuredAdminSecret) {
-      return { outcome: "invalid" };
-    }
-
-    return {
-      outcome: "authenticated",
-      principal: {
-        userId: "admin-sync-secret",
-        credential: "admin",
-        clientId: "admin-sync-secret",
-      },
-      permissions: ["read", "write", "admin"],
-      client: createAdminClient(),
-    };
-  }
-
   if (request.headers.has("authorization")) return { outcome: "anonymous" };
 
   const client = await createServerClient();
@@ -120,7 +97,34 @@ export async function authenticateAdminCredential(
 
   return {
     outcome: "authenticated",
-    principal: { userId: user.id, credential: "admin" },
+    principal: { type: "user", userId: user.id, credential: "admin" },
+    permissions: ["read", "write", "admin"],
+    client: createAdminClient(),
+  };
+}
+
+export async function authenticateAdminSecretCredential(
+  request: Request,
+): Promise<CredentialOutcome<SupabaseClient>> {
+  const suppliedAdminSecret = request.headers.get("x-admin-secret");
+  if (suppliedAdminSecret === null) return { outcome: "anonymous" };
+
+  const configuredAdminSecret = process.env.ADMIN_SYNC_SECRET;
+  if (!configuredAdminSecret) {
+    log.error("[auth] Admin secret credential is not configured");
+    return { outcome: "misconfigured" };
+  }
+  if (suppliedAdminSecret !== configuredAdminSecret) {
+    return { outcome: "invalid" };
+  }
+
+  return {
+    outcome: "authenticated",
+    principal: {
+      type: "service",
+      serviceId: "admin-sync",
+      credential: "adminSecret",
+    },
     permissions: ["read", "write", "admin"],
     client: createAdminClient(),
   };
@@ -154,6 +158,7 @@ export async function authenticateMcpCredential(
   return {
     outcome: "authenticated",
     principal: {
+      type: "user",
       userId: verified.userId,
       credential: "mcp",
       clientId: verified.clientId,
@@ -167,12 +172,13 @@ export const authenticatedRequestAdapters: AuthenticatedRequestAdapters = {
   cookie: authenticateCookieCredential,
   apiKey: authenticateApiKeyCredential,
   admin: authenticateAdminCredential,
+  adminSecret: authenticateAdminSecretCredential,
   mcp: authenticateMcpCredential,
 };
 
-export function authenticateRequest(
+export function authenticateRequest<Policy extends AuthenticatedRequestPolicy>(
   request: Request,
-  policy: AuthenticatedRequestPolicy,
+  policy: Policy,
 ) {
   return resolveAuthenticatedRequestContext(
     request,

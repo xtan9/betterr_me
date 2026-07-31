@@ -200,9 +200,9 @@ describe('authenticateRequest', () => {
     expect(result).toEqual({
       ok: true,
       outcome: 'authenticated',
-      principal: { userId: 'user-123', credential: 'cookie' },
+      principal: { type: 'user', userId: 'user-123', credential: 'cookie' },
       permissions: ['read', 'write'],
-      permission: 'read',
+      requiredPermission: 'read',
       client: mockCookieClient,
     });
   });
@@ -240,9 +240,9 @@ describe('authenticateRequest', () => {
     expect(result).toEqual({
       ok: true,
       outcome: 'authenticated',
-      principal: { userId: 'user-789', credential: 'apiKey' },
+      principal: { type: 'user', userId: 'user-789', credential: 'apiKey' },
       permissions: ['read', 'write'],
-      permission: 'read',
+      requiredPermission: 'read',
       client: mockServiceClient,
     });
     expect(serviceQueryLog).toEqual([
@@ -303,9 +303,9 @@ describe('authenticateRequest', () => {
     expect(result).toEqual({
       ok: true,
       outcome: 'authenticated',
-      principal: { userId: 'api-key-user', credential: 'apiKey' },
+      principal: { type: 'user', userId: 'api-key-user', credential: 'apiKey' },
       permissions: ['read', 'write'],
-      permission: 'read',
+      requiredPermission: 'read',
       client: mockServiceClient,
     });
     expect(mockGetUser).not.toHaveBeenCalled();
@@ -356,9 +356,9 @@ describe('authenticateRequest', () => {
     expect(result).toEqual({
       ok: true,
       outcome: 'authenticated',
-      principal: { userId: 'cookie-user', credential: 'cookie' },
+      principal: { type: 'user', userId: 'cookie-user', credential: 'cookie' },
       permissions: ['read', 'write'],
-      permission: 'read',
+      requiredPermission: 'read',
       client: mockCookieClient,
     });
     expect(mockServiceFrom).not.toHaveBeenCalled();
@@ -480,9 +480,9 @@ describe('authenticateRequest', () => {
     expect(result).toEqual({
       ok: true,
       outcome: 'authenticated',
-      principal: { userId: 'api-key-user', credential: 'apiKey' },
+      principal: { type: 'user', userId: 'api-key-user', credential: 'apiKey' },
       permissions: ['read', 'write'],
-      permission: 'read',
+      requiredPermission: 'read',
       client: mockServiceClient,
     });
     expect(mockLogError).toHaveBeenCalledWith(

@@ -9,7 +9,7 @@ import { log } from "@/lib/logger";
 import { findBestMatch } from "string-similarity";
 
 const ADMIN_REQUEST_POLICY = {
-  allowedCredentials: ["admin"],
+  allowedCredentials: ["adminSecret", "admin"],
   requiredPermission: "admin",
 } as const satisfies AuthenticatedRequestPolicy;
 

@@ -2,14 +2,33 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { log } from "@/lib/logger";
 
-export type CredentialKind = "cookie" | "apiKey" | "admin" | "mcp";
+export type CredentialKind =
+  | "cookie"
+  | "apiKey"
+  | "admin"
+  | "adminSecret"
+  | "mcp";
 export type RequestPermission = "read" | "write" | "admin";
 
-export type AuthenticatedPrincipal = {
-  userId: string;
-  credential: CredentialKind;
-  clientId?: string;
-};
+type UserCredentialKind = Exclude<CredentialKind, "adminSecret">;
+
+type AuthenticatedUserPrincipal = {
+  [Credential in UserCredentialKind]: {
+    type: "user";
+    userId: string;
+    credential: Credential;
+    clientId?: string;
+  };
+}[UserCredentialKind];
+
+export type AuthenticatedPrincipal =
+  | AuthenticatedUserPrincipal
+  | {
+      type: "service";
+      serviceId: string;
+      credential: "adminSecret";
+      clientId?: string;
+    };
 
 type AuthenticatedCredential<Client> = {
   outcome: "authenticated";
@@ -40,12 +59,15 @@ export type AuthenticatedRequestPolicy = {
   requiredPermission: RequestPermission;
 };
 
-export type AuthenticatedRequestContext<Client = SupabaseClient> = {
+export type AuthenticatedRequestContext<
+  Client = SupabaseClient,
+  Credential extends CredentialKind = CredentialKind,
+> = {
   ok: true;
   outcome: "authenticated";
-  principal: AuthenticatedPrincipal;
+  principal: Extract<AuthenticatedPrincipal, { credential: Credential }>;
   permissions: readonly RequestPermission[];
-  permission: RequestPermission;
+  requiredPermission: RequestPermission;
   client: Client;
 };
 
@@ -78,11 +100,17 @@ export function sanitizedAuthFailureContext(
   return context;
 }
 
-export async function resolveAuthenticatedRequestContext<Client>(
+export async function resolveAuthenticatedRequestContext<
+  Client,
+  Policy extends AuthenticatedRequestPolicy,
+>(
   request: Request,
-  policy: AuthenticatedRequestPolicy,
+  policy: Policy,
   adapters: AuthenticatedRequestAdapters<Client>,
-): Promise<AuthenticatedRequestContext<Client> | AuthenticatedRequestError> {
+): Promise<
+  | AuthenticatedRequestContext<Client, Policy["allowedCredentials"][number]>
+  | AuthenticatedRequestError
+> {
   if (policy.allowedCredentials.length === 0) {
     log.error("[auth] Request policy has no allowed credentials");
     return {
@@ -169,9 +197,12 @@ export async function resolveAuthenticatedRequestContext<Client>(
     return {
       ok: true,
       outcome: "authenticated",
-      principal: result.principal,
+      principal: result.principal as Extract<
+        AuthenticatedPrincipal,
+        { credential: Policy["allowedCredentials"][number] }
+      >,
       permissions: result.permissions,
-      permission: policy.requiredPermission,
+      requiredPermission: policy.requiredPermission,
       client: result.client,
     };
   }

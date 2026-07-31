@@ -23,6 +23,7 @@ function adapters(
     cookie: async () => ({ outcome: "anonymous" }),
     apiKey: async () => ({ outcome: "anonymous" }),
     admin: async () => ({ outcome: "anonymous" }),
+    adminSecret: async () => ({ outcome: "anonymous" }),
     mcp: async () => ({ outcome: "anonymous" }),
     ...overrides,
   };
@@ -43,7 +44,7 @@ describe("resolveAuthenticatedRequestContext", () => {
       adapters({
         apiKey: async () => ({
           outcome: "authenticated",
-          principal: { userId: "user-123", credential: "apiKey" },
+          principal: { type: "user", userId: "user-123", credential: "apiKey" },
           permissions: ["read", "write"],
           client: privilegedClient,
         }),
@@ -53,9 +54,9 @@ describe("resolveAuthenticatedRequestContext", () => {
     expect(result).toEqual({
       ok: true,
       outcome: "authenticated",
-      principal: { userId: "user-123", credential: "apiKey" },
+      principal: { type: "user", userId: "user-123", credential: "apiKey" },
       permissions: ["read", "write"],
-      permission: "read",
+      requiredPermission: "read",
       client: privilegedClient,
     });
   });
@@ -74,7 +75,7 @@ describe("resolveAuthenticatedRequestContext", () => {
           events.push("credential-resolved");
           return {
             outcome: "authenticated",
-            principal: { userId: "user-123", credential: "apiKey" },
+            principal: { type: "user", userId: "user-123", credential: "apiKey" },
             permissions: ["read", "write"],
             client: privilegedClient,
             onAuthorized: () => events.push("authorized"),
@@ -136,7 +137,7 @@ describe("resolveAuthenticatedRequestContext", () => {
       adapters({
         apiKey: async () => ({
           outcome: "authenticated",
-          principal: { userId: "user-123", credential: "apiKey" },
+          principal: { type: "user", userId: "user-123", credential: "apiKey" },
           permissions: ["read"],
           client: privilegedClient,
           onAuthorized,
@@ -208,7 +209,7 @@ describe("resolveAuthenticatedRequestContext", () => {
         adapters({
           [credential]: async () => ({
             outcome: "authenticated",
-            principal: { userId: `${credential}-user`, credential },
+            principal: { type: "user", userId: `${credential}-user`, credential },
             permissions:
               credential === "admin"
                 ? ["read", "write", "admin"]
@@ -221,12 +222,12 @@ describe("resolveAuthenticatedRequestContext", () => {
       expect(result).toEqual({
         ok: true,
         outcome: "authenticated",
-        principal: { userId: `${credential}-user`, credential },
+        principal: { type: "user", userId: `${credential}-user`, credential },
         permissions:
           credential === "admin"
             ? ["read", "write", "admin"]
             : ["read", "write"],
-        permission: credential === "admin" ? "admin" : "read",
+        requiredPermission: credential === "admin" ? "admin" : "read",
         client: privilegedClient,
       });
     },
@@ -244,7 +245,7 @@ describe("resolveAuthenticatedRequestContext", () => {
       adapters({
         apiKey: async () => ({
           outcome: "authenticated",
-          principal: { userId: "api-user", credential: "apiKey" },
+          principal: { type: "user", userId: "api-user", credential: "apiKey" },
           permissions: ["read", "write"],
           client: privilegedClient,
         }),
@@ -321,7 +322,7 @@ describe("resolveAuthenticatedRequestContext", () => {
       adapters({
         cookie: async () => ({
           outcome: "authenticated",
-          principal: { userId: "user-123", credential: "apiKey" },
+          principal: { type: "user", userId: "user-123", credential: "apiKey" },
           permissions: ["read"],
           client: privilegedClient,
         }),

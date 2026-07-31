@@ -128,7 +128,11 @@ export async function authenticateApiKeyCredential(
 
   return {
     outcome: 'authenticated',
-    principal: { userId: keyRow.user_id, credential: 'apiKey' },
+    principal: {
+      type: 'user',
+      userId: keyRow.user_id,
+      credential: 'apiKey',
+    },
     permissions:
       permissions === 'read_write' ? ['read', 'write'] : ['read'],
     client: serviceClient,
