@@ -223,7 +223,9 @@ verification without granting workflow, controller, or secret authority.
 Marked fixtures that need an authenticated identity call the runner-owned
 `public.ralph_ci_create_auth_user(uuid, text)` helper. The helper can create
 only a minimal disposable auth row; the fixture role receives no direct write
-access to `auth` tables. Concurrent fixtures open named sessions through
+access to `auth` tables. Self-cleaning fixtures remove only identities whose
+email ends in `@example.test` through
+`public.ralph_ci_delete_auth_user(uuid)`. Concurrent fixtures open named sessions through
 `public.ralph_ci_open_connection(text)`, which reconnects as the same
 non-superuser role to the current disposable database server.
 
