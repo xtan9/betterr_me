@@ -73,11 +73,10 @@ export function useChatPersistence(
 
       if (!userMsg || !userContent?.trim()) return;
 
+      let convId = activeConversationId;
       const saveMessages = async () => {
         setPersistenceError(null);
         try {
-          let convId = activeConversationId;
-
           // Create conversation if this is the first message (new chat)
           if (!convId) {
             const data = await fetchJSON("/api/conversations", {

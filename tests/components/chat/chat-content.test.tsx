@@ -334,7 +334,7 @@ describe("ChatContent", () => {
     });
     render(<ChatContent />);
     fireEvent.click(screen.getByText("error.retry"));
-    expect(mockRegenerate).toHaveBeenCalled();
+    expect(mockRegenerate).toHaveBeenCalledTimes(1);
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
@@ -586,7 +586,7 @@ describe("ChatContent", () => {
     let turnAttempts = 0;
     const turnBodies: unknown[] = [];
     const mockFetch = vi.fn((url: string, init?: RequestInit) => {
-      if (url === "/api/conversations/conv-save-error/turns") {
+      if (url === "/api/conversations/new-conv-id/turns") {
         turnAttempts += 1;
         turnBodies.push(JSON.parse(init?.body as string));
         return Promise.resolve({
@@ -600,6 +600,14 @@ describe("ChatContent", () => {
           status: turnAttempts <= 2 ? 500 : 201,
         });
       }
+      if (url === "/api/conversations" && init?.method === "POST") {
+        return Promise.resolve({
+          json: () =>
+            Promise.resolve({ conversation: { id: "new-conv-id" } }),
+          ok: true,
+          status: 201,
+        });
+      }
       return Promise.resolve({
         json: () => Promise.resolve({ messages: [] }),
         ok: true,
@@ -608,9 +616,7 @@ describe("ChatContent", () => {
     });
     vi.stubGlobal("fetch", mockFetch);
 
-    const { rerender } = render(
-      <ChatContent conversationId="conv-save-error" />,
-    );
+    const { rerender } = render(<ChatContent />);
     mockUseChat.mockReturnValue({
       messages: msgs,
       sendMessage: mockSendMessage,
@@ -620,7 +626,7 @@ describe("ChatContent", () => {
       setMessages: mockSetMessages,
       id: "test-chat",
     });
-    rerender(<ChatContent conversationId="conv-save-error" />);
+    rerender(<ChatContent />);
 
     expect(await screen.findByText("error.generic")).toBeInTheDocument();
     expect(turnAttempts).toBe(2);
@@ -628,6 +634,12 @@ describe("ChatContent", () => {
     fireEvent.click(screen.getByText("error.retry"));
 
     await waitFor(() => expect(turnAttempts).toBe(3));
+    const conversationCreateCalls = mockFetch.mock.calls.filter(
+      ([url, init]) =>
+        url === "/api/conversations" &&
+        (init as RequestInit | undefined)?.method === "POST",
+    );
+    expect(conversationCreateCalls).toHaveLength(1);
     expect(turnBodies).toEqual([
       expect.objectContaining({ turnId: "stable-turn-id" }),
       expect.objectContaining({ turnId: "stable-turn-id" }),
