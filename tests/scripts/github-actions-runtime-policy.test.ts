@@ -54,13 +54,24 @@ function externalActionReferences() {
 }
 
 describe("GitHub Actions runtime policy", () => {
-  it("publishes one unambiguous CI Gate and E2E Gate for pull requests", () => {
+  it("publishes one unambiguous CI Gate and E2E Gate for pull requests and default-branch pushes", () => {
     const gateNames = workflowFiles.flatMap(({ contents }) =>
       [...contents.matchAll(/^\s+name:\s+(CI Gate|E2E Gate|PR Gate)\s*$/gm)]
         .map((match) => match[1])
     );
 
+    const requiredGateWorkflows = ["ci.yml", "e2e.yml"].map((name) =>
+      readFileSync(resolve(workflowDirectory, name), "utf8")
+        .replaceAll("\r\n", "\n")
+    );
+
     expect(gateNames).toEqual(["CI Gate", "E2E Gate"]);
+    for (const workflow of requiredGateWorkflows) {
+      expect(workflow).toMatch(/on:\n(?:[\s\S]*?\n)?  push:\n    branches: \[main\]/);
+      expect(workflow).toContain(
+        "if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')",
+      );
+    }
   });
 
   it("groups GitHub Actions updates into one monthly pull request", () => {
