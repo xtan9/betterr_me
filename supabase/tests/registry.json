@@ -51,6 +51,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "initial_chat_turn_lifecycle.sql",
+    "domain": "chat",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "oauth_refresh_token_upgrade.sql",
     "domain": "oauth",
     "role": "admin",

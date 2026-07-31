@@ -116,6 +116,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
   // Save both user and assistant messages after stream completes (deferred persistence).
   const {
     persistenceError,
+    isPersisting,
     retryPersistence,
     clearPersistenceError,
   } = useChatPersistence(
@@ -126,6 +127,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
     submittedTurnModelRef.current,
     mutateConversations,
   );
+  const isChatInputDisabled = isPersisting || Boolean(persistenceError);
 
   useEffect(() => {
     if (error) {
@@ -135,13 +137,14 @@ export function ChatContent({ conversationId }: ChatContentProps) {
 
   const handleSend = useCallback(
     (text: string, files?: FileUIPart[]) => {
+      if (isChatInputDisabled) return;
       // Just send to LLM — user message shown optimistically in useChat buffer.
       // Persistence (conversation creation + user + assistant messages) is handled
       // in the stream-complete effect, so a mid-stream refresh leaves no partial data.
       submittedTurnModelRef.current = selectedModel;
       sendMessage({ text, files });
     },
-    [selectedModel, sendMessage]
+    [isChatInputDisabled, selectedModel, sendMessage]
   );
 
   const handleStop = useCallback(() => {
@@ -335,6 +338,7 @@ export function ChatContent({ conversationId }: ChatContentProps) {
           onSend={handleSend}
           onStop={handleStop}
           isStreaming={isStreaming}
+          disabled={isChatInputDisabled}
           modelId={selectedModel}
           onModelChange={handleModelChange}
         />
