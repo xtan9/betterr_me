@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest } from '@/lib/auth/api-key';
+import { authenticateRequest } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { TasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
@@ -9,6 +10,16 @@ import { ensureRecurringInstances } from '@/lib/recurring-tasks';
 import { getLocalDateString } from '@/lib/utils';
 import { createTaskWrites } from '@/lib/tasks/writes';
 import type { TaskFilters } from '@/lib/db/types';
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['apiKey', 'cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['apiKey', 'cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/tasks
@@ -24,11 +35,11 @@ import type { TaskFilters } from '@/lib/db/types';
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = await authenticateRequest(request);
-    if ('error' in auth) {
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { userId, supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const tasksDB = new TasksDB(supabase);
     const searchParams = request.nextUrl.searchParams;
@@ -121,11 +132,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = await authenticateRequest(request);
-    if ('error' in auth) {
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const { userId, supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 

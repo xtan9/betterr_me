@@ -13,15 +13,62 @@ vi.mock('@/lib/logger', () => ({
 
 // Mock Supabase service client for user-exists check in verifyMcpToken
 const mockSingle = vi.fn();
-const mockEq = vi.fn().mockReturnValue({ single: mockSingle });
-const mockSelect = vi.fn().mockReturnValue({ eq: mockEq });
-const mockFrom = vi.fn().mockReturnValue({ select: mockSelect });
+const profileQueryLog: Array<{
+  table: string;
+  method: string;
+  args: unknown[];
+}> = [];
+let profileTable = '';
+const mockEq = vi.fn((...args: unknown[]) => {
+  profileQueryLog.push({ table: profileTable, method: 'eq', args });
+  return {
+    single: (...singleArgs: unknown[]) => {
+      profileQueryLog.push({
+        table: profileTable,
+        method: 'single',
+        args: singleArgs,
+      });
+      return mockSingle(...singleArgs);
+    },
+  };
+});
+const mockSelect = vi.fn((...args: unknown[]) => {
+  profileQueryLog.push({ table: profileTable, method: 'select', args });
+  return { eq: mockEq };
+});
+const mockFrom = vi.fn((table: string) => {
+  profileTable = table;
+  profileQueryLog.push({ table, method: 'from', args: [table] });
+  return { select: mockSelect };
+});
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({ from: mockFrom }),
 }));
 
-import { signMcpToken, verifyMcpToken, verifyMcpAuth } from '@/lib/mcp/token';
+import {
+  signMcpToken,
+  verifyMcpToken,
+  verifyMcpTokenCredential,
+  verifyMcpAuth,
+} from '@/lib/mcp/token';
+
+async function signPayload(payload: unknown): Promise<string> {
+  const crypto = await import('node:crypto');
+  const secret = process.env.API_KEY_HMAC_SECRET!;
+  const header = Buffer.from(
+    JSON.stringify({ alg: 'HS256', typ: 'JWT' }),
+  ).toString('base64url');
+  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const data = `${header}.${payloadB64}`;
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(data)
+    .digest()
+    .toString('base64url');
+
+  return `${data}.${signature}`;
+}
 
 // ---------------------------------------------------------------------------
 // signMcpToken
@@ -78,10 +125,8 @@ describe('signMcpToken', () => {
 describe('verifyMcpToken', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    profileQueryLog.length = 0;
     // Default: user exists
-    mockFrom.mockReturnValue({ select: mockSelect });
-    mockSelect.mockReturnValue({ eq: mockEq });
-    mockEq.mockReturnValue({ single: mockSingle });
     mockSingle.mockResolvedValue({ data: { id: 'user-123' }, error: null });
   });
 
@@ -94,6 +139,12 @@ describe('verifyMcpToken', () => {
       clientId: 'user-123',
       scopes: ['read', 'write'],
     });
+    expect(profileQueryLog).toEqual([
+      { table: 'profiles', method: 'from', args: ['profiles'] },
+      { table: 'profiles', method: 'select', args: ['id'] },
+      { table: 'profiles', method: 'eq', args: ['id', 'user-123'] },
+      { table: 'profiles', method: 'single', args: [] },
+    ]);
   });
 
   it('legacy token without exp is accepted (backwards-compat)', async () => {
@@ -174,6 +225,36 @@ describe('verifyMcpToken', () => {
 
     expect(result).toBeNull();
   });
+
+  it.each([
+    ['a non-object payload', null],
+    ['an array payload', []],
+    ['a non-string subject', { sub: 123, aud: 'mcp' }],
+    ['a non-string audience', { sub: 'user-123', aud: 123 }],
+    ['a non-number expiry', { sub: 'user-123', aud: 'mcp', exp: 'never' }],
+    ['a non-number issued-at time', { sub: 'user-123', aud: 'mcp', iat: 'now' }],
+    ['a non-string client ID', { sub: 'user-123', aud: 'mcp', client_id: 123 }],
+    ['a non-string scope', { sub: 'user-123', aud: 'mcp', scope: ['read'] }],
+  ])('classifies %s as invalid claims', async (_description, payload) => {
+    const token = await signPayload(payload);
+
+    await expect(verifyMcpTokenCredential(token)).resolves.toEqual({
+      outcome: 'invalid',
+    });
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('classifies profile infrastructure failures as misconfigured', async () => {
+    mockSingle.mockResolvedValue({
+      data: null,
+      error: { code: 'XX000', message: 'database unavailable' },
+    });
+
+    const token = await signMcpToken('user-123');
+    const result = await verifyMcpTokenCredential(token);
+
+    expect(result).toEqual({ outcome: 'misconfigured' });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -182,9 +263,7 @@ describe('verifyMcpToken', () => {
 describe('verifyMcpAuth', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFrom.mockReturnValue({ select: mockSelect });
-    mockSelect.mockReturnValue({ eq: mockEq });
-    mockEq.mockReturnValue({ single: mockSingle });
+    profileQueryLog.length = 0;
     mockSingle.mockResolvedValue({ data: { id: 'user-123' }, error: null });
   });
 
