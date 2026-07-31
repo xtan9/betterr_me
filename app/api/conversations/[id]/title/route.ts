@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server";
 import { generateText } from "ai";
-import { createClient } from "@/lib/supabase/server";
+import {
+  authenticateRequest,
+  cookieRouteErrorMessage,
+} from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { ConversationsDB } from "@/lib/db";
 import { llmProvider } from "@/lib/ai/provider";
 import { DEFAULT_MODEL_ID } from "@/lib/ai/models";
 import { checkChatRateLimit } from "@/lib/ai/rate-limit";
 import { titleRequestSchema } from "@/lib/validations/chat";
 import { log } from "@/lib/logger";
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * POST /api/conversations/[id]/title
@@ -18,14 +27,14 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     // Early guard: LLM API key must be configured
     if (!process.env.LLM_API_KEY) {
@@ -38,7 +47,7 @@ export async function POST(
       );
     }
 
-    const rateLimit = await checkChatRateLimit(supabase, user.id);
+    const rateLimit = await checkChatRateLimit(supabase, userId);
     if (!rateLimit.allowed) {
       return NextResponse.json(
         {
@@ -63,7 +72,7 @@ export async function POST(
     // Verify conversation ownership
     const conversationsDB = new ConversationsDB(supabase);
     const conversation = await conversationsDB.getConversation(id);
-    if (!conversation || conversation.user_id !== user.id) {
+    if (!conversation || conversation.user_id !== userId) {
       return NextResponse.json(
         { error: "Conversation not found" },
         { status: 404 },
@@ -82,7 +91,7 @@ export async function POST(
     const title = text.trim();
 
     // Update conversation title
-    await conversationsDB.updateConversation(id, user.id, { title });
+    await conversationsDB.updateConversation(id, userId, { title });
 
     return NextResponse.json({ title });
   } catch (error) {

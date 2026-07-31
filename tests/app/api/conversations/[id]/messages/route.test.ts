@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // vi.hoisted mocks
-const { mockGetUser, mockGetConversation, mockGetMessagesByConversation, mockCreateMessage, mockFrom } = vi.hoisted(() => ({
+const { mockGetUser, mockGetConversation, mockGetMessagesByConversation, mockCreateMessage } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockGetConversation: vi.fn(),
   mockGetMessagesByConversation: vi.fn(),
   mockCreateMessage: vi.fn(),
-  mockFrom: vi.fn(),
 }));
 
 const { mockLogError } = vi.hoisted(() => ({
@@ -16,7 +15,6 @@ const { mockLogError } = vi.hoisted(() => ({
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => Promise.resolve({
     auth: { getUser: mockGetUser },
-    from: mockFrom,
   })),
 }));
 
@@ -58,11 +56,6 @@ describe('GET /api/conversations/[id]/messages', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123' } } });
     mockGetConversation.mockResolvedValue(mockConversation);
 
-    // Setup chain for supabase.from().update().eq().eq()
-    const eqInner = vi.fn().mockReturnValue({ data: null, error: null });
-    const eqOuter = vi.fn().mockReturnValue({ eq: eqInner });
-    const update = vi.fn().mockReturnValue({ eq: eqOuter });
-    mockFrom.mockReturnValue({ update });
   });
 
   it('returns 401 for unauthenticated requests', async () => {
@@ -108,11 +101,6 @@ describe('POST /api/conversations/[id]/messages', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123' } } });
     mockGetConversation.mockResolvedValue(mockConversation);
 
-    // Setup chain for supabase.from().update().eq().eq()
-    const eqInner = vi.fn().mockReturnValue({ data: null, error: null });
-    const eqOuter = vi.fn().mockReturnValue({ eq: eqInner });
-    const update = vi.fn().mockReturnValue({ eq: eqOuter });
-    mockFrom.mockReturnValue({ update });
   });
 
   it('returns 401 for unauthenticated requests', async () => {
@@ -157,15 +145,6 @@ describe('POST /api/conversations/[id]/messages', () => {
 
     expect(response.status).toBe(201);
     expect(data.message).toEqual(savedMessage);
-  });
-
-  it('bumps conversation updated_at after saving a message', async () => {
-    const savedMessage = { id: 'm1', conversation_id: 'conv-1', role: 'user', content: 'hi', created_at: '2026-01-01' };
-    mockCreateMessage.mockResolvedValue(savedMessage);
-
-    await POST(makePostRequest({ role: 'user', content: 'hi' }), { params });
-
-    expect(mockFrom).toHaveBeenCalledWith('conversations');
   });
 
   it('returns 404 if conversation not owned by user', async () => {

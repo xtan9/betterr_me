@@ -1,28 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import {
+  authenticateRequest,
+  cookieRouteErrorMessage,
+} from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { ProfilesDB } from "@/lib/db";
 import { validateRequestBody } from "@/lib/validations/api";
 import { log } from "@/lib/logger";
 import { profileUpdateSchema } from "@/lib/validations/profile";
 import type { Profile, ProfileUpdate } from "@/lib/db/types";
 
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
+
 /**
  * GET /api/profile
  * Get current user's profile
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const profilesDB = new ProfilesDB(supabase);
-    const profile = await profilesDB.getProfile(user.id);
+    const profile = await profilesDB.getProfile(userId);
 
     if (!profile) {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
@@ -44,14 +58,14 @@ export async function GET() {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 
@@ -75,7 +89,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const profilesDB = new ProfilesDB(supabase);
-    const profile: Profile = await profilesDB.updateProfile(user.id, updates);
+    const profile: Profile = await profilesDB.updateProfile(userId, updates);
 
     return NextResponse.json({ profile });
   } catch (error: unknown) {

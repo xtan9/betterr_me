@@ -1,40 +1,52 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { ConversationsDB, ChatMessagesDB } from "@/lib/db";
+import {
+  authenticateRequest,
+  cookieRouteErrorMessage,
+} from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
+import { createConversationMessages } from "@/lib/chat/conversation-messages";
 import { saveMessageSchema } from "@/lib/validations/chat";
 import { log } from "@/lib/logger";
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/conversations/[id]/messages
  * Load messages for a conversation owned by the authenticated user
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
-    // Verify conversation ownership
-    const conversationsDB = new ConversationsDB(supabase);
-    const conversation = await conversationsDB.getConversation(id);
-    if (!conversation || conversation.user_id !== user.id) {
+    const messages = await createConversationMessages(supabase).load(
+      id,
+      userId,
+    );
+    if (!messages) {
       return NextResponse.json(
         { error: "Conversation not found" },
         { status: 404 },
       );
     }
-
-    const chatMessagesDB = new ChatMessagesDB(supabase);
-    const messages = await chatMessagesDB.getMessagesByConversation(id);
     return NextResponse.json({ messages });
   } catch (error) {
     log.error("GET /api/conversations/[id]/messages error", error);
@@ -55,14 +67,14 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     // Parse and validate body
     const body = await request.json();
@@ -74,36 +86,19 @@ export async function POST(
       );
     }
 
-    // Verify conversation ownership
-    const conversationsDB = new ConversationsDB(supabase);
-    const conversation = await conversationsDB.getConversation(id);
-    if (!conversation || conversation.user_id !== user.id) {
+    const message = await createConversationMessages(supabase).save(
+      id,
+      userId,
+      {
+        role: parsed.data.role,
+        content: parsed.data.content,
+      },
+    );
+    if (!message) {
       return NextResponse.json(
         { error: "Conversation not found" },
         { status: 404 },
       );
-    }
-
-    // Save message
-    const chatMessagesDB = new ChatMessagesDB(supabase);
-    const message = await chatMessagesDB.createMessage({
-      conversation_id: id,
-      role: parsed.data.role,
-      content: parsed.data.content,
-    });
-
-    // Bump conversation updated_at
-    const { error: updateError } = await supabase
-      .from("conversations")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .eq("user_id", user.id);
-
-    if (updateError) {
-      log.warn("Failed to bump conversation updated_at", {
-        conversationId: id,
-        error: updateError.message,
-      });
     }
 
     return NextResponse.json({ message }, { status: 201 });

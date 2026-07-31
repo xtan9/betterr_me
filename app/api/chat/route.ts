@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { streamText, convertToModelMessages, stepCountIs } from "ai";
-import { createClient } from "@/lib/supabase/server";
+import {
+  authenticateRequest,
+  cookieRouteErrorMessage,
+} from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { llmProvider, webSearchTool, createMemoryTool } from "@/lib/ai/provider";
 import { AVAILABLE_MODELS, DEFAULT_MODEL_ID } from "@/lib/ai/models";
 import { createChatTools } from "@/lib/ai/tools";
@@ -13,6 +17,11 @@ export const maxDuration = 60;
 const MAX_REQUEST_BYTES = 256 * 1024;
 const MAX_MESSAGES = 40;
 const MAX_OUTPUT_TOKENS = 2048;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 function removeEphemeralOpenAIItemId(metadata: unknown): unknown {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
@@ -38,14 +47,14 @@ function removeEphemeralOpenAIItemId(metadata: unknown): unknown {
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(req, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     if (!process.env.LLM_API_KEY) {
       log.error("POST /api/chat failed: LLM_API_KEY not configured");
@@ -55,7 +64,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const rateLimit = await checkChatRateLimit(supabase, user.id);
+    const rateLimit = await checkChatRateLimit(supabase, userId);
     if (!rateLimit.allowed) {
       const unavailable = rateLimit.reason === "unavailable";
       return NextResponse.json(
@@ -183,7 +192,7 @@ export async function POST(req: Request) {
 
     // Build tools for the authenticated user.
     const tools = await createChatTools({
-      userId: user.id,
+      userId,
       supabase,
       date,
       timezone,
@@ -193,7 +202,7 @@ export async function POST(req: Request) {
       model: llmProvider(modelId),
       messages: [...buildIdentityMessages({ date, timezone }), ...modelMessages],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: { ...tools, web_search: webSearchTool, memory: createMemoryTool(supabase, user.id) } as any,
+      tools: { ...tools, web_search: webSearchTool, memory: createMemoryTool(supabase, userId) } as any,
       stopWhen: stepCountIs(3),
       maxOutputTokens: Math.min(
         MAX_OUTPUT_TOKENS,
@@ -201,7 +210,7 @@ export async function POST(req: Request) {
       ),
       abortSignal: req.signal,
       onError({ error }) {
-        log.error("LLM stream error", error, { userId: user.id });
+        log.error("[chat] LLM stream error", error, { userId });
       },
     });
 

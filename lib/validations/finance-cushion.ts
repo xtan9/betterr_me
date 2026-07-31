@@ -260,4 +260,4 @@ export const financeCushionEventSchema = z
   })
   .strict();
 
-export type FinanceCushionPlanInput = z.output<typeof financeCushionPlanSchema>;
+export type FinanceCushionPlanInput = z.input<typeof financeCushionPlanSchema>;
