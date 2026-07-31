@@ -270,6 +270,27 @@ revoke all on function public.ralph_ci_create_auth_user(uuid, text) from public;
 grant execute on function public.ralph_ci_create_auth_user(uuid, text)
   to ralph_ci_test;
 
+create or replace function public.ralph_ci_delete_auth_user(
+  test_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, auth
+as $function$
+begin
+  delete from auth.users
+  where id = test_user_id
+    and email like '%@example.test';
+  if not found then
+    raise exception 'Ralph CI test user is missing or is not disposable';
+  end if;
+end
+$function$;
+revoke all on function public.ralph_ci_delete_auth_user(uuid) from public;
+grant execute on function public.ralph_ci_delete_auth_user(uuid)
+  to ralph_ci_test;
+
 -- Extension installation grants EXECUTE to PUBLIC. Remove that ambient access and
 -- expose only operations on connections opened by the fixed low-privilege wrapper.
 revoke execute on all functions in schema extensions from public, ralph_ci_test;
@@ -315,17 +336,21 @@ language plpgsql
 security definer
 set search_path = pg_catalog, extensions
 as $function$
+declare
+  connection_status text;
 begin
   if connection_name !~ '^[A-Za-z0-9_-]{1,64}$' then
     raise exception 'invalid Ralph CI connection name';
   end if;
-  return extensions.dblink_connect(
+  connection_status := extensions.dblink_connect(
     connection_name,
     'hostaddr=' || host(inet_server_addr())
       || ' port=' || inet_server_port()
       || ' dbname=' || current_database()
       || ' user=ralph_ci_test password=ralph-ci-disposable-only'
   );
+  perform extensions.dblink_exec(connection_name, 'set role authenticated');
+  return connection_status;
 end
 $function$;
 revoke all on function public.ralph_ci_open_connection(text) from public;

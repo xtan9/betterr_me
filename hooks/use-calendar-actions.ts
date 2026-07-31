@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { FeedAction } from "@/lib/calendar/feed-types";
+import { setHabitCompletion } from "@/lib/hooks/use-habit-toggle";
 
 /**
  * Result of an inline calendar action.
@@ -17,7 +18,7 @@ export interface ActionResult {
  *
  * Actions:
  * - toggle_task: POST /api/tasks/[id]/toggle
- * - toggle_habit: POST /api/habits/[id]/toggle with { date }
+ * - toggle_habit: POST /api/habits/[id]/toggle with { date, completed }
  * - navigate_workout: client-side navigation to /workouts/[id]
  *
  * @param onMutated Callback fired after a successful mutation so the caller can refetch data.
@@ -46,22 +47,17 @@ export function useCalendarActions(onMutated?: () => void) {
   );
 
   const toggleHabit = useCallback(
-    async (habitId: string, date: string): Promise<ActionResult> => {
+    async (habitId: string, date: string, completed: boolean): Promise<ActionResult> => {
       try {
-        const res = await fetch(`/api/habits/${habitId}/toggle`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          return { success: false, error: body?.error || "Failed to toggle habit" };
-        }
+        await setHabitCompletion(habitId, completed, date);
         onMutated?.();
         return { success: true };
       } catch (err) {
         console.error("Failed to toggle habit:", err);
-        return { success: false, error: "Network error" };
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : "Network error",
+        };
       }
     },
     [onMutated],
@@ -82,13 +78,21 @@ export function useCalendarActions(onMutated?: () => void) {
    * @param date The date the item appears on (for habit toggle)
    */
   const dispatch = useCallback(
-    async (action: FeedAction, sourceId: string, date?: string): Promise<ActionResult> => {
+    async (
+      action: FeedAction,
+      sourceId: string,
+      date?: string,
+      completed?: boolean,
+    ): Promise<ActionResult> => {
       switch (action) {
         case "toggle_task":
           return toggleTask(sourceId);
         case "toggle_habit":
           if (!date) return { success: false, error: "Date is required to toggle a habit" };
-          return toggleHabit(sourceId, date);
+          if (typeof completed !== "boolean") {
+            return { success: false, error: "Completion state is required to toggle a habit" };
+          }
+          return toggleHabit(sourceId, date, completed);
         case "navigate_workout":
           navigateWorkout(sourceId);
           return { success: true };

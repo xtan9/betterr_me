@@ -11,6 +11,7 @@ import { PageHeader, PageHeaderSkeleton } from "@/components/layouts/page-header
 import { getLocalDateString } from "@/lib/utils";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
+import { setHabitCompletion } from "@/lib/hooks/use-habit-toggle";
 import { HabitList } from "./habit-list";
 import type { HabitWithTodayStatus } from "@/lib/db/types";
 
@@ -50,21 +51,13 @@ export function HabitsPageContent({ initialHabits }: HabitsPageContentProps) {
   const handleToggleHabit = async (habitId: string) => {
     if (isToggling(habitId)) return;
 
+    const completed = !(data?.find((habit) => habit.id === habitId)?.completed_today ?? false);
     startToggling(habitId);
 
     try {
       await mutate(
         async () => {
-          const response = await fetch(`/api/habits/${habitId}/toggle`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ date: today }),
-          });
-          if (!response.ok) {
-            throw new Error(
-              `Failed to toggle habit ${habitId}: ${response.status}`,
-            );
-          }
+          await setHabitCompletion(habitId, completed, today);
           return undefined;
         },
         {

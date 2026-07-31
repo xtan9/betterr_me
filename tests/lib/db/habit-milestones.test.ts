@@ -23,16 +23,46 @@ describe('HabitMilestonesDB', () => {
   });
 
   describe('recordMilestone', () => {
-    it('should upsert a milestone with correct conflict clause', async () => {
+    it('records a milestone once with the unique conflict clause', async () => {
+      mockSupabaseClient.setMockResponse({ id: 'milestone-1' });
+
+      await expect(
+        milestonesDB.recordMilestone(mockHabitId, mockUserId, 7)
+      ).resolves.toBe(true);
+
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: 'habit_milestones',
+          method: 'from',
+          args: ['habit_milestones'],
+        },
+        {
+          table: 'habit_milestones',
+          method: 'upsert',
+          args: [
+            { habit_id: mockHabitId, user_id: mockUserId, milestone: 7 },
+            { onConflict: 'habit_id,milestone', ignoreDuplicates: true },
+          ],
+        },
+        {
+          table: 'habit_milestones',
+          method: 'select',
+          args: ['id'],
+        },
+        {
+          table: 'habit_milestones',
+          method: 'maybeSingle',
+          args: [],
+        },
+      ]);
+    });
+
+    it('reports an existing milestone without rewriting it', async () => {
       mockSupabaseClient.setMockResponse(null);
 
-      await milestonesDB.recordMilestone(mockHabitId, mockUserId, 7);
-
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('habit_milestones');
-      expect(mockSupabaseClient.upsert).toHaveBeenCalledWith(
-        { habit_id: mockHabitId, user_id: mockUserId, milestone: 7 },
-        { onConflict: 'habit_id,milestone' }
-      );
+      await expect(
+        milestonesDB.recordMilestone(mockHabitId, mockUserId, 7)
+      ).resolves.toBe(false);
     });
 
     it('should throw on Supabase error', async () => {

@@ -4,7 +4,8 @@ import type { ToolContext } from "@/lib/ai/tools/types";
 
 const mockGetHabitsWithTodayStatus = vi.fn();
 const mockGetHabitStats = vi.fn();
-const mockToggleLog = vi.fn();
+const mockComplete = vi.fn();
+const mockUncomplete = vi.fn();
 const mockCreateHabit = vi.fn();
 const mockUpdateHabit = vi.fn();
 const mockPauseHabit = vi.fn();
@@ -29,9 +30,15 @@ vi.mock("@/lib/db", () => ({
   },
   HabitLogsDB: class {
     getHabitStats = mockGetHabitStats;
-    toggleLog = mockToggleLog;
     getDetailedHabitStats = mockGetDetailedHabitStats;
   },
+}));
+
+vi.mock("@/lib/habits/completion", () => ({
+  createHabitCompletion: vi.fn(() => ({
+    complete: mockComplete,
+    uncomplete: mockUncomplete,
+  })),
 }));
 
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
@@ -87,22 +94,59 @@ describe("habitTools", () => {
     ]);
   });
 
-  it("logHabit calls HabitLogsDB.toggleLog", async () => {
+  it("logHabit completes a habit to an explicit desired state", async () => {
     const ctx = makeCtx();
-    mockToggleLog.mockResolvedValue({
+    mockComplete.mockResolvedValue({
       log: { completed: true },
+      completed: true,
       currentStreak: 5,
       bestStreak: 10,
+      milestones: [],
     });
     const result = await findTool("logHabit").execute(
-      { habitId: "h1", date: "2026-04-10" },
+      { habitId: "h1", date: "2026-04-10", completed: true },
       ctx,
     );
-    expect(mockToggleLog).toHaveBeenCalledWith("h1", "user-123", "2026-04-10");
+    expect(mockComplete).toHaveBeenCalledWith({
+      habitId: "h1",
+      userId: "user-123",
+      date: "2026-04-10",
+    });
     expect(result).toEqual({
       log: { completed: true },
+      completed: true,
       currentStreak: 5,
       bestStreak: 10,
+      milestones: [],
+    });
+  });
+
+  it("logHabit retries the same uncompleted state without toggling it", async () => {
+    const ctx = makeCtx();
+    mockUncomplete.mockResolvedValue({
+      log: { completed: false },
+      completed: false,
+      currentStreak: 4,
+      bestStreak: 10,
+      milestones: [],
+    });
+    const params = {
+      habitId: "h1",
+      date: "2026-04-10",
+      completed: false,
+    };
+
+    await findTool("logHabit").execute(params, ctx);
+    const retry = await findTool("logHabit").execute(params, ctx);
+
+    expect(mockUncomplete).toHaveBeenCalledTimes(2);
+    expect(mockComplete).not.toHaveBeenCalled();
+    expect(retry).toEqual({
+      currentStreak: 4,
+      bestStreak: 10,
+      completed: false,
+      log: { completed: false },
+      milestones: [],
     });
   });
 

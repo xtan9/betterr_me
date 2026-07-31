@@ -38,6 +38,7 @@ import { getLocalDateString } from "@/lib/utils";
 import { shouldTrackOnDate } from "@/lib/habits/format";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
+import { setHabitCompletion } from "@/lib/hooks/use-habit-toggle";
 import { fetcher } from "@/lib/fetcher";
 import type { DashboardData } from "@/lib/db/types";
 
@@ -151,21 +152,16 @@ export function DashboardContent({
   const handleToggleHabit = async (habitId: string) => {
     if (isToggling(habitId)) return;
 
+    const completed = !(
+      data?.habits.find((habit) => habit.id === habitId)?.completed_today ??
+      false
+    );
     startToggling(habitId);
 
     try {
       await mutate(
         async () => {
-          const response = await fetch(`/api/habits/${habitId}/toggle`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ date: today }),
-          });
-          if (!response.ok) {
-            throw new Error(
-              `Failed to toggle habit ${habitId}: ${response.status}`,
-            );
-          }
+          await setHabitCompletion(habitId, completed, today);
           return undefined;
         },
         {

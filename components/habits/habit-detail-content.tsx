@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { log } from "@/lib/logger";
 import { useTogglingSet } from "@/lib/hooks/use-toggling-set";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
+import { setHabitCompletion } from "@/lib/hooks/use-habit-toggle";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { getProjectColor } from "@/lib/projects/colors";
 import { getCategoryDisplayName } from "@/lib/categories/get-category-display-name";
@@ -142,19 +143,16 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
   const handleToggleDate = useCallback(async (date: string) => {
     if (isToggling(date)) return;
 
+    const completed = !(
+      logsData?.logs.find((log: HabitLog) => log.logged_date === date)?.completed ??
+      false
+    );
     startToggling(date);
 
     try {
       await mutateLogs(
         async () => {
-          const response = await fetch(`/api/habits/${habitId}/toggle`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ date }),
-          });
-          if (!response.ok) {
-            throw new Error(`Failed to toggle: ${response.status}`);
-          }
+          await setHabitCompletion(habitId, completed, date);
           return undefined;
         },
         {
@@ -199,7 +197,7 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     } finally {
       stopToggling(date);
     }
-  }, [isToggling, startToggling, stopToggling, mutateLogs, habitId, mutateHabit, t]);
+  }, [isToggling, logsData, startToggling, stopToggling, mutateLogs, habitId, mutateHabit, t]);
 
   const handlePause = async () => {
     if (!habit) return;

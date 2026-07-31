@@ -236,12 +236,12 @@ describe('useHabitToggle', () => {
 
     const { useHabitToggle } = await import('@/lib/hooks/use-habit-toggle');
     const { toggleHabit } = useHabitToggle();
-    await toggleHabit('habit-1');
+    await toggleHabit('habit-1', true);
 
     expect(global.fetch).toHaveBeenCalledWith('/api/habits/habit-1/toggle', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: undefined }),
+      body: JSON.stringify({ date: undefined, completed: true }),
     });
   });
 
@@ -253,10 +253,10 @@ describe('useHabitToggle', () => {
 
     const { useHabitToggle } = await import('@/lib/hooks/use-habit-toggle');
     const { toggleHabit } = useHabitToggle();
-    await toggleHabit('habit-1', '2026-02-01');
+    await toggleHabit('habit-1', true, '2026-02-01');
 
     expect(global.fetch).toHaveBeenCalledWith('/api/habits/habit-1/toggle', expect.objectContaining({
-      body: JSON.stringify({ date: '2026-02-01' }),
+      body: JSON.stringify({ date: '2026-02-01', completed: true }),
     }));
   });
 
@@ -269,7 +269,7 @@ describe('useHabitToggle', () => {
 
     const { useHabitToggle } = await import('@/lib/hooks/use-habit-toggle');
     const { toggleHabit } = useHabitToggle();
-    await toggleHabit('habit-1', undefined, { onOptimisticUpdate });
+    await toggleHabit('habit-1', true, undefined, { onOptimisticUpdate });
 
     expect(onOptimisticUpdate).toHaveBeenCalled();
   });
@@ -284,7 +284,7 @@ describe('useHabitToggle', () => {
 
     const { useHabitToggle } = await import('@/lib/hooks/use-habit-toggle');
     const { toggleHabit } = useHabitToggle();
-    await toggleHabit('habit-1', undefined, { onSuccess });
+    await toggleHabit('habit-1', true, undefined, { onSuccess });
 
     expect(onSuccess).toHaveBeenCalledWith(responseData);
   });
@@ -299,7 +299,7 @@ describe('useHabitToggle', () => {
     const { useHabitToggle } = await import('@/lib/hooks/use-habit-toggle');
     const { toggleHabit } = useHabitToggle();
 
-    await expect(toggleHabit('habit-1', undefined, { onError })).rejects.toThrow('Failed to toggle habit');
+    await expect(toggleHabit('habit-1', true, undefined, { onError })).rejects.toThrow('Failed to toggle habit');
     expect(onError).toHaveBeenCalled();
   });
 
@@ -312,7 +312,7 @@ describe('useHabitToggle', () => {
 
     const { useHabitToggle } = await import('@/lib/hooks/use-habit-toggle');
     const { toggleHabit } = useHabitToggle();
-    const result = await toggleHabit('habit-1');
+    const result = await toggleHabit('habit-1', false);
 
     expect(result).toEqual(responseData);
   });
