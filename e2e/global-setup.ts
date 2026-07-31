@@ -1,158 +1,84 @@
 import { createClient } from '@supabase/supabase-js';
+import {
+  E2E_READ_ONLY,
+  FIXTURE_REGISTRY,
+  RUN_CONTEXT,
+  SEED_HABIT_NAMES,
+  SEED_TASK_TITLE,
+} from './constants';
+import { registerFixtureId, requiredE2EEnvironment } from './run-context';
 
-const TEST_DATA_PREFIX = 'E2E Test -';
-
-const SEED_HABITS = [
-  { name: 'E2E Test - Seed Habit 1' },
-  { name: 'E2E Test - Seed Habit 2' },
-  { name: 'E2E Test - Seed Habit 3' },
-];
-
-const SEED_TASKS = [
-  {
-    title: 'E2E Test - Seed Task 1',
-    description: 'Seeded for E2E testing',
-    priority: 2,
-    is_completed: false,
-  },
-];
-
-/**
- * Global setup for E2E tests.
- *
- * 1. Cleans up leftover test data from cancelled runs (teardown may not have run).
- * 2. Seeds the test account with habits and tasks so that tests expecting
- *    data on the dashboard always have something to interact with.
- */
 async function globalSetup() {
+  if (E2E_READ_ONLY) {
+    console.log(`[setup] ${RUN_CONTEXT.runId} is read-only; no fixtures will be created`);
+    return;
+  }
+
+  const supabase = createClient(
+    requiredE2EEnvironment('NEXT_PUBLIC_SUPABASE_URL', 'setup'),
+    requiredE2EEnvironment('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'setup'),
+  );
+  let primaryFailure: unknown;
+
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const testEmail = process.env.E2E_TEST_EMAIL;
-    const testPassword = process.env.E2E_TEST_PASSWORD;
-
-    if (!supabaseUrl || !supabaseAnonKey || !testEmail || !testPassword) {
-      console.warn('[setup] Missing env vars — skipping seed');
-      return;
+    const password = requiredE2EEnvironment('E2E_TEST_PASSWORD', 'setup');
+    const email = RUN_CONTEXT.identityEmail(
+      requiredE2EEnvironment('E2E_TEST_EMAIL', 'setup'),
+    );
+    const { error: signUpError } = await supabase.auth.signUp({ email, password });
+    if (signUpError && !/already registered/i.test(signUpError.message)) {
+      throw new Error(`[setup] Failed to create run identity: ${signUpError.message}`);
     }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: testEmail,
-      password: testPassword,
+      email,
+      password,
     });
-
     if (authError || !authData.user) {
-      throw new Error(`[setup] Auth failed: ${authError?.message}`);
+      throw new Error(`[setup] Auth failed: ${authError?.message ?? 'no user returned'}`);
     }
 
-    const userId = authData.user.id;
-
-    try {
-      // --- Clean up leftover test data from previous cancelled runs ---
-      // When CI runs are cancelled (e.g. cancel-in-progress), teardown doesn't
-      // execute and "E2E Test -" data accumulates. Leftover habits can push the
-      // test user past MAX_HABITS_PER_USER, causing create-habit tests to fail.
-      // Tasks are cleaned for a fresh slate.
-      const { data: leftoverHabits } = await supabase
-        .from('habits')
-        .select('id, name')
-        .eq('user_id', userId)
-        .ilike('name', `${TEST_DATA_PREFIX}%`);
-
-      if (leftoverHabits && leftoverHabits.length > 0) {
-        const habitIds = leftoverHabits.map((h) => h.id);
-        console.log(`[setup] Cleaning up ${leftoverHabits.length} leftover test habit(s) from previous run...`);
-
-        await supabase.from('habit_logs').delete().in('habit_id', habitIds);
-        const { error: deleteError } = await supabase.from('habits').delete().in('id', habitIds);
-        if (deleteError) {
-          console.error('[setup] Failed to clean up leftover habits:', deleteError.message);
-        } else {
-          console.log(`[setup] Cleaned up ${leftoverHabits.length} leftover test habit(s)`);
-        }
-      }
-
-      const { data: leftoverTasks } = await supabase
-        .from('tasks')
-        .select('id, title')
-        .eq('user_id', userId)
-        .ilike('title', `${TEST_DATA_PREFIX}%`);
-
-      if (leftoverTasks && leftoverTasks.length > 0) {
-        const taskIds = leftoverTasks.map((t) => t.id);
-        console.log(`[setup] Cleaning up ${leftoverTasks.length} leftover test task(s)...`);
-        const { error: deleteError } = await supabase.from('tasks').delete().in('id', taskIds);
-        if (deleteError) {
-          console.error('[setup] Failed to clean up leftover tasks:', deleteError.message);
-        }
-      }
-
-      // --- Seed test data ---
-      // Check which seed habits already exist
-      const { data: existing } = await supabase
-        .from('habits')
-        .select('name')
-        .eq('user_id', userId)
-        .in('name', SEED_HABITS.map((h) => h.name));
-
-      const existingNames = new Set((existing ?? []).map((h) => h.name));
-      const toInsert = SEED_HABITS.filter((h) => !existingNames.has(h.name));
-
-      if (toInsert.length > 0) {
-        const { error: insertError } = await supabase.from('habits').insert(
-          toInsert.map((h) => ({
-            user_id: userId,
-            name: h.name,
-            description: 'Seeded for E2E testing',
-            frequency: { type: 'daily' },
-          }))
-        );
-
-        if (insertError) {
-          console.error('[setup] Failed to seed habits:', insertError.message);
-        } else {
-          console.log(`[setup] Seeded ${toInsert.length} habit(s)`);
-        }
-      } else {
-        console.log('[setup] Seed habits already exist — skipping');
-      }
-
-      // --- Seed tasks ---
-      const { data: existingTasks } = await supabase
-        .from('tasks')
-        .select('title')
-        .eq('user_id', userId)
-        .in('title', SEED_TASKS.map((t) => t.title));
-
-      const existingTaskTitles = new Set((existingTasks ?? []).map((t) => t.title));
-      const tasksToInsert = SEED_TASKS.filter((t) => !existingTaskTitles.has(t.title));
-
-      if (tasksToInsert.length === 0) {
-        console.log('[setup] Seed tasks already exist — skipping');
-      } else {
-        const { error: taskInsertError } = await supabase.from('tasks').insert(
-          tasksToInsert.map((t) => ({
-            user_id: userId,
-            title: t.title,
-            description: t.description,
-            priority: t.priority,
-            is_completed: t.is_completed,
-          }))
-        );
-
-        if (taskInsertError) {
-          console.error('[setup] Failed to seed tasks:', taskInsertError.message);
-        } else {
-          console.log(`[setup] Seeded ${tasksToInsert.length} task(s)`);
-        }
-      }
-    } finally {
-      await supabase.auth.signOut();
+    const { data: habits, error: habitError } = await supabase
+      .from('habits')
+      .insert(SEED_HABIT_NAMES.map((name) => ({
+        user_id: authData.user.id,
+        name,
+        description: `Owned by functional run ${RUN_CONTEXT.runId}`,
+        frequency: { type: 'daily' },
+      })))
+      .select('id');
+    if (habitError || habits?.length !== SEED_HABIT_NAMES.length) {
+      throw new Error(`[setup] Failed to seed run-owned habits: ${habitError?.message ?? 'incomplete insert'}`);
     }
-  } catch (err) {
-    console.error('[setup] Unexpected error during seeding:', err);
+    for (const habit of habits) registerFixtureId(FIXTURE_REGISTRY, 'habits', habit.id);
+
+    const { data: tasks, error: taskError } = await supabase
+      .from('tasks')
+      .insert({
+        user_id: authData.user.id,
+        title: SEED_TASK_TITLE,
+        description: `Owned by functional run ${RUN_CONTEXT.runId}`,
+        priority: 2,
+        is_completed: false,
+      })
+      .select('id');
+    if (taskError || tasks?.length !== 1) {
+      throw new Error(`[setup] Failed to seed run-owned task: ${taskError?.message ?? 'incomplete insert'}`);
+    }
+    registerFixtureId(FIXTURE_REGISTRY, 'tasks', tasks[0].id);
+
+    console.log(
+      `[setup] Seeded ${habits.length} habits and ${tasks.length} task for ${RUN_CONTEXT.runId}`,
+    );
+  } catch (error) {
+    primaryFailure = error;
+    throw error;
+  } finally {
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError && !primaryFailure) {
+      throw new Error(`[setup] Sign-out failed: ${signOutError.message}`);
+    }
+    if (signOutError) console.error('[setup] Sign-out also failed:', signOutError.message);
   }
 }
 

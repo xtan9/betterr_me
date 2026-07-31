@@ -20,7 +20,6 @@ import {
   failureDisposition,
   findDuplicateMigrationPrefixes,
   findNewTypeScriptDiagnostics,
-  isIssueActive,
   isIssueParked,
   isPullRequestRecoveryCandidate,
   issueStageAtLeast,
@@ -30,6 +29,7 @@ import {
   redactCredentialPatterns,
   recordCheckRetryAttempt,
   reopenIssueForPullRequestRecovery,
+  selectActiveStateIssue,
   selectPullRequestRecoveryCandidates,
   selectNextLiveIssueStatus,
   selectRecoveryBase,
@@ -1042,14 +1042,8 @@ async function getLiveIssues(state, controllerOptions) {
   return issues;
 }
 
-function activeStateIssue(state) {
-  return Object.entries(state.issues)
-    .map(([number, issue]) => ({ issueNumber: Number(number), ...issue }))
-    .find((issue) => isIssueActive(issue));
-}
-
 async function selectIssue(state, actor, controllerOptions) {
-  const active = activeStateIssue(state);
+  const active = selectActiveStateIssue(state.issues);
   if (active) {
     const approved = queue.find((issue) => issue.issueNumber === active.issueNumber);
     if (!approved) throw new Error(`state references unknown issue #${active.issueNumber}`);

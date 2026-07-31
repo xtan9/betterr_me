@@ -179,7 +179,9 @@ re-enter one bounded, exhaustive verification and review cycle when its original
 blocker is a worker or ticket-specific verification finding. Ralph promotes the
 draft only after that cycle passes; safety, ambiguity, controller infrastructure,
 explicitly non-repairable findings, exhausted attempts, and high-risk merges
-remain human-gated. Unrelated ready issues may continue.
+remain human-gated. Unrelated ready issues may continue. If an unpublished issue
+already owns the single implementation worktree, Ralph resumes that issue before
+starting backlog recovery that also needs the worktree.
 
 Before repairing or re-verifying an existing PR, Ralph verifies that the exact
 PR head contains the latest remote `main`. A clean stale branch is updated with
@@ -190,11 +192,13 @@ independent review before any merge decision. If `main` advances while an update
 is pending, Ralph finishes the recorded update idempotently before requesting the
 next one. A dirty recovery checkout is safety-scanned and preserved as explicitly
 unverified Draft work first; protected-path or secret-bearing changes stop the
-controller without publication. A base conflict is human-gated rather than sent
-through coding repair. GitHub's asynchronous branch update is polled before a
-bounded retry is consumed. Immediately before merge, Ralph fetches `origin/main`
-again; if it advanced, the PR returns to the same durable base-sync and full
-verification cycle.
+controller without publication. A base conflict enters the bounded fresh
+conflict-repair path against the exact latest `main`; it becomes human-gated only
+after the repair budget is exhausted or another genuine safety or review gate
+blocks it. GitHub's asynchronous branch update is polled before a bounded retry
+is consumed. Immediately before merge, Ralph fetches `origin/main` again; if it
+advanced, the PR returns to the same durable base-sync and full verification
+cycle.
 
 Ticket-specific infrastructure and protected-scope blockers do not consume a
 coding attempt merely to re-verify a new, green PR head. Safe in-scope changes
@@ -203,15 +207,15 @@ of leaving a dirty worktree that stops the queue. A protected workflow or
 controller change still requires supervised handling; Ralph never grants an
 ordinary issue worker write access to `.github/**` or `scripts/ralph/**`.
 
-Ticket-specific PostgreSQL fixtures opt into the controller-owned disposable
-database gate by placing the exact marker `-- ralph-ci: true` in their first 12
-lines. `scripts/ci/run-ralph-sql-tests.sh` discovers marked fixtures in stable
-path order, rejects psql meta-commands and dangerous server/role primitives,
-clears the process environment, and runs accepted fixtures as a dedicated
-non-superuser role. Both local-Supabase PR jobs execute them with
-`ON_ERROR_STOP=1`. This gives ordinary workers a narrow test-data-only path to
-request real database verification without granting workflow, controller, or
-secret authority.
+Ticket-specific PostgreSQL fixtures opt into the controller-owned constrained
+role by placing the exact marker `-- ralph-ci: true` in their first 12 lines.
+The repository-wide registry in `supabase/tests/registry.json` accounts for all
+SQL fixtures and `scripts/ci/run-sql-fixtures.sh` executes acceptance fixtures
+in registry order. The underlying Ralph policy still rejects psql meta-commands
+and dangerous server/role primitives, clears the process environment, and runs
+accepted ordinary-worker fixtures as a dedicated non-superuser role. This gives
+ordinary workers a narrow test-data-only path to request real database
+verification without granting workflow, controller, or secret authority.
 
 Marked fixtures that need an authenticated identity call the runner-owned
 `public.ralph_ci_create_auth_user(uuid, text)` helper. The helper can create

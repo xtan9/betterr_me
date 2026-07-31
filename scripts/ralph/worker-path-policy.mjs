@@ -4,10 +4,15 @@ export const WORKER_PROTECTED_PATHS = Object.freeze([
   "scripts/ralph",
   "scripts/ci/ralph-sql-policy.mjs",
   "scripts/ci/run-ralph-sql-tests.sh",
+  "scripts/ci/run-sql-fixtures.sh",
+  "scripts/ci/sql-fixture-registry.mjs",
+  "scripts/ci/verify-sql-fixture-runner.sh",
   "supabase/migrations",
   "supabase/config.toml",
   "supabase/seed.sql",
   "supabase/tests/e2e_local_authenticated_grants.sql",
+  "supabase/tests/calendar_event_reminder_lifecycle.sql",
+  "supabase/tests/control_plane_authorization.sql",
   "supabase/tests/finance_cushion_rls.sql",
   "supabase/tests/oauth_refresh_token_lifecycle.sql",
   "supabase/tests/oauth_refresh_token_upgrade.sql",
@@ -15,6 +20,7 @@ export const WORKER_PROTECTED_PATHS = Object.freeze([
   "AGENTS.md",
   "package.json",
   "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
   "package-lock.json",
   "yarn.lock",
 ]);
@@ -36,7 +42,7 @@ export function workerProtectedPath(filePath) {
   if (/(^|\/)agents\.md$/.test(normalized)) return true;
   if (/(^|\/)\.env(?:\.|$)/.test(normalized)) return true;
   if (
-    /(^|\/)(?:package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/.test(
+    /(^|\/)(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|package-lock\.json|yarn\.lock)$/.test(
       normalized,
     )
   ) {

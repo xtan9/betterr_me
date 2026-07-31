@@ -1,4 +1,5 @@
 -- Run after `supabase db reset --local` against the local instance.
+-- ralph-ci: true
 -- The transaction rolls back all synthetic identities and workout data.
 begin;
 
