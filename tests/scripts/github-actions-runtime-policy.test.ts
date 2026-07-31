@@ -54,6 +54,15 @@ function externalActionReferences() {
 }
 
 describe("GitHub Actions runtime policy", () => {
+  it("publishes one unambiguous CI Gate and E2E Gate for pull requests", () => {
+    const gateNames = workflowFiles.flatMap(({ contents }) =>
+      [...contents.matchAll(/^\s+name:\s+(CI Gate|E2E Gate|PR Gate)\s*$/gm)]
+        .map((match) => match[1])
+    );
+
+    expect(gateNames).toEqual(["CI Gate", "E2E Gate"]);
+  });
+
   it("groups GitHub Actions updates into one monthly pull request", () => {
     expect(dependabotConfig).toBe(`version: 2
 

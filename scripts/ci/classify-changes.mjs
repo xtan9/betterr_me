@@ -19,6 +19,12 @@ const CLASSIFIER_TESTS = [
   "tests/scripts/classify-changes.test.ts",
   "tests/scripts/run-change-classifier.test.ts",
 ];
+const CI_POLICY_TESTS = [
+  ...CLASSIFIER_TESTS,
+  "tests/scripts/detect-pull-request-validated-push.test.ts",
+  "tests/scripts/gate-policy.test.ts",
+  "tests/scripts/github-actions-runtime-policy.test.ts",
+];
 
 export const OWNERSHIP_REGISTRY = [
   rule("calendar", [/^(?:app|components)\/calendar\//, /^app\/api\/(?:calendar|calendar-events)\//, /^hooks\/use-calendar/, /^lib\/(?:calendar\/|db\/calendar-events|validations\/calendar-events)/], fullE2E()),
@@ -41,9 +47,9 @@ export const OWNERSHIP_REGISTRY = [
   rule("database-platform", [/^supabase\//], { ...fullE2E({ fullTests: true }), migrations: true }),
   rule("e2e-tests", [/^e2e\//], product({ directE2E: true })),
   rule("unit-tests", [/^tests\//], { quality: true, changedTests: true }),
-  rule("ci-workflows", [/^\.github\/(?:actions|workflows)\//], { quality: true, smokeTests: CLASSIFIER_TESTS, e2eSpecs: [SPECS.dashboard], e2eSupabase: true }),
+  rule("ci-workflows", [/^\.github\/(?:actions|workflows)\//], { quality: true, smokeTests: CI_POLICY_TESTS, e2eSpecs: [SPECS.dashboard], e2eSupabase: true }),
   rule("dependency-automation", [/^\.github\/dependabot\.yml$/], { quality: true, smokeTests: CLASSIFIER_TESTS }),
-  rule("ci-policy", [/^scripts\/ci\//], { quality: true, smokeTests: CLASSIFIER_TESTS, e2eSpecs: [SPECS.dashboard], e2eSupabase: true }),
+  rule("ci-policy", [/^scripts\/ci\//], { quality: true, smokeTests: CI_POLICY_TESTS, e2eSpecs: [SPECS.dashboard], e2eSupabase: true }),
   rule("automation", [/^scripts\/(?!ci\/)/], { quality: true, changedTests: true }),
   rule("configuration", [/^(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig\.json|vitest\.config\.ts|eslint\.config\.mjs|next\.config\.ts|playwright\.config\.ts|proxy\.ts|tailwind\.config\.ts|postcss\.config\.mjs|lighthouserc\.js|vercel\.json|stryker\.config\.mjs|components\.json|\.env\.example)$/], { ...fullE2E({ fullTests: true, fullLint: true }), performance: true }),
   rule("documentation", [/^(?:docs\/|README|CONTEXT\.md|AGENTS\.md|CLAUDE\.md|\.agents\/|\.claude\/|\.planning\/|\.superpowers\/|\.github\/(?:PULL_REQUEST_TEMPLATE|SETUP_SECRETS)|\.git(?:attributes|ignore)$|skills-lock\.json)/], {}),

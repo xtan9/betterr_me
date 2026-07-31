@@ -176,11 +176,15 @@ When changing the classifier, run its targeted policy verification:
 
 ```bash
 pnpm exec vitest run tests/scripts/classify-changes.test.ts \
-  tests/scripts/run-change-classifier.test.ts
+  tests/scripts/run-change-classifier.test.ts \
+  tests/scripts/detect-pull-request-validated-push.test.ts \
+  tests/scripts/gate-policy.test.ts \
+  tests/scripts/github-actions-runtime-policy.test.ts
 ```
 
 This verifies every tracked path has an owner and covers renames, deletions,
 test-only and workflow-only changes, mixed-risk diffs, each registered product
-area, and conservative fallbacks. It intentionally does not run the complete
-Playwright suite; the classifier selects the dashboard smoke spec for its own
-changes in pull-request CI.
+area, conservative fallbacks, stable aggregate gate names, and fail-closed gate
+results. It intentionally does not run the complete Playwright suite; the
+classifier selects the dashboard smoke spec for its own changes in pull-request
+CI.

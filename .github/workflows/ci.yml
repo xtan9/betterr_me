@@ -164,26 +164,20 @@ jobs:
           fi
           echo "✅ All migration timestamps are unique"
 
-  pr-gate:
-    name: PR Gate
+  ci-gate:
+    name: CI Gate
     needs: [changes, lint-and-test, check-migrations]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Verify selected CI checks
+      - name: Checkout gate policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Verify selected non-browser checks
         env:
-          CHANGES_RESULT: ${{ needs.changes.result }}
-          QUALITY_NEEDED: ${{ fromJSON(needs.changes.outputs.classification_json).suites.quality }}
-          QUALITY_RESULT: ${{ needs.lint-and-test.result }}
-          MIGRATIONS_NEEDED: ${{ fromJSON(needs.changes.outputs.classification_json).suites.migrations }}
-          MIGRATIONS_RESULT: ${{ needs.check-migrations.result }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$CHANGES_RESULT" = "success"
-          if [[ "$QUALITY_NEEDED" == "true" ]]; then
-            test "$QUALITY_RESULT" = "success"
-          fi
-          if [[ "$MIGRATIONS_NEEDED" == "true" ]]; then
-            test "$MIGRATIONS_RESULT" = "success"
-          fi
+          GATE_NAME: CI Gate
+          SELECTION_RESULT: ${{ needs.changes.result }}
+          CLASSIFICATION_JSON: ${{ needs.changes.outputs.classification_json }}
+          PREREQUISITES_JSON: >-
+            [{"name":"quality","suite":"quality","result":"${{ needs.lint-and-test.result }}"},{"name":"migrations","suite":"migrations","result":"${{ needs.check-migrations.result }}"}]
+        run: node scripts/ci/verify-gate.mjs

@@ -209,21 +209,20 @@ jobs:
           retention-days: 3
           compression-level: 9
 
-  pr-gate:
-    name: PR Gate
+  e2e-gate:
+    name: E2E Gate
     needs: [changes, e2e-tests]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout gate policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
       - name: Verify selected E2E checks
         env:
-          CHANGES_RESULT: ${{ needs.changes.result }}
-          E2E_NEEDED: ${{ fromJSON(needs.changes.outputs.classification_json).suites.e2e }}
-          E2E_RESULT: ${{ needs.e2e-tests.result }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$CHANGES_RESULT" = "success"
-          if [[ "$E2E_NEEDED" == "true" ]]; then
-            test "$E2E_RESULT" = "success"
-          fi
+          GATE_NAME: E2E Gate
+          SELECTION_RESULT: ${{ needs.changes.result }}
+          CLASSIFICATION_JSON: ${{ needs.changes.outputs.classification_json }}
+          PREREQUISITES_JSON: >-
+            [{"name":"browser tests","suite":"e2e","result":"${{ needs.e2e-tests.result }}"}]
+        run: node scripts/ci/verify-gate.mjs
