@@ -25,7 +25,10 @@ const CI_POLICY_TESTS = [
   "tests/scripts/detect-pull-request-validated-push.test.ts",
   "tests/scripts/gate-policy.test.ts",
   "tests/scripts/github-actions-runtime-policy.test.ts",
+  "tests/scripts/production-deployment-policy.test.ts",
+  "tests/scripts/production-smoke.test.ts",
   "tests/scripts/quality-signal-contracts.test.ts",
+  "tests/scripts/vercel-ignore-build.test.ts",
 ];
 
 export const MUTATION_SCOPES = [

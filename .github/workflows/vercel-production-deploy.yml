@@ -1,0 +1,183 @@
+name: Vercel Deploy
+
+on:
+  workflow_run:
+    workflows: [Database Migration]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
+      commit_sha:
+        description: Commit or branch to deploy; defaults to the workflow commit
+        required: false
+        type: string
+
+concurrency:
+  group: vercel-${{ inputs.target || 'production' }}
+  cancel-in-progress: false
+
+permissions:
+  checks: read
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (vars.VERCEL_CI_DEPLOY_ENABLED == 'true' &&
+      github.event.workflow_run.event == 'workflow_run' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ (inputs.target || 'production') == 'production' && 'Production' || 'Preview' }}
+    env:
+      APP_URL: ${{ secrets.APP_URL }}
+      DEPLOY_SHA: ${{ inputs.commit_sha || github.event.workflow_run.head_sha || github.sha }}
+      DEPLOY_TARGET: ${{ inputs.target || 'production' }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout exact deployment commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          fetch-depth: 2
+
+      - name: Setup Node.js and pnpm without dependency install
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          install-dependencies: "false"
+
+      - name: Authorize automatic production deployment
+        id: policy
+        if: github.event_name == 'workflow_run'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          TARGET_SHA: ${{ env.DEPLOY_SHA }}
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const moduleUrl = pathToFileURL(
+              `${process.env.GITHUB_WORKSPACE}/scripts/ci/production-deployment-policy.mjs`
+            ).href;
+            const {
+              changedFilesForCommit,
+              authorizeProductionDeployment,
+            } = await import(moduleUrl);
+            const { owner, repo } = context.repo;
+            const sha = process.env.TARGET_SHA;
+            let changedFiles = [];
+            try {
+              changedFiles = changedFilesForCommit(sha);
+            } catch (error) {
+              core.warning(
+                `Could not classify deployment paths; deploying after prerequisites: ${error.message}`
+              );
+            }
+            const result = await authorizeProductionDeployment({
+              sha,
+              changedFiles,
+              getCurrentMainSha: async () => {
+                const response = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+                return response.data.commit.sha;
+              },
+              listCheckRuns: async () => {
+                const response = await github.rest.checks.listForRef({
+                  owner,
+                  repo,
+                  ref: sha,
+                  filter: 'latest',
+                  per_page: 100,
+                });
+                return response.data.check_runs;
+              },
+            });
+            core.setOutput('action', result.action);
+            core.setOutput('reason', result.reason);
+            await core.summary
+              .addHeading('Vercel production deployment policy')
+              .addRaw(`${result.action}: ${result.reason}`)
+              .addBreak()
+              .addRaw(`Runtime files: ${result.runtimeFiles.join(', ') || 'none'}`)
+              .write();
+
+      - name: Force explicit manual deployment
+        id: manual-policy
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "action=deploy" >> "$GITHUB_OUTPUT"
+          echo "Manual $DEPLOY_TARGET deployment requested for $DEPLOY_SHA."
+
+      - name: Explain skipped deployment
+        if: steps.policy.outputs.action == 'skip'
+        env:
+          SKIP_REASON: ${{ steps.policy.outputs.reason }}
+        run: echo "$SKIP_REASON"
+
+      - name: Require deployment credentials
+        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required Vercel credential: $name" >&2
+              exit 1
+            fi
+          done
+          if [[ "$DEPLOY_TARGET" == "production" && -z "${APP_URL:-}" ]]; then
+            echo "Missing required production secret: APP_URL" >&2
+            exit 1
+          fi
+
+      - name: Pull Vercel environment
+        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy'
+        run: >-
+          pnpm --silent dlx vercel@58.4.4 pull --yes
+          --environment="$DEPLOY_TARGET" --token="$VERCEL_TOKEN"
+
+      - name: Deploy through Vercel remote build
+        id: deploy-command
+        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(deploy --yes)
+          if [[ "$DEPLOY_TARGET" == "production" ]]; then
+            args+=(--prod)
+          fi
+          args+=(--token="$VERCEL_TOKEN")
+          deployment_url="$(pnpm --silent dlx vercel@58.4.4 "${args[@]}")"
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Probe production after deployment
+        if: >-
+          (steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy') &&
+          env.DEPLOY_TARGET == 'production'
+        run: node scripts/ci/production-smoke.mjs --probe
+
+      - name: Publish deployment summary
+        if: steps.policy.outputs.action == 'deploy' || steps.manual-policy.outputs.action == 'deploy'
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy-command.outputs.url }}
+        shell: bash
+        run: |
+          {
+            echo "## Vercel deployment"
+            echo "- Commit: \`$DEPLOY_SHA\`"
+            echo "- Target: $DEPLOY_TARGET"
+            echo "- Deployment: $DEPLOYMENT_URL"
+            if [[ "$DEPLOY_TARGET" == "production" ]]; then
+              echo "- Production smoke: passed"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

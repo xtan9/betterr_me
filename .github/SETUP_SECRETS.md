@@ -40,3 +40,46 @@ If the workflow fails:
 - Check that both secrets are set correctly
 - Verify the project ID in `.github/workflows/db-migrate.yml` is correct (`ugkhvvmjdrshuopgaaje`)
 - Check Supabase dashboard for any manual migrations that might conflict
+
+## Controlled Vercel deployments
+
+The controlled production and manual preview workflow requires:
+
+- Repository secret `VERCEL_TOKEN`: a scoped Vercel access token for the project
+  owner or team. Record its expiration and rotate the secret before it expires.
+- Repository variable `VERCEL_ORG_ID`: the `orgId` from the project's
+  `.vercel/project.json` after running `vercel link` locally.
+- Repository variable `VERCEL_PROJECT_ID`: the `projectId` from the same file.
+- Repository secret `APP_URL`: the canonical production origin used by the
+  post-deploy smoke probe.
+
+Keep the repository variable `VERCEL_CI_DEPLOY_ENABLED` unset or set to `false`
+when the controlled workflow is first merged. Automatic Vercel Git deployments
+and the legacy production smoke workflow remain active in that state.
+
+The automatic production chain is:
+
+`CI` -> `Database Migration` -> `Vercel Deploy`
+
+The database workflow runs for every CI-validated `main` commit but touches the
+database only when a migration SQL file changed. The deployment workflow then
+waits for the exact commit's `E2E Gate`, skips known non-runtime-only changes,
+and deploys through Vercel's remote builder. Unknown paths and empty comparisons
+deploy as a fail-safe. A newer `main` commit supersedes an older queued deploy.
+
+Use this rollout order:
+
+1. Add the Vercel token, project variables, and production URL described above.
+2. Merge the workflow with `VERCEL_CI_DEPLOY_ENABLED=false`.
+3. Add `deployment-policy` to the required `main` branch checks alongside the
+   existing CI and E2E gates.
+4. Manually run `Vercel Deploy` with target `preview` and verify the result.
+5. Manually run it with target `production` and verify the smoke step passes.
+6. In a small follow-up change, set `git.deploymentEnabled` to `false` in
+   `vercel.json`. Let that final Git-integrated deployment finish.
+7. Set `VERCEL_CI_DEPLOY_ENABLED=true`, then manually verify production once
+   more. Do not disable Git deployment before steps 1-5 succeed.
+
+When the rollout variable is `true`, the legacy `Production Smoke` push job
+skips because the controlled deployment performs its own post-deploy smoke
+probe.

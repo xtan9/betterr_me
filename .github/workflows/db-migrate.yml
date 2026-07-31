@@ -1,12 +1,15 @@
 name: Database Migration
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'supabase/migrations/**'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Main commit to inspect; defaults to the workflow commit
+        required: false
+        type: string
 
 concurrency:
   group: database-migration-production
@@ -17,40 +20,62 @@ permissions:
 
 jobs:
   migrate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: Production
-    
+    env:
+      MIGRATION_SHA: ${{ inputs.commit_sha || github.event.workflow_run.head_sha || github.sha }}
+
     steps:
-      - name: Checkout code
+      - name: Checkout exact CI-validated commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      
+        with:
+          ref: ${{ env.MIGRATION_SHA }}
+          fetch-depth: 2
+
+      - name: Detect migration changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_files="$(git diff --name-only --no-renames "${MIGRATION_SHA}^" "$MIGRATION_SHA" -- 'supabase/migrations/*.sql')"
+          if [[ -n "$migration_files" ]]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            printf 'Migrations to apply:\n%s\n' "$migration_files"
+          else
+            echo "required=false" >> "$GITHUB_OUTPUT"
+            echo "No migration changes; completing the prerequisite without touching production."
+          fi
+
       - name: Setup Supabase CLI
+        if: steps.changes.outputs.required == 'true'
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
         with:
           version: 2.109.1
-      
+
       - name: Link Supabase project
+        if: steps.changes.outputs.required == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           PROJECT_ID: ugkhvvmjdrshuopgaaje
-        run: |
-          supabase link --project-ref $PROJECT_ID
-      
+        run: supabase link --project-ref "$PROJECT_ID"
+
       - name: Run migrations
+        if: steps.changes.outputs.required == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: |
-          supabase db push --linked --include-all --yes
+        run: supabase db push --linked --include-all --yes
 
       - name: Verify remote migration history
+        if: steps.changes.outputs.required == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: supabase migration list --linked
-      
-      - name: Migration success
-        run: |
-          echo "✅ Database migrations applied successfully!"

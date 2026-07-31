@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyVercelBuild } from "../../scripts/ci/vercel-ignore-build.mjs";
+import {
+  classifyVercelBuild,
+  parseVercelChangedPaths,
+} from "../../scripts/ci/vercel-ignore-build.mjs";
 
 describe("Vercel ignored build classification", () => {
   it.each([
@@ -87,5 +90,15 @@ describe("Vercel ignored build classification", () => {
 
   it("builds when the changed-file list is unexpectedly empty", () => {
     expect(classifyVercelBuild([]).build).toBe(true);
+  });
+
+  it("keeps both sides of renames and runtime deletions", () => {
+    expect(parseVercelChangedPaths(
+      "R100\0app/legacy/page.tsx\0docs/legacy-page.md\0D\0app/old/page.tsx\0",
+    )).toEqual([
+      "app/legacy/page.tsx",
+      "docs/legacy-page.md",
+      "app/old/page.tsx",
+    ]);
   });
 });
