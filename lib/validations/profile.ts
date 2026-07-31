@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { preferencesSchema } from "./preferences";
 
 export const profileFormSchema = z.object({
   full_name: z.string().max(100).optional().nullable(),
@@ -16,12 +17,20 @@ export type ProfileFormValues = z.infer<typeof profileFormSchema>;
 export const profileUpdateSchema = profileFormSchema
   .partial()
   .extend({
-    preferences: z.record(z.unknown()).optional(),
+    preferences: preferencesSchema.optional(),
     timezone: z.string().min(1).max(100).optional().nullable(),
     email_notifications_enabled: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
-  });
+  })
+  .refine(
+    (data) =>
+      data.preferences === undefined || Object.keys(data).length === 1,
+    {
+      message: "Preferences must be updated separately from profile fields",
+      path: ["preferences"],
+    },
+  );
 
 export type ProfileUpdateValues = z.infer<typeof profileUpdateSchema>;

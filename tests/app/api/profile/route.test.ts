@@ -14,6 +14,7 @@ vi.mock('@/lib/supabase/server', () => ({
 const mockProfilesDB = {
   getProfile: vi.fn(),
   updateProfile: vi.fn(),
+  updatePreferences: vi.fn(),
 };
 
 vi.mock('@/lib/db', () => ({
@@ -180,9 +181,7 @@ describe('PATCH /api/profile', () => {
     expect(response.status).toBe(401);
   });
 
-  it('should persist avatar_url, preferences, and email_notifications_enabled', async () => {
-    vi.mocked(mockProfilesDB.updateProfile).mockResolvedValue({ id: 'user-123' } as any);
-
+  it('should reject preferences combined with other profile fields', async () => {
     const request = new NextRequest('http://localhost:3000/api/profile', {
       method: 'PATCH',
       body: JSON.stringify({
@@ -193,12 +192,9 @@ describe('PATCH /api/profile', () => {
     });
 
     const response = await PATCH(request);
-    expect(response.status).toBe(200);
-    expect(mockProfilesDB.updateProfile).toHaveBeenCalledWith('user-123', {
-      avatar_url: 'https://example.com/a.png',
-      preferences: { theme: 'dark' },
-      email_notifications_enabled: true,
-    });
+    expect(response.status).toBe(400);
+    expect(mockProfilesDB.updateProfile).not.toHaveBeenCalled();
+    expect(mockProfilesDB.updatePreferences).not.toHaveBeenCalled();
   });
 
   it('should coerce empty full_name to null', async () => {

@@ -28,6 +28,9 @@ describe("Ralph SQL fixture policy", () => {
     expect(runnerScript).toContain("hostaddr=' || host(inet_server_addr())");
     expect(runnerScript).toContain("' port=' || inet_server_port()");
     expect(runnerScript).not.toContain("host=127.0.0.1 port=54322 dbname=postgres");
+    expect(runnerScript).toContain(
+      "extensions.dblink_exec(connection_name, 'set role authenticated')",
+    );
   });
 
   it("uses the local Supabase admin boundary for auth and extension grants", () => {
@@ -44,6 +47,10 @@ describe("Ralph SQL fixture policy", () => {
     expect(runnerScript).toContain(
       "create or replace function public.ralph_ci_create_auth_user(",
     );
+    expect(runnerScript).toContain(
+      "create or replace function public.ralph_ci_delete_auth_user(",
+    );
+    expect(runnerScript).toContain("email like '%@example.test'");
     expect(runnerScript).not.toContain(
       "grant all privileges on all tables in schema auth to ralph_ci_test",
     );
@@ -85,6 +92,9 @@ describe("Ralph SQL fixture policy", () => {
     );
     expect(runnerScript).toContain(
       "grant execute on function public.ralph_ci_create_auth_user(uuid, text)",
+    );
+    expect(runnerScript).toContain(
+      "grant execute on function public.ralph_ci_delete_auth_user(uuid)",
     );
     expect(runnerScript).toContain(
       "grant execute on function public.ralph_ci_open_connection(text) to ralph_ci_test",

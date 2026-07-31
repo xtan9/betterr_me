@@ -23,6 +23,7 @@ begin
       and privilege.privilege_type = 'EXECUTE'
       and routine.proname not in (
         'ralph_ci_create_auth_user',
+        'ralph_ci_delete_auth_user',
         'ralph_ci_open_connection'
       )
   ) then

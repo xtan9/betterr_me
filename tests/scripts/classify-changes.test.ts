@@ -185,6 +185,7 @@ describe("conditional test classifier", () => {
     ["chat", "app/api/chat/route.ts"],
     ["export", "app/api/export/route.ts"],
     ["settings", "components/settings/account-settings.tsx"],
+    ["settings", "lib/profile-preference-cache.ts"],
     ["cron", "app/api/cron/dispatch-reminders/route.ts"],
     ["control-plane", "app/control-plane/page.tsx"],
   ])("selects browser validation for the %s product area", (owner, path) => {
