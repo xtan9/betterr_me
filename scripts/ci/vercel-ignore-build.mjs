@@ -42,6 +42,32 @@ export function classifyVercelBuild(changedFiles) {
   };
 }
 
+export function parseVercelChangedPaths(raw) {
+  const tokens = String(raw).split("\0").filter(Boolean);
+  const paths = [];
+
+  for (let index = 0; index < tokens.length;) {
+    const status = tokens[index++];
+    const kind = status[0];
+    if (!/^[ACDMRTUXB]$/.test(kind)) {
+      throw new Error(`unrecognized git diff status: ${status}`);
+    }
+
+    if (kind === "R" || kind === "C") {
+      const oldPath = tokens[index++];
+      const newPath = tokens[index++];
+      if (!oldPath || !newPath) throw new Error("incomplete git rename record");
+      paths.push(oldPath, newPath);
+    } else {
+      const path = tokens[index++];
+      if (!path) throw new Error(`missing path for git diff status: ${status}`);
+      paths.push(path);
+    }
+  }
+
+  return [...new Set(paths)];
+}
+
 function git(args) {
   return execFileSync("git", args, {
     encoding: "utf8",
@@ -73,13 +99,14 @@ export function changedFilesForVercel(env = process.env) {
     throw new Error("comparison commits are unavailable in the Vercel checkout");
   }
 
-  return git([
+  return parseVercelChangedPaths(git([
     "diff",
-    "--name-only",
-    "--diff-filter=ACMRTUXB",
+    "--name-status",
+    "-z",
+    "--find-renames",
     previousSha,
     currentSha,
-  ]).split(/\r?\n/).filter(Boolean);
+  ]));
 }
 
 function printPaths(label, files) {

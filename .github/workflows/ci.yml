@@ -21,6 +21,22 @@ permissions:
   pull-requests: read
 
 jobs:
+  deployment-policy:
+    name: deployment-policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout deployment policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Node.js without dependency install
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          install-dependencies: "false"
+
+      - name: Test deployment policy
+        run: node --test scripts/ci/production-deployment-policy.policy.mjs
+
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -166,7 +182,7 @@ jobs:
 
   ci-gate:
     name: CI Gate
-    needs: [changes, lint-and-test, check-migrations]
+    needs: [deployment-policy, changes, lint-and-test, check-migrations]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')
     runs-on: ubuntu-latest
     steps:
@@ -181,3 +197,11 @@ jobs:
           PREREQUISITES_JSON: >-
             [{"name":"quality","suite":"quality","result":"${{ needs.lint-and-test.result }}"},{"name":"migrations","suite":"migrations","result":"${{ needs.check-migrations.result }}"}]
         run: node scripts/ci/verify-gate.mjs
+
+      - name: Verify deployment policy check
+        if: needs.deployment-policy.result != 'success'
+        env:
+          POLICY_RESULT: ${{ needs.deployment-policy.result }}
+        run: |
+          echo "deployment-policy must succeed; received $POLICY_RESULT" >&2
+          exit 1
