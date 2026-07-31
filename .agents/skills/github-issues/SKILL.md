@@ -65,6 +65,29 @@ Always use the templates in [references/templates.md](references/templates.md). 
 | Feature, enhancement, add, new | Feature Request |
 | Task, chore, refactor, update | Task |
 
+### Issue References and Dependencies
+
+Preserve GitHub's enriched issue rendering whenever an issue body refers to another
+issue. This rendering exposes useful metadata such as the referenced issue's open or
+closed status.
+
+- Use a bare issue reference (`#123`) instead of a custom Markdown link to the issue.
+- In `## Blocked by` and other dependency lists, put one bare reference on each bullet:
+
+  ```markdown
+  ## Blocked by
+
+  - #123
+  - #456
+  ```
+
+- Do not write `[#123 — Title](https://github.com/owner/repo/issues/123)`. An explicit
+  Markdown link suppresses GitHub's enriched issue-reference rendering.
+- For an issue in another repository, use the bare cross-repository form
+  `owner/repository#123`.
+- Before creating or updating the body, normalize any dependency references supplied
+  as issue URLs or custom Markdown links to these bare forms.
+
 ## Updating Issues
 
 Use `mcp__github__update_issue` with:
@@ -128,5 +151,5 @@ Use these standard labels when applicable:
 
 - Always confirm the repository context before creating issues
 - Ask for missing critical information rather than guessing
-- Link related issues when known: `Related to #123`
+- Reference related issues with bare GitHub references when known: `Related to #123`
 - For updates, fetch current issue first to preserve unchanged fields
