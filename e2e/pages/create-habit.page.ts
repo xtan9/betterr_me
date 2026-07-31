@@ -1,4 +1,6 @@
 import type { Page } from '@playwright/test';
+import { FIXTURE_REGISTRY } from '../constants';
+import { registerFixtureId } from '../run-context';
 
 export class CreateHabitPage {
   constructor(private page: Page) {}
@@ -49,13 +51,21 @@ export class CreateHabitPage {
 
   /** Submit and wait for the API response (use for valid submissions only) */
   async submitAndWaitForApi() {
-    await Promise.all([
+    const [response] = await Promise.all([
       this.page.waitForResponse(
         (res) => res.url().includes('/api/habits') && res.request().method() === 'POST',
         { timeout: 30000 },
       ),
       this.page.getByRole('button', { name: /create/i }).click(),
     ]);
+
+    if (!response.ok()) {
+      throw new Error(`Habit creation failed (${response.status()}): ${await response.text()}`);
+    }
+    const body = await response.json() as { habit?: { id?: string } };
+    if (!body.habit?.id) throw new Error('Habit creation response did not include an ID');
+    registerFixtureId(FIXTURE_REGISTRY, 'habits', body.habit.id);
+    return body.habit.id;
   }
 
   /** Click the Cancel button */

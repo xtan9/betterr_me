@@ -123,32 +123,16 @@ jobs:
           test -n "$anon_key"
           export NEXT_PUBLIC_SUPABASE_ANON_KEY="$anon_key"
           printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$NEXT_PUBLIC_SUPABASE_ANON_KEY" >> "$GITHUB_ENV"
+          service_role_key="$(supabase status --output env | sed -n 's/^SERVICE_ROLE_KEY=//p' | sed 's/^"//; s/"$//')"
+          test -n "$service_role_key"
+          printf 'E2E_SUPABASE_SERVICE_ROLE_KEY=%s\n' "$service_role_key" >> "$GITHUB_ENV"
+          export E2E_RUN_ID="gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf 'E2E_RUN_ID=%s\n' "$E2E_RUN_ID" >> "$GITHUB_ENV"
+          printf 'E2E_DATA_MODE=disposable\n' >> "$GITHUB_ENV"
           export E2E_TEST_EMAIL="cushion-e2e@example.test"
           printf 'E2E_TEST_EMAIL=%s\n' "$E2E_TEST_EMAIL" >> "$GITHUB_ENV"
           export E2E_TEST_PASSWORD="Cushion-E2E-local-2026!"
           printf 'E2E_TEST_PASSWORD=%s\n' "$E2E_TEST_PASSWORD" >> "$GITHUB_ENV"
-          node --input-type=module <<'NODE'
-          import { createClient } from '@supabase/supabase-js';
-
-          const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-          );
-          const { data, error } = await supabase.auth.signUp({
-            email: process.env.E2E_TEST_EMAIL,
-            password: process.env.E2E_TEST_PASSWORD,
-          });
-          if (error && !/already registered/i.test(error.message)) {
-            throw error;
-          }
-          if (!data?.user) {
-            const { error: signInError } = await supabase.auth.signInWithPassword({
-              email: process.env.E2E_TEST_EMAIL,
-              password: process.env.E2E_TEST_PASSWORD,
-            });
-            if (signInError) throw signInError;
-          }
-          NODE
 
       - name: Configure production-backed E2E target
         if: ${{ github.event_name != 'pull_request' }}
@@ -165,6 +149,8 @@ jobs:
           printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$PROD_SUPABASE_ANON_KEY" >> "$GITHUB_ENV"
           printf 'E2E_TEST_EMAIL=%s\n' "$PROD_E2E_EMAIL" >> "$GITHUB_ENV"
           printf 'E2E_TEST_PASSWORD=%s\n' "$PROD_E2E_PASSWORD" >> "$GITHUB_ENV"
+          printf 'E2E_RUN_ID=gh-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+          printf 'E2E_DATA_MODE=read-only\n' >> "$GITHUB_ENV"
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -181,6 +167,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          if [[ "${E2E_DATA_MODE:-read-only}" == "read-only" ]]; then
+            pnpm exec playwright test e2e/production-smoke.spec.ts --project=chromium
+            exit 0
+          fi
 
           if [[ "$E2E_FULL" == "true" ]]; then
             pnpm test:e2e:chromium

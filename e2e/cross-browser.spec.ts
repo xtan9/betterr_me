@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { DashboardPage } from './pages/dashboard.page';
 import { HabitsPage } from './pages/habits.page';
 import { CreateHabitPage } from './pages/create-habit.page';
+import { E2E_READ_ONLY, RUN_CONTEXT, SEED_HABIT_NAMES } from './constants';
 import { toggleAndVerify } from './helpers/checkbox';
 
 /**
@@ -28,24 +29,27 @@ test.describe('Cross-Browser - Core Functionality', () => {
   });
 
   test('create habit form submits correctly', async ({ page }) => {
+    test.skip(E2E_READ_ONLY, 'Habit creation requires disposable E2E state');
     const createPage = new CreateHabitPage(page);
     await createPage.goto();
 
-    await createPage.fillName('E2E Test - Cross-Browser Habit');
+    const habitName = RUN_CONTEXT.ownedName(`Cross-Browser Habit ${test.info().project.name}`);
+    await createPage.fillName(habitName);
     await createPage.selectFrequency(/every day/i);
     await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
 
-    // Verify — use .first() in case duplicates linger from a previous run
-    await expect(page.getByText('E2E Test - Cross-Browser Habit').first()).toBeVisible();
+    // Verify the exact run- and project-owned record.
+    await expect(page.getByText(habitName).first()).toBeVisible();
   });
 
   test('habit toggle works', async ({ page }) => {
+    test.skip(E2E_READ_ONLY, 'Habit mutation requires disposable E2E state');
     const dashboard = new DashboardPage(page);
     await dashboard.goto();
 
     // Target a specific seed habit to avoid parallel contention with other test files
-    const checkbox = dashboard.habitCheckbox('E2E Test - Seed Habit 3');
+    const checkbox = dashboard.habitCheckbox(SEED_HABIT_NAMES[2]);
     await expect(checkbox).toBeVisible({ timeout: 10000 });
 
     await toggleAndVerify(checkbox);

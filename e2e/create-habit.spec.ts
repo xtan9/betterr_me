@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { CreateHabitPage } from './pages/create-habit.page';
 import { HabitsPage } from './pages/habits.page';
+import { E2E_READ_ONLY, RUN_CONTEXT } from './constants';
 
 /**
  * QA-001: E2E test - Create habit flow
@@ -14,6 +15,8 @@ import { HabitsPage } from './pages/habits.page';
  */
 
 test.describe('Create Habit Flow', () => {
+  test.skip(E2E_READ_ONLY, 'Habit creation requires disposable E2E state');
+
   test('should navigate to create habit page from habits list', async ({ page }) => {
     const habits = new HabitsPage(page);
     await habits.goto();
@@ -23,9 +26,7 @@ test.describe('Create Habit Flow', () => {
 
   test('should navigate to create habit page from dashboard empty state', async ({ page }) => {
     await page.goto('/dashboard');
-    // If user has no habits, there should be a create CTA
     const createButton = page.getByRole('link', { name: /create|new|add/i }).first();
-    // Empty state CTA only shows when user has no habits — skip if not present
     if (await createButton.isVisible({ timeout: 3000 })) {
       await createButton.click();
       await expect(page).toHaveURL('/habits/new');
@@ -36,15 +37,14 @@ test.describe('Create Habit Flow', () => {
     const createPage = new CreateHabitPage(page);
     await createPage.goto();
 
-    await createPage.fillName('E2E Test - Morning Run');
+    const habitName = RUN_CONTEXT.ownedName('Morning Run');
+    await createPage.fillName(habitName);
     await createPage.fillDescription('A test habit created by E2E test suite');
     await createPage.selectCategory('Health');
     await createPage.selectFrequency(/every day/i);
     await createPage.submitAndWaitForApi();
     await createPage.waitForRedirect();
 
-    // Verify the habit appears in the list
-    await expect(page.getByText('E2E Test - Morning Run').first()).toBeVisible();
+    await expect(page.getByText(habitName).first()).toBeVisible();
   });
-
 });
