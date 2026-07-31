@@ -16,7 +16,7 @@
     "path": "control_plane_authorization.sql",
     "domain": "control-plane",
     "role": "admin",
-    "cleanup": "transactional",
+    "cleanup": "self-cleaning",
     "adminReason": "seeds control-plane membership and disposable auth identities for role assertions"
   },
   {
