@@ -61,6 +61,36 @@ describe('PATCH /api/profile/preferences', () => {
     });
   });
 
+  it('should accept quiet hours as a partial preference intent', async () => {
+    const updatedProfile = {
+      id: 'user-123',
+      preferences: {
+        theme: 'system',
+        quiet_hours_start: '22:00',
+        quiet_hours_end: '07:00',
+      },
+    };
+    vi.mocked(mockProfilesDB.updatePreferences).mockResolvedValue(updatedProfile as any);
+
+    const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        quiet_hours_start: '22:00',
+        quiet_hours_end: '07:00',
+      }),
+    });
+
+    const response = await PATCH(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.profile).toEqual(updatedProfile);
+    expect(mockProfilesDB.updatePreferences).toHaveBeenCalledWith('user-123', {
+      quiet_hours_start: '22:00',
+      quiet_hours_end: '07:00',
+    });
+  });
+
   it('should validate theme', async () => {
     const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
       method: 'PATCH',

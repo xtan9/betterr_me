@@ -1,5 +1,11 @@
 [
   {
+    "path": "atomic_profile_preference_updates.sql",
+    "domain": "profile",
+    "role": "constrained",
+    "cleanup": "self-cleaning"
+  },
+  {
     "path": "calendar_event_reminder_lifecycle.sql",
     "domain": "calendar",
     "role": "admin",

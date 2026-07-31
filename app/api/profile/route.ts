@@ -4,7 +4,7 @@ import { ProfilesDB } from "@/lib/db";
 import { validateRequestBody } from "@/lib/validations/api";
 import { log } from "@/lib/logger";
 import { profileUpdateSchema } from "@/lib/validations/profile";
-import type { ProfileUpdate } from "@/lib/db/types";
+import type { Profile, ProfileUpdate } from "@/lib/db/types";
 
 /**
  * GET /api/profile
@@ -70,10 +70,6 @@ export async function PATCH(request: NextRequest) {
       updates.avatar_url = validation.data.avatar_url?.trim() || null;
     }
 
-    if (validation.data.preferences !== undefined) {
-      updates.preferences = validation.data.preferences as unknown as ProfileUpdate["preferences"];
-    }
-
     if (validation.data.email_notifications_enabled !== undefined) {
       updates.email_notifications_enabled = validation.data.email_notifications_enabled;
     }
@@ -83,7 +79,19 @@ export async function PATCH(request: NextRequest) {
     }
 
     const profilesDB = new ProfilesDB(supabase);
-    const profile = await profilesDB.updateProfile(user.id, updates);
+    let profile: Profile | undefined;
+
+    if (Object.keys(updates).length > 0) {
+      profile = await profilesDB.updateProfile(user.id, updates);
+    }
+
+    if (validation.data.preferences !== undefined) {
+      profile = await profilesDB.updatePreferences(
+        user.id,
+        validation.data.preferences
+      );
+    }
+
     return NextResponse.json({ profile });
   } catch (error: unknown) {
     log.error("PATCH /api/profile error", error);
