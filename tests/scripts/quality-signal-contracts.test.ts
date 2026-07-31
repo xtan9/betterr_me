@@ -263,6 +263,7 @@ describe("advisory quality-signal contracts", () => {
     expect([...monitoredWorkflowBlock.matchAll(/^      - (.+)$/gm)]
       .map((match) => match[1])).toEqual([
       "CI",
+      "Cross-Browser Smoke",
       "E2E Tests",
       "Performance Measurements (Advisory)",
       "Mutation Testing",

@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - CI
+      - Cross-Browser Smoke
       - E2E Tests
       - Performance Measurements (Advisory)
       - Mutation Testing

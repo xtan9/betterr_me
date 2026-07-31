@@ -1,0 +1,101 @@
+name: Cross-Browser Smoke
+
+on:
+  schedule:
+    # Nightly after the primary Chromium E2E schedule.
+    - cron: '30 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: cross-browser-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Smoke (${{ matrix.project }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [firefox, webkit, mobile-chrome, mobile-safari]
+        include:
+          - project: firefox
+            browser: firefox
+          - project: webkit
+            browser: webkit
+          - project: mobile-chrome
+            browser: chromium
+          - project: mobile-safari
+            browser: webkit
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup disposable Supabase
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.109.1
+
+      - name: Start disposable Supabase and apply migrations
+        run: >-
+          supabase start
+          --exclude analytics,edge-runtime,functions,imgproxy,inbucket,meta,storage,studio,vector
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
+      - name: Prepare authenticated E2E table grants
+        run: >-
+          psql postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          -v ON_ERROR_STOP=1
+          -f supabase/tests/e2e_local_authenticated_grants.sql
+
+      - name: Setup Node.js, pnpm, and dependencies
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Configure isolated smoke run
+        shell: bash
+        env:
+          SMOKE_PROJECT: ${{ matrix.project }}
+        run: |
+          set -euo pipefail
+          printf 'NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321\n' >> "$GITHUB_ENV"
+          anon_key="$(supabase status --output env | sed -n 's/^ANON_KEY=//p' | sed 's/^"//; s/"$//')"
+          service_role_key="$(supabase status --output env | sed -n 's/^SERVICE_ROLE_KEY=//p' | sed 's/^"//; s/"$//')"
+          test -n "$anon_key"
+          test -n "$service_role_key"
+          printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$anon_key" >> "$GITHUB_ENV"
+          printf 'E2E_SUPABASE_SERVICE_ROLE_KEY=%s\n' "$service_role_key" >> "$GITHUB_ENV"
+          printf 'E2E_TEST_EMAIL=cross-browser-smoke@example.test\n' >> "$GITHUB_ENV"
+          printf 'E2E_TEST_PASSWORD=Cross-Browser-Smoke-2026!\n' >> "$GITHUB_ENV"
+          printf 'E2E_DATA_MODE=disposable\n' >> "$GITHUB_ENV"
+          printf 'E2E_RUN_ID=gh-%s-%s-%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$SMOKE_PROJECT" >> "$GITHUB_ENV"
+
+      - name: Install setup and ${{ matrix.browser }} browsers
+        run: pnpm exec playwright install --with-deps chromium "${{ matrix.browser }}"
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Run bounded ${{ matrix.project }} smoke
+        env:
+          SMOKE_PROJECT: ${{ matrix.project }}
+        shell: bash
+        run: pnpm exec playwright test e2e/cross-browser-smoke.spec.ts --project="$SMOKE_PROJECT"
+
+      - name: Upload ${{ matrix.project }} runtime, retry, and flake evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-smoke-${{ matrix.project }}-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 9

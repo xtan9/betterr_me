@@ -158,6 +158,7 @@ updates:
     expect({ sharedConsumers, directSetup }).toEqual({
       sharedConsumers: [
         "workflows/ci.yml",
+        "workflows/cross-browser-smoke.yml",
         "workflows/e2e.yml",
         "workflows/mutation-testing.yml",
         "workflows/mutation-testing.yml",
