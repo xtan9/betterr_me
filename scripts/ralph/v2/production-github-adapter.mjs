@@ -30,11 +30,11 @@ function runId(check) {
 
 function normalizedCheck(check) {
   const state = String(check.conclusion ?? check.state ?? check.status ?? "").toUpperCase();
-  const bucket = ["SUCCESS", "NEUTRAL", "SKIPPED"].includes(state)
+  const bucket = state === "SUCCESS"
     ? "pass"
     : ["CANCELLED", "TIMED_OUT"].includes(state)
       ? "cancel"
-      : ["FAILURE", "ACTION_REQUIRED", "STARTUP_FAILURE"].includes(state)
+      : ["FAILURE", "ACTION_REQUIRED", "STARTUP_FAILURE", "NEUTRAL", "SKIPPED"].includes(state)
         ? "fail"
         : "pending";
   return {
@@ -139,10 +139,15 @@ export function createProductionGitHubAdapter({
     },
 
     async findClaim({ issueNumber, operationId }) {
-      const winner = activeClaims(issueComments(issueNumber))[0];
-      return winner?.operationId === operationId
-        ? { issueNumber, operationId, claimed: true, commentId: winner.commentId }
-        : null;
+      const claims = activeClaims(issueComments(issueNumber));
+      const existing = claims.find((claim) => claim.operationId === operationId);
+      if (!existing) return null;
+      return {
+        issueNumber,
+        operationId,
+        claimed: claims[0]?.operationId === operationId,
+        commentId: existing.commentId,
+      };
     },
 
     async claimIssue({ issueNumber, operationId, claimedAt }) {

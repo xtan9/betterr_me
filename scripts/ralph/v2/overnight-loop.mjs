@@ -104,9 +104,50 @@ export async function runOvernightLoop({
         throw new Error("Ralph runtime returned an invalid status");
       }
       status = observed;
+      onStatus({ kind: "status", runAttempts, status });
+      if (status.stopRequested) {
+        return summary(status, {
+          completed: false,
+          stopReason: "kill_switch",
+          runAttempts,
+          lastError,
+        });
+      }
+
+      const queue = await runtime.inspectQueue();
+      if (!queue || !Array.isArray(queue.readyIssueNumbers)) {
+        throw new Error("Ralph runtime returned invalid queue evidence");
+      }
       consecutiveErrors = 0;
       lastError = null;
-      onStatus({ kind: "status", runAttempts, status });
+      const active = status.issues.filter((issue) => !terminal(issue, mode));
+      if (
+        active.length === 0 &&
+        queue.readyIssueNumbers.length === 0 &&
+        queue.queueComplete !== false
+      ) {
+        return summary(status, {
+          completed: true,
+          stopReason: "queue_complete",
+          runAttempts,
+          lastError: null,
+          queueAudit: queue,
+        });
+      }
+      const handled = new Set(
+        status.issues
+          .filter((issue) => !initialIssueNumbers.has(issue.number))
+          .map((issue) => issue.number),
+      );
+      if (active.length === 0 && handled.size >= maxIssues) {
+        return summary(status, {
+          completed: false,
+          stopReason: "issue_limit",
+          runAttempts,
+          lastError: null,
+          queueAudit: queue,
+        });
+      }
     } catch (error) {
       consecutiveErrors += 1;
       lastError = error instanceof Error ? error.message : String(error);
@@ -124,47 +165,6 @@ export async function runOvernightLoop({
       continue;
     }
 
-    if (status.stopRequested) {
-      return summary(status, {
-        completed: false,
-        stopReason: "kill_switch",
-        runAttempts,
-        lastError,
-      });
-    }
-
-    const queue = await runtime.inspectQueue();
-    if (!queue || !Array.isArray(queue.readyIssueNumbers)) {
-      throw new Error("Ralph runtime returned invalid queue evidence");
-    }
-    const active = status.issues.filter((issue) => !terminal(issue, mode));
-    if (
-      active.length === 0 &&
-      queue.readyIssueNumbers.length === 0 &&
-      queue.queueComplete !== false
-    ) {
-      return summary(status, {
-        completed: true,
-        stopReason: "queue_complete",
-        runAttempts,
-        lastError: null,
-        queueAudit: queue,
-      });
-    }
-    const handled = new Set(
-      status.issues
-        .filter((issue) => !initialIssueNumbers.has(issue.number))
-        .map((issue) => issue.number),
-    );
-    if (active.length === 0 && handled.size >= maxIssues) {
-      return summary(status, {
-        completed: false,
-        stopReason: "issue_limit",
-        runAttempts,
-        lastError: null,
-        queueAudit: queue,
-      });
-    }
     await sleep(pollIntervalMilliseconds);
   }
 }

@@ -40,8 +40,9 @@ export function classifyQueueAudit({ audit, issueRecords, readyIssueNumbers }) {
         pullRequest?.number === record?.pullRequestNumber &&
         pullRequest.state === "OPEN",
     );
+    const preservedPrivateArtifact = record?.artifactEvidenceValid === true;
     if (
-      preservedPullRequest &&
+      (preservedPullRequest || preservedPrivateArtifact) &&
       PRESERVED_BLOCKED_DISPOSITIONS.has(record?.disposition)
     ) {
       nonMergeableIssueNumbers.push(issue.number);

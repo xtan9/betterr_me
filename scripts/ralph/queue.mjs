@@ -684,6 +684,17 @@ export function redactCredentialPatterns(value) {
     .replace(
       /github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}/g,
       "[REDACTED]",
+    )
+    .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, "[REDACTED]")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]{16,}/gi, "[REDACTED]")
+    .replace(
+      /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|https?):\/\/[^\s:@/]+:[^@\s/]+@[^\s]+/gi,
+      "[REDACTED]",
+    )
+    .replace(
+      /\b(?:access[_-]?token|refresh[_-]?token|api[_-]?key|secret|password|credential)\b\s*[:=]\s*["']?[^\s"']{8,}["']?/gi,
+      "[REDACTED]",
     );
 }
 

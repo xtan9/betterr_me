@@ -1,3 +1,5 @@
+import { runOvernightLoop } from "./overnight-loop.mjs";
+
 function parseRunArguments(args) {
   let mode = "PrOnly";
   let maxIssues = 1;
@@ -46,6 +48,12 @@ export async function runCli(args, { runtime, stdout, stderr }) {
       printResult(result, options.json, stdout);
       return 0;
     }
+    if (command === "audit") {
+      const options = parseSimpleArguments(commandArguments);
+      const result = await runtime.inspectQueue();
+      printResult(result, options.json, stdout);
+      return 0;
+    }
     if (command === "stop") {
       const options = parseSimpleArguments(commandArguments);
       const result = await runtime.requestStop();
@@ -57,4 +65,12 @@ export async function runCli(args, { runtime, stdout, stderr }) {
     stderr(error instanceof Error ? error.message : String(error));
     return 1;
   }
+}
+
+export async function runOvernightCli(options, { runtime, onStatus = () => {} }) {
+  const result = await runOvernightLoop({ runtime, ...options, onStatus });
+  return {
+    exitCode: ["queue_complete", "issue_limit"].includes(result.stopReason) ? 0 : 2,
+    result,
+  };
 }

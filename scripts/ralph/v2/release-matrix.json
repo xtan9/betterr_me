@@ -1,0 +1,88 @@
+{
+  "Selection": [
+    ["selection-frontier", "Dependency-frontier order", "tests/ralph-system/overnight-acceptance.system.test.ts", "drains a mixed queue sequentially", "fresh-cli"],
+    ["selection-exclusions", "Claimed, closed, and unapproved issues excluded", "tests/ralph-system/production-github-adapter.system.test.ts", "excludes claimed, closed, unapproved, and dependency-blocked issues", "boundary-contract"],
+    ["selection-independent-route", "One blocked route does not block an unrelated route", "tests/ralph-system/queue-safety.system.test.ts", "continues an unrelated ready issue", "fresh-cli"],
+    ["selection-manual-merge", "A manually merged PR is reconciled before selecting more work", "tests/ralph-system/overnight-acceptance.system.test.ts", "drains a mixed queue sequentially", "fresh-cli"]
+  ],
+  "Ownership": [
+    ["ownership-github-race", "Atomic GitHub claim race", "tests/ralph-system/production-github-adapter.system.test.ts", "fresh process interleaves the atomic claim race", "real-process"],
+    ["ownership-controller", "One local controller", "tests/ralph-system/controller-lock-race.system.test.ts", "does not admit a new controller", "real-process"],
+    ["ownership-worker", "One writable implementation session", "tests/ralph-system/recovery.system.test.ts", "one controller and one implementation worker", "fresh-cli"],
+    ["ownership-reattach", "Recovery attaches to a surviving session and never starts a duplicate", "tests/ralph-system/worker-survival.system.test.ts", "attaches to the one stable worker session", "real-process"]
+  ],
+  "Freshness": [
+    ["freshness-main", "Every generation begins at exact latest remote main", "tests/ralph-system/happy-path.system.test.ts", "from latest main exactly once", "fresh-cli"],
+    ["freshness-moved", "A moved base is adopted and fully reverified", "tests/ralph-system/auto-merge-lifecycle.system.test.ts", "updates a clean PR to latest main and re-verifies", "fresh-cli"],
+    ["freshness-conflict", "A conflicting base enters bounded conflict repair", "tests/ralph-system/auto-merge-lifecycle.system.test.ts", "resolve a real latest-main merge conflict", "fresh-cli"],
+    ["freshness-next", "The next issue starts from the preceding merge", "tests/ralph-system/auto-merge-lifecycle.system.test.ts", "starts the next issue from the main commit", "fresh-cli"]
+  ],
+  "Worker": [
+    ["worker-fresh", "Implementation and repair use fresh isolated Codex sessions", "tests/ralph-system/production-worker-sessions.system.test.ts", "runs one fresh offline contained implementation session", "real-process"],
+    ["worker-disciplines", "Immutable implement and TDD disciplines", "tests/ralph-system/production-worker-sessions.system.test.ts", "runs one fresh offline contained implementation session", "real-process"],
+    ["worker-offline", "Worker has no GitHub or network credentials", "tests/ralph-system/wsl-worker-sandbox.system.test.ts", "denies controller credentials and Windows interop", "real-process"],
+    ["worker-protected", "Worker cannot alter controller or verification assets", "tests/ralph-system/queue-safety.system.test.ts", "quarantines a non-empty protected edit", "fresh-cli"]
+  ],
+  "Verification": [
+    ["verification-gates", "Related tests, diagnostics, full suite, and review bind one tree", "tests/ralph-system/production-verifier-session.system.test.ts", "runs sandboxed gates and four fresh brokered review sessions", "real-process"],
+    ["verification-coverage", "Every changed contract, file, and review axis has evidence", "tests/ralph-system/review-executor.system.test.ts", "rejects a shape-correct pass that omits mandatory coverage", "real-process"],
+    ["verification-findings", "Repair reviews close every durable finding", "tests/ralph-system/review-executor.system.test.ts", "returns one complete finding batch", "real-process"]
+  ],
+  "Repairs": [
+    ["repairs-batch", "One complete finding batch per attempt", "tests/ralph-system/review-executor.system.test.ts", "returns one complete finding batch", "real-process"],
+    ["repairs-five", "Default maximum five coding attempts", "tests/ralph-system/auto-merge-lifecycle.system.test.ts", "stops after exactly five fresh coding repairs", "fresh-cli"],
+    ["repairs-interrupted", "Interrupted attempts are never completed", "tests/ralph-system/session-supervisor.system.test.ts", "marks a launched session interrupted and never relaunches", "real-process"],
+    ["repairs-separate-bounds", "Check reruns and transient retries have separate bounds", "tests/ralph-system/auto-merge-lifecycle.system.test.ts", "retries a transient failed check once", "fresh-cli"],
+    ["repairs-exhaustion", "Exhaustion preserves a reviewable artifact and releases queue", "tests/ralph-system/auto-merge-lifecycle.system.test.ts", "preserves a Draft PR when an honest code-repair worker becomes blocked", "fresh-cli"]
+  ],
+  "Pull requests": [
+    ["pr-exactly-one", "Exactly one linked PR per generation", "tests/ralph-system/happy-path.system.test.ts", "exactly once across fresh processes", "fresh-cli"],
+    ["pr-metadata", "Title and body conventions are controller-owned", "tests/ralph-system/production-github-adapter.system.test.ts", "complete trusted PR body", "boundary-contract"],
+    ["pr-terminal-success", "Required checks are terminal and successful", "tests/ralph-system/production-github-adapter.system.test.ts", "does not accept neutral or skipped", "boundary-contract"],
+    ["pr-generic-repair", "Generic failed checks enter bounded repair", "tests/ralph-system/auto-merge-lifecycle.system.test.ts", "repair an ordinary failed check", "fresh-cli"],
+    ["pr-cancel-rerun", "Cancelled checks use bounded reruns", "tests/ralph-system/auto-merge-lifecycle.system.test.ts", "retries a transient failed check once", "fresh-cli"],
+    ["pr-idempotent", "Repeated recovery is idempotent", "tests/ralph-system/effect-gate-recovery.system.test.ts", "recovers when the controller dies", "fresh-cli"]
+  ],
+  "Merge": [
+    ["merge-pr-only", "PrOnly never merges", "tests/ralph-system/happy-path.system.test.ts", "publishes one verified Draft", "fresh-cli"],
+    ["merge-all-gates", "AutoMerge requires current clean low-risk unambiguous approved passing head", "tests/ralph-system/auto-merge-lifecycle.system.test.ts", "merges one verified low-risk PR exactly once", "fresh-cli"],
+    ["merge-human-gates", "High-risk ambiguous conflicted or failed work remains human-gated", "tests/ralph-system/overnight-acceptance.system.test.ts", "drains a mixed queue sequentially", "fresh-cli"]
+  ],
+  "Stop and bounds": [
+    ["bounds-dry-run", "Dry-run has no writes", "tests/ralph-system/production-entry.system.test.ts", "keeps production DryRun read-only", "boundary-contract"],
+    ["bounds-issue-limit", "Issue limit is enforced", "tests/ralph-system/overnight-loop.system.test.ts", "stops at the configured issue limit", "boundary-contract"],
+    ["bounds-deadline", "Run deadline is enforced", "tests/ralph-system/overnight-loop.system.test.ts", "does not launch work after the deadline", "boundary-contract"],
+    ["bounds-phase", "Phase timeouts are enforced", "tests/ralph-system/implementation-timeout.system.test.ts", "exceeds its durable bound", "fresh-cli"],
+    ["bounds-retry", "Retry bounds are enforced", "tests/ralph-system/overnight-loop.system.test.ts", "bounds controller retries", "boundary-contract"],
+    ["bounds-stop", "STOP kills child tree and prevents next irreversible stage", "tests/ralph-system/stop-boundaries.system.test.ts", "force-terminates a non-cooperative worker process tree", "real-process"],
+    ["bounds-startup", "Startup reconciles stopped in-flight generation", "tests/ralph-system/stop-boundaries.system.test.ts", "reconciles a stopped in-flight candidate", "real-process"]
+  ],
+  "Recovery": [
+    ["recovery-effects", "Hard crashes after Git GitHub worker and verifier effects recover exactly once", "tests/ralph-system/effect-gate-recovery.system.test.ts", "recovers when the controller dies", "fresh-cli"],
+    ["recovery-locks", "Stale and partially written locks recover safely", "tests/ralph-system/controller-lock.system.test.ts", "ignores an unlinked candidate", "boundary-contract"],
+    ["recovery-pid", "PID reuse cannot impersonate owner", "tests/ralph-system/controller-lock.system.test.ts", "live PID belongs to a newer process identity", "boundary-contract"],
+    ["recovery-state", "Tampered state fails closed", "tests/ralph-system/generation-intent.system.test.ts", "detects every protected state field", "boundary-contract"],
+    ["recovery-ancestry", "Tampered ancestry and remote head fail closed", "tests/ralph-system/recovery.system.test.ts", "rejects a merge commit injected", "fresh-cli"],
+    ["recovery-receipt", "Tampered receipt fails closed", "tests/ralph-system/runtime-genuine-verification.system.test.ts", "bound review artifact changes", "real-process"]
+  ],
+  "Safety": [
+    ["safety-hostile", "Hostile issue text cannot alter policy or metadata", "tests/ralph-system/queue-safety.system.test.ts", "ignores hostile issue instructions", "fresh-cli"],
+    ["safety-secret", "Secret-bearing candidates are never published", "tests/ralph-system/wsl-worker-sandbox.system.test.ts", "denies controller credentials", "real-process"],
+    ["safety-symlink", "Symlinked candidates fail closed", "tests/ralph-system/verification-session-protocol.system.test.ts", "rejects a result for another request and a symlinked session root", "boundary-contract"],
+    ["safety-protected", "Protected paths are never committed or pushed", "tests/ralph-system/queue-safety.system.test.ts", "quarantines a non-empty protected edit", "fresh-cli"],
+    ["safety-history", "Unverified history is never published", "tests/ralph-system/recovery.system.test.ts", "rejects a merge commit injected", "fresh-cli"],
+    ["safety-containment", "Containment failure stops delivery", "tests/ralph-system/windows-job-containment.system.test.ts", "kills the complete tree if its trusted broker crashes", "real-process"]
+  ],
+  "Cleanup and reporting": [
+    ["cleanup-success", "Published and merged generations remove local checkout and branch", "tests/ralph-system/overnight-acceptance.system.test.ts", "drains a mixed queue sequentially", "fresh-cli"],
+    ["cleanup-blocked", "Blocked artifacts remain exact and reviewable", "tests/ralph-system/stop-boundaries.system.test.ts", "parks private work", "real-process"],
+    ["reporting-every-exit", "Every exit atomically refreshes machine and human summaries", "tests/ralph-system/production-entry.system.test.ts", "atomically refreshes a failure summary", "boundary-contract"],
+    ["reporting-final", "Final mixed overnight simulation writes exact summary", "tests/ralph-system/overnight-acceptance.system.test.ts", "with an exact summary", "fresh-cli"]
+  ],
+  "Platform": [
+    ["platform-windows", "Acceptance suite passes on Windows", "tests/ralph-system/overnight-acceptance.system.test.ts", "drains a mixed queue sequentially", "fresh-cli"],
+    ["platform-wsl", "WSL composition proves immutable dependencies and skills", "tests/ralph-system/production-preflight.system.test.ts", "rejects changed immutable WSL skill or dependency content", "boundary-contract"],
+    ["platform-streaming", "Credential isolation bounded tree control and live redacted streaming", "tests/ralph-system/production-worker-sessions.system.test.ts", "streams fresh Codex events", "real-process"],
+    ["platform-soak", "Fault injection leaves no duplicates or leaked worker", "tests/ralph-system/fault-soak.system.test.ts", "recovers every sampled lifecycle crash without duplicates or a leaked worker", "fresh-cli"]
+  ]
+}

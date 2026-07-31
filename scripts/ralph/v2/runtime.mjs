@@ -220,12 +220,12 @@ function parkIssue({
   record,
   disposition,
 }) {
-  const { artifactPath } = workspace.park({
+  const { artifactPath, artifactFingerprint } = workspace.park({
     issueNumber: record.number,
     branch: record.branch,
     expectedHead: record.headSha ?? record.baseSha,
   });
-  Object.assign(record, { disposition, artifactPath });
+  Object.assign(record, { disposition, artifactPath, artifactFingerprint });
   state.workerLease = null;
   stateStore.save(state);
 }
@@ -2210,17 +2210,6 @@ async function reconcileIssue({
     });
 
     if (pullRequest.draft === true) {
-      if (risk.level !== "low" || pullRequest.requirementsAmbiguous === true) {
-        Object.assign(record, {
-          disposition: "safety_blocked",
-          blocker:
-            risk.level !== "low"
-              ? `automatic merge denied by risk policy: ${risk.reasons.join("; ")}`
-              : "automatic merge denied because requirements are ambiguous",
-        });
-        stateStore.save(state);
-        return;
-      }
       const promotionPlan = planPullRequestRecovery(
         recoverySnapshot(pullRequest, false),
       );
@@ -2417,17 +2406,40 @@ async function reconcileIssue({
         await checkpoint(lifecycle, "pull-request-code-repair-planned", record);
         return continuePullRequestCodeRepair();
       }
+      if (
+        promotionPlan.action === "human-gate" &&
+        (risk.level !== "low" || pullRequest.requirementsAmbiguous === true)
+      ) {
+        Object.assign(record, {
+          disposition: "safety_blocked",
+          blocker:
+            risk.level !== "low"
+              ? `automatic merge denied by risk policy: ${risk.reasons.join("; ")}`
+              : "automatic merge denied because requirements are ambiguous",
+        });
+        stateStore.save(state);
+        return;
+      }
+      if (promotionPlan.action === "human-gate") {
+        Object.assign(record, {
+          disposition: "safety_blocked",
+          blocker: promotionPlan.reason ?? "pull request requires a human gate",
+        });
+        stateStore.save(state);
+        return;
+      }
       if (promotionPlan.action !== "merge-gates") return;
-      const promotionGate = evaluateMergeGate({
-        mode: record.deliveryMode,
-        risk: risk.level,
-        ambiguous: false,
-        checksPassed: true,
-        reviewDecision: pullRequest.reviewDecision,
-        reviewRequired: pullRequest.reviewRequired === true,
-        mergeState: pullRequest.mergeStateStatus,
-      });
-      if (!promotionGate.canMerge) return;
+      if (risk.level !== "low" || pullRequest.requirementsAmbiguous === true) {
+        Object.assign(record, {
+          disposition: "safety_blocked",
+          blocker:
+            risk.level !== "low"
+              ? `automatic merge denied by risk policy: ${risk.reasons.join("; ")}`
+              : "automatic merge denied because requirements are ambiguous",
+        });
+        stateStore.save(state);
+        return;
+      }
 
       const ready = await runAdmittedEffect(stateStore, "ready-pull-request", () =>
         github.markPullRequestReady({
@@ -2481,6 +2493,12 @@ async function reconcileIssue({
         pullRequest.mergeStateStatus === "CLEAN" ? "CLEAN" : pullRequest.mergeStateStatus,
     });
     if (!gate.canMerge) {
+      if (gate.reason === "required review approval is missing") {
+        record.disposition = "pr_waiting";
+        record.blocker = gate.reason;
+        stateStore.save(state);
+        return;
+      }
       Object.assign(record, {
         disposition: "safety_blocked",
         blocker: gate.reason,
@@ -2707,6 +2725,23 @@ export function createRalphRuntimeCore({
 
     async inspectQueue() {
       const state = stateStore.load();
+      const auditedRecords = Object.fromEntries(
+        Object.entries(state.issues).map(([number, record]) => [
+          number,
+          {
+            ...record,
+            artifactEvidenceValid:
+              typeof record.artifactPath === "string" &&
+              workspace.validateParkedArtifact({
+                issueNumber: record.number,
+                branch: record.branch,
+                expectedHead: record.headSha ?? record.baseSha,
+                artifactPath: record.artifactPath,
+                artifactFingerprint: record.artifactFingerprint,
+              }),
+          },
+        ]),
+      );
       const readyIssues = await github.listReadyIssues();
       const readyIssueNumbers = readyIssues
         .map((issue) => validateReadyIssue(issue).number)
@@ -2723,7 +2758,7 @@ export function createRalphRuntimeCore({
       }
       return classifyQueueAudit({
         audit: await github.auditApprovedQueue(),
-        issueRecords: state.issues,
+        issueRecords: auditedRecords,
         readyIssueNumbers,
       });
     },

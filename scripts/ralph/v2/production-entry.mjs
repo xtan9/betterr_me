@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { runOvernightLoop } from "./overnight-loop.mjs";
+import { runOvernightCli } from "./cli.mjs";
 import { assertProductionPreflight } from "./production-preflight.mjs";
 import { createRalphRuntime } from "./production-runtime.mjs";
+import { createProductionGitHubAdapter } from "./production-github-adapter.mjs";
 import { startRuntimeArtifactStreamer } from "./runtime-artifact-stream.mjs";
 import { redactCredentialPatterns } from "../queue.mjs";
 
@@ -91,19 +92,45 @@ export function parseProductionArguments(args) {
   };
 }
 
+function sanitizedSummaryValue(value, depth = 0) {
+  if (depth > 12) return "[truncated]";
+  if (typeof value === "string") {
+    return redactCredentialPatterns(value).slice(0, 10_000);
+  }
+  if (value === null || typeof value === "number" || typeof value === "boolean") return value;
+  if (Array.isArray(value)) {
+    return value.slice(0, 1_000).map((entry) => sanitizedSummaryValue(entry, depth + 1));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).slice(0, 1_000).map(([key, entry]) => [
+      redactCredentialPatterns(key).slice(0, 200),
+      sanitizedSummaryValue(entry, depth + 1),
+    ]));
+  }
+  return String(value).slice(0, 1_000);
+}
+
+function replaceAtomically(filePath, bytes) {
+  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporaryPath, bytes, { flag: "wx" });
+  fs.renameSync(temporaryPath, filePath);
+}
+
 export function writeOvernightSummary(runtimePath, result, completedAt = new Date()) {
   const summaryRoot = path.join(runtimePath, "summaries");
   fs.mkdirSync(summaryRoot, { recursive: true });
   const completedAtIso = completedAt.toISOString();
   const timestamp = completedAtIso.replaceAll(":", "-");
-  const bytes = `${JSON.stringify({ schemaVersion: 1, completedAt: completedAtIso, ...result }, null, 2)}\n`;
+  const safeResult = sanitizedSummaryValue(result);
+  const bytes = `${JSON.stringify({ schemaVersion: 1, completedAt: completedAtIso, ...safeResult }, null, 2)}\n`;
   const immutablePath = path.join(summaryRoot, `overnight-${timestamp}.json`);
   fs.writeFileSync(immutablePath, bytes, { flag: "wx" });
   const latestPath = path.join(summaryRoot, "latest.json");
-  const temporaryPath = `${latestPath}.${process.pid}.tmp`;
-  fs.writeFileSync(temporaryPath, bytes, { flag: "wx" });
-  fs.renameSync(temporaryPath, latestPath);
-  const issueLines = (result.issues ?? []).map((issue) => {
+  replaceAtomically(latestPath, bytes);
+  const canonicalPath = path.join(summaryRoot, "overnight-summary.json");
+  replaceAtomically(canonicalPath, bytes);
+  replaceAtomically(path.join(runtimePath, "overnight-summary.json"), bytes);
+  const issueLines = (safeResult.issues ?? []).map((issue) => {
     const rawBlocker = issue.blocker === undefined
       ? ""
       : ` — ${typeof issue.blocker === "string" ? issue.blocker : JSON.stringify(issue.blocker)}`;
@@ -112,14 +139,14 @@ export function writeOvernightSummary(runtimePath, result, completedAt = new Dat
       .slice(0, 1_000);
     return `- #${issue.number}: ${issue.disposition ?? "unknown"}${blocker}`;
   });
-  const audit = result.queueAudit;
+  const audit = safeResult.queueAudit;
   const markdown = [
     "# Ralph v2 overnight summary",
     "",
     `Completed at: ${completedAtIso}`,
-    `Stop reason: \`${result.stopReason ?? "unknown"}\``,
-    `Completed: ${result.completed === true ? "yes" : "no"}`,
-    `Run attempts: ${result.runAttempts ?? 0}`,
+    `Stop reason: \`${safeResult.stopReason ?? "unknown"}\``,
+    `Completed: ${safeResult.completed === true ? "yes" : "no"}`,
+    `Run attempts: ${safeResult.runAttempts ?? 0}`,
     "",
     "## Issues",
     "",
@@ -139,9 +166,10 @@ export function writeOvernightSummary(runtimePath, result, completedAt = new Dat
   const immutableMarkdownPath = path.join(summaryRoot, `overnight-${timestamp}.md`);
   fs.writeFileSync(immutableMarkdownPath, markdown, { flag: "wx" });
   const latestMarkdownPath = path.join(summaryRoot, "latest.md");
-  const temporaryMarkdownPath = `${latestMarkdownPath}.${process.pid}.tmp`;
-  fs.writeFileSync(temporaryMarkdownPath, markdown, { flag: "wx" });
-  fs.renameSync(temporaryMarkdownPath, latestMarkdownPath);
+  replaceAtomically(latestMarkdownPath, markdown);
+  const canonicalMarkdownPath = path.join(summaryRoot, "overnight-summary.md");
+  replaceAtomically(canonicalMarkdownPath, markdown);
+  replaceAtomically(path.join(runtimePath, "overnight-summary.md"), markdown);
   return immutablePath;
 }
 
@@ -168,50 +196,127 @@ export async function runVisibleOvernight({
 }) {
   const streamer = startRuntimeArtifactStreamer({ runtimePath, stdout });
   try {
-    return await runOvernightLoop({
-      runtime,
+    const execution = await runOvernightCli({
       mode,
       maxIssues,
       pollIntervalMilliseconds,
       retryDelayMilliseconds,
       maxConsecutiveErrors,
       deadlineEpochMilliseconds,
-      onStatus: (event) => stdout(statusLine(event)),
-    });
+    }, { runtime, onStatus: (event) => stdout(statusLine(event)) });
+    return execution.result;
   } finally {
     streamer.stop();
   }
 }
 
+export async function runProductionDryRun({ github, maxIssues }) {
+  const readyIssues = await github.listReadyIssues();
+  return {
+    stopRequested: false,
+    workerLease: null,
+    issues: readyIssues.slice(0, maxIssues).map((issue) => ({
+      number: issue.number,
+      disposition: "ready",
+    })),
+  };
+}
+
+export async function runProductionOvernightWithSummary({
+  runtime,
+  runtimePath,
+  run = runVisibleOvernight,
+  ...options
+}) {
+  try {
+    const result = await run({ runtime, runtimePath, ...options });
+    const summaryPath = writeOvernightSummary(runtimePath, result);
+    return { result, summaryPath };
+  } catch (error) {
+    let issues = [];
+    try {
+      const inspected = runtime.inspect();
+      if (Array.isArray(inspected?.issues)) issues = inspected.issues;
+    } catch {
+      // A minimal summary must not depend on readable durable state.
+    }
+    writeOvernightSummary(runtimePath, {
+      completed: false,
+      stopReason: "controller_failure",
+      runAttempts: 0,
+      lastError: error instanceof Error ? error.message : String(error),
+      issues,
+    });
+    throw error;
+  }
+}
+
 export async function main(args = process.argv.slice(2)) {
   const options = parseProductionArguments(args);
+  if (options.command === "run" && options.mode === "DryRun") {
+    const github = createProductionGitHubAdapter({
+      repository: options.githubRepository,
+      queuePath: options.queuePath,
+      actor: options.githubActor,
+    });
+    console.log(JSON.stringify(
+      await runProductionDryRun({ github, maxIssues: options.maxIssues }),
+      null,
+      2,
+    ));
+    return 0;
+  }
   fs.mkdirSync(options.runtimePath, { recursive: true });
   if (options.command === "run" && options.mode !== "DryRun") {
-    const localAppData = process.env.LOCALAPPDATA;
-    if (!localAppData || !path.win32.isAbsolute(localAppData)) {
-      throw new Error("production Ralph cannot locate LOCALAPPDATA for legacy-owner exclusion");
+    try {
+      const localAppData = process.env.LOCALAPPDATA;
+      if (!localAppData || !path.win32.isAbsolute(localAppData)) {
+        throw new Error("production Ralph cannot locate LOCALAPPDATA for legacy-owner exclusion");
+      }
+      assertProductionPreflight({
+        repositoryPath: options.repositoryPath,
+        runtimePath: options.runtimePath,
+        githubRepository: options.githubRepository,
+        legacyRuntimeRoot: path.join(
+          localAppData,
+          "betterr-me-ralph",
+          options.githubRepository.replaceAll("/", "_"),
+        ),
+        trustedDependencyRoot: options.trustedDependencyRoot,
+      });
+    } catch (error) {
+      writeOvernightSummary(options.runtimePath, {
+        completed: false,
+        stopReason: "preflight_failed",
+        runAttempts: 0,
+        lastError: error instanceof Error ? error.message : String(error),
+        issues: [],
+      });
+      throw error;
     }
-    assertProductionPreflight({
+  }
+  let runtime;
+  try {
+    runtime = createRalphRuntime({
       repositoryPath: options.repositoryPath,
       runtimePath: options.runtimePath,
       githubRepository: options.githubRepository,
-      legacyRuntimeRoot: path.join(
-        localAppData,
-        "betterr-me-ralph",
-        options.githubRepository.replaceAll("/", "_"),
-      ),
+      githubActor: options.githubActor,
+      queuePath: options.queuePath,
+      trustedDependencyRoot: options.trustedDependencyRoot,
+      implementationTimeoutMilliseconds: options.implementationTimeoutMilliseconds,
+      verificationTimeoutMilliseconds: options.verificationTimeoutMilliseconds,
     });
+  } catch (error) {
+    writeOvernightSummary(options.runtimePath, {
+      completed: false,
+      stopReason: "initialization_failed",
+      runAttempts: 0,
+      lastError: error instanceof Error ? error.message : String(error),
+      issues: [],
+    });
+    throw error;
   }
-  const runtime = createRalphRuntime({
-    repositoryPath: options.repositoryPath,
-    runtimePath: options.runtimePath,
-    githubRepository: options.githubRepository,
-    githubActor: options.githubActor,
-    queuePath: options.queuePath,
-    trustedDependencyRoot: options.trustedDependencyRoot,
-    implementationTimeoutMilliseconds: options.implementationTimeoutMilliseconds,
-    verificationTimeoutMilliseconds: options.verificationTimeoutMilliseconds,
-  });
   if (options.command === "status") {
     console.log(JSON.stringify(runtime.inspect(), null, 2));
     return 0;
@@ -221,19 +326,33 @@ export async function main(args = process.argv.slice(2)) {
     return 0;
   }
   if (options.command === "stop") {
-    console.log(JSON.stringify(await runtime.requestStop(), null, 2));
-    return 0;
-  }
-  if (options.mode === "DryRun") {
-    const result = await runtime.run({ mode: "DryRun", maxIssues: options.maxIssues });
-    console.log(JSON.stringify(result, null, 2));
+    let stopped;
+    try {
+      stopped = await runtime.requestStop();
+    } catch (error) {
+      writeOvernightSummary(options.runtimePath, {
+        completed: false,
+        stopReason: "stop_failed",
+        runAttempts: 0,
+        lastError: error instanceof Error ? error.message : String(error),
+        issues: [],
+      });
+      throw error;
+    }
+    writeOvernightSummary(options.runtimePath, {
+      completed: false,
+      stopReason: "kill_switch",
+      runAttempts: 0,
+      issues: stopped.issues ?? [],
+    });
+    console.log(JSON.stringify(stopped, null, 2));
     return 0;
   }
   console.log(
     `[ralph-v2] starting ${options.mode}, issue limit ${options.maxIssues}, ` +
     `deadline ${Math.round(options.deadlineMilliseconds / 3_600_000)}h`,
   );
-  const result = await runVisibleOvernight({
+  const { result, summaryPath } = await runProductionOvernightWithSummary({
     runtime,
     runtimePath: options.runtimePath,
     mode: options.mode,
@@ -243,7 +362,6 @@ export async function main(args = process.argv.slice(2)) {
     maxConsecutiveErrors: options.maxConsecutiveErrors,
     deadlineEpochMilliseconds: Date.now() + options.deadlineMilliseconds,
   });
-  const summaryPath = writeOvernightSummary(options.runtimePath, result);
   console.log(`[ralph-v2] ${result.stopReason}; summary: ${summaryPath}`);
   return ["queue_complete", "issue_limit"].includes(result.stopReason) ? 0 : 2;
 }

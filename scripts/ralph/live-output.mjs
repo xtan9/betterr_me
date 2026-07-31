@@ -1,17 +1,7 @@
 import { StringDecoder } from "node:string_decoder";
+import { redactCredentialPatterns } from "./queue.mjs";
 
 const MAX_LIVE_TEXT_LENGTH = 2000;
-const CREDENTIAL_PATTERNS = [
-  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
-  /github_pat_[A-Za-z0-9_]{20,}/g,
-  /gh[pousr]_[A-Za-z0-9_]{20,}/g,
-  /sk-[A-Za-z0-9_-]{20,}/g,
-  /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g,
-  /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
-  /\bBearer\s+[A-Za-z0-9._~+\/-]{16,}/gi,
-  /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|https?):\/\/[^\s:@/]+:[^@\s/]+@[^\s]+/gi,
-  /\b(?:access[_-]?token|refresh[_-]?token|api[_-]?key|secret|password|credential)\b\s*[:=]\s*["']?[^\s"']{8,}["']?/gi,
-];
 
 function contextPrefix(issueNumber, phase) {
   return `[ralph][issue #${issueNumber}][${phase}]`;
@@ -38,10 +28,7 @@ function redact(value, sensitiveValues) {
   for (const sensitiveValue of sensitiveValues) {
     if (sensitiveValue) safe = safe.replaceAll(sensitiveValue, "[REDACTED]");
   }
-  for (const pattern of CREDENTIAL_PATTERNS) {
-    pattern.lastIndex = 0;
-    safe = safe.replace(pattern, "[REDACTED]");
-  }
+  safe = redactCredentialPatterns(safe);
   if (safe.length <= MAX_LIVE_TEXT_LENGTH) return safe;
   let visible = safe.slice(0, MAX_LIVE_TEXT_LENGTH);
   const partialRedaction = visible.lastIndexOf("[");

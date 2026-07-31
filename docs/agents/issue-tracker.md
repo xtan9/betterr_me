@@ -4,8 +4,9 @@ Issues and PRDs for this repo live in GitHub Issues for `xtan9/betterr_me`.
 
 Use the `github-issues` skill for all issue operations. Do not invoke the `gh` CLI directly for issue creation, reading, updating, labeling, commenting, or closing.
 
-The standalone overnight controller at `scripts/ralph/controller.mjs` is the sole
-exception. A non-interactive fresh Codex session cannot call the issue-tracker
+The standalone overnight controllers at `scripts/ralph/controller.mjs` and
+`scripts/ralph/v2/production-github-adapter.mjs` are the sole exceptions. A
+non-interactive fresh Codex session cannot call the issue-tracker
 connector, so the privileged controller may use authenticated `gh` commands only
 to list/read an approved queued issue, assign it, and write or read Ralph claim
 comments. Issue workers remain offline and must never invoke `gh` or receive

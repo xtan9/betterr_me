@@ -17,7 +17,7 @@ type GitWorld = {
 export function createSystemScenario(
   world: GitWorld,
   input: {
-    issues: Array<{ number: number; title: string; body: string }>;
+    issues: Array<{ number: number; title: string; body: string; blockers?: number[] }>;
     workerChanges: Array<{ path: string; content: string }>;
     expectedChanges: Array<{
       path: string;
@@ -46,18 +46,36 @@ export function createSystemScenario(
     raceControllers?: boolean;
     pullRequestChecks?: Array<Record<string, unknown>>;
     pullRequestCheckSequence?: Array<Array<Record<string, unknown>>>;
+    pullRequestCheckSequenceByIssue?: Record<string, Array<Array<Record<string, unknown>>>>;
+    pullRequestChecksByIssue?: Record<string, Array<Record<string, unknown>>>;
     mergeUpdatesMain?: boolean;
     repairWorkerChanges?: Array<{ path: string; content: string }>;
+    repairWorkerChangesByIssue?: Record<string, Array<{ path: string; content: string }>>;
+    repairWorkerChangesSequenceByIssue?: Record<string, Array<Array<{ path: string; content: string }>>>;
     repairExpectedChanges?: Array<{
       path: string;
       content: string;
       mode: string;
       status: string;
     }>;
+    repairExpectedChangesByIssue?: Record<string, Array<{
+      path: string;
+      content: string;
+      mode: string;
+      status: string;
+    }>>;
+    repairExpectedChangesSequenceByIssue?: Record<string, Array<Array<{
+      path: string;
+      content: string;
+      mode: string;
+      status: string;
+    }>>>;
     pullRequestReviewRequired?: boolean;
     pullRequestReviewDecision?: string;
     advanceMainAfterPullRequest?: { path: string; content: string };
+    advanceMainAfterPullRequestByIssue?: Record<string, { path: string; content: string }>;
     pullRequestMergeStateStatusWhenBehind?: "CLEAN" | "DIRTY";
+    pullRequestMergeStateStatusWhenBehindByIssue?: Record<string, "CLEAN" | "DIRTY">;
     workerResultByIssue?: Record<string, {
       kind: "completed" | "blocked" | "failed";
       ambiguous?: boolean;
@@ -163,6 +181,8 @@ export function createSystemScenario(
   });
 
   return {
+    configPath,
+    externalStatePath,
     run(args: string[]) {
       const result = spawnSync(
         process.execPath,
@@ -255,6 +275,13 @@ export function createSystemScenario(
     },
     inspectExternalState() {
       return JSON.parse(fs.readFileSync(externalStatePath, "utf8"));
+    },
+    updateExternalState(update: (state: any) => void) {
+      const state = JSON.parse(fs.readFileSync(externalStatePath, "utf8"));
+      update(state);
+      const temporaryPath = `${externalStatePath}.${process.pid}.tmp`;
+      fs.writeFileSync(temporaryPath, `${JSON.stringify(state, null, 2)}\n`);
+      fs.renameSync(temporaryPath, externalStatePath);
     },
     inspectEffectLedger() {
       if (!fs.existsSync(effectLedgerPath)) return [];

@@ -150,10 +150,16 @@ function assertNoCheckoutBeforeClaim(config, issueNumber) {
   }
 }
 
-function advanceRemoteMain(config) {
-  if (!config.advanceMainAfterPullRequest) return;
+function advanceRemoteMain(config, issueNumber) {
+  const change = issueSetting(
+    config,
+    "advanceMainAfterPullRequest",
+    issueNumber,
+  );
+  if (!change) return;
   const state = readState(config);
-  if (state.mainAdvancedAfterPullRequest) return;
+  state.mainAdvancedAfterPullRequestByIssue ??= {};
+  if (state.mainAdvancedAfterPullRequestByIssue[String(issueNumber)]) return;
   const checkout = path.join(
     path.dirname(config.externalStatePath),
     `main-advance-${randomUUID()}`,
@@ -164,16 +170,17 @@ function advanceRemoteMain(config) {
     git(checkout, ["config", "user.email", "ralph-conflict@example.invalid"]);
     const destination = assertPathWithin(
       checkout,
-      path.join(checkout, config.advanceMainAfterPullRequest.path),
+      path.join(checkout, change.path),
       "main advance fixture",
     );
     fs.mkdirSync(path.dirname(destination), { recursive: true });
-    fs.writeFileSync(destination, config.advanceMainAfterPullRequest.content);
+    fs.writeFileSync(destination, change.content);
     git(checkout, ["add", "--all"]);
     git(checkout, ["commit", "-m", "test: advance conflicting main"]);
     git(checkout, ["push", "origin", "main"]);
     changeState(config, (current) => {
-      current.mainAdvancedAfterPullRequest = true;
+      current.mainAdvancedAfterPullRequestByIssue ??= {};
+      current.mainAdvancedAfterPullRequestByIssue[String(issueNumber)] = true;
     });
   } finally {
     fs.rmSync(checkout, { recursive: true, force: true, maxRetries: 5 });
@@ -184,6 +191,17 @@ function issueSetting(config, setting, issueNumber) {
   return config[`${setting}ByIssue`]?.[String(issueNumber)] ?? config[setting];
 }
 
+function repairAttemptSetting(config, setting, issueNumber) {
+  const sequence = config[`${setting}SequenceByIssue`]?.[String(issueNumber)];
+  if (!sequence) return issueSetting(config, setting, issueNumber);
+  const attempt = readState(config).sessions.filter(
+    (session) =>
+      session.issueNumber === issueNumber &&
+      ["pr-repair", "conflict-repair"].includes(session.purpose),
+  ).length;
+  return sequence[Math.max(0, attempt - 1)] ?? sequence.at(-1);
+}
+
 function assertExpectedCandidate(
   config,
   candidateTreeSha,
@@ -192,7 +210,7 @@ function assertExpectedCandidate(
   purpose,
 ) {
   const expectedChanges = ["pr-repair", "conflict-repair"].includes(purpose)
-    ? issueSetting(config, "repairExpectedChanges", issueNumber)
+    ? repairAttemptSetting(config, "repairExpectedChanges", issueNumber)
     : issueSetting(config, "expectedChanges", issueNumber);
   const expectedNames = expectedChanges
     .map((change) => `${change.status}\t${change.path}`)
@@ -233,8 +251,37 @@ function assertExpectedCandidate(
 
 export function createTestAdapters(config) {
   const github = {
+    async auditApprovedQueue() {
+      const state = readState(config);
+      return {
+        issues: config.issues.map((issue) => {
+          const pullRequests = state.pullRequests
+            .filter((pullRequest) => pullRequest.issueNumber === issue.number)
+            .map((pullRequest) => ({
+              number: pullRequest.number,
+              state: pullRequest.state,
+              draft: pullRequest.draft === true,
+            }));
+          return {
+            number: issue.number,
+            state: pullRequests.some((pullRequest) => pullRequest.state === "MERGED")
+              ? "CLOSED"
+              : "OPEN",
+            pullRequests,
+          };
+        }),
+      };
+    },
     async listReadyIssues() {
-      return structuredClone(config.issues);
+      const state = readState(config);
+      const closed = new Set(
+        state.pullRequests
+          .filter((pullRequest) => pullRequest.state === "MERGED")
+          .map((pullRequest) => pullRequest.issueNumber),
+      );
+      return structuredClone(config.issues.filter((issue) =>
+        (issue.blockers ?? []).every((blocker) => closed.has(blocker)),
+      ));
     },
     async claimIssue(input) {
       assertNoCheckoutBeforeClaim(config, input.issueNumber);
@@ -323,14 +370,24 @@ export function createTestAdapters(config) {
         ...structuredClone(pullRequest),
         mergeStateStatus: containsMain
           ? "CLEAN"
-          : (config.pullRequestMergeStateStatusWhenBehind ?? "DIRTY"),
+          : (issueSetting(
+              config,
+              "pullRequestMergeStateStatusWhenBehind",
+              pullRequest.issueNumber,
+            ) ?? "DIRTY"),
         reviewDecision: config.pullRequestReviewDecision ?? "APPROVED",
         reviewRequired: config.pullRequestReviewRequired ?? false,
         requirementsAmbiguous: false,
         checksAvailable: true,
-        checks: config.pullRequestCheckSequence?.[
-          pullRequest.checkAttempt ?? 0
-        ] ?? config.pullRequestChecks ?? [
+        checks: issueSetting(
+          config,
+          "pullRequestCheckSequence",
+          pullRequest.issueNumber,
+        )?.[pullRequest.checkAttempt ?? 0] ?? issueSetting(
+          config,
+          "pullRequestChecks",
+          pullRequest.issueNumber,
+        ) ?? [
           {
             name: "fixture-required-check",
             bucket: "pass",
@@ -494,7 +551,7 @@ export function createTestAdapters(config) {
           `PR head ${input.headSha} does not match remote ${remoteHead}`,
         );
       }
-      advanceRemoteMain(config);
+      advanceRemoteMain(config, input.issueNumber);
       return changeState(config, (state) => {
         state.pullRequestRequests.push({
           issueNumber: input.issueNumber,
@@ -591,13 +648,10 @@ export function createTestAdapters(config) {
       });
 
       try {
-        for (const change of issueSetting(
-          config,
-          ["pr-repair", "conflict-repair"].includes(input.purpose)
-            ? "repairWorkerChanges"
-            : "workerChanges",
-          input.issue.number,
-        )) {
+        const repairing = ["pr-repair", "conflict-repair"].includes(input.purpose);
+        for (const change of (repairing
+          ? repairAttemptSetting(config, "repairWorkerChanges", input.issue.number)
+          : issueSetting(config, "workerChanges", input.issue.number))) {
           const destination = assertPathWithin(
             input.worktreePath,
             path.join(input.worktreePath, change.path),

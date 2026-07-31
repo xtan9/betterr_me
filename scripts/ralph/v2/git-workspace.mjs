@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -8,6 +9,28 @@ const EMPTY_SANDBOX_PLACEHOLDERS = Object.freeze([
   "yarn.lock",
   "supabase/seed.sql",
 ]);
+
+function checkoutFingerprint(checkoutPath, branch, headSha) {
+  const hash = createHash("sha256");
+  hash.update(`ralph-v2-parked-artifact-v1\0${branch}\0${headSha}\0`);
+  const paths = runGit(checkoutPath, [
+    "ls-files", "--cached", "--others", "--exclude-standard", "-z",
+  ]).stdout.split("\0").filter(Boolean).sort();
+  for (const relative of paths) {
+    const filePath = path.resolve(checkoutPath, relative);
+    const contained = path.relative(checkoutPath, filePath);
+    if (!contained || contained.startsWith("..") || path.isAbsolute(contained)) {
+      throw new Error("parked Ralph artifact contains an unsafe path");
+    }
+    const stat = fs.lstatSync(filePath);
+    hash.update(`${relative.replaceAll("\\", "/")}\0${stat.mode}\0`);
+    if (stat.isSymbolicLink()) hash.update(`link\0${fs.readlinkSync(filePath)}\0`);
+    else if (stat.isFile()) hash.update(fs.readFileSync(filePath));
+    else throw new Error("parked Ralph artifact contains an unsupported entry");
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
 
 function runGit(cwd, args, { allowFailure = false } = {}) {
   const result = spawnSync(
@@ -527,7 +550,10 @@ export function createGitWorkspace({ repositoryPath, runtimePath }) {
         if (parkedBranch !== branch || parkedHead !== expectedHead) {
           throw new Error("parked Ralph checkout changed before recovery");
         }
-        return { artifactPath };
+        return {
+          artifactPath,
+          artifactFingerprint: checkoutFingerprint(artifactPath, branch, expectedHead),
+        };
       }
       if (!fs.existsSync(worktreePath) || fs.existsSync(artifactPath)) {
         throw new Error("Ralph cannot park the active issue checkout safely");
@@ -539,7 +565,33 @@ export function createGitWorkspace({ repositoryPath, runtimePath }) {
       }
       fs.mkdirSync(parkedRoot, { recursive: true });
       runGit(repositoryRoot, ["worktree", "move", worktreePath, artifactPath]);
-      return { artifactPath };
+      return {
+        artifactPath,
+        artifactFingerprint: checkoutFingerprint(artifactPath, branch, expectedHead),
+      };
+    },
+
+    validateParkedArtifact({
+      issueNumber,
+      branch,
+      expectedHead,
+      artifactPath,
+      artifactFingerprint,
+    }) {
+      const parkedRoot = path.resolve(worktreeRoot, "parked");
+      const expectedPath = path.resolve(parkedRoot, `issue-${issueNumber}`);
+      if (
+        branch !== issueBranch(issueNumber) ||
+        artifactPath !== expectedPath ||
+        !/^[a-f0-9]{64}$/.test(artifactFingerprint ?? "") ||
+        !fs.existsSync(expectedPath) ||
+        fs.lstatSync(expectedPath).isSymbolicLink() ||
+        fs.realpathSync.native(expectedPath) !== expectedPath
+      ) return false;
+      const parkedBranch = gitLine(expectedPath, ["branch", "--show-current"]);
+      const parkedHead = gitLine(expectedPath, ["rev-parse", "HEAD"]);
+      if (parkedBranch !== branch || parkedHead !== expectedHead) return false;
+      return checkoutFingerprint(expectedPath, branch, expectedHead) === artifactFingerprint;
     },
 
     cleanup({ issueNumber, branch, headSha }) {

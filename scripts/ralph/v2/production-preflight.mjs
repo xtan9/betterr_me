@@ -58,13 +58,15 @@ export function assertProductionPreflight({
   legacyRuntimeRoot,
   execute = defaultExecute,
   processIsAlive = defaultProcessIsAlive,
+  trustedDependencyRoot = "/var/lib/betterr-me-ralph/deps-source/node_modules",
 }) {
   if (
     !path.win32.isAbsolute(repositoryPath) ||
     !fs.statSync(repositoryPath).isDirectory() ||
     !path.win32.isAbsolute(runtimePath) ||
     !fs.statSync(runtimePath).isDirectory() ||
-    !/^[^/\s]+\/[^/\s]+$/.test(githubRepository)
+    !/^[^/\s]+\/[^/\s]+$/.test(githubRepository) ||
+    !path.posix.isAbsolute(trustedDependencyRoot)
   ) throw new Error("production preflight paths failed integrity validation");
 
   if (legacyRuntimeRoot) {
@@ -132,10 +134,71 @@ export function assertProductionPreflight({
     "wsl.exe",
     [
       "-u", "nobody", "-e", "/usr/bin/test", "-d",
-      "/var/lib/betterr-me-ralph/deps-source/node_modules",
+      trustedDependencyRoot,
     ],
     repositoryPath,
     "immutable WSL dependencies",
+  );
+  const skillRoot = "/var/lib/betterr-me-ralph/worker-home/.agents/skills";
+  const skillOwnership = checked(
+    execute, "wsl.exe", ["-u", "root", "-e", "stat", "-c", "%U:%G:%a", skillRoot],
+    repositoryPath, "immutable WSL skill ownership",
+  );
+  if (skillOwnership !== "root:root:555") {
+    throw new Error("immutable WSL skill home has unsafe ownership or mode");
+  }
+  const dependencyOwnership = checked(
+    execute, "wsl.exe", ["-u", "root", "-e", "stat", "-c", "%U:%G:%a", trustedDependencyRoot],
+    repositoryPath, "immutable WSL dependency ownership",
+  );
+  if (dependencyOwnership !== "root:root:555") {
+    throw new Error("immutable WSL dependency root has unsafe ownership or mode");
+  }
+  const writableDependency = checked(
+    execute,
+    "wsl.exe",
+    ["-u", "root", "-e", "/bin/bash", "-c", `find ${trustedDependencyRoot} \\( -type f -o -type d \\) -perm /022 -print -quit`],
+    repositoryPath,
+    "immutable WSL dependency permissions",
+  );
+  if (writableDependency) throw new Error("immutable WSL dependencies contain a writable entry");
+  const expectedSkills = checked(
+    execute, "wsl.exe", ["-u", "root", "-e", "cat", "/var/lib/betterr-me-ralph/skills.content.sha256"],
+    repositoryPath, "immutable WSL skill fingerprint",
+  );
+  const actualSkills = checked(
+    execute,
+    "wsl.exe",
+    ["-u", "root", "-e", "/bin/bash", "-c", `set -o pipefail; find ${skillRoot} -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum`],
+    repositoryPath,
+    "immutable WSL skill content",
+  );
+  if (expectedSkills !== actualSkills) throw new Error("immutable WSL skill content fingerprint changed");
+  const expectedDependencies = checked(
+    execute, "wsl.exe", ["-u", "root", "-e", "cat", "/var/lib/betterr-me-ralph/deps.content.sha256"],
+    repositoryPath, "immutable WSL dependency fingerprint",
+  );
+  const actualDependencies = checked(
+    execute,
+    "wsl.exe",
+    ["-u", "root", "-e", "/bin/bash", "-c", `set -o pipefail; find ${trustedDependencyRoot} -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum`],
+    repositoryPath,
+    "immutable WSL dependency content",
+  );
+  if (expectedDependencies !== actualDependencies) {
+    throw new Error("immutable WSL dependency content fingerprint changed");
+  }
+  checked(
+    execute,
+    "wsl.exe",
+    [
+      "-u", "root", "-e", "stat",
+      `${skillRoot}/implement/SKILL.md`,
+      `${skillRoot}/tdd/SKILL.md`,
+      `${skillRoot}/code-review/SKILL.md`,
+    ],
+    repositoryPath,
+    "required immutable WSL skills",
   );
   return { repositoryPath, runtimePath, githubRepository, branch, headSha };
 }

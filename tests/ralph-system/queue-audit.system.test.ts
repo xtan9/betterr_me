@@ -16,15 +16,37 @@ describe("Ralph v2 final queue audit", () => {
         10: { disposition: "merged", pullRequestNumber: 100 },
         11: { disposition: "merged", pullRequestNumber: 101 },
         12: { disposition: "safety_blocked", pullRequestNumber: 102 },
-        13: { disposition: "verification_failed" },
+        13: {
+          disposition: "verification_failed",
+          artifactPath: "C:\\private\\issue-13",
+          artifactEvidenceValid: true,
+        },
       },
       readyIssueNumbers: [13],
     })).toEqual({
       queueComplete: false,
       closedIssueNumbers: [10],
-      nonMergeableIssueNumbers: [12],
-      unresolvedIssueNumbers: [11, 13],
+      nonMergeableIssueNumbers: [12, 13],
+      unresolvedIssueNumbers: [11],
       readyIssueNumbers: [13],
+    });
+  });
+
+  it("does not accept a private artifact path without validated workspace evidence", () => {
+    expect(classifyQueueAudit({
+      audit: { issues: [{ number: 30, state: "OPEN", pullRequests: [] }] },
+      issueRecords: {
+        30: {
+          disposition: "verification_failed",
+          artifactPath: "C:\\missing\\issue-30",
+          artifactEvidenceValid: false,
+        },
+      },
+      readyIssueNumbers: [],
+    })).toMatchObject({
+      queueComplete: false,
+      nonMergeableIssueNumbers: [],
+      unresolvedIssueNumbers: [30],
     });
   });
 

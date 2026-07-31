@@ -18,7 +18,7 @@ describe("Ralph v2 runtime artifact stream", () => {
       fs.writeFileSync(workerLog, '{"type":"turn.started"}\n');
       fs.writeFileSync(
         reviewLog,
-        '{"type":"thread.started","text":"ghp_abcdefghijklmnopqrstuvwxyz123456"}\n',
+        '{"type":"thread.started","text":"ghp_abcdefghijklmnopqrstuvwxyz123456 AKIAAAAAAAAAAAAAAAAA postgresql://user:password@db.invalid/name Bearer abcdefghijklmnopqrstuvwxyz"}\n',
       );
       const cursors = new Map();
       const output: string[] = [];
@@ -35,6 +35,9 @@ describe("Ralph v2 runtime artifact stream", () => {
       ]);
       expect(output.join("\n")).toContain("[REDACTED]");
       expect(output.join("\n")).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz123456");
+      expect(output.join("\n")).not.toContain("AKIAAAAAAAAAAAAAAAAA");
+      expect(output.join("\n")).not.toContain("postgresql://user:password@");
+      expect(output.join("\n")).not.toContain("Bearer abcdefghijklmnopqrstuvwxyz");
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

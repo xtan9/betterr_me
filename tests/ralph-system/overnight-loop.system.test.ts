@@ -85,6 +85,36 @@ describe("Ralph v2 overnight loop", () => {
     expect(stopCalls).toBe(1);
   });
 
+  it("retries queue-audit outages inside the bounded controller transaction", async () => {
+    let audits = 0;
+    let stops = 0;
+    const runtime = {
+      inspect: () => ({ stopRequested: false, issues: [] }),
+      run: async () => ({ stopRequested: false, issues: [] }),
+      inspectQueue: async () => {
+        audits += 1;
+        if (audits < 3) throw new Error("GitHub audit unavailable");
+        return { readyIssueNumbers: [], queueComplete: true };
+      },
+      requestStop: async () => {
+        stops += 1;
+        return { stopRequested: true, issues: [] };
+      },
+    };
+    await expect(runOvernightLoop({
+      runtime,
+      mode: "AutoMerge",
+      maxIssues: 24,
+      maxConsecutiveErrors: 3,
+      retryDelayMilliseconds: 5,
+      deadlineEpochMilliseconds: 10_000,
+      now: () => 1_000,
+      sleep: async () => {},
+    })).resolves.toMatchObject({ stopReason: "queue_complete", runAttempts: 3 });
+    expect(audits).toBe(3);
+    expect(stops).toBe(0);
+  });
+
   it("does not launch work after the deadline", async () => {
     let runs = 0;
     let stopCalls = 0;
@@ -107,5 +137,35 @@ describe("Ralph v2 overnight loop", () => {
     })).toMatchObject({ stopReason: "deadline", completed: false });
     expect(runs).toBe(0);
     expect(stopCalls).toBe(1);
+  });
+
+  it("stops at the configured issue limit while leaving later ready work queued", async () => {
+    let runs = 0;
+    const runtime = {
+      inspect: () => ({ stopRequested: false, issues: [] }),
+      run: async () => {
+        runs += 1;
+        return {
+          stopRequested: false,
+          issues: [{ number: 10, disposition: "merged" }],
+        };
+      },
+      inspectQueue: async () => ({ readyIssueNumbers: [11], queueComplete: false }),
+      requestStop: async () => ({ stopRequested: true, issues: [] }),
+    };
+    await expect(runOvernightLoop({
+      runtime,
+      mode: "AutoMerge",
+      maxIssues: 1,
+      deadlineEpochMilliseconds: 10_000,
+      now: () => 1_000,
+      sleep: async () => {},
+    })).resolves.toMatchObject({
+      completed: false,
+      stopReason: "issue_limit",
+      runAttempts: 1,
+      queueAudit: { readyIssueNumbers: [11] },
+    });
+    expect(runs).toBe(1);
   });
 });

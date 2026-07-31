@@ -327,14 +327,16 @@ describe("Ralph v2 automatic merge lifecycle", () => {
       ],
     });
 
-    const run = scenario.run([
+    const args = [
       "run",
       "--mode",
       "AutoMerge",
       "--max-issues",
       "1",
       "--json",
-    ]);
+    ];
+    scenario.run(args);
+    const run = scenario.run(args);
     expect(run.exitCode, run.stderr.join("\n")).toBe(0);
     const state = scenario.inspectExternalState();
     expect(state.mergeRequests).toEqual([]);
@@ -636,6 +638,63 @@ describe("Ralph v2 automatic merge lifecycle", () => {
     expect(merged.mergeRequests).toHaveLength(1);
   });
 
+  it("stops after exactly five fresh coding repairs and preserves the Draft", () => {
+    const world = createGitWorld();
+    worlds.push(world);
+    const changes = Array.from({ length: 5 }, (_, index) => [{
+      path: "lib/five-repairs.txt",
+      content: `repair-${index + 1}\n`,
+    }]);
+    const expected = changes.map(([change]) => [{
+      ...change,
+      mode: "100644",
+      status: "A",
+    }]);
+    const failedCheck = [{
+      name: "tests",
+      bucket: "fail",
+      state: "FAILURE",
+      provider: "github-actions",
+      runId: "persistent-failure",
+    }];
+    const scenario = createSystemScenario(world, {
+      issues: [{ number: 973, title: "Bound repairs", body: "Create lib/five-repairs.txt." }],
+      workerChanges: [{ path: "lib/five-repairs.txt", content: "initial\n" }],
+      expectedChanges: [{
+        path: "lib/five-repairs.txt", content: "initial\n", mode: "100644", status: "A",
+      }],
+      repairWorkerChanges: [],
+      repairExpectedChanges: [],
+      repairWorkerChangesSequenceByIssue: { "973": changes },
+      repairExpectedChangesSequenceByIssue: { "973": expected },
+      pullRequestCheckSequence: Array.from({ length: 6 }, () => failedCheck),
+    });
+    const args = ["run", "--mode", "AutoMerge", "--max-issues", "1", "--json"];
+    let output;
+    for (let index = 0; index < 6; index += 1) output = scenario.run(args);
+    expect(output?.exitCode, output?.stderr.join("\n")).toBe(0);
+    expect(scenario.inspectExternalState()).toMatchObject({
+      maximumActiveWorkers: 1,
+      pullRequests: [{ draft: true }],
+      sessions: [
+        { purpose: "implementation" },
+        { purpose: "pr-repair" },
+        { purpose: "pr-repair" },
+        { purpose: "pr-repair" },
+        { purpose: "pr-repair" },
+        { purpose: "pr-repair" },
+      ],
+      mergeRequests: [],
+    });
+    expect(JSON.parse(output?.stdout.at(-1) ?? "null")).toMatchObject({
+      issues: [{
+        number: 973,
+        disposition: "safety_blocked",
+        blocker: expect.stringMatching(/five|bounded|repair/i),
+      }],
+    });
+  }, 120_000);
+
   it("resumes the same repair generation after a controller crash", () => {
     const world = createGitWorld();
     worlds.push(world);
@@ -667,7 +726,7 @@ describe("Ralph v2 automatic merge lifecycle", () => {
     expect(state.mergeRequests).toHaveLength(1);
   });
 
-  it("leaves a reviewed-required PR as Draft until approval exists", () => {
+  it("marks a reviewed-required PR ready, then waits for approval before merge", () => {
     const world = createGitWorld();
     worlds.push(world);
     const scenario = createSystemScenario(world, {
@@ -683,8 +742,8 @@ describe("Ralph v2 automatic merge lifecycle", () => {
     ]);
     expect(run.exitCode, run.stderr.join("\n")).toBe(0);
     const state = scenario.inspectExternalState();
-    expect(state.pullRequests[0].draft).toBe(true);
-    expect(state.readyPullRequestRequests).toEqual([]);
+    expect(state.pullRequests[0].draft).toBe(false);
+    expect(state.readyPullRequestRequests).toHaveLength(1);
     expect(state.mergeRequests).toEqual([]);
     expect(JSON.parse(run.stdout.at(-1) ?? "null")).toMatchObject({
       issues: [{ number: 981, disposition: "pr_waiting" }],

@@ -4,6 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   parseProductionArguments,
+  runProductionDryRun,
+  runProductionOvernightWithSummary,
   runVisibleOvernight,
   writeOvernightSummary,
 } from "../../scripts/ralph/v2/production-entry.mjs";
@@ -52,7 +54,7 @@ describe("Ralph v2 production entry", () => {
       writeOvernightSummary(root, { stopReason: "queue_complete", issues: [{ number: 2 }] }, new Date("2026-07-30T02:00:00Z"));
       const summaryRoot = path.join(root, "summaries");
       expect(fs.readdirSync(summaryRoot).filter(
-        (name) => name.startsWith("overnight-") && name.endsWith(".json"),
+        (name) => /^overnight-\d{4}-/.test(name) && name.endsWith(".json"),
       )).toHaveLength(2);
       expect(JSON.parse(fs.readFileSync(path.join(summaryRoot, "latest.json"), "utf8"))).toMatchObject({
         stopReason: "queue_complete",
@@ -61,6 +63,14 @@ describe("Ralph v2 production entry", () => {
       const humanSummary = fs.readFileSync(path.join(summaryRoot, "latest.md"), "utf8");
       expect(humanSummary).toContain("Stop reason: `queue_complete`");
       expect(humanSummary).toContain("#2");
+      expect(fs.readFileSync(path.join(summaryRoot, "overnight-summary.json"), "utf8"))
+        .toBe(fs.readFileSync(path.join(summaryRoot, "latest.json"), "utf8"));
+      expect(fs.readFileSync(path.join(summaryRoot, "overnight-summary.md"), "utf8"))
+        .toBe(humanSummary);
+      expect(fs.readFileSync(path.join(root, "overnight-summary.json"), "utf8"))
+        .toBe(fs.readFileSync(path.join(summaryRoot, "latest.json"), "utf8"));
+      expect(fs.readFileSync(path.join(root, "overnight-summary.md"), "utf8"))
+        .toBe(humanSummary);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -102,6 +112,78 @@ describe("Ralph v2 production entry", () => {
         expect.stringMatching(/implementation-session-requests.*turn\.completed/),
         expect.stringMatching(/poll 1: #1:merged/),
       ]));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it(
+    "keeps production DryRun read-only and does not construct worker infrastructure",
+    async () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), "ralph-v2-production-dry-run-"));
+      const runtimePath = path.join(root, "runtime-must-not-exist");
+      try {
+        await expect(runProductionDryRun({
+          github: {
+            listReadyIssues: async () => [{ number: 10 }, { number: 11 }],
+          },
+          maxIssues: 1,
+        })).resolves.toEqual({
+          stopRequested: false,
+          workerLease: null,
+          issues: [{ number: 10, disposition: "ready" }],
+        });
+        expect(fs.existsSync(runtimePath)).toBe(false);
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("atomically refreshes a failure summary when overnight orchestration throws", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ralph-v2-failure-summary-"));
+    try {
+      await expect(runProductionOvernightWithSummary({
+        runtime: { inspect: () => ({ issues: [{ number: 12, disposition: "pr_waiting" }] }) },
+        runtimePath: root,
+        run: async () => { throw new Error("audit unavailable"); },
+      })).rejects.toThrow("audit unavailable");
+      expect(JSON.parse(fs.readFileSync(
+        path.join(root, "summaries", "overnight-summary.json"),
+        "utf8",
+      ))).toMatchObject({
+        completed: false,
+        stopReason: "controller_failure",
+        lastError: "audit unavailable",
+        issues: [{ number: 12, disposition: "pr_waiting" }],
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("redacts credential-shaped hostile text from machine and human summaries", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ralph-v2-redacted-summary-"));
+    try {
+      const secrets = [
+        `ghp_${"a".repeat(36)}`,
+        `AKIA${"A".repeat(16)}`,
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature123456",
+        "Bearer abcdefghijklmnopqrstuvwxyz123456",
+        "postgresql://worker:password@db.example.invalid/database",
+        "api_key=super-secret-value",
+      ];
+      writeOvernightSummary(root, {
+        completed: false,
+        stopReason: "controller_failure",
+        lastError: `hostile ${secrets.join(" ")}`,
+        issues: [{ number: 13, disposition: "safety_blocked", blocker: `leak ${secrets.join(" ")}` }],
+      });
+      for (const name of ["overnight-summary.json", "overnight-summary.md"]) {
+        const content = fs.readFileSync(path.join(root, name), "utf8");
+        for (const secret of secrets) expect(content).not.toContain(secret);
+        expect(content).toContain("[REDACTED]");
+      }
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

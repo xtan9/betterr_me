@@ -18,6 +18,7 @@ The orchestration module exposes a small interface:
 ```js
 createRalphRuntime(options)
 runCli(["run" | "status" | "stop", ...options], { runtime, stdout, stderr })
+runOvernightCli(options, { runtime, onStatus })
 ```
 
 Importing either module must not read or write the filesystem, acquire a lock,
