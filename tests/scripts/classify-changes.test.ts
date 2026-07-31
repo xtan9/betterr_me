@@ -193,7 +193,12 @@ describe("conditional test classifier", () => {
 
     expect(result.changedPaths).toEqual([path]);
     expect(result.ownershipMatches).toEqual(
-      expect.arrayContaining([expect.objectContaining({ path, owners: [owner] })]),
+      expect.arrayContaining([
+        expect.objectContaining({
+          path,
+          owners: expect.arrayContaining([owner]),
+        }),
+      ]),
     );
     expect(result.suites.e2e).toBe(true);
   });
@@ -229,6 +234,38 @@ describe("conditional test classifier", () => {
     expect(result.reasons).toContain(
       "Unclassified application path app/future/page.tsx requires broad validation.",
     );
+  });
+
+  it.each([
+    ["habit implementation", "lib/habits/absence.ts"],
+    ["habit tests", "tests/lib/habits/absence.test.ts"],
+  ])("selects the habits pull-request mutation scope for %s", (_kind, path) => {
+    const result = classifyChanges([{ status: "M", path }]);
+
+    expect(result.suites).toMatchObject({
+      mutation: true,
+      mutationScopes: expect.arrayContaining(["habits"]),
+    });
+  });
+
+  it("does not select habits mutation work for unrelated changes", () => {
+    const result = classifyChanges([
+      { status: "M", path: "components/journal/journal-editor.tsx" },
+    ]);
+
+    expect(result.suites.mutationScopes).not.toContain("habits");
+  });
+
+  it("treats the central mutation policy as mutation infrastructure", () => {
+    const result = classifyChanges([
+      { status: "M", path: "scripts/ci/classify-changes.mjs" },
+    ]);
+
+    expect(result.suites.mutationScopes).toEqual([
+      "database",
+      "habits",
+      "recurring-tasks",
+    ]);
   });
 
   it.each(["missing comparison metadata", "classifier error", "ambiguous diff"])(
@@ -278,6 +315,7 @@ describe("conditional test classifier", () => {
       "tests/scripts/github-actions-runtime-policy.test.ts",
       "tests/scripts/quality-signal-contracts.test.ts",
       "tests/scripts/run-change-classifier.test.ts",
+      "tests/scripts/stryker-changed.test.ts",
     ]);
 
     const classifier = classifyChanges([
@@ -294,6 +332,7 @@ describe("conditional test classifier", () => {
         "tests/scripts/github-actions-runtime-policy.test.ts",
         "tests/scripts/quality-signal-contracts.test.ts",
         "tests/scripts/run-change-classifier.test.ts",
+        "tests/scripts/stryker-changed.test.ts",
       ],
     });
 
@@ -316,6 +355,7 @@ describe("conditional test classifier", () => {
       "fullLint",
       "fullTests",
       "migrations",
+      "mutation",
       "performance",
       "quality",
       "smokeTests",
@@ -323,7 +363,7 @@ describe("conditional test classifier", () => {
   });
 
   it("makes the structured report the workflow policy contract", () => {
-    for (const workflow of ["ci.yml", "e2e.yml", "performance.yml"]) {
+    for (const workflow of ["ci.yml", "e2e.yml", "mutation-testing.yml", "performance.yml"]) {
       const source = readFileSync(`.github/workflows/${workflow}`, "utf8");
       expect(source).toContain("node scripts/ci/run-change-classifier.mjs");
       expect(source).toContain("fromJSON(needs.changes.outputs.classification_json)");

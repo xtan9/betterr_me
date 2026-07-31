@@ -1,82 +1,81 @@
 #!/usr/bin/env node
-// Run Stryker mutation testing scoped to files changed vs origin/main.
-// Used by the per-PR CI job so PRs pay a small mutation-testing cost (~2-5
-// min) while the weekly workflow runs the full scope (~15 min).
-//
-// Scope tracks the `mutate` glob in stryker.config.mjs: lib/db/** and
-// lib/recurring-tasks/** (excluding index.ts / types.ts entry points).
+// Run Stryker mutation testing for centrally owned mutation scopes changed vs
+// origin/main. Implementation changes mutate the exact changed files. Test or
+// infrastructure changes mutate the owning scope because no source file alone
+// represents their impact.
 
 import { execFileSync, spawn } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const BASE_REF = process.env.STRYKER_BASE_REF || "origin/main";
-const MUTATE_SCOPE = "lib/db/**/*.ts, lib/recurring-tasks/**/*.ts";
+import {
+  parseNameStatus,
+} from "./ci/classify-changes.mjs";
+import {
+  buildStrykerCommand,
+  selectMutationTargets,
+} from "./ci/mutation-selection.mjs";
 
-// Files Stryker is told to mutate. Intersection of (changed since base) and
-// (currently in Stryker's mutate scope). If nothing in scope changed, exit
-// cleanly — nothing to mutate-test.
-function getChangedFiles() {
+const BASE_REF = process.env.STRYKER_BASE_REF || "origin/main";
+
+function getChangedRecords(baseRef = BASE_REF) {
   let diffOutput;
   try {
     diffOutput = execFileSync(
       "git",
-      ["diff", "--name-only", "--diff-filter=d", `${BASE_REF}...HEAD`],
+      ["diff", "--name-status", "-z", "--find-renames", `${baseRef}...HEAD`],
       { encoding: "utf8" },
     );
-  } catch (err) {
-    console.error(`Failed to diff against ${BASE_REF}:`, err.message);
-    console.error(
-      `Set STRYKER_BASE_REF or fetch the base branch before running.`,
-    );
-    process.exit(1);
+  } catch (error) {
+    console.error(`Failed to diff against ${baseRef}:`, error.message);
+    console.error("Set STRYKER_BASE_REF or fetch the base branch before running.");
+    return null;
   }
 
-  return diffOutput
-    .split("\n")
-    .filter(Boolean)
-    .filter(
-      (f) =>
-        /^lib\/db\/.+\.ts$/.test(f) ||
-        /^lib\/recurring-tasks\/.+\.ts$/.test(f),
-    )
-    .filter(
-      (f) =>
-        f !== "lib/db/index.ts" &&
-        f !== "lib/db/types.ts" &&
-        f !== "lib/recurring-tasks/index.ts",
+  return parseNameStatus(diffOutput);
+}
+
+export async function runChangedMutation({ baseRef = BASE_REF } = {}) {
+  const records = getChangedRecords(baseRef);
+  if (!records) return 1;
+
+  const targets = selectMutationTargets(records);
+  if (targets.length === 0) {
+    console.log(`No centrally owned mutation scope changed vs ${baseRef}.`);
+    console.log("Skipping mutation testing for this pull request.");
+    return 0;
+  }
+
+  console.log(
+    `Running Stryker for ${targets.length} changed-scope target(s):\n  ${targets.join("\n  ")}\n`,
+  );
+
+  const requireFromScript = createRequire(import.meta.url);
+  const strykerPkgJson = requireFromScript.resolve(
+    "@stryker-mutator/core/package.json",
+  );
+  const strykerBin = path.join(
+    path.dirname(strykerPkgJson),
+    "bin",
+    "stryker.js",
+  );
+  const command = buildStrykerCommand(strykerBin, targets);
+
+  return await new Promise((resolve) => {
+    const child = spawn(
+      command.command,
+      command.args,
+      command.options,
     );
+    child.on("exit", (code) => resolve(code ?? 1));
+    child.on("error", (error) => {
+      console.error("Failed to start Stryker:", error.message);
+      resolve(1);
+    });
+  });
 }
 
-const changed = getChangedFiles();
-
-if (changed.length === 0) {
-  console.log(`No files matching ${MUTATE_SCOPE} changed vs ${BASE_REF}.`);
-  console.log("Skipping mutation testing for this PR.");
-  process.exit(0);
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.exitCode = await runChangedMutation();
 }
-
-console.log(
-  `Running Stryker on ${changed.length} changed file(s):\n  ${changed.join("\n  ")}\n`,
-);
-
-// Resolve Stryker's bin via Node's module resolution rather than relying on
-// PATH — makes the script robust to direct `node scripts/...` invocation and
-// to package-manager PATH differences. Stryker's package.json "exports" field
-// doesn't expose ./bin/*, so we resolve package.json first and then join the
-// bin path manually. `execPath` + resolved bin path, no shell, no
-// command-injection risk.
-const requireFromScript = createRequire(import.meta.url);
-const strykerPkgJson = requireFromScript.resolve(
-  "@stryker-mutator/core/package.json",
-);
-const strykerBin = path.join(path.dirname(strykerPkgJson), "bin", "stryker.js");
-
-const child = spawn(
-  process.execPath,
-  [strykerBin, "run", "--mutate", changed.join(",")],
-  { stdio: "inherit" },
-);
-child.on("exit", (code) => {
-  process.exit(code ?? 1);
-});

@@ -3,20 +3,6 @@ name: Mutation Testing
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "lib/db/**"
-      - "lib/recurring-tasks/**"
-      - "tests/lib/db/**"
-      - "tests/lib/recurring-tasks/**"
-      - "tests/helpers/mock-supabase.ts"
-      - "tests/setup.ts"
-      - "stryker.config.mjs"
-      # Mutation infra itself — a change here must re-run the gate to catch
-      # regressions (e.g. a broken --mutate filter that silently mutates 0 files).
-      - "scripts/stryker-changed.mjs"
-      - ".github/workflows/mutation-testing.yml"
-      - "package.json"
-      - "pnpm-workspace.yaml"
   schedule:
     # Mondays at 03:00 UTC — full baseline on main, catches cross-file drift
     # a per-PR changed-files run would miss.
@@ -30,9 +16,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Per-PR: only mutate files changed vs origin/main. Typical runtime 2-5 min.
-  mutation-changed:
+  changes:
     if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      classification_json: ${{ steps.classify.outputs.classification_json }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Classify changes
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ci/run-change-classifier.mjs
+
+  # Per-PR: mutate changed implementation files or the scope owning changed tests.
+  mutation-changed:
+    needs: changes
+    if: fromJSON(needs.changes.outputs.classification_json).suites.mutation
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
