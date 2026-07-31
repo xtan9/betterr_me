@@ -1,7 +1,45 @@
 import { z } from "zod";
 import { TasksDB, RecurringTasksDB } from "@/lib/db";
 import type { RecurrenceRule } from "@/lib/db";
+import { createTaskWrites } from "@/lib/tasks/writes";
+import {
+  hasTaskUpdateValues,
+  taskFormSchema,
+  taskStatusSchema,
+} from "@/lib/validations/task";
 import type { ToolDefinition, ToolContext } from "./types";
+
+const createTaskParameters = z.object({
+  title: taskFormSchema.shape.title.describe("Task title"),
+  dueDate: taskFormSchema.shape.due_date.describe(
+    "Due date in YYYY-MM-DD format",
+  ),
+  priority: taskFormSchema.shape.priority.describe(
+    "Priority level (0=none, 1=low, 2=medium, 3=high)",
+  ),
+  projectId: taskFormSchema.shape.project_id.describe(
+    "Project ID to assign the task to",
+  ),
+});
+
+const updateTaskParameters = z
+  .object({
+    taskId: z.string().describe("The task ID"),
+    title: taskFormSchema.shape.title.optional().describe("New title"),
+    description: taskFormSchema.shape.description.describe("New description"),
+    status: taskStatusSchema.optional().describe("New status"),
+    priority: taskFormSchema.shape.priority.describe("New priority level"),
+    dueDate: taskFormSchema.shape.due_date.describe(
+      "New due date in YYYY-MM-DD format",
+    ),
+    projectId: taskFormSchema.shape.project_id.describe(
+      "Move to a different project",
+    ),
+  })
+  .refine(
+    ({ taskId: _taskId, ...updates }) => hasTaskUpdateValues(updates),
+    { message: "At least one field must be provided" },
+  );
 
 export function taskTools(): ToolDefinition[] {
   return [
@@ -74,33 +112,22 @@ export function taskTools(): ToolDefinition[] {
     {
       name: "createTask",
       description: "Create a new task",
-      parameters: z.object({
-        title: z.string().describe("Task title"),
-        dueDate: z
-          .string()
-          .optional()
-          .describe("Due date in YYYY-MM-DD format"),
-        priority: z
-          .number()
-          .optional()
-          .describe("Priority level (0=none, 1=low, 2=medium, 3=high)"),
-        projectId: z
-          .string()
-          .optional()
-          .describe("Project ID to assign the task to"),
-      }),
-      execute: async (params, ctx: ToolContext) => {
-        const db = new TasksDB(ctx.supabase);
-        return db.createTask({
-          user_id: ctx.userId,
-          title: params.title,
-          description: null,
-          due_date: params.dueDate ?? null,
-          due_time: null,
-          priority: params.priority ?? 0,
-          project_id: params.projectId,
-          is_completed: false,
+      parameters: createTaskParameters,
+      execute: async (
+        params: z.infer<typeof createTaskParameters>,
+        ctx: ToolContext,
+      ) => {
+        const outcome = await createTaskWrites(ctx.supabase).execute({
+          type: "create",
+          userId: ctx.userId,
+          values: {
+            title: params.title,
+            due_date: params.dueDate,
+            priority: params.priority,
+            project_id: params.projectId,
+          },
         });
+        return outcome.task;
       },
     },
     {
@@ -110,39 +137,34 @@ export function taskTools(): ToolDefinition[] {
         taskId: z.string().describe("The task ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new TasksDB(ctx.supabase);
-        return db.toggleTaskCompletion(params.taskId, ctx.userId);
+        const outcome = await createTaskWrites(ctx.supabase).execute({
+          type: "toggle-completion",
+          taskId: params.taskId,
+          userId: ctx.userId,
+        });
+        return outcome.task;
       },
     },
     {
       name: "updateTask",
       description: "Update an existing task's fields",
-      parameters: z.object({
-        taskId: z.string().describe("The task ID"),
-        title: z.string().optional().describe("New title"),
-        description: z.string().optional().describe("New description"),
-        status: z.string().optional().describe("New status"),
-        priority: z.number().optional().describe("New priority level"),
-        dueDate: z
-          .string()
-          .optional()
-          .describe("New due date in YYYY-MM-DD format"),
-        projectId: z
-          .string()
-          .optional()
-          .describe("Move to a different project"),
-      }),
-      execute: async (params, ctx: ToolContext) => {
-        const db = new TasksDB(ctx.supabase);
+      parameters: updateTaskParameters,
+      execute: async (
+        params: z.infer<typeof updateTaskParameters>,
+        ctx: ToolContext,
+      ) => {
         const { taskId, dueDate, projectId, ...rest } = params;
-        const updates: Record<string, unknown> = { ...rest };
-        if (dueDate !== undefined) updates.due_date = dueDate;
-        if (projectId !== undefined) updates.project_id = projectId;
-        // Remove undefined values
-        for (const key of Object.keys(updates)) {
-          if (updates[key] === undefined) delete updates[key];
-        }
-        return db.updateTask(taskId, ctx.userId, updates);
+        const outcome = await createTaskWrites(ctx.supabase).execute({
+          type: "update",
+          taskId,
+          userId: ctx.userId,
+          values: {
+            ...rest,
+            due_date: dueDate,
+            project_id: projectId,
+          },
+        });
+        return outcome.task;
       },
     },
     {

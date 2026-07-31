@@ -21,6 +21,10 @@ export const taskFormSchema = z.object({
 
 export type TaskFormValues = z.infer<typeof taskFormSchema>;
 
+export function hasTaskUpdateValues(data: Record<string, unknown>): boolean {
+  return Object.keys(data).length > 0;
+}
+
 export const taskUpdateSchema = taskFormSchema
   .partial()
   .extend({
@@ -30,7 +34,7 @@ export const taskUpdateSchema = taskFormSchema
     sort_order: z.number().optional(),
     project_id: z.string().uuid().nullable().optional(),
   })
-  .refine((data) => Object.keys(data).length > 0, {
+  .refine(hasTaskUpdateValues, {
     message: "At least one field must be provided",
   });
 
