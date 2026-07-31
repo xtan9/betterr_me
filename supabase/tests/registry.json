@@ -51,6 +51,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "identity_communication_rls.sql",
+    "domain": "identity-communication",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "initial_chat_turn_lifecycle.sql",
     "domain": "chat",
     "role": "constrained",
