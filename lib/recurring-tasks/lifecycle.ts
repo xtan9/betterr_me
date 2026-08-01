@@ -1472,8 +1472,7 @@ function ensureCoverageState(
     series.status = "ended";
   }
   if (
-    series.status === "active"
-    && series.lastScheduledDate !== null
+    series.lastScheduledDate !== null
     && compareLocalDates(range.to, series.lastScheduledDate) >= 0
   ) {
     series.status = "ended";

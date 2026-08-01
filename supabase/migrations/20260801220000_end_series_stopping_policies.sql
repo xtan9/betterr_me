@@ -296,8 +296,7 @@ begin
       status = case
         when occurrence_limit is not null
           and v_retained_count >= occurrence_limit then 'ended'
-        when status = 'active'
-          and last_scheduled_date is not null
+        when last_scheduled_date is not null
           and p_to >= last_scheduled_date then 'ended'
         else status
       end,

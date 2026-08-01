@@ -1532,6 +1532,77 @@ describe("RecurringTaskLifecycle revision behavior", () => {
     )).toBe(false);
   });
 
+  it("ends a Paused Series when its inclusive Last Scheduled Date is reached", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-paused-end",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Paused end"),
+      lastScheduledDate: "2026-08-03",
+      coverage: { from: "2026-08-01", to: "2026-08-01" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const ended = await lifecycle.pauseSeries({
+      userId: "user-paused-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-02",
+      coverage: { from: "2026-08-02", to: "2026-08-03" },
+    });
+    expect(ended.status).toBe("complete");
+    if (ended.status !== "complete") return;
+    expect(ended.series.status).toBe("ended");
+    expect(ended.series.occurrences.map((occurrence) => occurrence.scheduledDate)).toEqual([
+      "2026-08-01",
+    ]);
+
+    expect(await lifecycle.resumeSeries({
+      userId: "user-paused-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-04",
+    })).toMatchObject({ status: "invalid-transition", type: "invalid-transition" });
+  });
+
+  it("allows a Paused Series to end explicitly", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-explicit-paused-end",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Explicit paused end"),
+      coverage: { from: "2026-08-01", to: "2026-08-01" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const paused = await lifecycle.pauseSeries({
+      userId: "user-explicit-paused-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-02",
+    });
+    expect(paused.status).toBe("complete");
+
+    const ended = await lifecycle.endSeries({
+      userId: "user-explicit-paused-end",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-03",
+    });
+    expect(ended).toMatchObject({ status: "complete", type: "complete" });
+    if (ended.status !== "complete") return;
+    expect(ended.series.status).toBe("ended");
+    expect(ended.series.revisions.at(-1)?.state).toBe("ended");
+  });
+
   it("fills a coverage gap and ends exactly when the retained occurrence limit is reached", async () => {
     const lifecycle = new RecurringTaskLifecycle(
       new InMemoryRecurringTaskLifecyclePersistence(),
