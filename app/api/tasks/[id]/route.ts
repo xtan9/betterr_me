@@ -7,8 +7,13 @@ import { log } from '@/lib/logger';
 import { taskUpdateSchema } from '@/lib/validations/task';
 import { editScopeSchema } from '@/lib/validations/recurring-task';
 import {
+  createTaskWrites,
+  taskDeletionHttpFailure,
+} from '@/lib/tasks/writes';
+import {
   createSupabaseOccurrenceAdapter,
   createSupabaseSeriesStateAdapter,
+  createSupabaseRecurringTaskLifecycle,
   isOccurrenceSuccess,
   occurrenceHttpFailure,
   isSeriesStateSuccess,
@@ -192,55 +197,31 @@ export async function DELETE(
       );
     }
 
-    // Handle recurring task scope-based deletes
+    let scope: 'this' | 'following' | 'all' | undefined;
     if (scopeParam) {
       const scopeResult = editScopeSchema.safeParse(scopeParam);
       if (!scopeResult.success) {
         return NextResponse.json(
           { error: 'Invalid scope. Must be: this, following, or all' },
-          { status: 400 }
+          { status: 400 },
         );
       }
-
-      if (scopeResult.data === 'this') {
-        const outcome = await createSupabaseOccurrenceAdapter(supabase).delete({
-          taskId: id,
-          userId,
-          scope: 'this',
-        });
-        if (!isOccurrenceSuccess(outcome)) {
-          const failure = occurrenceHttpFailure(outcome);
-          return NextResponse.json(
-            { error: failure.error },
-            { status: failure.status },
-          );
-        }
-        return NextResponse.json({ success: true });
-      }
-
-      const outcome = await createSupabaseSeriesStateAdapter(supabase).deleteScope({
-        taskId: id,
-        userId,
-        scope: scopeResult.data,
-        effectiveDate: dateParam,
-      });
-      if (!isSeriesStateSuccess(outcome)) {
-        const failure = seriesStateHttpFailure(outcome);
-        return NextResponse.json(
-          { error: failure.error },
-          { status: failure.status },
-        );
-      }
-      return NextResponse.json({ success: true });
+      scope = scopeResult.data;
     }
 
-    const outcome = await createSupabaseOccurrenceAdapter(supabase).delete({
+    const outcome = await createTaskWrites(supabase, {
+      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+    }).delete({
       taskId: id,
       userId,
-      scope: 'this',
+      ...(scope === undefined ? {} : { scope }),
+      ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
     });
-    if (!isOccurrenceSuccess(outcome)) {
-      const failure = occurrenceHttpFailure(outcome);
+    if (outcome.type !== 'deleted') {
+      const failure = taskDeletionHttpFailure(
+        outcome,
+        scope === 'following' || scope === 'all' ? 'series' : 'occurrence',
+      );
       return NextResponse.json(
         { error: failure.error },
         { status: failure.status },

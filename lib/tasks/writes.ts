@@ -84,11 +84,100 @@ export interface TaskReminderConfigurationPersistence {
   ): Promise<TaskReminderConfigurationPersistenceOutcome>;
 }
 
+/** Storage-independent, owner-scoped task deletion intent. */
+export interface TaskDeletionRequest {
+  userId: string;
+  taskId: string;
+  scope?: EditScope;
+  effectiveDate?: string;
+}
+
+/** Storage-independent recurring-series deletion intent. */
+export interface TaskSeriesDeletionRequest {
+  userId: string;
+  seriesId: string;
+  effectiveDate?: string;
+}
+
+export type TaskDeletionPersistenceOutcome =
+  | { type: 'deleted' }
+  | { type: 'not-found' };
+
+export interface TaskDeletionPersistence {
+  deleteTask(
+    taskId: string,
+    userId: string,
+  ): Promise<TaskDeletionPersistenceOutcome>;
+}
+
+export type TaskDeletionOutcome =
+  | TaskDeletionPersistenceOutcome
+  | {
+      type: 'invalid-transition';
+      reason: string;
+    }
+  | {
+      type: 'conflict';
+      reason?: string;
+      expectedRevisionToken?: number;
+      actualRevisionToken?: number;
+    }
+  | {
+      type: 'coverage-unavailable';
+      requestedRange: { from: string; to: string };
+      coverageHorizon: string | null;
+      reason: string;
+    };
+
+export type TaskSeriesDeletionOutcome = TaskDeletionOutcome;
+
+export type TaskDeletionPresentationContext =
+  | 'task'
+  | 'occurrence'
+  | 'series';
+
+export function taskDeletionErrorMessage(
+  outcome: Exclude<TaskDeletionOutcome, { type: 'deleted' }>,
+  context: TaskDeletionPresentationContext = 'task',
+): string {
+  switch (outcome.type) {
+    case 'not-found':
+      return context === 'series' ? 'Recurring task not found' : 'Task not found';
+    case 'conflict':
+      return context === 'series'
+        ? 'Recurring task changed concurrently'
+        : context === 'occurrence'
+          ? 'Task occurrence conflict'
+          : 'Task deletion conflict';
+    case 'coverage-unavailable':
+      return 'Recurring task coverage is temporarily unavailable';
+    case 'invalid-transition':
+      return outcome.reason;
+  }
+}
+
+export function taskDeletionHttpFailure(
+  outcome: Exclude<TaskDeletionOutcome, { type: 'deleted' }>,
+  context: TaskDeletionPresentationContext = 'task',
+): { error: string; status: 400 | 404 | 409 | 503 } {
+  switch (outcome.type) {
+    case 'not-found':
+      return { error: taskDeletionErrorMessage(outcome, context), status: 404 };
+    case 'conflict':
+      return { error: taskDeletionErrorMessage(outcome, context), status: 409 };
+    case 'coverage-unavailable':
+      return { error: taskDeletionErrorMessage(outcome, context), status: 503 };
+    case 'invalid-transition':
+      return { error: taskDeletionErrorMessage(outcome, context), status: 400 };
+  }
+}
+
 export interface TaskWritePersistence {
   getMaxSortOrder(userId: string): Promise<number | null>;
   createTask(task: TaskInsert): Promise<Task>;
   getTask(taskId: string, userId: string): Promise<Task | null>;
   updateTask(taskId: string, userId: string, updates: TaskUpdate): Promise<Task>;
+  deleteTask?: TaskDeletionPersistence['deleteTask'];
   updateInstanceWithScope?(
     taskId: string,
     userId: string,
@@ -98,7 +187,13 @@ export interface TaskWritePersistence {
   configureTaskReminders?: TaskReminderConfigurationPersistence['configureTaskReminders'];
   lifecycle?: Pick<
     RecurringTaskLifecyclePort,
-    'editOccurrence' | 'completeOccurrence' | 'reopenOccurrence'
+    | 'editOccurrence'
+    | 'completeOccurrence'
+    | 'reopenOccurrence'
+    | 'getSeries'
+    | 'skipOccurrence'
+    | 'endSeries'
+    | 'deleteSeries'
   >;
 }
 
@@ -147,6 +242,11 @@ export function createTaskWrites(
     createTask: tasksDB.createTask.bind(tasksDB),
     getTask: tasksDB.getTask.bind(tasksDB),
     updateTask: tasksDB.updateTask.bind(tasksDB),
+    async deleteTask(taskId, userId) {
+      return (await tasksDB.deleteTask(taskId, userId))
+        ? { type: 'deleted' }
+        : { type: 'not-found' };
+    },
     updateInstanceWithScope: recurringTasksDB
       ? recurringTasksDB.updateInstanceWithScope.bind(recurringTasksDB)
       : undefined,
@@ -192,6 +292,161 @@ export class TaskWrites {
       throw new Error('Task reminder configuration persistence is not configured');
     }
     return this.persistence.configureTaskReminders(normalized.value);
+  }
+
+  async delete(request: TaskDeletionRequest): Promise<TaskDeletionOutcome> {
+    const normalized = normalizeTaskDeletionRequest(request);
+    if (!normalized.userId || !normalized.taskId) return { type: 'not-found' };
+
+    const task = await this.persistence.getTask(
+      normalized.taskId,
+      normalized.userId,
+    );
+    if (!task) return { type: 'not-found' };
+
+    const recurring = isRecurringTask(task);
+    if (!recurring) {
+      if (normalized.scope !== undefined) {
+        return {
+          type: 'invalid-transition',
+          reason: 'Recurring deletion scope requires a Task Occurrence',
+        };
+      }
+      if (!this.persistence.deleteTask) {
+        throw new Error('Task deletion persistence is not configured');
+      }
+      return this.persistence.deleteTask(
+        normalized.taskId,
+        normalized.userId,
+      );
+    }
+
+    const seriesId = task.recurring_series_id ?? task.recurring_task_id;
+    const occurrenceId = task.recurring_occurrence_id;
+    if (!seriesId || !occurrenceId) {
+      return {
+        type: 'invalid-transition',
+        reason: 'Recurring Task Occurrence metadata is incomplete',
+      };
+    }
+
+    const scope = normalized.scope ?? 'this';
+    const occurrenceState = task.recurrence_occurrence_state;
+    if (occurrenceState === 'skipped' || occurrenceState === 'withdrawn') {
+      return { type: 'not-found' };
+    }
+
+    if (scope === 'this') {
+      if (task.is_completed || occurrenceState === 'completed') {
+        return {
+          type: 'invalid-transition',
+          reason: 'Completed Task Occurrences retain history',
+        };
+      }
+      if (!this.persistence.lifecycle?.skipOccurrence) {
+        return {
+          type: 'invalid-transition',
+          reason: 'Recurring task deletion requires lifecycle persistence',
+        };
+      }
+      return mapDeletionLifecycleOutcome(
+        await this.persistence.lifecycle.skipOccurrence({
+          userId: normalized.userId,
+          seriesId,
+          occurrenceId,
+        }),
+      );
+    }
+
+    const scheduledDate = task.scheduled_date ?? task.original_date;
+    if (!scheduledDate) {
+      return {
+        type: 'invalid-transition',
+        reason: 'Recurring Task Occurrence is missing its Scheduled Date',
+      };
+    }
+    if (
+      !this.persistence.lifecycle?.getSeries
+      || (!this.persistence.lifecycle.endSeries && !this.persistence.lifecycle.deleteSeries)
+    ) {
+      return {
+        type: 'invalid-transition',
+        reason: 'Recurring task deletion requires lifecycle persistence',
+      };
+    }
+
+    const seriesOutcome = await this.persistence.lifecycle.getSeries(
+      normalized.userId,
+      seriesId,
+    );
+    if (seriesOutcome.status === 'not-found') return { type: 'not-found' };
+    if (!isLifecycleSuccess(seriesOutcome)) {
+      return mapDeletionLifecycleOutcome(seriesOutcome);
+    }
+    if (seriesOutcome.series.status === 'ended') return { type: 'not-found' };
+
+    const effectiveDate = normalized.effectiveDate ?? scheduledDate;
+    if (scope === 'all') {
+      if (!this.persistence.lifecycle.deleteSeries) {
+        return {
+          type: 'invalid-transition',
+          reason: 'Recurring task deletion requires lifecycle persistence',
+        };
+      }
+      return mapDeletionLifecycleOutcome(
+        await this.persistence.lifecycle.deleteSeries({
+          userId: normalized.userId,
+          seriesId,
+          effectiveDate,
+        }),
+      );
+    }
+
+    if (!this.persistence.lifecycle.endSeries) {
+      return {
+        type: 'invalid-transition',
+        reason: 'Recurring task deletion requires lifecycle persistence',
+      };
+    }
+
+    return mapDeletionLifecycleOutcome(
+      await this.persistence.lifecycle.endSeries({
+        userId: normalized.userId,
+        seriesId,
+        effectiveDate,
+      }),
+    );
+  }
+
+  async deleteSeries(
+    request: TaskSeriesDeletionRequest,
+  ): Promise<TaskSeriesDeletionOutcome> {
+    const userId = request.userId.trim();
+    const seriesId = request.seriesId.trim();
+    if (!userId || !seriesId) return { type: 'not-found' };
+    if (!this.persistence.lifecycle?.getSeries || !this.persistence.lifecycle.deleteSeries) {
+      throw new Error('Recurring series deletion requires lifecycle persistence');
+    }
+
+    const seriesOutcome = await this.persistence.lifecycle.getSeries(
+      userId,
+      seriesId,
+    );
+    if (seriesOutcome.status === 'not-found') return { type: 'not-found' };
+    if (!isLifecycleSuccess(seriesOutcome)) {
+      return mapDeletionLifecycleOutcome(seriesOutcome);
+    }
+    if (seriesOutcome.series.status === 'ended') return { type: 'not-found' };
+
+    return mapDeletionLifecycleOutcome(
+      await this.persistence.lifecycle.deleteSeries({
+        userId,
+        seriesId,
+        ...(request.effectiveDate?.trim()
+          ? { effectiveDate: request.effectiveDate.trim() }
+          : {}),
+      }),
+    );
   }
 
   async execute(
@@ -685,6 +940,74 @@ export function toTaskReminderResponse(reminder: TaskReminderRecord) {
     fire_at: reminder.fireAt,
     sent_at: reminder.sentAt,
     created_at: reminder.createdAt,
+  };
+}
+
+function normalizeTaskDeletionRequest(
+  request: TaskDeletionRequest,
+): TaskDeletionRequest {
+  return {
+    userId: request.userId.trim(),
+    taskId: request.taskId.trim(),
+    ...(request.scope === undefined ? {} : { scope: request.scope }),
+    ...(request.effectiveDate?.trim()
+      ? { effectiveDate: request.effectiveDate.trim() }
+      : {}),
+  };
+}
+
+function isRecurringTask(task: Task): boolean {
+  return Boolean(
+    task.recurring_task_id
+      || task.recurring_series_id
+      || task.recurring_occurrence_id
+      || task.original_date
+      || task.scheduled_date
+      || task.recurrence_occurrence_state,
+  );
+}
+
+function isLifecycleSuccess<T>(
+  outcome: LifecycleOutcome<T>,
+): outcome is Extract<
+  LifecycleOutcome<T>,
+  { status: 'complete' | 'already-applied' }
+> {
+  return outcome.status === 'complete' || outcome.status === 'already-applied';
+}
+
+function mapDeletionLifecycleOutcome<T>(
+  outcome: LifecycleOutcome<T>,
+): TaskDeletionOutcome {
+  if (outcome.status === 'complete') return { type: 'deleted' };
+  if (outcome.status === 'already-applied') return { type: 'not-found' };
+  if (outcome.status === 'not-found') return { type: 'not-found' };
+  if (outcome.status === 'conflict') {
+    return {
+      type: 'conflict',
+      ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
+      ...(outcome.expectedRevisionToken === undefined
+        ? {}
+        : { expectedRevisionToken: outcome.expectedRevisionToken }),
+      ...(outcome.actualRevisionToken === undefined
+        ? {}
+        : { actualRevisionToken: outcome.actualRevisionToken }),
+    };
+  }
+  if (outcome.status === 'coverage-unavailable') {
+    return {
+      type: 'coverage-unavailable',
+      requestedRange: outcome.requestedRange,
+      coverageHorizon: outcome.coverageHorizon,
+      reason: outcome.reason,
+    };
+  }
+  if (outcome.status === 'invalid-transition') {
+    return { type: 'invalid-transition', reason: outcome.reason };
+  }
+  return {
+    type: 'invalid-transition',
+    reason: String(outcome.reason),
   };
 }
 

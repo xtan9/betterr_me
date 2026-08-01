@@ -10,7 +10,6 @@ import {
   type OccurrenceLifecyclePort,
   type OccurrenceEditIntent,
   type OccurrenceCommandIntent,
-  type OccurrenceDeleteIntent,
   toLegacyTaskUpdate,
 } from "./occurrence-adapter";
 
@@ -69,17 +68,6 @@ export function createSupabaseOccurrenceAdapter(
           taskId: intent.taskId,
         });
         return outcome.task;
-      },
-      async delete(intent: OccurrenceDeleteIntent, task) {
-        if (task.recurring_series_id || task.recurring_task_id) {
-          await getRecurringTasksDB().deleteInstanceWithScope(
-            task.id,
-            intent.userId,
-            intent.scope ?? "this",
-          );
-          return;
-        }
-        await tasksDB.deleteTask(task.id, intent.userId);
       },
     },
   };

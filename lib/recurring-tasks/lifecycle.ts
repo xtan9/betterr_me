@@ -435,6 +435,9 @@ export interface RecurringTaskLifecyclePort {
   endSeries(
     request: SeriesCommandRequest,
   ): Promise<LifecycleOutcome<RecurringTaskSeries>>;
+  deleteSeries(
+    request: SeriesCommandRequest,
+  ): Promise<LifecycleOutcome<RecurringTaskSeries>>;
   getSeries(
     userId: string,
     seriesId: string,
@@ -1051,6 +1054,51 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     });
   }
 
+  async deleteSeries(
+    request: SeriesCommandRequest,
+  ): Promise<LifecycleOutcome<RecurringTaskSeries>> {
+    return this.mutateExisting(request, "delete-series", (series) => {
+      const invalid = checkExpectedRevision(series, request);
+      if (invalid) return invalid;
+      if (series.status === "ended") return summarize(series);
+      const effectiveDate = this.resolveEffectiveDate(request, series.timeZone);
+      if (typeof effectiveDate !== "string") return effectiveDate;
+      if (compareLocalDates(effectiveDate, series.activationDate) < 0) {
+        return invalidTransition("Lifecycle date cannot precede activation");
+      }
+      const current = currentRevision(series);
+      if (compareLocalDates(effectiveDate, current.effectiveFrom) < 0) {
+        return invalidTransition(
+          "A lifecycle transition cannot begin before the current revision",
+        );
+      }
+
+      let endedRevision: SeriesRevision;
+      if (compareLocalDates(effectiveDate, current.effectiveFrom) === 0) {
+        current.state = "ended";
+        current.activationDate = effectiveDate;
+        endedRevision = current;
+      } else {
+        closeRevision(current, effectiveDate);
+        endedRevision = successorRevision(
+          series,
+          current,
+          effectiveDate,
+          "ended",
+          this.clock().toISOString(),
+          this.idFactory,
+        );
+        series.revisions.push(endedRevision);
+      }
+      series.currentRevisionId = endedRevision.id;
+      series.status = "ended";
+      series.revisionToken += 1;
+      series.updatedAt = this.clock().toISOString();
+      withdrawAllEligibleOccurrences(series);
+      return summarize(series);
+    });
+  }
+
   async listActiveSeries(): Promise<{ series: ActiveSeriesSummary[] }> {
     const series = await (this.persistence.read
       ? this.persistence.read("active-series", async (state) =>
@@ -1556,6 +1604,17 @@ function reconcileEligibleOccurrences(
     if (occurrence.state === "open") {
       occurrence.state = occurrenceHasIntent(occurrence) ? "extra" : "withdrawn";
     }
+  }
+}
+
+function withdrawAllEligibleOccurrences(series: RecurringTaskSeries): void {
+  for (const occurrence of series.occurrences) {
+    if (occurrence.state !== "open" && occurrence.state !== "extra") continue;
+    occurrence.state = "withdrawn";
+    series.intentionalAbsences = addUnique(
+      series.intentionalAbsences,
+      occurrence.scheduledDate,
+    );
   }
 }
 

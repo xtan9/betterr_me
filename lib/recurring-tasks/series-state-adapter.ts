@@ -79,12 +79,6 @@ export interface SeriesStateCommandInput {
   operationKey?: string;
 }
 
-export interface SeriesScopeDeleteInput
-  extends Omit<SeriesStateCommandInput, "seriesId"> {
-  taskId: string;
-  scope: SeriesStateScope;
-}
-
 export interface SeriesStateLegacyPersistence {
   getRecurringTask(id: string, userId: string): Promise<RecurringTask | null>;
   updateRecurringTask(
@@ -106,12 +100,6 @@ export interface SeriesStateLegacyPersistence {
     throughDate?: string,
   ): Promise<RecurringTask>;
   archiveRecurringTask(id: string, userId: string): Promise<void>;
-  deleteRecurringTask(id: string, userId: string): Promise<void>;
-  deleteInstanceWithScope(
-    taskId: string,
-    userId: string,
-    scope: EditScope,
-  ): Promise<void>;
 }
 
 export interface SeriesStatePersistence {
@@ -372,49 +360,6 @@ export class SeriesStateAdapter {
         input.userId,
       )) ?? undefined,
     };
-  }
-
-  async end(input: SeriesStateCommandInput): Promise<SeriesStateOutcome> {
-    if (this.options.lifecycle) {
-      return attachRecurringTask(
-        await this.options.lifecycle.endSeries(
-          toSeriesCommandRequest(input),
-        ),
-      );
-    }
-    const existing = await this.legacy().getRecurringTask(
-      input.seriesId,
-      input.userId,
-    );
-    if (!existing) return notFound();
-    await this.legacy().deleteRecurringTask(input.seriesId, input.userId);
-    return complete();
-  }
-
-  async deleteScope(
-    input: SeriesScopeDeleteInput,
-  ): Promise<SeriesStateOutcome> {
-    if (!this.options.lifecycle) {
-      await this.legacy().deleteInstanceWithScope(
-        input.taskId,
-        input.userId,
-        input.scope,
-      );
-      return complete();
-    }
-
-    const targetOutcome = await this.lifecycleTarget(input.taskId, input.userId);
-    if (!isLifecycleTarget(targetOutcome)) return targetOutcome;
-    const target = targetOutcome;
-    return this.end({
-      ...input,
-      seriesId: target.seriesId,
-      effectiveDate: resolveSeriesEffectiveDate(
-        input.effectiveDate,
-        target.scheduledDate,
-      ),
-      inferredDate: undefined,
-    });
   }
 
   async getRecurringTask(

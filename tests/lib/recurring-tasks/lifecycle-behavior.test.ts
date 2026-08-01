@@ -1761,4 +1761,93 @@ describe("RecurringTaskLifecycle revision behavior", () => {
       (occurrence) => occurrence.scheduledDate === "2026-08-05",
     )?.state).toBe("withdrawn");
   });
+
+  it("deletes every eligible incomplete occurrence while preserving completed history", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-delete-all",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Delete all"),
+      coverage: { from: "2026-08-01", to: "2026-08-04" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    await lifecycle.completeOccurrence({
+      userId: "user-delete-all",
+      seriesId: created.series.id,
+      occurrenceId: created.occurrences[0].id,
+    });
+    const deleted = await lifecycle.deleteSeries({
+      userId: "user-delete-all",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-03",
+    });
+
+    expect(deleted.status).toBe("complete");
+    if (deleted.status !== "complete") return;
+    expect(deleted.series.status).toBe("ended");
+    expect(deleted.series.occurrences).toEqual(expect.arrayContaining([
+      expect.objectContaining({ scheduledDate: "2026-08-01", state: "completed" }),
+      expect.objectContaining({ scheduledDate: "2026-08-02", state: "withdrawn" }),
+      expect.objectContaining({ scheduledDate: "2026-08-03", state: "withdrawn" }),
+      expect.objectContaining({ scheduledDate: "2026-08-04", state: "withdrawn" }),
+    ]));
+    expect(deleted.series.intentionalAbsences).toEqual([
+      "2026-08-02",
+      "2026-08-03",
+      "2026-08-04",
+    ]);
+  });
+
+  it("rolls back every recurring-series deletion change when revision creation fails", async () => {
+    let failMaterialization = false;
+    let idCalls = 0;
+    const persistence = new InMemoryRecurringTaskLifecyclePersistence();
+    const lifecycle = new RecurringTaskLifecycle(persistence, {
+      idFactory: () => {
+        if (failMaterialization) throw new Error("deletion materialization failed");
+        return `deletion-id-${++idCalls}`;
+      },
+    });
+    const created = await lifecycle.createSeries({
+      userId: "user-deletion-rollback",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Deletion rollback"),
+      coverage: { from: "2026-08-01", to: "2026-08-04" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    failMaterialization = true;
+    await expect(lifecycle.deleteSeries({
+      userId: "user-deletion-rollback",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-03",
+    })).rejects.toThrow("deletion materialization failed");
+
+    const restored = await lifecycle.getSeries(
+      "user-deletion-rollback",
+      created.series.id,
+    );
+    expect(restored.status).toBe("complete");
+    if (restored.status !== "complete") return;
+    expect(restored.series.status).toBe("active");
+    expect(restored.series.revisionToken).toBe(1);
+    expect(restored.series.revisions).toHaveLength(1);
+    expect(restored.series.occurrences.map((occurrence) => occurrence.state)).toEqual([
+      "open",
+      "open",
+      "open",
+      "open",
+    ]);
+    expect(restored.series.intentionalAbsences).toEqual([]);
+  });
 });

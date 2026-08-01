@@ -686,16 +686,23 @@ describe("TasksDB", () => {
   // ─── deleteTask ───────────────────────────────────────────────────────────
   describe("deleteTask", () => {
     it("deletes a task scoped to id and user_id", async () => {
-      mockSupabaseClient.setMockResponse(null);
+      mockSupabaseClient.setMockResponse([{ id: TASK_ID }]);
 
-      await db.deleteTask(TASK_ID, USER_ID);
+      await expect(db.deleteTask(TASK_ID, USER_ID)).resolves.toBe(true);
 
       expect(mockSupabaseClient.queryLog).toEqual([
         { table: "tasks", method: "from", args: ["tasks"] },
         { table: "tasks", method: "delete", args: [] },
         { table: "tasks", method: "eq", args: ["id", TASK_ID] },
         { table: "tasks", method: "eq", args: ["user_id", USER_ID] },
+        { table: "tasks", method: "select", args: ["id"] },
       ]);
+    });
+
+    it("returns false when the owner-scoped task does not exist", async () => {
+      mockSupabaseClient.setMockResponse([]);
+
+      await expect(db.deleteTask(TASK_ID, USER_ID)).resolves.toBe(false);
     });
 
     it("throws on delete error", async () => {

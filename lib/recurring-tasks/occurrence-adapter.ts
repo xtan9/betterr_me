@@ -47,17 +47,12 @@ export interface OccurrenceCommandIntent {
   taskId: string;
 }
 
-export interface OccurrenceDeleteIntent extends OccurrenceCommandIntent {
-  scope?: EditScope;
-}
-
 export interface OccurrenceAdapterPersistence {
   getTask(taskId: string, userId: string): Promise<Task | null>;
   legacy?: {
     edit(intent: OccurrenceEditIntent, task: Task): Promise<Task>;
     editScoped(intent: OccurrenceEditIntent, task: Task): Promise<void>;
     toggle(intent: OccurrenceCommandIntent, task: Task): Promise<Task>;
-    delete(intent: OccurrenceDeleteIntent, task: Task): Promise<void>;
   };
 }
 
@@ -197,35 +192,6 @@ export class OccurrenceAdapter {
     intent: OccurrenceCommandIntent,
   ): Promise<OccurrenceAdapterOutcome> {
     return this.transition(intent, "reopen");
-  }
-
-  async delete(
-    intent: OccurrenceDeleteIntent,
-  ): Promise<OccurrenceAdapterOutcome> {
-    const task = await this.findTask(intent.taskId, intent.userId);
-    if (!task) return notFound();
-
-    const target = this.lifecycleTarget(task);
-    if (this.options.lifecycle) {
-      if (!target) {
-        return invalidTransition(
-          "Lifecycle mode requires a recurring Task Occurrence",
-        );
-      }
-      if (intent.scope && intent.scope !== "this") {
-        return invalidTransition(
-          "Only one-occurrence deletion is available through this lifecycle adapter",
-        );
-      }
-      return this.options.lifecycle.skipOccurrence({
-        userId: intent.userId,
-        seriesId: target.seriesId,
-        occurrenceId: target.occurrenceId,
-      });
-    }
-
-    await this.legacyPersistence().delete(intent, task);
-    return complete();
   }
 
   async toggle(

@@ -217,4 +217,60 @@ describe("SupabaseRecurringTaskLifecycle", () => {
       });
     },
   );
+
+  it("routes recurring deletion preflight and terminal mutation through lifecycle RPCs", async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({
+        data: {
+          status: "complete",
+          type: "complete",
+          series: { id: "series-1", status: "active" },
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { status: "complete", type: "complete" },
+        error: null,
+      })
+      .mockResolvedValue({
+        data: { status: "complete", type: "complete" },
+        error: null,
+      });
+    const lifecycle = new SupabaseRecurringTaskLifecycle({ rpc } as never);
+
+    await lifecycle.getSeries("user-1", "series-1");
+    await lifecycle.endSeries({
+      userId: "user-1",
+      seriesId: "series-1",
+      effectiveDate: "2026-08-04",
+    });
+
+    expect(rpc).toHaveBeenNthCalledWith(1, "recurring_task_lifecycle", {
+      p_operation: "get-series",
+      p_request: { userId: "user-1", seriesId: "series-1" },
+    });
+    expect(rpc).toHaveBeenNthCalledWith(2, "recurring_task_lifecycle", {
+      p_operation: "end-series",
+      p_request: {
+        userId: "user-1",
+        seriesId: "series-1",
+        effectiveDate: "2026-08-04",
+      },
+    });
+
+    await lifecycle.deleteSeries({
+      userId: "user-1",
+      seriesId: "series-1",
+      effectiveDate: "2026-08-04",
+    });
+
+    expect(rpc).toHaveBeenNthCalledWith(3, "recurring_task_delete_series", {
+      p_operation: "delete-series",
+      p_request: {
+        userId: "user-1",
+        seriesId: "series-1",
+        effectiveDate: "2026-08-04",
+      },
+    });
+  });
 });

@@ -29,21 +29,28 @@ describe("Series State adapter architecture boundaries", () => {
       "export async function DELETE",
       "function toSeriesRevisionInput",
     );
+    const taskDelete = section(
+      taskRoute,
+      "export async function DELETE",
+      "function toOccurrenceInput",
+    );
 
     expect(recurringPatch).toContain("createSupabaseSeriesStateAdapter(supabase)");
     expect(recurringPatch).toContain("seriesStateHttpFailure(outcome)");
     expect(recurringPatch).not.toContain("createSupabaseRecurringTaskLifecycle");
     expect(recurringPatch).not.toContain("new RecurringTasksDB");
-    expect(recurringDelete).toContain("createSupabaseSeriesStateAdapter(supabase)");
-    expect(recurringDelete).toContain("state.end");
+    expect(recurringDelete).toContain("createTaskWrites(supabase,");
+    expect(recurringDelete).toContain(".deleteSeries({");
+    expect(recurringDelete).not.toContain("createSupabaseSeriesStateAdapter(supabase)");
     expect(taskRoute).toContain("createSupabaseSeriesStateAdapter(supabase)");
     expect(taskRoute).toContain(".editScope");
-    expect(taskRoute).toContain(".deleteScope");
-    expect(taskRoute).not.toContain("createSupabaseRecurringTaskLifecycle");
-    expect(taskRoute).not.toContain("createTaskWrites");
+    expect(taskDelete).toContain("createTaskWrites(supabase,");
+    expect(taskDelete).toContain(".delete({");
+    expect(taskDelete).toContain("createSupabaseRecurringTaskLifecycle(supabase)");
+    expect(taskDelete).not.toContain("createSupabaseSeriesStateAdapter(supabase)");
   });
 
-  it("routes AI following, pause, resume, and end commands through the adapter", () => {
+  it("routes AI recurring updates through the adapter and deletion through Task Writes", () => {
     const tools = source("lib/ai/tools/tasks.ts");
     const update = section(tools, 'name: "updateTask"', 'name: "deleteTask"');
     const deleteTask = section(tools, 'name: "deleteTask"', 'name: "getRecurringTasks"');
@@ -64,11 +71,19 @@ describe("Series State adapter architecture boundaries", () => {
     );
     const end = tools.slice(tools.indexOf('name: "deleteRecurringTask"'));
 
-    for (const operation of [update, deleteTask, recurringUpdate, pause, resume, end]) {
+    for (const operation of [update, recurringUpdate, pause, resume]) {
       expect(operation).toContain("createSupabaseSeriesStateAdapter(");
       expect(operation).toContain("ctx.supabase");
       expect(operation).not.toContain("createSupabaseRecurringTaskLifecycle(ctx.supabase)");
     }
+    expect(deleteTask).toContain("createTaskWrites(ctx.supabase,");
+    expect(deleteTask).toContain(".delete({");
+    expect(deleteTask).toMatch(/taskDeletionErrorMessage\(\s*outcome/);
+    expect(deleteTask).not.toContain("createSupabaseSeriesStateAdapter(");
+    expect(end).toContain("createTaskWrites(ctx.supabase,");
+    expect(end).toContain(".deleteSeries({");
+    expect(end).toContain("taskDeletionErrorMessage(outcome");
+    expect(end).not.toContain("createSupabaseSeriesStateAdapter(");
     expect(deleteTask).toContain("Always confirm with the user first");
     expect(end).toContain("Always confirm with the user first");
   });

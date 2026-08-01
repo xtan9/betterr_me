@@ -57,14 +57,6 @@ export function createSupabaseSeriesStateAdapter(
         recurringTasksDB,
         "archiveRecurringTask",
       ),
-      deleteRecurringTask: bindLegacyMethod(
-        recurringTasksDB,
-        "deleteRecurringTask",
-      ),
-      deleteInstanceWithScope: bindLegacyMethod(
-        recurringTasksDB,
-        "deleteInstanceWithScope",
-      ),
     },
   };
 

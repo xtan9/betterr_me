@@ -87,8 +87,6 @@ function createPersistence(): SeriesStatePersistence {
       pauseRecurringTask: vi.fn(),
       resumeRecurringTask: vi.fn(),
       archiveRecurringTask: vi.fn(),
-      deleteRecurringTask: vi.fn(),
-      deleteInstanceWithScope: vi.fn(),
     },
   };
 }
@@ -218,18 +216,17 @@ describe("SeriesStateAdapter", () => {
     expect(persistence.legacy?.updateInstanceWithScope).not.toHaveBeenCalled();
   });
 
-  it("maps pause, resume, and end dates with explicit intent before inferred today", async () => {
+  it("maps pause and resume dates with explicit intent before inferred today", async () => {
     const persistence = createPersistence();
     const pauseSeries = vi.fn().mockResolvedValue(lifecycleSuccess());
     const resumeSeries = vi.fn().mockResolvedValue(lifecycleSuccess());
-    const endSeries = vi.fn().mockResolvedValue(lifecycleSuccess());
     const adapter = new SeriesStateAdapter(persistence, {
       lifecycle: {
         getSeries: vi.fn(),
         reviseSeries: vi.fn(),
         pauseSeries,
         resumeSeries,
-        endSeries,
+        endSeries: vi.fn(),
       },
     });
 
@@ -245,13 +242,6 @@ describe("SeriesStateAdapter", () => {
       inferredDate: "2026-08-02",
       coverageThrough: "2026-08-09",
     });
-    await adapter.end({
-      userId: "user-1",
-      seriesId: "series-1",
-      effectiveDate: "2026-08-07",
-      inferredDate: "2026-08-02",
-    });
-
     expect(pauseSeries).toHaveBeenCalledWith({
       userId: "user-1",
       seriesId: "series-1",
@@ -263,36 +253,6 @@ describe("SeriesStateAdapter", () => {
       effectiveDate: "2026-08-02",
       coverage: { from: "2026-08-02", to: "2026-08-09" },
     });
-    expect(endSeries).toHaveBeenCalledWith({
-      userId: "user-1",
-      seriesId: "series-1",
-      effectiveDate: "2026-08-07",
-    });
-  });
-
-  it("maps legacy archive and delete-all presentations to the legacy compatibility seam", async () => {
-    const persistence = createPersistence();
-    vi.mocked(persistence.legacy!.getRecurringTask).mockResolvedValue({
-      id: "series-1",
-    } as never);
-    const adapter = new SeriesStateAdapter(persistence);
-
-    await adapter.archive({ userId: "user-1", seriesId: "series-1" });
-    await adapter.deleteScope({
-      userId: "user-1",
-      taskId: "task-1",
-      scope: "all",
-    });
-
-    expect(persistence.legacy!.archiveRecurringTask).toHaveBeenCalledWith(
-      "series-1",
-      "user-1",
-    );
-    expect(persistence.legacy!.deleteInstanceWithScope).toHaveBeenCalledWith(
-      "task-1",
-      "user-1",
-      "all",
-    );
   });
 
   it.each([

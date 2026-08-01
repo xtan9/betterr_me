@@ -6,7 +6,7 @@ const mockGetUserRecurringTasks = vi.fn();
 const mockCreateRecurringTask = vi.fn();
 const mockUpdateRecurringTask = vi.fn();
 const mockPauseRecurringTask = vi.fn();
-const mockDeleteRecurringTask = vi.fn();
+const mockRpc = vi.fn();
 
 const mockGetRecurringTask = vi.fn();
 
@@ -28,14 +28,13 @@ vi.mock("@/lib/db", () => ({
     createRecurringTask = mockCreateRecurringTask;
     updateRecurringTask = mockUpdateRecurringTask;
     pauseRecurringTask = mockPauseRecurringTask;
-    deleteRecurringTask = mockDeleteRecurringTask;
   },
 }));
 
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
   return {
     userId: "user-123",
-    supabase: {} as ToolContext["supabase"],
+    supabase: { rpc: mockRpc } as unknown as ToolContext["supabase"],
     date: "2026-04-10",
     timezone: "America/Toronto",
     ...overrides,
@@ -47,7 +46,17 @@ function findTool(name: string) {
 }
 
 describe("recurring task tools", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRpc.mockResolvedValue({
+      data: {
+        status: "complete",
+        type: "complete",
+        series: { id: "rt1", status: "active" },
+      },
+      error: null,
+    });
+  });
 
   it("taskTools includes recurring task tools", () => {
     const tools = taskTools();
@@ -131,27 +140,37 @@ describe("recurring task tools", () => {
     expect(mockPauseRecurringTask).toHaveBeenCalledWith("rt1", "user-123");
   });
 
-  it("deleteRecurringTask verifies existence then deletes", async () => {
+  it("deleteRecurringTask ends a series through Task Writes", async () => {
     const ctx = makeCtx();
-    mockGetRecurringTask.mockResolvedValue({ id: "rt1" });
-    mockDeleteRecurringTask.mockResolvedValue(undefined);
     const result = await findTool("deleteRecurringTask").execute(
       { recurringTaskId: "rt1" },
       ctx,
     );
-    expect(mockGetRecurringTask).toHaveBeenCalledWith("rt1", "user-123");
-    expect(mockDeleteRecurringTask).toHaveBeenCalledWith("rt1", "user-123");
+    expect(mockRpc).toHaveBeenNthCalledWith(1, "recurring_task_lifecycle", {
+      p_operation: "get-series",
+      p_request: { userId: "user-123", seriesId: "rt1" },
+    });
+    expect(mockRpc).toHaveBeenNthCalledWith(2, "recurring_task_delete_series", {
+      p_operation: "delete-series",
+      p_request: {
+        userId: "user-123",
+        seriesId: "rt1",
+        effectiveDate: "2026-04-10",
+      },
+    });
     expect(result).toEqual({ success: true });
   });
 
   it("deleteRecurringTask returns error when not found", async () => {
     const ctx = makeCtx();
-    mockGetRecurringTask.mockResolvedValue(null);
+    mockRpc.mockResolvedValue({
+      data: { status: "not-found", type: "not-found" },
+      error: null,
+    });
     const result = await findTool("deleteRecurringTask").execute(
       { recurringTaskId: "rt999" },
       ctx,
     );
     expect(result).toEqual({ error: "Recurring task not found" });
-    expect(mockDeleteRecurringTask).not.toHaveBeenCalled();
   });
 });

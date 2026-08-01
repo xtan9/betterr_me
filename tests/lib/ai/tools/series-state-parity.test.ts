@@ -9,20 +9,23 @@ const {
   httpSupabase,
   mockStateFactory,
   mockState,
+  mockTaskWritesFactory,
+  mockDeleteSeries,
 } = vi.hoisted(() => {
   const mockState = {
     update: vi.fn(),
     pause: vi.fn(),
     resume: vi.fn(),
-    end: vi.fn(),
     editScope: vi.fn(),
-    deleteScope: vi.fn(),
     getRecurringTask: vi.fn(),
   };
+  const mockDeleteSeries = vi.fn();
   return {
     httpSupabase: {},
     mockStateFactory: vi.fn(() => mockState),
     mockState,
+    mockTaskWritesFactory: vi.fn(() => ({ deleteSeries: mockDeleteSeries })),
+    mockDeleteSeries,
   };
 });
 
@@ -43,6 +46,13 @@ vi.mock("@/lib/recurring-tasks", async () => {
     ...actual,
     createSupabaseSeriesStateAdapter: mockStateFactory,
   };
+});
+
+vi.mock("@/lib/tasks/writes", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/tasks/writes")>(
+    "@/lib/tasks/writes",
+  );
+  return { ...actual, createTaskWrites: mockTaskWritesFactory };
 });
 
 const recurringTask = {
@@ -72,9 +82,8 @@ describe("HTTP and AI Series State adapter parity", () => {
     mockState.update.mockResolvedValue(success());
     mockState.pause.mockResolvedValue(success());
     mockState.resume.mockResolvedValue(success());
-    mockState.end.mockResolvedValue({ status: "complete", type: "complete" });
     mockState.editScope.mockResolvedValue({ status: "complete", type: "complete" });
-    mockState.deleteScope.mockResolvedValue({ status: "complete", type: "complete" });
+    mockDeleteSeries.mockResolvedValue({ type: "deleted" });
   });
 
   it("maps product and AI Series Default edits to the same lifecycle meaning", async () => {
@@ -184,17 +193,15 @@ describe("HTTP and AI Series State adapter parity", () => {
     expect(httpResponse.status).toBe(200);
     expect(await httpResponse.json()).toEqual({ success: true });
     expect(aiResult).toEqual({ success: true });
-    expect(mockState.end).toHaveBeenNthCalledWith(1, {
+    expect(mockDeleteSeries).toHaveBeenNthCalledWith(1, {
       seriesId: "series-1",
       userId: "user-123",
       effectiveDate: "2026-08-09",
     });
-    expect(mockState.end).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    expect(mockDeleteSeries).toHaveBeenNthCalledWith(2, {
       seriesId: "series-1",
       userId: "user-123",
       effectiveDate: "2026-08-09",
-      inferredDate: "2026-08-01",
-      timezone: "America/Los_Angeles",
-    }));
+    });
   });
 });

@@ -147,14 +147,16 @@ export class TasksDB {
   /**
    * Delete a task
    */
-  async deleteTask(taskId: string, userId: string): Promise<void> {
-    const { error } = await this.supabase
+  async deleteTask(taskId: string, userId: string): Promise<boolean> {
+    const { data, error } = await this.supabase
       .from('tasks')
       .delete()
       .eq('id', taskId)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .select('id');
 
     if (error) throw error;
+    return (data?.length ?? 0) > 0;
   }
 
   /**
