@@ -256,6 +256,17 @@ describe("SidebarUserFooter", () => {
     expect(screen.getAllByText("?").length).toBeGreaterThan(0);
   });
 
+  it("renders the unavailable state instead of presenting it as loading", () => {
+    mockSWRReturn.data = undefined as unknown as typeof mockSWRReturn.data;
+    mockSWRReturn.isLoading = false;
+    mockSWRReturn.error = undefined;
+
+    render(<SidebarUserFooter />);
+
+    expect(screen.getByText("profileError")).toBeInTheDocument();
+    expect(screen.queryByText("loading")).not.toBeInTheDocument();
+  });
+
   it("renders settings link in dropdown", () => {
     render(<SidebarUserFooter />);
 
