@@ -405,6 +405,14 @@ export interface HabitMilestone {
 // DASHBOARD TYPES
 // =============================================================================
 
+export interface DashboardWarning {
+  code: string;
+  message: string;
+  type?: string;
+  requestedRange?: { from: string; to: string };
+  failedSeriesIds?: string[];
+}
+
 export interface DashboardData {
   habits: HabitWithAbsence[];
   tasks_today: Task[];
@@ -420,8 +428,8 @@ export interface DashboardData {
     last_workout_at: string | null;
     week_workout_count: number;
   };
-  /** Non-fatal warnings about degraded data (omitted when empty) */
-  _warnings?: string[];
+  /** Structured non-fatal warnings about degraded data (omitted when empty) */
+  _warnings?: DashboardWarning[];
 }
 
 // =============================================================================

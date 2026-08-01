@@ -343,8 +343,19 @@ export interface UserCoverageSuccess {
   intentionalAbsences: string[];
 }
 
+export interface UserCoveragePartial {
+  status: "partial";
+  type: "partial";
+  requestedRange: LocalDateRange;
+  failedSeriesIds: string[];
+  series: RecurringTaskSeries[];
+  occurrences: TaskOccurrence[];
+  intentionalAbsences: string[];
+}
+
 export type UserCoverageOutcome =
   | UserCoverageSuccess
+  | UserCoveragePartial
   | NotFoundOutcome
   | CoverageUnavailableOutcome;
 
@@ -527,31 +538,62 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     request: EnsureUserCoverageRequest,
   ): Promise<UserCoverageOutcome> {
     validateRange(request.range);
-    return this.persistence.transaction(`user:${request.userId}`, async (state) => {
-      const series = [...state.series.values()]
-        .filter((candidate) => candidate.userId === request.userId)
-        .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-      const occurrences: TaskOccurrence[] = [];
-      const intentionalAbsences = new Set<string>();
-      for (const candidate of series) {
-        const range = coverageRangeForExtension(candidate, request.range);
-        const result = ensureCoverageState(
-          candidate,
-          range,
-          this.idFactory,
-          this.clock().toISOString(),
-        );
-        occurrences.push(...result.occurrences);
-        result.intentionalAbsences.forEach((date) => intentionalAbsences.add(date));
+    const series = await (this.persistence.read
+      ? this.persistence.read(`user:${request.userId}`, async (state) =>
+        [...state.series.values()]
+          .filter((candidate) => candidate.userId === request.userId)
+          .sort((left, right) => left.createdAt.localeCompare(right.createdAt)))
+      : this.persistence.transaction(`user:${request.userId}`, async (state) =>
+        [...state.series.values()]
+          .filter((candidate) => candidate.userId === request.userId)
+          .sort((left, right) => left.createdAt.localeCompare(right.createdAt))));
+    const coveredSeries: RecurringTaskSeries[] = [];
+    const occurrencesById = new Map<string, TaskOccurrence>();
+    const intentionalAbsences = new Set<string>();
+    const failedSeriesIds: string[] = [];
+
+    for (const candidate of series) {
+      try {
+        const outcome = await this.ensureCoverage({
+          userId: request.userId,
+          seriesId: candidate.id,
+          range: request.range,
+        });
+        if (outcome.status !== "complete" && outcome.status !== "already-applied") {
+          failedSeriesIds.push(candidate.id);
+          continue;
+        }
+        coveredSeries.push(outcome.series);
+        outcome.occurrences.forEach((occurrence) => {
+          occurrencesById.set(occurrence.id, occurrence);
+        });
+        outcome.intentionalAbsences.forEach((date) => {
+          intentionalAbsences.add(date);
+        });
+      } catch {
+        failedSeriesIds.push(candidate.id);
       }
+    }
+
+    const shared = {
+      series: coveredSeries,
+      occurrences: [...occurrencesById.values()],
+      intentionalAbsences: [...intentionalAbsences].sort(),
+    };
+    if (failedSeriesIds.length === 0) {
       return {
         status: "complete",
         type: "complete",
-        series,
-        occurrences,
-        intentionalAbsences: [...intentionalAbsences].sort(),
+        ...shared,
       };
-    });
+    }
+    return {
+      status: "partial",
+      type: "partial",
+      requestedRange: request.range,
+      failedSeriesIds: [...new Set(failedSeriesIds)].sort(),
+      ...shared,
+    };
   }
 
   async reviseSeries(

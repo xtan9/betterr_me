@@ -4,7 +4,10 @@ import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { HabitsDB, TasksDB } from "@/lib/db";
 import { getLocalDateString } from "@/lib/utils";
 import { log } from "@/lib/logger";
-import { ensureRecurringTaskCoverageThrough } from "@/lib/recurring-tasks/coverage";
+import {
+  ensureRecurringTaskCoverageThrough,
+  recurringCoverageWarning,
+} from "@/lib/recurring-tasks/coverage";
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ["cookie"],
@@ -45,7 +48,11 @@ export async function GET(request: NextRequest) {
     );
     if (recurringCoverage.status === "partial") {
       return NextResponse.json(
-        { error: "Recurring task coverage is temporarily unavailable" },
+        {
+          error: "Recurring task coverage is temporarily unavailable",
+          warning: recurringCoverage.warning
+            ?? recurringCoverageWarning({ from: date, to: date }),
+        },
         { status: 503 },
       );
     }

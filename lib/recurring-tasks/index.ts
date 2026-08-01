@@ -11,7 +11,12 @@ export {
 export {
   ensureRecurringTaskCoverage,
   ensureRecurringTaskCoverageThrough,
+  recurringCoverageWarning,
+  RecurringCoverageUnavailableError,
+  taskReadCoverageRange,
   type RecurringCoverageResult,
+  type RecurringCoverageWarning,
+  type TaskReadCoverageRequest,
 } from './coverage';
 export * from './occurrence-adapter';
 export {

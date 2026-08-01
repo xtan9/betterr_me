@@ -7,9 +7,11 @@ import { log } from '@/lib/logger';
 import { taskFormSchema } from '@/lib/validations/task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import {
+  recurringCoverageWarning,
   ensureRecurringTaskCoverageThrough,
+  taskReadCoverageRange,
+  type RecurringCoverageWarning,
 } from '@/lib/recurring-tasks/coverage';
-import { addLocalDays } from '@/lib/recurring-tasks/recurrence';
 import { getLocalDateString } from '@/lib/utils';
 import { createTaskWrites } from '@/lib/tasks/writes';
 import type { TaskFilters } from '@/lib/db/types';
@@ -58,7 +60,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Materialize exactly the requested local-date horizon before reading.
-    let recurringGenFailed = false;
+    let recurringCoverageWarningResult: RecurringCoverageWarning | undefined;
     let upcomingDays = 7;
     if (view === 'today' || view === 'upcoming' || view === 'overdue') {
       upcomingDays = view === 'upcoming'
@@ -70,41 +72,47 @@ export async function GET(request: NextRequest) {
           { status: 400 }
         );
       }
-      const throughDate = view === 'upcoming' ? addLocalDays(date, upcomingDays) : date;
+      const coverageRange = taskReadCoverageRange({
+        view,
+        date,
+        days: upcomingDays,
+      });
       try {
         const coverage = await ensureRecurringTaskCoverageThrough(
           supabase,
           userId,
-          date,
-          throughDate,
+          coverageRange!.from,
+          coverageRange!.to,
         );
-        recurringGenFailed = coverage.status === 'partial';
+        if (coverage.status === 'partial') {
+          recurringCoverageWarningResult = coverage.warning
+            ?? recurringCoverageWarning(coverageRange!);
+        }
       } catch (err) {
         log.error('ensure recurring task coverage failed on tasks', err, { userId });
-        recurringGenFailed = true;
+        recurringCoverageWarningResult = recurringCoverageWarning(coverageRange!);
       }
     }
+
+    const withCoverageWarning = (response: Record<string, unknown>) =>
+      recurringCoverageWarningResult
+        ? { ...response, _warnings: [recurringCoverageWarningResult] }
+        : response;
 
     // Handle special views
     if (view === 'today') {
       const tasks = await tasksDB.getTodayTasks(userId, date);
-      const response: Record<string, unknown> = { tasks };
-      if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
-      return NextResponse.json(response);
+      return NextResponse.json(withCoverageWarning({ tasks }));
     }
 
     if (view === 'upcoming') {
       const tasks = await tasksDB.getUpcomingTasks(userId, date, upcomingDays);
-      const response: Record<string, unknown> = { tasks };
-      if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
-      return NextResponse.json(response);
+      return NextResponse.json(withCoverageWarning({ tasks }));
     }
 
     if (view === 'overdue') {
       const tasks = await tasksDB.getOverdueTasks(userId, date);
-      const response: Record<string, unknown> = { tasks };
-      if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
-      return NextResponse.json(response);
+      return NextResponse.json(withCoverageWarning({ tasks }));
     }
 
     // Handle regular filtering
@@ -131,24 +139,29 @@ export async function GET(request: NextRequest) {
     }
 
     if (filters.due_date && /^\d{4}-\d{2}-\d{2}$/.test(filters.due_date)) {
+      const coverageRange = taskReadCoverageRange({
+        date,
+        dueDate: filters.due_date,
+      });
       try {
         const coverage = await ensureRecurringTaskCoverageThrough(
           supabase,
           userId,
-          filters.due_date,
-          filters.due_date,
+          coverageRange!.from,
+          coverageRange!.to,
         );
-        recurringGenFailed = coverage.status === 'partial';
+        if (coverage.status === 'partial') {
+          recurringCoverageWarningResult = coverage.warning
+            ?? recurringCoverageWarning(coverageRange!);
+        }
       } catch (err) {
         log.error('ensure recurring task coverage failed on filtered tasks', err, { userId });
-        recurringGenFailed = true;
+        recurringCoverageWarningResult = recurringCoverageWarning(coverageRange!);
       }
     }
 
     const tasks = await tasksDB.getUserTasks(userId, filters);
-    const response: Record<string, unknown> = { tasks };
-    if (recurringGenFailed) response._warnings = ['Some recurring tasks may not appear'];
-    return NextResponse.json(response);
+    return NextResponse.json(withCoverageWarning({ tasks }));
   } catch (error) {
     log.error('GET /api/tasks error', error);
     return NextResponse.json(

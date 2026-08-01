@@ -4,7 +4,12 @@ import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { CalendarEventsDB } from "@/lib/db";
 import { expandEventsForRange } from "@/lib/calendar/recurrence";
 import { log } from "@/lib/logger";
-import { ensureRecurringTaskCoverageThrough } from "@/lib/recurring-tasks/coverage";
+import {
+  ensureRecurringTaskCoverageThrough,
+  recurringCoverageWarning,
+  RecurringCoverageUnavailableError,
+  type RecurringCoverageWarning,
+} from "@/lib/recurring-tasks/coverage";
 import {
   normalizeEvents,
   normalizeTasks,
@@ -105,7 +110,10 @@ export async function GET(request: NextRequest) {
             endDate,
           );
           if (recurringCoverage.status === "partial") {
-            throw new Error("Recurring task coverage is temporarily unavailable");
+            throw new RecurringCoverageUnavailableError(
+              recurringCoverage.warning
+              ?? recurringCoverageWarning({ from: startDate, to: endDate }),
+            );
           }
           const { data, error } = await supabase
             .from("tasks")
@@ -173,6 +181,7 @@ export async function GET(request: NextRequest) {
     const settled = await Promise.allSettled(promises);
     const items: CalendarFeedItem[] = [];
     const partialFailures: string[] = [];
+    const warnings: RecurringCoverageWarning[] = [];
 
     settled.forEach((result, i) => {
       if (result.status === "fulfilled") {
@@ -181,12 +190,16 @@ export async function GET(request: NextRequest) {
         const domain = requestedLayers[i] || `domain-${i}`;
         log.error(`Feed domain query failed: ${domain}`, result.reason);
         partialFailures.push(domain);
+        if (result.reason instanceof RecurringCoverageUnavailableError) {
+          warnings.push(result.reason.warning);
+        }
       }
     });
 
     return NextResponse.json({
       items,
       ...(partialFailures.length > 0 && { partialFailures }),
+      ...(warnings.length > 0 && { warnings }),
     });
   } catch (error) {
     log.error("GET /api/calendar/feed error", error);

@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       ...outcome.snapshot,
       ...(outcome.status === 'degraded' && {
-        _warnings: outcome.warnings.map((warning) => warning.message),
+        _warnings: outcome.warnings,
       }),
     });
   } catch (error) {
