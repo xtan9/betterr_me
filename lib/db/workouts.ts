@@ -127,12 +127,6 @@ export class WorkoutsDB {
   }
 
   /**
-   * Update a workout row. Handles status transitions:
-   * - To 'completed': computes completed_at and duration_seconds.
-   * - To 'discarded': just updates status.
-   * Validates state transitions — terminal states cannot be changed.
-   */
-  /**
    * List completed/discarded workouts for a user (workout history).
    * Does NOT include exercises/sets — use getWorkoutWithExercises for detail.
    */

@@ -101,7 +101,6 @@ export interface WorkoutSetMutationRecord {
 export interface WorkoutDetailChanges {
   title?: string;
   notes?: string | null;
-  status?: WorkoutMutationStatus;
 }
 
 export interface WorkoutExerciseChanges {
@@ -124,7 +123,20 @@ export interface WorkoutUpdateRequest {
   workoutId: string;
   title?: string;
   notes?: string | null;
-  status?: WorkoutMutationStatus;
+}
+
+export interface WorkoutCompletionRequest {
+  userId: string;
+  workoutId: string;
+  title?: string;
+  notes?: string | null;
+}
+
+export interface WorkoutDiscardRequest {
+  userId: string;
+  workoutId: string;
+  title?: string;
+  notes?: string | null;
 }
 
 export interface WorkoutExerciseAddRequest {
@@ -180,6 +192,12 @@ export type WorkoutInvalidTransitionOutcome = {
   type: "invalid-transition";
   currentStatus: WorkoutMutationStatus;
 };
+
+export type WorkoutTerminalPersistenceOutcome =
+  | { type: "transitioned"; workout: WorkoutMutationRecord }
+  | { type: "already-applied"; workout: WorkoutMutationRecord }
+  | WorkoutNotFoundOutcome
+  | WorkoutInvalidTransitionOutcome;
 
 export type WorkoutUpdatePersistenceOutcome =
   | { type: "updated"; workout: WorkoutMutationRecord }
@@ -260,12 +278,30 @@ export type WorkoutSetRemoveOutcome =
   | WorkoutInvalidTransitionOutcome
   | WorkoutInvalidOutcome;
 
+export type WorkoutCompletionOutcome =
+  | WorkoutTerminalPersistenceOutcome
+  | WorkoutInvalidOutcome;
+export type WorkoutDiscardOutcome =
+  | WorkoutTerminalPersistenceOutcome
+  | WorkoutInvalidOutcome;
+
 export interface WorkoutMutationPersistence {
   updateWorkout(
     userId: string,
     workoutId: string,
     changes: WorkoutDetailChanges,
   ): Promise<WorkoutUpdatePersistenceOutcome>;
+  completeWorkout(
+    userId: string,
+    workoutId: string,
+    completedAt: string,
+    changes: WorkoutDetailChanges,
+  ): Promise<WorkoutTerminalPersistenceOutcome>;
+  discardWorkout(
+    userId: string,
+    workoutId: string,
+    changes: WorkoutDetailChanges,
+  ): Promise<WorkoutTerminalPersistenceOutcome>;
   addWorkoutExercise(
     userId: string,
     workoutId: string,
@@ -414,12 +450,60 @@ function normalizeWorkoutUpdateRequest(
   );
   if (!workoutId.ok) return workoutId;
 
+  const details = normalizeWorkoutDetailChanges(request);
+  if (!details.ok) return details;
+
+  if (Object.keys(details.changes).length === 0) {
+    return invalidRequest("changes", "At least one workout field is required");
+  }
+
+  return {
+    ok: true,
+    userId: userId.value,
+    workoutId: workoutId.value,
+    changes: details.changes,
+  };
+}
+
+function normalizeWorkoutTerminalRequest(
+  request: WorkoutCompletionRequest | WorkoutDiscardRequest,
+):
+  | { ok: true; userId: string; workoutId: string; changes: WorkoutDetailChanges }
+  | InvalidRequest {
+  if (!isRecord(request)) {
+    return invalidRequest("request", "Workout transition is required");
+  }
+
+  const userId = normalizedIdentity(request.userId, "userId", "User identity");
+  if (!userId.ok) return userId;
+  const workoutId = normalizedIdentity(
+    request.workoutId,
+    "workoutId",
+    "Workout identity",
+  );
+  if (!workoutId.ok) return workoutId;
+
+  const details = normalizeWorkoutDetailChanges(request);
+  if (!details.ok) return details;
+
+  return {
+    ok: true,
+    userId: userId.value,
+    workoutId: workoutId.value,
+    changes: details.changes,
+  };
+}
+
+function normalizeWorkoutDetailChanges(
+  value: Record<string, unknown>,
+): { ok: true; changes: WorkoutDetailChanges } | InvalidRequest {
   const changes: WorkoutDetailChanges = {};
-  if (hasDefinedValue(request, "title")) {
-    if (typeof request.title !== "string" || !request.title.trim()) {
+
+  if (hasDefinedValue(value, "title")) {
+    if (typeof value.title !== "string" || !value.title.trim()) {
       return invalidRequest("title", "Workout title is required");
     }
-    const title = request.title.trim();
+    const title = value.title.trim();
     if (title.length > 100) {
       return invalidRequest(
         "title",
@@ -429,12 +513,12 @@ function normalizeWorkoutUpdateRequest(
     changes.title = title;
   }
 
-  if (hasDefinedValue(request, "notes")) {
-    if (request.notes !== null && typeof request.notes !== "string") {
+  if (hasDefinedValue(value, "notes")) {
+    if (value.notes !== null && typeof value.notes !== "string") {
       return invalidRequest("notes", "Workout notes must be text");
     }
-    const notes = typeof request.notes === "string"
-      ? request.notes.trim() || null
+    const notes = typeof value.notes === "string"
+      ? value.notes.trim() || null
       : null;
     if (notes && notes.length > 2000) {
       return invalidRequest(
@@ -445,18 +529,7 @@ function normalizeWorkoutUpdateRequest(
     changes.notes = notes;
   }
 
-  if (hasDefinedValue(request, "status")) {
-    if (!isWorkoutMutationStatus(request.status)) {
-      return invalidRequest("status", "Workout status is invalid");
-    }
-    changes.status = request.status;
-  }
-
-  if (Object.keys(changes).length === 0) {
-    return invalidRequest("changes", "At least one workout field is required");
-  }
-
-  return { ok: true, userId: userId.value, workoutId: workoutId.value, changes };
+  return { ok: true, changes };
 }
 
 function normalizeWorkoutExerciseChanges(
@@ -695,6 +768,39 @@ export class WorkoutWrites {
     }
 
     return this.persistence.updateWorkout(
+      normalized.userId,
+      normalized.workoutId,
+      normalized.changes,
+    );
+  }
+
+  async complete(
+    request: WorkoutCompletionRequest,
+  ): Promise<WorkoutCompletionOutcome> {
+    const normalized = normalizeWorkoutTerminalRequest(request);
+    if (!normalized.ok) return normalized.outcome;
+    if (!this.persistence.completeWorkout) {
+      throw new Error("Workout completion is not supported by this persistence");
+    }
+
+    return this.persistence.completeWorkout(
+      normalized.userId,
+      normalized.workoutId,
+      this.now().toISOString(),
+      normalized.changes,
+    );
+  }
+
+  async discard(
+    request: WorkoutDiscardRequest,
+  ): Promise<WorkoutDiscardOutcome> {
+    const normalized = normalizeWorkoutTerminalRequest(request);
+    if (!normalized.ok) return normalized.outcome;
+    if (!this.persistence.discardWorkout) {
+      throw new Error("Workout discard is not supported by this persistence");
+    }
+
+    return this.persistence.discardWorkout(
       normalized.userId,
       normalized.workoutId,
       normalized.changes,
@@ -1074,6 +1180,30 @@ function mapStoredMutationOutcome(
   throw new Error("Invalid workout mutation outcome returned by the database");
 }
 
+function mapStoredTerminalOutcome(value: unknown): WorkoutTerminalPersistenceOutcome {
+  const outcome = storedObject(value, "workout terminal outcome");
+  if (outcome.type === "not-found") return { type: "not-found" };
+  if (
+    (outcome.type === "transitioned" || outcome.type === "already-applied") &&
+    Object.prototype.hasOwnProperty.call(outcome, "workout")
+  ) {
+    return {
+      type: outcome.type,
+      workout: mapStoredWorkout(outcome.workout),
+    };
+  }
+  if (
+    outcome.type === "invalid-transition" &&
+    isWorkoutMutationStatus(outcome.current_status)
+  ) {
+    return {
+      type: "invalid-transition",
+      currentStatus: outcome.current_status,
+    };
+  }
+  throw new Error("Invalid workout terminal outcome returned by the database");
+}
+
 function mapStoredRemovalOutcome(value: unknown): unknown {
   const outcome = storedObject(value, "workout mutation outcome");
   if (outcome.type === "not-found") return { type: "not-found" };
@@ -1107,7 +1237,6 @@ function toStoredWorkoutChanges(
   return {
     ...(changes.title === undefined ? {} : { title: changes.title }),
     ...(changes.notes === undefined ? {} : { notes: changes.notes }),
-    ...(changes.status === undefined ? {} : { status: changes.status }),
   };
 }
 
@@ -1161,6 +1290,42 @@ export class SupabaseWorkoutMutationPersistence
         p_changes: toStoredWorkoutChanges(changes),
       },
       (value) => mapStoredMutationOutcome(value, "updated", "workout", mapStoredWorkout) as WorkoutUpdatePersistenceOutcome,
+    );
+  }
+
+  completeWorkout(
+    userId: string,
+    workoutId: string,
+    completedAt: string,
+    changes: WorkoutDetailChanges,
+  ): Promise<WorkoutTerminalPersistenceOutcome> {
+    return callWorkoutMutation(
+      this.supabase,
+      "complete_workout_atomically",
+      {
+        p_user_id: userId,
+        p_workout_id: workoutId,
+        p_completed_at: completedAt,
+        p_changes: toStoredWorkoutChanges(changes),
+      },
+      mapStoredTerminalOutcome,
+    );
+  }
+
+  discardWorkout(
+    userId: string,
+    workoutId: string,
+    changes: WorkoutDetailChanges,
+  ): Promise<WorkoutTerminalPersistenceOutcome> {
+    return callWorkoutMutation(
+      this.supabase,
+      "discard_workout_atomically",
+      {
+        p_user_id: userId,
+        p_workout_id: workoutId,
+        p_changes: toStoredWorkoutChanges(changes),
+      },
+      mapStoredTerminalOutcome,
     );
   }
 
@@ -1335,6 +1500,8 @@ export function createWorkoutWrites(supabase: SupabaseClient): WorkoutWrites {
     startRoutine: starts.startRoutine.bind(starts),
     markRoutinePerformed: starts.markRoutinePerformed?.bind(starts),
     updateWorkout: mutations.updateWorkout.bind(mutations),
+    completeWorkout: mutations.completeWorkout.bind(mutations),
+    discardWorkout: mutations.discardWorkout.bind(mutations),
     addWorkoutExercise: mutations.addWorkoutExercise.bind(mutations),
     updateWorkoutExercise: mutations.updateWorkoutExercise.bind(mutations),
     removeWorkoutExercise: mutations.removeWorkoutExercise.bind(mutations),
