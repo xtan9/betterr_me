@@ -4,11 +4,6 @@ import type { Habit, HabitInsert, HabitUpdate, HabitFilters, HabitWithTodayStatu
 import type { HabitFrequency } from './types';
 import { getLocalDateString } from '@/lib/utils';
 import { shouldTrackOnDate } from '@/lib/habits/format';
-import { HabitGraduationsDB } from './habit-graduations';
-import {
-  HabitNotFoundError,
-  HabitNotFormedError,
-} from './habit-errors';
 import { isGraduationEligible } from '@/lib/habits/graduation';
 import { log } from '@/lib/logger';
 
@@ -122,39 +117,6 @@ export class HabitsDB {
       .eq('user_id', userId);
 
     if (error) throw error;
-  }
-
-  /**
-   * Reactivate a formed habit — reset current_streak, keep best_streak, stamp reactivated_at.
-   */
-  async reactivateHabit(habitId: string, userId: string): Promise<Habit> {
-    const habit = await this.getHabit(habitId, userId);
-    if (!habit) throw new HabitNotFoundError(habitId);
-    if (habit.status !== 'formed') {
-      throw new HabitNotFormedError(habitId);
-    }
-
-    const updated = await this.updateHabit(habitId, userId, {
-      status: 'active',
-      current_streak: 0,
-      graduated_at: null,
-      graduated_streak: null,
-      nudge_dismissed_at: null,
-    });
-
-    const graduations = new HabitGraduationsDB(this.supabase);
-    try {
-      await graduations.markReactivated(habitId, userId);
-    } catch (err) {
-      log.error(
-        '[habits] markReactivated failed after status flip',
-        err,
-        { habitId, userId },
-      );
-      // Don't throw — reactivation already committed; history is best-effort.
-    }
-
-    return updated;
   }
 
   /**

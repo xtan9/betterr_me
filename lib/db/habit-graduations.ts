@@ -16,7 +16,11 @@ export class HabitGraduationsDB {
   }
 
   /** Stamp reactivated_at on the most recent open graduation row for a habit. */
-  async markReactivated(habitId: string, userId: string): Promise<void> {
+  async markReactivated(
+    habitId: string,
+    userId: string,
+    reactivatedAt = new Date().toISOString(),
+  ): Promise<void> {
     const { data: latest, error: selErr } = await this.supabase
       .from("habit_graduations")
       .select("id")
@@ -37,7 +41,7 @@ export class HabitGraduationsDB {
 
     const { error } = await this.supabase
       .from("habit_graduations")
-      .update({ reactivated_at: new Date().toISOString() })
+      .update({ reactivated_at: reactivatedAt })
       .eq("id", latest.id)
       .eq("user_id", userId);
     if (error) throw error;

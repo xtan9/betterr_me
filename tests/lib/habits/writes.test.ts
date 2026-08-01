@@ -5,6 +5,7 @@ import {
   type HabitCreationPersistence,
   type HabitCreationRecord,
 } from "@/lib/habits/writes";
+import { log } from "@/lib/logger";
 
 function createPersistence(): HabitCreationPersistence {
   return {
@@ -308,6 +309,143 @@ describe("HabitWrites", () => {
       await expect(
         writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
       ).rejects.toThrow("Habit graduation is not supported by this persistence");
+    });
+  });
+
+  describe("reactivate", () => {
+    const formedHabit = {
+      id: "habit-1",
+      userId: "trusted-user",
+      status: "formed" as const,
+      currentStreak: 87,
+      bestStreak: 120,
+      graduatedAt: "2026-07-31T12:00:00.000Z",
+      graduatedStreak: 87,
+      nudgeDismissedAt: null,
+    };
+    const activeHabit = {
+      ...formedHabit,
+      status: "active" as const,
+      currentStreak: 0,
+      graduatedAt: null,
+      graduatedStreak: null,
+      nudgeDismissedAt: null,
+    };
+
+    it("returns reactivated and runs history after the core commit", async () => {
+      const events: string[] = [];
+      const reactivateHabit = vi.fn().mockImplementation(async () => {
+        events.push("core");
+        return { type: "reactivated", habit: activeHabit };
+      });
+      const markReactivated = vi.fn().mockImplementation(async () => {
+        events.push("history");
+      });
+      const writes = new HabitWrites(
+        { reactivateHabit, markReactivated },
+        () => new Date("2026-08-01T12:00:00.000Z"),
+      );
+
+      await expect(
+        writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual({ type: "reactivated", habit: activeHabit });
+      expect(reactivateHabit).toHaveBeenCalledWith(
+        "habit-1",
+        "trusted-user",
+      );
+      expect(markReactivated).toHaveBeenCalledWith(
+        "habit-1",
+        "trusted-user",
+        "2026-08-01T12:00:00.000Z",
+      );
+      expect(events).toEqual(["core", "history"]);
+    });
+
+    it("returns already-active without running the history reaction again", async () => {
+      const reactivateHabit = vi.fn().mockResolvedValue({
+        type: "already-active",
+        habit: activeHabit,
+      });
+      const markReactivated = vi.fn();
+      const writes = new HabitWrites({ reactivateHabit, markReactivated });
+
+      await expect(
+        writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual({ type: "already-active", habit: activeHabit });
+      expect(markReactivated).not.toHaveBeenCalled();
+    });
+
+    it.each(["missing", "cross-owner"] as const)(
+      "returns the same not-found outcome for %s habits",
+      async () => {
+        const reactivateHabit = vi.fn().mockResolvedValue({ type: "not-found" });
+        const markReactivated = vi.fn();
+        const writes = new HabitWrites({ reactivateHabit, markReactivated });
+
+        await expect(
+          writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+        ).resolves.toEqual({ type: "not-found" });
+        expect(markReactivated).not.toHaveBeenCalled();
+      },
+    );
+
+    it("returns invalid-transition without disclosing the paused habit", async () => {
+      const reactivateHabit = vi.fn().mockResolvedValue({
+        type: "invalid-transition",
+        currentStatus: "paused",
+      });
+      const writes = new HabitWrites({ reactivateHabit });
+
+      await expect(
+        writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual({
+        type: "invalid-transition",
+        action: "reactivate",
+        currentStatus: "paused",
+        message: "Habit cannot be reactivated from paused state",
+      });
+    });
+
+    it("propagates a core persistence failure and skips history", async () => {
+      const persistenceError = new Error("reactivation transaction unavailable");
+      const reactivateHabit = vi.fn().mockRejectedValue(persistenceError);
+      const markReactivated = vi.fn();
+      const writes = new HabitWrites({ reactivateHabit, markReactivated });
+
+      await expect(
+        writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toBe(persistenceError);
+      expect(markReactivated).not.toHaveBeenCalled();
+    });
+
+    it("logs a history reaction failure without changing a valid result", async () => {
+      const historyError = new Error("history unavailable");
+      const logError = vi.spyOn(log, "error").mockImplementation(() => {});
+      const reactivateHabit = vi.fn().mockResolvedValue({
+        type: "reactivated",
+        habit: activeHabit,
+      });
+      const writes = new HabitWrites({
+        reactivateHabit,
+        markReactivated: vi.fn().mockRejectedValue(historyError),
+      });
+
+      await expect(
+        writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual({ type: "reactivated", habit: activeHabit });
+      expect(logError).toHaveBeenCalledWith(
+        "[habits] reactivation history reaction failed after core commit",
+        historyError,
+        { habitId: "habit-1", userId: "trusted-user" },
+      );
+    });
+
+    it("rejects reactivation when the persistence adapter has no core seam", async () => {
+      const writes = new HabitWrites({});
+
+      await expect(
+        writes.reactivate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toThrow("Habit reactivation is not supported by this persistence");
     });
   });
 

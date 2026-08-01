@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
-import { HabitsDB, HabitNotFoundError, HabitNotFormedError } from '@/lib/db';
+import { createHabitWrites, toHabitResponse } from '@/lib/habits/writes';
 import { log } from '@/lib/logger';
 
 const WRITE_REQUEST_POLICY = {
@@ -11,7 +11,7 @@ const WRITE_REQUEST_POLICY = {
 
 /**
  * POST /api/habits/[id]/reactivate
- * Move a formed habit back to active. Resets current_streak, preserves best_streak.
+ * Move a formed habit back to active through the shared habit mutation seam.
  */
 export async function POST(
   request: NextRequest,
@@ -31,18 +31,26 @@ export async function POST(
     const { principal: { userId: authenticatedUserId }, client: supabase } = auth;
     userId = authenticatedUserId;
 
-    const habitsDB = new HabitsDB(supabase);
-    const habit = await habitsDB.reactivateHabit(id, authenticatedUserId);
-    return NextResponse.json({ habit });
-  } catch (error: unknown) {
-    if (error instanceof HabitNotFoundError) {
+    const outcome = await createHabitWrites(supabase).reactivate({
+      habitId: id,
+      userId: authenticatedUserId,
+    });
+    if (outcome.type === 'not-found') {
       log.info('[habits] reactivate: not found', { id, userId });
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
-    if (error instanceof HabitNotFormedError) {
-      log.info('[habits] reactivate: not formed', { id, userId });
+    if (outcome.type === 'already-active') {
+      log.info('[habits] reactivate: already active', { id, userId });
       return NextResponse.json({ error: 'Habit is not formed' }, { status: 400 });
     }
+    if (outcome.type === 'invalid-transition') {
+      return NextResponse.json(
+        { error: 'Habit is not formed' },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json({ habit: toHabitResponse(outcome.habit) });
+  } catch (error: unknown) {
     log.error('[habits] POST reactivate', error, { id, userId });
     return NextResponse.json({ error: 'Failed to reactivate habit' }, { status: 500 });
   }

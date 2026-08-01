@@ -31,7 +31,6 @@ vi.mock("@/lib/db", () => ({
     getHabit = mockGetHabit;
     createHabit = mockCreateHabit;
     updateHabit = mockUpdateHabit;
-    reactivateHabit = mockReactivateHabit;
     deleteHabit = mockDeleteHabit;
   },
   HabitLogsDB: class {
@@ -54,6 +53,7 @@ vi.mock("@/lib/habits/writes", () => ({
     pause: mockPauseHabit,
     resume: mockResumeHabit,
     graduate: mockGraduateHabit,
+    reactivate: mockReactivateHabit,
   })),
   toHabitResponse: mockToHabitResponse,
 }));
@@ -363,11 +363,44 @@ describe("habitTools", () => {
     ).resolves.toEqual(expected);
   });
 
-  it("reactivateHabit calls HabitsDB.reactivateHabit", async () => {
+  it("reactivateHabit uses HabitWrites and preserves the AI presentation", async () => {
     const ctx = makeCtx();
-    mockReactivateHabit.mockResolvedValue({ id: "h1", status: "active" });
-    await findTool("reactivateHabit").execute({ habitId: "h1" }, ctx);
-    expect(mockReactivateHabit).toHaveBeenCalledWith("h1", "user-123");
+    const habit = { id: "h1", userId: "user-123", status: "active" };
+    const presentedHabit = { id: "h1", status: "active" };
+    mockReactivateHabit.mockResolvedValue({ type: "reactivated", habit });
+    mockToHabitResponse.mockReturnValue(presentedHabit);
+
+    await expect(
+      findTool("reactivateHabit").execute({ habitId: "h1" }, ctx),
+    ).resolves.toEqual(presentedHabit);
+    expect(mockReactivateHabit).toHaveBeenCalledWith({
+      habitId: "h1",
+      userId: "user-123",
+    });
+    expect(mockToHabitResponse).toHaveBeenCalledWith(habit);
+  });
+
+  it.each([
+    [
+      { type: "already-active", habit: { id: "h1", status: "active" } },
+      { error: "Habit is not formed" },
+    ],
+    [{ type: "not-found" }, { error: "Habit not found" }],
+    [
+      {
+        type: "invalid-transition",
+        action: "reactivate",
+        currentStatus: "paused",
+        message: "Habit cannot be reactivated from paused state",
+      },
+      { error: "Habit is not formed" },
+    ],
+  ] as const)("maps reactivation outcome %j for the AI caller", async (outcome, expected) => {
+    mockReactivateHabit.mockResolvedValue(outcome);
+
+    await expect(
+      findTool("reactivateHabit").execute({ habitId: "h1" }, makeCtx()),
+    ).resolves.toEqual(expected);
   });
 
   it("deleteHabit verifies existence then deletes", async () => {
