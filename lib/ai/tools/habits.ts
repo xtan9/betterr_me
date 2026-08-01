@@ -241,10 +241,11 @@ export function habitTools(): ToolDefinition[] {
         habitId: z.string().describe("The habit ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new HabitsDB(ctx.supabase);
-        const habit = await db.getHabit(params.habitId, ctx.userId);
-        if (!habit) return { error: "Habit not found" };
-        await db.deleteHabit(params.habitId, ctx.userId);
+        const outcome = await createHabitWrites(ctx.supabase).delete({
+          habitId: params.habitId,
+          userId: ctx.userId,
+        });
+        if (outcome.type === "not-found") return { error: "Habit not found" };
         return { success: true };
       },
     },

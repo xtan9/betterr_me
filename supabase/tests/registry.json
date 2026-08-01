@@ -106,6 +106,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "habit_deletion_lifecycle.sql",
+    "domain": "habits",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "identity_communication_rls.sql",
     "domain": "identity-communication",
     "role": "constrained",

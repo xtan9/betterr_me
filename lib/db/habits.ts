@@ -107,19 +107,6 @@ export class HabitsDB {
   }
 
   /**
-   * Delete a habit permanently
-   */
-  async deleteHabit(habitId: string, userId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('habits')
-      .delete()
-      .eq('id', habitId)
-      .eq('user_id', userId);
-
-    if (error) throw error;
-  }
-
-  /**
    * Mark the graduation nudge as dismissed for this habit.
    */
   async dismissGraduationNudge(habitId: string, userId: string): Promise<Habit> {

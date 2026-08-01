@@ -135,8 +135,14 @@ export async function DELETE(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const habitsDB = new HabitsDB(supabase);
-    await habitsDB.deleteHabit(id, userId);
+    const outcome = await createHabitWrites(supabase).delete({
+      habitId: id,
+      userId,
+    });
+    if (outcome.type === 'not-found') {
+      return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     log.error('[habits] DELETE', error);

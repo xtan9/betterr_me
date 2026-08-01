@@ -112,6 +112,23 @@ describe("Habit detail mutation architecture boundaries", () => {
     expect(reactivation).not.toMatch(/new HabitsDB|\.reactivateHabit\(/);
   });
 
+  it("routes HTTP deletion through HabitWrites without a direct-write bypass", () => {
+    const route = source("app/api/habits/[id]/route.ts");
+    const deletion = section(route, "export async function DELETE", "\n}");
+
+    expect(deletion).toContain("createHabitWrites(supabase).delete");
+    expect(deletion).not.toMatch(/new HabitsDB|\.deleteHabit\(/);
+  });
+
+  it("routes AI deletion through HabitWrites without losing confirmation", () => {
+    const tools = source("lib/ai/tools/habits.ts");
+    const deletion = section(tools, 'name: "deleteHabit"', 'name: "getDetailedHabitStats"');
+
+    expect(deletion).toContain("createHabitWrites(ctx.supabase).delete");
+    expect(deletion).toContain("Always confirm with the user first");
+    expect(deletion).not.toMatch(/new HabitsDB|\.deleteHabit\(/);
+  });
+
   it("keeps lifecycle and graduation writes out of the generic database inventory", () => {
     const habitsDb = source("lib/db/habits.ts");
 
@@ -119,5 +136,6 @@ describe("Habit detail mutation architecture boundaries", () => {
     expect(habitsDb).not.toMatch(/async resumeHabit\s*\(/);
     expect(habitsDb).not.toMatch(/async graduateHabit\s*\(/);
     expect(habitsDb).not.toMatch(/async reactivateHabit\s*\(/);
+    expect(habitsDb).not.toMatch(/async deleteHabit\s*\(/);
   });
 });

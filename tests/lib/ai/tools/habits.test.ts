@@ -21,7 +21,7 @@ const mockPauseHabit = vi.fn();
 const mockResumeHabit = vi.fn();
 const mockGraduateHabit = vi.fn();
 const mockReactivateHabit = vi.fn();
-const mockDeleteHabit = vi.fn();
+const mockDeleteHabitWrite = vi.fn();
 const mockGetHabit = vi.fn();
 const mockGetDetailedHabitStats = vi.fn();
 
@@ -31,7 +31,6 @@ vi.mock("@/lib/db", () => ({
     getHabit = mockGetHabit;
     createHabit = mockCreateHabit;
     updateHabit = mockUpdateHabit;
-    deleteHabit = mockDeleteHabit;
   },
   HabitLogsDB: class {
     getHabitStats = mockGetHabitStats;
@@ -54,6 +53,7 @@ vi.mock("@/lib/habits/writes", () => ({
     resume: mockResumeHabit,
     graduate: mockGraduateHabit,
     reactivate: mockReactivateHabit,
+    delete: mockDeleteHabitWrite,
   })),
   toHabitResponse: mockToHabitResponse,
 }));
@@ -403,28 +403,40 @@ describe("habitTools", () => {
     ).resolves.toEqual(expected);
   });
 
-  it("deleteHabit verifies existence then deletes", async () => {
+  it("deleteHabit delegates to the mutation command and preserves confirmation", async () => {
     const ctx = makeCtx();
-    mockGetHabit.mockResolvedValue({ id: "h1" });
-    mockDeleteHabit.mockResolvedValue(undefined);
+    mockDeleteHabitWrite.mockResolvedValue({ type: "deleted" });
+    const tool = findTool("deleteHabit");
     const result = await findTool("deleteHabit").execute(
       { habitId: "h1" },
       ctx,
     );
-    expect(mockGetHabit).toHaveBeenCalledWith("h1", "user-123");
-    expect(mockDeleteHabit).toHaveBeenCalledWith("h1", "user-123");
+    expect(tool.description).toContain("Always confirm with the user first");
+    expect(mockDeleteHabitWrite).toHaveBeenCalledWith({
+      habitId: "h1",
+      userId: "user-123",
+    });
+    expect(mockGetHabit).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true });
   });
 
-  it("deleteHabit returns error when not found", async () => {
+  it("deleteHabit maps the mutation not-found outcome", async () => {
     const ctx = makeCtx();
-    mockGetHabit.mockResolvedValue(null);
+    mockDeleteHabitWrite.mockResolvedValue({ type: "not-found" });
     const result = await findTool("deleteHabit").execute(
       { habitId: "h999" },
       ctx,
     );
     expect(result).toEqual({ error: "Habit not found" });
-    expect(mockDeleteHabit).not.toHaveBeenCalled();
+  });
+
+  it("deleteHabit propagates unexpected mutation failures", async () => {
+    const persistenceError = new Error("database unavailable");
+    mockDeleteHabitWrite.mockRejectedValue(persistenceError);
+
+    await expect(
+      findTool("deleteHabit").execute({ habitId: "h1" }, makeCtx()),
+    ).rejects.toBe(persistenceError);
   });
 
   it("getDetailedHabitStats fetches habit then gets detailed stats", async () => {

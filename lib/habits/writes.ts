@@ -150,11 +150,28 @@ export interface HabitReactivationPersistence {
   ): Promise<void>;
 }
 
+export interface HabitDeletionRequest {
+  userId: string;
+  habitId: string;
+}
+
+export type HabitDeletionPersistenceOutcome =
+  | { type: "deleted" }
+  | { type: "not-found" };
+
+export interface HabitDeletionPersistence {
+  deleteHabit(
+    habitId: string,
+    userId: string,
+  ): Promise<HabitDeletionPersistenceOutcome>;
+}
+
 type HabitWritesPersistence = Partial<HabitCreationPersistence> &
   Partial<HabitUpdatePersistence> &
   Partial<HabitLifecyclePersistence> &
   Partial<HabitGraduationPersistence> &
-  Partial<HabitReactivationPersistence>;
+  Partial<HabitReactivationPersistence> &
+  Partial<HabitDeletionPersistence>;
 
 export type HabitCreationOutcome =
   | { type: "created"; habit: CreatedHabit }
@@ -199,6 +216,8 @@ export type HabitReactivationOutcome =
       currentStatus: HabitLifecycleState;
       message: string;
     };
+
+export type HabitDeletionOutcome = HabitDeletionPersistenceOutcome;
 
 type NormalizedRequest =
   | { ok: true; record: HabitCreationRecord }
@@ -571,6 +590,16 @@ export class HabitWrites {
     };
   }
 
+  async delete(
+    request: HabitDeletionRequest,
+  ): Promise<HabitDeletionOutcome> {
+    if (!this.persistence.deleteHabit) {
+      throw new Error("Habit deletion is not supported by this persistence");
+    }
+
+    return this.persistence.deleteHabit(request.habitId, request.userId);
+  }
+
   private async transition(
     action: HabitLifecycleAction,
     request: HabitLifecycleRequest,
@@ -700,6 +729,20 @@ function mapStoredHabitReactivationOutcome(
   throw new Error("Invalid reactivation outcome returned by the database");
 }
 
+function mapStoredHabitDeletionOutcome(
+  value: unknown,
+): HabitDeletionPersistenceOutcome {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    throw new Error("Invalid habit deletion outcome returned by the database");
+  }
+
+  if (value.type === "deleted" || value.type === "not-found") {
+    return { type: value.type };
+  }
+
+  throw new Error("Invalid habit deletion outcome returned by the database");
+}
+
 export function createHabitWrites(supabase: SupabaseClient): HabitWrites {
   const habitsDB = new HabitsDB(supabase);
 
@@ -773,6 +816,14 @@ export function createHabitWrites(supabase: SupabaseClient): HabitWrites {
       });
       if (error) throw error;
       return mapStoredHabitReactivationOutcome(data);
+    },
+    deleteHabit: async (habitId, userId) => {
+      const { data, error } = await supabase.rpc("delete_habit_atomically", {
+        p_habit_id: habitId,
+        p_user_id: userId,
+      });
+      if (error) throw error;
+      return mapStoredHabitDeletionOutcome(data);
     },
     markReactivated: async (habitId, userId, reactivatedAt) => {
       const graduations = new HabitGraduationsDB(supabase);

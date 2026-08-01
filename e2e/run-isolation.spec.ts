@@ -144,7 +144,7 @@ test.describe('Run-owned fixture isolation', () => {
       expect(crossRead.status()).toBe(404);
 
       const crossDelete = await authenticated[0].request.delete(`/api/habits/${second.id}`);
-      expect(crossDelete.ok()).toBe(true);
+      expect(crossDelete.status()).toBe(404);
       expect((await authenticated[1].request.get(`/api/habits/${second.id}`)).ok()).toBe(true);
 
       const firstDelete = await authenticated[0].request.delete(`/api/habits/${first.id}`);
@@ -166,7 +166,7 @@ test.describe('Run-owned fixture isolation', () => {
       const cleanupFailures = [
         ...recordCleanup.flatMap((result) => {
           if (result.status === 'rejected') return [String(result.reason)];
-          return result.value && !result.value.ok()
+          return result.value && result.value.status() !== 404 && !result.value.ok()
             ? [`record cleanup returned ${result.value.status()}`]
             : [];
         }),

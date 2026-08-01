@@ -6,14 +6,14 @@ const {
   mockGetHabit,
   mockUpdateHabit,
   mockUpdateHabitMutation,
+  mockDeleteHabitMutation,
   mockToHabitResponse,
-  mockDeleteHabit,
 } = vi.hoisted(() => ({
   mockGetHabit: vi.fn(),
   mockUpdateHabit: vi.fn(),
   mockUpdateHabitMutation: vi.fn(),
+  mockDeleteHabitMutation: vi.fn(),
   mockToHabitResponse: vi.fn(),
-  mockDeleteHabit: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -28,12 +28,14 @@ vi.mock('@/lib/db', () => ({
   HabitsDB: class {
     getHabit = mockGetHabit;
     updateHabit = mockUpdateHabit;
-    deleteHabit = mockDeleteHabit;
   },
 }));
 
 vi.mock('@/lib/habits/writes', () => ({
-  createHabitWrites: vi.fn(() => ({ update: mockUpdateHabitMutation })),
+  createHabitWrites: vi.fn(() => ({
+    update: mockUpdateHabitMutation,
+    delete: mockDeleteHabitMutation,
+  })),
   toHabitResponse: mockToHabitResponse,
 }));
 
@@ -230,8 +232,8 @@ describe('DELETE /api/habits/[id]', () => {
     } as any);
   });
 
-  it('should hard delete a habit', async () => {
-    mockDeleteHabit.mockResolvedValue(undefined);
+  it('should hard delete a habit through the mutation command', async () => {
+    mockDeleteHabitMutation.mockResolvedValue({ type: 'deleted' });
 
     const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
       method: 'DELETE',
@@ -241,6 +243,34 @@ describe('DELETE /api/habits/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
+    expect(mockDeleteHabitMutation).toHaveBeenCalledWith({
+      habitId: 'habit-1',
+      userId: 'user-123',
+    });
+  });
+
+  it('maps the mutation not-found outcome without exposing ownership', async () => {
+    mockDeleteHabitMutation.mockResolvedValue({ type: 'not-found' });
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
+      method: 'DELETE',
+    });
+    const response = await DELETE(request, { params });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Habit not found' });
+  });
+
+  it('maps an unexpected mutation failure to a server error', async () => {
+    mockDeleteHabitMutation.mockRejectedValue(new Error('database unavailable'));
+
+    const request = new NextRequest('http://localhost:3000/api/habits/habit-1', {
+      method: 'DELETE',
+    });
+    const response = await DELETE(request, { params });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Failed to delete habit' });
   });
 
   it('should return 401 if not authenticated', async () => {
