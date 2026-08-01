@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { MoodRating } from "@/lib/db/types";
+import type { JournalLinkType, MoodRating } from "@/lib/db/types";
 
 export type JournalDocument = Record<string, unknown>;
 
@@ -24,6 +24,27 @@ export interface JournalEntryChanges {
   wordCount?: number;
   tags?: string[];
   promptKey?: string | null;
+}
+
+export interface JournalLinkMutationRecord {
+  id: string;
+  entryId: string;
+  linkType: JournalLinkType;
+  targetId: string;
+  createdAt: string;
+}
+
+export interface JournalLinkRequest {
+  userId: string;
+  entryId: string;
+  linkType: JournalLinkType;
+  targetId: string;
+}
+
+export interface JournalUnlinkRequest {
+  userId: string;
+  entryId: string;
+  linkId: string;
 }
 
 export interface JournalSaveRequest extends JournalEntryChanges {
@@ -51,6 +72,36 @@ export interface JournalSavePersistence {
   ): Promise<JournalSavePersistenceOutcome>;
 }
 
+export type JournalLinkPersistenceOutcome =
+  | { type: "linked"; link: JournalLinkMutationRecord }
+  | { type: "already-applied"; link: JournalLinkMutationRecord }
+  | { type: "unlinked"; link: JournalLinkMutationRecord }
+  | { type: "conflict" }
+  | { type: "not-found" };
+
+export interface JournalLinkPersistence {
+  linkEntry(
+    request: JournalLinkRequest,
+  ): Promise<
+    Extract<
+      JournalLinkPersistenceOutcome,
+      { type: "linked" | "already-applied" | "conflict" | "not-found" }
+    >
+  >;
+  unlinkEntry(
+    request: JournalUnlinkRequest,
+  ): Promise<
+    Extract<
+      JournalLinkPersistenceOutcome,
+      { type: "unlinked" | "conflict" | "not-found" }
+    >
+  >;
+}
+
+export type JournalMutationPersistence = Partial<
+  JournalSavePersistence & JournalLinkPersistence
+>;
+
 export type JournalSaveOutcome =
   | { type: "created"; entry: JournalEntryMutationRecord }
   | { type: "updated"; entry: JournalEntryMutationRecord }
@@ -58,8 +109,28 @@ export type JournalSaveOutcome =
   | { type: "not-found" }
   | { type: "invalid"; field: string; message: string };
 
+export type JournalLinkOutcome =
+  | Extract<JournalLinkPersistenceOutcome, { type: "linked" | "already-applied" }>
+  | { type: "conflict" }
+  | { type: "not-found" }
+  | { type: "invalid"; field: string; message: string };
+
+export type JournalUnlinkOutcome =
+  | Extract<JournalLinkPersistenceOutcome, { type: "unlinked" }>
+  | { type: "conflict" }
+  | { type: "not-found" }
+  | { type: "invalid"; field: string; message: string };
+
 type NormalizedRequest =
   | { ok: true; request: JournalSavePersistenceRequest }
+  | { ok: false; field: string; message: string };
+
+type NormalizedLinkRequest =
+  | { ok: true; request: JournalLinkRequest }
+  | { ok: false; field: string; message: string };
+
+type NormalizedUnlinkRequest =
+  | { ok: true; request: JournalUnlinkRequest }
   | { ok: false; field: string; message: string };
 
 const EMPTY_DOCUMENT = { type: "doc", content: [] };
@@ -75,6 +146,107 @@ function hasValue(value: object, key: string): boolean {
 
 function invalid(field: string, message: string): NormalizedRequest {
   return { ok: false, field, message };
+}
+
+function invalidLinkRequest(
+  field: string,
+  message: string,
+): { ok: false; field: string; message: string } {
+  return { ok: false, field, message };
+}
+
+function normalizeRequiredIdentity(
+  value: unknown,
+  field: string,
+  message: string,
+): { ok: true; value: string } | { ok: false; field: string; message: string } {
+  if (typeof value !== "string" || !value.trim()) {
+    return invalidLinkRequest(field, message);
+  }
+  return { ok: true, value: value.trim() };
+}
+
+function isJournalLinkType(value: unknown): value is JournalLinkType {
+  return value === "habit" || value === "task" || value === "project";
+}
+
+function normalizeLinkRequest(request: JournalLinkRequest): NormalizedLinkRequest {
+  if (!isRecord(request)) {
+    return invalidLinkRequest("request", "Link request is required");
+  }
+
+  const userId = normalizeRequiredIdentity(
+    request.userId,
+    "userId",
+    "User identity is required",
+  );
+  if (!userId.ok) return userId;
+
+  const entryId = normalizeRequiredIdentity(
+    request.entryId,
+    "entryId",
+    "Entry identity is required",
+  );
+  if (!entryId.ok) return entryId;
+
+  if (!isJournalLinkType(request.linkType)) {
+    return invalidLinkRequest("linkType", "Link type is invalid");
+  }
+
+  const targetId = normalizeRequiredIdentity(
+    request.targetId,
+    "targetId",
+    "Target identity is required",
+  );
+  if (!targetId.ok) return targetId;
+
+  return {
+    ok: true,
+    request: {
+      userId: userId.value,
+      entryId: entryId.value,
+      linkType: request.linkType,
+      targetId: targetId.value,
+    },
+  };
+}
+
+function normalizeUnlinkRequest(
+  request: JournalUnlinkRequest,
+): NormalizedUnlinkRequest {
+  if (!isRecord(request)) {
+    return invalidLinkRequest("request", "Unlink request is required");
+  }
+
+  const userId = normalizeRequiredIdentity(
+    request.userId,
+    "userId",
+    "User identity is required",
+  );
+  if (!userId.ok) return userId;
+
+  const entryId = normalizeRequiredIdentity(
+    request.entryId,
+    "entryId",
+    "Entry identity is required",
+  );
+  if (!entryId.ok) return entryId;
+
+  const linkId = normalizeRequiredIdentity(
+    request.linkId,
+    "linkId",
+    "Link identity is required",
+  );
+  if (!linkId.ok) return linkId;
+
+  return {
+    ok: true,
+    request: {
+      userId: userId.value,
+      entryId: entryId.value,
+      linkId: linkId.value,
+    },
+  };
 }
 
 function normalizeDate(value: unknown):
@@ -275,7 +447,7 @@ function normalizeRequest(request: JournalSaveRequest): NormalizedRequest {
 }
 
 export class JournalWrites {
-  constructor(private readonly persistence: JournalSavePersistence) {}
+  constructor(private readonly persistence: JournalMutationPersistence) {}
 
   async save(request: JournalSaveRequest): Promise<JournalSaveOutcome> {
     const normalized = normalizeRequest(request);
@@ -287,7 +459,42 @@ export class JournalWrites {
       };
     }
 
+    if (!this.persistence.saveEntry) {
+      throw new Error("Journal save persistence is not configured");
+    }
     return this.persistence.saveEntry(normalized.request);
+  }
+
+  async link(request: JournalLinkRequest): Promise<JournalLinkOutcome> {
+    const normalized = normalizeLinkRequest(request);
+    if (!normalized.ok) {
+      return {
+        type: "invalid",
+        field: normalized.field,
+        message: normalized.message,
+      };
+    }
+
+    if (!this.persistence.linkEntry) {
+      throw new Error("Journal link persistence is not configured");
+    }
+    return this.persistence.linkEntry(normalized.request);
+  }
+
+  async unlink(request: JournalUnlinkRequest): Promise<JournalUnlinkOutcome> {
+    const normalized = normalizeUnlinkRequest(request);
+    if (!normalized.ok) {
+      return {
+        type: "invalid",
+        field: normalized.field,
+        message: normalized.message,
+      };
+    }
+
+    if (!this.persistence.unlinkEntry) {
+      throw new Error("Journal unlink persistence is not configured");
+    }
+    return this.persistence.unlinkEntry(normalized.request);
   }
 }
 
@@ -307,11 +514,21 @@ export function toJournalEntryResponse(entry: JournalEntryMutationRecord) {
   };
 }
 
+export function toJournalLinkResponse(link: JournalLinkMutationRecord) {
+  return {
+    id: link.id,
+    entry_id: link.entryId,
+    link_type: link.linkType,
+    link_id: link.targetId,
+    created_at: link.createdAt,
+  };
+}
+
 export function createJournalWrites(supabase: SupabaseClient): JournalWrites {
   return new JournalWrites(new SupabaseJournalSavePersistence(supabase));
 }
 
-export class SupabaseJournalSavePersistence implements JournalSavePersistence {
+export class SupabaseJournalSavePersistence implements JournalMutationPersistence {
   constructor(private readonly supabase: SupabaseClient) {}
 
   async saveEntry(
@@ -325,6 +542,41 @@ export class SupabaseJournalSavePersistence implements JournalSavePersistence {
     });
     if (error) throw error;
     return mapStoredSaveOutcome(data);
+  }
+
+  async linkEntry(
+    request: JournalLinkRequest,
+  ): Promise<
+    Extract<
+      JournalLinkPersistenceOutcome,
+      { type: "linked" | "already-applied" | "conflict" | "not-found" }
+    >
+  > {
+    const { data, error } = await this.supabase.rpc("link_journal_entry", {
+      p_user_id: request.userId,
+      p_entry_id: request.entryId,
+      p_link_type: request.linkType,
+      p_link_id: request.targetId,
+    });
+    if (error) throw error;
+    return mapStoredLinkOutcome(data, "link");
+  }
+
+  async unlinkEntry(
+    request: JournalUnlinkRequest,
+  ): Promise<
+    Extract<
+      JournalLinkPersistenceOutcome,
+      { type: "unlinked" | "conflict" | "not-found" }
+    >
+  > {
+    const { data, error } = await this.supabase.rpc("unlink_journal_entry", {
+      p_user_id: request.userId,
+      p_entry_id: request.entryId,
+      p_link_id: request.linkId,
+    });
+    if (error) throw error;
+    return mapStoredLinkOutcome(data, "unlink");
   }
 }
 
@@ -397,4 +649,72 @@ function mapStoredSaveOutcome(value: unknown): JournalSavePersistenceOutcome {
     };
   }
   throw new Error("Invalid journal save outcome returned by the database");
+}
+
+function toJournalLinkMutationRecord(value: unknown): JournalLinkMutationRecord {
+  if (!isRecord(value)) {
+    throw new Error("Invalid journal link returned by the database");
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.id !== "string" ||
+    typeof record.entry_id !== "string" ||
+    !isJournalLinkType(record.link_type) ||
+    typeof record.link_id !== "string" ||
+    typeof record.created_at !== "string"
+  ) {
+    throw new Error("Invalid journal link returned by the database");
+  }
+
+  return {
+    id: record.id,
+    entryId: record.entry_id,
+    linkType: record.link_type,
+    targetId: record.link_id,
+    createdAt: record.created_at,
+  };
+}
+
+function mapStoredLinkOutcome(
+  value: unknown,
+  operation: "link",
+): Extract<
+  JournalLinkPersistenceOutcome,
+  { type: "linked" | "already-applied" | "conflict" | "not-found" }
+>;
+function mapStoredLinkOutcome(
+  value: unknown,
+  operation: "unlink",
+): Extract<
+  JournalLinkPersistenceOutcome,
+  { type: "unlinked" | "conflict" | "not-found" }
+>;
+function mapStoredLinkOutcome(
+  value: unknown,
+  operation: "link" | "unlink",
+): JournalLinkPersistenceOutcome {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    throw new Error("Invalid journal link outcome returned by the database");
+  }
+
+  if (value.type === "conflict" || value.type === "not-found") {
+    return { type: value.type };
+  }
+
+  const validType =
+    operation === "link"
+      ? value.type === "linked" || value.type === "already-applied"
+      : value.type === "unlinked";
+  if (validType && value.link) {
+    return {
+      type: value.type,
+      link: toJournalLinkMutationRecord(value.link),
+    } as Extract<
+      JournalLinkPersistenceOutcome,
+      { type: "linked" | "already-applied" | "unlinked" }
+    >;
+  }
+
+  throw new Error("Invalid journal link outcome returned by the database");
 }

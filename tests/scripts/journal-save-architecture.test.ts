@@ -45,4 +45,22 @@ describe("Journal save mutation architecture boundaries", () => {
     expect(journalDb).not.toMatch(/async upsertEntry\s*\(/);
     expect(journalDb).not.toMatch(/async updateEntry\s*\(/);
   });
+
+  it("routes journal link mutations through JournalWrites without a direct-write bypass", () => {
+    const route = source("app/api/journal/[id]/links/route.ts");
+    const post = section(route, "export async function POST", "\n}");
+    const remove = section(route, "export async function DELETE", "\n}");
+
+    expect(post).toContain("createJournalWrites(supabase).link");
+    expect(remove).toContain("createJournalWrites(supabase).unlink");
+    expect(route).not.toMatch(/\.addLink\(/);
+    expect(route).not.toMatch(/\.removeLink\(/);
+  });
+
+  it("keeps JournalEntryLinksDB query-only", () => {
+    const linksDb = source("lib/db/journal-entry-links.ts");
+
+    expect(linksDb).not.toMatch(/async addLink\s*\(/);
+    expect(linksDb).not.toMatch(/async removeLink\s*\(/);
+  });
 });

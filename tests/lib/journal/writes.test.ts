@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   JournalWrites,
   toJournalEntryResponse,
+  toJournalLinkResponse,
   type JournalEntryMutationRecord,
+  type JournalLinkMutationRecord,
   type JournalSavePersistence,
 } from "@/lib/journal/writes";
 
@@ -18,6 +20,14 @@ const createdEntry: JournalEntryMutationRecord = {
   promptKey: null,
   createdAt: "2026-08-01T12:00:00.000Z",
   updatedAt: "2026-08-01T12:00:00.000Z",
+};
+
+const linkedRecord: JournalLinkMutationRecord = {
+  id: "link-1",
+  entryId: "entry-1",
+  linkType: "habit",
+  targetId: "habit-1",
+  createdAt: "2026-08-01T12:00:00.000Z",
 };
 
 describe("JournalWrites.save", () => {
@@ -150,5 +160,133 @@ describe("JournalWrites.save", () => {
         title: "Entry",
       }),
     ).resolves.toEqual(outcome);
+  });
+});
+
+describe("JournalWrites.link", () => {
+  it.each(["habit", "task", "project"] as const)(
+    "normalizes a trusted %s link request before persistence",
+    async (linkType) => {
+      const linkEntry = vi.fn().mockResolvedValue({
+        type: "linked" as const,
+        link: { ...linkedRecord, linkType },
+      });
+      const writes = new JournalWrites({ linkEntry });
+
+      await expect(
+        writes.link({
+          userId: " user-1 ",
+          entryId: " entry-1 ",
+          linkType,
+          targetId: ` ${linkType}-1 `,
+        }),
+      ).resolves.toEqual({
+        type: "linked",
+        link: { ...linkedRecord, linkType },
+      });
+
+      expect(linkEntry).toHaveBeenCalledWith({
+        userId: "user-1",
+        entryId: "entry-1",
+        linkType,
+        targetId: `${linkType}-1`,
+      });
+    },
+  );
+
+  it("preserves an already-applied duplicate-link outcome", async () => {
+    const linkEntry = vi.fn().mockResolvedValue({
+      type: "already-applied" as const,
+      link: linkedRecord,
+    });
+
+    await expect(
+      new JournalWrites({ linkEntry }).link({
+        userId: "user-1",
+        entryId: "entry-1",
+        linkType: "habit",
+        targetId: "habit-1",
+      }),
+    ).resolves.toEqual({ type: "already-applied", link: linkedRecord });
+  });
+
+  it("rejects malformed link requests without opening persistence", async () => {
+    const linkEntry = vi.fn();
+
+    await expect(
+      new JournalWrites({ linkEntry }).link({
+        userId: "user-1",
+        entryId: "entry-1",
+        linkType: "habit",
+        targetId: " ",
+      }),
+    ).resolves.toEqual({
+      type: "invalid",
+      field: "targetId",
+      message: "Target identity is required",
+    });
+    expect(linkEntry).not.toHaveBeenCalled();
+  });
+});
+
+describe("JournalWrites.unlink", () => {
+  it("normalizes a trusted unlink request and returns the unlinked record", async () => {
+    const unlinkEntry = vi.fn().mockResolvedValue({
+      type: "unlinked" as const,
+      link: linkedRecord,
+    });
+
+    await expect(
+      new JournalWrites({ unlinkEntry }).unlink({
+        userId: " user-1 ",
+        entryId: " entry-1 ",
+        linkId: " link-1 ",
+      }),
+    ).resolves.toEqual({ type: "unlinked", link: linkedRecord });
+    expect(unlinkEntry).toHaveBeenCalledWith({
+      userId: "user-1",
+      entryId: "entry-1",
+      linkId: "link-1",
+    });
+  });
+
+  it.each([
+    ["conflict", { type: "conflict" as const }],
+    ["not-found", { type: "not-found" as const }],
+  ])("preserves the expected %s unlink outcome", async (_label, outcome) => {
+    const unlinkEntry = vi.fn().mockResolvedValue(outcome);
+
+    await expect(
+      new JournalWrites({ unlinkEntry }).unlink({
+        userId: "user-1",
+        entryId: "entry-1",
+        linkId: "link-1",
+      }),
+    ).resolves.toEqual(outcome);
+  });
+
+  it("propagates unexpected persistence failures", async () => {
+    const failure = new Error("database unavailable");
+    const unlinkEntry = vi.fn().mockRejectedValue(failure);
+
+    await expect(
+      new JournalWrites({ unlinkEntry }).unlink({
+        userId: "user-1",
+        entryId: "entry-1",
+        linkId: "link-1",
+      }),
+    ).rejects.toBe(failure);
+  });
+});
+
+describe("Journal link response mapping", () => {
+  it("maps the storage-independent record to the existing transport shape", () => {
+    expect(toJournalLinkResponse(linkedRecord)).toEqual({
+      id: "link-1",
+      entry_id: "entry-1",
+      link_type: "habit",
+      link_id: "habit-1",
+      created_at: "2026-08-01T12:00:00.000Z",
+    });
   });
 });
