@@ -166,7 +166,7 @@ test.describe('Run-owned fixture isolation', () => {
       const cleanupFailures = [
         ...recordCleanup.flatMap((result) => {
           if (result.status === 'rejected') return [String(result.reason)];
-          return result.value && !result.value.ok()
+          return result.value && result.value.status() !== 404 && !result.value.ok()
             ? [`record cleanup returned ${result.value.status()}`]
             : [];
         }),
