@@ -7,7 +7,7 @@ import { log } from '@/lib/logger';
 import { recurringTaskCreateSchema } from '@/lib/validations/recurring-task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import { getLocalDateString } from '@/lib/utils';
-import { createSupabaseRecurringTaskLifecycle } from '@/lib/recurring-tasks';
+import { createActivatedRecurringTaskLifecycle } from '@/lib/recurring-tasks';
 import {
   createSeriesCreation,
   initialSeriesCoverage,
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       : null;
 
     const recurringTasksDB = new RecurringTasksDB(supabase, {
-      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+      lifecycle: createActivatedRecurringTaskLifecycle(supabase),
     });
     const templates = await recurringTasksDB.getUserRecurringTasks(
       userId,
@@ -111,13 +111,6 @@ export async function POST(request: NextRequest) {
       ).to,
     });
     const result = await createSeriesCreation(supabase).create(intent);
-    if (result.mode === 'legacy') {
-      return NextResponse.json(
-        { recurring_task: result.recurringTask },
-        { status: 201 },
-      );
-    }
-
     const outcome = result.outcome;
     if (outcome.status === 'complete' || outcome.status === 'already-applied') {
       return NextResponse.json(

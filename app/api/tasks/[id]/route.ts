@@ -13,7 +13,7 @@ import {
 import {
   createSupabaseOccurrenceAdapter,
   createSupabaseSeriesStateAdapter,
-  createSupabaseRecurringTaskLifecycle,
+  createActivatedRecurringTaskLifecycle,
   isOccurrenceSuccess,
   occurrenceHttpFailure,
   isSeriesStateSuccess,
@@ -210,7 +210,7 @@ export async function DELETE(
     }
 
     const outcome = await createTaskWrites(supabase, {
-      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+      lifecycle: createActivatedRecurringTaskLifecycle(supabase),
     }).delete({
       taskId: id,
       userId,

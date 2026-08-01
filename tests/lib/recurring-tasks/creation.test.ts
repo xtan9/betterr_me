@@ -158,23 +158,26 @@ describe("Series creation adapter", () => {
     });
   });
 
-  it("keeps the lifecycle writer inactive by default", async () => {
-    const legacyTask = { id: "legacy-series-1", title: "Daily review" };
-    mockLegacyCreate.mockResolvedValue(legacyTask);
+  it("activates the lifecycle writer by default and never calls the legacy writer", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        status: "complete",
+        type: "complete",
+        series: {},
+      },
+      error: null,
+    });
 
     const result = await createSeriesCreation(
-      {} as SupabaseClient,
+      { rpc } as unknown as SupabaseClient,
     ).create(makeIntent());
 
-    expect(result).toEqual({ mode: "legacy", recurringTask: legacyTask });
-    expect(mockLegacyCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        user_id: "user-1",
-        start_date: "2026-08-01",
-        end_type: "never",
-      }),
-      "2026-08-08",
+    expect(result.mode).toBe("lifecycle");
+    expect(rpc).toHaveBeenCalledWith(
+      "recurring_task_lifecycle",
+      expect.objectContaining({ p_operation: "create-series" }),
     );
+    expect(mockLegacyCreate).not.toHaveBeenCalled();
   });
 
   it("preserves typed lifecycle failures without parsing their reasons", async () => {

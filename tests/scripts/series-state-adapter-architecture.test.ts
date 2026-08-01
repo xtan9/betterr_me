@@ -46,7 +46,7 @@ describe("Series State adapter architecture boundaries", () => {
     expect(taskRoute).toContain(".editScope");
     expect(taskDelete).toContain("createTaskWrites(supabase,");
     expect(taskDelete).toContain(".delete({");
-    expect(taskDelete).toContain("createSupabaseRecurringTaskLifecycle(supabase)");
+    expect(taskDelete).toContain("createActivatedRecurringTaskLifecycle(supabase)");
     expect(taskDelete).not.toContain("createSupabaseSeriesStateAdapter(supabase)");
   });
 
@@ -88,18 +88,11 @@ describe("Series State adapter architecture boundaries", () => {
     expect(end).toContain("Always confirm with the user first");
   });
 
-  it("does not construct legacy writers in lifecycle mode", () => {
+  it("activates lifecycle mode without constructing legacy writers", () => {
     const factory = source("lib/recurring-tasks/supabase-series-state-adapter.ts");
-    const lifecycleBranch = section(
-      factory,
-      "if (options.lifecycle)",
-      "const recurringTasksDB",
-    );
 
-    expect(lifecycleBranch).toContain("getTask");
-    expect(lifecycleBranch).toContain("return new SeriesStateAdapter");
-    expect(lifecycleBranch).not.toContain("RecurringTasksDB");
-    expect(lifecycleBranch).not.toContain("updateRecurringTask");
-    expect(lifecycleBranch).not.toContain("deleteRecurringTask");
+    expect(factory).toContain("createActivatedRecurringTaskLifecycle(supabase)");
+    expect(factory).toContain("return new SeriesStateAdapter");
+    expect(factory).not.toMatch(/RecurringTasksDB|updateRecurringTask|updateInstanceWithScope|ensureRecurringInstances/);
   });
 });

@@ -59,22 +59,14 @@ describe("Occurrence adapter architecture boundaries", () => {
     expect(lifecycleAdapter).toContain("reopenOccurrence");
   });
 
-  it("keeps lifecycle routing opt-in for the production adapters", () => {
-    const httpRoute = source("app/api/tasks/[id]/route.ts");
-    const toggleRoute = source("app/api/tasks/[id]/toggle/route.ts");
-    const tools = source("lib/ai/tools/tasks.ts");
+  it("activates lifecycle routing in the production adapter factory", () => {
     const factory = source("lib/recurring-tasks/supabase-occurrence-adapter.ts");
 
-    expect(httpRoute).not.toMatch(/createSupabaseOccurrenceAdapter\([^)]*,\s*\{/);
-    expect(toggleRoute).not.toMatch(/createSupabaseOccurrenceAdapter\([^)]*,\s*\{/);
-    expect(tools).not.toMatch(/createSupabaseOccurrenceAdapter\([^)]*,\s*\{/);
-    expect(factory).toContain("return new OccurrenceAdapter(persistence, options)");
+    expect(factory).toContain("createActivatedRecurringTaskLifecycle(supabase)");
+    expect(factory).toContain("return new OccurrenceAdapter(persistence, { lifecycle })");
     expect(factory).toContain("lifecycle?: OccurrenceLifecyclePort");
-    const lifecycleFactory = section(
-      factory,
-      "if (options.lifecycle)",
-      "const taskWrites = createTaskWrites(supabase)",
-    );
-    expect(lifecycleFactory).not.toMatch(/createTaskWrites|RecurringTasksDB/);
+    expect(factory).toContain("standalone:");
+    expect(factory).toContain("createTaskWrites(supabase)");
+    expect(factory).not.toMatch(/RecurringTasksDB|updateInstanceWithScope|ensureRecurringInstances/);
   });
 });

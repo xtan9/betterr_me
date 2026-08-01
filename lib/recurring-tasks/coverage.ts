@@ -1,9 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { log } from "@/lib/logger";
-import {
-  createSupabaseRecurringTaskLifecycle,
-} from "./supabase-lifecycle";
+import { createActivatedRecurringTaskLifecycle } from "./activation";
 import { addLocalDays } from "./recurrence";
 import type { LocalDateRange } from "./lifecycle";
 import {
@@ -124,7 +122,7 @@ export async function ensureRecurringTaskCoverage(
     return partialCoverage(range);
   }
   try {
-    const outcome = await createSupabaseRecurringTaskLifecycle(supabase)
+    const outcome = await createActivatedRecurringTaskLifecycle(supabase)
       .ensureUserCoverage({ userId, range });
 
     if (outcome.status === "complete" || outcome.status === "already-applied") {

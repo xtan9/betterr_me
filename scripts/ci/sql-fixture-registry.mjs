@@ -22,6 +22,7 @@ const TRUSTED_ADMIN_FIXTURES = new Set([
   "oauth_refresh_token_lifecycle.sql",
   "oauth_refresh_token_upgrade.sql",
   "preference_storage_foundation.sql",
+  "recurring_task_lifecycle_cutover.sql",
 ]);
 const TRUSTED_SUPPORT_FIXTURES = new Set(["e2e_local_authenticated_grants.sql"]);
 
