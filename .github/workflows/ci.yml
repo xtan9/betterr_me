@@ -153,6 +153,23 @@ jobs:
           IFS=',' read -ra smoke_tests <<< "$QUALITY_SMOKE_TESTS"
           pnpm exec vitest run "${smoke_tests[@]}"
 
+  write-inventory:
+    name: Delivery write inventory
+    needs: changes
+    if: fromJSON(needs.changes.outputs.classification_json).suites.architecture
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Node.js without dependency install
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          install-dependencies: "false"
+
+      - name: Check delivery write inventory baseline
+        run: pnpm check:write-inventory
+
   check-migrations:
     needs: changes
     if: fromJSON(needs.changes.outputs.classification_json).suites.migrations
@@ -182,7 +199,7 @@ jobs:
 
   ci-gate:
     name: CI Gate
-    needs: [deployment-policy, changes, lint-and-test, check-migrations]
+    needs: [deployment-policy, changes, lint-and-test, check-migrations, write-inventory]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'push')
     runs-on: ubuntu-latest
     steps:
@@ -195,7 +212,7 @@ jobs:
           SELECTION_RESULT: ${{ needs.changes.result }}
           CLASSIFICATION_JSON: ${{ needs.changes.outputs.classification_json }}
           PREREQUISITES_JSON: >-
-            [{"name":"quality","suite":"quality","result":"${{ needs.lint-and-test.result }}"},{"name":"migrations","suite":"migrations","result":"${{ needs.check-migrations.result }}"}]
+            [{"name":"quality","suite":"quality","result":"${{ needs.lint-and-test.result }}"},{"name":"migrations","suite":"migrations","result":"${{ needs.check-migrations.result }}"},{"name":"write inventory","suite":"architecture","result":"${{ needs.write-inventory.result }}"}]
         run: node scripts/ci/verify-gate.mjs
 
       - name: Verify deployment policy check

@@ -25,6 +25,7 @@ describe("change classifier runner", () => {
       migrations: true,
       e2eFull: true,
       performance: true,
+      architecture: true,
     });
     expect(result.reasons[0]).toContain("classifier startup error");
     expect(write).toHaveBeenCalledWith(expect.stringContaining("classification_json="));

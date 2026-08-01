@@ -19,6 +19,7 @@ function emergencyBroadClassification(error) {
       e2eVisual: true,
       e2eSupabase: true,
       performance: true,
+      architecture: true,
       mutation: true,
       mutationScopes: [],
     },
