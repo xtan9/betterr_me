@@ -56,22 +56,6 @@ export class JournalEntriesDB {
   }
 
   /**
-   * Delete a journal entry by ID.
-   */
-  async deleteEntry(entryId: string, userId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from("journal_entries")
-      .delete()
-      .eq("id", entryId)
-      .eq("user_id", userId);
-
-    if (error) {
-      log.error("JournalEntriesDB.deleteEntry failed", error, { entryId });
-      throw error;
-    }
-  }
-
-  /**
    * Calendar data: lightweight query returning date + mood + title for a month.
    * Never loads full content (performance).
    */

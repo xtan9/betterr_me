@@ -47,6 +47,11 @@ export interface JournalUnlinkRequest {
   linkId: string;
 }
 
+export interface JournalDeletionRequest {
+  userId: string;
+  entryId: string;
+}
+
 export interface JournalSaveRequest extends JournalEntryChanges {
   userId: string;
   entryId?: string;
@@ -98,8 +103,18 @@ export interface JournalLinkPersistence {
   >;
 }
 
+export type JournalDeletionPersistenceOutcome =
+  | { type: "deleted" }
+  | { type: "not-found" };
+
+export interface JournalDeletionPersistence {
+  deleteEntry(
+    request: JournalDeletionRequest,
+  ): Promise<JournalDeletionPersistenceOutcome>;
+}
+
 export type JournalMutationPersistence = Partial<
-  JournalSavePersistence & JournalLinkPersistence
+  JournalSavePersistence & JournalLinkPersistence & JournalDeletionPersistence
 >;
 
 export type JournalSaveOutcome =
@@ -120,6 +135,8 @@ export type JournalUnlinkOutcome =
   | { type: "conflict" }
   | { type: "not-found" }
   | { type: "invalid"; field: string; message: string };
+
+export type JournalDeletionOutcome = JournalDeletionPersistenceOutcome;
 
 type NormalizedRequest =
   | { ok: true; request: JournalSavePersistenceRequest }
@@ -496,6 +513,15 @@ export class JournalWrites {
     }
     return this.persistence.unlinkEntry(normalized.request);
   }
+
+  async delete(
+    request: JournalDeletionRequest,
+  ): Promise<JournalDeletionOutcome> {
+    if (!this.persistence.deleteEntry) {
+      throw new Error("Journal deletion persistence is not configured");
+    }
+    return this.persistence.deleteEntry(request);
+  }
 }
 
 export function toJournalEntryResponse(entry: JournalEntryMutationRecord) {
@@ -577,6 +603,20 @@ export class SupabaseJournalSavePersistence implements JournalMutationPersistenc
     });
     if (error) throw error;
     return mapStoredLinkOutcome(data, "unlink");
+  }
+
+  async deleteEntry(
+    request: JournalDeletionRequest,
+  ): Promise<JournalDeletionPersistenceOutcome> {
+    const { data, error } = await this.supabase.rpc(
+      "delete_journal_entry_atomically",
+      {
+        p_entry_id: request.entryId,
+        p_user_id: request.userId,
+      },
+    );
+    if (error) throw error;
+    return mapStoredJournalDeletionOutcome(data);
   }
 }
 
@@ -717,4 +757,18 @@ function mapStoredLinkOutcome(
   }
 
   throw new Error("Invalid journal link outcome returned by the database");
+}
+
+function mapStoredJournalDeletionOutcome(
+  value: unknown,
+): JournalDeletionPersistenceOutcome {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    throw new Error("Invalid journal deletion outcome returned by the database");
+  }
+
+  if (value.type === "deleted" || value.type === "not-found") {
+    return { type: value.type };
+  }
+
+  throw new Error("Invalid journal deletion outcome returned by the database");
 }

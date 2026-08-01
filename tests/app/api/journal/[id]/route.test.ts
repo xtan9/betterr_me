@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, PATCH, DELETE } from '@/app/api/journal/[id]/route';
 import { NextRequest } from 'next/server';
 
-const { mockSaveJournalEntry } = vi.hoisted(() => ({
+const { mockSaveJournalEntry, mockDeleteJournalEntry } = vi.hoisted(() => ({
   mockSaveJournalEntry: vi.fn(),
+  mockDeleteJournalEntry: vi.fn(),
 }));
 
 const mockJournalDB = {
   getEntry: vi.fn(),
-  deleteEntry: vi.fn(),
 };
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -30,7 +30,10 @@ vi.mock('@/lib/db', () => ({
 }));
 
 vi.mock('@/lib/journal/writes', () => ({
-  createJournalWrites: vi.fn(() => ({ save: mockSaveJournalEntry })),
+  createJournalWrites: vi.fn(() => ({
+    save: mockSaveJournalEntry,
+    delete: mockDeleteJournalEntry,
+  })),
   toJournalEntryResponse: (entry: unknown) => entry,
 }));
 
@@ -215,8 +218,8 @@ describe('DELETE /api/journal/[id]', () => {
     expect(response.status).toBe(401);
   });
 
-  it('should delete entry and return 200', async () => {
-    mockJournalDB.deleteEntry.mockResolvedValue(undefined);
+  it('should delete entry through the mutation command and return 200', async () => {
+    mockDeleteJournalEntry.mockResolvedValue({ type: 'deleted' });
 
     const request = new NextRequest('http://localhost:3000/api/journal/entry-123', {
       method: 'DELETE',
@@ -226,6 +229,33 @@ describe('DELETE /api/journal/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockJournalDB.deleteEntry).toHaveBeenCalledWith('entry-123', 'user-123');
+    expect(mockDeleteJournalEntry).toHaveBeenCalledWith({
+      entryId: 'entry-123',
+      userId: 'user-123',
+    });
+  });
+
+  it.each(['missing', 'repeated', 'cross-owner'])('returns 404 for the %s deletion outcome', async () => {
+    mockDeleteJournalEntry.mockResolvedValue({ type: 'not-found' });
+
+    const request = new NextRequest('http://localhost:3000/api/journal/entry-123', {
+      method: 'DELETE',
+    });
+    const response = await DELETE(request, { params: makeParams('entry-123') });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Journal entry not found' });
+  });
+
+  it('maps an unexpected mutation failure to a server error', async () => {
+    mockDeleteJournalEntry.mockRejectedValue(new Error('database unavailable'));
+
+    const request = new NextRequest('http://localhost:3000/api/journal/entry-123', {
+      method: 'DELETE',
+    });
+    const response = await DELETE(request, { params: makeParams('entry-123') });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Failed to delete journal entry' });
   });
 });

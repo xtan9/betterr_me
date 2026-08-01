@@ -175,54 +175,6 @@ describe("JournalEntriesDB", () => {
     });
   });
 
-  // ─── deleteEntry ──────────────────────────────────────────────────────────
-  describe("deleteEntry", () => {
-    it("deletes the entry scoped by id + user", async () => {
-      // delete builder is thenable-terminal; setMockResponse with no error
-      // makes the awaited destructure return { error: null }.
-      mockSupabaseClient.setMockResponse(null);
-
-      await db.deleteEntry(ENTRY_ID, USER_ID);
-
-      // Full chain: from → delete() → eq(id) → eq(user_id).
-      expect(mockSupabaseClient.queryLog).toEqual([
-        {
-          table: "journal_entries",
-          method: "from",
-          args: ["journal_entries"],
-        },
-        { table: "journal_entries", method: "delete", args: [] },
-        {
-          table: "journal_entries",
-          method: "eq",
-          args: ["id", ENTRY_ID],
-        },
-        {
-          table: "journal_entries",
-          method: "eq",
-          args: ["user_id", USER_ID],
-        },
-      ]);
-      expect(log.error).not.toHaveBeenCalled();
-    });
-
-    it("logs and throws on db error", async () => {
-      const dbErr = new Error("FK constraint");
-      mockSupabaseClient.setMockResponse(null, dbErr);
-
-      await expect(db.deleteEntry(ENTRY_ID, USER_ID)).rejects.toThrow(
-        "FK constraint",
-      );
-
-      expect(log.error).toHaveBeenCalledTimes(1);
-      expect(log.error).toHaveBeenCalledWith(
-        "JournalEntriesDB.deleteEntry failed",
-        dbErr,
-        { entryId: ENTRY_ID },
-      );
-    });
-  });
-
   // ─── getCalendarMonth ─────────────────────────────────────────────────────
   describe("getCalendarMonth", () => {
     it("queries entries for a 31-day month (December)", async () => {

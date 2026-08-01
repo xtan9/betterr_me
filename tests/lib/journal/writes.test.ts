@@ -279,6 +279,52 @@ describe("JournalWrites.unlink", () => {
   });
 });
 
+describe("JournalWrites.delete", () => {
+  it("returns deleted through the typed owner-scoped persistence seam", async () => {
+    const deleteEntry = vi.fn().mockResolvedValue({ type: "deleted" as const });
+    const writes = new JournalWrites({ deleteEntry });
+
+    await expect(
+      writes.delete({ userId: "trusted-user", entryId: "entry-1" }),
+    ).resolves.toEqual({ type: "deleted" });
+    expect(deleteEntry).toHaveBeenCalledWith({
+      userId: "trusted-user",
+      entryId: "entry-1",
+    });
+  });
+
+  it.each(["missing", "repeated", "cross-owner"] as const)(
+    "returns the same not-found outcome for %s requests",
+    async () => {
+      const deleteEntry = vi.fn().mockResolvedValue({ type: "not-found" as const });
+      const writes = new JournalWrites({ deleteEntry });
+
+      await expect(
+        writes.delete({ userId: "trusted-user", entryId: "entry-1" }),
+      ).resolves.toEqual({ type: "not-found" });
+    },
+  );
+
+  it("propagates an unexpected deletion persistence failure", async () => {
+    const persistenceError = new Error("deletion transaction unavailable");
+    const writes = new JournalWrites({
+      deleteEntry: vi.fn().mockRejectedValue(persistenceError),
+    });
+
+    await expect(
+      writes.delete({ userId: "trusted-user", entryId: "entry-1" }),
+    ).rejects.toBe(persistenceError);
+  });
+
+  it("rejects deletion when the persistence adapter has no deletion seam", async () => {
+    const writes = new JournalWrites({});
+
+    await expect(
+      writes.delete({ userId: "trusted-user", entryId: "entry-1" }),
+    ).rejects.toThrow("Journal deletion persistence is not configured");
+  });
+});
+
 describe("Journal link response mapping", () => {
   it("maps the storage-independent record to the existing transport shape", () => {
     expect(toJournalLinkResponse(linkedRecord)).toEqual({
