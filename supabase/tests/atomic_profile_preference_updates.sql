@@ -13,6 +13,11 @@ select public.ralph_ci_create_auth_user(
 
 set role authenticated;
 select set_config(
+  'request.jwt.claim.sub',
+  '48600000-0000-0000-0000-000000000001',
+  false
+);
+select set_config(
   'request.jwt.claims',
   '{"sub":"48600000-0000-0000-0000-000000000001"}',
   false
@@ -64,7 +69,7 @@ begin
     );
     raise exception 'cross-user preference patch unexpectedly succeeded';
   exception
-    when raise_exception then
+    when insufficient_privilege then
       if sqlerrm <> 'Cannot update preferences for another user' then
         raise;
       end if;
@@ -80,6 +85,11 @@ select extensions.dblink_send_query(
   $query$
     with request_context as materialized (
       select set_config(
+        'request.jwt.claim.sub',
+        '48600000-0000-0000-0000-000000000001',
+        false
+      ),
+      set_config(
         'request.jwt.claims',
         '{"sub":"48600000-0000-0000-0000-000000000001"}',
         false
@@ -103,6 +113,11 @@ select pg_sleep(0.1);
 
 set role authenticated;
 select set_config(
+  'request.jwt.claim.sub',
+  '48600000-0000-0000-0000-000000000001',
+  false
+);
+select set_config(
   'request.jwt.claims',
   '{"sub":"48600000-0000-0000-0000-000000000001"}',
   false
@@ -119,6 +134,11 @@ from extensions.dblink_get_result('atomic-preference-writer')
 select extensions.dblink_disconnect('atomic-preference-writer');
 
 set role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  '48600000-0000-0000-0000-000000000001',
+  false
+);
 select set_config(
   'request.jwt.claims',
   '{"sub":"48600000-0000-0000-0000-000000000001"}',

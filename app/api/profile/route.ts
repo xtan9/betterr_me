@@ -6,7 +6,11 @@ import {
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { ProfilesDB } from "@/lib/db";
 import { validateRequestBody } from "@/lib/validations/api";
-import { log } from "@/lib/logger";
+import {
+  createLegacyRouteTelemetry,
+  legacyAuthErrorCode,
+  legacyFailureCode,
+} from "@/lib/legacy-telemetry";
 import { profileUpdateSchema } from "@/lib/validations/profile";
 import type { Profile, ProfileUpdate } from "@/lib/db/types";
 
@@ -25,13 +29,11 @@ const WRITE_REQUEST_POLICY = {
  * Get current user's profile
  */
 export async function GET(request: Request) {
-  log.info("[legacy-profile] compatibility traffic", {
-    route: "/api/profile",
-    method: "GET",
-  });
+  const telemetry = createLegacyRouteTelemetry("/api/profile", "profile");
   try {
     const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
     if (!auth.ok) {
+      telemetry.setErrorCode(legacyAuthErrorCode(auth.outcome));
       return NextResponse.json(
         { error: cookieRouteErrorMessage(auth) },
         { status: auth.status },
@@ -43,16 +45,20 @@ export async function GET(request: Request) {
     const profile = await profilesDB.getProfile(userId);
 
     if (!profile) {
+      telemetry.setErrorCode("profile_not_found");
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
+    telemetry.setRevision(profile.preference_revision);
     return NextResponse.json({ profile });
   } catch (error) {
-    log.error("GET /api/profile error", error);
+    telemetry.setErrorCode(legacyFailureCode(error, "profile_read_failed"));
     return NextResponse.json(
       { error: "Failed to fetch profile" },
       { status: 500 }
     );
+  } finally {
+    telemetry.emit();
   }
 }
 
@@ -61,13 +67,11 @@ export async function GET(request: Request) {
  * Update current user's profile
  */
 export async function PATCH(request: NextRequest) {
-  log.info("[legacy-profile] compatibility traffic", {
-    route: "/api/profile",
-    method: "PATCH",
-  });
+  const telemetry = createLegacyRouteTelemetry("/api/profile", "profile");
   try {
     const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {
+      telemetry.setErrorCode(legacyAuthErrorCode(auth.outcome));
       return NextResponse.json(
         { error: cookieRouteErrorMessage(auth) },
         { status: auth.status },
@@ -79,7 +83,10 @@ export async function PATCH(request: NextRequest) {
 
     // Validate with Zod schema
     const validation = validateRequestBody(body, profileUpdateSchema);
-    if (!validation.success) return validation.response;
+    if (!validation.success) {
+      telemetry.setErrorCode("invalid_request");
+      return validation.response;
+    }
 
     // Build update object from validated data
     const updates: ProfileUpdate = {};
@@ -99,12 +106,12 @@ export async function PATCH(request: NextRequest) {
     const profilesDB = new ProfilesDB(supabase);
     const profile: Profile = await profilesDB.updateProfile(userId, updates);
 
+    telemetry.setRevision(profile.preference_revision);
     return NextResponse.json({ profile });
   } catch (error: unknown) {
-    log.error("PATCH /api/profile error", error);
-
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("not found")) {
+    const code = legacyFailureCode(error, "profile_write_failed");
+    telemetry.setErrorCode(code);
+    if (code === "profile_not_found") {
       return NextResponse.json({ error: "Profile not found" }, { status: 404 });
     }
 
@@ -112,5 +119,7 @@ export async function PATCH(request: NextRequest) {
       { error: "Failed to update profile" },
       { status: 500 }
     );
+  } finally {
+    telemetry.emit();
   }
 }

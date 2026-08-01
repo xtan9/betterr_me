@@ -98,6 +98,19 @@ describe("domain-owned Preference commands", () => {
     expect(mockSetAppearancePreference).not.toHaveBeenCalled();
   });
 
+  it("does not accept a target profile identifier in an owner command", async () => {
+    const response = await postAppearance(
+      request("/api/preferences/appearance", {
+        type: "setTheme",
+        theme: "dark",
+        profileId: "other-user",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockSetAppearancePreference).not.toHaveBeenCalled();
+  });
+
   it("routes Localization and Fitness intents to their owning commands", async () => {
     mockSetLocalizationPreference.mockResolvedValue({
       weekStart: "monday",
