@@ -118,6 +118,11 @@ describe('projectUpdateSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts sort_order-only update', () => {
+    const result = projectUpdateSchema.safeParse({ sort_order: 131072 });
+    expect(result.success).toBe(true);
+  });
+
   it('accepts mixed fields (name + status)', () => {
     const result = projectUpdateSchema.safeParse({
       name: 'Updated',

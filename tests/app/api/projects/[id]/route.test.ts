@@ -13,9 +13,10 @@ vi.mock('@/lib/supabase/server', () => ({
 
 const mockProjectsDB = {
   getProject: vi.fn(),
-  updateProject: vi.fn(),
   deleteProject: vi.fn(),
 };
+
+const mockProjectUpdate = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   ProjectsDB: class {
@@ -24,6 +25,16 @@ vi.mock('@/lib/db', () => ({
     }
   },
 }));
+
+vi.mock('@/lib/projects/writes', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/projects/writes')>(
+    '@/lib/projects/writes',
+  );
+  return {
+    ...actual,
+    createProjectWrites: vi.fn(() => ({ update: mockProjectUpdate })),
+  };
+});
 
 import { createClient } from '@/lib/supabase/server';
 
@@ -98,16 +109,25 @@ describe('PATCH /api/projects/[id]', () => {
   it('should update project', async () => {
     const updatedProject = {
       id: 'p1',
-      user_id: 'user-123',
+      userId: 'user-123',
       name: 'Updated',
       section: 'work',
       color: 'red',
+      status: 'active',
+      sortOrder: 131072,
+      createdAt: '2026-08-01T12:00:00.000Z',
+      updatedAt: '2026-08-01T12:00:00.000Z',
     };
-    vi.mocked(mockProjectsDB.updateProject).mockResolvedValue(updatedProject);
+    mockProjectUpdate.mockResolvedValue({ type: 'updated', project: updatedProject });
 
     const request = new NextRequest('http://localhost:3000/api/projects/p1', {
       method: 'PATCH',
-      body: JSON.stringify({ name: 'Updated', section: 'work', color: 'red' }),
+      body: JSON.stringify({
+        name: 'Updated',
+        section: 'work',
+        color: 'red',
+        sort_order: 131072,
+      }),
     });
 
     const response = await PATCH(request, {
@@ -116,7 +136,26 @@ describe('PATCH /api/projects/[id]', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.project).toEqual(updatedProject);
+    expect(data.project).toEqual({
+      id: 'p1',
+      user_id: 'user-123',
+      name: 'Updated',
+      section: 'work',
+      color: 'red',
+      status: 'active',
+      sort_order: 131072,
+      created_at: '2026-08-01T12:00:00.000Z',
+      updated_at: '2026-08-01T12:00:00.000Z',
+    });
+    expect(mockProjectUpdate).toHaveBeenCalledWith({
+      userId: 'user-123',
+      projectId: 'p1',
+      name: 'Updated',
+      section: 'work',
+      color: 'red',
+      sortOrder: 131072,
+    });
+    expect(mockProjectsDB.getProject).not.toHaveBeenCalled();
   });
 
   it('should return 400 if no valid updates', async () => {
@@ -148,13 +187,16 @@ describe('PATCH /api/projects/[id]', () => {
   it('should archive a project', async () => {
     const archivedProject = {
       id: 'p1',
-      user_id: 'user-123',
+      userId: 'user-123',
       name: 'Project 1',
       section: 'personal',
       color: 'blue',
       status: 'archived',
+      sortOrder: 65536,
+      createdAt: '2026-08-01T12:00:00.000Z',
+      updatedAt: '2026-08-01T12:00:00.000Z',
     };
-    vi.mocked(mockProjectsDB.updateProject).mockResolvedValue(archivedProject);
+    mockProjectUpdate.mockResolvedValue({ type: 'updated', project: archivedProject });
 
     const request = new NextRequest('http://localhost:3000/api/projects/p1', {
       method: 'PATCH',
@@ -168,23 +210,26 @@ describe('PATCH /api/projects/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.project.status).toBe('archived');
-    expect(mockProjectsDB.updateProject).toHaveBeenCalledWith(
-      'p1',
-      'user-123',
-      { status: 'archived' }
-    );
+    expect(mockProjectUpdate).toHaveBeenCalledWith({
+      userId: 'user-123',
+      projectId: 'p1',
+      status: 'archived',
+    });
   });
 
   it('should restore an archived project', async () => {
     const restoredProject = {
       id: 'p1',
-      user_id: 'user-123',
+      userId: 'user-123',
       name: 'Project 1',
       section: 'personal',
       color: 'blue',
       status: 'active',
+      sortOrder: 65536,
+      createdAt: '2026-08-01T12:00:00.000Z',
+      updatedAt: '2026-08-01T12:00:00.000Z',
     };
-    vi.mocked(mockProjectsDB.updateProject).mockResolvedValue(restoredProject);
+    mockProjectUpdate.mockResolvedValue({ type: 'updated', project: restoredProject });
 
     const request = new NextRequest('http://localhost:3000/api/projects/p1', {
       method: 'PATCH',
@@ -198,11 +243,96 @@ describe('PATCH /api/projects/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.project.status).toBe('active');
-    expect(mockProjectsDB.updateProject).toHaveBeenCalledWith(
-      'p1',
-      'user-123',
-      { status: 'active' }
-    );
+    expect(mockProjectUpdate).toHaveBeenCalledWith({
+      userId: 'user-123',
+      projectId: 'p1',
+      status: 'active',
+    });
+  });
+
+  it('maps a missing or cross-owner project outcome to the existing 404 contract', async () => {
+    mockProjectUpdate.mockResolvedValue({ type: 'not-found' });
+
+    const request = new NextRequest('http://localhost:3000/api/projects/private', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Private name' }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'private' }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: 'Project not found' });
+  });
+
+  it('returns an already-applied archive outcome as a successful idempotent response', async () => {
+    const archivedProject = {
+      id: 'p1',
+      userId: 'user-123',
+      name: 'Project 1',
+      section: 'personal',
+      color: 'blue',
+      status: 'archived',
+      sortOrder: 65536,
+      createdAt: '2026-08-01T12:00:00.000Z',
+      updatedAt: '2026-08-01T12:00:00.000Z',
+    };
+    mockProjectUpdate.mockResolvedValue({
+      type: 'already-applied',
+      project: archivedProject,
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/projects/p1', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'archived' }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'p1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).project.status).toBe('archived');
+  });
+
+  it('maps a shared invalid outcome to the existing HTTP validation contract', async () => {
+    mockProjectUpdate.mockResolvedValue({
+      type: 'invalid',
+      field: 'sortOrder',
+      message: 'Sort order must be a non-negative finite number',
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/projects/p1', {
+      method: 'PATCH',
+      body: JSON.stringify({ sort_order: 1 }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'p1' }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'Sort order must be a non-negative finite number',
+      field: 'sortOrder',
+    });
+  });
+
+  it('does not infer a typed outcome from an unexpected update failure', async () => {
+    mockProjectUpdate.mockRejectedValue(new Error('not found while updating'));
+
+    const request = new NextRequest('http://localhost:3000/api/projects/p1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Updated' }),
+    });
+
+    const response = await PATCH(request, {
+      params: Promise.resolve({ id: 'p1' }),
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'Failed to update project' });
   });
 
   it('should reject invalid status value', async () => {
@@ -216,7 +346,7 @@ describe('PATCH /api/projects/[id]', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(mockProjectsDB.updateProject).not.toHaveBeenCalled();
+    expect(mockProjectUpdate).not.toHaveBeenCalled();
   });
 
   it('should return 401 if not authenticated', async () => {

@@ -59,8 +59,60 @@ export interface ProjectCreationPersistence {
 
 export type ProjectCreationOutcome = ProjectCreationPersistenceOutcome;
 
+/**
+ * Transport-neutral project detail change intent. The adapter supplies the
+ * trusted owner identity; all mutable values are normalized below.
+ */
+export interface ProjectUpdateRequest {
+  userId: string;
+  projectId: string;
+  name?: string | null;
+  section?: ProjectSection | string | null;
+  color?: string | null;
+  status?: ProjectStatus | string | null;
+  sortOrder?: number | null;
+}
+
+export interface ProjectUpdateChanges {
+  name?: string;
+  section?: ProjectSection;
+  color?: string;
+  status?: ProjectStatus;
+  sortOrder?: number;
+}
+
+export type ProjectUpdatePersistenceOutcome =
+  | { type: "updated"; project: ProjectMutationRecord }
+  | { type: "already-applied"; project: ProjectMutationRecord }
+  | { type: "not-found" }
+  | { type: "conflict" }
+  | { type: "invalid"; field: string; message: string };
+
+export interface ProjectUpdatePersistence {
+  updateProject(
+    projectId: string,
+    userId: string,
+    changes: ProjectUpdateChanges,
+  ): Promise<ProjectUpdatePersistenceOutcome>;
+}
+
+export type ProjectMutationPersistence = Partial<
+  ProjectCreationPersistence & ProjectUpdatePersistence
+>;
+
+export type ProjectUpdateOutcome = ProjectUpdatePersistenceOutcome;
+
 type NormalizedRequest =
   | { ok: true; record: ProjectCreationRecord }
+  | { ok: false; field: string; message: string };
+
+type NormalizedUpdateRequest =
+  | {
+      ok: true;
+      userId: string;
+      projectId: string;
+      changes: ProjectUpdateChanges;
+    }
   | { ok: false; field: string; message: string };
 
 const PROJECT_COLOR_KEYS = new Set(PROJECT_COLORS.map((color) => color.key));
@@ -77,10 +129,39 @@ function invalid(field: string, message: string): NormalizedRequest {
 function normalizeIdentity(value: unknown):
   | { ok: true; value: string }
   | { ok: false; field: string; message: string } {
+  return normalizeRequiredIdentity(
+    value,
+    "userId",
+    "User identity is required",
+  );
+}
+
+function normalizeRequiredIdentity(
+  value: unknown,
+  field: string,
+  message: string,
+): { ok: true; value: string } | { ok: false; field: string; message: string } {
   if (typeof value !== "string" || !value.trim()) {
-    return { ok: false, field: "userId", message: "User identity is required" };
+    return { ok: false, field, message };
   }
   return { ok: true, value: value.trim() };
+}
+
+function hasValue(value: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function normalizeName(value: unknown):
+  | { ok: true; value: string }
+  | { ok: false; message: string } {
+  if (typeof value !== "string") return { ok: false, message: "Name is required" };
+
+  const name = value.trim();
+  if (!name) return { ok: false, message: "Name is required" };
+  if (name.length > 50) {
+    return { ok: false, message: "Name must be 50 characters or less" };
+  }
+  return { ok: true, value: name };
 }
 
 function normalizeSection(value: unknown):
@@ -151,12 +232,8 @@ function normalizeRequest(request: ProjectCreationRequest): NormalizedRequest {
   const userId = normalizeIdentity(request.userId);
   if (!userId.ok) return userId;
 
-  if (typeof request.name !== "string") return invalid("name", "Name is required");
-  const name = request.name.trim();
-  if (!name) return invalid("name", "Name is required");
-  if (name.length > 50) {
-    return invalid("name", "Name must be 50 characters or less");
-  }
+  const name = normalizeName(request.name);
+  if (!name.ok) return invalid("name", name.message);
 
   const section = normalizeSection(request.section);
   if (!section.ok) return invalid("section", section.message);
@@ -174,7 +251,7 @@ function normalizeRequest(request: ProjectCreationRequest): NormalizedRequest {
     ok: true,
     record: {
       userId: userId.value,
-      name,
+      name: name.value,
       section: section.value,
       color: color.value,
       status: status.value,
@@ -183,8 +260,101 @@ function normalizeRequest(request: ProjectCreationRequest): NormalizedRequest {
   };
 }
 
+function normalizeUpdateRequest(
+  request: ProjectUpdateRequest,
+): NormalizedUpdateRequest {
+  if (!isRecord(request)) {
+    return { ok: false, field: "request", message: "Project request is required" };
+  }
+
+  const userId = normalizeRequiredIdentity(
+    request.userId,
+    "userId",
+    "User identity is required",
+  );
+  if (!userId.ok) return userId;
+
+  const projectId = normalizeRequiredIdentity(
+    request.projectId,
+    "projectId",
+    "Project identity is required",
+  );
+  if (!projectId.ok) return projectId;
+
+  const changes: ProjectUpdateChanges = {};
+
+  if (hasValue(request, "name") && request.name !== undefined) {
+    const name = normalizeName(request.name);
+    if (!name.ok) return { ok: false, field: "name", message: name.message };
+    changes.name = name.value;
+  }
+
+  if (hasValue(request, "section") && request.section !== undefined) {
+    if (request.section === null) {
+      return { ok: false, field: "section", message: "Section is invalid" };
+    }
+    const section = normalizeSection(request.section);
+    if (!section.ok) return { ok: false, field: "section", message: section.message };
+    changes.section = section.value;
+  }
+
+  if (hasValue(request, "color") && request.color !== undefined) {
+    if (request.color === null) {
+      return { ok: false, field: "color", message: "Color is invalid" };
+    }
+    const color = normalizeColor(request.color);
+    if (!color.ok) return { ok: false, field: "color", message: color.message };
+    changes.color = color.value;
+  }
+
+  if (hasValue(request, "status") && request.status !== undefined) {
+    if (request.status === null) {
+      return { ok: false, field: "status", message: "Status is invalid" };
+    }
+    const status = normalizeStatus(request.status);
+    if (!status.ok) return { ok: false, field: "status", message: status.message };
+    changes.status = status.value;
+  }
+
+  if (hasValue(request, "sortOrder") && request.sortOrder !== undefined) {
+    if (request.sortOrder === null) {
+      return {
+        ok: false,
+        field: "sortOrder",
+        message: "Sort order must be a non-negative finite number",
+      };
+    }
+    const sortOrder = normalizeSortOrder(request.sortOrder);
+    if (!sortOrder.ok || sortOrder.value === null) {
+      return {
+        ok: false,
+        field: "sortOrder",
+        message: sortOrder.ok
+          ? "Sort order must be a non-negative finite number"
+          : sortOrder.message,
+      };
+    }
+    changes.sortOrder = sortOrder.value;
+  }
+
+  if (Object.keys(changes).length === 0) {
+    return {
+      ok: false,
+      field: "changes",
+      message: "At least one project field must be provided",
+    };
+  }
+
+  return {
+    ok: true,
+    userId: userId.value,
+    projectId: projectId.value,
+    changes,
+  };
+}
+
 export class ProjectWrites {
-  constructor(private readonly persistence: ProjectCreationPersistence) {}
+  constructor(private readonly persistence: ProjectMutationPersistence) {}
 
   async create(request: ProjectCreationRequest): Promise<ProjectCreationOutcome> {
     const normalized = normalizeRequest(request);
@@ -201,10 +371,31 @@ export class ProjectWrites {
     }
     return this.persistence.createProject(normalized.record);
   }
+
+  async update(request: ProjectUpdateRequest): Promise<ProjectUpdateOutcome> {
+    const normalized = normalizeUpdateRequest(request);
+    if (!normalized.ok) {
+      return {
+        type: "invalid",
+        field: normalized.field,
+        message: normalized.message,
+      };
+    }
+
+    if (!this.persistence.updateProject) {
+      throw new Error("Project updates are not supported by this persistence");
+    }
+
+    return this.persistence.updateProject(
+      normalized.projectId,
+      normalized.userId,
+      normalized.changes,
+    );
+  }
 }
 
-export class SupabaseProjectCreationPersistence
-  implements ProjectCreationPersistence
+export class SupabaseProjectMutationPersistence
+  implements ProjectMutationPersistence
 {
   constructor(private readonly supabase: SupabaseClient) {}
 
@@ -229,6 +420,43 @@ export class SupabaseProjectCreationPersistence
     }
     return mapStoredProjectCreationOutcome(data);
   }
+
+  async updateProject(
+    projectId: string,
+    userId: string,
+    changes: ProjectUpdateChanges,
+  ): Promise<ProjectUpdatePersistenceOutcome> {
+    const { data, error } = await this.supabase.rpc(
+      "update_project_atomically",
+      {
+        p_project_id: projectId,
+        p_user_id: userId,
+        p_changes: toStoredProjectUpdateChanges(changes),
+      },
+    );
+
+    if (error) {
+      if (isConflictError(error)) return { type: "conflict" };
+      throw error;
+    }
+    return mapStoredProjectUpdateOutcome(data);
+  }
+}
+
+/** Backwards-compatible name for callers that only use project creation. */
+export class SupabaseProjectCreationPersistence
+  extends SupabaseProjectMutationPersistence {}
+
+function toStoredProjectUpdateChanges(
+  changes: ProjectUpdateChanges,
+): Record<string, unknown> {
+  return {
+    ...(changes.name === undefined ? {} : { name: changes.name }),
+    ...(changes.section === undefined ? {} : { section: changes.section }),
+    ...(changes.color === undefined ? {} : { color: changes.color }),
+    ...(changes.status === undefined ? {} : { status: changes.status }),
+    ...(changes.sortOrder === undefined ? {} : { sort_order: changes.sortOrder }),
+  };
 }
 
 function isConflictError(error: unknown): boolean {
@@ -307,8 +535,44 @@ function mapStoredProjectCreationOutcome(
   throw new Error("Invalid project creation outcome returned by the database");
 }
 
+function mapStoredProjectUpdateOutcome(
+  value: unknown,
+): ProjectUpdatePersistenceOutcome {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    throw new Error("Invalid project update outcome returned by the database");
+  }
+
+  if (value.type === "not-found" || value.type === "conflict") {
+    return { type: value.type };
+  }
+
+  if (
+    value.type === "invalid" &&
+    typeof value.field === "string" &&
+    typeof value.message === "string"
+  ) {
+    return {
+      type: "invalid",
+      field: value.field,
+      message: value.message,
+    };
+  }
+
+  if (
+    (value.type === "updated" || value.type === "already-applied") &&
+    isRecord(value.project)
+  ) {
+    return {
+      type: value.type,
+      project: toProjectMutationRecord(value.project),
+    };
+  }
+
+  throw new Error("Invalid project update outcome returned by the database");
+}
+
 export function createProjectWrites(supabase: SupabaseClient): ProjectWrites {
-  return new ProjectWrites(new SupabaseProjectCreationPersistence(supabase));
+  return new ProjectWrites(new SupabaseProjectMutationPersistence(supabase));
 }
 
 export function toProjectResponse(project: ProjectMutationRecord) {

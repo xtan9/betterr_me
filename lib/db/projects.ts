@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Project, ProjectUpdate, ProjectSection, ProjectStatus } from './types';
+import type { Project, ProjectSection, ProjectStatus } from './types';
 
 export class ProjectsDB {
   constructor(private supabase: SupabaseClient) {}
@@ -48,33 +48,6 @@ export class ProjectsDB {
     }
 
     return data;
-  }
-
-  /**
-   * Update a project
-   */
-  async updateProject(
-    projectId: string,
-    userId: string,
-    updates: ProjectUpdate
-  ): Promise<Project> {
-    const { data, error } = await this.supabase
-      .from('projects')
-      .update(updates)
-      .eq('id', projectId)
-      .eq('user_id', userId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
-
-  /**
-   * Archive a project (shorthand for status update)
-   */
-  async archiveProject(projectId: string, userId: string): Promise<Project> {
-    return this.updateProject(projectId, userId, { status: 'archived' });
   }
 
   /**

@@ -6,7 +6,7 @@ const mockGetUserProjects = vi.fn();
 const mockGetProject = vi.fn();
 const mockCreateProject = vi.fn();
 const mockProjectCreate = vi.fn();
-const mockUpdateProject = vi.fn();
+const mockProjectUpdate = vi.fn();
 const mockDeleteProject = vi.fn();
 
 vi.mock("@/lib/db", () => ({
@@ -14,13 +14,15 @@ vi.mock("@/lib/db", () => ({
     getUserProjects = mockGetUserProjects;
     getProject = mockGetProject;
     createProject = mockCreateProject;
-    updateProject = mockUpdateProject;
     deleteProject = mockDeleteProject;
   },
 }));
 
 vi.mock("@/lib/projects/writes", () => ({
-  createProjectWrites: vi.fn(() => ({ create: mockProjectCreate })),
+  createProjectWrites: vi.fn(() => ({
+    create: mockProjectCreate,
+    update: mockProjectUpdate,
+  })),
   toProjectResponse: vi.fn((project) => project),
 }));
 
@@ -90,14 +92,71 @@ describe("projectTools", () => {
 
   it("updateProject removes undefined values", async () => {
     const ctx = makeCtx();
-    mockUpdateProject.mockResolvedValue({ id: "p1", name: "Renamed" });
+    mockProjectUpdate.mockResolvedValue({
+      type: "updated",
+      project: { id: "p1", name: "Renamed" },
+    });
     await findTool("updateProject").execute(
       { projectId: "p1", name: "Renamed" },
       ctx,
     );
-    expect(mockUpdateProject).toHaveBeenCalledWith("p1", "user-123", {
+    expect(mockProjectUpdate).toHaveBeenCalledWith({
+      userId: "user-123",
+      projectId: "p1",
       name: "Renamed",
     });
+  });
+
+  it("maps ordering through the shared update request", async () => {
+    mockProjectUpdate.mockResolvedValue({
+      type: "updated",
+      project: { id: "p1", name: "Renamed", sort_order: 131072 },
+    });
+
+    await findTool("updateProject").execute(
+      { projectId: "p1", sortOrder: 131072 },
+      makeCtx(),
+    );
+
+    expect(mockProjectUpdate).toHaveBeenCalledWith({
+      userId: "user-123",
+      projectId: "p1",
+      sortOrder: 131072,
+    });
+  });
+
+  it("maps a shared invalid outcome through the AI contract", async () => {
+    mockProjectUpdate.mockResolvedValue({
+      type: "invalid",
+      field: "color",
+      message: "Color is invalid",
+    });
+
+    await expect(
+      findTool("updateProject").execute(
+        { projectId: "p1", color: "chartreuse" },
+        makeCtx(),
+      ),
+    ).resolves.toEqual({ error: "Color is invalid", field: "color" });
+  });
+
+  it("maps missing and already-applied update outcomes through the AI contract", async () => {
+    const ctx = makeCtx();
+    mockProjectUpdate.mockResolvedValueOnce({ type: "not-found" });
+
+    await expect(
+      findTool("updateProject").execute({ projectId: "missing", status: "archived" }, ctx),
+    ).resolves.toEqual({ error: "Project not found" });
+
+    const project = { id: "p1", name: "Renamed", status: "archived" };
+    mockProjectUpdate.mockResolvedValueOnce({
+      type: "already-applied",
+      project,
+    });
+
+    await expect(
+      findTool("updateProject").execute({ projectId: "p1", status: "archived" }, ctx),
+    ).resolves.toEqual(project);
   });
 
   it("deleteProject verifies existence then deletes", async () => {
