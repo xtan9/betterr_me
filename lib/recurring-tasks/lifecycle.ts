@@ -8,6 +8,7 @@ import {
   calculateScheduledDates,
   compareLocalDates,
   getLocalDateInTimeZone,
+  isValidLocalDate,
 } from "./recurrence";
 
 export type RecurringSeriesStatus = "active" | "paused" | "ended";
@@ -562,8 +563,8 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       if (series.status === "ended") {
         return invalidTransition("Ended Series cannot be revised");
       }
-      const effectiveDate = request.effectiveDate
-        ?? this.resolveEffectiveDate(request, series.timeZone);
+      const effectiveDate = this.resolveEffectiveDate(request, series.timeZone);
+      if (typeof effectiveDate !== "string") return effectiveDate;
       if (compareLocalDates(effectiveDate, series.activationDate) < 0) {
         return invalidTransition("A Series Revision cannot begin before activation");
       }
@@ -764,8 +765,8 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
             : "Paused Series is already paused",
         );
       }
-      const effectiveDate = request.effectiveDate
-        ?? this.resolveEffectiveDate(request, series.timeZone);
+      const effectiveDate = this.resolveEffectiveDate(request, series.timeZone);
+      if (typeof effectiveDate !== "string") return effectiveDate;
       if (compareLocalDates(effectiveDate, series.activationDate) < 0) {
         return invalidTransition("Lifecycle date cannot precede activation");
       }
@@ -822,8 +823,8 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       if (series.status !== "paused") {
         return invalidTransition("Active Series is not paused");
       }
-      const effectiveDate = request.effectiveDate
-        ?? this.resolveEffectiveDate(request, series.timeZone);
+      const effectiveDate = this.resolveEffectiveDate(request, series.timeZone);
+      if (typeof effectiveDate !== "string") return effectiveDate;
       if (compareLocalDates(effectiveDate, series.activationDate) < 0) {
         return invalidTransition("Lifecycle date cannot precede activation");
       }
@@ -855,10 +856,12 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       series.revisionToken += 1;
       series.updatedAt = this.clock().toISOString();
       clearPauseAbsencesFrom(series, effectiveDate);
-      return request.coverage
+      const coverage = request.coverage
+        ?? coverageFrom(series.coverageHorizon, effectiveDate);
+      return coverage
         ? ensureCoverageState(
           series,
-          request.coverage,
+          coverage,
           this.idFactory,
           this.clock().toISOString(),
         )
@@ -873,8 +876,8 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       const invalid = checkExpectedRevision(series, request);
       if (invalid) return invalid;
       if (series.status === "ended") return summarize(series);
-      const effectiveDate = request.effectiveDate
-        ?? this.resolveEffectiveDate(request, series.timeZone);
+      const effectiveDate = this.resolveEffectiveDate(request, series.timeZone);
+      if (typeof effectiveDate !== "string") return effectiveDate;
       if (compareLocalDates(effectiveDate, series.activationDate) < 0) {
         return invalidTransition("Lifecycle date cannot precede activation");
       }
@@ -999,15 +1002,17 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
   private resolveEffectiveDate(
     request: LifecycleContext,
     seriesTimeZone: string,
-  ): string {
-    const timeZone = validateTimeZone(
-      request.timeZone ?? request.timezone ?? seriesTimeZone,
-    );
-    return request.effectiveDate
-      ?? getLocalDateInTimeZone(
-        this.clock(),
-        timeZone,
-      );
+  ): string | InvalidTransitionOutcome {
+    const explicitDate = request.effectiveDate?.trim();
+    if (explicitDate) {
+      return isValidLocalDate(explicitDate)
+        ? explicitDate
+        : invalidTransition("Effective Date must be a valid local date");
+    }
+    // A command's implicit boundary is a property of the person's stored
+    // Series, not of whichever transport happened to invoke the lifecycle.
+    const timeZone = validateTimeZone(seriesTimeZone);
+    return getLocalDateInTimeZone(this.clock(), timeZone);
   }
 }
 
