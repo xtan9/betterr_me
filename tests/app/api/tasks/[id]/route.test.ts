@@ -73,6 +73,10 @@ describe("GET /api/tasks/[id]", () => {
 describe("PATCH /api/tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(mockTasksDB.getTask).mockResolvedValue({
+      id: "task-1",
+      user_id: "user-123",
+    } as any);
   });
 
   it("should update task", async () => {
@@ -347,6 +351,10 @@ describe("DELETE /api/tasks/[id]", () => {
   });
 
   it("should delete task", async () => {
+    vi.mocked(mockTasksDB.getTask).mockResolvedValue({
+      id: "task-1",
+      user_id: "user-123",
+    } as any);
     vi.mocked(mockTasksDB.deleteTask).mockResolvedValue();
 
     const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
@@ -370,6 +378,10 @@ describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
   });
 
   it("should delegate scope=this to updateInstanceWithScope", async () => {
+    vi.mocked(mockTasksDB.getTask).mockResolvedValue({
+      id: "task-1",
+      user_id: "user-123",
+    } as any);
     vi.mocked(mockRecurringTasksDB.updateInstanceWithScope).mockResolvedValue();
 
     const request = new NextRequest(
@@ -468,6 +480,12 @@ describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
   });
 
   it("should delegate scope=this to deleteInstanceWithScope", async () => {
+    vi.mocked(mockTasksDB.getTask).mockResolvedValue({
+      id: "task-1",
+      user_id: "user-123",
+      recurring_series_id: "series-1",
+      recurring_occurrence_id: "occurrence-1",
+    } as any);
     vi.mocked(mockRecurringTasksDB.deleteInstanceWithScope).mockResolvedValue();
 
     const request = new NextRequest(

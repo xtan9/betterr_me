@@ -61,7 +61,7 @@ describe('POST /api/tasks/[id]/toggle', () => {
     );
   });
 
-  it('completes a recurring occurrence through the lifecycle RPC', async () => {
+  it('keeps the prepared lifecycle path inactive for recurring occurrences', async () => {
     const currentTask = {
       id: 'task-1',
       is_completed: false,
@@ -69,13 +69,8 @@ describe('POST /api/tasks/[id]/toggle', () => {
       recurring_occurrence_id: 'occurrence-1',
     };
     const completedTask = { ...currentTask, is_completed: true, status: 'done' };
-    vi.mocked(mockTasksDB.getTask)
-      .mockResolvedValueOnce(currentTask as any)
-      .mockResolvedValueOnce(completedTask as any);
-    mockRpc.mockResolvedValue({
-      data: { status: 'complete', type: 'complete' },
-      error: null,
-    });
+    vi.mocked(mockTasksDB.getTask).mockResolvedValue(currentTask as any);
+    vi.mocked(mockTasksDB.updateTask).mockResolvedValue(completedTask as any);
 
     const request = new NextRequest('http://localhost:3000/api/tasks/task-1/toggle', {
       method: 'POST',
@@ -88,15 +83,12 @@ describe('POST /api/tasks/[id]/toggle', () => {
 
     expect(response.status).toBe(200);
     expect(data.task).toEqual(completedTask);
-    expect(mockRpc).toHaveBeenCalledWith('recurring_task_lifecycle', {
-      p_operation: 'complete-occurrence',
-      p_request: {
-        userId: 'user-123',
-        seriesId: 'series-1',
-        occurrenceId: 'occurrence-1',
-      },
-    });
-    expect(mockTasksDB.updateTask).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockTasksDB.updateTask).toHaveBeenCalledWith(
+      'task-1',
+      'user-123',
+      expect.objectContaining({ is_completed: true, status: 'done' }),
+    );
   });
 
   it('should return 404 if task not found', async () => {

@@ -3,6 +3,12 @@ import { TasksDB, RecurringTasksDB } from "@/lib/db";
 import type { RecurrenceRule } from "@/lib/db";
 import { createTaskWrites } from "@/lib/tasks/writes";
 import { createSupabaseRecurringTaskLifecycle } from "@/lib/recurring-tasks";
+import {
+  isOccurrenceSuccess,
+  occurrenceErrorMessage,
+  toOccurrenceEditIntent,
+} from "@/lib/recurring-tasks/occurrence-adapter";
+import { createSupabaseOccurrenceAdapter } from "@/lib/recurring-tasks/supabase-occurrence-adapter";
 import { ensureRecurringTaskCoverageThrough } from "@/lib/recurring-tasks/coverage";
 import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
 import {
@@ -155,14 +161,12 @@ export function taskTools(): ToolDefinition[] {
         taskId: z.string().describe("The task ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const outcome = await createTaskWrites(ctx.supabase, {
-          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
-        }).execute({
-          type: "toggle-completion",
+        const outcome = await createSupabaseOccurrenceAdapter(ctx.supabase).toggle({
           taskId: params.taskId,
           userId: ctx.userId,
         });
-        return outcome.task;
+        if (isOccurrenceSuccess(outcome)) return outcome.task;
+        return { error: occurrenceErrorMessage(outcome) };
       },
     },
     {
@@ -174,40 +178,37 @@ export function taskTools(): ToolDefinition[] {
         ctx: ToolContext,
       ) => {
         const { taskId, dueDate, projectId, ...rest } = params;
-        const outcome = await createTaskWrites(ctx.supabase, {
-          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
-        }).execute({
-          type: "update",
-          taskId,
-          userId: ctx.userId,
-          values: {
-            ...rest,
-            due_date: dueDate,
-            project_id: projectId,
-          },
-        });
-        return outcome.task;
+        const outcome = await createSupabaseOccurrenceAdapter(ctx.supabase).edit(
+          toOccurrenceEditIntent({
+            userId: ctx.userId,
+            taskId,
+            title: rest.title,
+            description: rest.description,
+            priority: rest.priority,
+            status: rest.status,
+            dueDate,
+            projectId,
+          }),
+        );
+        if (isOccurrenceSuccess(outcome)) return outcome.task;
+        return { error: occurrenceErrorMessage(outcome) };
       },
     },
     {
       name: "deleteTask",
       description:
-        "Delete a task by ID, or skip a recurring occurrence while preserving its series lineage.",
+        "Delete a task by ID, or skip a recurring occurrence while preserving its series lineage. Always confirm with the user first.",
       parameters: z.object({
         taskId: z.string().describe("The task ID"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new TasksDB(ctx.supabase);
-        const task = await db.getTask(params.taskId, ctx.userId);
-        if (!task) return { error: "Task not found" };
-        if (task.recurring_series_id && task.recurring_occurrence_id) {
-          await new RecurringTasksDB(ctx.supabase, {
-            lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
-          }).deleteInstanceWithScope(params.taskId, ctx.userId, "this");
-        } else {
-          await db.deleteTask(params.taskId, ctx.userId);
-        }
-        return { success: true };
+        const outcome = await createSupabaseOccurrenceAdapter(ctx.supabase).delete({
+          taskId: params.taskId,
+          userId: ctx.userId,
+          scope: "this",
+        });
+        if (isOccurrenceSuccess(outcome)) return { success: true };
+        return { error: occurrenceErrorMessage(outcome) };
       },
     },
     {

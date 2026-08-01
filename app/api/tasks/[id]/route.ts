@@ -7,7 +7,14 @@ import { log } from '@/lib/logger';
 import { taskUpdateSchema } from '@/lib/validations/task';
 import { editScopeSchema } from '@/lib/validations/recurring-task';
 import { createTaskWrites } from '@/lib/tasks/writes';
-import { createSupabaseRecurringTaskLifecycle } from '@/lib/recurring-tasks';
+import {
+  createSupabaseOccurrenceAdapter,
+  createSupabaseRecurringTaskLifecycle,
+  isOccurrenceSuccess,
+  occurrenceHttpFailure,
+  toOccurrenceEditIntent,
+} from '@/lib/recurring-tasks';
+import type { TaskUpdateValues } from '@/lib/validations/task';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['apiKey', 'cookie'],
@@ -86,6 +93,25 @@ export async function PATCH(
       const validation = validateRequestBody(body, taskUpdateSchema);
       if (!validation.success) return validation.response;
 
+      if (scopeResult.data === 'this') {
+        const outcome = await createSupabaseOccurrenceAdapter(supabase).edit(
+          toOccurrenceEditIntent({
+            userId,
+            taskId: id,
+            ...toOccurrenceInput(validation.data),
+            scope: 'this',
+          }),
+        );
+        if (!isOccurrenceSuccess(outcome)) {
+          const failure = occurrenceHttpFailure(outcome);
+          return NextResponse.json(
+            { error: failure.error },
+            { status: failure.status },
+          );
+        }
+        return NextResponse.json({ success: true });
+      }
+
       const writes = createTaskWrites(supabase, {
         scopedUpdates: true,
         lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
@@ -104,32 +130,23 @@ export async function PATCH(
     const validation = validateRequestBody(body, taskUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const writes = createTaskWrites(supabase, {
-      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
-    });
-    const outcome = validation.data.sort_order !== undefined
-      && Object.keys(validation.data).length === 1
-      ? await writes.execute({
-        type: 'order',
-        taskId: id,
+    const outcome = await createSupabaseOccurrenceAdapter(supabase).edit(
+      toOccurrenceEditIntent({
         userId,
-        sortOrder: validation.data.sort_order,
-      })
-      : await writes.execute({
-        type: 'update',
         taskId: id,
-        userId,
-        values: validation.data,
-      });
+        ...toOccurrenceInput(validation.data),
+      }),
+    );
+    if (!isOccurrenceSuccess(outcome)) {
+      const failure = occurrenceHttpFailure(outcome);
+      return NextResponse.json(
+        { error: failure.error },
+        { status: failure.status },
+      );
+    }
     return NextResponse.json({ task: outcome.task });
   } catch (error: unknown) {
     log.error('PATCH /api/tasks/[id] error', error);
-
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('not found')) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
-    }
-
     return NextResponse.json(
       { error: 'Failed to update task' },
       { status: 500 }
@@ -166,6 +183,22 @@ export async function DELETE(
         );
       }
 
+      if (scopeResult.data === 'this') {
+        const outcome = await createSupabaseOccurrenceAdapter(supabase).delete({
+          taskId: id,
+          userId,
+          scope: 'this',
+        });
+        if (!isOccurrenceSuccess(outcome)) {
+          const failure = occurrenceHttpFailure(outcome);
+          return NextResponse.json(
+            { error: failure.error },
+            { status: failure.status },
+          );
+        }
+        return NextResponse.json({ success: true });
+      }
+
       const recurringTasksDB = new RecurringTasksDB(supabase, {
         lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
       });
@@ -173,14 +206,17 @@ export async function DELETE(
       return NextResponse.json({ success: true });
     }
 
-    const tasksDB = new TasksDB(supabase);
-    const task = await tasksDB.getTask(id, userId);
-    if (task?.recurring_series_id && task.recurring_occurrence_id) {
-      await new RecurringTasksDB(supabase, {
-        lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
-      }).deleteInstanceWithScope(id, userId, 'this');
-    } else {
-      await tasksDB.deleteTask(id, userId);
+    const outcome = await createSupabaseOccurrenceAdapter(supabase).delete({
+      taskId: id,
+      userId,
+      scope: 'this',
+    });
+    if (!isOccurrenceSuccess(outcome)) {
+      const failure = occurrenceHttpFailure(outcome);
+      return NextResponse.json(
+        { error: failure.error },
+        { status: failure.status },
+      );
     }
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -190,4 +226,21 @@ export async function DELETE(
       { status: 500 }
     );
   }
+}
+
+function toOccurrenceInput(values: TaskUpdateValues) {
+  return {
+    title: values.title,
+    description: values.description,
+    priority: values.priority,
+    categoryId: values.category_id,
+    dueDate: values.due_date,
+    dueTime: values.due_time,
+    status: values.status,
+    completed: values.is_completed,
+    section: values.section,
+    sortOrder: values.sort_order,
+    projectId: values.project_id,
+    completionDifficulty: values.completion_difficulty,
+  };
 }
