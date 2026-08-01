@@ -30,3 +30,8 @@ export {
   createSupabaseOccurrenceAdapter,
   type SupabaseOccurrenceAdapterOptions,
 } from './supabase-occurrence-adapter';
+export * from './series-state-adapter';
+export {
+  createSupabaseSeriesStateAdapter,
+  type SupabaseSeriesStateAdapterOptions,
+} from './supabase-series-state-adapter';

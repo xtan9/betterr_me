@@ -5,8 +5,16 @@ import { RecurringTasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { recurringTaskUpdateSchema } from '@/lib/validations/recurring-task';
-import { addLocalDays } from '@/lib/recurring-tasks/recurrence';
-import { createSupabaseRecurringTaskLifecycle } from '@/lib/recurring-tasks';
+import {
+  addLocalDays,
+  isValidLocalDate,
+} from '@/lib/recurring-tasks/recurrence';
+import {
+  createSupabaseSeriesStateAdapter,
+  isSeriesStateSuccess,
+  seriesStateHttpFailure,
+} from '@/lib/recurring-tasks';
+import type { RecurringTaskUpdateValues } from '@/lib/validations/recurring-task';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -37,9 +45,7 @@ export async function GET(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const recurringTasksDB = new RecurringTasksDB(supabase, {
-      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
-    });
+    const recurringTasksDB = new RecurringTasksDB(supabase);
     const template = await recurringTasksDB.getRecurringTask(id, userId);
 
     if (!template) {
@@ -80,25 +86,47 @@ export async function PATCH(
 
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action');
-    const recurringTasksDB = new RecurringTasksDB(supabase, {
-      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
-    });
+    const dateParam = searchParams.get('date')?.trim() || undefined;
+    if (dateParam && !isValidLocalDate(dateParam)) {
+      return NextResponse.json(
+        { error: 'Invalid date. Must be a valid YYYY-MM-DD local date' },
+        { status: 400 },
+      );
+    }
+    const state = createSupabaseSeriesStateAdapter(supabase);
 
     // Handle quick actions
     if (action === 'pause') {
-      const template = await recurringTasksDB.pauseRecurringTask(id, userId);
-      return NextResponse.json({ recurring_task: template });
+      const outcome = await state.pause({
+        seriesId: id,
+        userId,
+        effectiveDate: dateParam,
+      });
+      if (!isSeriesStateSuccess(outcome)) {
+        const failure = seriesStateHttpFailure(outcome);
+        return NextResponse.json(
+          { error: failure.error },
+          { status: failure.status },
+        );
+      }
+      return NextResponse.json({ recurring_task: outcome.recurringTask });
     }
     if (action === 'resume') {
-      const explicitDate = searchParams.get('date') || undefined;
-      const throughDate = explicitDate ? addLocalDays(explicitDate, 7) : undefined;
-      const template = await recurringTasksDB.resumeRecurringTask(
-        id,
+      const throughDate = dateParam ? addLocalDays(dateParam, 7) : undefined;
+      const outcome = await state.resume({
+        seriesId: id,
         userId,
-        explicitDate,
-        throughDate,
-      );
-      return NextResponse.json({ recurring_task: template });
+        effectiveDate: dateParam,
+        coverageThrough: throughDate,
+      });
+      if (!isSeriesStateSuccess(outcome)) {
+        const failure = seriesStateHttpFailure(outcome);
+        return NextResponse.json(
+          { error: failure.error },
+          { status: failure.status },
+        );
+      }
+      return NextResponse.json({ recurring_task: outcome.recurringTask });
     }
     if (action) {
       return NextResponse.json(
@@ -112,8 +140,22 @@ export async function PATCH(
     const validation = validateRequestBody(body, recurringTaskUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const template = await recurringTasksDB.updateRecurringTask(id, userId, validation.data);
-    return NextResponse.json({ recurring_task: template });
+    const outcome = await state.update(
+      toSeriesRevisionInput(
+        id,
+        userId,
+        validation.data,
+        dateParam,
+      ),
+    );
+    if (!isSeriesStateSuccess(outcome)) {
+      const failure = seriesStateHttpFailure(outcome);
+      return NextResponse.json(
+        { error: failure.error },
+        { status: failure.status },
+      );
+    }
+    return NextResponse.json({ recurring_task: outcome.recurringTask });
   } catch (error: unknown) {
     log.error('PATCH /api/recurring-tasks/[id] error', error);
 
@@ -148,10 +190,26 @@ export async function DELETE(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const recurringTasksDB = new RecurringTasksDB(supabase, {
-      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+    const dateParam = request.nextUrl.searchParams.get('date')?.trim() || undefined;
+    if (dateParam && !isValidLocalDate(dateParam)) {
+      return NextResponse.json(
+        { error: 'Invalid date. Must be a valid YYYY-MM-DD local date' },
+        { status: 400 },
+      );
+    }
+    const state = createSupabaseSeriesStateAdapter(supabase);
+    const outcome = await state.end({
+      seriesId: id,
+      userId,
+      effectiveDate: dateParam,
     });
-    await recurringTasksDB.deleteRecurringTask(id, userId);
+    if (!isSeriesStateSuccess(outcome)) {
+      const failure = seriesStateHttpFailure(outcome);
+      return NextResponse.json(
+        { error: failure.error },
+        { status: failure.status },
+      );
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     log.error('DELETE /api/recurring-tasks/[id] error', error);
@@ -160,4 +218,28 @@ export async function DELETE(
       { status: 500 }
     );
   }
+}
+
+function toSeriesRevisionInput(
+  seriesId: string,
+  userId: string,
+  values: RecurringTaskUpdateValues,
+  effectiveDate?: string,
+) {
+  return {
+    seriesId,
+    userId,
+    title: values.title,
+    description: values.description,
+    priority: values.priority,
+    categoryId: values.category_id,
+    dueTime: values.due_time,
+    recurrenceRule: values.recurrence_rule,
+    startDate: values.start_date,
+    endType: values.end_type,
+    endDate: values.end_date,
+    endCount: values.end_count,
+    seriesStatus: values.status,
+    effectiveDate,
+  };
 }
