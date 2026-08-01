@@ -367,7 +367,9 @@ begin
   language plpgsql
   as $function$
   begin
-    if new.due_time = time '11:30' then
+    if new.due_time = time '11:30'
+       and current_setting('betterr.fixture_allow_revision_retry', true)
+           is distinct from 'on' then
       raise exception 'fixture occurrence task update rollback probe';
     end if;
     return new;
@@ -643,6 +645,306 @@ begin
   ) into outcome;
   if outcome->>'status' <> 'not-found' then
     raise exception 'series ownership disclosed another user''s lineage';
+  end if;
+end
+$$;
+
+do $$
+declare
+  v_series_id uuid;
+  completed_id uuid;
+  skipped_id uuid;
+  retained_id uuid;
+  prior_revision_id uuid;
+  successor_revision_id uuid;
+  revision_request jsonb;
+  rollback_request jsonb;
+  first_revision jsonb;
+  retry jsonb;
+  conflict_outcome jsonb;
+  rollback_failed boolean;
+begin
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000001"}',
+    true
+  );
+
+  first_revision := public.recurring_task_lifecycle(
+    'create-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'recurrenceRule', jsonb_build_object(
+        'frequency', 'weekly',
+        'interval', 1,
+        'days_of_week', jsonb_build_array(1, 3, 5)
+      ),
+      'recurrenceAnchor', '2026-08-03',
+      'activationDate', '2026-08-03',
+      'defaults', jsonb_build_object(
+        'title', 'Revision original',
+        'description', 'Original description',
+        'priority', 1
+      ),
+      'coverage', jsonb_build_object('from', '2026-08-03', 'to', '2026-08-14'),
+      'idempotencyKey', 'create-revision-682'
+    )
+  );
+  if first_revision->>'status' <> 'complete' then
+    raise exception 'revision reconciliation fixture series was not created: %', first_revision;
+  end if;
+  v_series_id := (first_revision->'series'->>'id')::uuid;
+
+  select occurrence.id
+  into completed_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = '2026-08-03';
+  select occurrence.id
+  into skipped_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = '2026-08-05';
+  select occurrence.id
+  into retained_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = '2026-08-12';
+
+  retry := public.recurring_task_lifecycle(
+    'complete-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', completed_id,
+      'idempotencyKey', 'complete-revision-682'
+    )
+  );
+  if retry->>'status' <> 'complete' then
+    raise exception 'revision reconciliation fixture completion failed: %', retry;
+  end if;
+  retry := public.recurring_task_lifecycle(
+    'skip-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', skipped_id,
+      'idempotencyKey', 'skip-revision-682'
+    )
+  );
+  if retry->>'status' <> 'complete' then
+    raise exception 'revision reconciliation fixture skip failed: %', retry;
+  end if;
+  retry := public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', retained_id,
+      'updates', jsonb_build_object('title', 'Retained override'),
+      'idempotencyKey', 'edit-revision-682'
+    )
+  );
+  if retry->>'status' <> 'complete' then
+    raise exception 'revision reconciliation fixture override failed: %', retry;
+  end if;
+
+  revision_request := jsonb_build_object(
+    'userId', '65900000-0000-0000-0000-000000000001',
+    'seriesId', v_series_id,
+    'effectiveDate', '2026-08-06',
+    'recurrenceRule', jsonb_build_object(
+      'frequency', 'weekly',
+      'interval', 1,
+      'days_of_week', jsonb_build_array(1, 4)
+    ),
+    'defaults', jsonb_build_object(
+      'title', 'Revised once',
+      'priority', 3
+    ),
+    'coverage', jsonb_build_object('from', '2026-08-06', 'to', '2026-08-14'),
+    'scope', 'following',
+    'idempotencyKey', 'revise-682'
+  );
+  first_revision := public.recurring_task_lifecycle('revise-series', revision_request);
+  retry := public.recurring_task_lifecycle('revise-series', revision_request);
+  if first_revision->>'status' <> 'complete'
+     or retry->>'status' <> 'already-applied'
+     or retry->>'type' <> 'already-applied' then
+    raise exception 'revision retry was not typed and idempotent: %', retry;
+  end if;
+
+  begin
+    conflict_outcome := public.recurring_task_lifecycle(
+      'revise-series',
+      jsonb_set(
+        revision_request,
+        '{defaults,title}',
+        '"Different intent"'::jsonb
+      )
+    );
+  exception when others then
+    raise exception 'revision idempotency reuse raised instead of returning typed conflict';
+  end;
+  if conflict_outcome->>'status' <> 'conflict'
+     or conflict_outcome->>'type' <> 'conflict' then
+    raise exception 'revision idempotency reuse was not a typed conflict: %', conflict_outcome;
+  end if;
+
+  select revision.id
+  into prior_revision_id
+  from public.recurring_task_series_revisions revision
+  where revision.series_id = v_series_id
+    and revision.effective_from = '2026-08-03';
+  select revision.id
+  into successor_revision_id
+  from public.recurring_task_series_revisions revision
+  where revision.series_id = v_series_id
+    and revision.effective_from = '2026-08-06';
+
+  if (select count(*) from public.recurring_task_series_revisions revision
+      where revision.series_id = v_series_id) <> 2
+     or (select effective_to from public.recurring_task_series_revisions revision
+         where revision.id = prior_revision_id) <> '2026-08-06'
+     or (select effective_to from public.recurring_task_series_revisions revision
+         where revision.id = successor_revision_id) is not null
+     or exists (
+       select 1
+       from (values
+         (date '2026-08-03'),
+         (date '2026-08-05'),
+         (date '2026-08-06'),
+         (date '2026-08-07'),
+         (date '2026-08-10'),
+         (date '2026-08-12'),
+         (date '2026-08-11'),
+         (date '2026-08-13'),
+         (date '2026-08-14')
+       ) as dates(scheduled_date)
+       where (
+         select count(*)
+         from public.recurring_task_series_revisions revision
+         where revision.series_id = v_series_id
+           and revision.effective_from <= dates.scheduled_date
+           and (
+             revision.effective_to is null
+             or dates.scheduled_date < revision.effective_to
+           )
+       ) <> 1
+     ) then
+    raise exception 'revision effective dates did not resolve exactly once';
+  end if;
+
+  if (select state from public.recurring_task_occurrences occurrence
+      where occurrence.series_id = v_series_id
+        and occurrence.scheduled_date = '2026-08-03') <> 'completed'
+     or (select revision_id from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-03') <> prior_revision_id
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-05') <> 'skipped'
+     or (select revision_id from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-05') <> prior_revision_id
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-10') <> 'open'
+     or (select revision_id from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-10') <> successor_revision_id
+     or (select details->>'title' from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-10') <> 'Revised once'
+     or (select (details->>'priority')::integer from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-10') <> 3
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-12') <> 'extra'
+     or (select revision_id from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-12') <> prior_revision_id
+     or (select details->>'title' from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-12') <> 'Retained override'
+     or (select (details->>'priority')::integer from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-12') <> 1
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-14') <> 'withdrawn'
+     or exists (
+       select 1
+       from (values (date '2026-08-06'), (date '2026-08-13')) as dates(scheduled_date)
+       where not exists (
+         select 1
+         from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = dates.scheduled_date
+           and occurrence.state = 'open'
+           and occurrence.revision_id = successor_revision_id
+           and occurrence.details->>'title' = 'Revised once'
+           and (occurrence.details->>'priority')::integer = 3
+       )
+     ) then
+    raise exception 'revision did not reconcile additions, removals, defaults, or preserved history';
+  end if;
+
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000002"}',
+    true
+  );
+  conflict_outcome := public.recurring_task_lifecycle(
+    'revise-series',
+    jsonb_set(revision_request, '{userId}',
+      '"65900000-0000-0000-0000-000000000002"'::jsonb)
+  );
+  if conflict_outcome->>'status' <> 'not-found'
+     or conflict_outcome->>'type' <> 'not-found' then
+    raise exception 'foreign revision did not return a typed not-found outcome: %', conflict_outcome;
+  end if;
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000001"}',
+    true
+  );
+
+  conflict_outcome := public.recurring_task_lifecycle(
+    'revise-series',
+    revision_request || jsonb_build_object(
+      'expectedRevisionToken', 1,
+      'idempotencyKey', 'stale-revision-682'
+    )
+  );
+  if conflict_outcome->>'status' <> 'conflict'
+     or conflict_outcome->>'type' <> 'conflict' then
+    raise exception 'stale revision token did not return a typed conflict: %', conflict_outcome;
+  end if;
+
+  rollback_request := revision_request || jsonb_build_object(
+    'effectiveDate', '2026-08-07',
+    'defaults', jsonb_build_object('dueTime', '11:30'),
+    'idempotencyKey', 'rollback-revision-682'
+  );
+  rollback_failed := false;
+  begin
+    perform public.recurring_task_lifecycle('revise-series', rollback_request);
+  exception when others then
+    rollback_failed := true;
+  end;
+  if not rollback_failed
+     or (select revision_token from public.recurring_task_series where id = v_series_id) <> 2
+     or (select count(*) from public.recurring_task_series_revisions revision
+         where revision.series_id = v_series_id) <> 2 then
+    raise exception 'failed revision did not roll back its lineage and retry record';
+  end if;
+  perform set_config('betterr.fixture_allow_revision_retry', 'on', false);
+  retry := public.recurring_task_lifecycle('revise-series', rollback_request);
+  if retry->>'status' <> 'complete'
+     or (select revision_token from public.recurring_task_series where id = v_series_id) <> 3 then
+    raise exception 'rolled-back revision did not retry as a fresh transaction: %', retry;
   end if;
 end
 $$;

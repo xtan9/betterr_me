@@ -720,6 +720,150 @@ describe("RecurringTaskLifecycle revision behavior", () => {
     expect(revised.series.revisions[0].effectiveTo).toBe("2026-08-02");
   });
 
+  it("reconciles covered work to a following revision without rewriting history", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-revision-reconciliation",
+      recurrenceRule: {
+        frequency: "weekly",
+        interval: 1,
+        days_of_week: [1, 3, 5],
+      },
+      recurrenceAnchor: "2026-08-03",
+      activationDate: "2026-08-03",
+      defaults: defaults("Original", 1),
+      coverage: { from: "2026-08-03", to: "2026-08-14" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const retained = created.occurrences.find(
+      (occurrence) => occurrence.scheduledDate === "2026-08-12",
+    );
+    const completed = created.occurrences.find(
+      (occurrence) => occurrence.scheduledDate === "2026-08-03",
+    );
+    const skipped = created.occurrences.find(
+      (occurrence) => occurrence.scheduledDate === "2026-08-05",
+    );
+    if (!retained || !completed || !skipped) return;
+
+    await lifecycle.editOccurrence({
+      userId: "user-revision-reconciliation",
+      seriesId: created.series.id,
+      occurrenceId: retained.id,
+      updates: { title: "Personally retained" },
+    });
+    await lifecycle.completeOccurrence({
+      userId: "user-revision-reconciliation",
+      seriesId: created.series.id,
+      occurrenceId: completed.id,
+    });
+    await lifecycle.skipOccurrence({
+      userId: "user-revision-reconciliation",
+      seriesId: created.series.id,
+      occurrenceId: skipped.id,
+    });
+
+    const revised = await lifecycle.reviseSeries({
+      userId: "user-revision-reconciliation",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-06",
+      recurrenceRule: {
+        frequency: "weekly",
+        interval: 1,
+        days_of_week: [1, 4],
+      },
+      defaults: defaults("Revised", 3),
+      coverage: { from: "2026-08-06", to: "2026-08-14" },
+      scope: "following",
+      idempotencyKey: "reconcile-revision",
+    });
+
+    expect(revised.status).toBe("complete");
+    if (revised.status !== "complete") return;
+    expect(await lifecycle.reviseSeries({
+      userId: "user-revision-reconciliation",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-06",
+      recurrenceRule: {
+        frequency: "weekly",
+        interval: 1,
+        days_of_week: [1, 4],
+      },
+      defaults: defaults("Revised", 3),
+      coverage: { from: "2026-08-06", to: "2026-08-14" },
+      scope: "following",
+      idempotencyKey: "reconcile-revision",
+    })).toMatchObject({
+      status: "already-applied",
+      type: "already-applied",
+    });
+    expect(await lifecycle.reviseSeries({
+      userId: "user-revision-reconciliation",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-06",
+      recurrenceRule: {
+        frequency: "weekly",
+        interval: 1,
+        days_of_week: [1, 4],
+      },
+      defaults: defaults("Different revision", 3),
+      coverage: { from: "2026-08-06", to: "2026-08-14" },
+      scope: "following",
+      idempotencyKey: "reconcile-revision",
+    })).toMatchObject({
+      status: "conflict",
+      type: "conflict",
+    });
+    const byDate = new Map(
+      revised.occurrences.map((occurrence) => [occurrence.scheduledDate, occurrence]),
+    );
+    const allByDate = new Map(
+      revised.series.occurrences.map((occurrence) => [occurrence.scheduledDate, occurrence]),
+    );
+    const successor = revised.series.revisions[1];
+    expect(successor).toMatchObject({
+      effectiveFrom: "2026-08-06",
+      effectiveTo: null,
+    });
+    expect(revised.series.revisions[0].effectiveTo).toBe("2026-08-06");
+    expect(byDate.get("2026-08-03")).toMatchObject({
+      state: "completed",
+      revisionId: created.series.revisions[0].id,
+    });
+    expect(byDate.get("2026-08-05")).toMatchObject({
+      state: "skipped",
+      revisionId: created.series.revisions[0].id,
+    });
+    expect(byDate.get("2026-08-10")).toMatchObject({
+      state: "open",
+      revisionId: successor?.id,
+      details: { title: "Revised", priority: 3 },
+    });
+    expect(byDate.get("2026-08-06")).toMatchObject({
+      state: "open",
+      revisionId: successor?.id,
+      details: { title: "Revised", priority: 3 },
+    });
+    expect(byDate.get("2026-08-12")).toMatchObject({
+      state: "extra",
+      revisionId: created.series.revisions[0].id,
+      details: { title: "Personally retained", priority: 1 },
+    });
+    expect(byDate.get("2026-08-13")).toMatchObject({
+      state: "open",
+      revisionId: successor?.id,
+      details: { title: "Revised", priority: 3 },
+    });
+    expect(byDate.get("2026-08-14")).toBeUndefined();
+    expect(allByDate.get("2026-08-07")?.state).toBe("withdrawn");
+    expect(allByDate.get("2026-08-14")?.state).toBe("withdrawn");
+  });
+
   it("withdraws untouched open work during a pause and resumes without backfill", async () => {
     const lifecycle = new RecurringTaskLifecycle(
       new InMemoryRecurringTaskLifecyclePersistence(),
