@@ -4,9 +4,11 @@ import { log } from "@/lib/logger";
 import type { Profile } from "@/lib/db/types";
 import type { User } from "@supabase/supabase-js";
 
+type AdminProfile = Pick<Profile, "role">;
+
 interface AdminContext {
   user: User;
-  profile: Profile;
+  profile: AdminProfile;
 }
 
 /**
@@ -15,7 +17,7 @@ interface AdminContext {
  */
 async function getAdminContext(): Promise<{
   user: User | null;
-  profile: Profile | null;
+  profile: AdminProfile | null;
 }> {
   const supabase = await createClient();
   const {
@@ -28,7 +30,7 @@ async function getAdminContext(): Promise<{
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("*")
+    .select("role")
     .eq("id", user.id)
     .single();
 
@@ -36,7 +38,7 @@ async function getAdminContext(): Promise<{
     log.error("Failed to fetch profile for admin check", profileError, { userId: user.id });
   }
 
-  return { user, profile: profile as Profile | null };
+  return { user, profile: profile as AdminProfile | null };
 }
 
 /**

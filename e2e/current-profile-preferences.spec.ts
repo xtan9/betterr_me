@@ -8,11 +8,17 @@ import { requiredE2EEnvironment } from './run-context';
 
 test.describe('Current Profile preference journey', () => {
   test.skip(E2E_READ_ONLY, 'Stateful verification never runs against production-backed targets');
-  test.beforeEach(({}, testInfo) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     test.skip(
       testInfo.project.name !== 'chromium',
       'The Current Profile acceptance journey is covered by desktop Chromium',
     );
+
+    for (const path of ['/api/profile', '/api/profile/preferences']) {
+      await page.route(`**${path}`, async () => {
+        throw new Error(`Legacy Profile client path was requested: ${path}`);
+      });
+    }
   });
 
   let createdWorkoutId: string | undefined;

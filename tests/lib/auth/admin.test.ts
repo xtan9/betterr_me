@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Hoisted mocks ---
-const { mockGetUser, mockFrom, mockRedirect } = vi.hoisted(() => ({
+const { mockGetUser, mockFrom, mockProfileSelect, mockRedirect } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockFrom: vi.fn(),
+  mockProfileSelect: vi.fn(),
   mockRedirect: vi.fn((url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   }),
@@ -34,16 +35,15 @@ function mockProfile(role: "user" | "admin") {
 }
 
 function setupProfileQuery(profile: Record<string, unknown> | null) {
-  mockFrom.mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({
-          data: profile,
-          error: null,
-        }),
+  mockProfileSelect.mockReturnValue({
+    eq: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: profile,
+        error: null,
       }),
     }),
   });
+  mockFrom.mockReturnValue({ select: mockProfileSelect });
 }
 
 // --- Tests ---
@@ -78,6 +78,7 @@ describe("requireAdmin", () => {
     const result = await requireAdmin();
 
     expect(result).toEqual({ user, profile });
+    expect(mockProfileSelect).toHaveBeenCalledWith("role");
   });
 
   it("redirects to /dashboard when profile query returns null", async () => {
