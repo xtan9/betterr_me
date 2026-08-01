@@ -1,5 +1,5 @@
-import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { authorizeCronRequest } from "@/lib/cron/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RemindersDB } from "@/lib/db/reminders";
 import { NotificationsDB } from "@/lib/db/notifications";
@@ -13,13 +13,6 @@ import { log } from "@/lib/logger";
 const MAX_STALE_MS = 4 * 60 * 60 * 1000; // 4 hours
 const SUPPORTED_REMINDER_SOURCE_TYPES = new Set(["calendar_event", "task", "habit"]);
 
-function secureCompare(a: string, b: string): boolean {
-  const key = "cron-auth-compare";
-  const hmacA = createHmac("sha256", key).update(a).digest();
-  const hmacB = createHmac("sha256", key).update(b).digest();
-  return timingSafeEqual(hmacA, hmacB);
-}
-
 /**
  * GET /api/cron/dispatch-reminders
  * Vercel Cron job: dispatch pending reminders via push and email channels.
@@ -32,17 +25,15 @@ function secureCompare(a: string, b: string): boolean {
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify CRON_SECRET (HMAC-based timing-safe comparison)
-    if (!process.env.CRON_SECRET) {
-      log.error("CRON_SECRET environment variable is not set");
-      return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
-    }
-
-    const authHeader = request.headers.get("Authorization") ?? "";
-    const expectedToken = `Bearer ${process.env.CRON_SECRET}`;
-
-    if (!secureCompare(authHeader, expectedToken)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const authorization = authorizeCronRequest(request.headers.get("Authorization"));
+    if (!authorization.ok) {
+      if (authorization.status === 500) {
+        log.error("CRON_SECRET environment variable is not set");
+      }
+      return NextResponse.json(
+        { error: authorization.error },
+        { status: authorization.status },
+      );
     }
 
     const adminClient = createAdminClient();

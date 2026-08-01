@@ -10,6 +10,14 @@ import {
   getLocalDateInTimeZone,
   isValidLocalDate,
 } from "./recurrence";
+import {
+  emitRecurringLifecycleSignal,
+  errorType,
+  type RecurringLifecycleObserver,
+  type RecurringLifecycleSignal,
+} from "./observability";
+
+export type { RecurringLifecycleEvent, RecurringLifecycleSignal } from "./observability";
 
 export type RecurringSeriesStatus = "active" | "paused" | "ended";
 export type OccurrenceState =
@@ -40,6 +48,20 @@ export type OccurrenceOverrides = Partial<
 export interface LocalDateRange {
   from: string;
   to: string;
+}
+
+export interface LifecycleObservability {
+  createdOccurrences: number;
+  intentionalAbsences: number;
+  withdrawnOccurrences: number;
+}
+
+export interface ActiveSeriesSummary {
+  id: string;
+  userId: string;
+  status: "active";
+  timeZone: string;
+  coverageHorizon: string | null;
 }
 
 export interface SeriesRevision {
@@ -224,7 +246,10 @@ export class InMemoryRecurringTaskLifecyclePersistence
 export interface LifecycleClockOptions {
   clock?: () => Date;
   idFactory?: () => string;
+  observer?: RecurringLifecycleObserver;
 }
+
+export type LifecycleSource = "interactive" | "prewarm";
 
 export interface LifecycleContext {
   userId: string;
@@ -234,6 +259,7 @@ export interface LifecycleContext {
   expectedRevisionToken?: number;
   idempotencyKey?: string;
   operationKey?: string;
+  source?: LifecycleSource;
 }
 
 export interface CreateSeriesRequest extends LifecycleContext {
@@ -289,6 +315,11 @@ export interface SeriesCommandRequest extends LifecycleContext {
   coverage?: LocalDateRange;
 }
 
+export interface PrewarmCoverageRequest extends LifecycleContext {
+  seriesId: string;
+  range: LocalDateRange;
+}
+
 export interface LifecycleSuccess<T> {
   status: "complete" | "already-applied";
   type: "complete" | "already-applied";
@@ -296,6 +327,7 @@ export interface LifecycleSuccess<T> {
   series: RecurringTaskSeries;
   occurrences: TaskOccurrence[];
   intentionalAbsences: string[];
+  observability?: LifecycleObservability;
   [key: string]: unknown;
 }
 
@@ -326,12 +358,19 @@ export interface CoverageUnavailableOutcome {
   reason: string;
 }
 
+export interface PrewarmSkippedOutcome {
+  status: "skipped";
+  type: "skipped";
+  reason: "already-covered" | "inactive-series";
+}
+
 export type LifecycleOutcome<T = unknown> =
   | (LifecycleSuccess<T> & { value: T })
   | NotFoundOutcome
   | InvalidTransitionOutcome
   | ConflictOutcome
-  | CoverageUnavailableOutcome;
+  | CoverageUnavailableOutcome
+  | PrewarmSkippedOutcome;
 
 export type EnsureCoverageOutcome = LifecycleOutcome<RecurringTaskSeries>;
 
@@ -341,6 +380,7 @@ export interface UserCoverageSuccess {
   series: RecurringTaskSeries[];
   occurrences: TaskOccurrence[];
   intentionalAbsences: string[];
+  observability?: LifecycleObservability;
 }
 
 export interface UserCoveragePartial {
@@ -351,13 +391,15 @@ export interface UserCoveragePartial {
   series: RecurringTaskSeries[];
   occurrences: TaskOccurrence[];
   intentionalAbsences: string[];
+  observability?: LifecycleObservability;
 }
 
 export type UserCoverageOutcome =
   | UserCoverageSuccess
   | UserCoveragePartial
   | NotFoundOutcome
-  | CoverageUnavailableOutcome;
+  | CoverageUnavailableOutcome
+  | PrewarmSkippedOutcome;
 
 export interface RecurringTaskLifecyclePort {
   createSeries(
@@ -403,6 +445,7 @@ interface LifecycleMutationResult {
   series: RecurringTaskSeries;
   occurrences: TaskOccurrence[];
   intentionalAbsences: string[];
+  observability?: LifecycleObservability;
   status?: "complete" | "already-applied";
 }
 
@@ -410,11 +453,13 @@ type LifecycleFailure =
   | NotFoundOutcome
   | InvalidTransitionOutcome
   | ConflictOutcome
-  | CoverageUnavailableOutcome;
+  | CoverageUnavailableOutcome
+  | PrewarmSkippedOutcome;
 
 export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
   private readonly clock: () => Date;
   private readonly idFactory: () => string;
+  private readonly observer: RecurringLifecycleObserver;
 
   constructor(
     private readonly persistence: RecurringTaskLifecyclePersistence,
@@ -422,6 +467,7 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
   ) {
     this.clock = options.clock ?? (() => new Date());
     this.idFactory = options.idFactory ?? (() => crypto.randomUUID());
+    this.observer = options.observer ?? emitRecurringLifecycleSignal;
   }
 
   async createSeries(
@@ -435,82 +481,100 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     });
     const serializationKey = `user:${request.userId}`;
 
-    return this.persistence.transaction(serializationKey, async (state) => {
-      const replay = replayIdempotent(
-        state,
-        request.userId,
-        idempotencyKey,
-        fingerprint,
-      );
-      if (replay) return replay;
+    try {
+      const outcome = await this.persistence.transaction(serializationKey, async (state) => {
+        const replay = replayIdempotent(
+          state,
+          request.userId,
+          idempotencyKey,
+          fingerprint,
+        );
+        if (replay) return replay;
 
-      validateCreateRequest(request);
-      const now = this.clock().toISOString();
-      const seriesId = this.idFactory();
-      const revisionId = this.idFactory();
-      const defaults = request.defaults ?? {
-        title: request.title ?? "",
-        description: null,
-        priority: 0,
-        categoryId: null,
-        dueTime: null,
-      };
-      const revision: SeriesRevision = {
-        id: revisionId,
-        seriesId,
-        effectiveFrom: request.activationDate,
-        effectiveTo: null,
-        state: "active",
-        recurrenceRule: request.recurrenceRule,
-        recurrenceAnchor: request.recurrenceAnchor,
-        activationDate: request.activationDate,
-        defaults: normalizeDefaults(defaults),
-        createdAt: now,
-      };
-      const series: RecurringTaskSeries = {
-        id: seriesId,
-        userId: request.userId,
-        status: "active",
-        timeZone: validateTimeZone(
-          request.timeZone ?? request.timezone ?? "UTC",
-        ),
-        recurrenceAnchor: request.recurrenceAnchor,
-        activationDate: request.activationDate,
-        occurrenceLimit: request.occurrenceLimit ?? null,
-        lastScheduledDate: request.lastScheduledDate ?? null,
-        coverageHorizon: null,
-        currentRevisionId: revisionId,
-        revisionToken: 1,
-        revisions: [revision],
-        occurrences: [],
-        intentionalAbsences: [],
-        createdAt: now,
-        updatedAt: now,
-      };
-      state.series.set(seriesId, series);
+        validateCreateRequest(request);
+        const now = this.clock().toISOString();
+        const seriesId = this.idFactory();
+        const revisionId = this.idFactory();
+        const defaults = request.defaults ?? {
+          title: request.title ?? "",
+          description: null,
+          priority: 0,
+          categoryId: null,
+          dueTime: null,
+        };
+        const revision: SeriesRevision = {
+          id: revisionId,
+          seriesId,
+          effectiveFrom: request.activationDate,
+          effectiveTo: null,
+          state: "active",
+          recurrenceRule: request.recurrenceRule,
+          recurrenceAnchor: request.recurrenceAnchor,
+          activationDate: request.activationDate,
+          defaults: normalizeDefaults(defaults),
+          createdAt: now,
+        };
+        const series: RecurringTaskSeries = {
+          id: seriesId,
+          userId: request.userId,
+          status: "active",
+          timeZone: validateTimeZone(
+            request.timeZone ?? request.timezone ?? "UTC",
+          ),
+          recurrenceAnchor: request.recurrenceAnchor,
+          activationDate: request.activationDate,
+          occurrenceLimit: request.occurrenceLimit ?? null,
+          lastScheduledDate: request.lastScheduledDate ?? null,
+          coverageHorizon: null,
+          currentRevisionId: revisionId,
+          revisionToken: 1,
+          revisions: [revision],
+          occurrences: [],
+          intentionalAbsences: [],
+          createdAt: now,
+          updatedAt: now,
+        };
+        state.series.set(seriesId, series);
 
-      const coverage = request.coverage
-        ?? (request.coverageThrough
-          ? { from: request.activationDate, to: request.coverageThrough }
-          : undefined);
-      const result = coverage
-        ? ensureCoverageState(
-          series,
-          coverage,
-          this.idFactory,
-          now,
-        )
-        : summarize(series);
-      const outcome = success(result, "complete");
-      rememberIdempotency(
-        state,
-        request.userId,
-        idempotencyKey,
-        fingerprint,
-        outcome,
-      );
+        const coverage = request.coverage
+          ?? (request.coverageThrough
+            ? { from: request.activationDate, to: request.coverageThrough }
+            : undefined);
+        if (coverage) {
+          this.observe({
+            event: "coverage_attempt",
+            operation: "create-series",
+            source: request.source,
+            userId: request.userId,
+            seriesId,
+            from: coverage.from,
+            to: coverage.to,
+          });
+        }
+        const result = coverage
+          ? ensureCoverageState(
+            series,
+            coverage,
+            this.idFactory,
+            now,
+          )
+          : summarize(series);
+        const outcome = success(result, "complete");
+        rememberIdempotency(
+          state,
+          request.userId,
+          idempotencyKey,
+          fingerprint,
+          outcome,
+        );
+        return outcome;
+      });
+      this.observeOutcome("create-series", request, outcome);
       return outcome;
-    });
+    } catch (error) {
+      this.observeFailure("create-series", request, error);
+      throw error;
+    }
   }
 
   async ensureCoverage(
@@ -523,6 +587,7 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     if (!range) {
       throw new RangeError("Coverage range is required");
     }
+    this.observeCoverageAttempt("ensure-coverage", request, range);
     return this.mutateExisting(request, "ensure-coverage", (series) => {
       const effectiveRange = coverageRangeForExtension(series, range);
       return ensureCoverageState(
@@ -538,6 +603,14 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     request: EnsureUserCoverageRequest,
   ): Promise<UserCoverageOutcome> {
     validateRange(request.range);
+    this.observe({
+      event: "coverage_attempt",
+      operation: "ensure-user-coverage",
+      source: request.source,
+      userId: request.userId,
+      from: request.range.from,
+      to: request.range.to,
+    });
     const series = await (this.persistence.read
       ? this.persistence.read(`user:${request.userId}`, async (state) =>
         [...state.series.values()]
@@ -551,6 +624,7 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     const occurrencesById = new Map<string, TaskOccurrence>();
     const intentionalAbsences = new Set<string>();
     const failedSeriesIds: string[] = [];
+    const observability = emptyObservability();
 
     for (const candidate of series) {
       try {
@@ -558,8 +632,9 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
           userId: request.userId,
           seriesId: candidate.id,
           range: request.range,
+          source: request.source,
         });
-        if (outcome.status !== "complete" && outcome.status !== "already-applied") {
+        if (!isLifecycleSuccess(outcome)) {
           failedSeriesIds.push(candidate.id);
           continue;
         }
@@ -567,9 +642,8 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
         outcome.occurrences.forEach((occurrence) => {
           occurrencesById.set(occurrence.id, occurrence);
         });
-        outcome.intentionalAbsences.forEach((date) => {
-          intentionalAbsences.add(date);
-        });
+        outcome.intentionalAbsences.forEach((date) => intentionalAbsences.add(date));
+        addObservability(observability, outcome.observability);
       } catch {
         failedSeriesIds.push(candidate.id);
       }
@@ -579,6 +653,7 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       series: coveredSeries,
       occurrences: [...occurrencesById.values()],
       intentionalAbsences: [...intentionalAbsences].sort(),
+      ...observabilityIfNonZero(observability),
     };
     if (failedSeriesIds.length === 0) {
       return {
@@ -587,13 +662,25 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
         ...shared,
       };
     }
-    return {
+    const partial: UserCoveragePartial = {
       status: "partial",
       type: "partial",
       requestedRange: request.range,
       failedSeriesIds: [...new Set(failedSeriesIds)].sort(),
       ...shared,
     };
+    this.observe({
+      event: "coverage_partial",
+      operation: "ensure-user-coverage",
+      source: request.source,
+      userId: request.userId,
+      from: request.range.from,
+      to: request.range.to,
+      seriesCount: series.length,
+      failedSeriesCount: partial.failedSeriesIds.length,
+      failedSeriesIds: partial.failedSeriesIds,
+    });
+    return partial;
   }
 
   async reviseSeries(
@@ -964,6 +1051,51 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     });
   }
 
+  async listActiveSeries(): Promise<{ series: ActiveSeriesSummary[] }> {
+    const series = await (this.persistence.read
+      ? this.persistence.read("active-series", async (state) =>
+        [...state.series.values()]
+          .filter((candidate) => candidate.status === "active")
+          .map(toActiveSeriesSummary))
+      : this.persistence.transaction("active-series", async (state) =>
+        [...state.series.values()]
+          .filter((candidate) => candidate.status === "active")
+          .map(toActiveSeriesSummary)));
+    return { series };
+  }
+
+  async prewarmCoverage(
+    request: PrewarmCoverageRequest,
+  ): Promise<LifecycleOutcome<RecurringTaskSeries>> {
+    validateRange(request.range);
+    this.observeCoverageAttempt("prewarm-coverage", request, request.range);
+    return this.mutateExisting(request, "prewarm-coverage", (series) => {
+      if (series.status !== "active") {
+        return {
+          status: "skipped",
+          type: "skipped",
+          reason: "inactive-series",
+        } satisfies PrewarmSkippedOutcome;
+      }
+      if (
+        series.coverageHorizon
+        && compareLocalDates(series.coverageHorizon, request.range.to) >= 0
+      ) {
+        return {
+          status: "skipped",
+          type: "skipped",
+          reason: "already-covered",
+        } satisfies PrewarmSkippedOutcome;
+      }
+      return ensureCoverageState(
+        series,
+        coverageRangeForExtension(series, request.range),
+        this.idFactory,
+        this.clock().toISOString(),
+      );
+    });
+  }
+
   async getSeries(
     userId: string,
     seriesId: string,
@@ -975,6 +1107,125 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
     });
   }
 
+  private observe(signal: RecurringLifecycleSignal): void {
+    this.observer(signal);
+  }
+
+  private observeCoverageAttempt(
+    operation: string,
+    request: LifecycleContext & { seriesId?: string },
+    range: LocalDateRange,
+  ): void {
+    this.observe({
+      event: "coverage_attempt",
+      operation,
+      source: request.source,
+      userId: request.userId,
+      seriesId: request.seriesId,
+      from: range.from,
+      to: range.to,
+    });
+  }
+
+  private observeOutcome(
+    operation: string,
+    request: LifecycleContext & { seriesId?: string },
+    outcome: LifecycleOutcome<RecurringTaskSeries>,
+  ): void {
+    if (outcome.status === "already-applied") {
+      if (isCoverageOperation(operation, request)) {
+        this.observe({
+          event: "coverage_retry",
+          operation,
+          source: request.source,
+          userId: request.userId,
+          seriesId: request.seriesId ?? outcome.series.id,
+          status: outcome.status,
+        });
+      }
+      return;
+    }
+    if (outcome.status === "conflict") {
+      this.observe({
+        event: "lifecycle_conflict",
+        operation,
+        source: request.source,
+        userId: request.userId,
+        seriesId: request.seriesId,
+        status: outcome.status,
+      });
+      return;
+    }
+    if (outcome.status === "skipped") {
+      this.observe({
+        event: "prewarm_skipped",
+        operation,
+        source: request.source,
+        userId: request.userId,
+        seriesId: request.seriesId,
+        status: outcome.reason,
+      });
+      return;
+    }
+    if (!isLifecycleSuccess(outcome)) {
+      if (outcome.status !== "not-found") {
+        this.observe({
+          event: "lifecycle_failure",
+          operation,
+          source: request.source,
+          userId: request.userId,
+          seriesId: request.seriesId,
+          status: outcome.status,
+        });
+      }
+      return;
+    }
+    const observability = outcome.observability;
+    if (!observability) return;
+    const common = {
+      operation,
+      source: request.source,
+      userId: request.userId,
+      seriesId: request.seriesId ?? outcome.series.id,
+    };
+    if (observability.createdOccurrences > 0) {
+      this.observe({
+        ...common,
+        event: "occurrence_created",
+        count: observability.createdOccurrences,
+      });
+    }
+    if (observability.intentionalAbsences > 0) {
+      this.observe({
+        ...common,
+        event: "intentional_absence",
+        count: observability.intentionalAbsences,
+      });
+    }
+    if (observability.withdrawnOccurrences > 0) {
+      this.observe({
+        ...common,
+        event: "occurrence_withdrawn",
+        count: observability.withdrawnOccurrences,
+      });
+    }
+  }
+
+  private observeFailure(
+    operation: string,
+    request: LifecycleContext & { seriesId?: string },
+    error: unknown,
+  ): void {
+    this.observe({
+      event: "lifecycle_failure",
+      operation,
+      source: request.source,
+      userId: request.userId,
+      seriesId: request.seriesId,
+      errorType: errorType(error),
+    });
+  }
+
   private async mutateExisting(
     request: LifecycleContext & { seriesId: string },
     operationName: string,
@@ -982,63 +1233,74 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       series: RecurringTaskSeries,
     ) => LifecycleMutationResult | LifecycleFailure,
   ): Promise<LifecycleOutcome<RecurringTaskSeries>> {
-    if (this.persistence.read) {
-      const missing = await this.persistence.read(
+    try {
+      if (this.persistence.read) {
+        const missing = await this.persistence.read(
+          `series:${request.seriesId}`,
+          async (state) => {
+            const series = state.series.get(request.seriesId);
+            if (!series || series.userId !== request.userId) {
+              return true;
+            }
+            if (
+              "occurrenceId" in request
+              && !series.occurrences.some(
+                (occurrence) => occurrence.id === request.occurrenceId,
+              )
+            ) {
+              return true;
+            }
+            return false;
+          },
+        );
+        if (missing) return notFound();
+      }
+
+      const fingerprint = fingerprintOf({
+        ...request,
+        operationName,
+        idempotencyKey: undefined,
+        operationKey: undefined,
+      });
+      const outcome = await this.persistence.transaction(
         `series:${request.seriesId}`,
         async (state) => {
-          const series = state.series.get(request.seriesId);
-          if (!series || series.userId !== request.userId) {
-            return true;
-          }
-          if (
-            "occurrenceId" in request
-            && !series.occurrences.some(
-              (occurrence) => occurrence.id === request.occurrenceId,
-            )
-          ) {
-            return true;
-          }
-          return false;
-        },
-      );
-      if (missing) return notFound();
-    }
-
-    const fingerprint = fingerprintOf({
-      ...request,
-      operationName,
-      idempotencyKey: undefined,
-      operationKey: undefined,
-    });
-    return this.persistence.transaction(
-      `series:${request.seriesId}`,
-      async (state) => {
-        const replay = replayIdempotent(
-          state,
-          request.userId,
-          request.idempotencyKey ?? request.operationKey,
-          fingerprint,
-        );
-        if (replay) return replay;
-
-        const series = state.series.get(request.seriesId);
-        if (!series || series.userId !== request.userId) return notFound();
-        const result = operation(series);
-        const outcome = "type" in result
-          ? result
-          : success(result, result.status ?? "complete");
-        if (isLifecycleSuccess(outcome)) {
-          rememberIdempotency(
+          const replay = replayIdempotent(
             state,
             request.userId,
             request.idempotencyKey ?? request.operationKey,
             fingerprint,
-            outcome,
           );
-        }
-        return outcome;
-      },
-    );
+          if (replay) return replay;
+
+          const series = state.series.get(request.seriesId);
+          if (!series || series.userId !== request.userId) return notFound();
+          const before = captureObservability(series);
+          const result = operation(series);
+          const rawOutcome = "type" in result
+            ? result
+            : success(result, result.status ?? "complete");
+          const outcome = isLifecycleSuccess(rawOutcome)
+            ? withMutationObservability(rawOutcome, before)
+            : rawOutcome;
+          if (isLifecycleSuccess(outcome)) {
+            rememberIdempotency(
+              state,
+              request.userId,
+              request.idempotencyKey ?? request.operationKey,
+              fingerprint,
+              outcome,
+            );
+          }
+          return outcome;
+        },
+      );
+      this.observeOutcome(operationName, request, outcome);
+      return outcome;
+    } catch (error) {
+      this.observeFailure(operationName, request, error);
+      throw error;
+    }
   }
 
   private resolveEffectiveDate(
@@ -1332,6 +1594,7 @@ function ensureCoverageState(
   updatedAt: string = series.updatedAt,
 ): LifecycleMutationResult {
   validateRange(range);
+  const before = captureObservability(series);
   const datesByRevision = new Map<string, string[]>();
   const intentionalAbsences = new Set(series.intentionalAbsences);
   const producedDates = new Set<string>();
@@ -1486,17 +1749,132 @@ function ensureCoverageState(
   }
   series.intentionalAbsences = [...intentionalAbsences].sort();
   series.updatedAt = updatedAt;
-  return summarize(series);
+  return summarize(series, observabilitySince(before, series));
 }
 
-function summarize(series: RecurringTaskSeries): LifecycleMutationResult {
+function summarize(
+  series: RecurringTaskSeries,
+  observability?: LifecycleObservability,
+): LifecycleMutationResult {
   return {
     series,
     occurrences: series.occurrences.filter(
       (occurrence) => occurrence.state !== "withdrawn",
     ),
     intentionalAbsences: [...series.intentionalAbsences].sort(),
+    ...observabilityIfNonZero(observability),
   };
+}
+
+function emptyObservability(): LifecycleObservability {
+  return {
+    createdOccurrences: 0,
+    intentionalAbsences: 0,
+    withdrawnOccurrences: 0,
+  };
+}
+
+interface ObservabilitySnapshot {
+  occurrenceIds: Set<string>;
+  intentionalAbsences: Set<string>;
+  withdrawnOccurrences: number;
+}
+
+function captureObservability(series: RecurringTaskSeries): ObservabilitySnapshot {
+  return {
+    occurrenceIds: new Set(series.occurrences.map((occurrence) => occurrence.id)),
+    intentionalAbsences: new Set(series.intentionalAbsences),
+    withdrawnOccurrences: series.occurrences.filter(
+      (occurrence) => occurrence.state === "withdrawn",
+    ).length,
+  };
+}
+
+function observabilitySince(
+  before: ObservabilitySnapshot,
+  series: RecurringTaskSeries,
+): LifecycleObservability {
+  return {
+    createdOccurrences: series.occurrences.filter(
+      (occurrence) => !before.occurrenceIds.has(occurrence.id),
+    ).length,
+    intentionalAbsences: series.intentionalAbsences.filter(
+      (date) => !before.intentionalAbsences.has(date),
+    ).length,
+    withdrawnOccurrences: Math.max(
+      0,
+      series.occurrences.filter((occurrence) => occurrence.state === "withdrawn").length
+        - before.withdrawnOccurrences,
+    ),
+  };
+}
+
+function withMutationObservability(
+  outcome: LifecycleOutcome<RecurringTaskSeries>,
+  before: ObservabilitySnapshot,
+): LifecycleOutcome<RecurringTaskSeries> {
+  if (!isLifecycleSuccess(outcome)) return outcome;
+  return {
+    ...outcome,
+    ...observabilityIfNonZero(
+      mergeObservability(outcome.observability, observabilitySince(before, outcome.series)),
+    ),
+  };
+}
+
+function mergeObservability(
+  left: LifecycleObservability | undefined,
+  right: LifecycleObservability,
+): LifecycleObservability {
+  return {
+    createdOccurrences: Math.max(left?.createdOccurrences ?? 0, right.createdOccurrences),
+    intentionalAbsences: Math.max(left?.intentionalAbsences ?? 0, right.intentionalAbsences),
+    withdrawnOccurrences: Math.max(left?.withdrawnOccurrences ?? 0, right.withdrawnOccurrences),
+  };
+}
+
+function addObservability(
+  target: LifecycleObservability,
+  source: LifecycleObservability | undefined,
+): void {
+  if (!source) return;
+  target.createdOccurrences += source.createdOccurrences;
+  target.intentionalAbsences += source.intentionalAbsences;
+  target.withdrawnOccurrences += source.withdrawnOccurrences;
+}
+
+function observabilityIfNonZero(
+  value: LifecycleObservability | undefined,
+): { observability?: LifecycleObservability } {
+  if (!value) return {};
+  if (
+    value.createdOccurrences === 0
+    && value.intentionalAbsences === 0
+    && value.withdrawnOccurrences === 0
+  ) {
+    return {};
+  }
+  return { observability: value };
+}
+
+function toActiveSeriesSummary(series: RecurringTaskSeries): ActiveSeriesSummary {
+  return {
+    id: series.id,
+    userId: series.userId,
+    status: "active",
+    timeZone: series.timeZone,
+    coverageHorizon: series.coverageHorizon,
+  };
+}
+
+function isCoverageOperation(
+  operation: string,
+  request: LifecycleContext & { seriesId?: string },
+): boolean {
+  return operation.includes("coverage")
+    || operation === "prewarm-coverage"
+    || "coverage" in request
+    || "range" in request;
 }
 
 function coverageFrom(
@@ -1546,6 +1924,7 @@ function success(
     series: result.series,
     occurrences: result.occurrences,
     intentionalAbsences: result.intentionalAbsences,
+    ...observabilityIfNonZero(result.observability),
   };
 }
 

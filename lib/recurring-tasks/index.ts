@@ -18,6 +18,13 @@ export {
   type RecurringCoverageWarning,
   type TaskReadCoverageRequest,
 } from './coverage';
+export {
+  prewarmActiveRecurringTaskCoverage,
+  type PrewarmAttemptResult,
+  type PrewarmOptions,
+  type PrewarmResult,
+  type RecurringTaskPrewarmingLifecycle,
+} from './prewarming';
 export * from './occurrence-adapter';
 export {
   createSupabaseOccurrenceAdapter,
