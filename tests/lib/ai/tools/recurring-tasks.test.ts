@@ -74,7 +74,7 @@ describe("recurring task tools", () => {
     expect(result).toEqual([{ id: "rt1", title: "Weekly review" }]);
   });
 
-  it("createRecurringTask passes correct params with throughDate", async () => {
+  it("createRecurringTask uses the shared initial coverage window", async () => {
     const ctx = makeCtx();
     mockCreateRecurringTask.mockResolvedValue({
       id: "rt2",
@@ -96,7 +96,7 @@ describe("recurring task tools", () => {
         recurrence_rule: { frequency: "daily", interval: 1 },
         end_type: "never",
       }),
-      "2026-05-10",
+      "2026-04-17",
     );
     expect(result).toEqual({ id: "rt2", title: "Daily standup" });
   });

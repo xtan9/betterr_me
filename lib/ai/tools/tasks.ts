@@ -6,6 +6,12 @@ import { createSupabaseRecurringTaskLifecycle } from "@/lib/recurring-tasks";
 import { ensureRecurringTaskCoverageThrough } from "@/lib/recurring-tasks/coverage";
 import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
 import {
+  createSeriesCreation,
+  initialSeriesCoverage,
+  normalizeSeriesCreationIntent,
+  toLegacyRecurringTask,
+} from "@/lib/recurring-tasks/creation";
+import {
   hasTaskUpdateValues,
   taskFormSchema,
   taskStatusSchema,
@@ -290,33 +296,44 @@ export function taskTools(): ToolDefinition[] {
           .describe("Number of occurrences if endType is after_count"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase, {
-          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
-        });
-        // Calculate a rolling window end date (30 days from start)
-        // Use string manipulation to avoid UTC date shift from toISOString()
-        const throughDateStr = addLocalDays(params.startDate, 30);
-
-        return db.createRecurringTask(
-          {
-            user_id: ctx.userId,
+        const result = await createSeriesCreation(ctx.supabase).create(
+          normalizeSeriesCreationIntent({
+            userId: ctx.userId,
             title: params.title,
             description: params.description ?? null,
             priority: (params.priority ?? 0) as 0 | 1 | 2 | 3,
-            category_id: params.categoryId ?? null,
-            due_time: params.dueTime ?? null,
-            start_date: params.startDate,
-            recurrence_rule: {
+            categoryId: params.categoryId ?? null,
+            dueTime: params.dueTime ?? null,
+            recurrenceRule: {
               ...params.recurrenceRule,
               interval: params.recurrenceRule.interval ?? 1,
             } as RecurrenceRule,
-            end_type: params.endType ?? "never",
-            end_date: params.endDate ?? null,
-            end_count: params.endCount ?? null,
-            status: "active",
-          },
-          throughDateStr,
+            legacyStartDate: params.startDate,
+            endType: params.endType ?? "never",
+            endDate: params.endDate ?? null,
+            endCount: params.endCount ?? null,
+            coverageThrough: initialSeriesCoverage(
+              params.startDate,
+              ctx.date,
+            ).to,
+          }),
         );
+        if (result.mode === "legacy") return result.recurringTask;
+
+        const outcome = result.outcome;
+        if (outcome.status === "complete" || outcome.status === "already-applied") {
+          return toLegacyRecurringTask(outcome.series);
+        }
+        if (outcome.status === "conflict") {
+          return { error: "Recurring task creation conflict" };
+        }
+        if (outcome.status === "coverage-unavailable") {
+          return { error: "Recurring task coverage is temporarily unavailable" };
+        }
+        if (outcome.status === "not-found") {
+          return { error: "Recurring task not found" };
+        }
+        return { error: outcome.reason };
       },
     },
     {

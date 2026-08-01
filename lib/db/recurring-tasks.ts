@@ -657,7 +657,7 @@ function legacyStatus(
   return series.status === 'ended' ? 'archived' : series.status;
 }
 
-function recurringTaskFromSeries(series: RecurringTaskSeries): RecurringTask {
+export function recurringTaskFromSeries(series: RecurringTaskSeries): RecurringTask {
   const revision = series.revisions.find(
     (candidate) => candidate.id === series.currentRevisionId,
   ) ?? series.revisions[series.revisions.length - 1];
