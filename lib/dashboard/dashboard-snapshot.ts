@@ -17,7 +17,6 @@ import {
 import type { WorkoutsDB } from "@/lib/db/workouts";
 import { computeMissedDays } from "@/lib/habits/absence";
 import { log } from "@/lib/logger";
-import type { RecurringGenerationResult } from "@/lib/recurring-tasks";
 import type {
   RecurringCoverageResult,
 } from "@/lib/recurring-tasks/coverage";
@@ -31,12 +30,7 @@ export interface DashboardSnapshotDependencies {
   milestones: Pick<HabitMilestonesDB, "getTodaysMilestones">;
   localization: Pick<LocalizationDB, "getWeekStartPreference">;
   workouts: Pick<WorkoutsDB, "getLastCompletedAt" | "getWeekWorkoutCount">;
-  /** Transitional legacy seam; production adapters supply ensureRecurringCoverage. */
-  generateRecurringTasks?(
-    userId: string,
-    throughDate: string,
-  ): Promise<RecurringGenerationResult>;
-  ensureRecurringCoverage?(
+  ensureRecurringCoverage(
     userId: string,
     range: { from: string; to: string },
   ): Promise<RecurringCoverageResult>;
@@ -148,7 +142,7 @@ function warning(
 
 function recurringWarningDetails(
   requestedRange: LocalDateRange,
-  result?: RecurringCoverageResult | RecurringGenerationResult,
+  result?: RecurringCoverageResult,
 ): Pick<
   DashboardSnapshotWarning,
   "type" | "requestedRange" | "failedSeriesIds"
@@ -208,18 +202,10 @@ export function createDashboardSnapshot(
       const warnings: DashboardSnapshotWarning[] = [];
 
       try {
-        const recurringResult = dependencies.ensureRecurringCoverage
-          ? await dependencies.ensureRecurringCoverage(userId, {
-            from: date,
-            to: tomorrow,
-          })
-          : dependencies.generateRecurringTasks
-            ? await dependencies.generateRecurringTasks(userId, tomorrow)
-            : {
-              status: "complete" as const,
-              requestedRange: { from: date, to: tomorrow },
-              failedSeriesIds: [] as [],
-            };
+        const recurringResult = await dependencies.ensureRecurringCoverage(userId, {
+          from: date,
+          to: tomorrow,
+        });
         if (recurringResult.status === "partial") {
           warnings.push(warning(
             "recurring_coverage_unavailable",

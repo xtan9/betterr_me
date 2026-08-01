@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TasksDB, RecurringTasksDB } from "@/lib/db";
+import { TasksDB } from "@/lib/db";
 import type { RecurrenceRule } from "@/lib/db";
 import {
   createTaskWrites,
@@ -28,8 +28,9 @@ import {
   createSeriesCreation,
   initialSeriesCoverage,
   normalizeSeriesCreationIntent,
-  toLegacyRecurringTask,
+  toRecurringTaskCompatibility,
 } from "@/lib/recurring-tasks/creation";
+import { toLifecycleRecurrenceDates } from "@/lib/recurring-tasks/compatibility";
 import {
   hasTaskUpdateValues,
   taskFormSchema,
@@ -341,12 +342,12 @@ export function taskTools(): ToolDefinition[] {
           .describe("Filter by status (default: all)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase, {
-          lifecycle: createActivatedRecurringTaskLifecycle(ctx.supabase),
-        });
-        return db.getUserRecurringTasks(ctx.userId, {
-          status: params.status,
-        });
+        const lifecycle = createActivatedRecurringTaskLifecycle(ctx.supabase);
+        const result = await lifecycle.listSeries(
+          ctx.userId,
+          params.status === "archived" ? "ended" : params.status,
+        );
+        return result.series.map(toRecurringTaskCompatibility);
       },
     },
     {
@@ -417,6 +418,7 @@ export function taskTools(): ToolDefinition[] {
           .describe("Number of occurrences if endType is after_count"),
       }),
       execute: async (params, ctx: ToolContext) => {
+        const recurrenceDates = toLifecycleRecurrenceDates(params.startDate);
         const result = await createSeriesCreation(ctx.supabase).create(
           normalizeSeriesCreationIntent({
             userId: ctx.userId,
@@ -429,19 +431,19 @@ export function taskTools(): ToolDefinition[] {
               ...params.recurrenceRule,
               interval: params.recurrenceRule.interval ?? 1,
             } as RecurrenceRule,
-            legacyStartDate: params.startDate,
+            ...recurrenceDates,
             endType: params.endType ?? "never",
             endDate: params.endDate ?? null,
             endCount: params.endCount ?? null,
             coverageThrough: initialSeriesCoverage(
-              params.startDate,
+              recurrenceDates.recurrenceAnchor,
               ctx.date,
             ).to,
           }),
         );
         const outcome = result.outcome;
         if (outcome.status === "complete" || outcome.status === "already-applied") {
-          return toLegacyRecurringTask(outcome.series);
+          return toRecurringTaskCompatibility(outcome.series);
         }
         if (outcome.status === "conflict") {
           return { error: "Recurring task creation conflict" };

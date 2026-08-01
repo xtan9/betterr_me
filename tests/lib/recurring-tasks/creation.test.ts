@@ -13,16 +13,6 @@ import {
 } from "@/lib/recurring-tasks/lifecycle";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const { mockLegacyCreate } = vi.hoisted(() => ({
-  mockLegacyCreate: vi.fn(),
-}));
-
-vi.mock("@/lib/db", () => ({
-  RecurringTasksDB: class {
-    createRecurringTask = mockLegacyCreate;
-  },
-}));
-
 function makeIntent(
   overrides: Partial<SeriesCreationIntent> = {},
 ): SeriesCreationIntent {
@@ -34,7 +24,8 @@ function makeIntent(
     categoryId: "category-1",
     dueTime: "09:00:00",
     recurrenceRule: { frequency: "daily", interval: 1 },
-    legacyStartDate: "2026-08-01",
+    recurrenceAnchor: "2026-08-01",
+    activationDate: "2026-08-01",
     endType: "never",
     endDate: null,
     endCount: null,
@@ -70,7 +61,7 @@ describe("Series creation adapter", () => {
     vi.clearAllMocks();
   });
 
-  it("maps a legacy start date to both lifecycle dates and a storage-independent request", () => {
+  it("maps the compatibility start date to both lifecycle dates and a storage-independent request", () => {
     const request = toLifecycleCreateSeriesRequest(
       makeIntent({
         endType: "after_count",
@@ -158,7 +149,7 @@ describe("Series creation adapter", () => {
     });
   });
 
-  it("activates the lifecycle writer by default and never calls the legacy writer", async () => {
+  it("activates the lifecycle writer by default", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: {
         status: "complete",
@@ -177,7 +168,6 @@ describe("Series creation adapter", () => {
       "recurring_task_lifecycle",
       expect.objectContaining({ p_operation: "create-series" }),
     );
-    expect(mockLegacyCreate).not.toHaveBeenCalled();
   });
 
   it("preserves typed lifecycle failures without parsing their reasons", async () => {

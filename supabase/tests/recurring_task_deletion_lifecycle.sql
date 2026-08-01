@@ -128,20 +128,6 @@ begin
 end
 $all_scope$;
 
-reset role;
-do $legacy_projection$
-declare
-  v_series_id uuid;
-begin
-  select series_id into v_series_id
-  from recurring_task_deletion_fixture_state;
-  if (select status from public.recurring_tasks legacy
-      where legacy.id = v_series_id) <> 'archived' then
-    raise exception 'all-scope deletion did not archive the legacy projection';
-  end if;
-end
-$legacy_projection$;
-
 set local role authenticated;
 
 do $rollback$

@@ -1,4 +1,9 @@
-# PRD V3: Recurring Tasks — Eliminate Daily Task Recreation
+# Archived PRD V3: Recurring Tasks — historical pre-cutover design
+
+> This document is retained as historical product context only. It is not the
+> runtime or storage contract after the Recurring Task Lifecycle cutover. Use
+> [the accepted lifecycle contract](architecture/recurring-task-lifecycle-contract.md)
+> for current terminology, architecture, schema, and acceptance evidence.
 
 **Date:** February 18, 2026
 **Status:** Implemented (PR #268)

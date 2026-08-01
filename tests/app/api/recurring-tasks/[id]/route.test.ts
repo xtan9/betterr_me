@@ -7,8 +7,12 @@ const {
   mockDeleteSeries,
   mockStateFactory,
   mockState,
+  mockGetSeries,
+  mockLifecycle,
+  mockToRecurringTaskCompatibility,
 } = vi.hoisted(() => {
   const mockDeleteSeries = vi.fn();
+  const mockGetSeries = vi.fn();
   const mockState = {
     update: vi.fn(),
     pause: vi.fn(),
@@ -19,6 +23,9 @@ const {
     mockDeleteSeries,
     mockStateFactory: vi.fn(() => mockState),
     mockState,
+    mockGetSeries,
+    mockLifecycle: { getSeries: mockGetSeries },
+    mockToRecurringTaskCompatibility: vi.fn(),
   };
 });
 
@@ -37,26 +44,25 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-const mockRecurringTasksDB = {
-  getRecurringTask: vi.fn(),
-  updateRecurringTask: vi.fn(),
-  pauseRecurringTask: vi.fn(),
-  resumeRecurringTask: vi.fn(),
-};
-
-vi.mock("@/lib/db", () => ({
-  RecurringTasksDB: class {
-    constructor() {
-      return mockRecurringTasksDB;
-    }
-  },
-}));
-
 vi.mock("@/lib/recurring-tasks", async () => {
   const actual = await vi.importActual<typeof import("@/lib/recurring-tasks")>(
     "@/lib/recurring-tasks",
   );
-  return { ...actual, createSupabaseSeriesStateAdapter: mockStateFactory };
+  return {
+    ...actual,
+    createSupabaseSeriesStateAdapter: mockStateFactory,
+    createActivatedRecurringTaskLifecycle: vi.fn(() => mockLifecycle),
+  };
+});
+
+vi.mock("@/lib/recurring-tasks/creation", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/lib/recurring-tasks/creation")
+  >("@/lib/recurring-tasks/creation");
+  return {
+    ...actual,
+    toRecurringTaskCompatibility: mockToRecurringTaskCompatibility,
+  };
 });
 
 import { createClient } from "@/lib/supabase/server";
@@ -67,13 +73,16 @@ describe("GET /api/recurring-tasks/[id]", () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })) },
     } as any);
+    mockToRecurringTaskCompatibility.mockImplementation((series) => series);
   });
 
   it("should return template by ID", async () => {
     const template = { id: "rt-1", title: "Daily standup" };
-    vi.mocked(mockRecurringTasksDB.getRecurringTask).mockResolvedValue(
-      template,
-    );
+    mockGetSeries.mockResolvedValue({
+      status: "complete",
+      type: "complete",
+      series: template,
+    });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1",
@@ -85,14 +94,11 @@ describe("GET /api/recurring-tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.recurring_task).toEqual(template);
-    expect(mockRecurringTasksDB.getRecurringTask).toHaveBeenCalledWith(
-      "rt-1",
-      "user-123",
-    );
+    expect(mockGetSeries).toHaveBeenCalledWith("user-123", "rt-1");
   });
 
   it("should return 404 if not found", async () => {
-    vi.mocked(mockRecurringTasksDB.getRecurringTask).mockResolvedValue(null);
+    mockGetSeries.mockResolvedValue({ status: "not-found", type: "not-found" });
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/nonexistent",

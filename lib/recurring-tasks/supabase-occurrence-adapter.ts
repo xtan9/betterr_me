@@ -10,7 +10,7 @@ import {
   type OccurrenceCommandIntent,
   type OccurrenceEditIntent,
   type OccurrenceLifecyclePort,
-  toLegacyTaskUpdate,
+  toTaskUpdate,
 } from "./occurrence-adapter";
 
 export interface SupabaseOccurrenceAdapterOptions {
@@ -34,7 +34,7 @@ export function createSupabaseOccurrenceAdapter(
           type: "update",
           userId: intent.userId,
           taskId: intent.taskId,
-          values: toLegacyTaskUpdate(intent),
+          values: toTaskUpdate(intent),
         });
         return outcome.task;
       },

@@ -15,7 +15,6 @@ function createPersistence(): TaskWritePersistence {
     createTask: vi.fn(async (task) => ({ id: 'task-1', ...task } as never)),
     getTask: vi.fn(),
     updateTask: vi.fn(),
-    updateInstanceWithScope: vi.fn(),
   };
 }
 
@@ -25,10 +24,8 @@ function recurringTask(
   return {
     id: 'task-1',
     is_completed: false,
-    recurring_task_id: null,
     recurring_series_id: 'series-1',
     recurring_occurrence_id: 'occurrence-1',
-    original_date: '2026-08-04',
     scheduled_date: '2026-08-04',
     recurrence_occurrence_state: 'open',
     ...overrides,
@@ -224,29 +221,19 @@ describe('TaskWrites', () => {
     expect(outcome).toEqual({ type: 'updated', task: { id: 'task-1' } });
   });
 
-  it('applies the same synchronization to scoped recurring updates', async () => {
+  it('rejects scoped updates at the ordinary Task Writes seam', async () => {
     const persistence = createPersistence();
     const writes = new TaskWrites(persistence, () => new Date('2026-07-28T12:00:00.000Z'));
 
-    const outcome = await writes.execute({
+    await expect(writes.execute({
       type: 'update',
       userId: 'user-1',
       taskId: 'task-1',
       scope: 'following',
       values: { is_completed: true },
-    });
-
-    expect(persistence.updateInstanceWithScope).toHaveBeenCalledWith(
-      'task-1',
-      'user-1',
-      'following',
-      {
-        is_completed: true,
-        status: 'done',
-        completed_at: '2026-07-28T12:00:00.000Z',
-      },
+    })).rejects.toThrow(
+      'Scoped task updates must use the Recurring Task Lifecycle adapter',
     );
-    expect(outcome).toEqual({ type: 'scoped-updated' });
     expect(persistence.updateTask).not.toHaveBeenCalled();
   });
 

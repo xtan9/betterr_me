@@ -37,11 +37,9 @@ set local role authenticated;
 
 do $assert_cutover_privileges$
 begin
-  if has_function_privilege(
-       'authenticated',
-       'public.recurring_task_lifecycle_cutover_activate(date)',
-       'execute'
-     )
+  if to_regprocedure(
+       'public.recurring_task_lifecycle_cutover_activate(date)'
+     ) is not null
      or has_function_privilege(
        'authenticated',
        'public.recurring_task_lifecycle_cutover_status()',

@@ -100,7 +100,7 @@
     "cleanup": "transactional"
   },
   {
-    "path": "recurring_task_legacy_backfill.sql",
+    "path": "recurring_task_legacy_contract.sql",
     "domain": "recurring-tasks",
     "role": "constrained",
     "cleanup": "transactional"

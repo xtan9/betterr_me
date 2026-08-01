@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -23,6 +23,48 @@ const lifecycleBoundarySources = [
 ];
 
 describe("recurring lifecycle import boundary", () => {
+  it("retires the best-effort materializer instead of leaving a compatibility entry point", () => {
+    expect(
+      existsSync(resolve(process.cwd(), "lib/recurring-tasks/instance-generator.ts")),
+    ).toBe(false);
+    expect(readFileSync(resolve(process.cwd(), "lib/recurring-tasks/index.ts"), "utf8"))
+      .not.toContain("instance-generator");
+    expect(
+      existsSync(resolve(process.cwd(), "lib/db/recurring-tasks.ts")),
+    ).toBe(false);
+    expect(readFileSync(resolve(process.cwd(), "lib/db/index.ts"), "utf8"))
+      .not.toContain("recurring-tasks");
+  });
+
+  it("confines transport translation to the declared compatibility adapter", () => {
+    const compatibility = readFileSync(
+      resolve(process.cwd(), "lib/recurring-tasks/compatibility.ts"),
+      "utf8",
+    );
+    const creation = readFileSync(
+      resolve(process.cwd(), "lib/recurring-tasks/creation.ts"),
+      "utf8",
+    );
+    const http = readFileSync(
+      resolve(process.cwd(), "app/api/recurring-tasks/route.ts"),
+      "utf8",
+    );
+    const ai = readFileSync(
+      resolve(process.cwd(), "lib/ai/tools/tasks.ts"),
+      "utf8",
+    );
+
+    expect(compatibility).toContain("toRecurringTaskResponse");
+    expect(compatibility).toContain("toLifecycleRecurrenceDates");
+    expect(compatibility).toContain("start_date");
+    expect(creation).toContain("recurrenceAnchor");
+    expect(creation).toContain("activationDate");
+    expect(creation).not.toContain("start_date");
+    expect(creation).not.toContain("startDate");
+    expect(http).toContain("toLifecycleRecurrenceDates");
+    expect(ai).toContain("toLifecycleRecurrenceDates");
+  });
+
   it("keeps date-bounded delivery and read modules off legacy writes and materialization", () => {
     for (const relativePath of lifecycleBoundarySources) {
       const source = readFileSync(resolve(process.cwd(), relativePath), "utf8");
@@ -42,5 +84,21 @@ describe("recurring lifecycle import boundary", () => {
         /new RecurringTasksDB\(\s*(?:supabase|ctx\.supabase)\s*\)/,
       );
     }
+  });
+
+  it("keeps ordinary task queries task-model-only after coverage", () => {
+    const taskQueries = readFileSync(
+      resolve(process.cwd(), "lib/db/tasks.ts"),
+      "utf8",
+    );
+    const dashboard = readFileSync(
+      resolve(process.cwd(), "lib/dashboard/dashboard-snapshot.ts"),
+      "utf8",
+    );
+
+    expect(taskQueries).toMatch(/\.from\(["']tasks["']\)/);
+    expect(taskQueries).not.toMatch(/recurring_task_series|virtual|expand/i);
+    expect(dashboard).toContain("ensureRecurringCoverage");
+    expect(dashboard).not.toMatch(/generateRecurringTasks|ensureRecurringInstances/);
   });
 });
