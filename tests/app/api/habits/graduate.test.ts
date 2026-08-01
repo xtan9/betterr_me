@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { graduateMock, reactivateMock, dismissMock } = vi.hoisted(() => ({
+const {
+  graduateMock,
+  reactivateMock,
+  dismissMock,
+  toHabitResponseMock,
+} = vi.hoisted(() => ({
   graduateMock: vi.fn(),
   reactivateMock: vi.fn(),
   dismissMock: vi.fn(),
+  toHabitResponseMock: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -36,7 +42,6 @@ vi.mock('@/lib/db', () => {
   }
   return {
     HabitsDB: class {
-      graduateHabit = graduateMock;
       reactivateHabit = reactivateMock;
       dismissGraduationNudge = dismissMock;
     },
@@ -46,15 +51,16 @@ vi.mock('@/lib/db', () => {
   };
 });
 
+vi.mock('@/lib/habits/writes', () => ({
+  createHabitWrites: vi.fn(() => ({ graduate: graduateMock })),
+  toHabitResponse: toHabitResponseMock,
+}));
+
 import { POST as graduatePOST } from '@/app/api/habits/[id]/graduate/route';
 import { POST as reactivatePOST } from '@/app/api/habits/[id]/reactivate/route';
 import { POST as dismissPOST } from '@/app/api/habits/[id]/dismiss-graduation-nudge/route';
 import { createClient } from '@/lib/supabase/server';
-import {
-  HabitNotFoundError,
-  HabitNotFormedError,
-  HabitAlreadyFormedError,
-} from '@/lib/db';
+import { HabitNotFormedError } from '@/lib/db';
 
 const params = Promise.resolve({ id: 'h1' });
 
@@ -67,32 +73,68 @@ describe('POST /api/habits/[id]/graduate', () => {
   });
 
   it('returns the graduated habit', async () => {
-    graduateMock.mockResolvedValue({ id: 'h1', status: 'formed' });
+    const habit = { id: 'h1', status: 'formed' };
+    const presentedHabit = { id: 'h1', status: 'formed', graduated_at: 'now' };
+    graduateMock.mockResolvedValue({ type: 'graduated', habit });
+    toHabitResponseMock.mockReturnValue(presentedHabit);
     const res = await graduatePOST(
       new NextRequest('http://localhost/api/habits/h1/graduate', { method: 'POST' }),
       { params }
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ habit: { id: 'h1', status: 'formed' } });
-    expect(graduateMock).toHaveBeenCalledWith('h1', 'user-1');
+    expect(await res.json()).toEqual({ habit: presentedHabit });
+    expect(graduateMock).toHaveBeenCalledWith({ habitId: 'h1', userId: 'user-1' });
+    expect(toHabitResponseMock).toHaveBeenCalledWith(habit);
   });
 
   it('returns 404 when habit not found', async () => {
-    graduateMock.mockRejectedValue(new HabitNotFoundError('h1'));
+    graduateMock.mockResolvedValue({ type: 'not-found' });
     const res = await graduatePOST(
       new NextRequest('http://localhost/api/habits/h1/graduate', { method: 'POST' }),
       { params }
     );
     expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Habit not found' });
   });
 
   it('returns 400 when habit is already formed', async () => {
-    graduateMock.mockRejectedValue(new HabitAlreadyFormedError('h1'));
+    graduateMock.mockResolvedValue({
+      type: 'already-formed',
+      habit: { id: 'h1', status: 'formed' },
+    });
     const res = await graduatePOST(
       new NextRequest('http://localhost/api/habits/h1/graduate', { method: 'POST' }),
       { params }
     );
     expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Habit is already formed' });
+  });
+
+  it('returns 409 for an invalid transition', async () => {
+    graduateMock.mockResolvedValue({
+      type: 'invalid-transition',
+      action: 'graduate',
+      currentStatus: 'paused',
+      message: 'Habit cannot be graduated from paused state',
+    });
+    const res = await graduatePOST(
+      new NextRequest('http://localhost/api/habits/h1/graduate', { method: 'POST' }),
+      { params }
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: 'Habit cannot be graduated from paused state',
+    });
+  });
+
+  it('returns 500 for an unexpected graduation failure', async () => {
+    graduateMock.mockRejectedValue(new Error('rpc unavailable'));
+    const res = await graduatePOST(
+      new NextRequest('http://localhost/api/habits/h1/graduate', { method: 'POST' }),
+      { params }
+    );
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Failed to graduate habit' });
   });
 });
 

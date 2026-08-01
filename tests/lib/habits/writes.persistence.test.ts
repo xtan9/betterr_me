@@ -208,6 +208,135 @@ describe("createHabitWrites persistence adapter", () => {
     ]);
   });
 
+  describe("graduate", () => {
+    const graduatedAt = "2026-08-01T12:00:00.000Z";
+
+    it("uses one atomic RPC and maps a graduated habit", async () => {
+      const graduatedHabit: Habit = {
+        ...storedHabit,
+        status: "formed",
+        current_streak: 18,
+        graduated_at: graduatedAt,
+        graduated_streak: 18,
+        nudge_dismissed_at: null,
+      };
+      mockSupabaseClient.setMockResponse({
+        type: "graduated",
+        habit: graduatedHabit,
+      });
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(graduatedAt));
+      try {
+        const writes = createHabitWrites(
+          mockSupabaseClient as unknown as SupabaseClient,
+        );
+
+        await expect(
+          writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+        ).resolves.toEqual({
+          type: "graduated",
+          habit: {
+            id: "habit-1",
+            userId: "trusted-user",
+            name: "Morning Run",
+            description: "Run five kilometers",
+            categoryId: "category-1",
+            frequency: { type: "custom", days: [1, 5] },
+            status: "formed",
+            currentStreak: 18,
+            bestStreak: 0,
+            pausedAt: null,
+            graduatedAt,
+            graduatedStreak: 18,
+            nudgeDismissedAt: null,
+            createdAt: storedHabit.created_at,
+            updatedAt: storedHabit.updated_at,
+          },
+        });
+        expect(mockSupabaseClient.queryLog).toEqual([
+          {
+            table: null,
+            method: "rpc",
+            args: [
+              "graduate_habit_atomically",
+              {
+                p_habit_id: "habit-1",
+                p_user_id: "trusted-user",
+                p_graduated_at: graduatedAt,
+              },
+            ],
+          },
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it.each([
+      [{ type: "not-found" }, { type: "not-found" }],
+      [
+        { type: "invalid-transition", current_status: "paused" },
+        {
+          type: "invalid-transition",
+          action: "graduate",
+          currentStatus: "paused",
+          message: "Habit cannot be graduated from paused state",
+        },
+      ],
+    ] as const)("maps the %s database outcome", async (databaseOutcome, outcome) => {
+      mockSupabaseClient.setMockResponse(databaseOutcome);
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual(outcome);
+    });
+
+    it("maps an already-formed database outcome with the existing habit", async () => {
+      mockSupabaseClient.setMockResponse({
+        type: "already-formed",
+        habit: { ...storedHabit, status: "formed" },
+      });
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toMatchObject({
+        type: "already-formed",
+        habit: { id: "habit-1", status: "formed" },
+      });
+    });
+
+    it("propagates an atomic RPC failure without attempting compensating writes", async () => {
+      const persistenceError = new Error("history insert failed");
+      mockSupabaseClient.setMockResponse(null, persistenceError);
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toBe(persistenceError);
+      expect(mockSupabaseClient.queryLog).toHaveLength(1);
+      expect(mockSupabaseClient.queryLog[0]?.method).toBe("rpc");
+    });
+
+    it("rejects malformed database outcomes", async () => {
+      mockSupabaseClient.setMockResponse({ type: "unexpected" });
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toThrow("Invalid graduation outcome returned by the database");
+    });
+  });
+
   it("persists a pause through owner-scoped lifecycle reads and updates", async () => {
     const fixedNow = new Date("2026-08-01T12:00:00.000Z");
     vi.useFakeTimers();

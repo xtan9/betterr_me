@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
-import { HabitsDB, HabitNotFoundError, HabitAlreadyFormedError } from '@/lib/db';
+import { createHabitWrites, toHabitResponse } from '@/lib/habits/writes';
 import { log } from '@/lib/logger';
 
 const WRITE_REQUEST_POLICY = {
@@ -31,18 +31,26 @@ export async function POST(
     const { principal: { userId: authenticatedUserId }, client: supabase } = auth;
     userId = authenticatedUserId;
 
-    const habitsDB = new HabitsDB(supabase);
-    const habit = await habitsDB.graduateHabit(id, authenticatedUserId);
-    return NextResponse.json({ habit });
-  } catch (error: unknown) {
-    if (error instanceof HabitNotFoundError) {
+    const outcome = await createHabitWrites(supabase).graduate({
+      habitId: id,
+      userId: authenticatedUserId,
+    });
+    if (outcome.type === 'not-found') {
       log.info('[habits] graduate: not found', { id, userId });
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
-    if (error instanceof HabitAlreadyFormedError) {
+    if (outcome.type === 'already-formed') {
       log.info('[habits] graduate: already formed', { id, userId });
       return NextResponse.json({ error: 'Habit is already formed' }, { status: 400 });
     }
+    if (outcome.type === 'invalid-transition') {
+      return NextResponse.json(
+        { error: outcome.message },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ habit: toHabitResponse(outcome.habit) });
+  } catch (error: unknown) {
     log.error('[habits] POST graduate', error, { id, userId });
     return NextResponse.json({ error: 'Failed to graduate habit' }, { status: 500 });
   }
