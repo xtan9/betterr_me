@@ -2,6 +2,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET, PATCH, DELETE } from "@/app/api/recurring-tasks/[id]/route";
 import { NextRequest } from "next/server";
 
+const { mockCreateTaskWrites, mockDeleteSeries } = vi.hoisted(() => {
+  const mockDeleteSeries = vi.fn();
+  return {
+    mockCreateTaskWrites: vi.fn(() => ({ deleteSeries: mockDeleteSeries })),
+    mockDeleteSeries,
+  };
+});
+
+vi.mock("@/lib/tasks/writes", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/tasks/writes")>(
+    "@/lib/tasks/writes",
+  );
+  return { ...actual, createTaskWrites: mockCreateTaskWrites };
+});
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({
     auth: {
@@ -15,7 +30,6 @@ const mockRecurringTasksDB = {
   updateRecurringTask: vi.fn(),
   pauseRecurringTask: vi.fn(),
   resumeRecurringTask: vi.fn(),
-  deleteRecurringTask: vi.fn(),
 };
 
 vi.mock("@/lib/db", () => ({
@@ -261,17 +275,13 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 describe("DELETE /api/recurring-tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(mockRecurringTasksDB.getRecurringTask).mockResolvedValue({
-      id: "rt-1",
-    });
+    mockDeleteSeries.mockResolvedValue({ type: "deleted" });
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })) },
     } as any);
   });
 
   it("should delete template", async () => {
-    vi.mocked(mockRecurringTasksDB.deleteRecurringTask).mockResolvedValue();
-
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1",
       {
@@ -286,10 +296,43 @@ describe("DELETE /api/recurring-tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockRecurringTasksDB.deleteRecurringTask).toHaveBeenCalledWith(
-      "rt-1",
-      "user-123",
+    expect(mockDeleteSeries).toHaveBeenCalledWith({
+      seriesId: "rt-1",
+      userId: "user-123",
+    });
+  });
+
+  it("passes the validated effective date to Task Writes", async () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/recurring-tasks/rt-1?date=2026-08-09",
+      { method: "DELETE" },
     );
+
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "rt-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockDeleteSeries).toHaveBeenCalledWith({
+      seriesId: "rt-1",
+      userId: "user-123",
+      effectiveDate: "2026-08-09",
+    });
+  });
+
+  it("maps a typed not-found deletion outcome to 404", async () => {
+    mockDeleteSeries.mockResolvedValue({ type: "not-found" });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/recurring-tasks/rt-1",
+      { method: "DELETE" },
+    );
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "rt-1" }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Recurring task not found" });
   });
 
   it("should return 401 if unauthenticated", async () => {
@@ -312,9 +355,7 @@ describe("DELETE /api/recurring-tasks/[id]", () => {
   });
 
   it("should return 500 on internal error", async () => {
-    vi.mocked(mockRecurringTasksDB.deleteRecurringTask).mockRejectedValue(
-      new Error("fail"),
-    );
+    mockDeleteSeries.mockRejectedValue(new Error("fail"));
 
     const request = new NextRequest(
       "http://localhost:3000/api/recurring-tasks/rt-1",

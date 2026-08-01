@@ -2,6 +2,60 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GET, PATCH, DELETE } from "@/app/api/tasks/[id]/route";
 import { NextRequest } from "next/server";
 
+const {
+  mockCreateTaskWrites,
+  mockTaskDelete,
+  mockTaskDeleteSeries,
+} = vi.hoisted(() => {
+  const mockTaskExecute = vi.fn(async (intent: any) => {
+    if (intent.type === "update") {
+      const updates = { ...intent.values };
+      if (updates.title !== undefined) updates.title = updates.title.trim();
+      if (updates.description !== undefined) {
+        updates.description = updates.description?.trim() || null;
+      }
+      if (updates.status !== undefined) {
+        updates.is_completed = updates.status === "done";
+        updates.completed_at = updates.is_completed
+          ? new Date().toISOString()
+          : null;
+      } else if (updates.is_completed !== undefined) {
+        updates.status = updates.is_completed ? "done" : "todo";
+        updates.completed_at = updates.is_completed
+          ? new Date().toISOString()
+          : null;
+      }
+      return {
+        type: "updated",
+        task: await mockTasksDB.updateTask(
+          intent.taskId,
+          intent.userId,
+          updates,
+        ),
+      };
+    }
+    throw new Error(`Unexpected task write intent: ${intent.type}`);
+  });
+  const mockTaskDelete = vi.fn();
+  const mockTaskDeleteSeries = vi.fn();
+  return {
+    mockCreateTaskWrites: vi.fn(() => ({
+      execute: mockTaskExecute,
+      delete: mockTaskDelete,
+      deleteSeries: mockTaskDeleteSeries,
+    })),
+    mockTaskDelete,
+    mockTaskDeleteSeries,
+  };
+});
+
+vi.mock("@/lib/tasks/writes", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/tasks/writes")>(
+    "@/lib/tasks/writes",
+  );
+  return { ...actual, createTaskWrites: mockCreateTaskWrites };
+});
+
 // Mock dependencies
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({
@@ -20,7 +74,6 @@ const mockTasksDB = {
 
 const mockRecurringTasksDB = {
   updateInstanceWithScope: vi.fn(),
-  deleteInstanceWithScope: vi.fn(),
 };
 
 vi.mock("@/lib/db", () => ({
@@ -348,15 +401,11 @@ describe("PATCH /api/tasks/[id]", () => {
 describe("DELETE /api/tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTaskDelete.mockResolvedValue({ type: "deleted" });
+    mockTaskDeleteSeries.mockResolvedValue({ type: "deleted" });
   });
 
   it("should delete task", async () => {
-    vi.mocked(mockTasksDB.getTask).mockResolvedValue({
-      id: "task-1",
-      user_id: "user-123",
-    } as any);
-    vi.mocked(mockTasksDB.deleteTask).mockResolvedValue();
-
     const request = new NextRequest("http://localhost:3000/api/tasks/task-1", {
       method: "DELETE",
     });
@@ -368,7 +417,10 @@ describe("DELETE /api/tasks/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockTasksDB.deleteTask).toHaveBeenCalledWith("task-1", "user-123");
+    expect(mockTaskDelete).toHaveBeenCalledWith({
+      taskId: "task-1",
+      userId: "user-123",
+    });
   });
 });
 
@@ -477,17 +529,11 @@ describe("PATCH /api/tasks/[id] with scope (recurring)", () => {
 describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTaskDelete.mockResolvedValue({ type: "deleted" });
+    mockTaskDeleteSeries.mockResolvedValue({ type: "deleted" });
   });
 
-  it("should delegate scope=this to deleteInstanceWithScope", async () => {
-    vi.mocked(mockTasksDB.getTask).mockResolvedValue({
-      id: "task-1",
-      user_id: "user-123",
-      recurring_series_id: "series-1",
-      recurring_occurrence_id: "occurrence-1",
-    } as any);
-    vi.mocked(mockRecurringTasksDB.deleteInstanceWithScope).mockResolvedValue();
-
+  it("should delegate scope=this to Task Writes", async () => {
     const request = new NextRequest(
       "http://localhost:3000/api/tasks/task-1?scope=this",
       { method: "DELETE" },
@@ -500,18 +546,16 @@ describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(mockRecurringTasksDB.deleteInstanceWithScope).toHaveBeenCalledWith(
-      "task-1",
-      "user-123",
-      "this",
-    );
+    expect(mockTaskDelete).toHaveBeenCalledWith({
+      taskId: "task-1",
+      userId: "user-123",
+      scope: "this",
+    });
   });
 
-  it("should delegate scope=all to deleteInstanceWithScope", async () => {
-    vi.mocked(mockRecurringTasksDB.deleteInstanceWithScope).mockResolvedValue();
-
+  it("should delegate scope=all and its effective date to Task Writes", async () => {
     const request = new NextRequest(
-      "http://localhost:3000/api/tasks/task-1?scope=all",
+      "http://localhost:3000/api/tasks/task-1?scope=all&date=2026-08-06",
       { method: "DELETE" },
     );
 
@@ -520,11 +564,44 @@ describe("DELETE /api/tasks/[id] with scope (recurring)", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockRecurringTasksDB.deleteInstanceWithScope).toHaveBeenCalledWith(
-      "task-1",
-      "user-123",
-      "all",
+    expect(mockTaskDelete).toHaveBeenCalledWith({
+      taskId: "task-1",
+      userId: "user-123",
+      scope: "all",
+      effectiveDate: "2026-08-06",
+    });
+  });
+
+  it("should delegate standalone deletion without inventing a recurring scope", async () => {
+    const request = new NextRequest(
+      "http://localhost:3000/api/tasks/task-1",
+      { method: "DELETE" },
     );
+
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockTaskDelete).toHaveBeenCalledWith({
+      taskId: "task-1",
+      userId: "user-123",
+    });
+  });
+
+  it("maps a typed not-found deletion outcome to 404", async () => {
+    mockTaskDelete.mockResolvedValue({ type: "not-found" });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/tasks/task-1",
+      { method: "DELETE" },
+    );
+    const response = await DELETE(request, {
+      params: Promise.resolve({ id: "task-1" }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Task not found" });
   });
 
   it("should return 400 for invalid delete scope", async () => {

@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { TasksDB, RecurringTasksDB } from "@/lib/db";
 import type { RecurrenceRule } from "@/lib/db";
-import { createTaskWrites } from "@/lib/tasks/writes";
+import {
+  createTaskWrites,
+  taskDeletionErrorMessage,
+} from "@/lib/tasks/writes";
 import { createSupabaseRecurringTaskLifecycle } from "@/lib/recurring-tasks";
 import {
   isOccurrenceSuccess,
@@ -307,25 +310,25 @@ export function taskTools(): ToolDefinition[] {
           .describe("Effective local date for a recurring Series end"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        if (params.scope && params.scope !== "this") {
-          const outcome = await createSupabaseSeriesStateAdapter(
-            ctx.supabase,
-          ).deleteScope({
-            taskId: params.taskId,
-            userId: ctx.userId,
-            scope: params.scope,
-            effectiveDate: params.effectiveDate,
-          });
-          if (isSeriesStateSuccess(outcome)) return { success: true };
-          return { error: seriesStateErrorMessage(outcome) };
-        }
-        const outcome = await createSupabaseOccurrenceAdapter(ctx.supabase).delete({
+        const outcome = await createTaskWrites(ctx.supabase, {
+          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        }).delete({
           taskId: params.taskId,
           userId: ctx.userId,
-          scope: "this",
+          ...(params.scope === undefined ? {} : { scope: params.scope }),
+          ...(params.effectiveDate === undefined
+            ? {}
+            : { effectiveDate: params.effectiveDate }),
         });
-        if (isOccurrenceSuccess(outcome)) return { success: true };
-        return { error: occurrenceErrorMessage(outcome) };
+        if (outcome.type === "deleted") return { success: true };
+        return {
+          error: taskDeletionErrorMessage(
+            outcome,
+            params.scope === "following" || params.scope === "all"
+              ? "series"
+              : "occurrence",
+          ),
+        };
       },
     },
     {
@@ -547,15 +550,15 @@ export function taskTools(): ToolDefinition[] {
           .describe("Effective local date; defaults to today"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const outcome = await createSupabaseSeriesStateAdapter(ctx.supabase).end({
+        const outcome = await createTaskWrites(ctx.supabase, {
+          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        }).deleteSeries({
           seriesId: params.recurringTaskId,
           userId: ctx.userId,
-          effectiveDate: params.effectiveDate,
-          inferredDate: ctx.date,
-          timezone: ctx.timezone,
+          effectiveDate: params.effectiveDate ?? ctx.date,
         });
-        if (isSeriesStateSuccess(outcome)) return { success: true };
-        return { error: seriesStateErrorMessage(outcome) };
+        if (outcome.type === "deleted") return { success: true };
+        return { error: taskDeletionErrorMessage(outcome, "series") };
       },
     },
   ];

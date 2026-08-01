@@ -61,7 +61,6 @@ function createPersistence(
       edit: vi.fn().mockResolvedValue(task),
       editScoped: vi.fn().mockResolvedValue(undefined),
       toggle: vi.fn().mockResolvedValue(task),
-      delete: vi.fn().mockResolvedValue(undefined),
     },
   };
 }
@@ -160,33 +159,6 @@ describe("OccurrenceAdapter", () => {
       seriesId: "series-1",
       occurrenceId: "occurrence-1",
     });
-  });
-
-  it("maps deletion of one occurrence to a lifecycle skip command", async () => {
-    const persistence = createPersistence();
-    const skipOccurrence = vi.fn().mockResolvedValue(lifecycleSuccess());
-    const adapter = new OccurrenceAdapter(persistence, {
-      lifecycle: {
-        editOccurrence: vi.fn(),
-        completeOccurrence: vi.fn(),
-        reopenOccurrence: vi.fn(),
-        skipOccurrence,
-      },
-    });
-
-    const outcome = await adapter.delete({
-      userId: "user-1",
-      taskId: "task-1",
-      scope: "this",
-    });
-
-    expect(outcome.status).toBe("complete");
-    expect(skipOccurrence).toHaveBeenCalledWith({
-      userId: "user-1",
-      seriesId: "series-1",
-      occurrenceId: "occurrence-1",
-    });
-    expect(persistence.legacy.delete).not.toHaveBeenCalled();
   });
 
   it("passes typed lifecycle failures through without parsing their reasons", async () => {

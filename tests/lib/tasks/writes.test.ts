@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createTaskWrites,
   TaskWrites,
+  type TaskDeletionPersistence,
+  type TaskDeletionRequest,
   type TaskWritePersistence,
 } from '@/lib/tasks/writes';
 import { mockSupabaseClient } from '../../setup';
@@ -14,6 +16,22 @@ function createPersistence(): TaskWritePersistence {
     getTask: vi.fn(),
     updateTask: vi.fn(),
     updateInstanceWithScope: vi.fn(),
+  };
+}
+
+function recurringTask(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: 'task-1',
+    is_completed: false,
+    recurring_task_id: null,
+    recurring_series_id: 'series-1',
+    recurring_occurrence_id: 'occurrence-1',
+    original_date: '2026-08-04',
+    scheduled_date: '2026-08-04',
+    recurrence_occurrence_state: 'open',
+    ...overrides,
   };
 }
 
@@ -440,6 +458,401 @@ describe('TaskWrites', () => {
       occurrenceId: 'occurrence-1',
     });
     expect(editOccurrence).not.toHaveBeenCalled();
+  });
+
+  describe('delete', () => {
+    it('returns deleted through the owner-scoped standalone persistence seam', async () => {
+      const persistence = createPersistence();
+      const task = { id: 'task-1', is_completed: false } as never;
+      const deleteTask = vi.fn().mockResolvedValue({ type: 'deleted' as const });
+      vi.mocked(persistence.getTask).mockResolvedValue(task);
+      persistence.deleteTask = deleteTask;
+      const writes = new TaskWrites(persistence);
+
+      await expect(
+        writes.delete({ userId: 'trusted-user', taskId: 'task-1' }),
+      ).resolves.toEqual({ type: 'deleted' });
+      expect(deleteTask).toHaveBeenCalledWith('task-1', 'trusted-user');
+    });
+
+    it.each(['missing', 'cross-owner', 'repeated'] as const)(
+      'returns the same not-found outcome for %s requests without destructive persistence',
+      async () => {
+        const persistence = createPersistence();
+        const deleteTask = vi.fn();
+        vi.mocked(persistence.getTask).mockResolvedValue(null);
+        persistence.deleteTask = deleteTask;
+
+        await expect(
+          new TaskWrites(persistence).delete({
+            userId: 'trusted-user',
+            taskId: 'task-1',
+          }),
+        ).resolves.toEqual({ type: 'not-found' });
+        expect(deleteTask).not.toHaveBeenCalled();
+      },
+    );
+
+    it('rejects an explicit recurring scope on a standalone task', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue({
+        id: 'task-1',
+        is_completed: false,
+      } as never);
+      persistence.deleteTask = vi.fn();
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+          scope: 'this',
+        }),
+      ).resolves.toEqual({
+        type: 'invalid-transition',
+        reason: 'Recurring deletion scope requires a Task Occurrence',
+      });
+      expect(persistence.deleteTask).not.toHaveBeenCalled();
+    });
+
+    it('routes this-scope occurrence deletion through skipOccurrence', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue(recurringTask() as never);
+      const skipOccurrence = vi.fn().mockResolvedValue({
+        status: 'complete',
+        type: 'complete',
+      });
+      persistence.deleteTask = vi.fn();
+      persistence.lifecycle = { skipOccurrence } as never;
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+          scope: 'this',
+        }),
+      ).resolves.toEqual({ type: 'deleted' });
+      expect(skipOccurrence).toHaveBeenCalledWith({
+        userId: 'trusted-user',
+        seriesId: 'series-1',
+        occurrenceId: 'occurrence-1',
+      });
+      expect(persistence.deleteTask).not.toHaveBeenCalled();
+    });
+
+    it('infers this-scope for a recurring task when no scope is supplied', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue(recurringTask() as never);
+      const skipOccurrence = vi.fn().mockResolvedValue({
+        status: 'complete',
+        type: 'complete',
+      });
+      persistence.lifecycle = { skipOccurrence } as never;
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+        }),
+      ).resolves.toEqual({ type: 'deleted' });
+      expect(skipOccurrence).toHaveBeenCalledOnce();
+    });
+
+    it('preserves completed occurrence history instead of deleting it', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue(
+        recurringTask({
+          is_completed: true,
+          recurrence_occurrence_state: 'completed',
+        }) as never,
+      );
+      const skipOccurrence = vi.fn();
+      persistence.lifecycle = { skipOccurrence } as never;
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+          scope: 'this',
+        }),
+      ).resolves.toEqual({
+        type: 'invalid-transition',
+        reason: 'Completed Task Occurrences retain history',
+      });
+      expect(skipOccurrence).not.toHaveBeenCalled();
+    });
+
+  it.each(['following', 'all'] as const)(
+      'routes %s-scope occurrence deletion through one atomic lifecycle command',
+      async (scope) => {
+        const persistence = createPersistence();
+        vi.mocked(persistence.getTask).mockResolvedValue(recurringTask() as never);
+        const getSeries = vi.fn().mockResolvedValue({
+          status: 'complete',
+          type: 'complete',
+          series: { id: 'series-1', status: 'active' },
+        });
+        const endSeries = vi.fn().mockResolvedValue({
+          status: 'complete',
+          type: 'complete',
+        });
+        const deleteSeries = vi.fn().mockResolvedValue({
+          status: 'complete',
+          type: 'complete',
+        });
+        persistence.deleteTask = vi.fn();
+        persistence.lifecycle = { getSeries, endSeries, deleteSeries } as never;
+
+        await expect(
+          new TaskWrites(persistence).delete({
+            userId: 'trusted-user',
+            taskId: 'task-1',
+            scope,
+          }),
+        ).resolves.toEqual({ type: 'deleted' });
+        expect(getSeries).toHaveBeenCalledWith('trusted-user', 'series-1');
+        const command = scope === 'all' ? deleteSeries : endSeries;
+        expect(command).toHaveBeenCalledWith({
+          userId: 'trusted-user',
+          seriesId: 'series-1',
+          effectiveDate: '2026-08-04',
+        });
+        expect(scope === 'all' ? endSeries : deleteSeries).not.toHaveBeenCalled();
+        expect(persistence.deleteTask).not.toHaveBeenCalled();
+      },
+    );
+
+    it('preserves completed history while deleting following occurrences', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue(
+        recurringTask({
+          is_completed: true,
+          recurrence_occurrence_state: 'completed',
+        }) as never,
+      );
+      const getSeries = vi.fn().mockResolvedValue({
+        status: 'complete',
+        type: 'complete',
+        series: { id: 'series-1', status: 'active' },
+      });
+      const endSeries = vi.fn().mockResolvedValue({
+        status: 'complete',
+        type: 'complete',
+      });
+      persistence.lifecycle = { getSeries, endSeries } as never;
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+          scope: 'following',
+        }),
+      ).resolves.toEqual({ type: 'deleted' });
+      expect(endSeries).toHaveBeenCalledOnce();
+    });
+
+    it('returns a domain failure when a recurring task has no scheduled date', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue(
+        recurringTask({ scheduled_date: null, original_date: null }) as never,
+      );
+      const endSeries = vi.fn();
+      persistence.lifecycle = { endSeries } as never;
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+          scope: 'following',
+        }),
+      ).resolves.toEqual({
+        type: 'invalid-transition',
+        reason: 'Recurring Task Occurrence is missing its Scheduled Date',
+      });
+      expect(endSeries).not.toHaveBeenCalled();
+    });
+
+    it('returns a domain failure when recurring occurrence metadata is incomplete', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue(
+        recurringTask({ recurring_occurrence_id: null }) as never,
+      );
+      const skipOccurrence = vi.fn();
+      persistence.lifecycle = { skipOccurrence } as never;
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+          scope: 'this',
+        }),
+      ).resolves.toEqual({
+        type: 'invalid-transition',
+        reason: 'Recurring Task Occurrence metadata is incomplete',
+      });
+      expect(skipOccurrence).not.toHaveBeenCalled();
+    });
+
+    it('maps a lifecycle not-found outcome without destructive persistence', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue(recurringTask() as never);
+      const skipOccurrence = vi.fn().mockResolvedValue({
+        status: 'not-found',
+        type: 'not-found',
+      });
+      persistence.lifecycle = { skipOccurrence } as never;
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+          scope: 'this',
+        }),
+      ).resolves.toEqual({ type: 'not-found' });
+    });
+
+    it('maps a repeated lifecycle deletion to the same not-found outcome', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue(recurringTask() as never);
+      const skipOccurrence = vi.fn().mockResolvedValue({
+        status: 'already-applied',
+        type: 'already-applied',
+      });
+      persistence.lifecycle = { skipOccurrence } as never;
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+          scope: 'this',
+        }),
+      ).resolves.toEqual({ type: 'not-found' });
+    });
+
+    it('returns not-found for an ended series instead of retrying destructive work', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue(recurringTask() as never);
+      const getSeries = vi.fn().mockResolvedValue({
+        status: 'complete',
+        type: 'complete',
+        series: { id: 'series-1', status: 'ended' },
+      });
+      const endSeries = vi.fn();
+      persistence.lifecycle = { getSeries, endSeries } as never;
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+          scope: 'all',
+        }),
+      ).resolves.toEqual({ type: 'not-found' });
+      expect(endSeries).not.toHaveBeenCalled();
+    });
+
+    it('propagates unexpected standalone deletion persistence failures', async () => {
+      const persistenceError = new Error('deletion transaction unavailable');
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue({
+        id: 'task-1',
+        is_completed: false,
+      } as never);
+      const deleteTask = vi.fn().mockRejectedValue(persistenceError);
+      persistence.deleteTask = deleteTask;
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+        }),
+      ).rejects.toBe(persistenceError);
+    });
+
+    it('deletes a recurring series through the lifecycle boundary', async () => {
+      const getSeries = vi.fn().mockResolvedValue({
+        status: 'complete',
+        type: 'complete',
+        series: { id: 'series-1', status: 'active' },
+      });
+      const deleteSeries = vi.fn().mockResolvedValue({
+        status: 'complete',
+        type: 'complete',
+      });
+      const writes = new TaskWrites({
+        lifecycle: { getSeries, deleteSeries },
+      } as never);
+
+      await expect(
+        writes.deleteSeries({
+          userId: 'trusted-user',
+          seriesId: 'series-1',
+          effectiveDate: '2026-08-06',
+        }),
+      ).resolves.toEqual({ type: 'deleted' });
+      expect(getSeries).toHaveBeenCalledWith('trusted-user', 'series-1');
+      expect(deleteSeries).toHaveBeenCalledWith({
+        userId: 'trusted-user',
+        seriesId: 'series-1',
+        effectiveDate: '2026-08-06',
+      });
+    });
+
+    it.each(['missing', 'cross-owner', 'repeated'] as const)(
+      'returns not-found for %s recurring-series deletion requests',
+      async () => {
+        const getSeries = vi.fn().mockResolvedValue({
+          status: 'not-found',
+          type: 'not-found',
+        });
+        const deleteSeries = vi.fn();
+        const writes = new TaskWrites({
+          lifecycle: { getSeries, deleteSeries },
+        } as never);
+
+        await expect(
+          writes.deleteSeries({
+            userId: 'trusted-user',
+            seriesId: 'series-1',
+          }),
+        ).resolves.toEqual({ type: 'not-found' });
+        expect(deleteSeries).not.toHaveBeenCalled();
+      },
+    );
+
+    it('rejects recurring deletion when lifecycle persistence is unavailable', async () => {
+      const persistence = createPersistence();
+      vi.mocked(persistence.getTask).mockResolvedValue(recurringTask() as never);
+
+      await expect(
+        new TaskWrites(persistence).delete({
+          userId: 'trusted-user',
+          taskId: 'task-1',
+          scope: 'this',
+        }),
+      ).resolves.toEqual({
+        type: 'invalid-transition',
+        reason: 'Recurring task deletion requires lifecycle persistence',
+      });
+    });
+
+    it('keeps deletion requests storage-independent', () => {
+      const request: TaskDeletionRequest = {
+        userId: 'trusted-user',
+        taskId: 'task-1',
+        scope: 'following',
+        effectiveDate: '2026-08-04',
+      };
+      const persistence: TaskDeletionPersistence = {
+        deleteTask: vi.fn().mockResolvedValue({ type: 'deleted' }),
+      };
+
+      expect(request).toEqual({
+        userId: 'trusted-user',
+        taskId: 'task-1',
+        scope: 'following',
+        effectiveDate: '2026-08-04',
+      });
+      expect(persistence).toBeDefined();
+    });
   });
 });
 

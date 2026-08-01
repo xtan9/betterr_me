@@ -13,7 +13,6 @@ const mockGetUserTasks = vi.fn();
 const mockCreateTask = vi.fn();
 const mockUpdateTask = vi.fn();
 const mockDeleteTask = vi.fn();
-const mockDeleteInstanceWithScope = vi.fn();
 
 const mockSortOrderChain = {
   select: vi.fn().mockReturnThis(),
@@ -32,8 +31,6 @@ vi.mock("@/lib/db", () => ({
     createRecurringTask = vi.fn();
     updateRecurringTask = vi.fn();
     pauseRecurringTask = vi.fn();
-    deleteRecurringTask = vi.fn();
-    deleteInstanceWithScope = mockDeleteInstanceWithScope;
   },
   TasksDB: class {
     getTodayTasks = mockGetTodayTasks;
@@ -178,7 +175,7 @@ describe("taskTools", () => {
     const tools = taskTools();
     const deleteTask = tools.find((t) => t.name === "deleteTask")!;
     mockGetTask.mockResolvedValue({ id: "t1" });
-    mockDeleteTask.mockResolvedValue(undefined);
+    mockDeleteTask.mockResolvedValue(true);
 
     const result = await deleteTask.execute({ taskId: "t1" }, ctx);
 
@@ -199,7 +196,7 @@ describe("taskTools", () => {
     expect(mockDeleteTask).not.toHaveBeenCalled();
   });
 
-  it("deleteTask skips a recurring occurrence through the recurring adapter", async () => {
+  it("deleteTask skips a recurring occurrence through Task Writes", async () => {
     const ctx = makeCtx();
     const deleteTask = taskTools().find((t) => t.name === "deleteTask")!;
     mockGetTask.mockResolvedValue({
@@ -207,15 +204,17 @@ describe("taskTools", () => {
       recurring_series_id: "series-1",
       recurring_occurrence_id: "occurrence-1",
     });
-    mockDeleteInstanceWithScope.mockResolvedValue(undefined);
 
     const result = await deleteTask.execute({ taskId: "t1" }, ctx);
 
-    expect(mockDeleteInstanceWithScope).toHaveBeenCalledWith(
-      "t1",
-      "user-123",
-      "this",
-    );
+    expect(mockRpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
+      p_operation: "skip-occurrence",
+      p_request: {
+        userId: "user-123",
+        seriesId: "series-1",
+        occurrenceId: "occurrence-1",
+      },
+    });
     expect(mockDeleteTask).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true });
   });

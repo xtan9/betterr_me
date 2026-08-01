@@ -37,6 +37,7 @@ type LifecycleOperation =
   | "pause-series"
   | "resume-series"
   | "end-series"
+  | "delete-series"
   | "get-series";
 
 /**
@@ -121,6 +122,10 @@ export class SupabaseRecurringTaskLifecycle
     return this.call("end-series", request);
   }
 
+  async deleteSeries(request: SeriesCommandRequest) {
+    return this.call("delete-series", request, "recurring_task_delete_series");
+  }
+
   async getSeries(userId: string, seriesId: string) {
     return this.call("get-series", { userId, seriesId });
   }
@@ -128,6 +133,7 @@ export class SupabaseRecurringTaskLifecycle
   private async call<TRequest extends object, TResult = LifecycleOutcome<RecurringTaskSeries>>(
     operation: LifecycleOperation,
     request: TRequest,
+    rpcName = "recurring_task_lifecycle",
   ): Promise<TResult> {
     const safeRequest = request as Record<string, unknown>;
     if (isCoverageOperation(operation, safeRequest)) {
@@ -141,7 +147,7 @@ export class SupabaseRecurringTaskLifecycle
       });
     }
     try {
-      const { data, error } = await this.supabase.rpc("recurring_task_lifecycle", {
+      const { data, error } = await this.supabase.rpc(rpcName, {
         p_operation: operation,
         p_request: request,
       });

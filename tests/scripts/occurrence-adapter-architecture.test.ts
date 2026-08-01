@@ -28,20 +28,25 @@ describe("Occurrence adapter architecture boundaries", () => {
     expect(toggleRoute).not.toContain("message.includes");
   });
 
-  it("routes AI occurrence edits and destructive commands through the adapter", () => {
+  it("routes AI occurrence edits through the adapter and deletion through Task Writes", () => {
     const tools = source("lib/ai/tools/tasks.ts");
     const toggle = section(tools, 'name: "toggleTask"', 'name: "updateTask"');
     const update = section(tools, 'name: "updateTask"', 'name: "deleteTask"');
     const deletion = section(tools, 'name: "deleteTask"', 'name: "getRecurringTasks"');
 
-    for (const operation of [toggle, update, deletion]) {
+    for (const operation of [toggle, update]) {
       expect(operation).toContain("createSupabaseOccurrenceAdapter(ctx.supabase)");
       expect(operation).toContain("occurrenceErrorMessage(outcome)");
     }
+    expect(deletion).toContain("createTaskWrites(ctx.supabase,");
+    expect(deletion).toContain(".delete({");
+    expect(deletion).toMatch(/taskDeletionErrorMessage\(\s*outcome/);
+    expect(deletion).not.toContain("createSupabaseOccurrenceAdapter(ctx.supabase)");
+    expect(deletion).not.toContain("occurrenceErrorMessage(outcome)");
     expect(deletion).toContain("Always confirm with the user first");
     expect(toggle).not.toContain("createTaskWrites");
     expect(update).not.toContain("createTaskWrites");
-    expect(deletion).not.toMatch(/\.deleteTask\(|deleteInstanceWithScope/);
+    expect(deletion).not.toMatch(/deleteInstanceWithScope|createSupabaseSeriesStateAdapter/);
   });
 
   it("keeps direct storage writes outside the lifecycle adapter boundary", () => {
@@ -50,7 +55,6 @@ describe("Occurrence adapter architecture boundaries", () => {
     expect(lifecycleAdapter).not.toMatch(/TasksDB|RecurringTasksDB/);
     expect(lifecycleAdapter).not.toMatch(/\.from\(|\.updateTask\(|\.deleteTask\(/);
     expect(lifecycleAdapter).toContain("lifecycle.editOccurrence");
-    expect(lifecycleAdapter).toContain("this.options.lifecycle.skipOccurrence");
     expect(lifecycleAdapter).toContain("completeOccurrence");
     expect(lifecycleAdapter).toContain("reopenOccurrence");
   });

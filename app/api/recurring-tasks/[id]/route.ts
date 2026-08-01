@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { RecurringTasksDB } from '@/lib/db';
+import {
+  createTaskWrites,
+  taskDeletionHttpFailure,
+} from '@/lib/tasks/writes';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { recurringTaskUpdateSchema } from '@/lib/validations/recurring-task';
@@ -11,6 +15,7 @@ import {
 } from '@/lib/recurring-tasks/recurrence';
 import {
   createSupabaseSeriesStateAdapter,
+  createSupabaseRecurringTaskLifecycle,
   isSeriesStateSuccess,
   seriesStateHttpFailure,
 } from '@/lib/recurring-tasks';
@@ -197,14 +202,15 @@ export async function DELETE(
         { status: 400 },
       );
     }
-    const state = createSupabaseSeriesStateAdapter(supabase);
-    const outcome = await state.end({
+    const outcome = await createTaskWrites(supabase, {
+      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+    }).deleteSeries({
       seriesId: id,
       userId,
-      effectiveDate: dateParam,
+      ...(dateParam === undefined ? {} : { effectiveDate: dateParam }),
     });
-    if (!isSeriesStateSuccess(outcome)) {
-      const failure = seriesStateHttpFailure(outcome);
+    if (outcome.type !== 'deleted') {
+      const failure = taskDeletionHttpFailure(outcome, 'series');
       return NextResponse.json(
         { error: failure.error },
         { status: failure.status },
