@@ -855,6 +855,8 @@
         "description": "Pause push notifications during these hours",
         "enabled": "Quiet hours enabled",
         "disabled": "Quiet hours disabled",
+        "unavailable": "Quiet hours unavailable",
+        "unavailableDescription": "Set a valid User Time Zone to use the stored quiet hours.",
         "startTime": "Start time",
         "endTime": "End time",
         "emailNote": "Email notifications are not affected by quiet hours",

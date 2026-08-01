@@ -157,8 +157,8 @@ function decodeReminderEmail(
   return { status: "ready", value: { enabled: true } };
 }
 
-function decodePushQuietWindow(
-  stored: Record<string, unknown> | null,
+export function decodePushQuietWindow(
+  stored: PreferenceStorage,
   timeZone: UserTimeZone,
 ): PreferenceState<PushQuietWindow> {
   const start = stored?.quiet_hours_start;

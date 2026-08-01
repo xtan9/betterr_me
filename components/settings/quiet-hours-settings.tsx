@@ -28,6 +28,7 @@ export function QuietHoursSettings({
   const t = useTranslations("settings.notifications");
   const notifications = useNotifications({ initialData, initialSubject });
   const quietState = notifications.pushQuietWindow;
+  const quietUnavailable = quietState.status === "unavailable";
   const acceptedQuiet = useMemo(
     () =>
       quietState.status === "ready" || quietState.status === "pending"
@@ -85,7 +86,9 @@ export function QuietHoursSettings({
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <Label htmlFor="quiet-hours-toggle" className="text-body font-medium">
-            {enabled
+            {quietUnavailable
+              ? t("quietHours.unavailable")
+              : enabled
               ? t("quietHours.enabled")
               : t("quietHours.disabled")}
           </Label>
@@ -127,7 +130,9 @@ export function QuietHoursSettings({
         )}
 
         <p className="text-caption text-muted-foreground">
-          {t("quietHours.emailNote")}
+          {quietUnavailable
+            ? t("quietHours.unavailableDescription")
+            : t("quietHours.emailNote")}
         </p>
 
         <Button

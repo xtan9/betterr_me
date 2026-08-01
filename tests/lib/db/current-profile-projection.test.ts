@@ -87,4 +87,5 @@ describe("ProfilesDB Current Profile projection", () => {
       db.getFitnessWeightUnitPreference("user-123"),
     ).rejects.toThrow("database unavailable");
   });
+
 });

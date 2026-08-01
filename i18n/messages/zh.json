@@ -855,6 +855,8 @@
         "description": "在此时段暂停推送通知",
         "enabled": "免打扰已启用",
         "disabled": "免打扰已禁用",
+        "unavailable": "免打扰时段不可用",
+        "unavailableDescription": "设置有效的用户时区后才能使用已保存的免打扰时段。",
         "startTime": "开始时间",
         "endTime": "结束时间",
         "emailNote": "邮件通知不受免打扰时段影响",

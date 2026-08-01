@@ -5,8 +5,7 @@ import { RemindersDB } from "@/lib/db/reminders";
 import { NotificationsDB } from "@/lib/db/notifications";
 import { sendPushNotification } from "@/lib/push/send";
 import { sendReminderEmail } from "@/lib/email/send";
-import { isInQuietHours } from "@/lib/push/quiet-hours";
-import { decodeNotificationPreferences } from "@/lib/preferences/owners";
+import { isPushQuietWindowActive } from "@/lib/preferences/push-quiet-window";
 import { getVapidDetails } from "@/lib/push/vapid";
 import { log } from "@/lib/logger";
 
@@ -88,24 +87,15 @@ export async function GET(request: NextRequest) {
         // Check staleness: skip reminders whose fire_at is too old
         const fireAtAge = Date.now() - new Date(reminder.fire_at).getTime();
 
-        // Read only the Notifications-owned projection for quiet-window evaluation.
-        const notificationProjection =
-          await notificationsDB.getNotificationPreferenceProjection(reminder.user_id);
-        const quietWindow = notificationProjection
-          ? decodeNotificationPreferences(
-              notificationProjection.preferences,
-              null,
-              notificationProjection.timezone,
-            ).pushQuietWindow
-          : { status: "disabled" as const };
-        const inQuietHours = isInQuietHours(
-          quietWindow.status === "ready" && quietWindow.value.status === "enabled"
-            ? quietWindow.value.startLocal
-            : null,
-          quietWindow.status === "ready" && quietWindow.value.status === "enabled"
-            ? quietWindow.value.endLocal
-            : null,
-          notificationProjection?.timezone ?? null,
+        // Read only the Notifications-owned Push Quiet Window state. An
+        // unavailable legacy window fails open for push while remaining
+        // visible as unavailable through Current Profile.
+        const pushQuietWindow = await notificationsDB.getPushQuietWindow(
+          reminder.user_id,
+        );
+        const inQuietHours = isPushQuietWindowActive(
+          pushQuietWindow?.pushQuietWindow,
+          pushQuietWindow?.userTimeZone,
         );
 
         // Determine which channels to dispatch

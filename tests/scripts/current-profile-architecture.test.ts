@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 function trackedSourceFiles(directory: string): string[] {
   return execFileSync("git", ["ls-files", "-z", "--", directory], {
     encoding: "utf8",
-  })
+    })
     .split("\0")
     .filter((path) => /\.(?:ts|tsx)$/.test(path) && existsSync(path));
 }
@@ -47,5 +47,15 @@ describe("Current Profile architecture boundaries", () => {
     for (const path of broadReaders) {
       expect(source(path), path).not.toMatch(/\.getProfile\(/);
     }
+  });
+
+  it("keeps push quiet-window evaluation behind the Notifications reader", () => {
+    const dispatchSource = source("app/api/cron/dispatch-reminders/route.ts");
+
+    expect(dispatchSource).toContain("getPushQuietWindow");
+    expect(dispatchSource).toContain("isPushQuietWindowActive");
+    expect(dispatchSource).not.toContain("getNotificationPreferenceProjection");
+    expect(dispatchSource).not.toContain("decodeNotificationPreferences");
+    expect(dispatchSource).not.toContain("lib/push/quiet-hours");
   });
 });

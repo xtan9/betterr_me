@@ -68,7 +68,9 @@ function responseStatus(code: string): number {
 
 export function commandFailureResponse(error: unknown, fallbackCode: string) {
   const code = errorCode(error) ?? fallbackCode;
-  log.error("[preferences] command failed", error, { code });
+  // Command errors may be produced from user intents. Keep diagnostics typed
+  // by public code only; never attach an error message or raw intent payload.
+  log.error("[preferences] command failed", undefined, { code });
   return NextResponse.json({ error: code }, { status: responseStatus(code) });
 }
 
