@@ -142,8 +142,6 @@ export interface Project {
   updated_at: string;
 }
 
-export type ProjectUpdate = Partial<Pick<Project, 'name' | 'section' | 'color' | 'status' | 'sort_order'>>;
-
 // =============================================================================
 // RECURRING TASKS
 // =============================================================================

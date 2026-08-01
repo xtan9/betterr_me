@@ -6,7 +6,7 @@ import {
   restoreMockSupabaseThen,
 } from "../../helpers/mock-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Project, ProjectUpdate } from "@/lib/db/types";
+import type { Project } from "@/lib/db/types";
 
 const USER_ID = "user-123";
 const PROJECT_ID = "project-123";
@@ -209,82 +209,6 @@ describe("ProjectsDB", () => {
       mockSupabaseClient.setMockResponse(null, err);
 
       await expect(db.getProject(PROJECT_ID, USER_ID)).rejects.toEqual(err);
-    });
-  });
-
-  // ─── updateProject ────────────────────────────────────────────────────────
-  describe("updateProject", () => {
-    it("updates by (id, user_id) and returns the updated project", async () => {
-      const updates: ProjectUpdate = { name: "Updated Name", color: "red" };
-      const expected = makeProject({ ...updates });
-      mockSupabaseClient.setMockResponse(expected);
-
-      const result = await db.updateProject(PROJECT_ID, USER_ID, updates);
-
-      expect(result).toEqual(expected);
-
-      mockSupabaseClient.expectQuery({
-        table: "projects",
-        method: "from",
-        args: ["projects"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "projects",
-        method: "update",
-        args: [updates],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "projects",
-        method: "eq",
-        args: ["id", PROJECT_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "projects",
-        method: "eq",
-        args: ["user_id", USER_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "projects",
-        method: "single",
-        args: [],
-      });
-    });
-
-    it("throws when the update errors", async () => {
-      const err = { message: "Update failed" };
-      mockSupabaseClient.setMockResponse(null, err);
-
-      await expect(
-        db.updateProject(PROJECT_ID, USER_ID, { name: "x" }),
-      ).rejects.toEqual(err);
-    });
-  });
-
-  // ─── archiveProject ───────────────────────────────────────────────────────
-  describe("archiveProject", () => {
-    it("delegates to updateProject with status='archived'", async () => {
-      const expected = makeProject({ status: "archived" });
-      mockSupabaseClient.setMockResponse(expected);
-
-      const result = await db.archiveProject(PROJECT_ID, USER_ID);
-
-      expect(result).toEqual(expected);
-
-      // Assert the exact update payload — catches mutations that swap the
-      // literal 'archived' for '' or an object-property drop.
-      mockSupabaseClient.expectQuery({
-        table: "projects",
-        method: "update",
-        args: [{ status: "archived" }],
-      });
-      mockSupabaseClient.expectQuery({
-        method: "eq",
-        args: ["id", PROJECT_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        method: "eq",
-        args: ["user_id", USER_ID],
-      });
     });
   });
 

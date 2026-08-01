@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ProjectWrites,
   SupabaseProjectCreationPersistence,
+  SupabaseProjectMutationPersistence,
   type ProjectCreationRecord,
+  type ProjectUpdateChanges,
 } from "@/lib/projects/writes";
 
 const projectRow = {
@@ -24,6 +26,14 @@ const creationRecord: ProjectCreationRecord = {
   color: "blue",
   status: "active",
   sortOrder: null,
+};
+
+const updateChanges: ProjectUpdateChanges = {
+  name: "Renamed",
+  section: "work",
+  color: "#3B82F6",
+  status: "archived",
+  sortOrder: 7,
 };
 
 describe("SupabaseProjectCreationPersistence", () => {
@@ -162,5 +172,118 @@ describe("SupabaseProjectCreationPersistence", () => {
       "created",
       "created",
     ]);
+  });
+});
+
+describe("SupabaseProjectMutationPersistence project updates", () => {
+  const rpc = vi.fn();
+  let persistence: SupabaseProjectMutationPersistence;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    persistence = new SupabaseProjectMutationPersistence({ rpc } as never);
+  });
+
+  it("uses the owner-scoped update capability and maps an updated project", async () => {
+    rpc.mockResolvedValue({
+      data: { type: "updated", project: { ...projectRow, ...{
+        name: "Renamed",
+        section: "work",
+        color: "#3B82F6",
+        status: "archived",
+        sort_order: 7,
+      } } },
+      error: null,
+    });
+
+    await expect(
+      persistence.updateProject("project-1", "user-1", updateChanges),
+    ).resolves.toEqual({
+      type: "updated",
+      project: {
+        id: "project-1",
+        userId: "user-1",
+        name: "Renamed",
+        section: "work",
+        color: "#3B82F6",
+        status: "archived",
+        sortOrder: 7,
+        createdAt: "2026-08-01T12:00:00.000Z",
+        updatedAt: "2026-08-01T12:00:00.000Z",
+      },
+    });
+
+    expect(rpc).toHaveBeenCalledWith("update_project_atomically", {
+      p_project_id: "project-1",
+      p_user_id: "user-1",
+      p_changes: {
+        name: "Renamed",
+        section: "work",
+        color: "#3B82F6",
+        status: "archived",
+        sort_order: 7,
+      },
+    });
+  });
+
+  it.each([
+    ["not-found", { type: "not-found" }],
+    ["conflict", { type: "conflict" }],
+    [
+      "invalid",
+      { type: "invalid", field: "sortOrder", message: "Sort order is invalid" },
+    ],
+  ])("preserves the %s database outcome", async (_label, outcome) => {
+    rpc.mockResolvedValue({ data: outcome, error: null });
+
+    await expect(
+      persistence.updateProject("project-1", "user-1", updateChanges),
+    ).resolves.toEqual(outcome);
+  });
+
+  it("maps an already-applied transition without rewriting the stored project", async () => {
+    rpc.mockResolvedValue({
+      data: { type: "already-applied", project: { ...projectRow, status: "archived" } },
+      error: null,
+    });
+
+    await expect(
+      persistence.updateProject("project-1", "user-1", { status: "archived" }),
+    ).resolves.toEqual({
+      type: "already-applied",
+      project: {
+        id: "project-1",
+        userId: "user-1",
+        name: "Roadmap",
+        section: "personal",
+        color: "blue",
+        status: "archived",
+        sortOrder: 65536,
+        createdAt: "2026-08-01T12:00:00.000Z",
+        updatedAt: "2026-08-01T12:00:00.000Z",
+      },
+    });
+  });
+
+  it("throws infrastructure failures and malformed update outcomes", async () => {
+    const failure = { code: "42P01", message: "function missing" };
+    rpc.mockResolvedValue({ data: null, error: failure });
+
+    await expect(
+      persistence.updateProject("project-1", "user-1", updateChanges),
+    ).rejects.toBe(failure);
+
+    rpc.mockResolvedValue({
+      data: { type: "updated", project: { id: "project-1" } },
+      error: null,
+    });
+    await expect(
+      persistence.updateProject("project-1", "user-1", updateChanges),
+    ).rejects.toThrow("Invalid project returned by the database");
+
+    rpc.mockResolvedValue({ data: { type: "unexpected" }, error: null });
+    await expect(
+      persistence.updateProject("project-1", "user-1", updateChanges),
+    ).rejects.toThrow("Invalid project update outcome returned by the database");
   });
 });

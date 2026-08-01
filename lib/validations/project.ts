@@ -21,7 +21,10 @@ export const projectStatusSchema = z.enum(['active', 'archived']);
 
 export const projectUpdateSchema = projectFormSchema
   .partial()
-  .extend({ status: projectStatusSchema.optional() })
+  .extend({
+    status: projectStatusSchema.optional(),
+    sort_order: z.number().optional(),
+  })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
   });

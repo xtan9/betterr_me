@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { ProjectsDB } from '@/lib/db';
+import { createProjectWrites, toProjectResponse } from '@/lib/projects/writes';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 
@@ -71,14 +72,44 @@ export async function PATCH(
     const validation = validateRequestBody(body, projectUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const projectsDB = new ProjectsDB(supabase);
-    const project = await projectsDB.updateProject(id, userId, validation.data);
+    const outcome = await createProjectWrites(supabase).update({
+      userId,
+      projectId: id,
+      ...(validation.data.name !== undefined
+        ? { name: validation.data.name }
+        : {}),
+      ...(validation.data.section !== undefined
+        ? { section: validation.data.section }
+        : {}),
+      ...(validation.data.color !== undefined
+        ? { color: validation.data.color }
+        : {}),
+      ...(validation.data.status !== undefined
+        ? { status: validation.data.status }
+        : {}),
+      ...(validation.data.sort_order !== undefined
+        ? { sortOrder: validation.data.sort_order }
+        : {}),
+    });
 
-    return NextResponse.json({ project });
-  } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'PGRST116') {
+    if (outcome.type === 'not-found') {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
+    if (outcome.type === 'conflict') {
+      return NextResponse.json(
+        { error: 'Project update conflict' },
+        { status: 409 },
+      );
+    }
+    if (outcome.type === 'invalid') {
+      return NextResponse.json(
+        { error: outcome.message, field: outcome.field },
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json({ project: toProjectResponse(outcome.project) });
+  } catch (error: unknown) {
     log.error('PATCH /api/projects/[id] error', error);
     return NextResponse.json(
       { error: 'Failed to update project' },

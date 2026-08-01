@@ -73,7 +73,8 @@ export function projectTools(): ToolDefinition[] {
     },
     {
       name: "updateProject",
-      description: "Update a project's name, section, color, or status",
+      description:
+        "Update a project's name, section, color, ordering, or status",
       parameters: z.object({
         projectId: z.string().describe("The project ID"),
         name: z.string().optional().describe("New name"),
@@ -86,15 +87,31 @@ export function projectTools(): ToolDefinition[] {
           .enum(["active", "archived"])
           .optional()
           .describe("New status"),
+        sortOrder: z.number().optional().describe("New ordering value"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new ProjectsDB(ctx.supabase);
-        const { projectId, ...rest } = params;
-        const updates: Record<string, unknown> = { ...rest };
-        for (const key of Object.keys(updates)) {
-          if (updates[key] === undefined) delete updates[key];
+        const outcome = await createProjectWrites(ctx.supabase).update({
+          userId: ctx.userId,
+          projectId: params.projectId,
+          ...(params.name !== undefined ? { name: params.name } : {}),
+          ...(params.section !== undefined ? { section: params.section } : {}),
+          ...(params.color !== undefined ? { color: params.color } : {}),
+          ...(params.status !== undefined ? { status: params.status } : {}),
+          ...(params.sortOrder !== undefined
+            ? { sortOrder: params.sortOrder }
+            : {}),
+        });
+
+        if (outcome.type === "updated" || outcome.type === "already-applied") {
+          return toProjectResponse(outcome.project);
         }
-        return db.updateProject(projectId, ctx.userId, updates);
+        if (outcome.type === "not-found") {
+          return { error: "Project not found" };
+        }
+        if (outcome.type === "conflict") {
+          return { error: "Project update conflict" };
+        }
+        return { error: outcome.message, field: outcome.field };
       },
     },
     {
