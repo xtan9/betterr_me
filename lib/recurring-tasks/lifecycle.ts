@@ -1334,6 +1334,7 @@ function ensureCoverageState(
   validateRange(range);
   const datesByRevision = new Map<string, string[]>();
   const intentionalAbsences = new Set(series.intentionalAbsences);
+  const producedDates = new Set<string>();
 
   for (const revision of series.revisions) {
     const start = maxDate(range.from, revision.effectiveFrom);
@@ -1351,27 +1352,48 @@ function ensureCoverageState(
     datesByRevision.set(revision.id, dates);
     if (revision.state !== "active") {
       for (const date of dates) intentionalAbsences.add(date);
+    } else {
+      for (const date of dates) producedDates.add(date);
     }
   }
 
   const scheduledDates = [...datesByRevision.values()]
     .flat()
     .sort();
-  const producedDates = new Set(scheduledDates);
-  for (const occurrence of series.occurrences) {
+  let retainedCount = series.occurrences.filter(
+    (occurrence) => occurrence.state !== "withdrawn",
+  ).length;
+  for (const occurrence of [...series.occurrences].sort(
+    (left, right) => left.scheduledDate.localeCompare(right.scheduledDate)
+      || left.id.localeCompare(right.id),
+  )) {
     if (
       occurrence.state === "open"
       && compareLocalDates(occurrence.scheduledDate, range.from) >= 0
       && compareLocalDates(occurrence.scheduledDate, range.to) <= 0
-      && !producedDates.has(occurrence.scheduledDate)
     ) {
-      occurrence.state = occurrenceHasIntent(occurrence) ? "extra" : "withdrawn";
+      const retainedBefore = series.occurrences.filter(
+        (candidate) => candidate.state !== "withdrawn"
+          && compareLocalDates(candidate.scheduledDate, occurrence.scheduledDate) < 0,
+      ).length;
+      const exceedsLimit = series.occurrenceLimit !== null
+        && retainedBefore >= series.occurrenceLimit;
+      const isPastLastScheduledDate = series.lastScheduledDate !== null
+        && compareLocalDates(
+          occurrence.scheduledDate,
+          series.lastScheduledDate,
+        ) > 0;
+      if (
+        !producedDates.has(occurrence.scheduledDate)
+        || exceedsLimit
+        || isPastLastScheduledDate
+      ) {
+        occurrence.state = occurrenceHasIntent(occurrence) ? "extra" : "withdrawn";
+        if (occurrence.state === "withdrawn") retainedCount -= 1;
+      }
     }
   }
 
-  let retainedCount = series.occurrences.filter(
-    (occurrence) => occurrence.state !== "withdrawn",
-  ).length;
   for (const date of scheduledDates) {
     const revision = resolveRevision(series, date);
     if (!revision) {
@@ -1385,6 +1407,20 @@ function ensureCoverageState(
     );
     if (existing) {
       if (existing.state === "withdrawn") {
+        if (
+          series.status === "ended"
+          || (
+            series.lastScheduledDate !== null
+            && compareLocalDates(date, series.lastScheduledDate) > 0
+          )
+          || (
+            series.occurrenceLimit !== null
+            && retainedCount >= series.occurrenceLimit
+          )
+        ) {
+          intentionalAbsences.add(date);
+          continue;
+        }
         existing.state = "open";
         existing.revisionId = revision.id;
         existing.details = mergeDetails(
@@ -1394,6 +1430,10 @@ function ensureCoverageState(
         existing.dueDate = existing.dueDate ?? date;
         retainedCount += 1;
       }
+      continue;
+    }
+
+    if (series.status === "ended") {
       continue;
     }
 
