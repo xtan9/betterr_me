@@ -30,6 +30,13 @@ const { mockSWRReturn, mockSelectTheme, mockPush, mockSignOut } = vi.hoisted(
 
 vi.mock("@/lib/hooks/use-appearance", () => ({
   useAppearance: () => ({
+    theme: "system",
+    selectTheme: mockSelectTheme,
+  }),
+}));
+
+vi.mock("@/lib/hooks/use-current-profile", () => ({
+  useCurrentProfile: () => ({
     data: mockSWRReturn.data,
     error: mockSWRReturn.error,
     status: mockSWRReturn.isLoading
@@ -37,8 +44,6 @@ vi.mock("@/lib/hooks/use-appearance", () => ({
       : mockSWRReturn.data
         ? "available"
         : "unavailable",
-    theme: "system",
-    selectTheme: mockSelectTheme,
   }),
 }));
 

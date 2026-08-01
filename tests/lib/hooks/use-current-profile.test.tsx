@@ -521,16 +521,12 @@ describe("useCurrentProfile", () => {
       status: "ready",
       value: "dark",
     };
+    let resolveAppearanceCommand!: (response: unknown) => void;
+    const appearanceCommand = new Promise((resolve) => {
+      resolveAppearanceCommand = resolve;
+    });
     mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            theme: "dark",
-            preferenceRevision: 4,
-            changed: true,
-          }),
-      })
+      .mockImplementationOnce(() => appearanceCommand)
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(acceptedProfile),
@@ -556,6 +552,16 @@ describe("useCurrentProfile", () => {
     expect(result.current.acceptedTheme).toEqual({
       status: "ready",
       value: "system",
+    });
+
+    resolveAppearanceCommand({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          theme: "dark",
+          preferenceRevision: 4,
+          changed: true,
+        }),
     });
 
     await act(async () => {

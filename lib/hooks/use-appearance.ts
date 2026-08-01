@@ -43,9 +43,10 @@ export function useAppearance() {
   };
 
   return {
-    ...profileQuery,
     theme: presentationTheme,
     themePreference,
+    acceptedTheme: profileQuery.acceptedTheme,
+    isPending: profileQuery.isPending,
     resolvedTheme,
     selectTheme,
   };

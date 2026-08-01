@@ -74,6 +74,15 @@ describe("useAppearance", () => {
     });
   });
 
+  it("does not expose Current Profile transport or cache controls to consumers", () => {
+    const { result } = renderHook(() => useAppearance());
+
+    expect(result.current).not.toHaveProperty("data");
+    expect(result.current).not.toHaveProperty("mutate");
+    expect(result.current).not.toHaveProperty("runCommand");
+    expect(result.current).not.toHaveProperty("pendingIntents");
+  });
+
   it("applies accepted Current Profile theme instead of stale local theme", async () => {
     mockAppearance.theme = { status: "ready", value: "dark" };
     mockAppearance.acceptedTheme = { status: "ready", value: "dark" };
