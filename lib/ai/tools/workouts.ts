@@ -1,6 +1,20 @@
 import { z } from "zod";
 import { WorkoutsDB, ExercisesDB, RoutinesDB } from "@/lib/db";
+import {
+  createWorkoutWrites,
+  type WorkoutStartOutcome,
+  type WorkoutStartSource,
+} from "@/lib/fitness/writes";
 import type { ToolDefinition, ToolContext } from "./types";
+
+function workoutStartToolResult(outcome: WorkoutStartOutcome) {
+  if (outcome.type === "started") return outcome.workout;
+  if (outcome.type === "conflict") {
+    return { error: "You already have an active workout" };
+  }
+  if (outcome.type === "not-found") return { error: "Routine not found" };
+  return { error: outcome.message };
+}
 
 export function workoutTools(): ToolDefinition[] {
   return [
@@ -44,11 +58,14 @@ export function workoutTools(): ToolDefinition[] {
           .describe("Start from a routine template"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new WorkoutsDB(ctx.supabase);
-        return db.startWorkout(ctx.userId, {
-          title: params.name,
-          routine_id: params.routineId,
+        const source: WorkoutStartSource = params.routineId === undefined
+          ? { type: "blank", title: params.name }
+          : { type: "routine", routineId: params.routineId };
+        const outcome = await createWorkoutWrites(ctx.supabase).start({
+          userId: ctx.userId,
+          source,
         });
+        return workoutStartToolResult(outcome);
       },
     },
     {

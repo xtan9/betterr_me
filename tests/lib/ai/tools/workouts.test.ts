@@ -15,7 +15,6 @@ vi.mock("@/lib/db", () => ({
   WorkoutsDB: class {
     getWorkoutsWithSummary = mockGetWorkoutsWithSummary;
     getActiveWorkout = mockGetActiveWorkout;
-    startWorkout = mockStartWorkout;
     updateWorkout = mockUpdateWorkout;
     getWorkoutWithExercises = mockGetWorkoutWithExercises;
     getExerciseHistory = mockGetExerciseHistory;
@@ -26,6 +25,10 @@ vi.mock("@/lib/db", () => ({
   RoutinesDB: class {
     getUserRoutines = mockGetUserRoutines;
   },
+}));
+
+vi.mock("@/lib/fitness/writes", () => ({
+  createWorkoutWrites: vi.fn(() => ({ start: mockStartWorkout })),
 }));
 
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
@@ -60,18 +63,60 @@ describe("workoutTools", () => {
     ]);
   });
 
-  it("startWorkout calls WorkoutsDB.startWorkout", async () => {
+  it("startWorkout maps a blank AI input through WorkoutWrites", async () => {
     const ctx = makeCtx();
-    mockStartWorkout.mockResolvedValue({ id: "w1", status: "in_progress" });
+    mockStartWorkout.mockResolvedValue({
+      type: "started",
+      workout: { id: "w1", status: "in_progress" },
+    });
     const result = await findTool("startWorkout").execute(
       { name: "Push day" },
       ctx,
     );
-    expect(mockStartWorkout).toHaveBeenCalledWith("user-123", {
-      title: "Push day",
-      routine_id: undefined,
+    expect(mockStartWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      source: { type: "blank", title: "Push day" },
     });
     expect(result).toEqual({ id: "w1", status: "in_progress" });
+  });
+
+  it("startWorkout maps a routine AI input through the same source contract", async () => {
+    const ctx = makeCtx();
+    const workout = { id: "w1", title: "Push day", exercises: [] };
+    mockStartWorkout.mockResolvedValue({ type: "started", workout });
+
+    await expect(
+      findTool("startWorkout").execute(
+        { name: "Ignored for routine", routineId: "routine-1" },
+        ctx,
+      ),
+    ).resolves.toBe(workout);
+
+    expect(mockStartWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      source: { type: "routine", routineId: "routine-1" },
+    });
+  });
+
+  it.each([
+    [{ type: "conflict" }, { error: "You already have an active workout" }],
+    [{ type: "not-found" }, { error: "Routine not found" }],
+    [
+      { type: "invalid-source", message: "Unsupported exercise type" },
+      { error: "Unsupported exercise type" },
+    ],
+  ] as const)("maps the expected start outcome %j for the AI caller", async (outcome, expected) => {
+    mockStartWorkout.mockResolvedValue(outcome);
+
+    await expect(
+      findTool("startWorkout").execute({ name: "Push day" }, makeCtx()),
+    ).resolves.toEqual(expected);
+  });
+
+  it("preserves the start confirmation contract", () => {
+    expect(findTool("startWorkout").description).toContain(
+      "Always confirm with the user first",
+    );
   });
 
   it("completeWorkout verifies ownership then completes", async () => {

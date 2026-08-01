@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
-import { createRoutineWorkoutRequests } from "@/lib/fitness/routine-workout-requests";
+import { createWorkoutWrites } from "@/lib/fitness/writes";
 import { log } from "@/lib/logger";
 
 const WRITE_REQUEST_POLICY = {
@@ -28,32 +28,30 @@ export async function POST(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const workout = await createRoutineWorkoutRequests(supabase).start(
+    const outcome = await createWorkoutWrites(supabase).start({
       userId,
-      routineId,
-    );
-    if (!workout) {
+      source: { type: "routine", routineId },
+    });
+
+    if (outcome.type === "not-found") {
       return NextResponse.json(
         { error: "Routine not found" },
         { status: 404 }
       );
     }
-
-    return NextResponse.json({ workout }, { status: 201 });
-  } catch (error) {
-    log.error("POST /api/routines/[id]/start error", error);
-
-    // Re-check for 23505 in case it was thrown from WorkoutsDB
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? (error as { code: string }).code
-        : undefined;
-    if (code === "23505") {
+    if (outcome.type === "conflict") {
       return NextResponse.json(
         { error: "You already have an active workout" },
-        { status: 409 }
+        { status: 409 },
       );
     }
+    if (outcome.type === "invalid-source") {
+      return NextResponse.json({ error: outcome.message }, { status: 400 });
+    }
+
+    return NextResponse.json({ workout: outcome.workout }, { status: 201 });
+  } catch (error) {
+    log.error("POST /api/routines/[id]/start error", error);
 
     return NextResponse.json(
       { error: "Failed to start workout from routine" },

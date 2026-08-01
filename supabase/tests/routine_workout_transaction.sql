@@ -145,8 +145,31 @@ begin
 end
 $$;
 
+-- A second start for the same user is an expected active-session conflict;
+-- the unique partial index rejects only this new insert and leaves the first
+-- session intact until the fixture removes it below.
+do $$
+begin
+  perform public.start_workout_from_routine(
+    '48500000-0000-4000-8000-000000000001',
+    '{
+      "title": "Conflicting transaction workout",
+      "routine_id": "48500000-0000-4000-8000-000000000004"
+    }'::jsonb,
+    '[]'::jsonb
+  );
+  raise exception 'active workout conflict unexpectedly succeeded';
+exception
+  when unique_violation then null;
+end
+$$;
+
+reset role;
+
 delete from public.workouts
 where user_id = '48500000-0000-4000-8000-000000000001';
+
+set local role authenticated;
 
 -- The invalid set type fails only after the workout, both workout exercises,
 -- and the first exercise's set have been inserted by the function.

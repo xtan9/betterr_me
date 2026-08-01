@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { WorkoutsDB } from "@/lib/db/workouts";
+import { createWorkoutWrites } from "@/lib/fitness/writes";
 import { validateRequestBody } from "@/lib/validations/api";
 import { workoutCreateSchema } from "@/lib/validations/workout";
 import { log } from "@/lib/logger";
@@ -77,24 +78,29 @@ export async function POST(request: NextRequest) {
     const validation = validateRequestBody(body, workoutCreateSchema);
     if (!validation.success) return validation.response;
 
-    const workoutsDB = new WorkoutsDB(supabase);
-    const workout = await workoutsDB.startWorkout(userId, validation.data);
+    const outcome = await createWorkoutWrites(supabase).start({
+      userId,
+      source: validation.data.routine_id
+        ? { type: "routine", routineId: validation.data.routine_id }
+        : { type: "blank", title: validation.data.title },
+    });
 
-    return NextResponse.json({ workout }, { status: 201 });
-  } catch (error: unknown) {
-    log.error("POST /api/workouts error", error);
-
-    // Handle unique constraint violation (active workout already exists)
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? (error as { code: string }).code
-        : undefined;
-    if (code === "23505") {
+    if (outcome.type === "conflict") {
       return NextResponse.json(
         { error: "You already have an active workout" },
-        { status: 409 }
+        { status: 409 },
       );
     }
+    if (outcome.type === "not-found") {
+      return NextResponse.json({ error: "Routine not found" }, { status: 404 });
+    }
+    if (outcome.type === "invalid-source") {
+      return NextResponse.json({ error: outcome.message }, { status: 400 });
+    }
+
+    return NextResponse.json({ workout: outcome.workout }, { status: 201 });
+  } catch (error: unknown) {
+    log.error("POST /api/workouts error", error);
 
     return NextResponse.json(
       { error: "Failed to start workout" },

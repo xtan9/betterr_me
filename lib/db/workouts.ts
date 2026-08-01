@@ -7,12 +7,6 @@ import type {
 } from "./types";
 import { log } from "@/lib/logger";
 
-/** Input data for starting a new workout. */
-export interface StartWorkoutInput {
-  title?: string;
-  routine_id?: string | null;
-}
-
 /** Options for listing completed/discarded workouts. */
 export interface GetWorkoutsOptions {
   limit?: number;
@@ -49,38 +43,6 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 /** CRUD for workouts. RLS handles user scoping. */
 export class WorkoutsDB {
   constructor(private supabase: SupabaseClient) {}
-
-  /**
-   * Start a new workout with status 'in_progress'.
-   * Throws a descriptive error on unique constraint violation (23505)
-   * when user already has an active workout.
-   */
-  async startWorkout(userId: string, data: StartWorkoutInput): Promise<Workout> {
-    const { data: workout, error } = await this.supabase
-      .from("workouts")
-      .insert({
-        user_id: userId,
-        title: data.title ?? "Workout",
-        status: "in_progress" as const,
-        started_at: new Date().toISOString(),
-        routine_id: data.routine_id ?? null,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === "23505") {
-        log.warn("Attempted to start workout while one is active", { userId });
-        const err = new Error("You already have an active workout");
-        (err as Error & { code: string }).code = "23505";
-        throw err;
-      }
-      log.error("Failed to start workout", error);
-      throw error;
-    }
-
-    return workout;
-  }
 
   /**
    * Get the user's active (in_progress) workout with nested exercises and sets.
