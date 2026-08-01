@@ -219,6 +219,49 @@ describe("HabitWrites", () => {
     ).rejects.toThrow("Habit lifecycle transitions are not supported by this persistence");
   });
 
+  describe("delete", () => {
+    it("returns deleted through the typed owner-scoped persistence seam", async () => {
+      const deleteHabit = vi.fn().mockResolvedValue({ type: "deleted" });
+      const writes = new HabitWrites({ deleteHabit });
+
+      await expect(
+        writes.delete({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual({ type: "deleted" });
+      expect(deleteHabit).toHaveBeenCalledWith("habit-1", "trusted-user");
+    });
+
+    it.each(["missing", "cross-owner", "repeated"] as const)(
+      "returns the same not-found outcome for %s requests",
+      async () => {
+        const deleteHabit = vi.fn().mockResolvedValue({ type: "not-found" });
+        const writes = new HabitWrites({ deleteHabit });
+
+        await expect(
+          writes.delete({ userId: "trusted-user", habitId: "habit-1" }),
+        ).resolves.toEqual({ type: "not-found" });
+      },
+    );
+
+    it("propagates an unexpected deletion persistence failure", async () => {
+      const persistenceError = new Error("deletion transaction unavailable");
+      const writes = new HabitWrites({
+        deleteHabit: vi.fn().mockRejectedValue(persistenceError),
+      });
+
+      await expect(
+        writes.delete({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toBe(persistenceError);
+    });
+
+    it("rejects deletion when the persistence adapter has no deletion seam", async () => {
+      const writes = new HabitWrites({});
+
+      await expect(
+        writes.delete({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toThrow("Habit deletion is not supported by this persistence");
+    });
+  });
+
   describe("graduate", () => {
     const formedHabit = {
       id: "habit-1",

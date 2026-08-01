@@ -106,6 +106,32 @@ values (
   'owner-agent'
 );
 
+-- Habit reminders are source-owned and therefore must reference an existing
+-- Habit. These disposable sources keep this communication fixture valid under
+-- the tenant-scoped Habit reminder foreign key.
+insert into public.habits (
+  id,
+  user_id,
+  name,
+  frequency,
+  status
+)
+values
+  (
+    '57700000-0000-0000-0000-000000000071',
+    '57700000-0000-0000-0000-000000000001',
+    'Owner habit reminder source',
+    '{"type":"daily"}'::jsonb,
+    'active'
+  ),
+  (
+    '57700000-0000-0000-0000-000000000073',
+    '57700000-0000-0000-0000-000000000001',
+    'Anonymous habit reminder source',
+    '{"type":"daily"}'::jsonb,
+    'active'
+  );
+
 set local role authenticated;
 insert into public.reminders (
   id,

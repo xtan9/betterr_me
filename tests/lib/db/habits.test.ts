@@ -371,29 +371,6 @@ describe("HabitsDB", () => {
   });
 
   // ─── deleteHabit ──────────────────────────────────────────────────────────
-  describe("deleteHabit", () => {
-    it("deletes with scoped id+user_id eq chain", async () => {
-      mockSupabaseClient.setMockResponse(null);
-
-      await db.deleteHabit(HABIT_ID, USER_ID);
-
-      expect(mockSupabaseClient.queryLog).toEqual([
-        { table: "habits", method: "from", args: ["habits"] },
-        { table: "habits", method: "delete", args: [] },
-        { table: "habits", method: "eq", args: ["id", HABIT_ID] },
-        { table: "habits", method: "eq", args: ["user_id", USER_ID] },
-      ]);
-    });
-
-    it("throws on delete error", async () => {
-      mockSupabaseClient.setMockResponse(null, new Error("delete failed"));
-
-      await expect(db.deleteHabit(HABIT_ID, USER_ID)).rejects.toThrow(
-        "delete failed",
-      );
-    });
-  });
-
   // ─── dismissGraduationNudge ───────────────────────────────────────────────
   describe("dismissGraduationNudge", () => {
     it("stamps nudge_dismissed_at with exact frozen timestamp", async () => {

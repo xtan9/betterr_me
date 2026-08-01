@@ -493,6 +493,73 @@ describe("createHabitWrites persistence adapter", () => {
     });
   });
 
+  describe("delete", () => {
+    it("uses one atomic owner-scoped RPC and maps a deleted outcome", async () => {
+      mockSupabaseClient.setMockResponse({ type: "deleted" });
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.delete({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual({ type: "deleted" });
+      expect(mockSupabaseClient.queryLog).toEqual([
+        {
+          table: null,
+          method: "rpc",
+          args: [
+            "delete_habit_atomically",
+            {
+              p_habit_id: "habit-1",
+              p_user_id: "trusted-user",
+            },
+          ],
+        },
+      ]);
+    });
+
+    it.each(["missing", "cross-owner", "repeated"] as const)(
+      "maps the same not-found database outcome for %s requests without other persistence calls",
+      async () => {
+        mockSupabaseClient.setMockResponse({ type: "not-found" });
+        const writes = createHabitWrites(
+          mockSupabaseClient as unknown as SupabaseClient,
+        );
+
+        await expect(
+          writes.delete({ userId: "trusted-user", habitId: "habit-1" }),
+        ).resolves.toEqual({ type: "not-found" });
+        expect(mockSupabaseClient.queryLog).toHaveLength(1);
+        expect(mockSupabaseClient.queryLog[0]?.method).toBe("rpc");
+      },
+    );
+
+    it("propagates an atomic RPC failure without attempting compensating writes", async () => {
+      const persistenceError = new Error("deletion transaction failed");
+      mockSupabaseClient.setMockResponse(null, persistenceError);
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.delete({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toBe(persistenceError);
+      expect(mockSupabaseClient.queryLog).toHaveLength(1);
+      expect(mockSupabaseClient.queryLog[0]?.method).toBe("rpc");
+    });
+
+    it("rejects malformed database outcomes", async () => {
+      mockSupabaseClient.setMockResponse({ type: "unexpected" });
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      await expect(
+        writes.delete({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toThrow("Invalid habit deletion outcome returned by the database");
+    });
+  });
+
   it("persists a pause through owner-scoped lifecycle reads and updates", async () => {
     const fixedNow = new Date("2026-08-01T12:00:00.000Z");
     vi.useFakeTimers();
