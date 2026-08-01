@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { log } from "@/lib/logger";
+import type { UserTimeZone } from "@/lib/preferences/types";
 
 /**
  * Hook that detects the user's IANA timezone from the browser and
@@ -11,14 +12,14 @@ import { log } from "@/lib/logger";
  * Uses localStorage flag to prevent repeated API calls.
  */
 export function useTimezoneDetection(
-  profileTimezone: string | null | undefined,
+  profileTimeZone: UserTimeZone | undefined,
   saveTimezone: (timeZone: string) => Promise<unknown>,
 ) {
   const hasRun = useRef(false);
 
   useEffect(() => {
     if (hasRun.current) return;
-    if (profileTimezone) return; // Already set, nothing to do
+    if (profileTimeZone?.status !== "unresolved") return;
 
     // Check localStorage to avoid repeated calls across page navigations
     try {
@@ -45,5 +46,5 @@ export function useTimezoneDetection(
         log.error("[timezone] Detection command failed", err);
         // Will retry on next page load since localStorage flag wasn't set
       });
-  }, [profileTimezone, saveTimezone]);
+  }, [profileTimeZone, saveTimezone]);
 }

@@ -20,6 +20,7 @@ describe("TimezoneDetector", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseUserTimeZone.mockReturnValue({
+      status: "available",
       timeZone: { status: "resolved", value: "America/New_York" },
       setUserTimeZone: vi.fn(),
     });
@@ -29,20 +30,39 @@ describe("TimezoneDetector", () => {
     render(<TimezoneDetector />);
 
     expect(mockUseTimezoneDetection).toHaveBeenCalledWith(
-      "America/New_York",
+      { status: "resolved", value: "America/New_York" },
       expect.any(Function),
     );
   });
 
-  it("should call useTimezoneDetection with null when the timezone is unresolved", () => {
+  it("should call useTimezoneDetection with the unresolved User Time Zone", () => {
     mockUseUserTimeZone.mockReturnValue({
+      status: "available",
       timeZone: { status: "unresolved" },
       setUserTimeZone: vi.fn(),
     });
 
     render(<TimezoneDetector />);
 
-    expect(mockUseTimezoneDetection).toHaveBeenCalledWith(null, expect.any(Function));
+    expect(mockUseTimezoneDetection).toHaveBeenCalledWith(
+      { status: "unresolved" },
+      expect.any(Function),
+    );
+  });
+
+  it("does not offer a browser zone before Current Profile is available", () => {
+    mockUseUserTimeZone.mockReturnValue({
+      status: "loading",
+      timeZone: { status: "unresolved" },
+      setUserTimeZone: vi.fn(),
+    });
+
+    render(<TimezoneDetector />);
+
+    expect(mockUseTimezoneDetection).toHaveBeenCalledWith(
+      undefined,
+      expect.any(Function),
+    );
   });
 
   it("should render nothing", () => {
