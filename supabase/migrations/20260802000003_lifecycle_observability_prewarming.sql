@@ -16,7 +16,7 @@ SET search_path = pg_catalog, public
 AS $function$
 DECLARE
   v_outcome JSONB;
-  v_series_id UUID := NULLIF(p_request->>'seriesId', '')::UUID;
+  v_series_id UUID;
   v_user_id UUID := CASE
     WHEN COALESCE(auth.role(), '') = 'service_role'
       THEN COALESCE(
@@ -33,6 +33,14 @@ DECLARE
   v_after_withdrawn INTEGER := 0;
   v_observability JSONB;
 BEGIN
+  BEGIN
+    v_series_id := NULLIF(p_request->>'seriesId', '')::UUID;
+  EXCEPTION WHEN others THEN
+    -- Let the underlying lifecycle function return its typed non-disclosing
+    -- outcome for malformed identifiers instead of raising in observability.
+    v_series_id := NULL;
+  END;
+
   IF v_series_id IS NOT NULL THEN
     SELECT COUNT(*)::INTEGER
     INTO v_before_occurrences
