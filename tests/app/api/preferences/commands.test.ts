@@ -172,7 +172,7 @@ describe("domain-owned Preference commands", () => {
       changed: true,
     });
 
-    await patchProfileDetails(
+    const response = await patchProfileDetails(
       request(
         "/api/profile-details",
         { fullName: "Taylor Example" },
@@ -180,9 +180,83 @@ describe("domain-owned Preference commands", () => {
       ),
     );
 
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      fullName: "Taylor Example",
+      avatarUrl: null,
+      changed: true,
+    });
     expect(mockUpdateProfileDetails).toHaveBeenCalledWith({
       fullName: "Taylor Example",
     });
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      { allowedCredentials: ["cookie"], requiredPermission: "write" },
+    );
+  });
+
+  it("sends an avatar-only Profile Details patch", async () => {
+    mockUpdateProfileDetails.mockResolvedValue({
+      fullName: "Taylor Example",
+      avatarUrl: "https://example.com/new-avatar.jpg",
+      changed: true,
+    });
+
+    const response = await patchProfileDetails(
+      request(
+        "/api/profile-details",
+        { avatarUrl: "https://example.com/new-avatar.jpg" },
+        "PATCH",
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockUpdateProfileDetails).toHaveBeenCalledWith({
+      avatarUrl: "https://example.com/new-avatar.jpg",
+    });
+  });
+
+  it("rejects a Profile Details request with neither dirty field", async () => {
+    const response = await patchProfileDetails(
+      request("/api/profile-details", {}, "PATCH"),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Validation failed",
+      details: { _errors: ["At least one Profile Details field must be provided"] },
+    });
+    expect(mockUpdateProfileDetails).not.toHaveBeenCalled();
+  });
+
+  it("rejects a Profile Details target identifier instead of accepting a foreign subject", async () => {
+    const response = await patchProfileDetails(
+      request(
+        "/api/profile-details",
+        { fullName: "Taylor Example", profileId: "other-user" },
+        "PATCH",
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockUpdateProfileDetails).not.toHaveBeenCalled();
+  });
+
+  it("requires the authenticated cookie command boundary", async () => {
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: false,
+      outcome: "anonymous",
+      error: "Unauthorized",
+      status: 401,
+    });
+
+    const response = await patchProfileDetails(
+      request("/api/profile-details", { fullName: "Taylor Example" }, "PATCH"),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+    expect(mockUpdateProfileDetails).not.toHaveBeenCalled();
   });
 
   it("uses an explicit User Time Zone command", async () => {

@@ -823,7 +823,7 @@
       "save": "Save Profile",
       "saving": "Saving...",
       "success": "Profile updated successfully",
-      "error": "Failed to update profile"
+      "error": "Profile update failed. Your accepted details were kept. Refresh and try again."
     },
     "toast": {
       "saveError": "Failed to save settings"

@@ -26,7 +26,7 @@ const allTranslations: Record<string, Record<string, string>> = {
     'save': 'Save Profile',
     'saving': 'Saving...',
     'success': 'Profile updated successfully',
-    'error': 'Failed to update profile',
+    'error': 'Profile update failed. Your accepted details were kept. Refresh and try again.',
   },
 };
 
@@ -170,6 +170,20 @@ describe('ProfileForm', () => {
     expect(mockToastSuccess).toHaveBeenCalledWith('Profile updated successfully');
   });
 
+  it('sends only the changed avatar value', async () => {
+    render(<ProfileForm />);
+
+    const avatarInput = screen.getByDisplayValue('https://example.com/avatar.jpg');
+    await user.clear(avatarInput);
+    await user.type(avatarInput, 'https://example.com/new-avatar.jpg');
+
+    await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+    await waitFor(() => expect(mockUpdateProfileDetails).toHaveBeenCalledWith({
+      avatarUrl: 'https://example.com/new-avatar.jpg',
+    }));
+  });
+
   it('shows error toast on save failure', async () => {
     mockUpdateProfileDetails.mockRejectedValueOnce(new Error('Server error'));
 
@@ -182,8 +196,42 @@ describe('ProfileForm', () => {
     await user.click(screen.getByRole('button', { name: 'Save Profile' }));
 
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith('Failed to update profile');
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Profile update failed. Your accepted details were kept. Refresh and try again.',
+      );
     });
+  });
+
+  it('restores accepted details and explains how to recover after rejection', async () => {
+    mockUpdateProfileDetails.mockRejectedValueOnce(
+      new Error('profile_details_unavailable'),
+    );
+
+    render(<ProfileForm />);
+
+    const nameInput = screen.getByDisplayValue('John Doe');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Jane Doe');
+
+    const avatarInput = screen.getByDisplayValue('https://example.com/avatar.jpg');
+    await user.clear(avatarInput);
+    await user.type(avatarInput, 'https://example.com/new-avatar.jpg');
+
+    await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('John Doe')).toBeInTheDocument();
+      expect(
+        screen.getByDisplayValue('https://example.com/avatar.jpg'),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByDisplayValue('Jane Doe')).not.toBeInTheDocument();
+    expect(
+      screen.queryByDisplayValue('https://example.com/new-avatar.jpg'),
+    ).not.toBeInTheDocument();
+    expect(mockToastError).toHaveBeenCalledWith(
+      'Profile update failed. Your accepted details were kept. Refresh and try again.',
+    );
   });
 
   it('accepts empty avatar URL', async () => {
