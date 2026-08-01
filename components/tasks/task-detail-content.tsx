@@ -36,7 +36,8 @@ import { TaskDetailsGrid } from "@/components/tasks/task-details-grid";
 import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { getProjectColor } from "@/lib/projects/colors";
-import type { Task, RecurringTask } from "@/lib/db/types";
+import type { Task } from "@/lib/db/types";
+import type { RecurringTaskResponse } from "@/lib/recurring-tasks/compatibility";
 import type { EditScope } from "@/lib/validations/recurring-task";
 import { describeRecurrence } from "@/lib/recurring-tasks/recurrence";
 import { fetcher } from "@/lib/fetcher";
@@ -67,10 +68,10 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
     mutate,
   } = useSWR<Task>(`/api/tasks/${taskId}`, taskFetcher);
 
-  // Fetch recurring task template if this is a recurring instance
-  const { data: recurringTemplate } = useSWR<RecurringTask>(
-    task?.recurring_task_id
-      ? `/api/recurring-tasks/${task.recurring_task_id}`
+  // Fetch the Recurring Task Series if this is a Task Occurrence
+  const { data: recurringTemplate } = useSWR<RecurringTaskResponse>(
+    task?.recurring_series_id
+      ? `/api/recurring-tasks/${task.recurring_series_id}`
       : null,
     async (url: string) => {
       const data = await fetcher(url);
@@ -93,7 +94,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   };
 
   const handleEditClick = () => {
-    if (task?.recurring_task_id) {
+    if (task?.recurring_series_id) {
       setScopeAction("edit");
       setScopeDialogOpen(true);
     } else {
@@ -102,7 +103,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
   };
 
   const handleDeleteClick = () => {
-    if (task?.recurring_task_id) {
+    if (task?.recurring_series_id) {
       setScopeAction("delete");
       setScopeDialogOpen(true);
     }
@@ -227,7 +228,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
           </div>
 
           {/* Recurrence info */}
-          {task.recurring_task_id && recurringTemplate && (
+          {task.recurring_series_id && recurringTemplate && (
             <div className="flex items-center gap-2 text-body text-muted-foreground">
               <Repeat className="size-4" />
               <span>
@@ -255,7 +256,7 @@ export function TaskDetailContent({ taskId }: TaskDetailContentProps) {
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3 pt-4 border-t">
-            {task.recurring_task_id ? (
+            {task.recurring_series_id ? (
               <Button
                 variant="destructive"
                 className="gap-2"

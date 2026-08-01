@@ -13,42 +13,23 @@ begin
     raise exception 'recurring lifecycle storage from #659 is missing';
   end if;
 
-  if to_regclass('public.recurring_tasks') is null then
-    raise exception 'legacy recurring task storage was removed';
+  if to_regclass('public.recurring_tasks') is not null then
+    raise exception 'obsolete recurring task storage still exists';
   end if;
-
-  foreach required_column in array array[
-    'id',
-    'user_id',
-    'recurrence_rule',
-    'start_date',
-    'instances_generated',
-    'status'
-  ] loop
-    if not exists (
-      select 1
-      from information_schema.columns
-      where table_schema = 'public'
-        and table_name = 'recurring_tasks'
-        and column_name = required_column
-    ) then
-      raise exception 'legacy recurring task column is missing: %', required_column;
-    end if;
-  end loop;
 
   foreach required_column in array array[
     'recurring_task_id',
     'is_exception',
     'original_date'
   ] loop
-    if not exists (
+    if exists (
       select 1
       from information_schema.columns
       where table_schema = 'public'
         and table_name = 'tasks'
         and column_name = required_column
     ) then
-      raise exception 'legacy task recurrence column is missing: %', required_column;
+      raise exception 'obsolete task recurrence column still exists: %', required_column;
     end if;
   end loop;
 

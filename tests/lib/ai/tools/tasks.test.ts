@@ -26,24 +26,17 @@ const mockSupabaseFrom = vi.fn(() => mockSortOrderChain);
 const mockRpc = vi.fn();
 
 vi.mock("@/lib/db", () => ({
-    recurringTaskFromSeries: vi.fn((series: unknown) => series),
-    RecurringTasksDB: class {
-      getUserRecurringTasks = vi.fn();
-      createRecurringTask = vi.fn();
-      updateRecurringTask = vi.fn();
-      pauseRecurringTask = vi.fn();
-    },
-    TasksDB: class {
-      getTodayTasks = mockGetTodayTasks;
-      getUpcomingTasks = mockGetUpcomingTasks;
-      getOverdueTasks = mockGetOverdueTasks;
-      getTask = mockGetTask;
-      getUserTasks = mockGetUserTasks;
-      createTask = mockCreateTask;
-      updateTask = mockUpdateTask;
-      deleteTask = mockDeleteTask;
-    },
-  }));
+  TasksDB: class {
+    getTodayTasks = mockGetTodayTasks;
+    getUpcomingTasks = mockGetUpcomingTasks;
+    getOverdueTasks = mockGetOverdueTasks;
+    getTask = mockGetTask;
+    getUserTasks = mockGetUserTasks;
+    createTask = mockCreateTask;
+    updateTask = mockUpdateTask;
+    deleteTask = mockDeleteTask;
+  },
+}));
 
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
   return {

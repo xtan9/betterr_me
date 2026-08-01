@@ -62,9 +62,11 @@ function createDependencies(
       getLastCompletedAt: vi.fn().mockResolvedValue("2026-02-08T10:00:00Z"),
       getWeekWorkoutCount: vi.fn().mockResolvedValue(3),
     } as DashboardSnapshotDependencies["workouts"],
-    generateRecurringTasks: vi.fn().mockResolvedValue({
+    ensureRecurringCoverage: vi.fn().mockResolvedValue({
       status: "complete",
-      failedTemplateIds: [],
+      type: "complete",
+      requestedRange: { from: "2026-02-09", to: "2026-02-10" },
+      failedSeriesIds: [],
     }),
     ...overrides,
   };
@@ -113,9 +115,9 @@ describe("DashboardSnapshot", () => {
         },
       },
     });
-    expect(dependencies.generateRecurringTasks).toHaveBeenCalledWith(
+    expect(dependencies.ensureRecurringCoverage).toHaveBeenCalledWith(
       "user-1",
-      "2026-02-10",
+      { from: "2026-02-09", to: "2026-02-10" },
     );
     expect(dependencies.habitLogs.getAllUserLogs).toHaveBeenCalledWith(
       "user-1",
@@ -130,77 +132,6 @@ describe("DashboardSnapshot", () => {
       "user-1",
       "2026-02-08",
     );
-  });
-
-  it("degrades when recurring generation reports partial template failures", async () => {
-    const dependencies = createDependencies({
-      generateRecurringTasks: vi.fn().mockResolvedValue({
-        status: "partial",
-        failedTemplateIds: ["template-2"],
-      }),
-    });
-    const snapshot = createDashboardSnapshot(dependencies);
-
-    const outcome = await snapshot.load({
-      userId: "user-1",
-      date: "2026-02-09",
-    });
-
-    expect(outcome.status).toBe("degraded");
-    if (outcome.status !== "degraded") {
-      throw new Error("Expected degraded snapshot");
-    }
-    expect(outcome.warnings).toEqual([
-      {
-        code: "recurring_coverage_unavailable",
-        message:
-          "Some recurring tasks may not appear because Coverage Horizon is unavailable for the requested range.",
-        type: "coverage-unavailable",
-        requestedRange: { from: "2026-02-09", to: "2026-02-10" },
-        failedSeriesIds: [],
-      },
-    ]);
-  });
-
-  it("includes tasks generated for the requested window before acquiring tasks", async () => {
-    let finishRecurringGeneration: (() => void) | undefined;
-    const recurringGeneration = new Promise<{
-      status: "complete";
-      failedTemplateIds: [];
-    }>((resolve) => {
-      finishRecurringGeneration = () =>
-        resolve({ status: "complete", failedTemplateIds: [] });
-    });
-    let taskAcquisitionStarted = false;
-    const dependencies = createDependencies({
-      generateRecurringTasks: vi.fn().mockReturnValue(recurringGeneration),
-      tasks: {
-        getTodayTasks: vi.fn().mockImplementation(async () => {
-          taskAcquisitionStarted = true;
-          return [{ id: "generated-task", is_completed: false }];
-        }),
-        getTaskCount: vi.fn().mockResolvedValue(1),
-        getUserTasks: vi.fn().mockResolvedValue([]),
-      } as DashboardSnapshotDependencies["tasks"],
-    });
-
-    const outcomePromise = createDashboardSnapshot(dependencies).load({
-      userId: "user-1",
-      date: "2026-02-09",
-    });
-    await Promise.resolve();
-
-    expect(taskAcquisitionStarted).toBe(false);
-    finishRecurringGeneration?.();
-    const outcome = await outcomePromise;
-
-    expect(outcome.status).not.toBe("failed");
-    if (outcome.status === "failed") {
-      throw new Error("Expected a dashboard snapshot");
-    }
-    expect(outcome.snapshot.tasks_today).toEqual([
-      { id: "generated-task", is_completed: false },
-    ]);
   });
 
   it("ensures the exact dashboard horizon before acquiring ordinary task data", async () => {
@@ -222,7 +153,6 @@ describe("DashboardSnapshot", () => {
     const ensureRecurringCoverage = vi.fn().mockReturnValue(coverage);
     const dependencies = createDependencies({
       ensureRecurringCoverage,
-      generateRecurringTasks: undefined,
       tasks: {
         getTodayTasks: vi.fn().mockImplementation(async () => {
           taskAcquisitionStarted = true;
@@ -263,7 +193,6 @@ describe("DashboardSnapshot", () => {
           failedSeriesIds: ["series-2"],
         },
       }),
-      generateRecurringTasks: undefined,
     });
 
     const outcome = await createDashboardSnapshot(dependencies).load({
@@ -340,9 +269,9 @@ describe("DashboardSnapshot", () => {
           .fn()
           .mockRejectedValue(new Error("workout count unavailable")),
       } as DashboardSnapshotDependencies["workouts"],
-      generateRecurringTasks: vi
+      ensureRecurringCoverage: vi
         .fn()
-        .mockRejectedValue(new Error("generation unavailable")),
+        .mockRejectedValue(new Error("coverage unavailable")),
     });
     const snapshot = createDashboardSnapshot(dependencies);
 

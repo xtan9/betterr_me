@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
-import { RecurringTasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { recurringTaskCreateSchema } from '@/lib/validations/recurring-task';
@@ -12,8 +11,9 @@ import {
   createSeriesCreation,
   initialSeriesCoverage,
   normalizeSeriesCreationIntent,
-  toLegacyRecurringTask,
+  toRecurringTaskCompatibility,
 } from '@/lib/recurring-tasks/creation';
+import { toLifecycleRecurrenceDates } from '@/lib/recurring-tasks/compatibility';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -47,13 +47,12 @@ export async function GET(request: NextRequest) {
       ? (statusParam as 'active' | 'paused' | 'archived')
       : null;
 
-    const recurringTasksDB = new RecurringTasksDB(supabase, {
-      lifecycle: createActivatedRecurringTaskLifecycle(supabase),
-    });
-    const templates = await recurringTasksDB.getUserRecurringTasks(
+    const lifecycle = createActivatedRecurringTaskLifecycle(supabase);
+    const result = await lifecycle.listSeries(
       userId,
-      status ? { status } : undefined
+      status === 'archived' ? 'ended' : status ?? undefined,
     );
+    const templates = result.series.map(toRecurringTaskCompatibility);
 
     return NextResponse.json({ recurring_tasks: templates });
   } catch (error) {
@@ -93,6 +92,7 @@ export async function POST(request: NextRequest) {
     // shared creation seam turns it into the same initial Coverage request as
     // the AI adapter.
     const today = body.date || getLocalDateString();
+    const recurrenceDates = toLifecycleRecurrenceDates(validation.data.start_date);
     const intent = normalizeSeriesCreationIntent({
       userId,
       title: validation.data.title,
@@ -101,12 +101,12 @@ export async function POST(request: NextRequest) {
       categoryId: validation.data.category_id ?? null,
       dueTime: validation.data.due_time ?? null,
       recurrenceRule: validation.data.recurrence_rule,
-      legacyStartDate: validation.data.start_date,
+      ...recurrenceDates,
       endType: validation.data.end_type ?? 'never',
       endDate: validation.data.end_date ?? null,
       endCount: validation.data.end_count ?? null,
       coverageThrough: initialSeriesCoverage(
-        validation.data.start_date,
+        recurrenceDates.recurrenceAnchor,
         today,
       ).to,
     });
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     const outcome = result.outcome;
     if (outcome.status === 'complete' || outcome.status === 'already-applied') {
       return NextResponse.json(
-        { recurring_task: toLegacyRecurringTask(outcome.series) },
+        { recurring_task: toRecurringTaskCompatibility(outcome.series) },
         { status: 201 },
       );
     }

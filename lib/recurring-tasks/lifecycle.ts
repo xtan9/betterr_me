@@ -438,6 +438,10 @@ export interface RecurringTaskLifecyclePort {
   deleteSeries(
     request: SeriesCommandRequest,
   ): Promise<LifecycleOutcome<RecurringTaskSeries>>;
+  listSeries(
+    userId: string,
+    status?: RecurringSeriesStatus,
+  ): Promise<{ series: RecurringTaskSeries[] }>;
   getSeries(
     userId: string,
     seriesId: string,
@@ -1097,6 +1101,21 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       withdrawAllEligibleOccurrences(series);
       return summarize(series);
     });
+  }
+
+  async listSeries(
+    userId: string,
+    status?: RecurringSeriesStatus,
+  ): Promise<{ series: RecurringTaskSeries[] }> {
+    const read = this.persistence.read ?? this.persistence.transaction.bind(this.persistence);
+    const series = await read(`user:${userId}`, async (state) =>
+      [...state.series.values()]
+        .filter((candidate) => candidate.userId === userId)
+        .filter((candidate) => status === undefined || candidate.status === status)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .map((candidate) => summarize(candidate).series),
+    );
+    return { series };
   }
 
   async listActiveSeries(): Promise<{ series: ActiveSeriesSummary[] }> {

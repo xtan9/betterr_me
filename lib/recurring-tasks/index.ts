@@ -1,8 +1,5 @@
 export { getOccurrencesInRange, getNextOccurrence, describeRecurrence } from './recurrence';
-export {
-  ensureRecurringInstances,
-  type RecurringGenerationResult,
-} from './instance-generator';
+export { toRecurringTaskResponse } from './compatibility';
 export * from './lifecycle';
 export {
   createActivatedRecurringTaskLifecycle,

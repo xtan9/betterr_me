@@ -3,15 +3,10 @@ import { taskTools } from "@/lib/ai/tools/tasks";
 import type { ToolContext } from "@/lib/ai/tools/types";
 
 const {
-  mockGetUserRecurringTasks,
-  mockCreateRecurringTask,
-  mockUpdateRecurringTask,
-  mockPauseRecurringTask,
   mockRpc,
-  mockToLegacyRecurringTask,
+  mockToRecurringTaskCompatibility,
   mockState,
   mockStateFactory,
-  mockGetRecurringTask,
 } = vi.hoisted(() => {
   const state = {
     update: vi.fn(),
@@ -19,40 +14,10 @@ const {
   };
 
   return {
-    mockGetUserRecurringTasks: vi.fn(),
-    mockCreateRecurringTask: vi.fn(),
-    mockUpdateRecurringTask: vi.fn(),
-    mockPauseRecurringTask: vi.fn(),
     mockRpc: vi.fn(),
-    mockToLegacyRecurringTask: vi.fn(),
+    mockToRecurringTaskCompatibility: vi.fn(),
     mockState: state,
     mockStateFactory: vi.fn(() => state),
-    mockGetRecurringTask: vi.fn(),
-  };
-});
-
-vi.mock("@/lib/db", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/db")>("@/lib/db");
-  return {
-    ...actual,
-    TasksDB: class {
-      getTodayTasks = vi.fn();
-      getUpcomingTasks = vi.fn();
-      getOverdueTasks = vi.fn();
-      getTask = vi.fn();
-      getUserTasks = vi.fn();
-      createTask = vi.fn();
-      toggleTaskCompletion = vi.fn();
-      updateTask = vi.fn();
-      deleteTask = vi.fn();
-    },
-    RecurringTasksDB: class {
-      getUserRecurringTasks = mockGetUserRecurringTasks;
-      getRecurringTask = mockGetRecurringTask;
-      createRecurringTask = mockCreateRecurringTask;
-      updateRecurringTask = mockUpdateRecurringTask;
-      pauseRecurringTask = mockPauseRecurringTask;
-    },
   };
 });
 
@@ -67,8 +32,50 @@ vi.mock("@/lib/recurring-tasks/creation", async () => {
   const actual = await vi.importActual<typeof import("@/lib/recurring-tasks/creation")>(
     "@/lib/recurring-tasks/creation",
   );
-  return { ...actual, toLegacyRecurringTask: mockToLegacyRecurringTask };
+  return {
+    ...actual,
+    toRecurringTaskCompatibility: mockToRecurringTaskCompatibility,
+  };
 });
+
+function lifecycleSeries(id: string, status: "active" | "paused" | "ended" = "active") {
+  const revision = {
+    id: `${id}-revision`,
+    seriesId: id,
+    effectiveFrom: "2026-04-10",
+    effectiveTo: null,
+    state: status,
+    recurrenceRule: { frequency: "daily", interval: 1 } as const,
+    recurrenceAnchor: "2026-04-10",
+    activationDate: "2026-04-10",
+    defaults: {
+      title: "Daily standup",
+      description: null,
+      priority: 0 as const,
+      categoryId: null,
+      dueTime: null,
+    },
+    createdAt: "2026-04-10T00:00:00.000Z",
+  };
+  return {
+    id,
+    userId: "user-123",
+    status,
+    timeZone: "America/Toronto",
+    recurrenceAnchor: "2026-04-10",
+    activationDate: "2026-04-10",
+    occurrenceLimit: null,
+    lastScheduledDate: null,
+    coverageHorizon: "2026-04-17",
+    currentRevisionId: revision.id,
+    revisionToken: 1,
+    revisions: [revision],
+    occurrences: [],
+    intentionalAbsences: [],
+    createdAt: "2026-04-10T00:00:00.000Z",
+    updatedAt: "2026-04-10T00:00:00.000Z",
+  };
+}
 
 function makeCtx(overrides?: Partial<ToolContext>): ToolContext {
   return {
@@ -87,15 +94,29 @@ function findTool(name: string) {
 describe("recurring task tools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRpc.mockResolvedValue({
-      data: {
-        status: "complete",
-        type: "complete",
-        series: { id: "rt1", status: "active" },
-      },
-      error: null,
+    mockRpc.mockImplementation(async (_name, request) => {
+      if (request?.p_request?.operationKey === "missing") {
+        return { data: { status: "not-found", type: "not-found" }, error: null };
+      }
+      if (request?.p_operation === "list-series") {
+        return {
+          data: { series: [lifecycleSeries("rt1")] },
+          error: null,
+        };
+      }
+      return {
+        data: {
+          status: "complete",
+          type: "complete",
+          series: lifecycleSeries("rt1"),
+          value: lifecycleSeries("rt1"),
+          occurrences: [],
+          intentionalAbsences: [],
+        },
+        error: null,
+      };
     });
-    mockToLegacyRecurringTask.mockReturnValue({
+    mockToRecurringTaskCompatibility.mockReturnValue({
       id: "rt2",
       title: "Daily standup",
     });
@@ -121,19 +142,20 @@ describe("recurring task tools", () => {
     expect(names).toContain("deleteRecurringTask");
   });
 
-  it("getRecurringTasks calls getUserRecurringTasks", async () => {
+  it("getRecurringTasks reads lifecycle Series and translates at the adapter", async () => {
     const ctx = makeCtx();
-    mockGetUserRecurringTasks.mockResolvedValue([
-      { id: "rt1", title: "Weekly review" },
-    ]);
     const result = await findTool("getRecurringTasks").execute(
       { status: "active" },
       ctx,
     );
-    expect(mockGetUserRecurringTasks).toHaveBeenCalledWith("user-123", {
-      status: "active",
+    expect(mockRpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
+      p_operation: "list-series",
+      p_request: { userId: "user-123", status: "active" },
     });
-    expect(result).toEqual([{ id: "rt1", title: "Weekly review" }]);
+    expect(mockToRecurringTaskCompatibility.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ id: "rt1", status: "active" }),
+    );
+    expect(result).toEqual([{ id: "rt2", title: "Daily standup" }]);
   });
 
   it("createRecurringTask uses the shared initial coverage window", async () => {

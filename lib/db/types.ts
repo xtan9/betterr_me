@@ -88,9 +88,6 @@ export interface Task {
   section: TaskSection;
   sort_order: number;
   project_id: string | null; // UUID, link to projects table
-  recurring_task_id: string | null; // UUID, link to recurring_tasks template
-  is_exception: boolean; // true if this instance was individually modified
-  original_date: string | null; // DATE (YYYY-MM-DD), the scheduled date from recurrence rule
   recurring_series_id?: string | null;
   recurring_occurrence_id?: string | null;
   scheduled_date?: string | null;
@@ -100,14 +97,11 @@ export interface Task {
   updated_at: string;
 }
 
-export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category_id' | 'completion_difficulty' | 'project_id' | 'recurring_task_id' | 'is_exception' | 'original_date' | 'recurring_series_id' | 'recurring_occurrence_id' | 'scheduled_date' | 'recurrence_occurrence_state' | 'occurrence_overrides' | 'status' | 'section' | 'sort_order'> & {
+export type TaskInsert = Omit<Task, 'id' | 'created_at' | 'updated_at' | 'completed_at' | 'category_id' | 'completion_difficulty' | 'project_id' | 'recurring_series_id' | 'recurring_occurrence_id' | 'scheduled_date' | 'recurrence_occurrence_state' | 'occurrence_overrides' | 'status' | 'section' | 'sort_order'> & {
   id?: string;
   category_id?: string | null;
   completion_difficulty?: 1 | 2 | 3 | null;
   project_id?: string | null;
-  recurring_task_id?: string | null;
-  is_exception?: boolean;
-  original_date?: string | null;
   recurring_series_id?: string | null;
   recurring_occurrence_id?: string | null;
   scheduled_date?: string | null;
@@ -186,51 +180,6 @@ export type RecurrenceRule =
   | MonthlyByDateRule
   | MonthlyByWeekdayRule
   | YearlyRule;
-
-export interface RecurringTask {
-  id: string;
-  user_id: string;
-  title: string;
-  description: string | null;
-  priority: 0 | 1 | 2 | 3;
-  category_id: string | null;
-  due_time: string | null;
-  recurrence_rule: RecurrenceRule;
-  start_date: string; // DATE (YYYY-MM-DD)
-  end_type: EndType;
-  end_date: string | null;
-  end_count: number | null;
-  instances_generated: number;
-  next_generate_date: string | null;
-  status: "active" | "paused" | "archived";
-  created_at: string;
-  updated_at: string;
-}
-
-export type RecurringTaskInsert = Omit<
-  RecurringTask,
-  | "id"
-  | "created_at"
-  | "updated_at"
-  | "instances_generated"
-  | "next_generate_date"
-> & {
-  id?: string;
-  instances_generated?: number;
-  next_generate_date?: string | null;
-};
-
-export type RecurringTaskUpdate = Partial<
-  Omit<
-    RecurringTask,
-    | "id"
-    | "user_id"
-    | "created_at"
-    | "updated_at"
-    | "instances_generated"
-    | "next_generate_date"
-  >
->;
 
 // =============================================================================
 // HELPER TYPES

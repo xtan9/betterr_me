@@ -1,15 +1,15 @@
 import type {
   EndType,
   RecurrenceRule,
-  RecurringTask,
-  RecurringTaskUpdate,
   Task,
   TaskSection,
   TaskStatus,
-  TaskUpdate,
 } from "@/lib/db/types";
 import type { EditScope } from "@/lib/validations/recurring-task";
-import { addLocalDays } from "./recurrence";
+import {
+  toRecurringTaskResponse,
+  type RecurringTaskResponse,
+} from "./compatibility";
 
 import type {
   LifecycleOutcome,
@@ -38,7 +38,7 @@ export interface SeriesDefaultsInput {
 export interface SeriesRevisionInput extends SeriesDefaultsInput {
   userId: string;
   seriesId: string;
-  seriesStatus?: RecurringTask["status"];
+  seriesStatus?: RecurringTaskResponse["status"];
   startDate?: string;
   recurrenceRule?: RecurrenceRule;
   endType?: EndType;
@@ -79,32 +79,8 @@ export interface SeriesStateCommandInput {
   operationKey?: string;
 }
 
-export interface SeriesStateLegacyPersistence {
-  getRecurringTask(id: string, userId: string): Promise<RecurringTask | null>;
-  updateRecurringTask(
-    id: string,
-    userId: string,
-    updates: RecurringTaskUpdate,
-  ): Promise<RecurringTask>;
-  updateInstanceWithScope(
-    taskId: string,
-    userId: string,
-    scope: EditScope,
-    updates: TaskUpdate,
-  ): Promise<void>;
-  pauseRecurringTask(id: string, userId: string): Promise<RecurringTask>;
-  resumeRecurringTask(
-    id: string,
-    userId: string,
-    effectiveDate?: string,
-    throughDate?: string,
-  ): Promise<RecurringTask>;
-  archiveRecurringTask(id: string, userId: string): Promise<void>;
-}
-
 export interface SeriesStatePersistence {
   getTask(taskId: string, userId: string): Promise<Task | null>;
-  legacy?: SeriesStateLegacyPersistence;
 }
 
 export type SeriesStateLifecyclePort = Pick<
@@ -115,7 +91,7 @@ export type SeriesStateLifecyclePort = Pick<
 export type SeriesStateSuccess = {
   status: "complete" | "already-applied";
   type: "complete" | "already-applied";
-  recurringTask?: RecurringTask;
+  recurringTask?: RecurringTaskResponse;
 };
 
 type SeriesStateLifecycleOutcome = Exclude<
@@ -123,7 +99,7 @@ type SeriesStateLifecycleOutcome = Exclude<
   PrewarmSkippedOutcome
 >;
 type SeriesStateLifecycleResult = SeriesStateLifecycleOutcome & {
-  recurringTask?: RecurringTask;
+  recurringTask?: RecurringTaskResponse;
 };
 
 export type SeriesStateOutcome =
@@ -220,28 +196,19 @@ export class SeriesStateAdapter {
   ) {}
 
   async revise(input: SeriesRevisionInput): Promise<SeriesStateOutcome> {
-    if (this.options.lifecycle) {
-      if (input.startDate !== undefined) {
-        return invalidTransition(
-          "Recurrence Anchor edits are not supported by the Series lifecycle",
-        );
-      }
-      return attachRecurringTask(
-        await this.options.lifecycle.reviseSeries(
-          toSeriesRevisionRequest(input),
-        ),
+    if (!this.options.lifecycle) {
+      return invalidTransition("Recurring Task Lifecycle is not configured");
+    }
+    if (input.startDate !== undefined) {
+      return invalidTransition(
+        "Recurrence Anchor edits are not supported by the Series lifecycle",
       );
     }
-
-    const updates = toLegacyRecurringTaskUpdate(input);
-    return {
-      ...complete(),
-      recurringTask: await this.legacy().updateRecurringTask(
-        input.seriesId,
-        input.userId,
-        updates,
+    return attachRecurringTask(
+      await this.options.lifecycle.reviseSeries(
+        toSeriesRevisionRequest(input),
       ),
-    };
+    );
   }
 
   /**
@@ -271,13 +238,7 @@ export class SeriesStateAdapter {
 
   async editScope(input: SeriesScopeEditInput): Promise<SeriesStateOutcome> {
     if (!this.options.lifecycle) {
-      await this.legacy().updateInstanceWithScope(
-        input.taskId,
-        input.userId,
-        input.scope,
-        toLegacyScopedTaskUpdate(input),
-      );
-      return complete();
+      return invalidTransition("Recurring Task Lifecycle is not configured");
     }
 
     const targetOutcome = await this.lifecycleTarget(input.taskId, input.userId);
@@ -305,70 +266,43 @@ export class SeriesStateAdapter {
   }
 
   async pause(input: SeriesStateCommandInput): Promise<SeriesStateOutcome> {
-    if (this.options.lifecycle) {
-      return attachRecurringTask(
-        await this.options.lifecycle.pauseSeries(
-          toSeriesCommandRequest(input),
-        ),
-      );
+    if (!this.options.lifecycle) {
+      return invalidTransition("Recurring Task Lifecycle is not configured");
     }
-    return {
-      ...complete(),
-      recurringTask: await this.legacy().pauseRecurringTask(
-        input.seriesId,
-        input.userId,
+    return attachRecurringTask(
+      await this.options.lifecycle.pauseSeries(
+        toSeriesCommandRequest(input),
       ),
-    };
+    );
   }
 
   async resume(input: SeriesStateCommandInput): Promise<SeriesStateOutcome> {
-    const effectiveDate = resolveSeriesEffectiveDate(
-      input.effectiveDate,
-      input.inferredDate,
-    );
-    if (this.options.lifecycle) {
-      return attachRecurringTask(
-        await this.options.lifecycle.resumeSeries(
-          toSeriesCommandRequest(input),
-        ),
-      );
+    if (!this.options.lifecycle) {
+      return invalidTransition("Recurring Task Lifecycle is not configured");
     }
-    return {
-      ...complete(),
-      recurringTask: await this.legacy().resumeRecurringTask(
-        input.seriesId,
-        input.userId,
-        effectiveDate,
-        input.coverageThrough,
+    return attachRecurringTask(
+      await this.options.lifecycle.resumeSeries(
+        toSeriesCommandRequest(input),
       ),
-    };
+    );
   }
 
   async archive(input: SeriesStateCommandInput): Promise<SeriesStateOutcome> {
-    if (this.options.lifecycle) {
-      return attachRecurringTask(
-        await this.options.lifecycle.endSeries(
-          toSeriesCommandRequest(input),
-        ),
-      );
+    if (!this.options.lifecycle) {
+      return invalidTransition("Recurring Task Lifecycle is not configured");
     }
-    await this.legacy().archiveRecurringTask(input.seriesId, input.userId);
-    return {
-      ...complete(),
-      recurringTask: (await this.legacy().getRecurringTask(
-        input.seriesId,
-        input.userId,
-      )) ?? undefined,
-    };
+    return attachRecurringTask(
+      await this.options.lifecycle.endSeries(
+        toSeriesCommandRequest(input),
+      ),
+    );
   }
 
   async getRecurringTask(
     seriesId: string,
     userId: string,
-  ): Promise<RecurringTask | null> {
-    if (!this.options.lifecycle) {
-      return this.legacy().getRecurringTask(seriesId, userId);
-    }
+  ): Promise<RecurringTaskResponse | null> {
+    if (!this.options.lifecycle) return null;
     const outcome = normalizeLifecycleOutcome(
       await this.options.lifecycle.getSeries(userId, seriesId),
     );
@@ -376,7 +310,7 @@ export class SeriesStateAdapter {
     if (!isLifecycleSeriesSuccess(outcome)) {
       throw new Error(seriesStateErrorMessage(outcome));
     }
-    return recurringTaskFromSeries(outcome.series);
+    return toRecurringTaskResponse(outcome.series);
   }
 
   private async lifecycleTarget(
@@ -388,7 +322,7 @@ export class SeriesStateAdapter {
   > {
     const task = await this.persistence.getTask(taskId, userId);
     if (!task) return notFound();
-    const seriesId = task.recurring_series_id ?? task.recurring_task_id;
+    const seriesId = task.recurring_series_id;
     if (!seriesId) {
       return invalidTransition(
         "Lifecycle mode requires a recurring Task Occurrence",
@@ -405,8 +339,7 @@ export class SeriesStateAdapter {
       (candidate) =>
         candidate.id === task.recurring_occurrence_id
         || candidate.taskId === taskId
-        || candidate.scheduledDate === task.scheduled_date
-        || candidate.scheduledDate === task.original_date,
+        || candidate.scheduledDate === task.scheduled_date,
     );
     if (!occurrence) return notFound();
     return {
@@ -416,12 +349,6 @@ export class SeriesStateAdapter {
     };
   }
 
-  private legacy(): SeriesStateLegacyPersistence {
-    if (!this.persistence.legacy) {
-      throw new Error("Legacy Series State persistence is unavailable");
-    }
-    return this.persistence.legacy;
-  }
 }
 
 export function toSeriesCommandRequest(
@@ -518,62 +445,6 @@ function toSeriesDefaults(input: SeriesDefaultsInput): Partial<
   };
 }
 
-function toLegacyRecurringTaskUpdate(
-  input: SeriesRevisionInput,
-): RecurringTaskUpdate {
-  return {
-    ...(input.title === undefined ? {} : { title: input.title.trim() }),
-    ...(input.description === undefined
-      ? {}
-      : { description: input.description?.trim() || null }),
-    ...(input.priority === undefined ? {} : { priority: input.priority }),
-    ...(input.categoryId === undefined
-      ? {}
-      : { category_id: input.categoryId?.trim() || null }),
-    ...(input.dueTime === undefined
-      ? {}
-      : { due_time: input.dueTime?.trim() || null }),
-    ...(input.recurrenceRule === undefined
-      ? {}
-      : { recurrence_rule: input.recurrenceRule }),
-    ...(input.endType === undefined ? {} : { end_type: input.endType }),
-    ...(input.endDate === undefined ? {} : { end_date: input.endDate }),
-    ...(input.endCount === undefined ? {} : { end_count: input.endCount }),
-    ...(input.startDate === undefined ? {} : { start_date: input.startDate }),
-    ...(input.seriesStatus === undefined
-      ? {}
-      : { status: input.seriesStatus }),
-  };
-}
-
-function toLegacyScopedTaskUpdate(input: SeriesScopeEditInput): TaskUpdate {
-  return {
-    ...(input.title === undefined ? {} : { title: input.title.trim() }),
-    ...(input.description === undefined
-      ? {}
-      : { description: input.description?.trim() || null }),
-    ...(input.priority === undefined ? {} : { priority: input.priority }),
-    ...(input.categoryId === undefined
-      ? {}
-      : { category_id: input.categoryId?.trim() || null }),
-    ...(input.dueDate === undefined
-      ? {}
-      : { due_date: input.dueDate?.trim() || null }),
-    ...(input.dueTime === undefined
-      ? {}
-      : { due_time: input.dueTime?.trim() || null }),
-    ...(input.status === undefined ? {} : { status: input.status }),
-    ...(input.completed === undefined
-      ? {}
-      : { is_completed: input.completed }),
-    ...(input.section === undefined ? {} : { section: input.section }),
-    ...(input.sortOrder === undefined ? {} : { sort_order: input.sortOrder }),
-    ...(input.projectId === undefined
-      ? {}
-      : { project_id: input.projectId?.trim() || null }),
-  };
-}
-
 function unsupportedScopedFields(input: SeriesScopeEditInput): string[] {
   const unsupported: string[] = [];
   if (input.dueDate !== undefined) unsupported.push("Scheduled Date");
@@ -593,10 +464,6 @@ function toSeriesCommandCoverage(
     from: effectiveDate,
     to: input.coverageThrough.trim(),
   };
-}
-
-function complete(): SeriesStateSuccess {
-  return { status: "complete", type: "complete" };
 }
 
 function notFound(): SeriesStateFailure {
@@ -623,7 +490,7 @@ function attachRecurringTask(
     return normalized;
   }
   const recurringTask = Array.isArray(normalized.series.revisions)
-    ? recurringTaskFromSeries(normalized.series)
+    ? toRecurringTaskResponse(normalized.series)
     : undefined;
   return {
     ...normalized,
@@ -649,48 +516,4 @@ function isLifecycleSeriesSuccess(
   { status: "complete" | "already-applied" }
 > {
   return outcome.status === "complete" || outcome.status === "already-applied";
-}
-
-function recurringTaskFromSeries(series: RecurringTaskSeries): RecurringTask {
-  const revision = series.revisions.find(
-    (candidate) => candidate.id === series.currentRevisionId,
-  ) ?? series.revisions[series.revisions.length - 1];
-  const defaults = revision?.defaults ?? {
-    title: "",
-    description: null,
-    priority: 0 as const,
-    categoryId: null,
-    dueTime: null,
-  };
-  const endType: EndType = series.occurrenceLimit !== null
-    ? "after_count"
-    : series.lastScheduledDate !== null
-      ? "on_date"
-      : "never";
-  return {
-    id: series.id,
-    user_id: series.userId,
-    title: defaults.title,
-    description: defaults.description,
-    priority: defaults.priority,
-    category_id: defaults.categoryId,
-    due_time: defaults.dueTime,
-    recurrence_rule: revision?.recurrenceRule ?? {
-      frequency: "daily",
-      interval: 1,
-    },
-    start_date: series.recurrenceAnchor,
-    end_type: endType,
-    end_date: series.lastScheduledDate,
-    end_count: series.occurrenceLimit,
-    instances_generated: series.occurrences.filter(
-      (occurrence) => occurrence.state !== "withdrawn",
-    ).length,
-    next_generate_date: series.coverageHorizon
-      ? addLocalDays(series.coverageHorizon, 1)
-      : null,
-    status: series.status === "ended" ? "archived" : series.status,
-    created_at: series.createdAt,
-    updated_at: series.updatedAt,
-  };
 }

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "baseline": {
-    "sourceCommit": "c572bc50f1c6950a08c6589d7ba92c048dfb5545",
+    "sourceCommit": "12ba0833608d4211be2fb417336b505f4353725d",
     "reviewedAt": "2026-08-01",
-    "owningTicket": "#635",
+    "owningTicket": "#692",
     "policy": "Every write-capable database call from a named HTTP, AI, or operational delivery source is an entry. Query-only persistence access remains allowed. A baseline edit is documented only when this file and its SHA-256 lock change together and the entry names its owning migration ticket."
   },
   "entries": [
@@ -173,9 +173,9 @@
       "invariants": ["Series identity, Series Revision effective dates, Coverage Horizon, occurrence lineage, and lifecycle state"],
       "atomicity": "Series mutations use lifecycle transaction boundaries; reads may use focused query adapters after coverage is ensured.",
       "migrationStatus": "migrated",
-      "owningTicket": "#659 / #681 / #682 / #686 / #687 / #688",
-      "authority": "lib/recurring-tasks/lifecycle.ts and its Supabase adapters",
-      "evidence": "Recurring-task routes, the calendar feed, the recurring-task prewarm job, and AI tools call lifecycle and series/occurrence adapters; direct recurring persistence writes are absent from delivery sources."
+      "owningTicket": "#659 / #681 / #682 / #686 / #687 / #688 / #692",
+      "authority": "lib/recurring-tasks/lifecycle.ts, its Supabase adapters, and the declared compatibility adapter",
+      "evidence": "Recurring-task routes, the calendar feed, the dashboard/read path, the optional prewarm job, and AI tools call lifecycle and Series/Occurrence adapters; ordinary task queries remain task-model queries, direct recurring persistence writes and legacy projection writers are absent, and the post-cutover storage/rollback/RLS proof is in docs/architecture/recurring-task-lifecycle-contract.md and the registered SQL fixtures."
     },
     {
       "id": "habits-completion",

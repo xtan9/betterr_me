@@ -79,19 +79,10 @@ const mockTasksDB = {
   deleteTask: vi.fn(),
 };
 
-const mockRecurringTasksDB = {
-  updateInstanceWithScope: vi.fn(),
-};
-
 vi.mock("@/lib/db", () => ({
   TasksDB: class {
     constructor() {
       return mockTasksDB;
-    }
-  },
-  RecurringTasksDB: class {
-    constructor() {
-      return mockRecurringTasksDB;
     }
   },
 }));

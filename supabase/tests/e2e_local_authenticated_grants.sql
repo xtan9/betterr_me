@@ -21,7 +21,6 @@ begin
     'habit_milestones',
     'habit_graduations',
     'categories',
-    'recurring_tasks',
     'projects',
     'journal_entries',
     'journal_entry_links',

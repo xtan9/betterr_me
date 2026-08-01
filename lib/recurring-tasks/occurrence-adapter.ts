@@ -54,11 +54,6 @@ export interface OccurrenceAdapterPersistence {
     edit(intent: OccurrenceEditIntent): Promise<Task>;
     toggle(intent: OccurrenceCommandIntent): Promise<Task>;
   };
-  legacy?: {
-    edit(intent: OccurrenceEditIntent, task: Task): Promise<Task>;
-    editScoped(intent: OccurrenceEditIntent, task: Task): Promise<void>;
-    toggle(intent: OccurrenceCommandIntent, task: Task): Promise<Task>;
-  };
 }
 
 export type OccurrenceLifecyclePort = Pick<
@@ -129,41 +124,22 @@ export class OccurrenceAdapter {
 
     const target = this.lifecycleTarget(task);
     if (!target) {
-      if (this.options.lifecycle) {
-        if (intent.scope && intent.scope !== "this") {
-          return invalidTransition(
-            "Only one-occurrence edits are available through this lifecycle adapter",
-          );
-        }
-        if (this.persistence.standalone) {
-          return {
-            ...complete(),
-            task: await this.persistence.standalone.edit(intent),
-          };
-        }
-        return invalidTransition("Standalone task persistence is unavailable");
+      if (intent.scope && intent.scope !== "this") {
+        return invalidTransition(
+          "Only one-occurrence edits are available through this lifecycle adapter",
+        );
       }
-      const legacy = this.legacyPersistence();
-      if (intent.scope) {
-        await legacy.editScoped(intent, task);
-        return complete();
+      if (this.persistence.standalone) {
+        return {
+          ...complete(),
+          task: await this.persistence.standalone.edit(intent),
+        };
       }
-      return {
-        ...complete(),
-        task: await legacy.edit(intent, task),
-      };
+      return invalidTransition("Standalone task persistence is unavailable");
     }
 
     if (!this.options.lifecycle) {
-      const legacy = this.legacyPersistence();
-      if (intent.scope) {
-        await legacy.editScoped(intent, task);
-        return complete();
-      }
-      return {
-        ...complete(),
-        task: await legacy.edit(intent, task),
-      };
+      return invalidTransition("Recurring Task Lifecycle is not configured");
     }
 
     if (intent.scope && intent.scope !== "this") {
@@ -228,11 +204,7 @@ export class OccurrenceAdapter {
         "Lifecycle occurrences require an explicit completion or reopening command",
       );
     }
-
-    return {
-      ...complete(),
-      task: await this.legacyPersistence().toggle(intent, task),
-    };
+    return invalidTransition("Recurring Task Lifecycle is not configured");
   }
 
   private async transition(
@@ -244,17 +216,7 @@ export class OccurrenceAdapter {
 
     const target = this.lifecycleTarget(task);
     if (!this.options.lifecycle) {
-      const legacy = this.legacyPersistence();
-      return {
-        ...complete(),
-        task: await legacy.edit(
-          toOccurrenceEditIntent({
-            ...intent,
-            completed: action === "complete",
-          }),
-          task,
-        ),
-      };
+      return invalidTransition("Recurring Task Lifecycle is not configured");
     }
 
     if (!target && this.persistence.standalone) {
@@ -295,13 +257,6 @@ export class OccurrenceAdapter {
 
   private async findTask(taskId: string, userId: string): Promise<Task | null> {
     return this.persistence.getTask(taskId, userId);
-  }
-
-  private legacyPersistence(): NonNullable<OccurrenceAdapterPersistence["legacy"]> {
-    if (!this.persistence.legacy) {
-      throw new Error("Legacy occurrence persistence is unavailable");
-    }
-    return this.persistence.legacy;
   }
 
   private lifecycleTarget(
@@ -349,7 +304,7 @@ function invalidTransition(reason: string): OccurrenceAdapterOutcome {
   return { status: "invalid-transition", type: "invalid-transition", reason };
 }
 
-export function toLegacyTaskUpdate(intent: OccurrenceEditIntent): TaskUpdate {
+export function toTaskUpdate(intent: OccurrenceEditIntent): TaskUpdate {
   const updates: TaskUpdate = {};
   const occurrence = intent.updates;
 

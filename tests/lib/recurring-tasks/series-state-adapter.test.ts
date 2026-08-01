@@ -80,14 +80,6 @@ function lifecycleSuccess(
 function createPersistence(): SeriesStatePersistence {
   return {
     getTask: vi.fn(),
-    legacy: {
-      getRecurringTask: vi.fn(),
-      updateRecurringTask: vi.fn(),
-      updateInstanceWithScope: vi.fn(),
-      pauseRecurringTask: vi.fn(),
-      resumeRecurringTask: vi.fn(),
-      archiveRecurringTask: vi.fn(),
-    },
   };
 }
 
@@ -119,7 +111,7 @@ describe("SeriesStateAdapter", () => {
     });
   });
 
-  it("uses one lifecycle revision command and no legacy writer", async () => {
+  it("uses one lifecycle revision command", async () => {
     const persistence = createPersistence();
     const reviseSeries = vi.fn().mockResolvedValue(lifecycleSuccess());
     const adapter = new SeriesStateAdapter(persistence, {
@@ -149,15 +141,10 @@ describe("SeriesStateAdapter", () => {
       scope: "following",
       defaults: { title: "Revised review" },
     });
-    expect(persistence.legacy?.updateRecurringTask).not.toHaveBeenCalled();
-    expect(persistence.legacy?.updateInstanceWithScope).not.toHaveBeenCalled();
   });
 
-  it("keeps the lifecycle writer inactive by default", async () => {
+  it("requires the lifecycle writer", async () => {
     const persistence = createPersistence();
-    const legacyTask = { id: "series-1", title: "Legacy review" };
-    vi.mocked(persistence.legacy!.getRecurringTask).mockResolvedValue(legacyTask as never);
-    vi.mocked(persistence.legacy!.updateRecurringTask).mockResolvedValue(legacyTask as never);
 
     const outcome = await new SeriesStateAdapter(persistence).revise({
       userId: "user-1",
@@ -166,15 +153,10 @@ describe("SeriesStateAdapter", () => {
     });
 
     expect(outcome).toEqual({
-      status: "complete",
-      type: "complete",
-      recurringTask: legacyTask,
+      status: "invalid-transition",
+      type: "invalid-transition",
+      reason: "Recurring Task Lifecycle is not configured",
     });
-    expect(persistence.legacy!.updateRecurringTask).toHaveBeenCalledWith(
-      "series-1",
-      "user-1",
-      { title: "Legacy review" },
-    );
   });
 
   it("maps a following-scope Series Default edit to one effective-dated Revision", async () => {
@@ -183,7 +165,6 @@ describe("SeriesStateAdapter", () => {
       recurring_series_id: "series-1",
       recurring_occurrence_id: "occurrence-1",
       scheduled_date: "2026-08-03",
-      original_date: "2026-08-03",
     } as never);
     const reviseSeries = vi.fn().mockResolvedValue(lifecycleSuccess());
     const adapter = new SeriesStateAdapter(persistence, {
@@ -213,7 +194,6 @@ describe("SeriesStateAdapter", () => {
       scope: "following",
       defaults: { title: "Following review" },
     });
-    expect(persistence.legacy?.updateInstanceWithScope).not.toHaveBeenCalled();
   });
 
   it("maps pause and resume dates with explicit intent before inferred today", async () => {

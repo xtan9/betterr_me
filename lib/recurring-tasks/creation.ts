@@ -1,12 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { recurringTaskFromSeries } from "@/lib/db";
-import type {
-  EndType,
-  RecurrenceRule,
-  RecurringTask,
-} from "@/lib/db";
+import type { RecurrenceRule } from "@/lib/db";
 import { addLocalDays } from "./recurrence";
+import {
+  toRecurringTaskResponse,
+  type RecurringTaskResponse,
+} from "./compatibility";
 import { createActivatedRecurringTaskLifecycle } from "./activation";
 import type {
   CreateSeriesRequest,
@@ -20,8 +19,8 @@ export const INITIAL_COVERAGE_DAYS = 7;
 
 /**
  * Transport-neutral creation intent shared by the product HTTP and AI
- * adapters. `legacyStartDate` is deliberately named at this seam because it
- * is the old input being translated into two lifecycle dates.
+ * adapters. Compatibility start-date fields are translated before this
+ * transport-neutral intent reaches the lifecycle boundary.
  */
 export interface SeriesCreationIntent {
   userId: string;
@@ -31,8 +30,9 @@ export interface SeriesCreationIntent {
   categoryId: string | null;
   dueTime: string | null;
   recurrenceRule: RecurrenceRule;
-  legacyStartDate: string;
-  endType: EndType;
+  recurrenceAnchor: string;
+  activationDate: string;
+  endType: "never" | "after_count" | "on_date";
   endDate: string | null;
   endCount: number | null;
   coverageThrough: string;
@@ -53,18 +53,18 @@ export type SeriesCreationLifecyclePort = Pick<
 >;
 
 /**
- * Derive the initial inclusive Coverage range from the legacy start-date
- * input. A future start date gets a full window of its own rather than an
+ * Derive the initial inclusive Coverage range from the Recurrence Anchor.
+ * A future anchor gets a full window of its own rather than an
  * inverted range against today's product window.
  */
 export function initialSeriesCoverage(
-  legacyStartDate: string,
-  referenceDate: string = legacyStartDate,
+  recurrenceAnchor: string,
+  referenceDate: string = recurrenceAnchor,
 ) {
   const coverageStart =
-    legacyStartDate > referenceDate ? legacyStartDate : referenceDate;
+    recurrenceAnchor > referenceDate ? recurrenceAnchor : referenceDate;
   return {
-    from: legacyStartDate,
+    from: recurrenceAnchor,
     to: addLocalDays(coverageStart, INITIAL_COVERAGE_DAYS),
   };
 }
@@ -79,7 +79,8 @@ export function normalizeSeriesCreationIntent(
     description: intent.description?.trim() || null,
     categoryId: intent.categoryId?.trim() || null,
     dueTime: normalizeDueTime(intent.dueTime),
-    legacyStartDate: intent.legacyStartDate.trim(),
+    recurrenceAnchor: intent.recurrenceAnchor.trim(),
+    activationDate: intent.activationDate.trim(),
     endDate: intent.endDate?.trim() || null,
     coverageThrough: intent.coverageThrough.trim(),
   };
@@ -92,11 +93,8 @@ export function toLifecycleCreateSeriesRequest(
   return {
     userId: normalized.userId,
     recurrenceRule: normalized.recurrenceRule,
-    // A legacy start date defined both when the pattern is phased and when
-    // the first occurrence may be activated. The lifecycle keeps those
-    // concepts separate even when this compatibility input supplies one date.
-    recurrenceAnchor: normalized.legacyStartDate,
-    activationDate: normalized.legacyStartDate,
+    recurrenceAnchor: normalized.recurrenceAnchor,
+    activationDate: normalized.activationDate,
     defaults: {
       title: normalized.title,
       description: normalized.description,
@@ -109,23 +107,23 @@ export function toLifecycleCreateSeriesRequest(
     lastScheduledDate:
       normalized.endType === "on_date" ? normalized.endDate : null,
     coverage: {
-      from: normalized.legacyStartDate,
+      from: normalized.recurrenceAnchor,
       to: normalized.coverageThrough,
     },
   };
 }
 
 /** Convert a successful lifecycle result to the existing HTTP/AI response model. */
-export function toLegacyRecurringTask(
+export function toRecurringTaskCompatibility(
   series: RecurringTaskSeries,
-): RecurringTask {
-  return recurringTaskFromSeries(series);
+): RecurringTaskResponse {
+  return toRecurringTaskResponse(series);
 }
 
 /**
  * Every production creation request is lifecycle-owned after the coordinated
  * cutover. The optional port remains a test/in-process seam, but omitting it
- * can no longer select the legacy recurring-task writer.
+ * always selects the activated lifecycle writer.
  */
 export function createSeriesCreation(
   supabase: SupabaseClient,

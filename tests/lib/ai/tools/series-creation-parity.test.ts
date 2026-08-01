@@ -39,15 +39,6 @@ vi.mock("@/lib/db/ensure-profile", () => ({
   ensureProfile: mockEnsureProfile,
 }));
 
-vi.mock("@/lib/db", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/db")>("@/lib/db");
-  return {
-    ...actual,
-    TasksDB: class {},
-    RecurringTasksDB: class {},
-  };
-});
-
 vi.mock("@/lib/recurring-tasks/creation", async () => {
   const actual = await vi.importActual<
     typeof import("@/lib/recurring-tasks/creation")
@@ -68,8 +59,6 @@ const presentedRecurringTask = {
   end_type: "after_count",
   end_date: null,
   end_count: 3,
-  instances_generated: 3,
-  next_generate_date: "2026-08-08",
   status: "active",
   created_at: "2026-08-01T12:00:00.000Z",
   updated_at: "2026-08-01T12:00:00.000Z",
@@ -206,7 +195,8 @@ describe("AI and HTTP Series creation parity", () => {
           categoryId: "00000000-0000-0000-0000-000000000001",
           dueTime: "09:00:00",
           recurrenceRule: { frequency: "daily", interval: 1 },
-          legacyStartDate: "2026-08-01",
+          recurrenceAnchor: "2026-08-01",
+          activationDate: "2026-08-01",
           endType: "after_count",
           endDate: null,
           endCount: 3,
@@ -222,7 +212,8 @@ describe("AI and HTTP Series creation parity", () => {
           categoryId: "00000000-0000-0000-0000-000000000001",
           dueTime: "09:00:00",
           recurrenceRule: { frequency: "daily", interval: 1 },
-          legacyStartDate: "2026-08-01",
+          recurrenceAnchor: "2026-08-01",
+          activationDate: "2026-08-01",
           endType: "after_count",
           endDate: null,
           endCount: 3,

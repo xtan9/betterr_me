@@ -58,4 +58,29 @@ describe("Recurring Task lifecycle cutover boundary", () => {
     expect(fixture).toContain("reset role;");
     expect(fixture).toContain("rollback;");
   });
+
+  it("contracts retired recurrence storage only after the activated callers are installed", () => {
+    const migration = source(
+      "supabase/migrations/20260803000002_contract_recurring_task_lifecycle.sql",
+    );
+    const fixture = source("supabase/tests/recurring_task_legacy_contract.sql");
+    const registry = source("supabase/tests/registry.json");
+
+    expect(migration).toContain("$contract_guard$");
+    expect(migration).toContain("backfill_outcome->>'status' = 'complete'");
+    expect(migration).toContain("pg_get_functiondef");
+    expect(migration).toContain(
+      "DROP FUNCTION IF EXISTS public.recurring_task_backfill_legacy",
+    );
+    expect(migration).toContain(
+      "DROP TABLE IF EXISTS public.recurring_tasks",
+    );
+    expect(migration).toContain("DROP COLUMN IF EXISTS recurring_task_id");
+    expect(migration).toContain("DROP COLUMN IF EXISTS is_exception");
+    expect(migration).toContain("DROP COLUMN IF EXISTS original_date");
+    expect(fixture).toContain("obsolete recurring task table remains");
+    expect(fixture).toContain("contract_rollback_probe");
+    expect(fixture).toContain("has_function_privilege");
+    expect(registry).toContain('"recurring_task_legacy_contract.sql"');
+  });
 });

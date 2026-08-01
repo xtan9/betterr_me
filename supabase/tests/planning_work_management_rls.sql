@@ -96,54 +96,6 @@ values (
     '57800000-0000-0000-0000-000000000102'
   );
 
--- This fixture deliberately exercises the legacy recurring_tasks projection
--- with direct table writes to prove its RLS boundary. Production callers must
--- use the recurring lifecycle RPC; authorize only this controlled fixture.
-select set_config('betterr.recurring_lifecycle', 'on', true);
-
-select set_config(
-  'request.jwt.claim.sub',
-  '57800000-0000-0000-0000-000000000001',
-  false
-);
-
-insert into public.recurring_tasks (
-  id,
-  user_id,
-  title,
-  recurrence_rule,
-  start_date
-)
-values
-  (
-    '57800000-0000-0000-0000-000000000301',
-    '57800000-0000-0000-0000-000000000001',
-    'Owner recurring task',
-    '{"frequency":"weekly","interval":1}'::jsonb,
-    '2026-08-03'
-  );
-
-select set_config(
-  'request.jwt.claim.sub',
-  '57800000-0000-0000-0000-000000000002',
-  false
-);
-
-insert into public.recurring_tasks (
-  id,
-  user_id,
-  title,
-  recurrence_rule,
-  start_date
-)
-values (
-    '57800000-0000-0000-0000-000000000302',
-    '57800000-0000-0000-0000-000000000002',
-    'Other recurring task',
-    '{"frequency":"daily","interval":1}'::jsonb,
-    '2026-08-03'
-  );
-
 select set_config(
   'request.jwt.claim.sub',
   '57800000-0000-0000-0000-000000000001',
@@ -607,7 +559,6 @@ begin
   foreach table_name in array array[
     'tasks',
     'projects',
-    'recurring_tasks',
     'habits',
     'habit_logs',
     'habit_milestones',
@@ -633,7 +584,6 @@ begin
   foreach table_name in array array[
     'tasks',
     'projects',
-    'recurring_tasks',
     'habits',
     'habit_logs',
     'habit_milestones',
@@ -666,7 +616,6 @@ begin
   foreach table_name in array array[
     'tasks',
     'projects',
-    'recurring_tasks',
     'habits',
     'habit_logs',
     'calendar_events'
@@ -802,11 +751,6 @@ begin
     raise exception 'project owner visibility is incorrect';
   end if;
 
-  if (select count(*) from public.recurring_tasks where user_id = '57800000-0000-0000-0000-000000000001') <> 1
-     or exists (select 1 from public.recurring_tasks where id = '57800000-0000-0000-0000-000000000302') then
-    raise exception 'recurring-task owner visibility is incorrect';
-  end if;
-
   insert into public.tasks (id, user_id, title, section, priority)
   values (
     '57800000-0000-0000-0000-000000000203',
@@ -867,41 +811,6 @@ begin
     raise exception 'project owner delete did not persist';
   end if;
 
-  insert into public.recurring_tasks (
-    id,
-    user_id,
-    title,
-    recurrence_rule,
-    start_date
-  ) values (
-    '57800000-0000-0000-0000-000000000303',
-    '57800000-0000-0000-0000-000000000001',
-    'Owner recurring probe',
-    '{"frequency":"monthly","interval":1}'::jsonb,
-    '2026-08-03'
-  );
-  update public.recurring_tasks
-  set title = 'Owner recurring probe updated'
-  where id = '57800000-0000-0000-0000-000000000303';
-  if not exists (
-    select 1
-    from public.recurring_tasks
-    where id = '57800000-0000-0000-0000-000000000303'
-      and title = 'Owner recurring probe updated'
-  ) then
-    raise exception 'recurring-task owner update did not persist';
-  end if;
-  perform pg_temp.ralph_578_expect_sqlstate(
-    $$update public.recurring_tasks set user_id = '57800000-0000-0000-0000-000000000002' where id = '57800000-0000-0000-0000-000000000303'$$,
-    '42501',
-    'recurring-task ownership transfer'
-  );
-  delete from public.recurring_tasks
-  where id = '57800000-0000-0000-0000-000000000303';
-  if exists (select 1 from public.recurring_tasks where id = '57800000-0000-0000-0000-000000000303') then
-    raise exception 'recurring-task owner delete did not persist';
-  end if;
-
   perform pg_temp.ralph_578_expect_zero_changes(
     $$update public.tasks set title = 'cross-user task write' where id = '57800000-0000-0000-0000-000000000202'$$,
     'non-owner task update'
@@ -918,15 +827,6 @@ begin
     $$delete from public.projects where id = '57800000-0000-0000-0000-000000000102'$$,
     'non-owner project delete'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
-    $$update public.recurring_tasks set title = 'cross-user recurring write' where id = '57800000-0000-0000-0000-000000000302'$$,
-    'non-owner recurring-task update'
-  );
-  perform pg_temp.ralph_578_expect_zero_changes(
-    $$delete from public.recurring_tasks where id = '57800000-0000-0000-0000-000000000302'$$,
-    'non-owner recurring-task delete'
-  );
-
   perform pg_temp.ralph_578_expect_sqlstate(
     $$insert into public.tasks (id, user_id, title, section) values ('57800000-0000-0000-0000-000000000204', '57800000-0000-0000-0000-000000000002', 'cross-user task insert', 'work')$$,
     '42501',
@@ -937,12 +837,6 @@ begin
     '42501',
     'non-owner project insert'
   );
-  perform pg_temp.ralph_578_expect_sqlstate(
-    $$insert into public.recurring_tasks (id, user_id, title, recurrence_rule, start_date) values ('57800000-0000-0000-0000-000000000304', '57800000-0000-0000-0000-000000000002', 'cross-user recurring insert', '{"frequency":"daily"}', '2026-08-03')$$,
-    '42501',
-    'non-owner recurring-task insert'
-  );
-
   -- A valid owner identity still cannot bypass a table constraint.
   perform pg_temp.ralph_578_expect_sqlstate(
     $$insert into public.tasks (id, user_id, title, section, priority) values ('57800000-0000-0000-0000-000000000205', '57800000-0000-0000-0000-000000000001', 'invalid priority', 'personal', 4)$$,
@@ -970,19 +864,12 @@ begin
     select 1 from public.projects
     where id = '57800000-0000-0000-0000-000000000102'
       and name = 'Other project'
-  ) or not exists (
-    select 1 from public.recurring_tasks
-    where id = '57800000-0000-0000-0000-000000000302'
-      and title = 'Other recurring task'
   ) or exists (
     select 1 from public.tasks
     where id in ('57800000-0000-0000-0000-000000000204', '57800000-0000-0000-0000-000000000205')
   ) or exists (
     select 1 from public.projects
     where id = '57800000-0000-0000-0000-000000000104'
-  ) or exists (
-    select 1 from public.recurring_tasks
-    where id = '57800000-0000-0000-0000-000000000304'
   ) then
     raise exception 'non-owner work-management write changed persisted state';
   end if;
@@ -996,10 +883,9 @@ do $block$
 begin
   if (select count(*) from public.tasks where user_id = '57800000-0000-0000-0000-000000000002') <> 1
      or (select count(*) from public.projects where user_id = '57800000-0000-0000-0000-000000000002') <> 1
-     or (select count(*) from public.recurring_tasks where user_id = '57800000-0000-0000-0000-000000000002') <> 1
      or exists (select 1 from public.tasks where id = '57800000-0000-0000-0000-000000000201')
      or exists (select 1 from public.projects where id = '57800000-0000-0000-0000-000000000101')
-     or exists (select 1 from public.recurring_tasks where id = '57800000-0000-0000-0000-000000000301') then
+     then
     raise exception 'second-user work-management visibility is incorrect';
   end if;
 
@@ -1043,30 +929,6 @@ begin
   end if;
   delete from public.projects where id = '57800000-0000-0000-0000-000000000107';
 
-  insert into public.recurring_tasks (
-    id,
-    user_id,
-    title,
-    recurrence_rule,
-    start_date
-  ) values (
-    '57800000-0000-0000-0000-000000000307',
-    '57800000-0000-0000-0000-000000000002',
-    'Second-user recurring probe',
-    '{"frequency":"monthly","interval":1}'::jsonb,
-    '2026-08-03'
-  );
-  update public.recurring_tasks
-  set title = 'Second-user recurring probe updated'
-  where id = '57800000-0000-0000-0000-000000000307';
-  if not exists (
-    select 1 from public.recurring_tasks
-    where id = '57800000-0000-0000-0000-000000000307'
-      and title = 'Second-user recurring probe updated'
-  ) then
-    raise exception 'second-user recurring-task update did not persist';
-  end if;
-  delete from public.recurring_tasks where id = '57800000-0000-0000-0000-000000000307';
 end
 $block$;
 reset role;
@@ -2157,7 +2019,6 @@ do $anonymous_rls$
 begin
   if exists (select 1 from public.tasks where id = '57800000-0000-0000-0000-000000000201')
      or exists (select 1 from public.projects where id = '57800000-0000-0000-0000-000000000101')
-     or exists (select 1 from public.recurring_tasks where id = '57800000-0000-0000-0000-000000000301')
      or exists (select 1 from public.habits where id = '57800000-0000-0000-0000-000000000401')
      or exists (select 1 from public.habit_logs where id = '57800000-0000-0000-0000-000000000501')
      or exists (select 1 from public.habit_milestones where id = '57800000-0000-0000-0000-000000000601')
@@ -2190,10 +2051,6 @@ begin
   perform pg_temp.ralph_578_expect_hidden(
     $$select count(*) from public.projects where id = '57800000-0000-0000-0000-000000000101'$$,
     'anonymous project read'
-  );
-  perform pg_temp.ralph_578_expect_hidden(
-    $$select count(*) from public.recurring_tasks where id = '57800000-0000-0000-0000-000000000301'$$,
-    'anonymous recurring-task read'
   );
   perform pg_temp.ralph_578_expect_hidden(
     $$select count(*) from public.habits where id = '57800000-0000-0000-0000-000000000401'$$,
@@ -2257,21 +2114,6 @@ begin
     $$delete from public.projects where id = '57800000-0000-0000-0000-000000000101'$$,
     '42501',
     'anonymous project delete'
-  );
-  perform pg_temp.ralph_578_expect_sqlstate(
-    $$insert into public.recurring_tasks (id, user_id, title, recurrence_rule, start_date) values ('57800000-0000-0000-0000-000000000306', '57800000-0000-0000-0000-000000000001', 'anonymous recurring insert', '{"frequency":"daily"}', '2026-08-05')$$,
-    '42501',
-    'anonymous recurring-task insert'
-  );
-  perform pg_temp.ralph_578_expect_sqlstate(
-    $$update public.recurring_tasks set title = 'anonymous recurring update' where id = '57800000-0000-0000-0000-000000000301'$$,
-    '42501',
-    'anonymous recurring-task update'
-  );
-  perform pg_temp.ralph_578_expect_sqlstate(
-    $$delete from public.recurring_tasks where id = '57800000-0000-0000-0000-000000000301'$$,
-    '42501',
-    'anonymous recurring-task delete'
   );
   perform pg_temp.ralph_578_expect_sqlstate(
     $$insert into public.habits (id, user_id, name, frequency) values ('57800000-0000-0000-0000-000000000406', '57800000-0000-0000-0000-000000000001', 'anonymous habit insert', '{"type":"daily"}')$$,
@@ -2460,10 +2302,6 @@ begin
     where id = '57800000-0000-0000-0000-000000000801'
       and title = 'Owner calendar event'
   ) or not exists (
-    select 1 from public.recurring_tasks
-    where id = '57800000-0000-0000-0000-000000000301'
-      and title = 'Owner recurring task'
-  ) or not exists (
     select 1 from public.habit_milestones
     where id = '57800000-0000-0000-0000-000000000601'
       and milestone = 7
@@ -2493,8 +2331,6 @@ begin
     from public.tasks where id in ('57800000-0000-0000-0000-000000000206', '57800000-0000-0000-0000-000000000207')
   ) or exists (
     select 1 from public.projects where id in ('57800000-0000-0000-0000-000000000106', '57800000-0000-0000-0000-000000000107')
-  ) or exists (
-    select 1 from public.recurring_tasks where id in ('57800000-0000-0000-0000-000000000306', '57800000-0000-0000-0000-000000000307')
   ) or exists (
     select 1 from public.habits where id in ('57800000-0000-0000-0000-000000000406', '57800000-0000-0000-0000-000000000405')
   ) or exists (
@@ -2526,7 +2362,6 @@ do $block$
 begin
   if not exists (select 1 from public.tasks where id = '57800000-0000-0000-0000-000000000202' and title = 'Other task')
      or not exists (select 1 from public.projects where id = '57800000-0000-0000-0000-000000000102' and name = 'Other project')
-     or not exists (select 1 from public.recurring_tasks where id = '57800000-0000-0000-0000-000000000302' and title = 'Other recurring task')
      or not exists (select 1 from public.habits where id = '57800000-0000-0000-0000-000000000402' and name = 'Other habit')
      or not exists (select 1 from public.habit_logs where id = '57800000-0000-0000-0000-000000000502' and completed)
      or not exists (select 1 from public.habit_milestones where id = '57800000-0000-0000-0000-000000000602' and milestone = 14)
@@ -2541,7 +2376,6 @@ begin
      or not exists (select 1 from public.push_subscriptions where id = '57800000-0000-0000-0000-000000001102' and user_agent = 'planning-other-agent')
      or exists (select 1 from public.tasks where id in ('57800000-0000-0000-0000-000000000204', '57800000-0000-0000-0000-000000000207'))
      or exists (select 1 from public.projects where id in ('57800000-0000-0000-0000-000000000104', '57800000-0000-0000-0000-000000000107'))
-     or exists (select 1 from public.recurring_tasks where id in ('57800000-0000-0000-0000-000000000304', '57800000-0000-0000-0000-000000000307'))
      or exists (select 1 from public.habits where id in ('57800000-0000-0000-0000-000000000404', '57800000-0000-0000-0000-000000000405'))
      or exists (select 1 from public.habit_logs where id in ('57800000-0000-0000-0000-000000000504', '57800000-0000-0000-0000-000000000505'))
      or exists (select 1 from public.habit_milestones where id in ('57800000-0000-0000-0000-000000000604', '57800000-0000-0000-0000-000000000605'))

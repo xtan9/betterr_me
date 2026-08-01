@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   OccurrenceAdapter,
-  toLegacyTaskUpdate,
+  toTaskUpdate,
   toOccurrenceEditIntent,
   type OccurrenceAdapterPersistence,
 } from "@/lib/recurring-tasks/occurrence-adapter";
@@ -25,9 +25,6 @@ function recurringTask(overrides: Partial<Task> = {}): Task {
     section: "personal",
     sort_order: 65536,
     project_id: null,
-    recurring_task_id: "series-1",
-    is_exception: false,
-    original_date: "2026-08-01",
     recurring_series_id: "series-1",
     recurring_occurrence_id: "occurrence-1",
     scheduled_date: "2026-08-01",
@@ -50,18 +47,9 @@ function lifecycleSuccess(status: "complete" | "already-applied" = "complete") {
   } as never;
 }
 
-function createPersistence(
-  task: Task = recurringTask(),
-): OccurrenceAdapterPersistence & {
-  legacy: NonNullable<OccurrenceAdapterPersistence["legacy"]>;
-} {
+function createPersistence(task: Task = recurringTask()): OccurrenceAdapterPersistence {
   return {
     getTask: vi.fn().mockResolvedValue(task),
-    legacy: {
-      edit: vi.fn().mockResolvedValue(task),
-      editScoped: vi.fn().mockResolvedValue(undefined),
-      toggle: vi.fn().mockResolvedValue(task),
-    },
   };
 }
 
@@ -120,7 +108,6 @@ describe("OccurrenceAdapter", () => {
         title: "Move review",
       },
     });
-    expect(persistence.legacy.edit).not.toHaveBeenCalled();
   });
 
   it("maps completion and reopening to explicit lifecycle commands", async () => {
@@ -188,7 +175,7 @@ describe("OccurrenceAdapter", () => {
     expect(outcome).toEqual(conflict);
   });
 
-  it("keeps the lifecycle path opt-in and uses the legacy adapter by default", async () => {
+  it("requires the lifecycle for recurring occurrence edits", async () => {
     const persistence = createPersistence();
     const adapter = new OccurrenceAdapter(persistence);
 
@@ -199,20 +186,14 @@ describe("OccurrenceAdapter", () => {
     }));
 
     expect(outcome).toEqual({
-      status: "complete",
-      type: "complete",
-      task: recurringTask(),
+      status: "invalid-transition",
+      type: "invalid-transition",
+      reason: "Recurring Task Lifecycle is not configured",
     });
-    expect(persistence.legacy.edit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        updates: { dueDate: "2026-08-05" },
-      }),
-      recurringTask(),
-    );
   });
 
-  it("preserves non-completion task statuses in the legacy projection", () => {
-    expect(toLegacyTaskUpdate(toOccurrenceEditIntent({
+  it("maps non-completion task statuses for standalone Task Writes", () => {
+    expect(toTaskUpdate(toOccurrenceEditIntent({
       userId: "user-1",
       taskId: "task-1",
       status: "in_progress",
@@ -222,7 +203,7 @@ describe("OccurrenceAdapter", () => {
     });
   });
 
-  it("returns a typed not-found outcome before any legacy edit", async () => {
+  it("returns a typed not-found outcome before any edit", async () => {
     const persistence = createPersistence();
     persistence.getTask = vi.fn().mockResolvedValue(null);
     const adapter = new OccurrenceAdapter(persistence);
@@ -234,6 +215,5 @@ describe("OccurrenceAdapter", () => {
     }));
 
     expect(outcome).toEqual({ status: "not-found", type: "not-found" });
-    expect(persistence.legacy.edit).not.toHaveBeenCalled();
   });
 });

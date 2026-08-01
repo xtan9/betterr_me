@@ -110,7 +110,7 @@ function TaskRow({
           >
             {task.title}
           </button>
-          {task.recurring_task_id && (
+          {task.recurring_series_id && (
             <Repeat className="size-3 text-muted-foreground" aria-label={t("recurring")} />
           )}
         </div>

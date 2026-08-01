@@ -32,7 +32,8 @@ import { useProjects } from "@/lib/hooks/use-projects";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { ProjectModal } from "@/components/projects/project-modal";
 import { ProjectDeleteDialog } from "@/components/projects/project-delete-dialog";
-import type { Task, RecurringTask, Project, TaskSection } from "@/lib/db/types";
+import type { Task, Project, TaskSection } from "@/lib/db/types";
+import type { RecurringTaskResponse } from "@/lib/recurring-tasks/compatibility";
 import { SectionBlock } from "./section-block";
 import { TasksPageSkeleton } from "./tasks-page-skeleton";
 
@@ -83,7 +84,7 @@ export function TasksPageContent() {
     data: pausedTemplates,
     error: pausedError,
     mutate: mutatePaused,
-  } = useSWR<RecurringTask[]>(
+  } = useSWR<RecurringTaskResponse[]>(
     "/api/recurring-tasks?status=paused",
     recurringFetcher,
     { revalidateOnFocus: true }

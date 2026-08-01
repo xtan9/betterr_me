@@ -92,9 +92,6 @@ const mockTask: Task = {
   project_id: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
-  recurring_task_id: null,
-  is_exception: false,
-  original_date: null,
 };
 
 describe('TaskForm', () => {

@@ -9,8 +9,7 @@ import type {
 } from '@/lib/validations/task';
 import type { EditScope } from '@/lib/validations/recurring-task';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { RecurringTasksDB, TasksDB } from '@/lib/db';
-import type { RecurringTaskLifecycleAdapter } from '@/lib/db/recurring-tasks';
+import { TasksDB } from '@/lib/db';
 import { getBottomSortOrder } from './sort-order';
 import type {
   LifecycleOutcome,
@@ -178,12 +177,6 @@ export interface TaskWritePersistence {
   getTask(taskId: string, userId: string): Promise<Task | null>;
   updateTask(taskId: string, userId: string, updates: TaskUpdate): Promise<Task>;
   deleteTask?: TaskDeletionPersistence['deleteTask'];
-  updateInstanceWithScope?(
-    taskId: string,
-    userId: string,
-    scope: EditScope,
-    updates: TaskUpdate,
-  ): Promise<void>;
   configureTaskReminders?: TaskReminderConfigurationPersistence['configureTaskReminders'];
   lifecycle?: Pick<
     RecurringTaskLifecyclePort,
@@ -212,16 +205,19 @@ type Clock = () => Date;
 export function createTaskWrites(
   supabase: SupabaseClient,
   options: {
-    scopedUpdates?: boolean;
-    lifecycle?: RecurringTaskLifecycleAdapter;
+    lifecycle?: Pick<
+      RecurringTaskLifecyclePort,
+      | 'editOccurrence'
+      | 'completeOccurrence'
+      | 'reopenOccurrence'
+      | 'getSeries'
+      | 'skipOccurrence'
+      | 'endSeries'
+      | 'deleteSeries'
+    >;
   } = {},
 ): TaskWrites {
   const tasksDB = new TasksDB(supabase);
-  const recurringTasksDB = options.scopedUpdates
-    ? new RecurringTasksDB(supabase, {
-      lifecycle: options.lifecycle,
-    })
-    : null;
   const taskReminderPersistence = new SupabaseTaskReminderConfigurationPersistence(
     supabase,
   );
@@ -247,9 +243,6 @@ export function createTaskWrites(
         ? { type: 'deleted' }
         : { type: 'not-found' };
     },
-    updateInstanceWithScope: recurringTasksDB
-      ? recurringTasksDB.updateInstanceWithScope.bind(recurringTasksDB)
-      : undefined,
     configureTaskReminders: taskReminderPersistence.configureTaskReminders.bind(
       taskReminderPersistence,
     ),
@@ -321,7 +314,7 @@ export class TaskWrites {
       );
     }
 
-    const seriesId = task.recurring_series_id ?? task.recurring_task_id;
+    const seriesId = task.recurring_series_id;
     const occurrenceId = task.recurring_occurrence_id;
     if (!seriesId || !occurrenceId) {
       return {
@@ -358,7 +351,7 @@ export class TaskWrites {
       );
     }
 
-    const scheduledDate = task.scheduled_date ?? task.original_date;
+    const scheduledDate = task.scheduled_date;
     if (!scheduledDate) {
       return {
         type: 'invalid-transition',
@@ -524,16 +517,9 @@ export class TaskWrites {
     if (intent.type === 'update') {
       const updates = this.prepareUpdate(intent.values);
       if (intent.scope) {
-        if (!this.persistence.updateInstanceWithScope) {
-          throw new Error('Scoped task updates are not supported by this persistence');
-        }
-        await this.persistence.updateInstanceWithScope(
-          intent.taskId,
-          intent.userId,
-          intent.scope,
-          updates,
+        throw new Error(
+          `Scoped task updates must use the Recurring Task Lifecycle adapter (scope: ${intent.scope})`,
         );
-        return { type: 'scoped-updated' };
       }
       if (this.persistence.lifecycle) {
         const current = await this.persistence.getTask(intent.taskId, intent.userId);
@@ -958,10 +944,8 @@ function normalizeTaskDeletionRequest(
 
 function isRecurringTask(task: Task): boolean {
   return Boolean(
-    task.recurring_task_id
-      || task.recurring_series_id
+    task.recurring_series_id
       || task.recurring_occurrence_id
-      || task.original_date
       || task.scheduled_date
       || task.recurrence_occurrence_state,
   );
