@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { type KeyedMutator } from "swr";
 import {
   decodeCurrentProfileResponse,
+  type CurrentProfile,
   type CurrentProfileResponse,
+  type PushQuietWindow,
 } from "@/lib/current-profile";
 import { createClient } from "@/lib/supabase/client";
 
@@ -32,6 +34,171 @@ export class CurrentProfileRequestError extends Error {
     super(message);
     this.name = "CurrentProfileRequestError";
   }
+}
+
+const PREFERENCE_CONCEPTS = [
+  "appearance",
+  "localization",
+  "fitness",
+  "notifications",
+] as const;
+
+type PreferenceConcept = (typeof PREFERENCE_CONCEPTS)[number];
+
+type PreferenceRevisionOutcome = Record<string, unknown> & {
+  preferenceRevision: number;
+  changed: boolean;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isPreferenceRevisionOutcome(
+  value: unknown,
+): value is PreferenceRevisionOutcome {
+  return (
+    isRecord(value) &&
+    typeof value.preferenceRevision === "number" &&
+    Number.isInteger(value.preferenceRevision) &&
+    value.preferenceRevision >= 0 &&
+    typeof value.changed === "boolean"
+  );
+}
+
+function readyPreference<Value>(value: Value) {
+  return { status: "ready" as const, value };
+}
+
+function isPushQuietWindow(value: unknown): value is PushQuietWindow {
+  return (
+    isRecord(value) &&
+    (value.status === "disabled" ||
+      (value.status === "enabled" &&
+        typeof value.startLocal === "string" &&
+        typeof value.endLocal === "string"))
+  );
+}
+
+function replacePreferenceIssue(
+  profile: CurrentProfile,
+  scope: CurrentProfile["issues"][number]["scope"],
+): CurrentProfile["issues"] {
+  return profile.issues.filter((issue) => issue.scope !== scope);
+}
+
+function applyNarrowPreferenceOutcome(
+  current: CurrentProfileResponse,
+  concept: PreferenceConcept,
+  outcome: unknown,
+): CurrentProfileResponse | undefined {
+  if (!isPreferenceRevisionOutcome(outcome) || !outcome.changed) return undefined;
+
+  const profile = current.currentProfile;
+  let nextProfile: CurrentProfile;
+
+  if (
+    concept === "appearance" &&
+    isRecord(outcome) &&
+    (outcome.theme === "system" ||
+      outcome.theme === "light" ||
+      outcome.theme === "dark")
+  ) {
+    nextProfile = {
+      ...profile,
+      preferences: {
+        ...profile.preferences,
+        preferenceRevision: Math.max(
+          profile.preferences.preferenceRevision,
+          outcome.preferenceRevision,
+        ),
+        appearance: { theme: readyPreference(outcome.theme) },
+      },
+      issues: replacePreferenceIssue(profile, "appearance.theme"),
+    };
+  } else if (
+    concept === "localization" &&
+    isRecord(outcome) &&
+    (outcome.weekStart === "sunday" || outcome.weekStart === "monday")
+  ) {
+    nextProfile = {
+      ...profile,
+      preferences: {
+        ...profile.preferences,
+        preferenceRevision: Math.max(
+          profile.preferences.preferenceRevision,
+          outcome.preferenceRevision,
+        ),
+        localization: { weekStart: readyPreference(outcome.weekStart) },
+      },
+      issues: replacePreferenceIssue(profile, "localization.weekStart"),
+    };
+  } else if (
+    concept === "fitness" &&
+    isRecord(outcome) &&
+    (outcome.weightUnit === "kg" || outcome.weightUnit === "lbs")
+  ) {
+    nextProfile = {
+      ...profile,
+      preferences: {
+        ...profile.preferences,
+        preferenceRevision: Math.max(
+          profile.preferences.preferenceRevision,
+          outcome.preferenceRevision,
+        ),
+        fitness: { weightUnit: readyPreference(outcome.weightUnit) },
+      },
+      issues: replacePreferenceIssue(profile, "fitness.weightUnit"),
+    };
+  } else if (
+    concept === "notifications" &&
+    isRecord(outcome) &&
+    isRecord(outcome.reminderEmail) &&
+    typeof outcome.reminderEmail.enabled === "boolean"
+  ) {
+    nextProfile = {
+      ...profile,
+      preferences: {
+        ...profile.preferences,
+        preferenceRevision: Math.max(
+          profile.preferences.preferenceRevision,
+          outcome.preferenceRevision,
+        ),
+        notifications: {
+          ...profile.preferences.notifications,
+          reminderEmail: {
+            status: "ready",
+            value: { enabled: outcome.reminderEmail.enabled },
+          },
+        },
+      },
+      issues: replacePreferenceIssue(profile, "notifications.reminderEmail"),
+    };
+  } else if (
+    concept === "notifications" &&
+    isRecord(outcome) &&
+    isPushQuietWindow(outcome.pushQuietWindow)
+  ) {
+    nextProfile = {
+      ...profile,
+      preferences: {
+        ...profile.preferences,
+        preferenceRevision: Math.max(
+          profile.preferences.preferenceRevision,
+          outcome.preferenceRevision,
+        ),
+        notifications: {
+          ...profile.preferences.notifications,
+          pushQuietWindow: readyPreference(outcome.pushQuietWindow),
+        },
+      },
+      issues: replacePreferenceIssue(profile, "notifications.pushQuietWindow"),
+    };
+  } else {
+    return undefined;
+  }
+
+  return { ...current, currentProfile: nextProfile };
 }
 
 export async function fetchCurrentProfile(): Promise<CurrentProfileResponse> {
@@ -111,6 +278,10 @@ export interface UseCurrentProfileResult {
   isLoading: boolean;
   mutate: KeyedMutator<CurrentProfileResponse>;
   revalidate: () => Promise<CurrentProfileResponse | undefined>;
+  applyAcceptedPreferenceOutcome: (
+    concept: string,
+    outcome: unknown,
+  ) => boolean;
 }
 
 function currentProfileUnavailableReason(
@@ -152,6 +323,30 @@ export function useCurrentProfile(
   const acceptedSnapshotRef = useRef<CurrentProfileResponse | undefined>(
     acceptedSnapshot,
   );
+  const appliedPreferenceRevisionsRef = useRef<Record<string, number>>(
+    options.initialData
+      ? Object.fromEntries(
+          PREFERENCE_CONCEPTS.map((concept) => [
+            concept,
+            options.initialData!.currentProfile.preferences.preferenceRevision,
+          ]),
+        )
+      : {},
+  );
+
+  const recordAcceptedPreferenceRevision = useCallback(
+    (snapshot: CurrentProfileResponse | undefined) => {
+      if (!snapshot) return;
+      const revision = snapshot.currentProfile.preferences.preferenceRevision;
+      for (const concept of PREFERENCE_CONCEPTS) {
+        appliedPreferenceRevisionsRef.current[concept] = Math.max(
+          appliedPreferenceRevisionsRef.current[concept] ?? 0,
+          revision,
+        );
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let active = true;
@@ -178,6 +373,7 @@ export function useCurrentProfile(
         setHydrationData(undefined);
         setAcceptedSnapshot(undefined);
         acceptedSnapshotRef.current = undefined;
+        appliedPreferenceRevisionsRef.current = {};
       } else if (subjectRef.current === undefined) {
         sessionVersionRef.current += 1;
         setSessionVersion(sessionVersionRef.current);
@@ -213,9 +409,10 @@ export function useCurrentProfile(
       next,
     );
     acceptedSnapshotRef.current = accepted;
+    recordAcceptedPreferenceRevision(accepted);
     setAcceptedSnapshot(accepted);
     return accepted;
-  }, [sessionVersion, subject]);
+  }, [recordAcceptedPreferenceRevision, sessionVersion, subject]);
   const query = useSWR<CurrentProfileResponse>(key, profileFetcher, {
     fallbackData: hydrationData,
     keepPreviousData: false,
@@ -231,9 +428,10 @@ export function useCurrentProfile(
         query.data,
       );
       acceptedSnapshotRef.current = accepted;
+      recordAcceptedPreferenceRevision(accepted);
       setAcceptedSnapshot(accepted);
     }
-  }, [query.data]);
+  }, [query.data, recordAcceptedPreferenceRevision]);
 
   const revalidate = useCallback(async () => {
     return query.mutate(
@@ -247,12 +445,50 @@ export function useCurrentProfile(
         }
         const accepted = acceptCurrentProfileSnapshot(acceptedSnapshotRef.current ?? current, next);
         acceptedSnapshotRef.current = accepted;
+        recordAcceptedPreferenceRevision(accepted);
         setAcceptedSnapshot(accepted);
         return accepted;
       },
       { revalidate: false },
     );
-  }, [query, sessionVersion, subject]);
+  }, [query, recordAcceptedPreferenceRevision, sessionVersion, subject]);
+
+  const applyAcceptedPreferenceOutcome = useCallback(
+    (concept: string, outcome: unknown) => {
+      if (!PREFERENCE_CONCEPTS.includes(concept as PreferenceConcept)) {
+        return false;
+      }
+      if (!isPreferenceRevisionOutcome(outcome) || !outcome.changed) {
+        return false;
+      }
+
+      const current = acceptedSnapshotRef.current;
+      if (!current) return false;
+
+      const preferenceConcept = concept as PreferenceConcept;
+      const currentRevision =
+        appliedPreferenceRevisionsRef.current[preferenceConcept] ??
+        current.currentProfile.preferences.preferenceRevision;
+      if (outcome.preferenceRevision <= currentRevision) return false;
+
+      const accepted = applyNarrowPreferenceOutcome(
+        current,
+        preferenceConcept,
+        outcome,
+      );
+      if (!accepted) return false;
+
+      appliedPreferenceRevisionsRef.current[preferenceConcept] =
+        outcome.preferenceRevision;
+      acceptedSnapshotRef.current = accepted;
+      setAcceptedSnapshot(accepted);
+      void Promise.resolve(query.mutate(accepted, { revalidate: false })).catch(
+        () => undefined,
+      );
+      return true;
+    },
+    [query],
+  );
 
   const acceptedData = query.data
     ? acceptCurrentProfileSnapshot(acceptedSnapshot, query.data)
@@ -282,6 +518,7 @@ export function useCurrentProfile(
     isLoading,
     mutate: query.mutate,
     revalidate,
+    applyAcceptedPreferenceOutcome,
   };
 }
 
@@ -323,7 +560,7 @@ export function useCurrentProfileCommands(
   options: UseCurrentProfileOptions = {},
 ): UseCurrentProfileCommandsResult {
   const profile = useCurrentProfile(options);
-  const { revalidate, sessionVersion } = profile;
+  const { applyAcceptedPreferenceOutcome, revalidate, sessionVersion } = profile;
   const [pendingState, setPendingState] = useState<{
     sessionVersion: number;
     values: Record<string, unknown>;
@@ -401,6 +638,7 @@ export function useCurrentProfileCommands(
                 delete next[concept];
                 return { sessionVersion: requestSessionVersion, values: next };
               });
+              applyAcceptedPreferenceOutcome(concept, result);
               await revalidate();
             }
             return result;
@@ -431,7 +669,7 @@ export function useCurrentProfileCommands(
       };
       return operation;
     },
-    [revalidate, sessionVersion],
+    [applyAcceptedPreferenceOutcome, revalidate, sessionVersion],
   );
 
   const isPending = useCallback(
