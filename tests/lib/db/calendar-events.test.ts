@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CalendarEventsDB } from "@/lib/db/calendar-events";
 import { mockSupabaseClient } from "../../setup";
 import {
@@ -6,14 +6,8 @@ import {
   restoreMockSupabaseThen,
 } from "../../helpers/mock-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  CalendarEvent,
-  CalendarEventInsert,
-  CalendarEventUpdate,
-} from "@/lib/db/types";
+import type { CalendarEvent } from "@/lib/db/types";
 
-// Source uses no logger, but we still install a mock so accidental future
-// log.* calls fail loud rather than pollute test output.
 vi.mock("@/lib/logger", () => ({
   log: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
@@ -50,7 +44,7 @@ function makeEvent(over: Partial<CalendarEvent> = {}): CalendarEvent {
   };
 }
 
-describe("CalendarEventsDB", () => {
+describe("CalendarEventsDB query-only persistence", () => {
   let db: CalendarEventsDB;
 
   beforeEach(() => {
@@ -59,423 +53,105 @@ describe("CalendarEventsDB", () => {
     db = new CalendarEventsDB(mockSupabaseClient as unknown as SupabaseClient);
   });
 
-  afterEach(() => {
-    restoreMockSupabaseThen();
-  });
+  afterEach(() => restoreMockSupabaseThen());
 
-  // ─── getUserEvents ────────────────────────────────────────────────────────
   describe("getUserEvents", () => {
-    // The exact .or() filter string source uses. Mutating any part of this
-    // changes observable behavior in production, so we assert on it literally.
-    const OR_FILTER = `and(start_date.lte.${END_DATE},end_date.gte.${START_DATE},is_recurring.eq.false,is_exception.eq.false),and(is_recurring.eq.true,start_date.lte.${END_DATE}),and(is_exception.eq.true)`;
+    const orFilter = `and(start_date.lte.${END_DATE},end_date.gte.${START_DATE},is_recurring.eq.false,is_exception.eq.false),and(is_recurring.eq.true,start_date.lte.${END_DATE}),and(is_exception.eq.true)`;
 
-    it("fetches events in a date range with the full filter + ordering", async () => {
+    it("fetches the owner-scoped date range with recurrence filters and ordering", async () => {
       const events = [makeEvent()];
       queueThenResponses([{ data: events, error: null }]);
 
-      const result = await db.getUserEvents(USER_ID, START_DATE, END_DATE);
+      await expect(db.getUserEvents(USER_ID, START_DATE, END_DATE)).resolves.toEqual(events);
 
-      expect(result).toEqual(events);
-
-      // Single-phase method → full chain via expectQuery.
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "from",
-        args: ["calendar_events"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "select",
-        args: ["*"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["user_id", USER_ID],
-      });
-      // The OR filter is highly specific — mutating any literal in the
-      // template breaks this assertion.
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "or",
-        args: [OR_FILTER],
-      });
-      // Two ordered clauses — both column + direction are asserted so
-      // Stryker can't flip ascending:true→false silently.
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "order",
-        args: ["start_date", { ascending: true }],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "order",
-        args: ["start_time", { ascending: true }],
-      });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "from", args: ["calendar_events"] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "select", args: ["*"] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "eq", args: ["user_id", USER_ID] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "or", args: [orFilter] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "order", args: ["start_date", { ascending: true }] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "order", args: ["start_time", { ascending: true }] });
     });
 
-    it("returns an empty array when data is null", async () => {
+    it("returns an empty array for no rows and propagates query failures", async () => {
       queueThenResponses([{ data: null, error: null }]);
+      await expect(db.getUserEvents(USER_ID, START_DATE, END_DATE)).resolves.toEqual([]);
 
-      const result = await db.getUserEvents(USER_ID, START_DATE, END_DATE);
-
-      expect(result).toEqual([]);
+      queueThenResponses([{ data: null, error: new Error("DB error") }]);
+      await expect(db.getUserEvents(USER_ID, START_DATE, END_DATE)).rejects.toThrow("DB error");
     });
 
-    it("throws when the query errors", async () => {
-      queueThenResponses([
-        { data: null, error: new Error("DB error") },
-      ]);
-
-      await expect(
-        db.getUserEvents(USER_ID, START_DATE, END_DATE),
-      ).rejects.toThrow("DB error");
-    });
-
-    it("embeds the supplied endDate/startDate into the OR filter (catches reversed args)", async () => {
-      const alt = `and(start_date.lte.2026-05-31,end_date.gte.2026-05-01,is_recurring.eq.false,is_exception.eq.false),and(is_recurring.eq.true,start_date.lte.2026-05-31),and(is_exception.eq.true)`;
+    it("embeds the supplied range in the filter", async () => {
+      const alternate = `and(start_date.lte.2026-05-31,end_date.gte.2026-05-01,is_recurring.eq.false,is_exception.eq.false),and(is_recurring.eq.true,start_date.lte.2026-05-31),and(is_exception.eq.true)`;
       queueThenResponses([{ data: [], error: null }]);
 
       await db.getUserEvents(USER_ID, "2026-05-01", "2026-05-31");
-
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "or",
-        args: [alt],
-      });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "or", args: [alternate] });
     });
   });
 
-  // ─── getEvent ─────────────────────────────────────────────────────────────
   describe("getEvent", () => {
-    it("fetches a single event by id + user and asserts the full chain", async () => {
+    it("fetches one event by owner and id", async () => {
       const event = makeEvent();
       mockSupabaseClient.setMockResponse(event);
 
-      const result = await db.getEvent(EVENT_ID, USER_ID);
-
-      expect(result).toEqual(event);
-
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "from",
-        args: ["calendar_events"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "select",
-        args: ["*"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["id", EVENT_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["user_id", USER_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "single",
-        args: [],
-      });
+      await expect(db.getEvent(EVENT_ID, USER_ID)).resolves.toEqual(event);
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "from", args: ["calendar_events"] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "select", args: ["*"] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "eq", args: ["id", EVENT_ID] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "eq", args: ["user_id", USER_ID] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "single", args: [] });
     });
 
-    it("returns null when PGRST116 (row not found) is raised", async () => {
+    it("maps PGRST116 to null and propagates other errors", async () => {
       mockSupabaseClient.setMockResponse(null, { code: "PGRST116" });
+      await expect(db.getEvent("missing", USER_ID)).resolves.toBeNull();
 
-      const result = await db.getEvent("missing", USER_ID);
-
-      expect(result).toBeNull();
-    });
-
-    it("throws when a non-PGRST116 error is raised", async () => {
-      mockSupabaseClient.setMockResponse(null, {
-        code: "OTHER_ERROR",
-        message: "DB error",
-      });
-
-      await expect(db.getEvent(EVENT_ID, USER_ID)).rejects.toEqual({
-        code: "OTHER_ERROR",
-        message: "DB error",
-      });
+      mockSupabaseClient.setMockResponse(null, { code: "OTHER_ERROR", message: "DB error" });
+      await expect(db.getEvent(EVENT_ID, USER_ID)).rejects.toEqual({ code: "OTHER_ERROR", message: "DB error" });
     });
   });
 
-  // ─── createEvent ──────────────────────────────────────────────────────────
-  describe("createEvent", () => {
-    const insertPayload: Omit<CalendarEventInsert, "user_id"> = {
-      title: "Team Meeting",
-      description: "Weekly sync",
-      start_date: "2026-03-30",
-      start_time: "10:00:00",
-      end_date: "2026-03-30",
-      end_time: "11:00:00",
-      location: "Conference Room A",
-      color: "#4285f4",
-      category_id: null,
-      is_recurring: false,
-      recurrence_rule: null,
-      end_type: null,
-      end_date_recurrence: null,
-      end_count: null,
-      recurring_event_id: null,
-      original_date: null,
-      is_exception: false,
-    };
-
-    it("inserts { ...event, user_id } and returns the new row", async () => {
-      const expected = makeEvent();
-      mockSupabaseClient.setMockResponse(expected);
-
-      const result = await db.createEvent(USER_ID, insertPayload);
-
-      expect(result).toEqual(expected);
-
-      // The insert object literal is asserted in full — catches
-      // ObjectLiteral mutations that drop the spread or user_id.
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "from",
-        args: ["calendar_events"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "insert",
-        args: [{ ...insertPayload, user_id: USER_ID }],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "select",
-        args: [],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "single",
-        args: [],
-      });
-    });
-
-    it("throws when the insert fails", async () => {
-      mockSupabaseClient.setMockResponse(null, new Error("Insert error"));
-
-      await expect(db.createEvent(USER_ID, insertPayload)).rejects.toThrow(
-        "Insert error",
-      );
-    });
-  });
-
-  // ─── updateEvent ──────────────────────────────────────────────────────────
-  describe("updateEvent", () => {
-    const updates: CalendarEventUpdate = { title: "Updated Meeting" };
-
-    it("updates and returns the row, scoped by id + user", async () => {
-      const expected = makeEvent({ title: "Updated Meeting" });
-      mockSupabaseClient.setMockResponse(expected);
-
-      const result = await db.updateEvent(EVENT_ID, USER_ID, updates);
-
-      expect(result).toEqual(expected);
-
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "from",
-        args: ["calendar_events"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "update",
-        args: [updates],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["id", EVENT_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["user_id", USER_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "select",
-        args: [],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "single",
-        args: [],
-      });
-    });
-
-    it("throws when the update fails", async () => {
-      mockSupabaseClient.setMockResponse(null, new Error("Update error"));
-
-      await expect(
-        db.updateEvent(EVENT_ID, USER_ID, { title: "New" }),
-      ).rejects.toThrow("Update error");
-    });
-  });
-
-  // ─── deleteEvent ──────────────────────────────────────────────────────────
-  describe("deleteEvent", () => {
-    it("deletes the row scoped by id + user", async () => {
-      queueThenResponses([{ data: null, error: null }]);
-
-      await db.deleteEvent(EVENT_ID, USER_ID);
-
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "from",
-        args: ["calendar_events"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "delete",
-        args: [],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["id", EVENT_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["user_id", USER_ID],
-      });
-    });
-
-    it("throws when the delete fails", async () => {
-      queueThenResponses([
-        { data: null, error: new Error("Delete error") },
-      ]);
-
-      await expect(db.deleteEvent(EVENT_ID, USER_ID)).rejects.toThrow(
-        "Delete error",
-      );
-    });
-  });
-
-  // ─── getRecurringEvents ───────────────────────────────────────────────────
   describe("getRecurringEvents", () => {
-    it("fetches recurring events for a user, ordered by start_date asc", async () => {
+    it("fetches owner-scoped recurring events in date order", async () => {
       const events = [makeEvent({ is_recurring: true })];
       queueThenResponses([{ data: events, error: null }]);
 
-      const result = await db.getRecurringEvents(USER_ID);
-
-      expect(result).toEqual(events);
-
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "from",
-        args: ["calendar_events"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "select",
-        args: ["*"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["user_id", USER_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["is_recurring", true],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "order",
-        args: ["start_date", { ascending: true }],
-      });
+      await expect(db.getRecurringEvents(USER_ID)).resolves.toEqual(events);
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "from", args: ["calendar_events"] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "select", args: ["*"] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "eq", args: ["user_id", USER_ID] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "eq", args: ["is_recurring", true] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "order", args: ["start_date", { ascending: true }] });
     });
 
-    it("returns an empty array when data is null", async () => {
+    it("returns an empty array and propagates errors", async () => {
       queueThenResponses([{ data: null, error: null }]);
+      await expect(db.getRecurringEvents(USER_ID)).resolves.toEqual([]);
 
-      const result = await db.getRecurringEvents(USER_ID);
-
-      expect(result).toEqual([]);
-    });
-
-    it("throws when the query errors", async () => {
-      queueThenResponses([
-        { data: null, error: new Error("select failed") },
-      ]);
-
-      await expect(db.getRecurringEvents(USER_ID)).rejects.toThrow(
-        "select failed",
-      );
+      queueThenResponses([{ data: null, error: new Error("select failed") }]);
+      await expect(db.getRecurringEvents(USER_ID)).rejects.toThrow("select failed");
     });
   });
 
-  // ─── getExceptions ────────────────────────────────────────────────────────
   describe("getExceptions", () => {
-    const RECURRING_ID = "parent-123";
-
-    it("fetches exceptions scoped by user + recurring parent + is_exception=true", async () => {
-      const events = [
-        makeEvent({
-          is_exception: true,
-          recurring_event_id: RECURRING_ID,
-        }),
-      ];
+    it("fetches owner-scoped exceptions for a recurring parent", async () => {
+      const events = [makeEvent({ is_exception: true, recurring_event_id: "parent-123" })];
       queueThenResponses([{ data: events, error: null }]);
 
-      const result = await db.getExceptions(USER_ID, RECURRING_ID);
-
-      expect(result).toEqual(events);
-
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "from",
-        args: ["calendar_events"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "select",
-        args: ["*"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["user_id", USER_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["recurring_event_id", RECURRING_ID],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "calendar_events",
-        method: "eq",
-        args: ["is_exception", true],
-      });
+      await expect(db.getExceptions(USER_ID, "parent-123")).resolves.toEqual(events);
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "from", args: ["calendar_events"] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "select", args: ["*"] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "eq", args: ["user_id", USER_ID] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "eq", args: ["recurring_event_id", "parent-123"] });
+      mockSupabaseClient.expectQuery({ table: "calendar_events", method: "eq", args: ["is_exception", true] });
     });
 
-    it("returns an empty array when data is null", async () => {
+    it("returns an empty array and propagates errors", async () => {
       queueThenResponses([{ data: null, error: null }]);
+      await expect(db.getExceptions(USER_ID, "parent-123")).resolves.toEqual([]);
 
-      const result = await db.getExceptions(USER_ID, RECURRING_ID);
-
-      expect(result).toEqual([]);
-    });
-
-    it("throws when the query errors", async () => {
-      queueThenResponses([
-        { data: null, error: new Error("exceptions query failed") },
-      ]);
-
-      await expect(db.getExceptions(USER_ID, RECURRING_ID)).rejects.toThrow(
-        "exceptions query failed",
-      );
+      queueThenResponses([{ data: null, error: new Error("exceptions query failed") }]);
+      await expect(db.getExceptions(USER_ID, "parent-123")).rejects.toThrow("exceptions query failed");
     });
   });
 });

@@ -23,10 +23,10 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/scheduling/lifecycle', () => ({
-  SchedulingLifecycle: class {
-    create = mockCreateEvent;
-  },
+vi.mock('@/lib/scheduling/writes', () => ({
+  createSchedulingWrites: vi.fn(() => ({ create: mockCreateEvent })),
+  toCalendarEventResponse: (event: unknown) => event,
+  toReminderResponse: (reminder: unknown) => reminder,
 }));
 vi.mock('@/lib/calendar/recurrence', () => ({
   expandEventsForRange: mockExpandEventsForRange,
@@ -268,13 +268,14 @@ describe('POST /api/calendar-events', () => {
 
     expect(response.status).toBe(201);
     expect(data.event).toEqual(mockEvent);
-    expect(mockCreateEvent).toHaveBeenCalledWith('user-123', {
+    expect(mockCreateEvent).toHaveBeenCalledWith({
+      userId: 'user-123',
       event: expect.objectContaining({
         title: 'Test Event',
-        start_date: '2026-04-01',
-        start_time: '10:00:00',
-        end_date: '2026-04-01',
-        end_time: '11:00:00',
+        startDate: '2026-04-01',
+        startTime: '10:00:00',
+        endDate: '2026-04-01',
+        endTime: '11:00:00',
       }),
       reminders: [],
     });
@@ -298,10 +299,11 @@ describe('POST /api/calendar-events', () => {
     expect(response.status).toBe(201);
     expect(data.event.start_time).toBeNull();
     expect(data.event.end_time).toBeNull();
-    expect(mockCreateEvent).toHaveBeenCalledWith('user-123', {
+    expect(mockCreateEvent).toHaveBeenCalledWith({
+      userId: 'user-123',
       event: expect.objectContaining({
-        start_time: null,
-        end_time: null,
+        startTime: null,
+        endTime: null,
       }),
       reminders: [],
     });
@@ -335,11 +337,16 @@ describe('POST /api/calendar-events', () => {
 
     expect(response.status).toBe(201);
     expect(data.event.is_recurring).toBe(true);
-    expect(mockCreateEvent).toHaveBeenCalledWith('user-123', {
+    expect(mockCreateEvent).toHaveBeenCalledWith({
+      userId: 'user-123',
       event: expect.objectContaining({
-        is_recurring: true,
-        recurrence_rule: recurrenceRule,
-        end_type: 'never',
+        isRecurring: true,
+        recurrenceRule: {
+          frequency: 'weekly',
+          interval: 1,
+          daysOfWeek: [1, 3, 5],
+        },
+        endType: 'never',
       }),
       reminders: [],
     });
@@ -371,11 +378,12 @@ describe('POST /api/calendar-events', () => {
 
     expect(response.status).toBe(201);
     expect(data.event.is_exception).toBe(true);
-    expect(mockCreateEvent).toHaveBeenCalledWith('user-123', {
+    expect(mockCreateEvent).toHaveBeenCalledWith({
+      userId: 'user-123',
       event: expect.objectContaining({
-        is_exception: true,
-        recurring_event_id: '550e8400-e29b-41d4-a716-446655440099',
-        original_date: '2026-04-08',
+        isException: true,
+        recurringEventId: '550e8400-e29b-41d4-a716-446655440099',
+        originalDate: '2026-04-08',
       }),
       reminders: [],
     });
