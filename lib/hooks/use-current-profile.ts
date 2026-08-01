@@ -8,6 +8,7 @@ import {
   type CurrentProfileResponse,
   type PushQuietWindow,
 } from "@/lib/current-profile";
+import { isThemePreference } from "@/lib/preferences/owners";
 import { createClient } from "@/lib/supabase/client";
 
 export const CURRENT_PROFILE_CACHE_KEY = "current-profile";
@@ -100,9 +101,7 @@ function applyNarrowPreferenceOutcome(
   if (
     concept === "appearance" &&
     isRecord(outcome) &&
-    (outcome.theme === "system" ||
-      outcome.theme === "light" ||
-      outcome.theme === "dark")
+    isThemePreference(outcome.theme)
   ) {
     nextProfile = {
       ...profile,

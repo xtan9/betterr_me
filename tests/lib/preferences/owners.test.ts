@@ -17,6 +17,21 @@ describe("Preference Owners", () => {
     });
   });
 
+  it("assigns System as the Appearance default when no Theme Preference is stored", () => {
+    expect(decodeAppearancePreferences(null)).toEqual({
+      theme: { status: "ready", value: "system" },
+    });
+    expect(decodeAppearancePreferences({})).toEqual({
+      theme: { status: "ready", value: "system" },
+    });
+  });
+
+  it("keeps an invalid stored Theme Preference unavailable", () => {
+    expect(decodeAppearancePreferences({ theme: "sepia" })).toEqual({
+      theme: { status: "unavailable", reason: "invalidStoredValue" },
+    });
+  });
+
   it("makes an invalid Weight Unit unavailable without affecting other owners", () => {
     expect(decodeFitnessPreferences({ weight_unit: "stones" })).toEqual({
       weightUnit: { status: "unavailable", reason: "invalidStoredValue" },

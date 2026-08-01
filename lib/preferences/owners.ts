@@ -6,6 +6,7 @@ import {
   type PreferenceState,
   type PreferenceStorage,
   type PushQuietWindow,
+  type ThemePreference,
   type UserTimeZone,
   type WeekStartPreference,
 } from "./types";
@@ -23,6 +24,16 @@ export type {
   WeekStartPreference,
   WeightUnitPreference,
 } from "./types";
+
+export const THEME_PREFERENCE_VALUES = ["system", "light", "dark"] as const;
+export const DEFAULT_THEME_PREFERENCE: ThemePreference = "system";
+
+export function isThemePreference(value: unknown): value is ThemePreference {
+  return (
+    typeof value === "string" &&
+    THEME_PREFERENCE_VALUES.includes(value as ThemePreference)
+  );
+}
 
 const unavailable = <Value>(
   reason: import("./types").PreferenceUnavailableReason,
@@ -46,8 +57,12 @@ export function decodeAppearancePreferences(
   preferences: PreferenceStorage,
 ): AppearancePreferences {
   const stored = isRecord(preferences) ? preferences : null;
+  const storedTheme = stored?.theme;
   return {
-    theme: decodeEnum(stored?.theme, ["system", "light", "dark"]),
+    theme:
+      storedTheme === undefined
+        ? { status: "ready", value: DEFAULT_THEME_PREFERENCE }
+        : decodeEnum(storedTheme, THEME_PREFERENCE_VALUES),
   };
 }
 

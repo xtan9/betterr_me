@@ -86,6 +86,44 @@ describe("domain-owned Preference commands", () => {
     expect(mockSetAppearancePreference).toHaveBeenCalledWith("dark");
   });
 
+  it.each(["system", "light", "dark"] as const)(
+    "accepts the strict Appearance Theme Preference value %s",
+    async (theme) => {
+      mockSetAppearancePreference.mockResolvedValue({
+        theme,
+        preferenceRevision: 4,
+        changed: false,
+      });
+
+      const response = await postAppearance(
+        request("/api/preferences/appearance", {
+          type: "setTheme",
+          theme,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({
+        theme,
+        preferenceRevision: 4,
+        changed: false,
+      });
+      expect(mockSetAppearancePreference).toHaveBeenCalledWith(theme);
+    },
+  );
+
+  it("rejects an unsupported Appearance Theme Preference value", async () => {
+    const response = await postAppearance(
+      request("/api/preferences/appearance", {
+        type: "setTheme",
+        theme: "sepia",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockSetAppearancePreference).not.toHaveBeenCalled();
+  });
+
   it("rejects a cross-domain or malformed Appearance intent", async () => {
     const response = await postAppearance(
       request("/api/preferences/appearance", {

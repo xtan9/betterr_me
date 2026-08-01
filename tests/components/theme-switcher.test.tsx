@@ -3,42 +3,28 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 
-// Mock next-themes
-const mockSetTheme = vi.fn();
-const mockMutateProfile = vi.fn();
-let mockTheme = 'system';
-let mockResolvedTheme: string | undefined = 'light';
-let mockProfileData: Record<string, unknown> | undefined;
-
-vi.mock('swr', () => ({
-  default: () => ({
-    data: mockProfileData,
-    error: undefined,
-    mutate: mockMutateProfile,
-  }),
+const { mockSelectTheme, mockAppearance } = vi.hoisted(() => ({
+  mockSelectTheme: vi.fn(),
+  mockAppearance: {
+    theme: "system",
+    resolvedTheme: "light" as string | undefined,
+  },
 }));
 
-vi.mock('next-themes', () => ({
-  useTheme: () => ({
-    theme: mockTheme,
-    setTheme: mockSetTheme,
-    resolvedTheme: mockResolvedTheme,
+vi.mock("@/lib/hooks/use-appearance", () => ({
+  useAppearance: () => ({
+    theme: mockAppearance.theme,
+    resolvedTheme: mockAppearance.resolvedTheme,
+    selectTheme: mockSelectTheme,
   }),
 }));
 
 describe('ThemeSwitcher', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockTheme = 'system';
-    mockResolvedTheme = 'light';
-    mockProfileData = undefined;
-    mockMutateProfile.mockResolvedValue(undefined);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        profile: { preferences: { theme: 'dark' } },
-      }),
-    }));
+    mockAppearance.theme = "system";
+    mockAppearance.resolvedTheme = "light";
+    mockSelectTheme.mockResolvedValue(undefined);
   });
 
   it('renders theme switcher button after mounting', async () => {
@@ -50,7 +36,7 @@ describe('ThemeSwitcher', () => {
   });
 
   it('shows sun icon when resolved theme is light', async () => {
-    mockResolvedTheme = 'light';
+    mockAppearance.resolvedTheme = 'light';
     render(<ThemeSwitcher />);
 
     await waitFor(() => {
@@ -62,7 +48,7 @@ describe('ThemeSwitcher', () => {
   });
 
   it('shows moon icon when resolved theme is dark', async () => {
-    mockResolvedTheme = 'dark';
+    mockAppearance.resolvedTheme = 'dark';
     render(<ThemeSwitcher />);
 
     await waitFor(() => {
@@ -91,7 +77,7 @@ describe('ThemeSwitcher', () => {
     });
   });
 
-  it('calls setTheme when light theme is selected', async () => {
+  it('delegates light theme selection to the Appearance owner', async () => {
     const user = userEvent.setup();
     render(<ThemeSwitcher />);
 
@@ -109,11 +95,11 @@ describe('ThemeSwitcher', () => {
     await user.click(screen.getByText('Light'));
 
     await waitFor(() => {
-      expect(mockSetTheme).toHaveBeenCalledWith('light');
+      expect(mockSelectTheme).toHaveBeenCalledWith('light');
     });
   });
 
-  it('calls setTheme when dark theme is selected', async () => {
+  it('delegates dark theme selection to the Appearance owner', async () => {
     const user = userEvent.setup();
     render(<ThemeSwitcher />);
 
@@ -131,37 +117,21 @@ describe('ThemeSwitcher', () => {
     await user.click(screen.getByText('Dark'));
 
     await waitFor(() => {
-      expect(mockSetTheme).toHaveBeenCalledWith('dark');
+      expect(mockSelectTheme).toHaveBeenCalledWith('dark');
     });
   });
 
-  it('submits only the selected theme for an authenticated profile', async () => {
-    mockProfileData = {
-      currentProfile: {
-        preferences: {
-          appearance: { theme: { status: 'ready', value: 'system' } },
-        },
-      },
-    };
+  it('delegates only the selected theme value to the Appearance owner', async () => {
     const user = userEvent.setup();
     render(<ThemeSwitcher />);
 
     await user.click(await screen.findByRole('button'));
     await user.click(await screen.findByText('Dark'));
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/preferences/appearance', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ type: 'setTheme', theme: 'dark' }),
-      });
-    });
+    await waitFor(() => expect(mockSelectTheme).toHaveBeenCalledWith("dark"));
   });
 
-  it('calls setTheme when system theme is selected', async () => {
+  it('delegates system theme selection to the Appearance owner', async () => {
     const user = userEvent.setup();
     render(<ThemeSwitcher />);
 
@@ -179,13 +149,13 @@ describe('ThemeSwitcher', () => {
     await user.click(screen.getByText('System'));
 
     await waitFor(() => {
-      expect(mockSetTheme).toHaveBeenCalledWith('system');
+      expect(mockSelectTheme).toHaveBeenCalledWith('system');
     });
   });
 
   it('does not manually manipulate document classes', async () => {
     document.documentElement.className = '';
-    mockResolvedTheme = 'dark';
+    mockAppearance.resolvedTheme = 'dark';
     render(<ThemeSwitcher />);
 
     await waitFor(() => {
