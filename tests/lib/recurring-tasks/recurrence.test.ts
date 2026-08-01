@@ -18,6 +18,211 @@ describe("calculateScheduledDates", () => {
 
     expect(result).toEqual(["2026-03-08", "2026-03-09", "2026-03-10"]);
   });
+
+  it("preserves weekly phase from the anchor when activation starts later", () => {
+    expect(calculateScheduledDates({
+      rule: {
+        frequency: "weekly",
+        interval: 2,
+        days_of_week: [3, 1, 3],
+      },
+      recurrenceAnchor: "2026-01-07",
+      activationDate: "2026-01-10",
+      range: { from: "2026-01-10", to: "2026-01-31" },
+    })).toEqual(["2026-01-19", "2026-01-21"]);
+  });
+
+  it("normalizes duplicate weekdays without mutating the recurrence rule", () => {
+    const daysOfWeek = [5, 1, 5, 1];
+    const rule = {
+      frequency: "weekly" as const,
+      interval: 1,
+      days_of_week: daysOfWeek,
+    };
+
+    expect(calculateScheduledDates({
+      rule,
+      recurrenceAnchor: "2026-01-05",
+      activationDate: "2026-01-05",
+      range: { from: "2026-01-05", to: "2026-01-11" },
+    })).toEqual(["2026-01-05", "2026-01-09"]);
+    expect(daysOfWeek).toEqual([5, 1, 5, 1]);
+  });
+
+  it("clamps monthly dates while keeping the activation boundary separate", () => {
+    expect(calculateScheduledDates({
+      rule: { frequency: "monthly", interval: 1, day_of_month: 31 },
+      recurrenceAnchor: "2026-01-31",
+      activationDate: "2026-02-01",
+      range: { from: "2026-02-01", to: "2026-04-30" },
+    })).toEqual(["2026-02-28", "2026-03-31", "2026-04-30"]);
+  });
+
+  it("clamps yearly leap-day dates in non-leap years", () => {
+    expect(calculateScheduledDates({
+      rule: {
+        frequency: "yearly",
+        interval: 1,
+        month_of_year: 2,
+        day_of_month: 29,
+      },
+      recurrenceAnchor: "2024-02-29",
+      activationDate: "2024-03-01",
+      range: { from: "2024-03-01", to: "2028-03-01" },
+    })).toEqual([
+      "2025-02-28",
+      "2026-02-28",
+      "2027-02-28",
+      "2028-02-29",
+    ]);
+  });
+
+  it.each([
+    ["first", 1, "2026-01-05"],
+    ["second", 2, "2026-01-13"],
+    ["third", 3, "2026-01-21"],
+    ["fourth", 4, "2026-01-22"],
+    ["last", 5, "2026-01-30"],
+  ] as const)("resolves the %s monthly weekday position", (position, dayOfWeek, expected) => {
+    expect(calculateScheduledDates({
+      rule: {
+        frequency: "monthly",
+        interval: 1,
+        week_position: position,
+        day_of_week_monthly: dayOfWeek,
+      },
+      recurrenceAnchor: "2026-01-01",
+      activationDate: "2026-01-01",
+      range: { from: "2026-01-01", to: "2026-01-31" },
+    })).toEqual([expected]);
+  });
+
+  it("treats activation and both local-date range endpoints as inclusive", () => {
+    expect(calculateScheduledDates({
+      rule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-01-01",
+      activationDate: "2026-01-03",
+      range: { from: "2026-01-03", to: "2026-01-05" },
+    })).toEqual(["2026-01-03", "2026-01-04", "2026-01-05"]);
+  });
+
+  it("handles valid local dates before year 100 without server-timezone dependence", () => {
+    expect(calculateScheduledDates({
+      rule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "0099-12-31",
+      activationDate: "0100-01-01",
+      range: { from: "0100-01-01", to: "0100-01-02" },
+    })).toEqual(["0100-01-01", "0100-01-02"]);
+  });
+
+  it("rejects weekly weekdays outside the local calendar week", () => {
+    expect(() => calculateScheduledDates({
+      rule: {
+        frequency: "weekly",
+        interval: 1,
+        days_of_week: [1, 7],
+      } as unknown as RecurrenceRule,
+      recurrenceAnchor: "2026-01-05",
+      activationDate: "2026-01-05",
+      range: { from: "2026-01-05", to: "2026-01-12" },
+    })).toThrow(RangeError);
+  });
+
+  it("rejects a yearly month outside the calendar year", () => {
+    expect(() => calculateScheduledDates({
+      rule: {
+        frequency: "yearly",
+        interval: 1,
+        month_of_year: 13,
+        day_of_month: 1,
+      } as unknown as RecurrenceRule,
+      recurrenceAnchor: "2026-01-01",
+      activationDate: "2026-01-01",
+      range: { from: "2026-01-01", to: "2027-12-31" },
+    })).toThrow(RangeError);
+  });
+
+  it("rejects an unsupported recurrence frequency", () => {
+    expect(() => calculateScheduledDates({
+      rule: {
+        frequency: "hourly",
+        interval: 1,
+      } as unknown as RecurrenceRule,
+      recurrenceAnchor: "2026-01-01",
+      activationDate: "2026-01-01",
+      range: { from: "2026-01-01", to: "2026-01-02" },
+    })).toThrow(RangeError);
+  });
+
+  it.each(["2026-02-30", "2026-13-01", "not-a-date"])(
+    "rejects an invalid local date: %s",
+    (invalidDate) => {
+      expect(() => calculateScheduledDates({
+        rule: { frequency: "daily", interval: 1 },
+        recurrenceAnchor: invalidDate,
+        activationDate: "2026-01-01",
+        range: { from: "2026-01-01", to: "2026-01-02" },
+      })).toThrow(RangeError);
+    },
+  );
+
+  it("does not overflow while skipping a large yearly interval", () => {
+    expect(calculateScheduledDates({
+      rule: {
+        frequency: "yearly",
+        interval: 10_000_000,
+        month_of_year: 1,
+        day_of_month: 1,
+      },
+      recurrenceAnchor: "2026-01-01",
+      activationDate: "2026-01-01",
+      range: { from: "2026-01-01", to: "2027-12-31" },
+    })).toEqual(["2026-01-01"]);
+  });
+
+  it("does not overflow while skipping a large monthly interval", () => {
+    expect(calculateScheduledDates({
+      rule: {
+        frequency: "monthly",
+        interval: 10_000_000,
+        day_of_month: 1,
+      },
+      recurrenceAnchor: "2026-01-01",
+      activationDate: "2026-01-01",
+      range: { from: "2026-01-01", to: "2027-12-31" },
+    })).toEqual(["2026-01-01"]);
+  });
+
+  it("does not overflow while skipping a large weekly interval", () => {
+    expect(calculateScheduledDates({
+      rule: {
+        frequency: "weekly",
+        interval: 20_000_000,
+        days_of_week: [1],
+      },
+      recurrenceAnchor: "2026-01-05",
+      activationDate: "2026-01-05",
+      range: { from: "2026-01-05", to: "2027-12-31" },
+    })).toEqual(["2026-01-05"]);
+  });
+
+  it("does not overflow while skipping a large daily interval", () => {
+    expect(calculateScheduledDates({
+      rule: { frequency: "daily", interval: 100_000_000 },
+      recurrenceAnchor: "2026-01-01",
+      activationDate: "2026-01-01",
+      range: { from: "2026-01-01", to: "2027-12-31" },
+    })).toEqual(["2026-01-01"]);
+  });
+
+  it("rejects intervals that cannot be represented exactly", () => {
+    expect(() => calculateScheduledDates({
+      rule: { frequency: "daily", interval: Number.MAX_SAFE_INTEGER + 1 },
+      recurrenceAnchor: "2026-01-01",
+      activationDate: "2026-01-01",
+      range: { from: "2026-01-01", to: "2026-01-02" },
+    })).toThrow(RangeError);
+  });
 });
 
 // =============================================================================

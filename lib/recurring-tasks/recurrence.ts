@@ -42,7 +42,9 @@ function formatDateParts([year, month, day]: DateParts): string {
 }
 
 function toUtcDate([year, month, day]: DateParts): Date {
-  return new Date(Date.UTC(year, month - 1, day));
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  return date;
 }
 
 function fromUtcDate(date: Date): string {
@@ -66,6 +68,9 @@ export function compareLocalDates(left: string, right: string): number {
 export function addLocalDays(dateString: string, days: number): string {
   const date = toUtcDate(parseDateParts(dateString));
   date.setUTCDate(date.getUTCDate() + days);
+  if (!Number.isFinite(date.getTime())) {
+    throw new RangeError("Local date is outside the supported calendar range");
+  }
   return fromUtcDate(date);
 }
 
@@ -82,14 +87,21 @@ export function isValidLocalDate(dateString: string): boolean {
   const day = Number(match[3]);
   if (month < 1 || month > 12 || day < 1) return false;
 
-  const lastDay = new Date(Date.UTC(year, month, 0));
-  return lastDay.getUTCFullYear() === year
+  const lastDay = new Date(0);
+  lastDay.setUTCFullYear(year, month, 0);
+  return Number.isFinite(lastDay.getTime())
+    && lastDay.getUTCFullYear() === year
     && lastDay.getUTCMonth() + 1 === month
     && day <= lastDay.getUTCDate();
 }
 
 function daysInMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const lastDay = new Date(0);
+  lastDay.setUTCFullYear(year, month, 0);
+  if (!Number.isFinite(lastDay.getTime())) {
+    throw new RangeError("Local date is outside the supported calendar range");
+  }
+  return lastDay.getUTCDate();
 }
 
 function dayOfWeek(dateString: string): number {
@@ -160,6 +172,57 @@ function nextPhaseIndex(
   return firstPhase + Math.ceil((requestedPhase - firstPhase) / interval) * interval;
 }
 
+function validateRecurrenceRule(rule: RecurrenceRule): void {
+  if (rule === null || typeof rule !== "object") {
+    throw new RangeError("A recurrence rule is required");
+  }
+  if (!Number.isSafeInteger(rule.interval) || rule.interval < 1) {
+    throw new RangeError("Recurrence interval must be a positive integer");
+  }
+
+  switch (rule.frequency) {
+    case "daily":
+      return;
+    case "weekly":
+      if (!Array.isArray(rule.days_of_week)
+        || rule.days_of_week.some(
+          (day) => !Number.isSafeInteger(day) || day < 0 || day > 6,
+        )) {
+        throw new RangeError("Weekly recurrence weekdays must be between 0 and 6");
+      }
+      return;
+    case "monthly":
+      if ("week_position" in rule) {
+        if (!(["first", "second", "third", "fourth", "last"] as const)
+          .includes(rule.week_position)
+          || !Number.isSafeInteger(rule.day_of_week_monthly)
+          || rule.day_of_week_monthly < 0
+          || rule.day_of_week_monthly > 6) {
+          throw new RangeError("Monthly weekday recurrence is invalid");
+        }
+      } else if (!Number.isSafeInteger(rule.day_of_month)
+        || rule.day_of_month < 1
+        || rule.day_of_month > 31) {
+        throw new RangeError("Monthly recurrence day must be between 1 and 31");
+      }
+      return;
+    case "yearly":
+      if (!Number.isSafeInteger(rule.month_of_year)
+        || rule.month_of_year < 1
+        || rule.month_of_year > 12) {
+        throw new RangeError("Yearly recurrence month must be between 1 and 12");
+      }
+      if (!Number.isSafeInteger(rule.day_of_month)
+        || rule.day_of_month < 1
+        || rule.day_of_month > 31) {
+        throw new RangeError("Yearly recurrence day must be between 1 and 31");
+      }
+      return;
+    default:
+      throw new RangeError("Unsupported recurrence frequency");
+  }
+}
+
 /**
  * Calculate scheduled local dates from a stable recurrence anchor.
  *
@@ -182,14 +245,16 @@ export function calculateScheduledDates(
   if (!resolvedRange) {
     throw new RangeError("A recurrence range is required");
   }
+  parseDateParts(recurrenceAnchor);
+  parseDateParts(activationDate);
+  parseDateParts(resolvedRange.from);
+  parseDateParts(resolvedRange.to);
+  validateRecurrenceRule(rule);
   if (compareLocalDates(resolvedRange.from, resolvedRange.to) > 0) return [];
   const lowerBound = maxLocalDate(resolvedRange.from, activationDate);
   if (compareLocalDates(lowerBound, resolvedRange.to) > 0) return [];
 
   const interval = rule.interval;
-  if (!Number.isInteger(interval) || interval < 1) {
-    throw new RangeError("Recurrence interval must be a positive integer");
-  }
 
   const dates: string[] = [];
   const appendIfInRange = (candidate: string) => {
@@ -206,12 +271,14 @@ export function calculateScheduledDates(
   switch (rule.frequency) {
     case "daily": {
       const anchorToLower = Math.max(0, daysBetween(recurrenceAnchor, lowerBound));
-      let current = addLocalDays(
-        recurrenceAnchor,
-        Math.ceil(anchorToLower / interval) * interval,
-      );
+      const initialOffset = Math.ceil(anchorToLower / interval) * interval;
+      if (initialOffset > Math.max(0, daysBetween(recurrenceAnchor, resolvedRange.to))) {
+        break;
+      }
+      let current = addLocalDays(recurrenceAnchor, initialOffset);
       while (compareLocalDates(current, resolvedRange.to) <= 0) {
         appendIfInRange(current);
+        if (interval > daysBetween(current, resolvedRange.to)) break;
         current = addLocalDays(current, interval);
       }
       break;
@@ -226,16 +293,20 @@ export function calculateScheduledDates(
       const requestedWeek = Math.floor(
         daysBetween(anchorWeekStart, lowerWeekStart) / 7,
       );
+      const rangeEndWeek = Math.floor(
+        daysBetween(anchorWeekStart, resolvedRange.to) / 7,
+      );
       let weekIndex = nextPhaseIndex(0, interval, requestedWeek);
       const uniqueDays = [...new Set(rule.days_of_week)].sort((a, b) => a - b);
 
       while (true) {
+        if (weekIndex > rangeEndWeek) break;
         const weekStart = addLocalDays(anchorWeekStart, weekIndex * 7);
         if (compareLocalDates(weekStart, resolvedRange.to) > 0) break;
         for (const requestedDay of uniqueDays) {
-          if (requestedDay < 0 || requestedDay > 6) continue;
           appendIfInRange(addLocalDays(weekStart, requestedDay));
         }
+        if (interval > rangeEndWeek - weekIndex) break;
         weekIndex += interval;
       }
       dates.sort();
@@ -245,6 +316,7 @@ export function calculateScheduledDates(
     case "monthly": {
       const anchorMonth = monthIndex(recurrenceAnchor);
       const lowerMonth = monthIndex(lowerBound);
+      const rangeEndMonth = monthIndex(resolvedRange.to);
       let targetMonth = nextPhaseIndex(
         anchorMonth,
         interval,
@@ -252,6 +324,7 @@ export function calculateScheduledDates(
       );
 
       while (true) {
+        if (targetMonth > rangeEndMonth) break;
         const candidate = "week_position" in rule
           ? nthWeekdayOfMonth(
             targetMonth,
@@ -261,6 +334,7 @@ export function calculateScheduledDates(
           : dateForMonth(targetMonth, rule.day_of_month);
         if (compareLocalDates(candidate, resolvedRange.to) > 0) break;
         appendIfInRange(candidate);
+        if (interval > rangeEndMonth - targetMonth) break;
         targetMonth += interval;
       }
       break;
@@ -269,6 +343,7 @@ export function calculateScheduledDates(
     case "yearly": {
       const [anchorYear] = parseDateParts(recurrenceAnchor);
       const [lowerYear] = parseDateParts(lowerBound);
+      const [rangeEndYear] = parseDateParts(resolvedRange.to);
       let year = nextPhaseIndex(
         anchorYear,
         interval,
@@ -276,14 +351,19 @@ export function calculateScheduledDates(
       );
 
       while (true) {
+        if (year > rangeEndYear) break;
         const targetMonthIndex = year * 12 + rule.month_of_year - 1;
         const candidate = dateForMonth(targetMonthIndex, rule.day_of_month);
         if (compareLocalDates(candidate, resolvedRange.to) > 0) break;
         appendIfInRange(candidate);
+        if (interval > rangeEndYear - year) break;
         year += interval;
       }
       break;
     }
+
+    default:
+      throw new RangeError("Unsupported recurrence frequency");
   }
 
   return dates;
