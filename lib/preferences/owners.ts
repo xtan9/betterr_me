@@ -8,6 +8,7 @@ import {
   type PushQuietWindow,
   type ThemePreference,
   type UserTimeZone,
+  type WeightUnitPreference,
   type WeekStartPreference,
 } from "./types";
 
@@ -32,6 +33,18 @@ export function isThemePreference(value: unknown): value is ThemePreference {
   return (
     typeof value === "string" &&
     THEME_PREFERENCE_VALUES.includes(value as ThemePreference)
+  );
+}
+
+export const WEIGHT_UNIT_PREFERENCE_VALUES = ["kg", "lbs"] as const;
+export const DEFAULT_WEIGHT_UNIT_PREFERENCE: WeightUnitPreference = "kg";
+
+export function isWeightUnitPreference(
+  value: unknown,
+): value is WeightUnitPreference {
+  return (
+    typeof value === "string" &&
+    WEIGHT_UNIT_PREFERENCE_VALUES.includes(value as WeightUnitPreference)
   );
 }
 
@@ -84,8 +97,12 @@ export function decodeFitnessPreferences(
   preferences: PreferenceStorage,
 ): FitnessPreferences {
   const stored = isRecord(preferences) ? preferences : null;
+  const storedWeightUnit = stored?.weight_unit;
   return {
-    weightUnit: decodeEnum(stored?.weight_unit, ["kg", "lbs"]),
+    weightUnit:
+      storedWeightUnit === undefined
+        ? { status: "ready", value: DEFAULT_WEIGHT_UNIT_PREFERENCE }
+        : decodeEnum(storedWeightUnit, WEIGHT_UNIT_PREFERENCE_VALUES),
   };
 }
 

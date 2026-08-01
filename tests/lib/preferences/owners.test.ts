@@ -41,6 +41,15 @@ describe("Preference Owners", () => {
     });
   });
 
+  it("assigns kilograms as the Fitness default when no Weight Unit is stored", () => {
+    expect(decodeFitnessPreferences(null)).toEqual({
+      weightUnit: { status: "ready", value: "kg" },
+    });
+    expect(decodeFitnessPreferences({})).toEqual({
+      weightUnit: { status: "ready", value: "kg" },
+    });
+  });
+
   it("keeps disabled Reminder Email valid without an Identity Email", () => {
     expect(
       decodeNotificationPreferences(

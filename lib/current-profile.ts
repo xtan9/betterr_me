@@ -6,6 +6,7 @@ import {
   decodeNotificationPreferences,
   decodeUserTimeZone,
   THEME_PREFERENCE_VALUES,
+  WEIGHT_UNIT_PREFERENCE_VALUES,
   type PreferenceState,
   type PreferenceStorage,
   type PushQuietWindow,
@@ -120,7 +121,7 @@ export const currentProfileSchema = z
           weekStart: preferenceStateSchema(z.enum(["sunday", "monday"])),
         }).strict(),
         fitness: z.object({
-          weightUnit: preferenceStateSchema(z.enum(["kg", "lbs"])),
+          weightUnit: preferenceStateSchema(z.enum(WEIGHT_UNIT_PREFERENCE_VALUES)),
         }).strict(),
         notifications: z.object({
           reminderEmail: preferenceStateSchema(

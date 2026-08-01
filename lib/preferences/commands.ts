@@ -5,7 +5,10 @@ import type {
   WeekStartPreference,
   WeightUnitPreference,
 } from "./types";
-import { THEME_PREFERENCE_VALUES } from "./owners";
+import {
+  THEME_PREFERENCE_VALUES,
+  WEIGHT_UNIT_PREFERENCE_VALUES,
+} from "./owners";
 
 const localTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
@@ -18,7 +21,10 @@ export const localizationPreferenceIntentSchema = z
   .strict();
 
 export const fitnessPreferenceIntentSchema = z
-  .object({ type: z.literal("setWeightUnit"), weightUnit: z.enum(["kg", "lbs"]) })
+  .object({
+    type: z.literal("setWeightUnit"),
+    weightUnit: z.enum(WEIGHT_UNIT_PREFERENCE_VALUES),
+  })
   .strict();
 
 const quietWindowValueSchema = z

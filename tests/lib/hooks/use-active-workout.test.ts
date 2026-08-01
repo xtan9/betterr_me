@@ -8,26 +8,23 @@ const {
   swrData,
   saveWorkoutToStorage,
   clearWorkoutStorage,
+  mockFitness,
 } = vi.hoisted(() => ({
   mockMutate: vi.fn(),
   mockFetch: vi.fn(),
   swrData: { value: null as unknown },
   saveWorkoutToStorage: vi.fn(),
   clearWorkoutStorage: vi.fn(),
+  mockFitness: { weightUnit: "kg" as "kg" | "lbs" },
 }));
 
 vi.mock("swr", () => ({
-  default: (key: string) => {
-    if (key === "/api/profile") {
-      return { data: undefined, error: undefined, isLoading: false, mutate: vi.fn() };
-    }
-    return {
-      data: swrData.value,
-      error: undefined,
-      isLoading: false,
-      mutate: mockMutate,
-    };
-  },
+  default: () => ({
+    data: swrData.value,
+    error: undefined,
+    isLoading: false,
+    mutate: mockMutate,
+  }),
 }));
 
 vi.mock("@/lib/fetcher", () => ({ fetcher: vi.fn() }));
@@ -40,8 +37,11 @@ vi.mock("@/lib/fitness/workout-session", () => ({
 }));
 vi.mock("@/lib/hooks/use-profile-preferences", () => ({
   useFitnessPreference: () => ({
-    weightUnit: { status: "ready", value: "kg" },
+    weightUnit: { status: "ready", value: mockFitness.weightUnit },
   }),
+}));
+vi.mock("@/lib/hooks/use-fitness", () => ({
+  useFitness: () => mockFitness,
 }));
 
 const baseWorkout = {
@@ -393,8 +393,20 @@ describe("useActiveWorkout", () => {
 });
 
 describe("useWeightUnit", () => {
+  beforeEach(() => {
+    mockFitness.weightUnit = "kg";
+  });
+
   it("returns 'kg' when no preference is set", () => {
     const { result } = renderHook(() => useWeightUnit());
     expect(result.current).toBe("kg");
+  });
+
+  it("returns the accepted Fitness Weight Unit from Current Profile", () => {
+    mockFitness.weightUnit = "lbs";
+
+    const { result } = renderHook(() => useWeightUnit());
+
+    expect(result.current).toBe("lbs");
   });
 });

@@ -67,9 +67,17 @@ export function WorkoutSetRow({
   const [typeOpen, setTypeOpen] = useState(false);
 
   // Local state for inputs to allow fast typing (optimistic blur-on-commit updates)
-  const [localWeight, setLocalWeight] = useState(
-    set.weight_kg != null ? String(displayWeight(set.weight_kg, weightUnit)) : ""
-  );
+  const [weightInput, setWeightInput] = useState<{
+    unit: WeightUnit;
+    canonicalKg: number | null;
+    value: string;
+  }>();
+  const storedWeight =
+    set.weight_kg != null ? String(displayWeight(set.weight_kg, weightUnit)) : "";
+  const localWeight =
+    weightInput?.unit === weightUnit && weightInput.canonicalKg === set.weight_kg
+      ? weightInput.value
+      : storedWeight;
   const [localReps, setLocalReps] = useState(
     set.reps != null ? String(set.reps) : ""
   );
@@ -215,7 +223,13 @@ export function WorkoutSetRow({
           type="number"
           inputMode="decimal"
           value={localWeight}
-          onChange={(e) => setLocalWeight(e.target.value)}
+          onChange={(e) =>
+            setWeightInput({
+              unit: weightUnit,
+              canonicalKg: set.weight_kg,
+              value: e.target.value,
+            })
+          }
           onBlur={handleWeightBlur}
           placeholder="-"
           className="h-8 text-center text-caption [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"

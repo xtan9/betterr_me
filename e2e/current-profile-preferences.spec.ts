@@ -90,6 +90,12 @@ test.describe('Current Profile preference journey', () => {
     expect(finishResponse.status()).toBe(200);
 
     await page.goto('/dashboard/settings');
+    let documentNavigations = 0;
+    page.on('request', (request) => {
+      if (request.isNavigationRequest() && request.resourceType() === 'document') {
+        documentNavigations += 1;
+      }
+    });
     const poundsOption = page.getByRole('radio', { name: 'Pounds (lbs)', exact: true });
     await expect(poundsOption).toBeVisible();
     await poundsOption.click();
@@ -113,6 +119,7 @@ test.describe('Current Profile preference journey', () => {
     await historyCard.click();
 
     await expect(page).toHaveURL(new RegExp(`/workouts/${createdWorkoutId}$`));
+    expect(documentNavigations).toBe(0);
     await expect(page.getByText('LBS', { exact: true })).toBeVisible();
     await expect(page.getByText('22.05', { exact: true })).toBeVisible();
   });

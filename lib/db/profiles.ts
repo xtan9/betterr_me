@@ -21,6 +21,7 @@ import type {
   PreferenceStorage,
   WeightUnitPreference,
 } from '@/lib/preferences/types';
+import { isWeightUnitPreference } from '@/lib/preferences/owners';
 
 export class ProfilesDB {
   constructor(private supabase: SupabaseClient) {}
@@ -74,7 +75,7 @@ export class ProfilesDB {
     };
   }
 
-  async getWeightUnitPreference(
+  async getFitnessWeightUnitPreference(
     userId: string,
   ): Promise<WeightUnitPreference | null> {
     const { data, error } = await this.supabase
@@ -87,7 +88,7 @@ export class ProfilesDB {
       throw error;
     }
     const value = (data as { weight_unit?: unknown } | null)?.weight_unit;
-    return value === 'kg' || value === 'lbs' ? value : null;
+    return isWeightUnitPreference(value) ? value : null;
   }
 
   async getWeekStartPreference(userId: string): Promise<0 | 1 | null> {

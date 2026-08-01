@@ -3,10 +3,12 @@
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { WeightUnitPreference } from "@/lib/preferences/types";
+import { isWeightUnitPreference } from "@/lib/preferences/owners";
 
 interface WeightUnitSelectorProps {
-  value: "kg" | "lbs";
-  onChange: (unit: "kg" | "lbs") => void;
+  value: WeightUnitPreference;
+  onChange: (unit: WeightUnitPreference) => void;
   disabled?: boolean;
 }
 
@@ -22,7 +24,7 @@ export function WeightUnitSelector({
       type="single"
       value={value}
       onValueChange={(val) => {
-        if (val === "kg" || val === "lbs") {
+        if (isWeightUnitPreference(val)) {
           onChange(val);
         }
       }}

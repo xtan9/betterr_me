@@ -40,6 +40,10 @@ describe("toKg", () => {
     expect(toKg(100, "lbs")).toBe(45.36);
   });
 
+  it("keeps pounds input canonical in kilograms for storage", () => {
+    expect(toKg(50, "lbs")).toBe(22.68);
+  });
+
   it("rounds to 2 decimal places", () => {
     const result = toKg(1, "lbs");
     const decimals = result.toString().split(".")[1];
