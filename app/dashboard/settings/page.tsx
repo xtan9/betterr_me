@@ -21,6 +21,7 @@ export default async function SettingsPage() {
     ? {
         currentProfile: composeCurrentProfile({
           identityEmail: verifiedIdentityEmail(user),
+          capabilities: { canAccessAdmin: false },
           projection,
         }),
       }

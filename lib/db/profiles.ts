@@ -53,7 +53,7 @@ export class ProfilesDB {
     const { data, error } = await this.supabase
       .from('profiles')
       .select(
-        'full_name, avatar_url, timezone, role, preferences, preference_revision',
+        'full_name, avatar_url, timezone, preferences, preference_revision',
       )
       .eq('id', userId)
       .maybeSingle();
@@ -63,7 +63,15 @@ export class ProfilesDB {
       throw error;
     }
 
-    return data as CurrentProfileProjection | null;
+    if (!data) return null;
+
+    return {
+      full_name: data.full_name ?? null,
+      avatar_url: data.avatar_url ?? null,
+      timezone: data.timezone ?? null,
+      preferences: data.preferences as PreferenceStorage,
+      preference_revision: data.preference_revision,
+    };
   }
 
   async getWeightUnitPreference(

@@ -10,22 +10,40 @@ import {
   type PushQuietWindow,
   type UserTimeZone,
 } from "@/lib/preferences/owners";
-import type { ProfileRole } from "@/lib/db/types";
+import {
+  PREFERENCE_UNAVAILABLE_REASONS,
+  type PreferenceUnavailableReason,
+} from "@/lib/preferences/types";
 
 export interface CurrentProfileProjection {
   full_name: string | null;
   avatar_url: string | null;
   timezone: string | null;
-  role: ProfileRole | string;
   preferences: PreferenceStorage;
   preference_revision: number;
+}
+
+export interface CurrentProfileCapabilities {
+  canAccessAdmin: boolean;
+}
+
+export type CurrentProfileIssueScope =
+  | "appearance.theme"
+  | "localization.weekStart"
+  | "fitness.weightUnit"
+  | "notifications.reminderEmail"
+  | "notifications.pushQuietWindow";
+
+export interface CurrentProfileIssue {
+  scope: CurrentProfileIssueScope;
+  code: PreferenceUnavailableReason;
 }
 
 export interface CurrentProfile {
   identity: { email: string | null };
   profileDetails: { fullName: string | null; avatarUrl: string | null };
   userTimeZone: UserTimeZone;
-  capabilities: { canAccessAdmin: boolean };
+  capabilities: CurrentProfileCapabilities;
   preferences: {
     preferenceRevision: number;
     appearance: ReturnType<typeof decodeAppearancePreferences>;
@@ -33,19 +51,21 @@ export interface CurrentProfile {
     fitness: ReturnType<typeof decodeFitnessPreferences>;
     notifications: ReturnType<typeof decodeNotificationPreferences>;
   };
-  issues: Array<{ scope: string; code: string }>;
+  issues: CurrentProfileIssue[];
 }
 
 export interface CurrentProfileResponse {
   currentProfile: CurrentProfile;
 }
 
-const unavailableReasonSchema = z.enum([
-  "invalidStoredValue",
-  "sourceUnavailable",
-  "dependencyUnavailable",
-  "identityEmailUnavailable",
-  "userTimeZoneUnresolved",
+const unavailableReasonSchema = z.enum(PREFERENCE_UNAVAILABLE_REASONS);
+
+const issueScopeSchema = z.enum([
+  "appearance.theme",
+  "localization.weekStart",
+  "fitness.weightUnit",
+  "notifications.reminderEmail",
+  "notifications.pushQuietWindow",
 ]);
 
 const preferenceStateSchema = <Value extends z.ZodTypeAny>(value: Value) =>
@@ -103,7 +123,14 @@ export const currentProfileSchema = z
         }).strict(),
       })
       .strict(),
-    issues: z.array(z.object({ scope: z.string().min(1), code: z.string().min(1) }).strict()),
+    issues: z.array(
+      z
+        .object({
+          scope: issueScopeSchema,
+          code: unavailableReasonSchema,
+        })
+        .strict(),
+    ),
   })
   .strict();
 
@@ -115,7 +142,7 @@ function collectIssues(
   preferences: CurrentProfile["preferences"],
 ): CurrentProfile["issues"] {
   const issues: CurrentProfile["issues"] = [];
-  const add = (scope: string, state: PreferenceState<unknown>) => {
+  const add = (scope: CurrentProfileIssueScope, state: PreferenceState<unknown>) => {
     if (state.status === "unavailable") {
       issues.push({ scope, code: state.reason });
     }
@@ -131,6 +158,7 @@ function collectIssues(
 
 export function composeCurrentProfile(input: {
   identityEmail: string | null;
+  capabilities: CurrentProfileCapabilities;
   projection: CurrentProfileProjection;
 }): CurrentProfile {
   const userTimeZone = decodeUserTimeZone(input.projection.timezone);
@@ -157,7 +185,7 @@ export function composeCurrentProfile(input: {
       avatarUrl: input.projection.avatar_url,
     },
     userTimeZone,
-    capabilities: { canAccessAdmin: input.projection.role === "admin" },
+    capabilities: input.capabilities,
     preferences,
     issues: collectIssues(preferences),
   };

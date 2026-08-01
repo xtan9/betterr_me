@@ -5,11 +5,15 @@ import {
 } from "@/lib/current-profile";
 
 const projection = {
+  id: "profile-123",
+  email: "stale-profile@example.com",
   full_name: "Taylor Example",
   avatar_url: "https://example.com/avatar.png",
   timezone: "America/Los_Angeles",
   role: "admin" as const,
   preference_revision: 7,
+  created_at: "2026-08-01T00:00:00.000Z",
+  updated_at: "2026-08-01T00:00:00.000Z",
   preferences: {
     date_format: "MM/DD/YYYY",
     theme: "dark",
@@ -26,6 +30,7 @@ describe("Current Profile", () => {
   it("composes a domain-shaped private snapshot without storage fields", () => {
     const result = composeCurrentProfile({
       identityEmail: "taylor@example.com",
+      capabilities: { canAccessAdmin: false },
       projection,
     });
 
@@ -39,7 +44,7 @@ describe("Current Profile", () => {
         status: "resolved",
         value: "America/Los_Angeles",
       },
-      capabilities: { canAccessAdmin: true },
+      capabilities: { canAccessAdmin: false },
       preferences: {
         preferenceRevision: 7,
         appearance: { theme: { status: "ready", value: "dark" } },
@@ -59,17 +64,19 @@ describe("Current Profile", () => {
   });
 
   it("keeps malformed concepts unavailable while preserving valid concepts", () => {
+    const malformedProjection = {
+      ...projection,
+      role: "user",
+      preferences: {
+        ...projection.preferences,
+        theme: "neon",
+        weight_unit: "stones",
+      },
+    };
     const result = composeCurrentProfile({
       identityEmail: null,
-      projection: {
-        ...projection,
-        role: "user",
-        preferences: {
-          ...projection.preferences,
-          theme: "neon",
-          weight_unit: "stones",
-        },
-      },
+      capabilities: { canAccessAdmin: false },
+      projection: malformedProjection,
     });
 
     expect(result.preferences.appearance.theme).toEqual({
@@ -89,6 +96,7 @@ describe("Current Profile", () => {
   it("accepts only the canonical currentProfile envelope", () => {
     const currentProfile = composeCurrentProfile({
       identityEmail: "taylor@example.com",
+      capabilities: { canAccessAdmin: true },
       projection,
     });
 
@@ -98,5 +106,16 @@ describe("Current Profile", () => {
     expect(() =>
       decodeCurrentProfileResponse({ profile: currentProfile }),
     ).toThrow();
+  });
+
+  it("takes capabilities from authorization input rather than stored role", () => {
+    const userProjection = { ...projection, role: "user" };
+    const result = composeCurrentProfile({
+      identityEmail: "taylor@example.com",
+      capabilities: { canAccessAdmin: true },
+      projection: userProjection,
+    });
+
+    expect(result.capabilities).toEqual({ canAccessAdmin: true });
   });
 });
