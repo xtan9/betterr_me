@@ -7,9 +7,13 @@ import { log } from '@/lib/logger';
 import { recurringTaskCreateSchema } from '@/lib/validations/recurring-task';
 import { ensureProfile } from '@/lib/db/ensure-profile';
 import { getLocalDateString } from '@/lib/utils';
-import { addLocalDays } from '@/lib/recurring-tasks/recurrence';
-import type { RecurringTaskInsert } from '@/lib/db/types';
 import { createSupabaseRecurringTaskLifecycle } from '@/lib/recurring-tasks';
+import {
+  createSeriesCreation,
+  initialSeriesCoverage,
+  normalizeSeriesCreationIntent,
+  toLegacyRecurringTask,
+} from '@/lib/recurring-tasks/creation';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -85,30 +89,64 @@ export async function POST(request: NextRequest) {
       ...auth.principal.profile,
     });
 
-    // Calculate throughDate (7 days from today)
+    // Keep the product's local-date reference as an adapter concern. The
+    // shared creation seam turns it into the same initial Coverage request as
+    // the AI adapter.
     const today = body.date || getLocalDateString();
-    const throughDateStr = addLocalDays(today, 7);
-
-    const recurringTasksDB = new RecurringTasksDB(supabase, {
-      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
-    });
-    const data: RecurringTaskInsert = {
-      user_id: userId,
-      title: validation.data.title.trim(),
-      description: validation.data.description?.trim() || null,
+    const intent = normalizeSeriesCreationIntent({
+      userId,
+      title: validation.data.title,
+      description: validation.data.description ?? null,
       priority: validation.data.priority ?? 0,
-      category_id: validation.data.category_id || null,
-      due_time: validation.data.due_time || null,
-      recurrence_rule: validation.data.recurrence_rule,
-      start_date: validation.data.start_date,
-      end_type: validation.data.end_type ?? 'never',
-      end_date: validation.data.end_date || null,
-      end_count: validation.data.end_count || null,
-      status: 'active',
-    };
+      categoryId: validation.data.category_id ?? null,
+      dueTime: validation.data.due_time ?? null,
+      recurrenceRule: validation.data.recurrence_rule,
+      legacyStartDate: validation.data.start_date,
+      endType: validation.data.end_type ?? 'never',
+      endDate: validation.data.end_date ?? null,
+      endCount: validation.data.end_count ?? null,
+      coverageThrough: initialSeriesCoverage(
+        validation.data.start_date,
+        today,
+      ).to,
+    });
+    const result = await createSeriesCreation(supabase).create(intent);
+    if (result.mode === 'legacy') {
+      return NextResponse.json(
+        { recurring_task: result.recurringTask },
+        { status: 201 },
+      );
+    }
 
-    const template = await recurringTasksDB.createRecurringTask(data, throughDateStr);
-    return NextResponse.json({ recurring_task: template }, { status: 201 });
+    const outcome = result.outcome;
+    if (outcome.status === 'complete' || outcome.status === 'already-applied') {
+      return NextResponse.json(
+        { recurring_task: toLegacyRecurringTask(outcome.series) },
+        { status: 201 },
+      );
+    }
+    if (outcome.status === 'conflict') {
+      return NextResponse.json(
+        { error: 'Recurring task creation conflict' },
+        { status: 409 },
+      );
+    }
+    if (outcome.status === 'coverage-unavailable') {
+      return NextResponse.json(
+        { error: 'Recurring task coverage is temporarily unavailable' },
+        { status: 503 },
+      );
+    }
+    if (outcome.status === 'not-found') {
+      return NextResponse.json(
+        { error: 'Recurring task not found' },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json(
+      { error: outcome.reason },
+      { status: 400 },
+    );
   } catch (error) {
     log.error('POST /api/recurring-tasks error', error);
     return NextResponse.json(
