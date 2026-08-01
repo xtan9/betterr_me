@@ -269,6 +269,157 @@ begin
     raise exception 'occurrence edit did not preserve field-level null or Scheduled Date';
   end if;
 
+  create function pg_temp.capture_recurring_task_update()
+  returns trigger
+  language plpgsql
+  as $function$
+  begin
+    perform set_config('betterr.fixture_task_title', new.title, false);
+    perform set_config('betterr.fixture_task_due_date', coalesce(new.due_date::text, '<null>'), false);
+    perform set_config('betterr.fixture_task_scheduled_date', new.scheduled_date::text, false);
+    perform set_config('betterr.fixture_task_series_id', new.recurring_series_id::text, false);
+    perform set_config('betterr.fixture_task_occurrence_id', new.recurring_occurrence_id::text, false);
+    perform set_config('betterr.fixture_task_due_time', coalesce(new.due_time::text, '<null>'), false);
+    perform set_config('betterr.fixture_task_has_due_date_override', (new.occurrence_overrides ? 'dueDate')::text, false);
+    perform set_config('betterr.fixture_task_has_description_override', (new.occurrence_overrides ? 'description')::text, false);
+    perform set_config('betterr.fixture_task_cleared_description', (new.occurrence_overrides->'description' = 'null'::jsonb)::text, false);
+    perform set_config('betterr.fixture_task_cleared_due_date', (new.occurrence_overrides->'dueDate' = 'null'::jsonb)::text, false);
+    return new;
+  end
+  $function$;
+
+  create trigger recurring_lifecycle_fixture_update_capture
+  before update on public.tasks
+  for each row execute function pg_temp.capture_recurring_task_update();
+
+  select public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', edited_id,
+      'updates', jsonb_build_object('dueTime', '10:30'),
+      'idempotencyKey', 'edit-task-659'
+    )
+  ) into outcome;
+  if outcome->>'status' <> 'complete'
+    or current_setting('betterr.fixture_task_title', true) <> 'Retained override'
+    or current_setting('betterr.fixture_task_due_date', true) <> '<null>'
+    or current_setting('betterr.fixture_task_scheduled_date', true) <> '2026-08-12'
+    or current_setting('betterr.fixture_task_series_id', true) <> v_series_id::text
+    or current_setting('betterr.fixture_task_occurrence_id', true) <> edited_id::text
+    or current_setting('betterr.fixture_task_due_time', true) <> '10:30:00'
+    or current_setting('betterr.fixture_task_has_due_date_override', true) <> 'true'
+    or current_setting('betterr.fixture_task_has_description_override', true) <> 'true'
+    or current_setting('betterr.fixture_task_cleared_description', true) <> 'true'
+    or current_setting('betterr.fixture_task_cleared_due_date', true) <> 'true'
+    or (select occurrence.overrides->>'dueTime'
+        from public.recurring_task_occurrences occurrence
+        where occurrence.id = edited_id) <> '10:30' then
+    raise exception 'one-occurrence edit did not update its linked ordinary task';
+  end if;
+
+  select public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', edited_id,
+      'updates', jsonb_build_object('dueTime', '10:30'),
+      'idempotencyKey', 'edit-task-659'
+    )
+  ) into outcome;
+  if outcome->>'status' <> 'already-applied' then
+    raise exception 'one-occurrence task edit did not replay idempotently: %', outcome;
+  end if;
+
+  select public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', completed_id,
+      'updates', '{}'::jsonb,
+      'completed', false,
+      'idempotencyKey', 'reopen-edit-659'
+    )
+  ) into outcome;
+  if outcome->>'status' <> 'complete' then
+    raise exception 'completed occurrence did not reopen through edit: %', outcome;
+  end if;
+  select public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', completed_id,
+      'updates', '{}'::jsonb,
+      'completed', false,
+      'idempotencyKey', 'reopen-edit-659'
+    )
+  ) into outcome;
+  if outcome->>'status' <> 'already-applied' then
+    raise exception 'reopening an occurrence did not replay idempotently: %', outcome;
+  end if;
+
+  create function pg_temp.fail_recurring_task_update()
+  returns trigger
+  language plpgsql
+  as $function$
+  begin
+    if new.due_time = time '11:30' then
+      raise exception 'fixture occurrence task update rollback probe';
+    end if;
+    return new;
+  end
+  $function$;
+
+  create trigger recurring_lifecycle_fixture_update_failure
+  before update on public.tasks
+  for each row execute function pg_temp.fail_recurring_task_update();
+
+  begin
+    perform public.recurring_task_lifecycle(
+      'edit-occurrence',
+      jsonb_build_object(
+        'userId', '65900000-0000-0000-0000-000000000001',
+        'seriesId', v_series_id,
+        'occurrenceId', edited_id,
+        'updates', jsonb_build_object('dueTime', '10:30'),
+        'idempotencyKey', 'rollback-edit-659'
+      )
+    );
+    raise exception 'occurrence task update rollback probe unexpectedly succeeded';
+  exception when others then
+    null;
+  end;
+
+  if (select occurrence.overrides->>'dueTime'
+      from public.recurring_task_occurrences occurrence
+      where occurrence.id = edited_id) <> '10:30' then
+    raise exception 'failed occurrence edit changed the ledger before task rollback';
+  end if;
+
+  select public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', edited_id,
+      'updates', jsonb_build_object('dueTime', '11:31'),
+      'idempotencyKey', 'rollback-edit-659'
+    )
+  ) into outcome;
+  if outcome->>'status' <> 'complete' then
+    raise exception 'failed occurrence edit left an idempotency record: %', outcome;
+  end if;
+
+  if (select occurrence.overrides->>'dueTime'
+      from public.recurring_task_occurrences occurrence
+      where occurrence.id = edited_id) <> '11:31' then
+    raise exception 'occurrence/task update did not roll back atomically';
+  end if;
+
   select public.recurring_task_lifecycle(
     'revise-series',
     jsonb_build_object(
@@ -288,6 +439,79 @@ begin
         where occurrence.series_id = v_series_id
           and occurrence.scheduled_date = '2026-08-05') <> 'skipped' then
     raise exception 'revision did not retain completed/skipped/overridden history';
+  end if;
+end
+$$;
+
+do $$
+declare
+  v_series_id uuid;
+  v_occurrence_id uuid;
+  outcome jsonb;
+begin
+  select state.series_id
+  into v_series_id
+  from recurring_lifecycle_fixture_state state;
+  select occurrence.id
+  into v_occurrence_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = '2026-08-12';
+
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000001"}',
+    true
+  );
+  outcome := public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', '00000000-0000-0000-0000-000000000000',
+      'updates', jsonb_build_object('title', 'missing')
+    )
+  );
+  if outcome <> '{"status":"not-found","type":"not-found"}'::jsonb then
+    raise exception 'missing occurrence did not return the typed not-found outcome: %', outcome;
+  end if;
+
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000002"}',
+    true
+  );
+  outcome := public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000002',
+      'seriesId', v_series_id,
+      'occurrenceId', v_occurrence_id,
+      'updates', jsonb_build_object('title', 'foreign')
+    )
+  );
+  if outcome <> '{"status":"not-found","type":"not-found"}'::jsonb then
+    raise exception 'foreign occurrence did not return the same not-found outcome: %', outcome;
+  end if;
+
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000001"}',
+    true
+  );
+  outcome := public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_occurrence_id,
+      'expectedRevisionToken', 1,
+      'updates', jsonb_build_object('title', 'stale')
+    )
+  );
+  if outcome->>'status' <> 'conflict'
+    or outcome->>'type' <> 'conflict' then
+    raise exception 'stale occurrence edit did not return a typed conflict outcome: %', outcome;
   end if;
 end
 $$;

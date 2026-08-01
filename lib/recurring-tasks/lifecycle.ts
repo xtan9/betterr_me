@@ -100,6 +100,15 @@ export interface RecurringTaskLifecycleState {
 
 export interface RecurringTaskLifecyclePersistence {
   /**
+   * A read is a non-mutating preflight seam. Implementations must provide an
+   * isolated snapshot and must not persist callback mutations.
+   */
+  read?<T>(
+    serializationKey: string,
+    operation: (state: RecurringTaskLifecycleState) => Promise<T>,
+  ): Promise<T>;
+
+  /**
    * A transaction is the lifecycle's atomicity seam. Implementations must
    * serialize calls for the same key, commit state only after the callback
    * resolves, and roll back all callback mutations when it rejects.
@@ -119,6 +128,14 @@ export class InMemoryRecurringTaskLifecyclePersistence
   };
 
   private readonly locks = new Map<string, Promise<void>>();
+
+  async read<T>(
+    serializationKey: string,
+    operation: (state: RecurringTaskLifecycleState) => Promise<T>,
+  ): Promise<T> {
+    await (this.locks.get(serializationKey) ?? Promise.resolve());
+    return operation(cloneState(this.state));
+  }
 
   async transaction<T>(
     serializationKey: string,
@@ -917,6 +934,28 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       series: RecurringTaskSeries,
     ) => LifecycleMutationResult | LifecycleFailure,
   ): Promise<LifecycleOutcome<RecurringTaskSeries>> {
+    if (this.persistence.read) {
+      const missing = await this.persistence.read(
+        `series:${request.seriesId}`,
+        async (state) => {
+          const series = state.series.get(request.seriesId);
+          if (!series || series.userId !== request.userId) {
+            return true;
+          }
+          if (
+            "occurrenceId" in request
+            && !series.occurrences.some(
+              (occurrence) => occurrence.id === request.occurrenceId,
+            )
+          ) {
+            return true;
+          }
+          return false;
+        },
+      );
+      if (missing) return notFound();
+    }
+
     const fingerprint = fingerprintOf({
       ...request,
       operationName,

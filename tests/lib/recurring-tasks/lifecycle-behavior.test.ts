@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   InMemoryRecurringTaskLifecyclePersistence,
+  type RecurringTaskLifecyclePersistence,
   RecurringTaskLifecycle,
 } from "@/lib/recurring-tasks/lifecycle";
 
@@ -16,6 +17,57 @@ function defaults(title: string, priority: 0 | 1 | 2 | 3 = 0) {
 }
 
 describe("RecurringTaskLifecycle revision behavior", () => {
+  it("returns one not-found outcome without opening mutation persistence for missing or foreign occurrences", async () => {
+    const backing = new InMemoryRecurringTaskLifecyclePersistence();
+    let mutationTransactions = 0;
+    const persistence = {
+      read: async <T>(
+        _serializationKey: string,
+        operation: Parameters<RecurringTaskLifecyclePersistence["transaction"]>[1],
+      ) => operation(backing.snapshot()) as Promise<T>,
+      transaction: async <T>(
+        serializationKey: string,
+        operation: Parameters<RecurringTaskLifecyclePersistence["transaction"]>[1],
+      ) => {
+        mutationTransactions += 1;
+        return backing.transaction(serializationKey, operation) as Promise<T>;
+      },
+    } as RecurringTaskLifecyclePersistence & {
+      read: <T>(
+        serializationKey: string,
+        operation: Parameters<RecurringTaskLifecyclePersistence["transaction"]>[1],
+      ) => Promise<T>;
+    };
+    const lifecycle = new RecurringTaskLifecycle(persistence, {
+      clock: () => new Date("2026-08-01T12:00:00.000Z"),
+    });
+    const created = await lifecycle.createSeries({
+      userId: "owner",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Owned"),
+      coverage: { from: "2026-08-01", to: "2026-08-01" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+    mutationTransactions = 0;
+
+    expect(await lifecycle.editOccurrence({
+      userId: "owner",
+      seriesId: created.series.id,
+      occurrenceId: "missing-occurrence",
+      updates: { title: "Should not persist" },
+    })).toEqual({ status: "not-found", type: "not-found" });
+    expect(await lifecycle.editOccurrence({
+      userId: "another-owner",
+      seriesId: created.series.id,
+      occurrenceId: created.occurrences[0].id,
+      updates: { title: "Should not persist" },
+    })).toEqual({ status: "not-found", type: "not-found" });
+    expect(mutationTransactions).toBe(0);
+  });
+
   it("ensures coverage for every owned series and reports intentional absences", async () => {
     const lifecycle = new RecurringTaskLifecycle(
       new InMemoryRecurringTaskLifecyclePersistence(),
