@@ -305,7 +305,7 @@ export type HabitInsert = Omit<
   current_streak?: number;
   best_streak?: number;
   paused_at?: string | null;
-  // graduation fields intentionally omitted — set via graduateHabit/reactivateHabit only
+  // Graduation fields intentionally omitted; set through dedicated mutation seams only.
 };
 
 export type HabitUpdate = Partial<

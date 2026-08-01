@@ -73,6 +73,13 @@ describe("Habit detail mutation architecture boundaries", () => {
     expect(resumeRoute).not.toMatch(/new HabitsDB|\.resumeHabit\(/);
   });
 
+  it("routes HTTP graduation through HabitWrites without a direct-write bypass", () => {
+    const route = source("app/api/habits/[id]/graduate/route.ts");
+
+    expect(route).toContain("createHabitWrites(supabase).graduate");
+    expect(route).not.toMatch(/new HabitsDB|\.graduateHabit\(/);
+  });
+
   it("routes AI lifecycle changes through HabitWrites", () => {
     const tools = source("lib/ai/tools/habits.ts");
     const lifecycle = section(tools, 'name: "pauseHabit"', 'name: "graduateHabit"');
@@ -82,10 +89,19 @@ describe("Habit detail mutation architecture boundaries", () => {
     expect(lifecycle).not.toMatch(/new HabitsDB|\.pauseHabit\(|\.resumeHabit\(/);
   });
 
-  it("keeps pause and resume writes out of the generic database inventory", () => {
+  it("routes AI graduation through HabitWrites without a direct-write bypass", () => {
+    const tools = source("lib/ai/tools/habits.ts");
+    const graduation = section(tools, 'name: "graduateHabit"', 'name: "reactivateHabit"');
+
+    expect(graduation).toContain("createHabitWrites(ctx.supabase).graduate");
+    expect(graduation).not.toMatch(/new HabitsDB|\.graduateHabit\(/);
+  });
+
+  it("keeps lifecycle and graduation writes out of the generic database inventory", () => {
     const habitsDb = source("lib/db/habits.ts");
 
     expect(habitsDb).not.toMatch(/async pauseHabit\s*\(/);
     expect(habitsDb).not.toMatch(/async resumeHabit\s*\(/);
+    expect(habitsDb).not.toMatch(/async graduateHabit\s*\(/);
   });
 });

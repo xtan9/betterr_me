@@ -4,12 +4,22 @@ import { createHabitCompletion } from "@/lib/habits/completion";
 import { createHabitWrites, toHabitResponse } from "@/lib/habits/writes";
 import type {
   HabitCreationFrequency,
+  HabitGraduationOutcome,
   HabitLifecycleOutcome,
 } from "@/lib/habits/writes";
 import type { ToolDefinition, ToolContext } from "./types";
 
 function habitLifecycleToolResult(outcome: HabitLifecycleOutcome) {
   if ("habit" in outcome) return toHabitResponse(outcome.habit);
+  if (outcome.type === "not-found") return { error: "Habit not found" };
+  return { error: outcome.message };
+}
+
+function habitGraduationToolResult(outcome: HabitGraduationOutcome) {
+  if (outcome.type === "graduated") return toHabitResponse(outcome.habit);
+  if (outcome.type === "already-formed") {
+    return { error: "Habit is already formed" };
+  }
   if (outcome.type === "not-found") return { error: "Habit not found" };
   return { error: outcome.message };
 }
@@ -191,8 +201,11 @@ export function habitTools(): ToolDefinition[] {
         habitId: z.string().describe("The habit ID to graduate"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new HabitsDB(ctx.supabase);
-        return db.graduateHabit(params.habitId, ctx.userId);
+        const outcome = await createHabitWrites(ctx.supabase).graduate({
+          habitId: params.habitId,
+          userId: ctx.userId,
+        });
+        return habitGraduationToolResult(outcome);
       },
     },
     {

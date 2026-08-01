@@ -88,6 +88,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "habit_graduation_lifecycle.sql",
+    "domain": "habits",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "identity_communication_rls.sql",
     "domain": "identity-communication",
     "role": "constrained",

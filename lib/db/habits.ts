@@ -8,7 +8,6 @@ import { HabitGraduationsDB } from './habit-graduations';
 import {
   HabitNotFoundError,
   HabitNotFormedError,
-  HabitAlreadyFormedError,
 } from './habit-errors';
 import { isGraduationEligible } from '@/lib/habits/graduation';
 import { log } from '@/lib/logger';
@@ -123,60 +122,6 @@ export class HabitsDB {
       .eq('user_id', userId);
 
     if (error) throw error;
-  }
-
-  /**
-   * Graduate a habit — mark it as formed, snapshot streak, record history row.
-   */
-  async graduateHabit(habitId: string, userId: string): Promise<Habit> {
-    const habit = await this.getHabit(habitId, userId);
-    if (!habit) throw new HabitNotFoundError(habitId);
-    if (habit.status === 'formed') {
-      throw new HabitAlreadyFormedError(habitId);
-    }
-
-    const graduatedAt = new Date().toISOString();
-    const graduatedStreak = habit.current_streak;
-
-    const updated = await this.updateHabit(habitId, userId, {
-      status: 'formed',
-      graduated_at: graduatedAt,
-      graduated_streak: graduatedStreak,
-      nudge_dismissed_at: null,
-    });
-
-    const graduations = new HabitGraduationsDB(this.supabase);
-    try {
-      await graduations.insertGraduation({
-        habit_id: habitId,
-        user_id: userId,
-        graduated_at: graduatedAt,
-        graduated_streak: graduatedStreak,
-      });
-    } catch (historyErr) {
-      log.error(
-        '[habits] graduation history insert failed; rolling back status',
-        historyErr,
-        { habitId, userId },
-      );
-      try {
-        await this.updateHabit(habitId, userId, {
-          status: habit.status,
-          graduated_at: null,
-          graduated_streak: null,
-          nudge_dismissed_at: habit.nudge_dismissed_at,
-        });
-      } catch (rollbackErr) {
-        log.error(
-          '[habits] graduation rollback FAILED; habit is in inconsistent state',
-          rollbackErr,
-          { habitId, userId },
-        );
-      }
-      throw historyErr;
-    }
-
-    return updated;
   }
 
   /**

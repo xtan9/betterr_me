@@ -218,6 +218,99 @@ describe("HabitWrites", () => {
     ).rejects.toThrow("Habit lifecycle transitions are not supported by this persistence");
   });
 
+  describe("graduate", () => {
+    const formedHabit = {
+      id: "habit-1",
+      userId: "trusted-user",
+      status: "formed" as const,
+      currentStreak: 18,
+      graduatedAt: "2026-08-01T12:00:00.000Z",
+      graduatedStreak: 18,
+      nudgeDismissedAt: null,
+    };
+
+    it("returns graduated and sends the trusted owner and timestamp to persistence", async () => {
+      const graduateHabit = vi.fn().mockResolvedValue({
+        type: "graduated",
+        habit: formedHabit,
+      });
+      const writes = new HabitWrites(
+        { graduateHabit },
+        () => new Date("2026-08-01T12:00:00.000Z"),
+      );
+
+      await expect(
+        writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual({ type: "graduated", habit: formedHabit });
+      expect(graduateHabit).toHaveBeenCalledWith(
+        "habit-1",
+        "trusted-user",
+        "2026-08-01T12:00:00.000Z",
+      );
+    });
+
+    it("preserves an already-formed outcome without issuing another write", async () => {
+      const graduateHabit = vi.fn().mockResolvedValue({
+        type: "already-formed",
+        habit: formedHabit,
+      });
+      const writes = new HabitWrites({ graduateHabit });
+
+      await expect(
+        writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual({ type: "already-formed", habit: formedHabit });
+      expect(graduateHabit).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(["missing", "cross-owner"] as const)(
+      "returns the same not-found outcome for %s habits",
+      async () => {
+        const graduateHabit = vi.fn().mockResolvedValue({ type: "not-found" });
+        const writes = new HabitWrites({ graduateHabit });
+
+        await expect(
+          writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+        ).resolves.toEqual({ type: "not-found" });
+      },
+    );
+
+    it("maps a paused habit to an invalid transition without disclosing another row", async () => {
+      const graduateHabit = vi.fn().mockResolvedValue({
+        type: "invalid-transition",
+        currentStatus: "paused",
+      });
+      const writes = new HabitWrites({ graduateHabit });
+
+      await expect(
+        writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).resolves.toEqual({
+        type: "invalid-transition",
+        action: "graduate",
+        currentStatus: "paused",
+        message: "Habit cannot be graduated from paused state",
+      });
+    });
+
+    it("propagates an unexpected graduation persistence failure", async () => {
+      const persistenceError = new Error("graduation transaction unavailable");
+      const writes = new HabitWrites({
+        graduateHabit: vi.fn().mockRejectedValue(persistenceError),
+      });
+
+      await expect(
+        writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toBe(persistenceError);
+    });
+
+    it("rejects graduation when the persistence adapter has no graduation seam", async () => {
+      const writes = new HabitWrites({});
+
+      await expect(
+        writes.graduate({ userId: "trusted-user", habitId: "habit-1" }),
+      ).rejects.toThrow("Habit graduation is not supported by this persistence");
+    });
+  });
+
   it("normalizes a creation request into an owned active habit", async () => {
     const persistence = createPersistence();
     const writes = new HabitWrites(persistence);

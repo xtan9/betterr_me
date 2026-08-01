@@ -31,7 +31,6 @@ vi.mock("@/lib/db", () => ({
     getHabit = mockGetHabit;
     createHabit = mockCreateHabit;
     updateHabit = mockUpdateHabit;
-    graduateHabit = mockGraduateHabit;
     reactivateHabit = mockReactivateHabit;
     deleteHabit = mockDeleteHabit;
   },
@@ -54,6 +53,7 @@ vi.mock("@/lib/habits/writes", () => ({
     update: mockUpdateHabitWrite,
     pause: mockPauseHabit,
     resume: mockResumeHabit,
+    graduate: mockGraduateHabit,
   })),
   toHabitResponse: mockToHabitResponse,
 }));
@@ -323,11 +323,44 @@ describe("habitTools", () => {
     ).rejects.toBe(persistenceError);
   });
 
-  it("graduateHabit calls HabitsDB.graduateHabit", async () => {
+  it("graduateHabit uses HabitWrites and preserves the AI presentation", async () => {
     const ctx = makeCtx();
-    mockGraduateHabit.mockResolvedValue({ id: "h1", status: "formed" });
-    await findTool("graduateHabit").execute({ habitId: "h1" }, ctx);
-    expect(mockGraduateHabit).toHaveBeenCalledWith("h1", "user-123");
+    const habit = { id: "h1", userId: "user-123", status: "formed" };
+    const presentedHabit = { id: "h1", status: "formed" };
+    mockGraduateHabit.mockResolvedValue({ type: "graduated", habit });
+    mockToHabitResponse.mockReturnValue(presentedHabit);
+
+    await expect(
+      findTool("graduateHabit").execute({ habitId: "h1" }, ctx),
+    ).resolves.toEqual(presentedHabit);
+    expect(mockGraduateHabit).toHaveBeenCalledWith({
+      habitId: "h1",
+      userId: "user-123",
+    });
+    expect(mockToHabitResponse).toHaveBeenCalledWith(habit);
+  });
+
+  it.each([
+    [
+      { type: "already-formed", habit: { id: "h1", status: "formed" } },
+      { error: "Habit is already formed" },
+    ],
+    [{ type: "not-found" }, { error: "Habit not found" }],
+    [
+      {
+        type: "invalid-transition",
+        action: "graduate",
+        currentStatus: "paused",
+        message: "Habit cannot be graduated from paused state",
+      },
+      { error: "Habit cannot be graduated from paused state" },
+    ],
+  ] as const)("maps graduation outcome %j for the AI caller", async (outcome, expected) => {
+    mockGraduateHabit.mockResolvedValue(outcome);
+
+    await expect(
+      findTool("graduateHabit").execute({ habitId: "h1" }, makeCtx()),
+    ).resolves.toEqual(expected);
   });
 
   it("reactivateHabit calls HabitsDB.reactivateHabit", async () => {

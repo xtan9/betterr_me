@@ -106,9 +106,29 @@ export interface HabitLifecyclePersistence {
   ): Promise<HabitMutationRecord | null>;
 }
 
+export interface HabitGraduationRequest {
+  userId: string;
+  habitId: string;
+}
+
+export type HabitGraduationPersistenceOutcome =
+  | { type: "graduated"; habit: HabitMutationRecord }
+  | { type: "already-formed"; habit: HabitMutationRecord }
+  | { type: "not-found" }
+  | { type: "invalid-transition"; currentStatus: HabitLifecycleState };
+
+export interface HabitGraduationPersistence {
+  graduateHabit(
+    habitId: string,
+    userId: string,
+    graduatedAt: string,
+  ): Promise<HabitGraduationPersistenceOutcome>;
+}
+
 type HabitWritesPersistence = Partial<HabitCreationPersistence> &
   Partial<HabitUpdatePersistence> &
-  Partial<HabitLifecyclePersistence>;
+  Partial<HabitLifecyclePersistence> &
+  Partial<HabitGraduationPersistence>;
 
 export type HabitCreationOutcome =
   | { type: "created"; habit: CreatedHabit }
@@ -128,6 +148,17 @@ export type HabitLifecycleOutcome =
   | {
       type: "invalid-transition";
       action: HabitLifecycleAction;
+      currentStatus: HabitLifecycleState;
+      message: string;
+    };
+
+export type HabitGraduationOutcome =
+  | { type: "graduated"; habit: HabitMutationRecord }
+  | { type: "already-formed"; habit: HabitMutationRecord }
+  | { type: "not-found" }
+  | {
+      type: "invalid-transition";
+      action: "graduate";
       currentStatus: HabitLifecycleState;
       message: string;
     };
@@ -433,6 +464,34 @@ export class HabitWrites {
     return this.transition("resume", request);
   }
 
+  async graduate(
+    request: HabitGraduationRequest,
+  ): Promise<HabitGraduationOutcome> {
+    if (!this.persistence.graduateHabit) {
+      throw new Error("Habit graduation is not supported by this persistence");
+    }
+
+    const outcome = await this.persistence.graduateHabit(
+      request.habitId,
+      request.userId,
+      this.now().toISOString(),
+    );
+    if (
+      outcome.type === "graduated" ||
+      outcome.type === "already-formed" ||
+      outcome.type === "not-found"
+    ) {
+      return outcome;
+    }
+
+    return {
+      type: "invalid-transition",
+      action: "graduate",
+      currentStatus: outcome.currentStatus,
+      message: `Habit cannot be graduated from ${outcome.currentStatus} state`,
+    };
+  }
+
   private async transition(
     action: HabitLifecycleAction,
     request: HabitLifecycleRequest,
@@ -494,6 +553,42 @@ function toHabitMutationRecord(habit: Habit): HabitMutationRecord {
   };
 }
 
+function isHabitLifecycleState(value: unknown): value is HabitLifecycleState {
+  return value === "active" || value === "paused" || value === "formed";
+}
+
+function mapStoredHabitGraduationOutcome(
+  value: unknown,
+): HabitGraduationPersistenceOutcome {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    throw new Error("Invalid graduation outcome returned by the database");
+  }
+
+  if (value.type === "not-found") return { type: "not-found" };
+
+  if (
+    (value.type === "graduated" || value.type === "already-formed") &&
+    isRecord(value.habit)
+  ) {
+    return {
+      type: value.type,
+      habit: toHabitMutationRecord(value.habit as unknown as Habit),
+    };
+  }
+
+  if (
+    value.type === "invalid-transition" &&
+    isHabitLifecycleState(value.current_status)
+  ) {
+    return {
+      type: "invalid-transition",
+      currentStatus: value.current_status,
+    };
+  }
+
+  throw new Error("Invalid graduation outcome returned by the database");
+}
+
 export function createHabitWrites(supabase: SupabaseClient): HabitWrites {
   const habitsDB = new HabitsDB(supabase);
 
@@ -550,6 +645,15 @@ export function createHabitWrites(supabase: SupabaseClient): HabitWrites {
         if (isNotFoundError(error)) return null;
         throw error;
       }
+    },
+    graduateHabit: async (habitId, userId, graduatedAt) => {
+      const { data, error } = await supabase.rpc("graduate_habit_atomically", {
+        p_habit_id: habitId,
+        p_user_id: userId,
+        p_graduated_at: graduatedAt,
+      });
+      if (error) throw error;
+      return mapStoredHabitGraduationOutcome(data);
     },
   });
 }
