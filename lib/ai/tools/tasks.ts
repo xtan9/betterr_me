@@ -14,6 +14,13 @@ import {
   RecurringCoverageUnavailableError,
   taskReadCoverageRange,
 } from "@/lib/recurring-tasks/coverage";
+import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
+import {
+  createSupabaseSeriesStateAdapter,
+  isSeriesStateSuccess,
+  resolveSeriesEffectiveDate,
+  seriesStateErrorMessage,
+} from "@/lib/recurring-tasks";
 import {
   createSeriesCreation,
   initialSeriesCoverage,
@@ -25,6 +32,7 @@ import {
   taskFormSchema,
   taskStatusSchema,
 } from "@/lib/validations/task";
+import { recurrenceRuleSchema } from "@/lib/validations/recurring-task";
 import type { ToolDefinition, ToolContext } from "./types";
 
 const createTaskParameters = z.object({
@@ -53,9 +61,62 @@ const updateTaskParameters = z
     projectId: taskFormSchema.shape.project_id.describe(
       "Move to a different project",
     ),
+    scope: z.enum(["this", "following", "all"]).optional().describe(
+      "Apply to this occurrence, this and following occurrences, or all occurrences",
+    ),
+    effectiveDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
+      .optional()
+      .describe("Effective local date for a scoped recurring change"),
   })
   .refine(
-    ({ taskId: _taskId, ...updates }) => hasTaskUpdateValues(updates),
+    ({ taskId: _taskId, scope: _scope, effectiveDate: _effectiveDate, ...updates }) =>
+      hasTaskUpdateValues(updates),
+    { message: "At least one field must be provided" },
+  );
+
+const recurringTaskUpdateParameters = z
+  .object({
+    recurringTaskId: z.string().describe("The recurring task ID"),
+    title: z.string().optional().describe("New title"),
+    description: z.string().optional().describe("New description"),
+    priority: z
+      .number()
+      .optional()
+      .describe("New priority level (0=none, 1=low, 2=medium, 3=high)"),
+    categoryId: z.string().optional().describe("New category ID"),
+    dueTime: z.string().optional().describe("New due time in HH:MM format"),
+    recurrenceRule: recurrenceRuleSchema.optional().describe(
+      "New recurrence schedule",
+    ),
+    endType: z
+      .enum(["never", "after_count", "on_date"])
+      .optional()
+      .describe("When the Series ends"),
+    endDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
+      .optional()
+      .describe("End date when endType is on_date"),
+    endCount: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe("Occurrence count when endType is after_count"),
+    scope: z.enum(["following", "all"]).optional().describe(
+      "Apply the change to this and following occurrences or all occurrences",
+    ),
+    effectiveDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
+      .optional()
+      .describe("Effective local date for the revision"),
+  })
+  .refine(
+    ({ recurringTaskId: _recurringTaskId, scope: _scope, effectiveDate: _effectiveDate, ...updates }) =>
+      hasTaskUpdateValues(updates),
     { message: "At least one field must be provided" },
   );
 
@@ -186,7 +247,34 @@ export function taskTools(): ToolDefinition[] {
         params: z.infer<typeof updateTaskParameters>,
         ctx: ToolContext,
       ) => {
-        const { taskId, dueDate, projectId, ...rest } = params;
+        const {
+          taskId,
+          dueDate,
+          projectId,
+          scope,
+          effectiveDate,
+          ...rest
+        } = params;
+        if (scope && scope !== "this") {
+          const outcome = await createSupabaseSeriesStateAdapter(
+            ctx.supabase,
+          ).editScope({
+            userId: ctx.userId,
+            taskId,
+            scope,
+            effectiveDate,
+            ...toSeriesScopeInput({
+              title: rest.title,
+              description: rest.description,
+              priority: rest.priority,
+              status: rest.status,
+              dueDate,
+              projectId,
+            }),
+          });
+          if (isSeriesStateSuccess(outcome)) return { success: true };
+          return { error: seriesStateErrorMessage(outcome) };
+        }
         const outcome = await createSupabaseOccurrenceAdapter(ctx.supabase).edit(
           toOccurrenceEditIntent({
             userId: ctx.userId,
@@ -209,8 +297,28 @@ export function taskTools(): ToolDefinition[] {
         "Delete a task by ID, or skip a recurring occurrence while preserving its series lineage. Always confirm with the user first.",
       parameters: z.object({
         taskId: z.string().describe("The task ID"),
+        scope: z.enum(["this", "following", "all"]).optional().describe(
+          "Apply to this occurrence, this and following occurrences, or all occurrences",
+        ),
+        effectiveDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
+          .optional()
+          .describe("Effective local date for a recurring Series end"),
       }),
       execute: async (params, ctx: ToolContext) => {
+        if (params.scope && params.scope !== "this") {
+          const outcome = await createSupabaseSeriesStateAdapter(
+            ctx.supabase,
+          ).deleteScope({
+            taskId: params.taskId,
+            userId: ctx.userId,
+            scope: params.scope,
+            effectiveDate: params.effectiveDate,
+          });
+          if (isSeriesStateSuccess(outcome)) return { success: true };
+          return { error: seriesStateErrorMessage(outcome) };
+        }
         const outcome = await createSupabaseOccurrenceAdapter(ctx.supabase).delete({
           taskId: params.taskId,
           userId: ctx.userId,
@@ -230,9 +338,7 @@ export function taskTools(): ToolDefinition[] {
           .describe("Filter by status (default: all)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase, {
-          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
-        });
+        const db = new RecurringTasksDB(ctx.supabase);
         return db.getUserRecurringTasks(ctx.userId, {
           status: params.status,
         });
@@ -348,26 +454,29 @@ export function taskTools(): ToolDefinition[] {
     },
     {
       name: "updateRecurringTask",
-      description: "Update a recurring task's title, description, or priority",
-      parameters: z.object({
-        recurringTaskId: z.string().describe("The recurring task ID"),
-        title: z.string().optional().describe("New title"),
-        description: z.string().optional().describe("New description"),
-        priority: z
-          .number()
-          .optional()
-          .describe("New priority level (0=none, 1=low, 2=medium, 3=high)"),
-      }),
+      description:
+        "Update a recurring Series Default or schedule. An effective date creates a following-scope revision.",
+      parameters: recurringTaskUpdateParameters,
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase, {
-          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        const outcome = await createSupabaseSeriesStateAdapter(ctx.supabase).update({
+          userId: ctx.userId,
+          seriesId: params.recurringTaskId,
+          title: params.title,
+          description: params.description,
+          priority: params.priority as 0 | 1 | 2 | 3 | undefined,
+          categoryId: params.categoryId,
+          dueTime: params.dueTime,
+          recurrenceRule: params.recurrenceRule as RecurrenceRule | undefined,
+          endType: params.endType,
+          endDate: params.endDate,
+          endCount: params.endCount,
+          scope: params.scope,
+          effectiveDate: params.effectiveDate,
+          inferredDate: ctx.date,
+          timezone: ctx.timezone,
         });
-        const { recurringTaskId, ...rest } = params;
-        const updates: Record<string, unknown> = { ...rest };
-        for (const key of Object.keys(updates)) {
-          if (updates[key] === undefined) delete updates[key];
-        }
-        return db.updateRecurringTask(recurringTaskId, ctx.userId, updates);
+        if (isSeriesStateSuccess(outcome)) return outcome.recurringTask;
+        return { error: seriesStateErrorMessage(outcome) };
       },
     },
     {
@@ -376,12 +485,53 @@ export function taskTools(): ToolDefinition[] {
         "Pause a recurring task to stop generating new instances",
       parameters: z.object({
         recurringTaskId: z.string().describe("The recurring task ID"),
+        effectiveDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
+          .optional()
+          .describe("Effective local date; defaults to today"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase, {
-          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        const outcome = await createSupabaseSeriesStateAdapter(ctx.supabase).pause({
+          seriesId: params.recurringTaskId,
+          userId: ctx.userId,
+          effectiveDate: params.effectiveDate,
+          inferredDate: ctx.date,
+          timezone: ctx.timezone,
         });
-        return db.pauseRecurringTask(params.recurringTaskId, ctx.userId);
+        if (isSeriesStateSuccess(outcome)) return outcome.recurringTask;
+        return { error: seriesStateErrorMessage(outcome) };
+      },
+    },
+    {
+      name: "resumeRecurringTask",
+      description:
+        "Resume a paused recurring task and continue generating instances",
+      parameters: z.object({
+        recurringTaskId: z.string().describe("The recurring task ID"),
+        effectiveDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
+          .optional()
+          .describe("Effective local date; defaults to today"),
+      }),
+      execute: async (params, ctx: ToolContext) => {
+        const effectiveDate = resolveSeriesEffectiveDate(
+          params.effectiveDate,
+          ctx.date,
+        );
+        const outcome = await createSupabaseSeriesStateAdapter(ctx.supabase).resume({
+          seriesId: params.recurringTaskId,
+          userId: ctx.userId,
+          effectiveDate: params.effectiveDate,
+          inferredDate: ctx.date,
+          timezone: ctx.timezone,
+          coverageThrough: effectiveDate
+            ? addLocalDays(effectiveDate, 7)
+            : undefined,
+        });
+        if (isSeriesStateSuccess(outcome)) return outcome.recurringTask;
+        return { error: seriesStateErrorMessage(outcome) };
       },
     },
     {
@@ -390,18 +540,22 @@ export function taskTools(): ToolDefinition[] {
         "End a recurring task while preserving its lineage and completed history. Always confirm with the user first.",
       parameters: z.object({
         recurringTaskId: z.string().describe("The recurring task ID"),
+        effectiveDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
+          .optional()
+          .describe("Effective local date; defaults to today"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const db = new RecurringTasksDB(ctx.supabase, {
-          lifecycle: createSupabaseRecurringTaskLifecycle(ctx.supabase),
+        const outcome = await createSupabaseSeriesStateAdapter(ctx.supabase).end({
+          seriesId: params.recurringTaskId,
+          userId: ctx.userId,
+          effectiveDate: params.effectiveDate,
+          inferredDate: ctx.date,
+          timezone: ctx.timezone,
         });
-        const rt = await db.getRecurringTask(params.recurringTaskId, ctx.userId);
-        if (!rt) return { error: "Recurring task not found" };
-        await db.deleteRecurringTask(
-          params.recurringTaskId,
-          ctx.userId,
-        );
-        return { success: true };
+        if (isSeriesStateSuccess(outcome)) return { success: true };
+        return { error: seriesStateErrorMessage(outcome) };
       },
     },
   ];
@@ -419,4 +573,26 @@ async function ensureAiRecurringCoverage(
   if (coverage.status === "partial") {
     throw new RecurringCoverageUnavailableError(coverage.warning);
   }
+}
+
+function toSeriesScopeInput(input: {
+  title?: string;
+  description?: string | null;
+  priority?: 0 | 1 | 2 | 3;
+  categoryId?: string | null;
+  dueDate?: string | null;
+  dueTime?: string | null;
+  status?: "backlog" | "todo" | "in_progress" | "done";
+  projectId?: string | null;
+}) {
+  return {
+    title: input.title,
+    description: input.description,
+    priority: input.priority,
+    categoryId: input.categoryId,
+    dueDate: input.dueDate,
+    dueTime: input.dueTime,
+    status: input.status,
+    projectId: input.projectId,
+  };
 }

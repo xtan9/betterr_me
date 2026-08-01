@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
-import { TasksDB, RecurringTasksDB } from '@/lib/db';
+import { TasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { taskUpdateSchema } from '@/lib/validations/task';
 import { editScopeSchema } from '@/lib/validations/recurring-task';
-import { createTaskWrites } from '@/lib/tasks/writes';
 import {
   createSupabaseOccurrenceAdapter,
-  createSupabaseRecurringTaskLifecycle,
+  createSupabaseSeriesStateAdapter,
   isOccurrenceSuccess,
   occurrenceHttpFailure,
+  isSeriesStateSuccess,
+  seriesStateHttpFailure,
   toOccurrenceEditIntent,
 } from '@/lib/recurring-tasks';
+import { isValidLocalDate } from '@/lib/recurring-tasks/recurrence';
 import type { TaskUpdateValues } from '@/lib/validations/task';
 
 const READ_REQUEST_POLICY = {
@@ -78,6 +80,13 @@ export async function PATCH(
     const body = await request.json();
     const searchParams = request.nextUrl.searchParams;
     const scopeParam = searchParams.get('scope');
+    const dateParam = searchParams.get('date')?.trim() || undefined;
+    if (dateParam && !isValidLocalDate(dateParam)) {
+      return NextResponse.json(
+        { error: 'Invalid date. Must be a valid YYYY-MM-DD local date' },
+        { status: 400 },
+      );
+    }
 
     // Handle recurring task scope-based updates
     if (scopeParam) {
@@ -112,17 +121,20 @@ export async function PATCH(
         return NextResponse.json({ success: true });
       }
 
-      const writes = createTaskWrites(supabase, {
-        scopedUpdates: true,
-        lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
-      });
-      await writes.execute({
-        type: 'update',
+      const outcome = await createSupabaseSeriesStateAdapter(supabase).editScope({
         taskId: id,
         userId,
         scope: scopeResult.data,
-        values: validation.data,
+        effectiveDate: dateParam,
+        ...toSeriesScopeInput(validation.data),
       });
+      if (!isSeriesStateSuccess(outcome)) {
+        const failure = seriesStateHttpFailure(outcome);
+        return NextResponse.json(
+          { error: failure.error },
+          { status: failure.status },
+        );
+      }
       return NextResponse.json({ success: true });
     }
 
@@ -172,6 +184,13 @@ export async function DELETE(
 
     const searchParams = request.nextUrl.searchParams;
     const scopeParam = searchParams.get('scope');
+    const dateParam = searchParams.get('date')?.trim() || undefined;
+    if (dateParam && !isValidLocalDate(dateParam)) {
+      return NextResponse.json(
+        { error: 'Invalid date. Must be a valid YYYY-MM-DD local date' },
+        { status: 400 },
+      );
+    }
 
     // Handle recurring task scope-based deletes
     if (scopeParam) {
@@ -199,10 +218,19 @@ export async function DELETE(
         return NextResponse.json({ success: true });
       }
 
-      const recurringTasksDB = new RecurringTasksDB(supabase, {
-        lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+      const outcome = await createSupabaseSeriesStateAdapter(supabase).deleteScope({
+        taskId: id,
+        userId,
+        scope: scopeResult.data,
+        effectiveDate: dateParam,
       });
-      await recurringTasksDB.deleteInstanceWithScope(id, userId, scopeResult.data);
+      if (!isSeriesStateSuccess(outcome)) {
+        const failure = seriesStateHttpFailure(outcome);
+        return NextResponse.json(
+          { error: failure.error },
+          { status: failure.status },
+        );
+      }
       return NextResponse.json({ success: true });
     }
 
@@ -242,5 +270,21 @@ function toOccurrenceInput(values: TaskUpdateValues) {
     sortOrder: values.sort_order,
     projectId: values.project_id,
     completionDifficulty: values.completion_difficulty,
+  };
+}
+
+function toSeriesScopeInput(values: TaskUpdateValues) {
+  return {
+    title: values.title,
+    description: values.description,
+    priority: values.priority,
+    categoryId: values.category_id,
+    dueDate: values.due_date,
+    dueTime: values.due_time,
+    status: values.status,
+    completed: values.is_completed,
+    section: values.section,
+    sortOrder: values.sort_order,
+    projectId: values.project_id,
   };
 }

@@ -86,9 +86,9 @@ describe("taskTools", () => {
     });
   });
 
-  it("returns an array of 14 tool definitions", () => {
+  it("returns an array of 15 tool definitions", () => {
     const tools = taskTools();
-    expect(tools).toHaveLength(14);
+    expect(tools).toHaveLength(15);
     expect(tools.map((t) => t.name)).toEqual([
       "getTodayTasks",
       "getUpcomingTasks",
@@ -103,6 +103,7 @@ describe("taskTools", () => {
       "createRecurringTask",
       "updateRecurringTask",
       "pauseRecurringTask",
+      "resumeRecurringTask",
       "deleteRecurringTask",
     ]);
   });

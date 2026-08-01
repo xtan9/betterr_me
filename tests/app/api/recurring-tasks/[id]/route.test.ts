@@ -261,6 +261,9 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
 describe("DELETE /api/recurring-tasks/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(mockRecurringTasksDB.getRecurringTask).mockResolvedValue({
+      id: "rt-1",
+    });
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: "user-123" } } })) },
     } as any);
