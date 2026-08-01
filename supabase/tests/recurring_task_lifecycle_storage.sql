@@ -170,8 +170,16 @@ select public.ralph_ci_create_auth_user(
 );
 
 -- The constrained runner owns disposable table grants before the fixture
--- switches to authenticated, so the optional task link can be tested without
--- broadening authenticated direct-write privileges.
+-- switches to authenticated. Set the owner claim while the runner still has
+-- the table grant so this setup write follows the existing tasks RLS policy
+-- without broadening authenticated direct-write privileges.
+select set_config('request.jwt.claims', '', false);
+select set_config(
+  'request.jwt.claim.sub',
+  '67700000-0000-0000-0000-000000000001',
+  false
+);
+
 insert into public.tasks (id, user_id, title)
 values (
   '67700000-0000-0000-0000-000000000101',
@@ -180,6 +188,11 @@ values (
 );
 
 set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  '67700000-0000-0000-0000-000000000001',
+  true
+);
 select set_config(
   'request.jwt.claims',
   '{"sub":"67700000-0000-0000-0000-000000000001"}',
@@ -379,6 +392,11 @@ end
 $creation$;
 
 select set_config(
+  'request.jwt.claim.sub',
+  '67700000-0000-0000-0000-000000000002',
+  true
+);
+select set_config(
   'request.jwt.claims',
   '{"sub":"67700000-0000-0000-0000-000000000002"}',
   true
@@ -429,6 +447,11 @@ begin
 end
 $ownership$;
 
+select set_config(
+  'request.jwt.claim.sub',
+  '67700000-0000-0000-0000-000000000001',
+  true
+);
 select set_config(
   'request.jwt.claims',
   '{"sub":"67700000-0000-0000-0000-000000000001"}',
@@ -576,6 +599,11 @@ begin
 end
 $occurrences$;
 
+select set_config(
+  'request.jwt.claim.sub',
+  '67700000-0000-0000-0000-000000000002',
+  true
+);
 select set_config(
   'request.jwt.claims',
   '{"sub":"67700000-0000-0000-0000-000000000002"}',
