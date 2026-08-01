@@ -74,4 +74,32 @@ describe("SupabaseRecurringTaskLifecycle", () => {
       p_request: request,
     });
   });
+
+  it.each([
+    ["skip-occurrence", "skipOccurrence"],
+    ["complete-occurrence", "completeOccurrence"],
+    ["reopen-occurrence", "reopenOccurrence"],
+  ] as const)(
+    "routes %s through the explicit occurrence lifecycle command",
+    async (operation, method) => {
+      const rpc = vi.fn().mockResolvedValue({
+        data: { status: "complete", type: "complete" },
+        error: null,
+      });
+      const lifecycle = new SupabaseRecurringTaskLifecycle({ rpc } as never);
+      const request = {
+        userId: "user-1",
+        seriesId: "series-1",
+        occurrenceId: "occurrence-1",
+        idempotencyKey: `${operation}-1`,
+      };
+
+      await lifecycle[method](request);
+
+      expect(rpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
+        p_operation: operation,
+        p_request: request,
+      });
+    },
+  );
 });

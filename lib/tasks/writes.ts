@@ -29,7 +29,10 @@ export interface TaskWritePersistence {
     scope: EditScope,
     updates: TaskUpdate,
   ): Promise<void>;
-  lifecycle?: Pick<RecurringTaskLifecyclePort, 'editOccurrence'>;
+  lifecycle?: Pick<
+    RecurringTaskLifecyclePort,
+    'editOccurrence' | 'completeOccurrence' | 'reopenOccurrence'
+  >;
 }
 
 export type TaskWriteIntent =
@@ -145,13 +148,15 @@ export class TaskWrites {
         && current.recurring_occurrence_id
         && this.persistence.lifecycle
       ) {
-        assertLifecycleSuccess(await this.persistence.lifecycle.editOccurrence({
+        const request = {
           userId: intent.userId,
           seriesId: current.recurring_series_id,
           occurrenceId: current.recurring_occurrence_id,
-          updates: {},
-          completed: !current.is_completed,
-        }));
+        };
+        const result = current.is_completed
+          ? await this.persistence.lifecycle.reopenOccurrence(request)
+          : await this.persistence.lifecycle.completeOccurrence(request);
+        assertLifecycleSuccess(result);
         const task = await this.persistence.getTask(intent.taskId, intent.userId);
         if (!task) throw new TaskNotFoundError();
         return { type: 'toggled', task };
@@ -189,15 +194,25 @@ export class TaskWrites {
           return { type: 'updated', task };
         }
         if (current.recurring_series_id && current.recurring_occurrence_id) {
-          assertLifecycleSuccess(await this.persistence.lifecycle.editOccurrence({
-            userId: intent.userId,
-            seriesId: current.recurring_series_id,
-            occurrenceId: current.recurring_occurrence_id,
-            updates: isCompletionSynchronizationOnly(updates)
-              ? {}
-              : taskUpdatesToOccurrenceOverrides(updates),
-            completed: updates.is_completed,
-          }));
+          if (isCompletionSynchronizationOnly(updates)) {
+            const request = {
+              userId: intent.userId,
+              seriesId: current.recurring_series_id,
+              occurrenceId: current.recurring_occurrence_id,
+            };
+            const result = updates.is_completed
+              ? await this.persistence.lifecycle.completeOccurrence(request)
+              : await this.persistence.lifecycle.reopenOccurrence(request);
+            assertLifecycleSuccess(result);
+          } else {
+            assertLifecycleSuccess(await this.persistence.lifecycle.editOccurrence({
+              userId: intent.userId,
+              seriesId: current.recurring_series_id,
+              occurrenceId: current.recurring_occurrence_id,
+              updates: taskUpdatesToOccurrenceOverrides(updates),
+              completed: updates.is_completed,
+            }));
+          }
           const task = await this.persistence.getTask(intent.taskId, intent.userId);
           if (!task) throw new TaskNotFoundError();
           return { type: 'updated', task };
@@ -298,8 +313,8 @@ function taskUpdatesToOccurrenceOverrides(
 }
 
 function isCompletionSynchronizationOnly(updates: TaskUpdate): boolean {
-  return updates.is_completed === false
-    && updates.status === 'todo'
+  return typeof updates.is_completed === 'boolean'
+    && updates.status === (updates.is_completed ? 'done' : 'todo')
     && Object.keys(updates).every((key) =>
       key === 'is_completed' || key === 'status' || key === 'completed_at'
     );

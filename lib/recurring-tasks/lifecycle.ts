@@ -736,6 +736,9 @@ export class RecurringTaskLifecycle implements RecurringTaskLifecyclePort {
       if (invalid) return invalid;
       const occurrence = ownedOccurrence(series, request.occurrenceId);
       if (!occurrence) return notFound();
+      if (occurrence.state === "open" || occurrence.state === "extra") {
+        return { ...summarize(series), status: "already-applied" };
+      }
       if (occurrence.state !== "completed") {
         return invalidTransition("Only completed Occurrences can be reopened");
       }

@@ -3,12 +3,15 @@ import { POST as togglePost } from '@/app/api/tasks/[id]/toggle/route';
 import { GET as tasksGet } from '@/app/api/tasks/route';
 import { NextRequest } from 'next/server';
 
+const mockRpc = vi.fn();
+
 // Mock dependencies
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => ({
     auth: {
       getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })),
     },
+    rpc: mockRpc,
   })),
 }));
 
@@ -56,6 +59,44 @@ describe('POST /api/tasks/[id]/toggle', () => {
       'user-123',
       expect.objectContaining({ is_completed: true, status: 'done' }),
     );
+  });
+
+  it('completes a recurring occurrence through the lifecycle RPC', async () => {
+    const currentTask = {
+      id: 'task-1',
+      is_completed: false,
+      recurring_series_id: 'series-1',
+      recurring_occurrence_id: 'occurrence-1',
+    };
+    const completedTask = { ...currentTask, is_completed: true, status: 'done' };
+    vi.mocked(mockTasksDB.getTask)
+      .mockResolvedValueOnce(currentTask as any)
+      .mockResolvedValueOnce(completedTask as any);
+    mockRpc.mockResolvedValue({
+      data: { status: 'complete', type: 'complete' },
+      error: null,
+    });
+
+    const request = new NextRequest('http://localhost:3000/api/tasks/task-1/toggle', {
+      method: 'POST',
+    });
+
+    const response = await togglePost(request, {
+      params: Promise.resolve({ id: 'task-1' }),
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.task).toEqual(completedTask);
+    expect(mockRpc).toHaveBeenCalledWith('recurring_task_lifecycle', {
+      p_operation: 'complete-occurrence',
+      p_request: {
+        userId: 'user-123',
+        seriesId: 'series-1',
+        occurrenceId: 'occurrence-1',
+      },
+    });
+    expect(mockTasksDB.updateTask).not.toHaveBeenCalled();
   });
 
   it('should return 404 if task not found', async () => {

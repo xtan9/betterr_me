@@ -13,6 +13,7 @@ const mockGetUserTasks = vi.fn();
 const mockCreateTask = vi.fn();
 const mockUpdateTask = vi.fn();
 const mockDeleteTask = vi.fn();
+const mockDeleteInstanceWithScope = vi.fn();
 
 const mockSortOrderChain = {
   select: vi.fn().mockReturnThis(),
@@ -32,6 +33,7 @@ vi.mock("@/lib/db", () => ({
     updateRecurringTask = vi.fn();
     pauseRecurringTask = vi.fn();
     deleteRecurringTask = vi.fn();
+    deleteInstanceWithScope = mockDeleteInstanceWithScope;
   },
   TasksDB: class {
     getTodayTasks = mockGetTodayTasks;
@@ -176,6 +178,27 @@ describe("taskTools", () => {
     expect(mockDeleteTask).not.toHaveBeenCalled();
   });
 
+  it("deleteTask skips a recurring occurrence through the recurring adapter", async () => {
+    const ctx = makeCtx();
+    const deleteTask = taskTools().find((t) => t.name === "deleteTask")!;
+    mockGetTask.mockResolvedValue({
+      id: "t1",
+      recurring_series_id: "series-1",
+      recurring_occurrence_id: "occurrence-1",
+    });
+    mockDeleteInstanceWithScope.mockResolvedValue(undefined);
+
+    const result = await deleteTask.execute({ taskId: "t1" }, ctx);
+
+    expect(mockDeleteInstanceWithScope).toHaveBeenCalledWith(
+      "t1",
+      "user-123",
+      "this",
+    );
+    expect(mockDeleteTask).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: true });
+  });
+
   it("getUpcomingTasks calls TasksDB.getUpcomingTasks with days", async () => {
     const ctx = makeCtx();
     const getUpcomingTasks = taskTools().find((t) => t.name === "getUpcomingTasks")!;
@@ -286,6 +309,37 @@ describe("taskTools", () => {
       }),
     );
     expect(result).toEqual({ id: "t1", is_completed: true, status: "done" });
+  });
+
+  it("toggleTask completes a recurring occurrence through the lifecycle RPC", async () => {
+    const ctx = makeCtx();
+    const toggleTask = taskTools().find((t) => t.name === "toggleTask")!;
+    const currentTask = {
+      id: "t1",
+      is_completed: false,
+      recurring_series_id: "series-1",
+      recurring_occurrence_id: "occurrence-1",
+    };
+    mockGetTask
+      .mockResolvedValueOnce(currentTask)
+      .mockResolvedValueOnce({ ...currentTask, is_completed: true, status: "done" });
+
+    const result = await toggleTask.execute({ taskId: "t1" }, ctx);
+
+    expect(mockRpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
+      p_operation: "complete-occurrence",
+      p_request: {
+        userId: "user-123",
+        seriesId: "series-1",
+        occurrenceId: "occurrence-1",
+      },
+    });
+    expect(mockUpdateTask).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ...currentTask,
+      is_completed: true,
+      status: "done",
+    });
   });
 
   it("updateTask transforms dueDate and projectId, strips undefined", async () => {
