@@ -413,7 +413,7 @@ describe("useCurrentProfile", () => {
     });
     await expect(rejected).rejects.toThrow("rejected");
     await waitFor(() =>
-      expect(result.current.weightUnit).toEqual({ status: "ready", value: "kg" }),
+      expect(result.current.weightUnit).toEqual({ status: "ready", value: "lbs" }),
     );
   });
 
@@ -523,5 +523,140 @@ describe("useCurrentProfile", () => {
       await localization;
     });
     expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("applies an accepted narrow outcome before revalidating Current Profile", async () => {
+    const { useFitnessPreference } = await import(
+      "@/lib/hooks/use-profile-preferences"
+    );
+    let resolveRevalidation!: (value: CurrentProfileResponse) => void;
+    const revalidation = new Promise<CurrentProfileResponse>((resolve) => {
+      resolveRevalidation = resolve;
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          weightUnit: "lbs",
+          preferenceRevision: 4,
+          changed: true,
+        }),
+    });
+    currentSWRData = baseProfile;
+    mockMutate.mockReturnValue(revalidation);
+
+    const { result } = renderHook(() => useFitnessPreference());
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-a"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+
+    let accepted: Promise<unknown> | undefined;
+    act(() => {
+      accepted = result.current.setWeightUnit("lbs");
+    });
+    await waitFor(() => expect(mockMutate).toHaveBeenCalled());
+
+    expect(result.current.weightUnit).toEqual({
+      status: "ready",
+      value: "lbs",
+    });
+
+    resolveRevalidation(baseProfile);
+    await act(async () => {
+      await accepted;
+    });
+  });
+
+  it("does not apply a no-op outcome as a new accepted revision", async () => {
+    const { useFitnessPreference } = await import(
+      "@/lib/hooks/use-profile-preferences"
+    );
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          weightUnit: "kg",
+          preferenceRevision: 3,
+          changed: false,
+        }),
+    });
+    currentSWRData = baseProfile;
+    mockMutate.mockResolvedValue(baseProfile);
+
+    const { result } = renderHook(() => useFitnessPreference());
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-a"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+
+    await act(async () => {
+      await result.current.setWeightUnit("kg");
+    });
+
+    expect(result.current.weightUnit).toEqual({
+      status: "ready",
+      value: "kg",
+    });
+    expect(result.current.currentProfile?.preferences.preferenceRevision).toBe(3);
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    expect(mockMutate).toHaveBeenCalledWith(expect.any(Function), {
+      revalidate: false,
+    });
+  });
+
+  it("rejects a stale same-concept outcome after a newer revision was applied", async () => {
+    const { useFitnessPreference } = await import(
+      "@/lib/hooks/use-profile-preferences"
+    );
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            weightUnit: "lbs",
+            preferenceRevision: 4,
+            changed: true,
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            weightUnit: "kg",
+            preferenceRevision: 3,
+            changed: true,
+          }),
+      });
+    currentSWRData = baseProfile;
+    mockMutate.mockResolvedValue(baseProfile);
+
+    const { result } = renderHook(() => useFitnessPreference());
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-a"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+
+    await act(async () => {
+      await result.current.setWeightUnit("lbs");
+    });
+    await act(async () => {
+      await result.current.setWeightUnit("kg");
+    });
+
+    expect(result.current.weightUnit).toEqual({
+      status: "ready",
+      value: "lbs",
+    });
+    expect(result.current.currentProfile?.preferences.preferenceRevision).toBe(4);
   });
 });
