@@ -133,40 +133,72 @@ values
   );
 
 set local role authenticated;
-insert into public.reminders (
-  id,
-  user_id,
-  source_type,
-  source_id,
-  reminder_type,
-  absolute_time,
-  channels,
-  status,
-  fire_at
-)
-values
-  (
-    '57700000-0000-0000-0000-000000000050',
+do $habit_reminder_seed$
+declare
+  outcome jsonb;
+  push_reminder_id uuid;
+  email_reminder_id uuid;
+begin
+  outcome := public.configure_habit_reminders(
     '57700000-0000-0000-0000-000000000001',
-    'habit',
     '57700000-0000-0000-0000-000000000071',
-    'absolute',
-    '2026-08-05 09:00:00+00',
-    array['push'],
-    'pending',
-    '2026-08-05 09:00:00+00'
-  ),
-  (
-    '57700000-0000-0000-0000-000000000051',
-    '57700000-0000-0000-0000-000000000001',
-    'habit',
-    '57700000-0000-0000-0000-000000000071',
-    'absolute',
-    '2026-08-06 09:00:00+00',
-    array['email'],
-    'pending',
-    '2026-08-06 09:00:00+00'
+    '[
+      {
+        "reminder_type": "absolute",
+        "relative_minutes": null,
+        "absolute_time": "2026-08-05T09:00:00Z",
+        "channels": ["push"]
+      },
+      {
+        "reminder_type": "absolute",
+        "relative_minutes": null,
+        "absolute_time": "2026-08-06T09:00:00Z",
+        "channels": ["email"]
+      }
+    ]'::jsonb,
+    null
   );
+
+  select (reminder->>'id')::uuid
+  into push_reminder_id
+  from jsonb_array_elements(outcome->'reminders') as reminder
+  where reminder->>'source_type' = 'habit'
+    and (reminder->>'source_id')::uuid
+      = '57700000-0000-0000-0000-000000000071'::uuid
+    and reminder->'channels' = '["push"]'::jsonb
+    and (reminder->>'fire_at')::timestamptz
+      = timestamptz '2026-08-05 09:00:00+00'
+    and reminder->>'status' = 'pending';
+  select (reminder->>'id')::uuid
+  into email_reminder_id
+  from jsonb_array_elements(outcome->'reminders') as reminder
+  where reminder->>'source_type' = 'habit'
+    and (reminder->>'source_id')::uuid
+      = '57700000-0000-0000-0000-000000000071'::uuid
+    and reminder->'channels' = '["email"]'::jsonb
+    and (reminder->>'fire_at')::timestamptz
+      = timestamptz '2026-08-06 09:00:00+00'
+    and reminder->>'status' = 'pending';
+
+  if outcome->>'type' is distinct from 'configured'
+     or jsonb_array_length(outcome->'reminders') <> 2
+     or push_reminder_id is null
+     or email_reminder_id is null then
+    raise exception 'identity Habit reminder seed outcome was incorrect: %', outcome;
+  end if;
+
+  perform set_config(
+    'ralph.identity_owner_push_reminder_id',
+    push_reminder_id::text,
+    false
+  );
+  perform set_config(
+    'ralph.identity_owner_email_reminder_id',
+    email_reminder_id::text,
+    false
+  );
+end
+$habit_reminder_seed$;
 reset role;
 
 insert into public.reminder_defaults (
@@ -344,6 +376,7 @@ set local role authenticated;
 do $$
 declare
   affected_rows bigint;
+  configuration jsonb;
 begin
   if (
     select count(*)
@@ -355,17 +388,20 @@ begin
 
   update public.reminders
   set status = 'sent'
-  where id = '57700000-0000-0000-0000-000000000050';
+  where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid;
   get diagnostics affected_rows = row_count;
   if affected_rows <> 1 then
     raise exception 'owner reminder update changed % rows', affected_rows;
   end if;
 
-  delete from public.reminders
-  where id = '57700000-0000-0000-0000-000000000051';
-  get diagnostics affected_rows = row_count;
-  if affected_rows <> 1 then
-    raise exception 'owner reminder delete changed % rows', affected_rows;
+  configuration := public.configure_habit_reminders(
+    '57700000-0000-0000-0000-000000000001',
+    '57700000-0000-0000-0000-000000000071',
+    '[]'::jsonb,
+    null
+  );
+  if configuration->>'type' <> 'removed' then
+    raise exception 'owner Habit Reminder Configuration removal was incorrect: %', configuration;
   end if;
 end
 $$;
@@ -770,7 +806,7 @@ begin
   if (
     select count(*)
     from public.reminders
-    where id = '57700000-0000-0000-0000-000000000050'
+    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid
   ) <> 0 then
     raise exception 'non-owner can read the owner reminder';
   end if;
@@ -780,7 +816,7 @@ begin
   begin
     update public.reminders
     set status = 'failed'
-    where id = '57700000-0000-0000-0000-000000000050';
+    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid;
     get diagnostics affected_rows = row_count;
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
@@ -794,7 +830,7 @@ begin
   operation_sqlstate := null;
   begin
     delete from public.reminders
-    where id = '57700000-0000-0000-0000-000000000051';
+    where id = current_setting('ralph.identity_owner_email_reminder_id')::uuid;
     get diagnostics affected_rows = row_count;
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
@@ -986,12 +1022,12 @@ begin
 
   if (
     select status from public.reminders
-    where id = '57700000-0000-0000-0000-000000000050'
+    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid
   ) is distinct from 'sent'
   or exists (
     select 1 from public.reminders
     where id in (
-      '57700000-0000-0000-0000-000000000051',
+      current_setting('ralph.identity_owner_email_reminder_id')::uuid,
       '57700000-0000-0000-0000-000000000052'
     )
   ) then
@@ -1113,7 +1149,7 @@ begin
   operation_sqlstate := null;
   begin
     select count(*) into visible_rows from public.reminders
-    where id = '57700000-0000-0000-0000-000000000050';
+    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid;
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
   end;
@@ -1278,7 +1314,7 @@ begin
   begin
     update public.reminders
     set status = 'failed'
-    where id = '57700000-0000-0000-0000-000000000050';
+    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid;
     get diagnostics affected_rows = row_count;
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
@@ -1292,7 +1328,7 @@ begin
   operation_sqlstate := null;
   begin
     delete from public.reminders
-    where id = '57700000-0000-0000-0000-000000000050';
+    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid;
     get diagnostics affected_rows = row_count;
   exception when others then
     get stacked diagnostics operation_sqlstate = returned_sqlstate;
@@ -1593,7 +1629,7 @@ begin
   ) is distinct from 'owner-agent-updated'
   or (
     select status from public.reminders
-    where id = '57700000-0000-0000-0000-000000000050'
+    where id = current_setting('ralph.identity_owner_push_reminder_id')::uuid
   ) is distinct from 'sent'
   or (
     select relative_minutes from public.reminder_defaults
@@ -1625,14 +1661,8 @@ begin
     raise exception 'owner push delete changed % rows', affected_rows;
   end if;
 
-  set local role authenticated;
-  delete from public.reminders
-  where id = '57700000-0000-0000-0000-000000000050';
-  get diagnostics affected_rows = row_count;
-  if affected_rows <> 1 then
-    raise exception 'owner reminder delete changed % rows', affected_rows;
-  end if;
-  reset role;
+  -- The Habit boundary removes pending intent but intentionally preserves the
+  -- sent delivery history for retry/audit ownership.
 
   delete from public.reminder_defaults
   where id = '57700000-0000-0000-0000-000000000060';
@@ -1650,10 +1680,7 @@ begin
 
   if exists (select 1 from public.chat_memories where id = '57700000-0000-0000-0000-000000000030')
     or exists (select 1 from public.push_subscriptions where id = '57700000-0000-0000-0000-000000000040')
-    or exists (select 1 from public.reminders where id in (
-      '57700000-0000-0000-0000-000000000050',
-      '57700000-0000-0000-0000-000000000051'
-    ))
+    or exists (select 1 from public.reminders where id = current_setting('ralph.identity_owner_email_reminder_id')::uuid)
     or exists (select 1 from public.reminder_defaults where id in (
       '57700000-0000-0000-0000-000000000060',
       '57700000-0000-0000-0000-000000000061'

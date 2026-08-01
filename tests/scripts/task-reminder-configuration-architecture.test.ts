@@ -20,7 +20,7 @@ describe("Task Reminder Configuration architecture boundaries", () => {
     const taskPost = section(
       route,
       'if (reminderData.source_type === "task")',
-      "    const fireAt",
+      '    if (reminderData.source_type === "habit")',
     );
 
     expect(taskPost).toContain("createTaskWrites(supabase).configureReminders");
@@ -38,7 +38,7 @@ describe("Task Reminder Configuration architecture boundaries", () => {
     const taskDelete = section(
       route,
       'if (existing.source_type === "task")',
-      "    await remindersDB.deleteReminder",
+      '    if (existing.source_type === "habit")',
     );
 
     expect(taskPatch).toContain("createTaskWrites(supabase).configureReminders");
@@ -52,12 +52,12 @@ describe("Task Reminder Configuration architecture boundaries", () => {
     const taskCreate = section(
       tools,
       'if (params.sourceType === "task")',
-      '        const db = new RemindersDB',
+      '        if (params.sourceType === "habit")',
     );
     const taskDelete = section(
       tools,
       'if (reminder.source_type === "task")',
-      "        await db.deleteReminder",
+      '        if (reminder.source_type === "habit")',
     );
 
     expect(taskCreate).toContain("createTaskWrites(ctx.supabase).configureReminders");

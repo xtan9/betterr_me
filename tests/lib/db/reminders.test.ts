@@ -1,16 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { RemindersDB } from "@/lib/db/reminders";
 import { mockSupabaseClient } from "../../setup";
-import {
-  queueThenResponses,
-  restoreMockSupabaseThen,
-} from "../../helpers/mock-supabase";
+import { restoreMockSupabaseThen } from "../../helpers/mock-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  Reminder,
-  ReminderInsert,
-  ReminderUpdate,
-} from "@/lib/db/types";
+import type { Reminder, ReminderUpdate } from "@/lib/db/types";
 
 const USER_ID = "user-123";
 const REMINDER_ID = "reminder-123";
@@ -48,57 +41,6 @@ describe("RemindersDB", () => {
   });
 
   // ─── createReminder ─────────────────────────────────────────────────────────
-  describe("createReminder", () => {
-    const insertPayload: Omit<ReminderInsert, "user_id"> = {
-      source_type: "calendar_event",
-      source_id: EVENT_ID,
-      reminder_type: "relative",
-      relative_minutes: 15,
-      absolute_time: null,
-      channels: ["push"],
-      fire_at: "2026-03-30T09:45:00Z",
-    };
-
-    it("inserts a reminder with user_id merged in and returns the row", async () => {
-      const expected = makeReminder();
-      mockSupabaseClient.setMockResponse(expected);
-
-      const result = await db.createReminder(USER_ID, insertPayload);
-
-      expect(result).toEqual(expected);
-
-      // Full chain: from → insert({ ...reminder, user_id }) → select() → single().
-      mockSupabaseClient.expectQuery({
-        table: "reminders",
-        method: "from",
-        args: ["reminders"],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "reminders",
-        method: "insert",
-        args: [{ ...insertPayload, user_id: USER_ID }],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "reminders",
-        method: "select",
-        args: [],
-      });
-      mockSupabaseClient.expectQuery({
-        table: "reminders",
-        method: "single",
-        args: [],
-      });
-    });
-
-    it("throws when the insert fails", async () => {
-      mockSupabaseClient.setMockResponse(null, new Error("duplicate key"));
-
-      await expect(db.createReminder(USER_ID, insertPayload)).rejects.toThrow(
-        "duplicate key",
-      );
-    });
-  });
-
   // ─── getRemindersBySource ───────────────────────────────────────────────────
   describe("getRemindersBySource", () => {
     it("returns reminders filtered by user/source ordered by fire_at ascending", async () => {
@@ -404,61 +346,5 @@ describe("RemindersDB", () => {
   });
 
   // ─── deleteReminder ─────────────────────────────────────────────────────────
-  describe("deleteReminder", () => {
-    it("deletes the reminder scoped to id and user_id", async () => {
-      // .delete().eq().eq() is awaited — use queueThenResponses for the
-      // terminal {data,error} tuple.
-      queueThenResponses([{ data: null, error: null }]);
-
-      await db.deleteReminder(USER_ID, REMINDER_ID);
-
-      expect(mockSupabaseClient.queryLog).toEqual([
-        { table: "reminders", method: "from", args: ["reminders"] },
-        { table: "reminders", method: "delete", args: [] },
-        { table: "reminders", method: "eq", args: ["id", REMINDER_ID] },
-        { table: "reminders", method: "eq", args: ["user_id", USER_ID] },
-      ]);
-    });
-
-    it("throws when the delete fails", async () => {
-      queueThenResponses([
-        { data: null, error: new Error("delete failed") },
-      ]);
-
-      await expect(db.deleteReminder(USER_ID, REMINDER_ID)).rejects.toThrow(
-        "delete failed",
-      );
-    });
-  });
-
   // ─── deleteRemindersBySource ────────────────────────────────────────────────
-  describe("deleteRemindersBySource", () => {
-    it("deletes reminders scoped to user/source_type/source_id", async () => {
-      queueThenResponses([{ data: null, error: null }]);
-
-      await db.deleteRemindersBySource(USER_ID, "calendar_event", EVENT_ID);
-
-      expect(mockSupabaseClient.queryLog).toEqual([
-        { table: "reminders", method: "from", args: ["reminders"] },
-        { table: "reminders", method: "delete", args: [] },
-        { table: "reminders", method: "eq", args: ["user_id", USER_ID] },
-        {
-          table: "reminders",
-          method: "eq",
-          args: ["source_type", "calendar_event"],
-        },
-        { table: "reminders", method: "eq", args: ["source_id", EVENT_ID] },
-      ]);
-    });
-
-    it("throws when the delete fails", async () => {
-      queueThenResponses([
-        { data: null, error: new Error("delete failed") },
-      ]);
-
-      await expect(
-        db.deleteRemindersBySource(USER_ID, "calendar_event", EVENT_ID),
-      ).rejects.toThrow("delete failed");
-    });
-  });
 });

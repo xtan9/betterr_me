@@ -11,6 +11,11 @@ import {
 } from "@/lib/tasks/writes";
 import { taskReminderConfigurationResponse } from "@/lib/reminders/task-configuration-response";
 import {
+  createHabitWrites,
+  type HabitReminderInput,
+} from "@/lib/habits/writes";
+import { habitReminderConfigurationResponse } from "@/lib/reminders/habit-configuration-response";
+import {
   CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR,
   isCalendarEventReminder,
 } from "@/lib/reminders/lifecycle-policy";
@@ -117,8 +122,32 @@ export async function PATCH(
       return taskReminderConfigurationResponse(outcome);
     }
 
+    if (existing.source_type === "habit" && validation.data.channels !== undefined) {
+      const updateKeys = Object.keys(validation.data);
+      if (updateKeys.some((key) => ["status", "fire_at", "sent_at"].includes(key))) {
+        return NextResponse.json(
+          { error: "Habit reminder configuration cannot be combined with delivery updates" },
+          { status: 400 },
+        );
+      }
+      const reminder = toHabitReminderInput(existing, validation.data.channels);
+      if (!reminder) {
+        return NextResponse.json(
+          { error: "Stored Habit reminder configuration is invalid" },
+          { status: 500 },
+        );
+      }
+      const outcome = await createHabitWrites(supabase).configureReminders({
+        userId,
+        habitId: existing.source_id,
+        referenceTime: reminder.referenceTime,
+        reminders: [reminder.input],
+      });
+      return habitReminderConfigurationResponse(outcome);
+    }
+
     // Status, fire_at, and sent_at are Reminder Delivery transitions. They
-    // remain on the delivery persistence path and do not alter Task intent.
+    // remain on the delivery persistence path and do not alter source intent.
     const reminder = await remindersDB.updateReminder(
       userId,
       id,
@@ -170,9 +199,17 @@ export async function DELETE(
       });
       return taskReminderConfigurationResponse(outcome);
     }
-    await remindersDB.deleteReminder(userId, id);
+    if (existing.source_type === "habit") {
+      const outcome = await createHabitWrites(supabase).configureReminders({
+        userId,
+        habitId: existing.source_id,
+        reminders: [],
+      });
+      return habitReminderConfigurationResponse(outcome);
+    }
 
-    return NextResponse.json({ success: true });
+    // Generic reminder writes are intentionally unavailable for source-owned configuration.
+    return NextResponse.json({ error: "Unsupported reminder source" }, { status: 400 });
   } catch (error) {
     log.error("DELETE /api/reminders/[id] error", error);
     return NextResponse.json(
@@ -203,5 +240,40 @@ function toTaskReminderInput(
     reminderType: "absolute",
     absoluteTime: reminder.absolute_time,
     channels,
+  };
+}
+
+function toHabitReminderInput(
+  reminder: {
+    reminder_type: "relative" | "absolute";
+    relative_minutes: number | null;
+    absolute_time: string | null;
+    fire_at?: string | null;
+  },
+  channels: readonly ("push" | "email")[],
+): { input: HabitReminderInput; referenceTime?: string } | null {
+  if (reminder.reminder_type === "relative") {
+    if (reminder.relative_minutes === null || !reminder.fire_at) return null;
+    const fireAt = Date.parse(reminder.fire_at);
+    if (Number.isNaN(fireAt)) return null;
+    return {
+      input: {
+        reminderType: "relative",
+        relativeMinutes: reminder.relative_minutes,
+        channels,
+      },
+      referenceTime: new Date(
+        fireAt + reminder.relative_minutes * 60_000,
+      ).toISOString(),
+    };
+  }
+  if (reminder.absolute_time === null) return null;
+  return {
+    input: {
+      reminderType: "absolute",
+      absoluteTime: reminder.absolute_time,
+      channels,
+    },
+    referenceTime: undefined,
   };
 }

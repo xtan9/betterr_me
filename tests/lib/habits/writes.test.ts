@@ -713,3 +713,145 @@ describe("HabitWrites", () => {
     ).rejects.toBe(persistenceError);
   });
 });
+
+describe("Habit Reminder Configuration", () => {
+  it("normalizes a complete desired intent before delegating to persistence", async () => {
+    const configureHabitReminders = vi.fn().mockResolvedValue({
+      type: "configured",
+      reminders: [],
+    });
+    const writes = new HabitWrites({ configureHabitReminders });
+
+    await expect(writes.configureReminders({
+      userId: " trusted-user ",
+      habitId: " habit-1 ",
+      referenceTime: "2026-08-03T09:00:00Z",
+      reminders: [{
+        reminderType: "relative",
+        relativeMinutes: 15,
+        channels: ["email", "push"],
+      }],
+    })).resolves.toEqual({ type: "configured", reminders: [] });
+
+    expect(configureHabitReminders).toHaveBeenCalledWith({
+      userId: "trusted-user",
+      habitId: "habit-1",
+      referenceTime: "2026-08-03T09:00:00Z",
+      reminders: [{
+        reminderType: "relative",
+        relativeMinutes: 15,
+        absoluteTime: null,
+        channels: ["email", "push"],
+      }],
+    });
+  });
+
+  it("returns typed invalid and conflict outcomes without opening persistence", async () => {
+    const configureHabitReminders = vi.fn();
+    const writes = new HabitWrites({ configureHabitReminders });
+
+    await expect(writes.configureReminders({
+      userId: "trusted-user",
+      habitId: "habit-1",
+      reminders: [{
+        reminderType: "absolute",
+        absoluteTime: "not-a-datetime",
+        channels: ["push"],
+      }],
+    })).resolves.toEqual({
+      type: "invalid",
+      field: "reminders[0].absoluteTime",
+      message: "absoluteTime must be a valid datetime",
+    });
+
+    await expect(writes.configureReminders({
+      userId: "trusted-user",
+      habitId: "habit-1",
+      reminders: [
+        { reminderType: "absolute", absoluteTime: "2026-08-03T09:00:00Z", channels: ["push"] },
+        { reminderType: "absolute", absoluteTime: "2026-08-03T09:00:00Z", channels: ["push"] },
+      ],
+    })).resolves.toEqual({
+      type: "conflict",
+      resource: "reminder",
+      reason: "Duplicate reminder configuration",
+    });
+
+    expect(configureHabitReminders).not.toHaveBeenCalled();
+  });
+
+  it("rejects a relative reminder without a reference time", async () => {
+    const configureHabitReminders = vi.fn();
+    const writes = new HabitWrites({ configureHabitReminders });
+
+    await expect(writes.configureReminders({
+      userId: "trusted-user",
+      habitId: "habit-1",
+      reminders: [{
+        reminderType: "relative",
+        relativeMinutes: 15,
+        channels: ["push"],
+      }],
+    })).resolves.toEqual({
+      type: "invalid",
+      field: "referenceTime",
+      message: "A relative reminder requires a valid reference time",
+    });
+    expect(configureHabitReminders).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["configured", { type: "configured", reminders: [] }],
+    ["removed", { type: "removed", reminders: [] }],
+    ["already-applied", { type: "already-applied", reminders: [] }],
+    ["not-found", { type: "not-found" }],
+    ["conflict", { type: "conflict", resource: "reminder" }],
+  ] as const)("preserves the typed %s persistence outcome", async (_label, outcome) => {
+    const configureHabitReminders = vi.fn().mockResolvedValue(outcome);
+    const writes = new HabitWrites({ configureHabitReminders });
+
+    await expect(writes.configureReminders({
+      userId: "trusted-user",
+      habitId: "habit-1",
+      reminders: [],
+    })).resolves.toEqual(outcome);
+  });
+
+  it("does not accept a Task or calendar source discriminator", async () => {
+    const configureHabitReminders = vi.fn();
+    const writes = new HabitWrites({ configureHabitReminders });
+
+    await expect(writes.configureReminders({
+      userId: "trusted-user",
+      habitId: "habit-1",
+      reminders: [],
+      sourceType: "task",
+    } as never)).resolves.toEqual({
+      type: "invalid",
+      field: "sourceType",
+      message: "Habit reminder configuration cannot select another source",
+    });
+    expect(configureHabitReminders).not.toHaveBeenCalled();
+  });
+
+  it("does not accept a nested Task or calendar source discriminator", async () => {
+    const configureHabitReminders = vi.fn();
+    const writes = new HabitWrites({ configureHabitReminders });
+
+    await expect(writes.configureReminders({
+      userId: "trusted-user",
+      habitId: "habit-1",
+      reminders: [{
+        reminderType: "absolute",
+        absoluteTime: "2026-08-03T09:00:00Z",
+        channels: ["push"],
+        source_type: "calendar_event",
+      }],
+    } as never)).resolves.toEqual({
+      type: "invalid",
+      field: "reminders[0].sourceType",
+      message: "Habit reminder configuration cannot select another source",
+    });
+    expect(configureHabitReminders).not.toHaveBeenCalled();
+  });
+});

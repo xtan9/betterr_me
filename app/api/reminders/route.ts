@@ -4,7 +4,6 @@ import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { RemindersDB } from "@/lib/db";
 import { reminderCreateSchema } from "@/lib/validations/reminders";
 import { validateRequestBody } from "@/lib/validations/api";
-import { computeFireAt } from "@/lib/reminders/fire-at";
 import {
   CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR,
   isCalendarEventReminder,
@@ -15,11 +14,13 @@ import {
   createTaskWrites,
 } from "@/lib/tasks/writes";
 import { taskReminderConfigurationResponse } from "@/lib/reminders/task-configuration-response";
+import { createHabitWrites } from "@/lib/habits/writes";
+import { habitReminderConfigurationResponse } from "@/lib/reminders/habit-configuration-response";
 
 /**
- * Extended schema that accepts the legacy event_start_time used by generic
- * Habit reminder creation. Task Reminder Configuration derives relative
- * fire_at values from the source Task and does not need this transport field.
+ * Extended schema that accepts the Habit reference time used to resolve
+ * relative Habit Reminder Configuration intent. Task configuration derives
+ * relative fire_at values from the source Task and does not need this field.
  */
 const createWithStartTimeSchema = reminderCreateSchema.and(
   z.object({
@@ -94,8 +95,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/reminders
- * Create a new reminder. Generic Habit reminders require event_start_time;
- * Task Reminder Configuration derives relative fire_at from the Task.
+ * Configure reminder intent for a source-owned lifecycle.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -142,31 +142,30 @@ export async function POST(request: NextRequest) {
       return taskReminderConfigurationResponse(outcome, 201);
     }
 
-    if (!event_start_time) {
-      return NextResponse.json(
-        { error: "event_start_time is required for this reminder source" },
-        { status: 400 },
-      );
+    if (reminderData.source_type === "habit") {
+      const outcome = await createHabitWrites(supabase).configureReminders({
+        userId,
+        habitId: reminderData.source_id,
+        referenceTime: event_start_time,
+        reminders: [
+          reminderData.reminder_type === "relative"
+            ? {
+                reminderType: "relative",
+                relativeMinutes: reminderData.relative_minutes ?? 0,
+                channels: reminderData.channels,
+              }
+            : {
+                reminderType: "absolute",
+                absoluteTime: reminderData.absolute_time ?? "",
+                channels: reminderData.channels,
+              },
+        ],
+      });
+      return habitReminderConfigurationResponse(outcome, 201);
     }
 
-    const fireAt = computeFireAt(
-      {
-        reminder_type: reminderData.reminder_type,
-        relative_minutes: reminderData.relative_minutes ?? null,
-        absolute_time: reminderData.absolute_time ?? null,
-      },
-      event_start_time
-    );
-
-    const remindersDB = new RemindersDB(supabase);
-    const reminder = await remindersDB.createReminder(userId, {
-      ...reminderData,
-      relative_minutes: reminderData.relative_minutes ?? null,
-      absolute_time: reminderData.absolute_time ?? null,
-      fire_at: fireAt,
-    });
-
-    return NextResponse.json({ reminder }, { status: 201 });
+    // Generic reminder writes are intentionally unavailable for source-owned configuration.
+    return NextResponse.json({ error: "Unsupported reminder source" }, { status: 400 });
   } catch (error) {
     log.error("POST /api/reminders error", error);
     return NextResponse.json(

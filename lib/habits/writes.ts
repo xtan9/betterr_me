@@ -14,6 +14,74 @@ export type HabitCreationFrequency =
 
 export type HabitLifecycleState = "active" | "paused" | "formed";
 
+export type HabitReminderType = "relative" | "absolute";
+export type HabitReminderChannel = "push" | "email";
+export type HabitReminderStatus = "pending" | "sent" | "failed" | "snoozed";
+
+/**
+ * Storage-independent Habit Reminder Configuration intent. The complete
+ * collection is supplied on every call; an empty collection removes pending
+ * configuration while terminal delivery history remains untouched.
+ */
+export type HabitReminderInput =
+  | {
+      reminderType: "relative";
+      relativeMinutes: number;
+      channels: readonly HabitReminderChannel[];
+    }
+  | {
+      reminderType: "absolute";
+      absoluteTime: string;
+      channels: readonly HabitReminderChannel[];
+    };
+
+export interface HabitReminderConfigurationRequest {
+  userId: string;
+  habitId: string;
+  referenceTime?: string | null;
+  reminders: readonly HabitReminderInput[];
+}
+
+export interface HabitReminderConfigurationRecord {
+  userId: string;
+  habitId: string;
+  referenceTime: string | null;
+  reminders: Array<{
+    reminderType: HabitReminderType;
+    relativeMinutes: number | null;
+    absoluteTime: string | null;
+    channels: HabitReminderChannel[];
+  }>;
+}
+
+export interface HabitReminderRecord {
+  id: string;
+  userId: string;
+  habitId: string;
+  reminderType: HabitReminderType;
+  relativeMinutes: number | null;
+  absoluteTime: string | null;
+  channels: HabitReminderChannel[];
+  status: HabitReminderStatus;
+  fireAt: string;
+  sentAt: string | null;
+  createdAt: string;
+}
+
+export type HabitReminderConfigurationPersistenceOutcome =
+  | { type: "configured"; reminders: HabitReminderRecord[] }
+  | { type: "removed"; reminders: [] }
+  | { type: "already-applied"; reminders: HabitReminderRecord[] }
+  | { type: "not-found" }
+  | { type: "conflict"; resource?: "reminder"; reason?: string }
+  | { type: "invalid"; field: string; message: string };
+
+export interface HabitReminderConfigurationPersistence {
+  configureHabitReminders(
+    record: HabitReminderConfigurationRecord,
+  ): Promise<HabitReminderConfigurationPersistenceOutcome>;
+}
+
 export interface HabitCreationRequest {
   userId: string;
   name: string;
@@ -171,7 +239,8 @@ type HabitWritesPersistence = Partial<HabitCreationPersistence> &
   Partial<HabitLifecyclePersistence> &
   Partial<HabitGraduationPersistence> &
   Partial<HabitReactivationPersistence> &
-  Partial<HabitDeletionPersistence>;
+  Partial<HabitDeletionPersistence> &
+  Partial<HabitReminderConfigurationPersistence>;
 
 export type HabitCreationOutcome =
   | { type: "created"; habit: CreatedHabit }
@@ -450,11 +519,239 @@ function normalizeUpdateRequest(
   };
 }
 
+type HabitReminderInvalid = { ok: false; field: string; message: string };
+type HabitReminderNormalized<T> = { ok: true; value: T } | HabitReminderInvalid;
+type HabitReminderRequestNormalization =
+  | { ok: true; value: HabitReminderConfigurationRecord }
+  | HabitReminderInvalid
+  | {
+      ok: false;
+      outcome: Extract<HabitReminderConfigurationPersistenceOutcome, { type: "conflict" }>;
+    };
+
+const HABIT_REMINDER_CHANNELS = new Set<HabitReminderChannel>(["push", "email"]);
+
+function normalizeHabitIdentity(
+  value: unknown,
+  field: "userId" | "habitId",
+): HabitReminderNormalized<string> {
+  if (typeof value !== "string" || !value.trim()) {
+    return {
+      ok: false,
+      field,
+      message: field === "userId"
+        ? "User identity is required"
+        : "Habit identity is required",
+    };
+  }
+  return { ok: true, value: value.trim() };
+}
+
+function normalizeHabitReminder(
+  value: unknown,
+  index: number,
+): HabitReminderNormalized<HabitReminderConfigurationRecord["reminders"][number]> {
+  if (
+    !isRecord(value) ||
+    Array.isArray(value) ||
+    (value.reminderType !== "relative" && value.reminderType !== "absolute")
+  ) {
+    return {
+      ok: false,
+      field: `reminders[${index}]`,
+      message: "Reminder type is invalid",
+    };
+  }
+  if ("sourceType" in value || "source_type" in value) {
+    return {
+      ok: false,
+      field: `reminders[${index}].sourceType`,
+      message: "Habit reminder configuration cannot select another source",
+    };
+  }
+  if (!Array.isArray(value.channels) || value.channels.length === 0) {
+    return {
+      ok: false,
+      field: `reminders[${index}].channels`,
+      message: "At least one reminder channel is required",
+    };
+  }
+
+  const channels: HabitReminderChannel[] = [];
+  for (const channel of value.channels) {
+    if (!HABIT_REMINDER_CHANNELS.has(channel as HabitReminderChannel)) {
+      return {
+        ok: false,
+        field: `reminders[${index}].channels`,
+        message: "Reminder channel is invalid",
+      };
+    }
+    if (channels.includes(channel as HabitReminderChannel)) {
+      return {
+        ok: false,
+        field: `reminders[${index}].channels`,
+        message: "Reminder channels must be unique",
+      };
+    }
+    channels.push(channel as HabitReminderChannel);
+  }
+  channels.sort();
+
+  if (value.reminderType === "relative") {
+    if (
+      typeof value.relativeMinutes !== "number" ||
+      !Number.isInteger(value.relativeMinutes) ||
+      value.relativeMinutes < -525600 ||
+      value.relativeMinutes > 525600
+    ) {
+      return {
+        ok: false,
+        field: `reminders[${index}].relativeMinutes`,
+        message: "relativeMinutes must be a whole number within one year",
+      };
+    }
+    return {
+      ok: true,
+      value: {
+        reminderType: "relative",
+        relativeMinutes: value.relativeMinutes,
+        absoluteTime: null,
+        channels,
+      },
+    };
+  }
+
+  if (
+    typeof value.absoluteTime !== "string" ||
+    !value.absoluteTime.trim() ||
+    Number.isNaN(Date.parse(value.absoluteTime))
+  ) {
+    return {
+      ok: false,
+      field: `reminders[${index}].absoluteTime`,
+      message: "absoluteTime must be a valid datetime",
+    };
+  }
+  return {
+    ok: true,
+    value: {
+      reminderType: "absolute",
+      relativeMinutes: null,
+      absoluteTime: value.absoluteTime.trim(),
+      channels,
+    },
+  };
+}
+
+function normalizeHabitReminderConfigurationRequest(
+  request: HabitReminderConfigurationRequest,
+): HabitReminderRequestNormalization {
+  if (!isRecord(request) || Array.isArray(request)) {
+    return {
+      ok: false,
+      field: "request",
+      message: "Habit reminder request is required",
+    };
+  }
+  if ("sourceType" in request || "source_type" in request) {
+    return {
+      ok: false,
+      field: "sourceType",
+      message: "Habit reminder configuration cannot select another source",
+    };
+  }
+
+  const userId = normalizeHabitIdentity(request.userId, "userId");
+  if (!userId.ok) return userId;
+  const habitId = normalizeHabitIdentity(request.habitId, "habitId");
+  if (!habitId.ok) return habitId;
+  if (!Array.isArray(request.reminders)) {
+    return { ok: false, field: "reminders", message: "reminders must be an array" };
+  }
+
+  let referenceTime: string | null = null;
+  if (request.referenceTime !== undefined && request.referenceTime !== null) {
+    if (
+      typeof request.referenceTime !== "string" ||
+      !request.referenceTime.trim() ||
+      Number.isNaN(Date.parse(request.referenceTime))
+    ) {
+      return {
+        ok: false,
+        field: "referenceTime",
+        message: "Reference time must be a valid datetime",
+      };
+    }
+    referenceTime = request.referenceTime.trim();
+  }
+
+  const reminders: HabitReminderConfigurationRecord["reminders"] = [];
+  const seen = new Set<string>();
+  for (const [index, input] of request.reminders.entries()) {
+    const reminder = normalizeHabitReminder(input, index);
+    if (!reminder.ok) return reminder;
+    if (reminder.value.reminderType === "relative" && referenceTime === null) {
+      return {
+        ok: false,
+        field: "referenceTime",
+        message: "A relative reminder requires a valid reference time",
+      };
+    }
+    const fingerprint = JSON.stringify(reminder.value);
+    if (seen.has(fingerprint)) {
+      return {
+        ok: false,
+        outcome: {
+          type: "conflict",
+          resource: "reminder",
+          reason: "Duplicate reminder configuration",
+        },
+      };
+    }
+    seen.add(fingerprint);
+    reminders.push(reminder.value);
+  }
+
+  return {
+    ok: true,
+    value: {
+      userId: userId.value,
+      habitId: habitId.value,
+      referenceTime,
+      reminders,
+    },
+  };
+}
+
 export class HabitWrites {
   constructor(
     private readonly persistence: HabitWritesPersistence,
     private readonly now: Clock = () => new Date(),
   ) {}
+
+  async configureReminder(
+    request: HabitReminderConfigurationRequest,
+  ): Promise<HabitReminderConfigurationPersistenceOutcome> {
+    return this.configureReminders(request);
+  }
+
+  async configureReminders(
+    request: HabitReminderConfigurationRequest,
+  ): Promise<HabitReminderConfigurationPersistenceOutcome> {
+    const normalized = normalizeHabitReminderConfigurationRequest(request);
+    if (!normalized.ok) {
+      if ("outcome" in normalized) return normalized.outcome;
+      return {
+        type: "invalid",
+        field: normalized.field,
+        message: normalized.message,
+      };
+    }
+    if (!this.persistence.configureHabitReminders) {
+      throw new Error("Habit reminder configuration persistence is not configured");
+    }
+    return this.persistence.configureHabitReminders(normalized.value);
+  }
 
   async create(request: HabitCreationRequest): Promise<HabitCreationOutcome> {
     const normalized = normalizeRequest(request);
@@ -743,8 +1040,153 @@ function mapStoredHabitDeletionOutcome(
   throw new Error("Invalid habit deletion outcome returned by the database");
 }
 
+function toStoredHabitReminder(
+  reminder: HabitReminderConfigurationRecord["reminders"][number],
+): Record<string, unknown> {
+  return {
+    reminder_type: reminder.reminderType,
+    relative_minutes: reminder.relativeMinutes,
+    absolute_time: reminder.absoluteTime,
+    channels: reminder.channels,
+  };
+}
+
+function isHabitReminderConflictError(error: unknown): boolean {
+  return isRecord(error) && error.code === "23505";
+}
+
+function isHabitReminderForeignKeyError(error: unknown): boolean {
+  return isRecord(error) && error.code === "23503";
+}
+
+function mapStoredHabitReminderConfigurationOutcome(
+  value: unknown,
+): HabitReminderConfigurationPersistenceOutcome {
+  if (!isRecord(value) || Array.isArray(value) || typeof value.type !== "string") {
+    throw new Error("Invalid habit reminder configuration outcome returned by the database");
+  }
+  if (value.type === "not-found") return { type: "not-found" };
+  if (value.type === "removed") return { type: "removed", reminders: [] };
+  if (value.type === "conflict") {
+    if (
+      (value.resource === undefined || value.resource === "reminder") &&
+      (value.reason === undefined || typeof value.reason === "string")
+    ) {
+      return {
+        type: "conflict",
+        ...(value.resource === undefined ? {} : { resource: value.resource }),
+        ...(value.reason === undefined ? {} : { reason: value.reason }),
+      };
+    }
+  }
+  if (
+    value.type === "invalid" &&
+    typeof value.field === "string" &&
+    typeof value.message === "string"
+  ) {
+    return { type: "invalid", field: value.field, message: value.message };
+  }
+  if (
+    (value.type === "configured" || value.type === "already-applied") &&
+    Array.isArray(value.reminders)
+  ) {
+    return {
+      type: value.type,
+      reminders: value.reminders.map(toHabitReminderRecord),
+    };
+  }
+  throw new Error("Invalid habit reminder configuration outcome returned by the database");
+}
+
+function nullableHabitReminderString(value: unknown, field: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value;
+  throw new Error(`Invalid habit ${field} returned by the database`);
+}
+
+function requiredHabitReminderString(value: unknown, field: string): string {
+  if (typeof value === "string" && value) return value;
+  throw new Error(`Invalid habit ${field} returned by the database`);
+}
+
+function toHabitReminderRecord(value: unknown): HabitReminderRecord {
+  if (!isRecord(value) || Array.isArray(value)) {
+    throw new Error("Invalid habit reminder returned by the database");
+  }
+  if (
+    value.source_type !== "habit" ||
+    (value.reminder_type !== "relative" && value.reminder_type !== "absolute") ||
+    !Array.isArray(value.channels) ||
+    value.channels.some((channel) => !HABIT_REMINDER_CHANNELS.has(channel as HabitReminderChannel)) ||
+    !["pending", "sent", "failed", "snoozed"].includes(value.status as string) ||
+    (value.relative_minutes !== null && typeof value.relative_minutes !== "number") ||
+    (value.absolute_time !== null && typeof value.absolute_time !== "string")
+  ) {
+    throw new Error("Invalid habit reminder returned by the database");
+  }
+  return {
+    id: requiredHabitReminderString(value.id, "reminder"),
+    userId: requiredHabitReminderString(value.user_id, "reminder"),
+    habitId: requiredHabitReminderString(value.source_id, "reminder"),
+    reminderType: value.reminder_type,
+    relativeMinutes: value.relative_minutes === null ? null : value.relative_minutes,
+    absoluteTime: nullableHabitReminderString(value.absolute_time, "reminder"),
+    channels: value.channels as HabitReminderChannel[],
+    status: value.status as HabitReminderStatus,
+    fireAt: requiredHabitReminderString(value.fire_at, "reminder"),
+    sentAt: nullableHabitReminderString(value.sent_at, "reminder"),
+    createdAt: requiredHabitReminderString(value.created_at, "reminder"),
+  };
+}
+
+export class SupabaseHabitReminderConfigurationPersistence
+  implements HabitReminderConfigurationPersistence
+{
+  constructor(private readonly supabase: SupabaseClient) {}
+
+  async configureHabitReminders(
+    record: HabitReminderConfigurationRecord,
+  ): Promise<HabitReminderConfigurationPersistenceOutcome> {
+    const { data, error } = await this.supabase.rpc("configure_habit_reminders", {
+      p_user_id: record.userId,
+      p_habit_id: record.habitId,
+      p_reference_time: record.referenceTime,
+      p_reminders: record.reminders.map(toStoredHabitReminder),
+    });
+
+    if (error) {
+      if (isHabitReminderConflictError(error)) {
+        return { type: "conflict", resource: "reminder" };
+      }
+      if (isHabitReminderForeignKeyError(error)) return { type: "not-found" };
+      throw error;
+    }
+    return mapStoredHabitReminderConfigurationOutcome(data);
+  }
+}
+
+export function toHabitReminderResponse(reminder: HabitReminderRecord) {
+  return {
+    id: reminder.id,
+    user_id: reminder.userId,
+    source_type: "habit" as const,
+    source_id: reminder.habitId,
+    reminder_type: reminder.reminderType,
+    relative_minutes: reminder.relativeMinutes,
+    absolute_time: reminder.absoluteTime,
+    channels: reminder.channels,
+    status: reminder.status,
+    fire_at: reminder.fireAt,
+    sent_at: reminder.sentAt,
+    created_at: reminder.createdAt,
+  };
+}
+
 export function createHabitWrites(supabase: SupabaseClient): HabitWrites {
   const habitsDB = new HabitsDB(supabase);
+  const habitReminderPersistence = new SupabaseHabitReminderConfigurationPersistence(
+    supabase,
+  );
 
   return new HabitWrites({
     countActiveHabits: habitsDB.getActiveHabitCount.bind(habitsDB),
@@ -825,6 +1267,9 @@ export function createHabitWrites(supabase: SupabaseClient): HabitWrites {
       if (error) throw error;
       return mapStoredHabitDeletionOutcome(data);
     },
+    configureHabitReminders: habitReminderPersistence.configureHabitReminders.bind(
+      habitReminderPersistence,
+    ),
     markReactivated: async (habitId, userId, reactivatedAt) => {
       const graduations = new HabitGraduationsDB(supabase);
       await graduations.markReactivated(habitId, userId, reactivatedAt);

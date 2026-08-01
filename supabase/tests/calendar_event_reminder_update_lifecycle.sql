@@ -191,8 +191,17 @@ begin
     raise exception 'direct calendar reminder update unexpectedly succeeded';
   end if;
 
-  delete from public.reminders where id = original_reminder_id;
-  if found then
+  begin
+    delete from public.reminders where id = original_reminder_id;
+    if found then
+      raise exception 'direct calendar reminder delete unexpectedly succeeded';
+    end if;
+  exception
+    when insufficient_privilege then null;
+  end;
+  if not exists (
+    select 1 from public.reminders where id = original_reminder_id
+  ) then
     raise exception 'direct calendar reminder delete unexpectedly succeeded';
   end if;
 
@@ -225,12 +234,14 @@ begin
     delete from public.reminders
     where user_id = '49100000-0000-0000-0000-000000000001'
       and source_type = 'task';
-    if not exists (
-      select 1 from public.reminders where id = task_reminder_id
-    ) then
-      raise exception 'direct Task reminder configuration delete unexpectedly succeeded';
-    end if;
+  exception
+    when insufficient_privilege then null;
   end;
+  if not exists (
+    select 1 from public.reminders where id = task_reminder_id
+  ) then
+    raise exception 'direct Task reminder configuration delete unexpectedly succeeded';
+  end if;
 
   -- Moving the event with omitted reminder intent preserves its relationship
   -- and recalculates its derived schedule.
