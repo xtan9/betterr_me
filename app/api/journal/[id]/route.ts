@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { JournalEntriesDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { journalEntryUpdateSchema } from '@/lib/validations/journal';
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/journal/[id]
@@ -15,17 +26,17 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const journalDB = new JournalEntriesDB(supabase);
-    const entry = await journalDB.getEntry(id, user.id);
+    const entry = await journalDB.getEntry(id, userId);
 
     if (!entry) {
       return NextResponse.json(
@@ -54,14 +65,14 @@ export async function PATCH(
 ) {
   const { id } = await params;
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 
@@ -70,7 +81,7 @@ export async function PATCH(
     if (!validation.success) return validation.response;
 
     const journalDB = new JournalEntriesDB(supabase);
-    const entry = await journalDB.updateEntry(id, user.id, validation.data);
+    const entry = await journalDB.updateEntry(id, userId, validation.data);
 
     return NextResponse.json({ entry });
   } catch (error: unknown) {
@@ -104,17 +115,17 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const journalDB = new JournalEntriesDB(supabase);
-    await journalDB.deleteEntry(id, user.id);
+    await journalDB.deleteEntry(id, userId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

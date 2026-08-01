@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { JournalEntriesDB } from '@/lib/db';
 import { log } from '@/lib/logger';
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/journal/calendar
@@ -13,14 +19,14 @@ import { log } from '@/lib/logger';
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const searchParams = request.nextUrl.searchParams;
     const yearParam = searchParams.get('year');
@@ -44,7 +50,7 @@ export async function GET(request: NextRequest) {
     }
 
     const journalDB = new JournalEntriesDB(supabase);
-    const entries = await journalDB.getCalendarMonth(user.id, year, month);
+    const entries = await journalDB.getCalendarMonth(userId, year, month);
 
     return NextResponse.json({ entries });
   } catch (error) {

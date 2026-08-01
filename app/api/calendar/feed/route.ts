@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { CalendarEventsDB } from "@/lib/db";
 import { expandEventsForRange } from "@/lib/calendar/recurrence";
 import { log } from "@/lib/logger";
@@ -11,6 +12,11 @@ import {
 } from "@/lib/calendar/feed-aggregation";
 import type { CalendarFeedItem } from "@/lib/calendar/feed-types";
 import type { Task, Habit, HabitLog, Workout } from "@/lib/db/types";
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/calendar/feed
@@ -25,14 +31,19 @@ import type { Task, Habit, HabitLog, Workout } from "@/lib/db/types";
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        {
+          error:
+            auth.status === 500
+              ? "Failed to fetch calendar feed"
+              : cookieRouteErrorMessage(auth),
+        },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const searchParams = request.nextUrl.searchParams;
     const startDate = searchParams.get("start_date");
@@ -75,7 +86,7 @@ export async function GET(request: NextRequest) {
       promises.push(
         (async () => {
           const db = new CalendarEventsDB(supabase);
-          const events = await db.getUserEvents(user.id, startDate, endDate);
+          const events = await db.getUserEvents(userId, startDate, endDate);
           const expanded = expandEventsForRange(events, startDate, endDate);
           return normalizeEvents(expanded);
         })(),
@@ -89,7 +100,7 @@ export async function GET(request: NextRequest) {
           const { data, error } = await supabase
             .from("tasks")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .not("due_date", "is", null)
             .gte("due_date", startDate)
             .lte("due_date", endDate);
@@ -107,7 +118,7 @@ export async function GET(request: NextRequest) {
           const { data: habits, error: habitsError } = await supabase
             .from("habits")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .eq("status", "active");
           if (habitsError) throw habitsError;
 
@@ -115,7 +126,7 @@ export async function GET(request: NextRequest) {
           const { data: logs, error: logsError } = await supabase
             .from("habit_logs")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .eq("completed", true)
             .gte("logged_date", startDate)
             .lte("logged_date", endDate);
@@ -139,7 +150,7 @@ export async function GET(request: NextRequest) {
           const { data, error } = await supabase
             .from("workouts")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .neq("status", "in_progress")
             .gte("started_at", `${startDate}T00:00:00`)
             .lte("started_at", `${endDate}T23:59:59`);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { JournalEntriesDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
@@ -9,6 +10,16 @@ import { ensureProfile } from '@/lib/db/ensure-profile';
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
+
 /**
  * GET /api/journal
  * Two modes:
@@ -17,14 +28,14 @@ const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const journalDB = new JournalEntriesDB(supabase);
     const searchParams = request.nextUrl.searchParams;
@@ -36,7 +47,7 @@ export async function GET(request: NextRequest) {
       const limit = limitParam ? Math.min(Math.max(Number(limitParam), 1), 50) : 10;
 
       const entries = await journalDB.getTimeline(
-        user.id,
+        userId,
         limit,
         cursor || undefined
       );
@@ -63,7 +74,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const entry = await journalDB.getEntryByDate(user.id, date);
+    const entry = await journalDB.getEntryByDate(userId, date);
     return NextResponse.json({ entry });
   } catch (error) {
     log.error('GET /api/journal error', error);
@@ -81,14 +92,14 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
 
@@ -100,11 +111,14 @@ export async function POST(request: NextRequest) {
     const parsed = validation.data as JournalEntryFormValues;
 
     // Ensure user profile exists (required by FK constraint)
-    await ensureProfile(supabase, user);
+    await ensureProfile(supabase, {
+      id: userId,
+      ...auth.principal.profile,
+    });
 
     const journalDB = new JournalEntriesDB(supabase);
     const entry = await journalDB.upsertEntry({
-      user_id: user.id,
+      user_id: userId,
       entry_date: parsed.entry_date,
       title: parsed.title,
       content: parsed.content,

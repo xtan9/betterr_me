@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { JournalEntriesDB, JournalEntryLinksDB } from "@/lib/db";
 import { validateRequestBody } from "@/lib/validations/api";
 import { journalLinkSchema } from "@/lib/validations/journal";
 import { log } from "@/lib/logger";
 import type { JournalLinkType } from "@/lib/db/types";
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/journal/[id]/links
@@ -17,18 +28,18 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     // Verify entry ownership
     const journalDB = new JournalEntriesDB(supabase);
-    const ownerEntry = await journalDB.getEntry(id, user.id);
+    const ownerEntry = await journalDB.getEntry(id, userId);
     if (!ownerEntry) {
       return NextResponse.json(
         { error: "Journal entry not found" },
@@ -116,14 +127,14 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, journalLinkSchema);
@@ -133,7 +144,7 @@ export async function POST(
 
     // Verify entry ownership
     const journalDB = new JournalEntriesDB(supabase);
-    const entry = await journalDB.getEntry(id, user.id);
+    const entry = await journalDB.getEntry(id, userId);
     if (!entry) {
       return NextResponse.json(
         { error: "Journal entry not found" },
@@ -169,18 +180,18 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     // Verify entry ownership
     const journalDB = new JournalEntriesDB(supabase);
-    const ownerEntry = await journalDB.getEntry(id, user.id);
+    const ownerEntry = await journalDB.getEntry(id, userId);
     if (!ownerEntry) {
       return NextResponse.json(
         { error: "Journal entry not found" },

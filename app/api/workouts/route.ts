@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { WorkoutsDB } from "@/lib/db/workouts";
 import { validateRequestBody } from "@/lib/validations/api";
 import { workoutCreateSchema } from "@/lib/validations/workout";
 import { log } from "@/lib/logger";
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/workouts
@@ -12,14 +23,14 @@ import { log } from "@/lib/logger";
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const { searchParams } = new URL(request.url);
     const limit = Math.min(
@@ -32,7 +43,7 @@ export async function GET(request: NextRequest) {
     );
 
     const workoutsDB = new WorkoutsDB(supabase);
-    const workouts = await workoutsDB.getWorkoutsWithSummary(user.id, {
+    const workouts = await workoutsDB.getWorkoutsWithSummary(userId, {
       limit,
       offset,
     });
@@ -53,21 +64,21 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, workoutCreateSchema);
     if (!validation.success) return validation.response;
 
     const workoutsDB = new WorkoutsDB(supabase);
-    const workout = await workoutsDB.startWorkout(user.id, validation.data);
+    const workout = await workoutsDB.startWorkout(userId, validation.data);
 
     return NextResponse.json({ workout }, { status: 201 });
   } catch (error: unknown) {

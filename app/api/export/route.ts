@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { HabitsDB } from "@/lib/db";
 import { log } from "@/lib/logger";
 import {
@@ -14,6 +15,11 @@ import JSZip from "jszip";
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const isValidDate = (d: string) =>
   dateRegex.test(d) && !isNaN(new Date(d).getTime());
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /** Fetch all habits for a user. */
 async function fetchHabits(supabase: SupabaseClient, userId: string) {
@@ -88,14 +94,14 @@ function validateDateParams(
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const searchParams = request.nextUrl.searchParams;
     const type = searchParams.get("type");
@@ -110,7 +116,7 @@ export async function GET(request: NextRequest) {
     const date = new Date().toISOString().split("T")[0];
 
     if (type === "habits") {
-      const habits = await fetchHabits(supabase, user.id);
+      const habits = await fetchHabits(supabase, userId);
       const csv = exportHabitsToCSV(habits);
       const filename = `betterrme-habits-${date}.csv`;
 
@@ -130,10 +136,10 @@ export async function GET(request: NextRequest) {
     if (dateError) return dateError;
 
     if (type === "logs") {
-      const habits = await fetchHabits(supabase, user.id);
+      const habits = await fetchHabits(supabase, userId);
       const logsWithNames = await fetchLogsWithNames(
         supabase,
-        user.id,
+        userId,
         habits,
         startDate,
         endDate
@@ -151,10 +157,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === "zip") {
-      const habits = await fetchHabits(supabase, user.id);
+      const habits = await fetchHabits(supabase, userId);
       const logsWithNames = await fetchLogsWithNames(
         supabase,
-        user.id,
+        userId,
         habits,
         startDate,
         endDate

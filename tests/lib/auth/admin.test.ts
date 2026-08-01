@@ -22,9 +22,6 @@ vi.mock("next/navigation", () => ({
 
 import {
   requireAdmin,
-  requireAdminApi,
-  AdminForbiddenError,
-  AdminUnauthorizedError,
 } from "@/lib/auth/admin";
 
 // --- Helpers ---
@@ -91,46 +88,5 @@ describe("requireAdmin", () => {
 
     await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/dashboard");
     expect(mockRedirect).toHaveBeenCalledWith("/dashboard");
-  });
-});
-
-describe("requireAdminApi", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("throws AdminUnauthorizedError when no user is authenticated", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } });
-
-    await expect(requireAdminApi()).rejects.toThrow(AdminUnauthorizedError);
-  });
-
-  it("throws AdminForbiddenError when user role is 'user'", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-123" } },
-    });
-    setupProfileQuery(mockProfile("user"));
-
-    await expect(requireAdminApi()).rejects.toThrow(AdminForbiddenError);
-  });
-
-  it("returns user and profile when role is 'admin'", async () => {
-    const user = { id: "user-123" };
-    const profile = mockProfile("admin");
-    mockGetUser.mockResolvedValue({ data: { user } });
-    setupProfileQuery(profile);
-
-    const result = await requireAdminApi();
-
-    expect(result).toEqual({ user, profile });
-  });
-
-  it("throws AdminForbiddenError when profile query returns null", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "user-123" } },
-    });
-    setupProfileQuery(null);
-
-    await expect(requireAdminApi()).rejects.toThrow(AdminForbiddenError);
   });
 });

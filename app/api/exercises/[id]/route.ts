@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { ExercisesDB } from "@/lib/db/exercises";
 import { validateRequestBody } from "@/lib/validations/api";
 import { exerciseUpdateSchema } from "@/lib/validations/exercise";
 import { log } from "@/lib/logger";
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/exercises/[id]
@@ -15,14 +26,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { client: supabase } = auth;
 
     const exercisesDB = new ExercisesDB(supabase);
     const exercise = await exercisesDB.getExercise(id);
@@ -54,14 +65,14 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, exerciseUpdateSchema);
@@ -103,14 +114,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { client: supabase } = auth;
 
     const exercisesDB = new ExercisesDB(supabase);
     await exercisesDB.deleteExercise(id);

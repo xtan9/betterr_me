@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { CategoriesDB } from '@/lib/db/categories';
 import { validateRequestBody } from '@/lib/validations/api';
 import { categoryUpdateSchema } from '@/lib/validations/category';
 import { log } from '@/lib/logger';
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * PUT /api/categories/[id]
@@ -15,21 +21,21 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, categoryUpdateSchema);
     if (!validation.success) return validation.response;
 
     const categoriesDB = new CategoriesDB(supabase);
-    const category = await categoriesDB.updateCategory(id, user.id, validation.data);
+    const category = await categoriesDB.updateCategory(id, userId, validation.data);
 
     return NextResponse.json({ category });
   } catch (error: unknown) {
@@ -54,17 +60,17 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const categoriesDB = new CategoriesDB(supabase);
-    await categoriesDB.deleteCategory(id, user.id);
+    await categoriesDB.deleteCategory(id, userId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

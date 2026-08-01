@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { HabitsDB, HabitLogsDB, ProfilesDB } from '@/lib/db';
 import { log } from '@/lib/logger';
 
 // Cache TTL for HTTP headers (5 minutes in seconds)
 const CACHE_MAX_AGE = 300;
+
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'read',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * GET /api/habits/[id]/stats
@@ -19,32 +25,32 @@ export async function GET(
 ) {
   try {
     const { id: habitId } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const habitsDB = new HabitsDB(supabase);
     const habitLogsDB = new HabitLogsDB(supabase);
     const profilesDB = new ProfilesDB(supabase);
 
-    const habit = await habitsDB.getHabit(habitId, user.id);
+    const habit = await habitsDB.getHabit(habitId, userId);
     if (!habit) {
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
 
     // Get user's week start day preference (default to Sunday = 0)
-    const profile = await profilesDB.getProfile(user.id);
+    const profile = await profilesDB.getProfile(userId);
     const weekStartDay = profile?.preferences?.week_start_day ?? 0;
 
     // Get detailed completion stats
     const detailedStats = await habitLogsDB.getDetailedHabitStats(
       habitId,
-      user.id,
+      userId,
       habit.frequency,
       habit.created_at,
       weekStartDay

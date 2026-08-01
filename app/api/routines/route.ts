@@ -1,27 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { RoutinesDB } from "@/lib/db/routines";
 import { validateRequestBody } from "@/lib/validations/api";
 import { routineCreateSchema } from "@/lib/validations/routine";
 import { log } from "@/lib/logger";
 
+const READ_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "read",
+} as const satisfies AuthenticatedRequestPolicy;
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
+
 /**
  * GET /api/routines
  * List all routines for the authenticated user with nested exercises.
  */
-export async function GET() {
+export async function GET(request: Request = new Request("http://localhost")) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const routinesDB = new RoutinesDB(supabase);
-    const routines = await routinesDB.getUserRoutines(user.id);
+    const routines = await routinesDB.getUserRoutines(userId);
 
     return NextResponse.json({ routines });
   } catch (error) {
@@ -39,21 +50,21 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, routineCreateSchema);
     if (!validation.success) return validation.response;
 
     const routinesDB = new RoutinesDB(supabase);
-    const routine = await routinesDB.createRoutine(user.id, validation.data);
+    const routine = await routinesDB.createRoutine(userId, validation.data);
 
     return NextResponse.json({ routine }, { status: 201 });
   } catch (error) {

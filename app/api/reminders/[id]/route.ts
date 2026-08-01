@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
+import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { RemindersDB } from "@/lib/db";
 import { reminderUpdateSchema } from "@/lib/validations/reminders";
 import { validateRequestBody } from "@/lib/validations/api";
@@ -16,6 +17,11 @@ function lifecycleConflict() {
   );
 }
 
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ["cookie"],
+  requiredPermission: "write",
+} as const satisfies AuthenticatedRequestPolicy;
+
 /**
  * PATCH /api/reminders/[id]
  * Update a reminder's status, fire_at, channels, or sent_at.
@@ -26,21 +32,21 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, reminderUpdateSchema);
     if (!validation.success) return validation.response;
 
     const remindersDB = new RemindersDB(supabase);
-    const existing = await remindersDB.getReminder(user.id, id);
+    const existing = await remindersDB.getReminder(userId, id);
     if (!existing) {
       return NextResponse.json({ error: "Reminder not found" }, { status: 404 });
     }
@@ -71,7 +77,7 @@ export async function PATCH(
         return lifecycleConflict();
       }
       const reminder = await remindersDB.transitionCalendarEventReminder(
-        user.id,
+        userId,
         id,
         isSnoozeTransition
           ? { status: "pending", fire_at: update.fire_at, sent_at: update.sent_at }
@@ -83,7 +89,7 @@ export async function PATCH(
       return NextResponse.json({ reminder });
     }
     const reminder = await remindersDB.updateReminder(
-      user.id,
+      userId,
       id,
       validation.data
     );
@@ -108,24 +114,24 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const remindersDB = new RemindersDB(supabase);
-    const existing = await remindersDB.getReminder(user.id, id);
+    const existing = await remindersDB.getReminder(userId, id);
     if (!existing) {
       return NextResponse.json({ error: "Reminder not found" }, { status: 404 });
     }
     if (isCalendarEventReminder(existing.source_type)) {
       return lifecycleConflict();
     }
-    await remindersDB.deleteReminder(user.id, id);
+    await remindersDB.deleteReminder(userId, id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
+import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { ApiKeysDB } from '@/lib/db';
 import { log } from '@/lib/logger';
+
+const WRITE_REQUEST_POLICY = {
+  allowedCredentials: ['cookie'],
+  requiredPermission: 'write',
+} as const satisfies AuthenticatedRequestPolicy;
 
 /**
  * DELETE /api/api-keys/[id]
@@ -13,17 +19,17 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: cookieRouteErrorMessage(auth) },
+        { status: auth.status },
+      );
     }
+    const { principal: { userId }, client: supabase } = auth;
 
     const apiKeysDB = new ApiKeysDB(supabase);
-    await apiKeysDB.deleteKey(id, user.id);
+    await apiKeysDB.deleteKey(id, userId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

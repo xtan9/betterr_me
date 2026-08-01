@@ -28,7 +28,8 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-vi.mock('@/lib/auth/api-key', () => ({
+vi.mock('@/lib/auth/api-key', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/api-key')>()),
   generateApiKey: vi.fn(() => ({
     fullKey: 'brm_testfullkey1234567890abcdef',
     keyPrefix: 'brm_testfull',
