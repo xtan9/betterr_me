@@ -17,38 +17,26 @@ vi.mock("sonner", () => ({
   },
 }));
 
-// Mock SWR
-const mockMutate = vi.fn();
-let mockSWRData: Record<string, unknown> | null = null;
+const mockSetPushQuietWindow = vi.fn();
+let mockQuietState: {
+  status: "ready";
+  value:
+    | { status: "disabled" }
+    | { status: "enabled"; startLocal: string; endLocal: string };
+} = { status: "ready", value: { status: "disabled" } };
 
-vi.mock("swr", () => ({
-  default: () => ({
-    data: mockSWRData,
-    mutate: mockMutate,
-    isLoading: false,
+vi.mock("@/lib/hooks/use-profile-preferences", () => ({
+  useNotificationPreferences: () => ({
+    pushQuietWindow: mockQuietState,
+    setPushQuietWindow: mockSetPushQuietWindow,
   }),
 }));
-
-// Mock fetcher
-vi.mock("@/lib/fetcher", () => ({
-  fetcher: vi.fn(),
-}));
-
-// Mock fetch
-const mockFetch = vi.fn();
-vi.stubGlobal("fetch", mockFetch);
 
 describe("QuietHoursSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSWRData = null;
-    mockMutate.mockResolvedValue(undefined);
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        profile: { preferences: {} },
-      }),
-    });
+    mockQuietState = { status: "ready", value: { status: "disabled" } };
+    mockSetPushQuietWindow.mockResolvedValue(undefined);
   });
 
   it("renders quiet hours title and switch", () => {
@@ -90,62 +78,26 @@ describe("QuietHoursSettings", () => {
     expect(screen.getByText("quietHours.emailNote")).toBeInTheDocument();
   });
 
-  it("sends only the quiet-hours intent and caches the accepted profile", async () => {
-    const acceptedProfile = {
-      id: "user-123",
-      updated_at: "2026-07-30T12:00:02.000000+00:00",
-      preferences: {
-        theme: "dark",
-        weight_unit: "kg",
-        quiet_hours_start: "22:00",
-        quiet_hours_end: "07:00",
-      },
-    };
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ profile: acceptedProfile }),
-    });
+  it("sends one complete owner-specific quiet-window intent", async () => {
     render(<QuietHoursSettings />);
 
     fireEvent.click(screen.getByRole("switch"));
     fireEvent.click(screen.getByText("quietHours.save"));
 
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/profile/preferences", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: expect.stringContaining("quiet_hours_start"),
-      });
-    });
-
-    const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(callBody).toEqual({
-      quiet_hours_start: "22:00",
-      quiet_hours_end: "07:00",
-    });
-    const [cacheUpdater, options] = mockMutate.mock.calls[0];
-    expect(options).toEqual({ revalidate: false });
-    expect(cacheUpdater()).toEqual({
-      profile: {
-        id: "user-123",
-        updated_at: "2026-07-30T12:00:02.000000+00:00",
-        preferences: {
-          theme: "dark",
-          weight_unit: "kg",
-          quiet_hours_start: "22:00",
-          quiet_hours_end: "07:00",
-        },
-      },
-    });
+    await waitFor(() => expect(mockSetPushQuietWindow).toHaveBeenCalledWith({
+      status: "enabled",
+      startLocal: "22:00",
+      endLocal: "07:00",
+    }));
   });
 
   it("loads saved quiet hours from profile", () => {
-    mockSWRData = {
-      profile: {
-        preferences: {
-          quiet_hours_start: "23:00",
-          quiet_hours_end: "08:00",
-        },
+    mockQuietState = {
+      status: "ready",
+      value: {
+        status: "enabled",
+        startLocal: "23:00",
+        endLocal: "08:00",
       },
     };
 
@@ -161,12 +113,12 @@ describe("QuietHoursSettings", () => {
   });
 
   it("sends null when quiet hours are disabled on save", async () => {
-    mockSWRData = {
-      profile: {
-        preferences: {
-          quiet_hours_start: "22:00",
-          quiet_hours_end: "07:00",
-        },
+    mockQuietState = {
+      status: "ready",
+      value: {
+        status: "enabled",
+        startLocal: "22:00",
+        endLocal: "07:00",
       },
     };
     render(<QuietHoursSettings />);
@@ -175,22 +127,18 @@ describe("QuietHoursSettings", () => {
 
     fireEvent.click(screen.getByText("quietHours.save"));
 
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalled();
-    });
-
-    const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(callBody.quiet_hours_start).toBeNull();
-    expect(callBody.quiet_hours_end).toBeNull();
+    await waitFor(() =>
+      expect(mockSetPushQuietWindow).toHaveBeenCalledWith({ status: "disabled" }),
+    );
   });
 
-  it("sends only the quiet-hours key that changed", async () => {
-    mockSWRData = {
-      profile: {
-        preferences: {
-          quiet_hours_start: "23:00",
-          quiet_hours_end: "08:00",
-        },
+  it("sends the complete quiet window when one endpoint changes", async () => {
+    mockQuietState = {
+      status: "ready",
+      value: {
+        status: "enabled",
+        startLocal: "23:00",
+        endLocal: "08:00",
       },
     };
     render(<QuietHoursSettings />);
@@ -200,19 +148,20 @@ describe("QuietHoursSettings", () => {
     });
     fireEvent.click(screen.getByText("quietHours.save"));
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({
-      quiet_hours_start: "21:30",
-    });
+    await waitFor(() => expect(mockSetPushQuietWindow).toHaveBeenCalledWith({
+      status: "enabled",
+      startLocal: "21:30",
+      endLocal: "08:00",
+    }));
   });
 
   it("does not offer a save when quiet hours are unchanged", () => {
-    mockSWRData = {
-      profile: {
-        preferences: {
-          quiet_hours_start: "23:00",
-          quiet_hours_end: "08:00",
-        },
+    mockQuietState = {
+      status: "ready",
+      value: {
+        status: "enabled",
+        startLocal: "23:00",
+        endLocal: "08:00",
       },
     };
 

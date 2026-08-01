@@ -25,6 +25,10 @@ const WRITE_REQUEST_POLICY = {
  * Get current user's profile
  */
 export async function GET(request: Request) {
+  log.info("[legacy-profile] compatibility traffic", {
+    route: "/api/profile",
+    method: "GET",
+  });
   try {
     const auth = await authenticateRequest(request, READ_REQUEST_POLICY);
     if (!auth.ok) {
@@ -57,6 +61,10 @@ export async function GET(request: Request) {
  * Update current user's profile
  */
 export async function PATCH(request: NextRequest) {
+  log.info("[legacy-profile] compatibility traffic", {
+    route: "/api/profile",
+    method: "PATCH",
+  });
   try {
     const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {

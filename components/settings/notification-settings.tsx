@@ -18,13 +18,18 @@ import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { toast } from "sonner";
 
 import { fetcher } from "@/lib/fetcher";
-import type { Profile } from "@/lib/db/types";
-import { emailNotificationsEnabled } from "@/lib/profile-preferences";
-import { submitProfilePreferenceIntent } from "@/lib/submit-profile-preference-intent";
+import type { CurrentProfileResponse } from "@/lib/current-profile";
+import { useNotificationPreferences } from "@/lib/hooks/use-profile-preferences";
 import { QuietHoursSettings } from "./quiet-hours-settings";
 import { ReminderDefaultsSettings } from "./reminder-defaults-settings";
 
-export function NotificationSettings() {
+export function NotificationSettings({
+  initialData,
+  initialSubject,
+}: {
+  initialData?: CurrentProfileResponse;
+  initialSubject?: string;
+}) {
   const t = useTranslations("settings.notifications");
   const {
     permission,
@@ -44,12 +49,12 @@ export function NotificationSettings() {
   );
   const deviceCount: number = subsData?.count ?? 0;
 
-  // Fetch profile for email notification preference
-  const { data: profileData, mutate: mutateProfile } = useSWR<{ profile: Profile }>(
-    "/api/profile",
-    fetcher
-  );
-  const emailEnabled = emailNotificationsEnabled(profileData?.profile);
+  const notifications = useNotificationPreferences({ initialData, initialSubject });
+  const emailState = notifications.reminderEmail;
+  const emailEnabled =
+    emailState.status === "ready" || emailState.status === "pending"
+      ? emailState.value.enabled
+      : false;
   const [isEmailToggling, setIsEmailToggling] = useState(false);
 
   const handleToggle = async (checked: boolean) => {
@@ -81,10 +86,7 @@ export function NotificationSettings() {
   const handleEmailToggle = async (checked: boolean) => {
     setIsEmailToggling(true);
     try {
-      await submitProfilePreferenceIntent(
-        { email_notifications_enabled: checked },
-        mutateProfile,
-      );
+      await notifications.setReminderEmail(checked);
       toast.success(checked ? t("emailEnabled") : t("emailDisabled"));
     } catch {
       toast.error(t("emailToggleError"));
@@ -140,7 +142,10 @@ export function NotificationSettings() {
           </CardContent>
         </Card>
 
-        <QuietHoursSettings />
+        <QuietHoursSettings
+          initialData={initialData}
+          initialSubject={initialSubject}
+        />
         <ReminderDefaultsSettings />
       </div>
     );
@@ -242,7 +247,10 @@ export function NotificationSettings() {
         </CardContent>
       </Card>
 
-      <QuietHoursSettings />
+      <QuietHoursSettings
+        initialData={initialData}
+        initialSubject={initialSubject}
+      />
       <ReminderDefaultsSettings />
     </div>
   );

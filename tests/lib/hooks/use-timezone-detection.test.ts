@@ -9,6 +9,7 @@ vi.stubGlobal("fetch", mockFetch);
 
 describe("useTimezoneDetection", () => {
   let localStorageStore: Record<string, string> = {};
+  const mockSaveTimezone = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -23,13 +24,14 @@ describe("useTimezoneDetection", () => {
         delete localStorageStore[key];
       }),
     });
+    mockSaveTimezone.mockResolvedValue(undefined);
   });
 
   it("should not fetch when profileTimezone is already set", async () => {
     const { useTimezoneDetection } = await import(
       "@/lib/hooks/use-timezone-detection"
     );
-    renderHook(() => useTimezoneDetection("America/New_York"));
+    renderHook(() => useTimezoneDetection("America/New_York", mockSaveTimezone));
 
     expect(mockFetch).not.toHaveBeenCalled();
   });
@@ -39,34 +41,28 @@ describe("useTimezoneDetection", () => {
     const { useTimezoneDetection } = await import(
       "@/lib/hooks/use-timezone-detection"
     );
-    renderHook(() => useTimezoneDetection(null));
+    renderHook(() => useTimezoneDetection(null, mockSaveTimezone));
 
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("should PATCH /api/profile with detected timezone when timezone is null", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true });
+  it("should issue the explicit timezone command when timezone is null", async () => {
     const { useTimezoneDetection } = await import(
       "@/lib/hooks/use-timezone-detection"
     );
-    renderHook(() => useTimezoneDetection(null));
+    renderHook(() => useTimezoneDetection(null, mockSaveTimezone));
 
     // Wait for the async effect
     await vi.waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith("/api/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: expect.stringContaining("timezone"),
-      });
+      expect(mockSaveTimezone).toHaveBeenCalledWith(expect.any(String));
     });
   });
 
   it("should set localStorage flag on successful PATCH", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true });
     const { useTimezoneDetection } = await import(
       "@/lib/hooks/use-timezone-detection"
     );
-    renderHook(() => useTimezoneDetection(null));
+    renderHook(() => useTimezoneDetection(null, mockSaveTimezone));
 
     await vi.waitFor(() => {
       expect(localStorage.setItem).toHaveBeenCalledWith(
@@ -77,11 +73,11 @@ describe("useTimezoneDetection", () => {
   });
 
   it("should not set localStorage flag on failed PATCH", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+    mockSaveTimezone.mockRejectedValueOnce(new Error("server error"));
     const { useTimezoneDetection } = await import(
       "@/lib/hooks/use-timezone-detection"
     );
-    renderHook(() => useTimezoneDetection(null));
+    renderHook(() => useTimezoneDetection(null, mockSaveTimezone));
 
     // Give effect time to run
     await new Promise((r) => setTimeout(r, 50));
@@ -89,12 +85,12 @@ describe("useTimezoneDetection", () => {
     expect(localStorage.setItem).not.toHaveBeenCalled();
   });
 
-  it("should not set localStorage flag on fetch error (allows retry)", async () => {
-    mockFetch.mockRejectedValueOnce(new Error("Network error"));
+  it("should not set localStorage flag on command error (allows retry)", async () => {
+    mockSaveTimezone.mockRejectedValueOnce(new Error("Network error"));
     const { useTimezoneDetection } = await import(
       "@/lib/hooks/use-timezone-detection"
     );
-    renderHook(() => useTimezoneDetection(null));
+    renderHook(() => useTimezoneDetection(null, mockSaveTimezone));
 
     // Give effect time to run
     await new Promise((r) => setTimeout(r, 50));

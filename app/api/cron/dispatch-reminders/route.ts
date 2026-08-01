@@ -6,6 +6,7 @@ import { ProfilesDB } from "@/lib/db/profiles";
 import { sendPushNotification } from "@/lib/push/send";
 import { sendReminderEmail } from "@/lib/email/send";
 import { isInQuietHours } from "@/lib/push/quiet-hours";
+import { decodeNotificationPreferences } from "@/lib/preferences/owners";
 import { getVapidDetails } from "@/lib/push/vapid";
 import { log } from "@/lib/logger";
 
@@ -87,12 +88,23 @@ export async function GET(request: NextRequest) {
         // Check staleness: skip reminders whose fire_at is too old
         const fireAtAge = Date.now() - new Date(reminder.fire_at).getTime();
 
-        // Fetch user profile for quiet hours and timezone
-        const profile = await profilesDB.getProfile(reminder.user_id);
+        // Read only the Notifications-owned projection for quiet-window evaluation.
+        const profile = await profilesDB.getNotificationPreferenceProjection(reminder.user_id);
+        const quietWindow = profile
+          ? decodeNotificationPreferences(
+              profile.preferences,
+              null,
+              profile.timezone,
+            ).pushQuietWindow
+          : { status: "disabled" as const };
         const inQuietHours = isInQuietHours(
-          profile?.preferences?.quiet_hours_start,
-          profile?.preferences?.quiet_hours_end,
-          profile?.timezone ?? null
+          quietWindow.status === "ready" && quietWindow.value.status === "enabled"
+            ? quietWindow.value.startLocal
+            : null,
+          quietWindow.status === "ready" && quietWindow.value.status === "enabled"
+            ? quietWindow.value.endLocal
+            : null,
+          profile?.timezone ?? null,
         );
 
         // Determine which channels to dispatch

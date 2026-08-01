@@ -29,14 +29,7 @@ import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarFeedItem } from "@/lib/calendar/feed-types";
 import { feedItemsToExpandedEvents } from "@/lib/calendar/feed-aggregation";
 import type { DomainCalendarEvent } from "@/lib/calendar/feed-types";
-
-interface ProfileResponse {
-  profile: {
-    preferences?: {
-      week_start_day?: number;
-    };
-  };
-}
+import { useLocalizationPreference } from "@/lib/hooks/use-profile-preferences";
 
 interface EventsResponse {
   events: ExpandedCalendarEvent[];
@@ -51,13 +44,15 @@ export function CalendarPageContent() {
   const searchParams = useSearchParams();
   const { mutate: globalMutate } = useSWRConfig();
 
-  // Fetch user profile for week_start_day
-  const {
-    data: profileData,
-    isLoading: profileLoading,
-    error: profileError,
-  } = useSWR<ProfileResponse>("/api/profile", fetcher);
-  const weekStartDay = profileData?.profile?.preferences?.week_start_day ?? 0;
+  const localization = useLocalizationPreference();
+  const profileLoading = localization.isLoading;
+  const profileError = localization.error;
+  const weekStartDay =
+    localization.weekStart.status === "ready" || localization.weekStart.status === "pending"
+      ? localization.weekStart.value === "sunday"
+        ? 0
+        : 1
+      : 1;
 
   // Navigation hook
   const {

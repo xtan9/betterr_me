@@ -137,8 +137,10 @@ describe('ThemeSwitcher', () => {
 
   it('submits only the selected theme for an authenticated profile', async () => {
     mockProfileData = {
-      profile: {
-        preferences: { theme: 'system' },
+      currentProfile: {
+        preferences: {
+          appearance: { theme: { status: 'ready', value: 'system' } },
+        },
       },
     };
     const user = userEvent.setup();
@@ -148,10 +150,13 @@ describe('ThemeSwitcher', () => {
     await user.click(await screen.findByText('Dark'));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/profile/preferences', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme: 'dark' }),
+      expect(global.fetch).toHaveBeenCalledWith('/api/preferences/appearance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ type: 'setTheme', theme: 'dark' }),
       });
     });
   });

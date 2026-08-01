@@ -5,7 +5,7 @@ import { NextRequest } from "next/server";
 const {
   mockGetPendingReminders,
   mockUpdateReminderStatus,
-  mockGetProfile,
+  mockGetNotificationProjection,
   mockSendPushNotification,
   mockSendReminderEmail,
   mockIsInQuietHours,
@@ -14,7 +14,7 @@ const {
 } = vi.hoisted(() => ({
   mockGetPendingReminders: vi.fn(),
   mockUpdateReminderStatus: vi.fn(),
-  mockGetProfile: vi.fn(),
+  mockGetNotificationProjection: vi.fn(),
   mockSendPushNotification: vi.fn(),
   mockSendReminderEmail: vi.fn(),
   mockIsInQuietHours: vi.fn(),
@@ -31,7 +31,7 @@ vi.mock("@/lib/db/reminders", () => ({
 
 vi.mock("@/lib/db/profiles", () => ({
   ProfilesDB: class {
-    getProfile = mockGetProfile;
+    getNotificationPreferenceProjection = mockGetNotificationProjection;
   },
 }));
 
@@ -90,22 +90,12 @@ const mockReminder = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const mockProfile = (overrides: Record<string, unknown> = {}) => ({
-  id: "user-1",
-  email: "user@test.com",
-  full_name: "Test User",
-  avatar_url: null,
   timezone: "America/New_York",
-  email_notifications_enabled: true,
   preferences: {
-    date_format: "YYYY-MM-DD",
-    week_start_day: 0,
-    theme: "system",
-    weight_unit: "kg",
+    email_notifications_enabled: false,
     quiet_hours_start: null,
     quiet_hours_end: null,
   },
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-01T00:00:00Z",
   ...overrides,
 });
 
@@ -156,7 +146,7 @@ describe("GET /api/cron/dispatch-reminders", () => {
       failed: 1,
       skipped_quiet_hours: 0,
     });
-    expect(mockGetProfile).not.toHaveBeenCalled();
+    expect(mockGetNotificationProjection).not.toHaveBeenCalled();
     expect(mockSendPushNotification).not.toHaveBeenCalled();
     expect(mockSendReminderEmail).not.toHaveBeenCalled();
     expect(mockUpdateReminderStatus).toHaveBeenCalledWith(
@@ -170,7 +160,7 @@ describe("GET /api/cron/dispatch-reminders", () => {
     const reminder = mockReminder();
     const profile = mockProfile();
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetProfile.mockResolvedValue(profile);
+    mockGetNotificationProjection.mockResolvedValue(profile);
     mockSendPushNotification.mockResolvedValue({ sent: 1, failed: 0 });
     mockSendReminderEmail.mockResolvedValue({ success: true });
 
@@ -210,16 +200,12 @@ describe("GET /api/cron/dispatch-reminders", () => {
     const reminder = mockReminder({ channels: ["push"], fire_at: recentFireAt });
     const profile = mockProfile({
       preferences: {
-        date_format: "YYYY-MM-DD",
-        week_start_day: 0,
-        theme: "system",
-        weight_unit: "kg",
         quiet_hours_start: "22:00",
         quiet_hours_end: "07:00",
       },
     });
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetProfile.mockResolvedValue(profile);
+    mockGetNotificationProjection.mockResolvedValue(profile);
     mockIsInQuietHours.mockReturnValue(true);
 
     const res = await GET(createRequest());
@@ -237,7 +223,7 @@ describe("GET /api/cron/dispatch-reminders", () => {
     const reminder = mockReminder({ channels: ["push"], fire_at: staleFireAt });
     const profile = mockProfile();
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetProfile.mockResolvedValue(profile);
+    mockGetNotificationProjection.mockResolvedValue(profile);
     mockIsInQuietHours.mockReturnValue(true);
 
     const res = await GET(createRequest());
@@ -252,7 +238,7 @@ describe("GET /api/cron/dispatch-reminders", () => {
     const reminder = mockReminder({ channels: ["email"] });
     const profile = mockProfile();
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetProfile.mockResolvedValue(profile);
+    mockGetNotificationProjection.mockResolvedValue(profile);
     mockIsInQuietHours.mockReturnValue(true);
     mockSendReminderEmail.mockResolvedValue({ success: true });
 
@@ -269,7 +255,7 @@ describe("GET /api/cron/dispatch-reminders", () => {
     const reminder = mockReminder({ channels: ["push", "email"] });
     const profile = mockProfile();
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetProfile.mockResolvedValue(profile);
+    mockGetNotificationProjection.mockResolvedValue(profile);
     mockIsInQuietHours.mockReturnValue(true);
     mockSendReminderEmail.mockResolvedValue({ success: true });
 
@@ -292,7 +278,7 @@ describe("GET /api/cron/dispatch-reminders", () => {
     const reminder = mockReminder({ channels: ["push", "email"] });
     const profile = mockProfile();
     mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetProfile.mockResolvedValue(profile);
+    mockGetNotificationProjection.mockResolvedValue(profile);
     mockSendPushNotification.mockResolvedValue({ sent: 0, failed: 1 });
     mockSendReminderEmail.mockResolvedValue({ success: false, error: "fail" });
 
@@ -314,8 +300,8 @@ describe("GET /api/cron/dispatch-reminders", () => {
     const profile = mockProfile();
 
     mockGetPendingReminders.mockResolvedValue([reminder1, reminder2]);
-    // First getProfile call throws (simulating DB error), second succeeds
-    mockGetProfile
+    // First Notifications projection call throws (simulating DB error), second succeeds
+    mockGetNotificationProjection
       .mockRejectedValueOnce(new Error("DB connection error"))
       .mockResolvedValueOnce(profile);
     mockSendPushNotification.mockResolvedValue({ sent: 1, failed: 0 });

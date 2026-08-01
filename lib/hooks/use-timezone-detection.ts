@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { log } from "@/lib/logger";
 
 /**
  * Hook that detects the user's IANA timezone from the browser and
@@ -9,7 +10,10 @@ import { useEffect, useRef } from "react";
  * Should be called once in a root layout client component.
  * Uses localStorage flag to prevent repeated API calls.
  */
-export function useTimezoneDetection(profileTimezone: string | null | undefined) {
+export function useTimezoneDetection(
+  profileTimezone: string | null | undefined,
+  saveTimezone: (timeZone: string) => Promise<unknown>,
+) {
   const hasRun = useRef(false);
 
   useEffect(() => {
@@ -29,25 +33,17 @@ export function useTimezoneDetection(profileTimezone: string | null | undefined)
 
     hasRun.current = true;
 
-    fetch("/api/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ timezone: detectedTimezone }),
-    })
-      .then((res) => {
-        if (res.ok) {
-          try {
-            localStorage.setItem("betterrme_tz_detected", "1");
-          } catch {
-            // localStorage unavailable — will retry next load but that's acceptable
-          }
-        } else {
-          console.error(`Timezone detection API returned ${res.status}`);
+    saveTimezone(detectedTimezone)
+      .then(() => {
+        try {
+          localStorage.setItem("betterrme_tz_detected", "1");
+        } catch {
+          // localStorage unavailable — will retry next load but that's acceptable
         }
-      })
+    })
       .catch((err) => {
-        console.error("Timezone detection failed:", err);
+        log.error("[timezone] Detection command failed", err);
         // Will retry on next page load since localStorage flag wasn't set
       });
-  }, [profileTimezone]);
+  }, [profileTimezone, saveTimezone]);
 }

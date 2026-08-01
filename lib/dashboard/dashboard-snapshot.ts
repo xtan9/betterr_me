@@ -21,7 +21,7 @@ export interface DashboardSnapshotDependencies {
   tasks: Pick<TasksDB, "getTodayTasks" | "getTaskCount" | "getUserTasks">;
   habitLogs: Pick<HabitLogsDB, "getAllUserLogs">;
   milestones: Pick<HabitMilestonesDB, "getTodaysMilestones">;
-  profiles: Pick<ProfilesDB, "getProfile">;
+  profiles: Pick<ProfilesDB, "getWeekStartPreference">;
   workouts: Pick<WorkoutsDB, "getLastCompletedAt" | "getWeekWorkoutCount">;
   generateRecurringTasks(
     userId: string,
@@ -227,14 +227,13 @@ export function createDashboardSnapshot(
       }
 
       const profileResult = await optional(
-        dependencies.profiles.getProfile(userId),
+        dependencies.profiles.getWeekStartPreference(userId),
         null,
         "profile_unavailable",
         { userId, date },
       );
       if (profileResult.warning) warnings.push(profileResult.warning);
-      const profile = profileResult.value;
-      const weekStartDay = profile?.preferences?.week_start_day ?? 1;
+      const weekStartDay = profileResult.value ?? 1;
       const weekStartDate = getWeekStartDate(date, weekStartDay);
 
       const [

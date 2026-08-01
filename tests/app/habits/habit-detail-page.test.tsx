@@ -15,6 +15,12 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+vi.mock("@/lib/hooks/use-profile-preferences", () => ({
+  useLocalizationPreference: () => ({
+    weekStart: { status: "ready", value: "monday" },
+  }),
+}));
+
 // Mock SWR
 const mockUseSWR = vi.fn();
 vi.mock("swr", () => ({

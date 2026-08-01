@@ -43,9 +43,8 @@ export async function GET(
       return NextResponse.json({ error: 'Habit not found' }, { status: 404 });
     }
 
-    // Get user's week start day preference (default to Sunday = 0)
-    const profile = await profilesDB.getProfile(userId);
-    const weekStartDay = profile?.preferences?.week_start_day ?? 0;
+    // Monday is the explicit degraded presentation when Localization is unavailable.
+    const weekStartDay = (await profilesDB.getWeekStartPreference(userId)) ?? 1;
 
     // Get detailed completion stats
     const detailedStats = await habitLogsDB.getDetailedHabitStats(

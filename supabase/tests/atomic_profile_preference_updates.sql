@@ -138,7 +138,9 @@ begin
     "week_start_day": 0,
     "theme": "system",
     "weight_unit": "lbs",
-    "email_notifications_enabled": false
+    "email_notifications_enabled": false,
+    "quiet_hours_start": null,
+    "quiet_hours_end": null
   }'::jsonb then
     raise exception
       'overlapping partial updates did not preserve unrelated keys: %',

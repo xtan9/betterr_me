@@ -2,7 +2,6 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import useSWR from "swr";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,77 +14,84 @@ import { NotificationSettings } from "./notification-settings";
 import { ApiKeysSection } from "./api-keys-section";
 import { CheckCircle, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
-import { fetcher } from "@/lib/fetcher";
-import { submitProfilePreferenceIntent } from "@/lib/submit-profile-preference-intent";
-
-interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  updated_at: string;
-  preferences: {
-    date_format: string;
-    week_start_day: number;
-    theme: "system" | "light" | "dark";
-    weight_unit?: "kg" | "lbs";
-  };
-}
+import { log } from "@/lib/logger";
+import type { CurrentProfileResponse } from "@/lib/current-profile";
+import {
+  useFitnessPreference,
+  useLocalizationPreference,
+} from "@/lib/hooks/use-profile-preferences";
 
 interface SettingsContentProps {
-  initialProfile?: { profile: Profile };
+  initialData?: CurrentProfileResponse;
+  initialSubject?: string;
 }
 
-export function SettingsContent({ initialProfile }: SettingsContentProps) {
+export function SettingsContent({ initialData, initialSubject }: SettingsContentProps) {
   const t = useTranslations("settings");
-  const { data, error, isLoading, mutate } = useSWR<{ profile: Profile }>(
-    "/api/profile",
-    fetcher,
-    { fallbackData: initialProfile }
-  );
+  const profileOptions = { initialData, initialSubject };
+  const localization = useLocalizationPreference(profileOptions);
+  const fitness = useFitnessPreference(profileOptions);
 
-  const [weekStartDay, setWeekStartDay] = useState<number>(0);
+  const [weekStartDay, setWeekStartDay] = useState<number>(1);
   const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [savingConcept, setSavingConcept] = useState<"weekStart" | "weightUnit" | null>(null);
+  const [savedConcept, setSavedConcept] = useState<"weekStart" | "weightUnit" | null>(null);
+  const acceptedWeekStart = localization.acceptedWeekStart;
+  const acceptedWeightUnit = fitness.acceptedWeightUnit;
+  const remoteWeekStart =
+    localization.weekStart.status === "ready" || localization.weekStart.status === "pending"
+      ? localization.weekStart.value
+      : undefined;
+  const remoteWeightUnit =
+    fitness.weightUnit.status === "ready" || fitness.weightUnit.status === "pending"
+      ? fitness.weightUnit.value
+      : undefined;
 
-  // Initialize form with profile data
   useEffect(() => {
-    if (data?.profile?.preferences) {
-      setWeekStartDay(data.profile.preferences.week_start_day ?? 0);
-      setWeightUnit(data.profile.preferences.weight_unit ?? "kg");
+    if (remoteWeekStart !== undefined) {
+      setWeekStartDay(remoteWeekStart === "sunday" ? 0 : 1);
     }
-  }, [data]);
+    if (remoteWeightUnit !== undefined) {
+      setWeightUnit(remoteWeightUnit);
+    }
+  }, [remoteWeekStart, remoteWeightUnit]);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSaveSuccess(false);
+  const saveWeekStart = async () => {
+    setSavingConcept("weekStart");
+    setSavedConcept(null);
     try {
-      const intent: {
-        week_start_day?: number;
-        weight_unit?: "kg" | "lbs";
-      } = {};
-      if (data?.profile.preferences.week_start_day !== weekStartDay) {
-        intent.week_start_day = weekStartDay;
-      }
-      if ((data?.profile.preferences.weight_unit ?? "kg") !== weightUnit) {
-        intent.weight_unit = weightUnit;
-      }
-      await submitProfilePreferenceIntent(intent, mutate);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      await localization.setWeekStart(weekStartDay === 0 ? "sunday" : "monday");
+      setSavedConcept("weekStart");
     } catch (err) {
-      console.error("Failed to save settings:", err);
+      log.error("[settings] Failed to save Week Start Preference", err);
       toast.error(t("toast.saveError"));
     } finally {
-      setIsSaving(false);
+      setSavingConcept(null);
     }
   };
 
-  const hasChanges =
-    data?.profile?.preferences?.week_start_day !== weekStartDay ||
-    (data?.profile?.preferences?.weight_unit ?? "kg") !== weightUnit;
+  const saveWeightUnit = async () => {
+    setSavingConcept("weightUnit");
+    setSavedConcept(null);
+    try {
+      await fitness.setWeightUnit(weightUnit);
+      setSavedConcept("weightUnit");
+    } catch (err) {
+      log.error("[settings] Failed to save Weight Unit Preference", err);
+      toast.error(t("toast.saveError"));
+    } finally {
+      setSavingConcept(null);
+    }
+  };
 
-  if (error) {
+  const hasWeekStartChanges =
+    acceptedWeekStart?.status !== "ready" ||
+    (acceptedWeekStart.value === "sunday" ? 0 : 1) !== weekStartDay;
+  const hasWeightUnitChanges =
+    acceptedWeightUnit?.status !== "ready" || acceptedWeightUnit.value !== weightUnit;
+  const isLoading = localization.isLoading || fitness.isLoading;
+
+  if (localization.error || fitness.error) {
     return (
       <div className="flex flex-col gap-section-gap">
         <PageHeader title={t("title")} />
@@ -102,22 +108,6 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
     <div className="flex flex-col gap-section-gap">
       <PageHeader
         title={t("title")}
-        actions={
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || isSaving}
-            className="gap-2"
-          >
-            {isSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : saveSuccess ? (
-              <CheckCircle className="h-4 w-4 text-status-success" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            {saveSuccess ? t("saved") : t("save")}
-          </Button>
-        }
       />
 
       <Card>
@@ -126,7 +116,7 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
           <CardDescription>{t("profile.description")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <ProfileForm />
+          <ProfileForm initialData={initialData} initialSubject={initialSubject} />
         </CardContent>
       </Card>
 
@@ -142,9 +132,23 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
             <WeekStartSelector
               value={weekStartDay}
               onChange={setWeekStartDay}
-              disabled={isSaving}
+              disabled={savingConcept !== null}
             />
           )}
+          <Button
+            onClick={saveWeekStart}
+            disabled={!hasWeekStartChanges || savingConcept !== null}
+            className="mt-4 gap-2"
+          >
+            {savingConcept === "weekStart" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : savedConcept === "weekStart" ? (
+              <CheckCircle className="h-4 w-4 text-status-success" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {savedConcept === "weekStart" ? t("saved") : t("save")}
+          </Button>
         </CardContent>
       </Card>
 
@@ -160,9 +164,23 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
             <WeightUnitSelector
               value={weightUnit}
               onChange={setWeightUnit}
-              disabled={isSaving}
+              disabled={savingConcept !== null}
             />
           )}
+          <Button
+            onClick={saveWeightUnit}
+            disabled={!hasWeightUnitChanges || savingConcept !== null}
+            className="mt-4 gap-2"
+          >
+            {savingConcept === "weightUnit" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : savedConcept === "weightUnit" ? (
+              <CheckCircle className="h-4 w-4 text-status-success" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {savedConcept === "weightUnit" ? t("saved") : t("save")}
+          </Button>
         </CardContent>
       </Card>
 
@@ -176,7 +194,10 @@ export function SettingsContent({ initialProfile }: SettingsContentProps) {
         </CardContent>
       </Card>
 
-      <NotificationSettings />
+      <NotificationSettings
+        initialData={initialData}
+        initialSubject={initialSubject}
+      />
 
       <Card>
         <CardContent className="pt-card-padding flex flex-col gap-4">

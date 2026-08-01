@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { GET } from "@/app/api/insights/weekly/route";
 
 const mockGetWeeklyInsights = vi.fn();
-const mockGetProfile = vi.fn();
+const mockGetWeekStartPreference = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({
@@ -19,7 +19,7 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/db", () => ({
   ProfilesDB: class {
     constructor() {
-      return { getProfile: mockGetProfile };
+      return { getWeekStartPreference: mockGetWeekStartPreference };
     }
   },
   InsightsDB: class {
@@ -60,10 +60,7 @@ describe("GET /api/insights/weekly", () => {
         priority: 80,
       },
     ];
-    mockGetProfile.mockResolvedValue({
-      id: "user-123",
-      preferences: { week_start_day: 1 },
-    });
+    mockGetWeekStartPreference.mockResolvedValue(1);
     mockGetWeeklyInsights.mockResolvedValue(mockInsights);
 
     const response = await GET(createRequest());
@@ -79,7 +76,7 @@ describe("GET /api/insights/weekly", () => {
   });
 
   it("forwards date query param to InsightsDB", async () => {
-    mockGetProfile.mockResolvedValue({ preferences: { week_start_day: 0 } });
+    mockGetWeekStartPreference.mockResolvedValue(0);
     mockGetWeeklyInsights.mockResolvedValue([]);
 
     const response = await GET(createRequest("2026-02-10"));
@@ -121,7 +118,7 @@ describe("GET /api/insights/weekly", () => {
   });
 
   it("defaults to Monday when profile has no week_start_day", async () => {
-    mockGetProfile.mockResolvedValue(null);
+    mockGetWeekStartPreference.mockResolvedValue(null);
     mockGetWeeklyInsights.mockResolvedValue([]);
 
     const response = await GET(createRequest());
@@ -134,7 +131,7 @@ describe("GET /api/insights/weekly", () => {
   });
 
   it("returns 500 on internal error", async () => {
-    mockGetProfile.mockRejectedValue(new Error("DB error"));
+    mockGetWeekStartPreference.mockRejectedValue(new Error("DB error"));
 
     const response = await GET(createRequest());
     const data = await response.json();

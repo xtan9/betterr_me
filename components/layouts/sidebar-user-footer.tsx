@@ -39,7 +39,7 @@ const locales = [
   { code: "zh-TW", name: "\u7E41\u9AD4\u4E2D\u6587" },
 ] as const;
 
-function getInitials(fullName: string | null | undefined, email: string): string {
+function getInitials(fullName: string | null | undefined, email: string | null): string {
   if (fullName) {
     const parts = fullName.trim().split(/\s+/);
     if (parts.length >= 2) {
@@ -47,7 +47,7 @@ function getInitials(fullName: string | null | undefined, email: string): string
     }
     return parts[0][0].toUpperCase();
   }
-  return email[0].toUpperCase();
+  return email?.[0]?.toUpperCase() ?? "?";
 }
 
 interface SidebarUserFooterProps {
@@ -66,10 +66,13 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
   // eslint-disable-next-line react-hooks/set-state-in-effect -- standard hydration guard pattern
   useEffect(() => { setMounted(true); }, []);
 
-  const profile = data?.profile;
-  const initials = profile ? getInitials(profile.full_name, profile.email) : "?";
-  const displayName = profile?.full_name || profile?.email || "";
-  const displayEmail = profile?.email || "";
+  const currentProfile = data?.currentProfile;
+  const profileDetails = currentProfile?.profileDetails;
+  const displayEmail = currentProfile?.identity.email ?? "";
+  const initials = currentProfile
+    ? getInitials(profileDetails?.fullName, displayEmail)
+    : "?";
+  const displayName = profileDetails?.fullName || displayEmail;
 
   const handleLocaleChange = (code: string) => {
     startTransition(() => {
@@ -142,8 +145,8 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
             >
               <Avatar className="h-8 w-8 rounded-card group-data-[collapsible=icon]:hidden">
                 <AvatarImage
-                  src={profile?.avatar_url ?? undefined}
-                  alt={profile?.full_name ?? ""}
+                  src={profileDetails?.avatarUrl ?? undefined}
+                  alt={profileDetails?.fullName ?? ""}
                 />
                 <AvatarFallback className="rounded-card">
                   {initials}
@@ -169,8 +172,8 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-body">
                 <Avatar className="h-8 w-8 rounded-card">
                   <AvatarImage
-                    src={profile?.avatar_url ?? undefined}
-                    alt={profile?.full_name ?? ""}
+                    src={profileDetails?.avatarUrl ?? undefined}
+                    alt={profileDetails?.fullName ?? ""}
                   />
                   <AvatarFallback className="rounded-card">
                     {initials}

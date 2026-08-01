@@ -74,7 +74,13 @@ describe('GET /api/tasks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-123', email: 'test@example.com' } },
+      data: {
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          email_confirmed_at: '2026-01-01T00:00:00.000Z',
+        },
+      },
       error: null,
     });
     vi.stubEnv('API_KEY_HMAC_SECRET', 'test-hmac-secret');
@@ -203,6 +209,7 @@ describe('POST /api/tasks', () => {
         user: {
           id: 'user-123',
           email: 'test@example.com',
+          email_confirmed_at: '2026-01-01T00:00:00.000Z',
           user_metadata: { full_name: 'Test User', avatar_url: 'avatar.png' },
         },
       },

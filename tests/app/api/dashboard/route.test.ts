@@ -43,10 +43,7 @@ const mockMilestonesDB = {
   getTodaysMilestones: vi.fn().mockResolvedValue([]),
 };
 const mockProfilesDB = {
-  getProfile: vi.fn().mockResolvedValue({
-    id: 'user-123',
-    preferences: { week_start_day: 1, date_format: 'YYYY-MM-DD', theme: 'system', weight_unit: 'kg' },
-  }),
+  getWeekStartPreference: vi.fn().mockResolvedValue(1),
 };
 
 vi.mock('@/lib/db', () => ({

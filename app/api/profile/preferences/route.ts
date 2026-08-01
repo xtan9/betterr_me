@@ -16,6 +16,10 @@ const WRITE_REQUEST_POLICY = {
  * Update user preferences (merges with existing)
  */
 export async function PATCH(request: NextRequest) {
+  log.info("[legacy-profile] compatibility traffic", {
+    route: "/api/profile/preferences",
+    method: "PATCH",
+  });
   try {
     const auth = await authenticateRequest(request, WRITE_REQUEST_POLICY);
     if (!auth.ok) {

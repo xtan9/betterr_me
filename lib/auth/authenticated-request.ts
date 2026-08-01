@@ -42,6 +42,10 @@ function classifyUserError(
   return { outcome: "misconfigured" };
 }
 
+export function verifiedIdentityEmail(user: User): string | null {
+  return user.email && user.email_confirmed_at ? user.email : null;
+}
+
 function authenticatedUserProfile(user: User) {
   const fullName = user.user_metadata?.full_name;
   const avatarUrl = user.user_metadata?.avatar_url;
@@ -49,7 +53,7 @@ function authenticatedUserProfile(user: User) {
     return undefined;
   }
   return {
-    email: user.email ?? null,
+    email: verifiedIdentityEmail(user),
     fullName: typeof fullName === "string" ? fullName : null,
     avatarUrl: typeof avatarUrl === "string" ? avatarUrl : null,
   };

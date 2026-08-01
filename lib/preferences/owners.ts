@@ -1,0 +1,147 @@
+import {
+  type AppearancePreferences,
+  type FitnessPreferences,
+  type LocalizationPreferences,
+  type NotificationPreferences,
+  type PreferenceState,
+  type PreferenceStorage,
+  type PushQuietWindow,
+  type UserTimeZone,
+  type WeekStartPreference,
+} from "./types";
+
+export type {
+  AppearancePreferences,
+  FitnessPreferences,
+  LocalizationPreferences,
+  NotificationPreferences,
+  PreferenceState,
+  PreferenceStorage,
+  PushQuietWindow,
+  ThemePreference,
+  UserTimeZone,
+  WeekStartPreference,
+  WeightUnitPreference,
+} from "./types";
+
+const unavailable = <Value>(
+  reason: import("./types").PreferenceUnavailableReason,
+): PreferenceState<Value> => ({
+  status: "unavailable",
+  reason,
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const decodeEnum = <Value extends string>(
+  value: unknown,
+  supported: readonly Value[],
+): PreferenceState<Value> =>
+  typeof value === "string" && supported.includes(value as Value)
+    ? { status: "ready", value: value as Value }
+    : unavailable("invalidStoredValue");
+
+export function decodeAppearancePreferences(
+  preferences: PreferenceStorage,
+): AppearancePreferences {
+  const stored = isRecord(preferences) ? preferences : null;
+  return {
+    theme: decodeEnum(stored?.theme, ["system", "light", "dark"]),
+  };
+}
+
+export function decodeLocalizationPreferences(
+  preferences: PreferenceStorage,
+): LocalizationPreferences {
+  const stored = isRecord(preferences) ? preferences : null;
+  const weekStart =
+    stored?.week_start_day === 0
+      ? ({ status: "ready", value: "sunday" } as const)
+      : stored?.week_start_day === 1
+        ? ({ status: "ready", value: "monday" } as const)
+        : unavailable<WeekStartPreference>("invalidStoredValue");
+
+  return { weekStart };
+}
+
+export function decodeFitnessPreferences(
+  preferences: PreferenceStorage,
+): FitnessPreferences {
+  const stored = isRecord(preferences) ? preferences : null;
+  return {
+    weightUnit: decodeEnum(stored?.weight_unit, ["kg", "lbs"]),
+  };
+}
+
+const LOCAL_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function isValidLocalTime(value: unknown): value is string {
+  return typeof value === "string" && LOCAL_TIME_PATTERN.test(value);
+}
+
+function decodeReminderEmail(
+  stored: Record<string, unknown> | null,
+  identityEmail: string | null,
+): NotificationPreferences["reminderEmail"] {
+  const enabled = stored?.email_notifications_enabled;
+  if (typeof enabled !== "boolean") {
+    return unavailable("invalidStoredValue");
+  }
+  if (!enabled) return { status: "ready", value: { enabled: false } };
+  if (!identityEmail) return unavailable("identityEmailUnavailable");
+  return { status: "ready", value: { enabled: true } };
+}
+
+function decodePushQuietWindow(
+  stored: Record<string, unknown> | null,
+  timeZone: UserTimeZone,
+): PreferenceState<PushQuietWindow> {
+  const start = stored?.quiet_hours_start;
+  const end = stored?.quiet_hours_end;
+
+  if (start === null && end === null) {
+    return { status: "ready", value: { status: "disabled" } };
+  }
+
+  if (!isValidLocalTime(start) || !isValidLocalTime(end) || start === end) {
+    return unavailable("invalidStoredValue");
+  }
+
+  if (timeZone.status !== "resolved") {
+    return unavailable("userTimeZoneUnresolved");
+  }
+
+  return {
+    status: "ready",
+    value: { status: "enabled", startLocal: start, endLocal: end },
+  };
+}
+
+export function decodeNotificationPreferences(
+  preferences: PreferenceStorage,
+  identityEmail: string | null,
+  timeZone: string | null,
+): NotificationPreferences {
+  const stored = isRecord(preferences) ? preferences : null;
+  return {
+    reminderEmail: decodeReminderEmail(stored, identityEmail),
+    pushQuietWindow: decodePushQuietWindow(
+      stored,
+      decodeUserTimeZone(timeZone),
+    ),
+  };
+}
+
+export function decodeUserTimeZone(value: unknown): UserTimeZone {
+  if (typeof value !== "string" || value.length === 0) {
+    return { status: "unresolved" };
+  }
+
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+    return { status: "resolved", value };
+  } catch {
+    return { status: "unresolved" };
+  }
+}

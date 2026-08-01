@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { ProfilesDB } from '@/lib/db';
 import type { ReminderSourceType } from '@/lib/db/types';
 import { log } from '@/lib/logger';
-import { emailNotificationsEnabled } from '@/lib/profile-preferences';
+import { decodeNotificationPreferences } from '@/lib/preferences/owners';
 
 // Action URL map per source type
 const ACTION_URLS: Record<ReminderSourceType, (date?: string) => string> = {
@@ -36,22 +36,32 @@ export async function sendReminderEmail(
     // Look up user profile (use admin client to bypass RLS since this runs from cron)
     const supabase = createAdminClient();
     const profilesDB = new ProfilesDB(supabase);
-    const profile = await profilesDB.getProfile(userId);
+    const projection = await profilesDB.getNotificationPreferenceProjection(userId);
 
-    if (!profile) {
+    if (!projection) {
       return { success: false, error: 'Profile not found' };
     }
 
-    // Check email preference
-    if (!emailNotificationsEnabled(profile)) {
+    const {
+      data: { user },
+    } = await supabase.auth.admin.getUserById(userId);
+    const identityEmail =
+      user?.email && user.email_confirmed_at ? user.email : null;
+    const emailPreference = decodeNotificationPreferences(
+      projection.preferences,
+      identityEmail,
+      projection.timezone,
+    ).reminderEmail;
+
+    if (emailPreference.status !== 'ready' || !emailPreference.value.enabled) {
       return { success: true, skipped: true };
     }
 
-    if (!profile.email) {
+    if (!identityEmail) {
       return { success: false, error: 'No email address on profile' };
     }
 
-    const locale = (profile as unknown as Record<string, unknown>).locale as string || 'en';
+    const locale = 'en';
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const unsubscribeUrl = getUnsubscribeUrl(userId);
     const actionPath = ACTION_URLS[payload.sourceType](payload.date);
@@ -96,7 +106,7 @@ export async function sendReminderEmail(
     // Send via Resend (use function call not JSX for templates)
     const { data, error } = await getResendClient().emails.send({
       from: 'BetterR.Me <reminders@betterr.me>',
-      to: [profile.email],
+      to: [identityEmail],
       subject,
       react: templateEntry.component(templateProps as never),
     });

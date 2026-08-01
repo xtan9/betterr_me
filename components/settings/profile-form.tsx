@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
-import useSWR from "swr";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,21 +22,8 @@ import {
   profileFormSchema,
   type ProfileFormValues,
 } from "@/lib/validations/profile";
-import { fetcher } from "@/lib/fetcher";
-
-interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  preferences: {
-    date_format: string;
-    week_start_day: number;
-    theme: "system" | "light" | "dark";
-  };
-  created_at: string;
-  updated_at: string;
-}
+import type { CurrentProfileResponse } from "@/lib/current-profile";
+import { useProfileDetails } from "@/lib/hooks/use-profile-preferences";
 
 function ProfileFormSkeleton() {
   return (
@@ -59,16 +45,17 @@ function ProfileFormSkeleton() {
   );
 }
 
-export function ProfileForm() {
+export function ProfileForm({
+  initialData,
+  initialSubject,
+}: {
+  initialData?: CurrentProfileResponse;
+  initialSubject?: string;
+}) {
   const t = useTranslations("settings.profile");
   const [isSaving, setIsSaving] = useState(false);
-
-  const { data, isLoading, mutate } = useSWR<{ profile: Profile }>(
-    "/api/profile",
-    fetcher
-  );
-
-  const profile = data?.profile;
+  const { details, currentProfile, isLoading, updateProfileDetails } =
+    useProfileDetails({ initialData, initialSubject });
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -80,31 +67,26 @@ export function ProfileForm() {
 
   // Reset form when profile data loads
   useEffect(() => {
-    if (profile) {
+    if (details) {
       form.reset({
-        full_name: profile.full_name ?? "",
-        avatar_url: profile.avatar_url ?? "",
+        full_name: details.fullName ?? "",
+        avatar_url: details.avatarUrl ?? "",
       });
     }
-  }, [profile, form]);
+  }, [details, form]);
 
   const handleSubmit = async (data: ProfileFormValues) => {
     setIsSaving(true);
     try {
-      const response = await fetch("/api/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          full_name: data.full_name || null,
-          avatar_url: data.avatar_url || null,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to update profile");
+      const patch: { fullName?: string | null; avatarUrl?: string | null } = {};
+      if (form.formState.dirtyFields.full_name) {
+        patch.fullName = data.full_name || null;
       }
-
-      await mutate();
+      if (form.formState.dirtyFields.avatar_url) {
+        patch.avatarUrl = data.avatar_url || null;
+      }
+      await updateProfileDetails(patch);
+      form.reset(data);
       toast.success(t("success"));
     } catch (error) {
       console.error("Update profile error:", error);
@@ -145,7 +127,7 @@ export function ProfileForm() {
         <div>
           <FormLabel>{t("email")}</FormLabel>
           <Input
-            value={profile?.email ?? ""}
+            value={currentProfile?.identity.email ?? ""}
             disabled
             className="mt-2"
           />

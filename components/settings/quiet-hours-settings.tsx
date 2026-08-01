@@ -1,9 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import useSWR from "swr";
-import { fetcher } from "@/lib/fetcher";
+import { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -17,47 +15,55 @@ import {
 } from "@/components/ui/card";
 import { Moon } from "lucide-react";
 import { toast } from "sonner";
-import type { Profile } from "@/lib/db/types";
-import type { PreferencesValues } from "@/lib/validations/preferences";
-import { submitProfilePreferenceIntent } from "@/lib/submit-profile-preference-intent";
+import type { CurrentProfileResponse } from "@/lib/current-profile";
+import { useNotificationPreferences } from "@/lib/hooks/use-profile-preferences";
 
-export function QuietHoursSettings() {
+export function QuietHoursSettings({
+  initialData,
+  initialSubject,
+}: {
+  initialData?: CurrentProfileResponse;
+  initialSubject?: string;
+}) {
   const t = useTranslations("settings.notifications");
-  const { data: profileData, mutate } = useSWR<{ profile: Profile }>(
-    "/api/profile",
-    fetcher,
+  const notifications = useNotificationPreferences({ initialData, initialSubject });
+  const quietState = notifications.pushQuietWindow;
+  const acceptedQuiet = useMemo(
+    () =>
+      quietState.status === "ready" || quietState.status === "pending"
+        ? quietState.value
+        : { status: "disabled" as const },
+    [quietState],
   );
-
-  const prefs = profileData?.profile?.preferences;
-  const savedStart = prefs?.quiet_hours_start ?? null;
-  const savedEnd = prefs?.quiet_hours_end ?? null;
+  const savedStart = acceptedQuiet.status === "enabled" ? acceptedQuiet.startLocal : null;
+  const savedEnd = acceptedQuiet.status === "enabled" ? acceptedQuiet.endLocal : null;
 
   const [enabled, setEnabled] = useState(false);
   const [start, setStart] = useState("22:00");
   const [end, setEnd] = useState("07:00");
   const [saving, setSaving] = useState(false);
 
-  const nextStart = enabled ? start : null;
-  const nextEnd = enabled ? end : null;
-  const intent: PreferencesValues = {};
-  if (savedStart !== nextStart) intent.quiet_hours_start = nextStart;
-  if (savedEnd !== nextEnd) intent.quiet_hours_end = nextEnd;
-  const hasChanges = Object.keys(intent).length > 0;
+  const nextValue = enabled
+    ? { status: "enabled" as const, startLocal: start, endLocal: end }
+    : { status: "disabled" as const };
+  const hasChanges =
+    quietState.status !== "ready" ||
+    JSON.stringify(quietState.value) !== JSON.stringify(nextValue);
 
   // Sync state from fetched profile
   useEffect(() => {
-    if (prefs) {
-      const hasQuietHours = !!savedStart && !!savedEnd;
+    if (quietState.status === "ready" || quietState.status === "pending") {
+      const hasQuietHours = acceptedQuiet.status === "enabled";
       setEnabled(hasQuietHours);
       if (savedStart) setStart(savedStart);
       if (savedEnd) setEnd(savedEnd);
     }
-  }, [prefs, savedStart, savedEnd]);
+  }, [quietState, savedStart, savedEnd, acceptedQuiet]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await submitProfilePreferenceIntent(intent, mutate);
+      await notifications.setPushQuietWindow(nextValue);
       toast.success(t("quietHours.saved"));
     } catch (error) {
       console.error("Failed to save quiet hours:", error);
@@ -87,6 +93,7 @@ export function QuietHoursSettings() {
             id="quiet-hours-toggle"
             checked={enabled}
             onCheckedChange={setEnabled}
+            disabled={saving || quietState.status === "unavailable"}
           />
         </div>
 
@@ -101,6 +108,7 @@ export function QuietHoursSettings() {
                 type="time"
                 value={start}
                 onChange={(e) => setStart(e.target.value)}
+                disabled={saving}
               />
             </div>
             <div className="space-y-1">
@@ -112,6 +120,7 @@ export function QuietHoursSettings() {
                 type="time"
                 value={end}
                 onChange={(e) => setEnd(e.target.value)}
+                disabled={saving}
               />
             </div>
           </div>

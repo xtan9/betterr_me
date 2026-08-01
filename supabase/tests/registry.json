@@ -1,5 +1,11 @@
 [
   {
+    "path": "current_profile_preferences.sql",
+    "domain": "profile",
+    "role": "constrained",
+    "cleanup": "self-cleaning"
+  },
+  {
     "path": "atomic_profile_preference_updates.sql",
     "domain": "profile",
     "role": "constrained",

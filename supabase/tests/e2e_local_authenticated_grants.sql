@@ -26,6 +26,7 @@ begin
     'journal_entries',
     'journal_entry_links',
     'exercises',
+    'exercise_media',
     'routines',
     'routine_exercises',
     'workouts',

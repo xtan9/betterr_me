@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { WorkoutsDB } from "@/lib/db/workouts";
+import { ProfilesDB } from "@/lib/db/profiles";
 import { log } from "@/lib/logger";
 import { PageHeader } from "@/components/layouts/page-header";
 import { WorkoutDetailView } from "@/components/fitness/workout-history/workout-detail-view";
@@ -45,21 +46,13 @@ export default async function WorkoutDetailPage({
     redirect("/workouts/active");
   }
 
-  // Get weight unit from user profile
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("preferences")
-    .eq("id", user.id)
-    .single();
-
-  if (profileError) {
-    log.error("Failed to fetch profile for weight unit", profileError);
+  const profilesDB = new ProfilesDB(supabase);
+  let weightUnit: WeightUnit = "kg";
+  try {
+    weightUnit = (await profilesDB.getWeightUnitPreference(user.id)) ?? "kg";
+  } catch (error) {
+    log.error("Failed to read Fitness Weight Unit Preference", error);
   }
-
-  const weightUnit: WeightUnit =
-    (profile?.preferences as { weight_unit?: string } | null)?.weight_unit === "lbs"
-      ? "lbs"
-      : "kg";
 
   const t = await getTranslations("workouts");
 

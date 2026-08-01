@@ -82,6 +82,12 @@ vi.mock("@/lib/hooks/use-toggling-set", () => ({
   }),
 }));
 
+vi.mock("@/lib/hooks/use-profile-preferences", () => ({
+  useLocalizationPreference: () => ({
+    weekStart: { status: "ready", value: "monday" },
+  }),
+}));
+
 // ─── colors ───────────────────────────────────────────────────────────────────
 const mockGetProjectColor = vi.fn().mockReturnValue({
   key: "blue",
