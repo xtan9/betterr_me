@@ -204,6 +204,7 @@ describe("conditional test classifier", () => {
     ["settings", "lib/profile-preference-cache.ts"],
     ["settings", "lib/hooks/use-profile-theme.ts"],
     ["settings", "lib/profile-preferences.ts"],
+    ["settings", "lib/legacy-telemetry.ts"],
     ["settings", "lib/submit-profile-preference-intent.ts"],
     ["cron", "app/api/cron/dispatch-reminders/route.ts"],
     ["control-plane", "app/control-plane/page.tsx"],
