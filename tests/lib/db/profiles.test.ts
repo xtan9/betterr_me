@@ -196,6 +196,37 @@ describe("ProfilesDB", () => {
   });
 
   // ─── module-level singleton ───────────────────────────────────────────────
+  describe("setUserTimeZone", () => {
+    it("persists one scalar replacement through the authenticated RPC", async () => {
+      const outcome = {
+        timeZone: "America/New_York",
+        changed: true,
+      };
+      const rpc = vi.fn().mockResolvedValue({ data: outcome, error: null });
+      const rpcDB = new ProfilesDB({ rpc } as unknown as SupabaseClient);
+
+      await expect(rpcDB.setUserTimeZone("America/New_York")).resolves.toEqual(
+        outcome,
+      );
+      expect(rpc).toHaveBeenCalledWith("set_user_time_zone", {
+        time_zone: "America/New_York",
+      });
+    });
+
+    it("normalizes an explicit User Time Zone RPC error", async () => {
+      const rpc = vi.fn().mockResolvedValue({
+        data: null,
+        error: { code: "22023", message: "Invalid User Time Zone" },
+      });
+      const rpcDB = new ProfilesDB({ rpc } as unknown as SupabaseClient);
+
+      await expect(rpcDB.setUserTimeZone("Mars/Olympus")).rejects.toMatchObject({
+        code: "22023",
+        message: "Invalid User Time Zone",
+      });
+    });
+  });
+
   describe("profilesDB singleton", () => {
     it("exports a ProfilesDB instance bound to the browser client", () => {
       // The singleton is constructed at import time via createClient() (mocked

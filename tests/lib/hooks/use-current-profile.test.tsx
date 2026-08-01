@@ -417,6 +417,100 @@ describe("useCurrentProfile", () => {
     );
   });
 
+  it("revalidates Current Profile after an accepted User Time Zone replacement", async () => {
+    const { useUserTimeZone } = await import(
+      "@/lib/hooks/use-profile-preferences"
+    );
+    const updatedProfile = structuredClone(baseProfile);
+    updatedProfile.currentProfile.userTimeZone = {
+      status: "resolved",
+      value: "America/New_York",
+    };
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({ timeZone: "America/New_York", changed: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(updatedProfile),
+      });
+    currentSWRData = baseProfile;
+    mockMutate.mockImplementation(async (updater) => {
+      if (typeof updater === "function") {
+        const next = await updater(currentSWRData);
+        currentSWRData = next;
+        return next;
+      }
+      return currentSWRData;
+    });
+
+    const { result } = renderHook(() => useUserTimeZone());
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-a"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+
+    await act(async () => {
+      await result.current.setUserTimeZone("America/New_York");
+    });
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      "/api/user-time-zone",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ timeZone: "America/New_York" }),
+      }),
+    );
+    await waitFor(() =>
+      expect(result.current.timeZone).toEqual({
+        status: "resolved",
+        value: "America/New_York",
+      }),
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      "/api/current-profile",
+      expect.objectContaining({ headers: { Accept: "application/json" } }),
+    );
+  });
+
+  it("keeps the accepted User Time Zone when its replacement is rejected", async () => {
+    const { useUserTimeZone } = await import(
+      "@/lib/hooks/use-profile-preferences"
+    );
+    mockFetch.mockRejectedValueOnce(new Error("user_time_zone_unavailable"));
+    currentSWRData = baseProfile;
+
+    const { result } = renderHook(() => useUserTimeZone());
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-a"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+
+    let rejected: Promise<unknown> | undefined;
+    act(() => {
+      rejected = result.current.setUserTimeZone("America/New_York");
+    });
+    await expect(rejected).rejects.toThrow("user_time_zone_unavailable");
+
+    expect(result.current.timeZone).toEqual({
+      status: "resolved",
+      value: "America/Los_Angeles",
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
   it("serializes same-concept commands so the latest intent is sent second", async () => {
     const { useCurrentProfileCommands } = await import(
       "@/lib/hooks/use-current-profile"

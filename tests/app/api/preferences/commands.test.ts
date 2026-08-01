@@ -259,7 +259,7 @@ describe("domain-owned Preference commands", () => {
     expect(mockUpdateProfileDetails).not.toHaveBeenCalled();
   });
 
-  it("uses an explicit User Time Zone command", async () => {
+  it("uses an explicit User Time Zone command and returns only its outcome", async () => {
     mockSetUserTimeZone.mockResolvedValue({
       timeZone: "America/New_York",
       changed: true,
@@ -274,7 +274,65 @@ describe("domain-owned Preference commands", () => {
     );
 
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      timeZone: "America/New_York",
+      changed: true,
+    });
     expect(mockSetUserTimeZone).toHaveBeenCalledWith("America/New_York");
+    expect(mockAuthenticateRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      { allowedCredentials: ["cookie"], requiredPermission: "write" },
+    );
+  });
+
+  it("rejects an unsupported IANA User Time Zone before persistence", async () => {
+    const response = await putUserTimeZone(
+      request(
+        "/api/user-time-zone",
+        { timeZone: "Mars/Olympus" },
+        "PUT",
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "invalid_preference",
+    });
+    expect(mockSetUserTimeZone).not.toHaveBeenCalled();
+  });
+
+  it("rejects a User Time Zone target identifier instead of accepting a foreign subject", async () => {
+    const response = await putUserTimeZone(
+      request(
+        "/api/user-time-zone",
+        { timeZone: "America/New_York", userId: "other-user" },
+        "PUT",
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockSetUserTimeZone).not.toHaveBeenCalled();
+  });
+
+  it("requires the authenticated cookie command boundary for User Time Zone", async () => {
+    mockAuthenticateRequest.mockResolvedValue({
+      ok: false,
+      outcome: "anonymous",
+      error: "Unauthorized",
+      status: 401,
+    });
+
+    const response = await putUserTimeZone(
+      request(
+        "/api/user-time-zone",
+        { timeZone: "America/New_York" },
+        "PUT",
+      ),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+    expect(mockSetUserTimeZone).not.toHaveBeenCalled();
   });
 
   it("maps unresolved User Time Zone command failures to a typed application error", async () => {

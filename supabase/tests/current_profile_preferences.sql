@@ -100,6 +100,19 @@ begin
     raise exception 'User Time Zone command returned wrong outcome: %', command_result;
   end if;
 
+  begin
+    perform public.set_user_time_zone('Mars/Olympus');
+    raise exception 'unsupported User Time Zone unexpectedly accepted';
+  exception
+    when sqlstate '22023' then null;
+  end;
+
+  if (select timezone from public.profiles
+      where id = '63400000-0000-0000-0000-000000000001')
+      <> 'America/Los_Angeles' then
+    raise exception 'rejected User Time Zone changed the accepted value';
+  end if;
+
   command_result := public.set_notification_preference(
     '{"type":"setPushQuietWindow","value":{"status":"enabled","startLocal":"22:00","endLocal":"07:00"}}'::jsonb
   );
