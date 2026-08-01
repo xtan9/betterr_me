@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { RoutinesDB } from "@/lib/db/routines";
+import { createRoutineWrites } from "@/lib/fitness/routine-writes";
 import { validateRequestBody } from "@/lib/validations/api";
 import { routineExerciseAddSchema } from "@/lib/validations/routine";
 import { log } from "@/lib/logger";
@@ -33,10 +34,10 @@ export async function GET(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const routinesDB = new RoutinesDB(supabase);
-    const routine = await routinesDB.getRoutine(id);
+    const routine = await routinesDB.getRoutine(id, userId);
 
     if (!routine) {
       return NextResponse.json(
@@ -72,19 +73,34 @@ export async function POST(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, routineExerciseAddSchema);
     if (!validation.success) return validation.response;
 
-    const routinesDB = new RoutinesDB(supabase);
-    const exercise = await routinesDB.addExerciseToRoutine(
-      id,
-      validation.data
-    );
+    const outcome = await createRoutineWrites(supabase).addExercise({
+      userId,
+      routineId: id,
+      exercise: {
+        exerciseId: validation.data.exercise_id,
+        targetSets: validation.data.target_sets,
+        targetReps: validation.data.target_reps,
+        targetWeightKg: validation.data.target_weight_kg,
+        targetDurationSeconds: validation.data.target_duration_seconds,
+        targetDistanceMeters: validation.data.target_distance_meters,
+        restTimerSeconds: validation.data.rest_timer_seconds,
+        notes: validation.data.notes,
+      },
+    });
+    if (outcome.type === "not-found") {
+      return NextResponse.json(
+        { error: "Routine not found" },
+        { status: 404 },
+      );
+    }
 
-    return NextResponse.json({ exercise }, { status: 201 });
+    return NextResponse.json({ exercise: outcome.exercise }, { status: 201 });
   } catch (error) {
     log.error("POST /api/routines/[id]/exercises error", error);
     return NextResponse.json(

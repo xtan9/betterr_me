@@ -260,8 +260,8 @@ function finalize({ changedPaths, ownershipMatches, reasons, fallback, suiteSeed
     e2eVisual: Boolean(suiteSeed.e2eVisual),
     e2eSupabase: Boolean(suiteSeed.e2eSupabase || suiteSeed.e2eFull || e2eSpecs.length),
     performance: Boolean(suiteSeed.performance),
-    // The delivery-write baseline is cheap, deterministic, and protects the
-    // architecture even for documentation-only or migration-only diffs.
+    // The permanent delivery mutation guard is cheap, deterministic, and
+    // protects the architecture even for documentation-only or migration-only diffs.
     architecture: suiteSeed.architecture !== false,
     mutation: mutationScopes.length > 0,
     mutationScopes,

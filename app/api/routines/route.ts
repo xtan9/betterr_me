@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { RoutinesDB } from "@/lib/db/routines";
+import { createRoutineWrites } from "@/lib/fitness/routine-writes";
 import { validateRequestBody } from "@/lib/validations/api";
 import { routineCreateSchema } from "@/lib/validations/routine";
 import { log } from "@/lib/logger";
@@ -63,10 +64,16 @@ export async function POST(request: NextRequest) {
     const validation = validateRequestBody(body, routineCreateSchema);
     if (!validation.success) return validation.response;
 
-    const routinesDB = new RoutinesDB(supabase);
-    const routine = await routinesDB.createRoutine(userId, validation.data);
+    const outcome = await createRoutineWrites(supabase).create({
+      userId,
+      name: validation.data.name,
+      notes: validation.data.notes,
+    });
+    if (outcome.type === "not-found") {
+      return NextResponse.json({ error: "Routine not found" }, { status: 404 });
+    }
 
-    return NextResponse.json({ routine }, { status: 201 });
+    return NextResponse.json({ routine: outcome.routine }, { status: 201 });
   } catch (error) {
     log.error("POST /api/routines error", error);
     return NextResponse.json(

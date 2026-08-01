@@ -23,6 +23,10 @@ vi.mock("@/lib/db/routines", () => ({
   },
 }));
 
+vi.mock("@/lib/fitness/routine-writes", () => ({
+  createRoutineWrites: () => ({ addExercise: mockAddExerciseToRoutine }),
+}));
+
 vi.mock("@/lib/logger", () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -112,7 +116,10 @@ describe("POST /api/routines/[id]/exercises", () => {
 
   it("adds exercise to routine (201)", async () => {
     const created = { id: "re-new", exercise_id: validExerciseUUID };
-    mockAddExerciseToRoutine.mockResolvedValue(created);
+    mockAddExerciseToRoutine.mockResolvedValue({
+      type: "added",
+      exercise: created,
+    });
 
     const response = await POST(
       makePostRequest({ exercise_id: validExerciseUUID }),
@@ -122,6 +129,20 @@ describe("POST /api/routines/[id]/exercises", () => {
 
     expect(response.status).toBe(201);
     expect(data.exercise).toEqual(created);
+    expect(mockAddExerciseToRoutine).toHaveBeenCalledWith({
+      userId: "user-123",
+      routineId: "r-1",
+      exercise: {
+        exerciseId: validExerciseUUID,
+        targetSets: 3,
+        targetReps: undefined,
+        targetWeightKg: undefined,
+        targetDurationSeconds: undefined,
+        targetDistanceMeters: undefined,
+        restTimerSeconds: 90,
+        notes: undefined,
+      },
+    });
   });
 
   it("rejects invalid body — missing exercise_id (400)", async () => {

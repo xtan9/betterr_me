@@ -1,11 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const INVENTORY_PATH = "docs/architecture/delivery-write-inventory.json";
-export const LOCK_PATH = "docs/architecture/delivery-write-inventory.sha256";
 
 const SCOPED_SOURCE_PATTERNS = [
   /^app\/api\/(?:tasks|recurring-tasks|habits|workouts|routines|journal|projects|calendar-events|calendar|reminders|reminder-defaults)\/.+\.ts$/,
@@ -14,12 +12,29 @@ const SCOPED_SOURCE_PATTERNS = [
 ];
 
 const RAW_WRITE_METHOD = /^(?:insert|update|upsert|delete)$/;
-const DATABASE_BINDING = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+([A-Za-z_$][\w$]*DB)\s*\(/g;
+const DATABASE_BINDING = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+([A-Za-z_$][\w$]*)\s*\(/g;
 const DIRECT_RAW_WRITE = /\b(?:supabase|adminClient|client)\s*\.\s*(?:(?:from\s*\([^)]*\))\s*\.\s*)?(insert|update|upsert|delete)\s*\(/g;
 const DIRECT_RAW_RPC = /\b(?:supabase|adminClient|client)\s*\.\s*rpc\s*\(/g;
-const DIRECT_DATABASE_CONSTRUCTOR_CALL = /\bnew\s+([A-Za-z_$][\w$]*DB)\s*\([^)]*\)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
-const DIRECT_DATABASE_SINGLETON_CALL = /\b([A-Za-z_$][\w$]*DB)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
+const DIRECT_DATABASE_CONSTRUCTOR_CALL = /\bnew\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
+const DIRECT_DATABASE_SINGLETON_CALL = /\b([A-Za-z_$][\w$]*)\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/g;
+const DATABASE_IMPORT = /\bimport\s+(?:type\s+)?\{([^}]+)\}\s+from\s+["']([^"']+)["']/g;
 const QUERY_METHOD = /^(?:get|list|find|fetch|count|calculate|has|is|exists|search|load|read|select|query|resolve|lookup|describe|preview|history|stats|summary)/i;
+
+const WRITE_CAPABLE_DATABASE_ADAPTERS = new Set([
+  "TasksDB",
+  "RecurringTasksDB",
+  "HabitsDB",
+  "HabitLogsDB",
+  "WorkoutsDB",
+  "WorkoutExercisesDB",
+  "RoutinesDB",
+  "JournalEntriesDB",
+  "JournalEntryLinksDB",
+  "ProjectsDB",
+  "CalendarEventsDB",
+  "RemindersDB",
+  "ReminderDefaultsDB",
+]);
 
 const DOMAIN_NAMES = new Set([
   "Tasks",
@@ -56,6 +71,31 @@ function addFinding(findings, finding) {
   findings.set(finding.id, { ...finding, lines: [finding.line] });
 }
 
+function importedDatabaseBindings(contents) {
+  const bindings = new Map();
+  let match;
+  while ((match = DATABASE_IMPORT.exec(contents)) !== null) {
+    const importSource = match[2];
+    if (!importSource.startsWith("@/lib/db")) continue;
+
+    for (const rawSpecifier of match[1].split(",")) {
+      const specifier = rawSpecifier.trim();
+      if (!specifier || specifier.startsWith("type ")) continue;
+      const [importedName, localName] = specifier
+        .split(/\s+as\s+/)
+        .map((value) => value.trim());
+      if (WRITE_CAPABLE_DATABASE_ADAPTERS.has(importedName)) {
+        bindings.set(localName || importedName, importedName);
+      }
+    }
+  }
+  return bindings;
+}
+
+function isDatabaseAdapter(className, importedBindings) {
+  return className.endsWith("DB") || importedBindings.has(className);
+}
+
 function isDatabaseWriteMethod(method) {
   return !QUERY_METHOD.test(method);
 }
@@ -83,9 +123,11 @@ function scanDatabaseCalls(findings, sourcePath, contents, receiver, className) 
 
 /**
  * Scan one delivery-layer source file. The scanner intentionally understands
- * only database adapters and raw Supabase mutations. Calls through a
- * domain write authority (for example createTaskWrites(...).delete()) are not
- * database bypasses and therefore do not match this scan.
+ * only write-capable database adapters and raw Supabase mutations. Calls
+ * through a domain write authority (for example createTaskWrites(...).delete())
+ * are not database bypasses and therefore do not match this scan. A
+ * write-capable adapter remains valid when the delivery source uses it only
+ * through query methods.
  */
 export function scanDeliverySource(filePath, contents) {
   const sourcePath = normalizePath(filePath);
@@ -93,10 +135,14 @@ export function scanDeliverySource(filePath, contents) {
 
   const findings = new Map();
   const bindings = new Map();
+  const importedBindings = importedDatabaseBindings(contents);
   let match;
 
   while ((match = DATABASE_BINDING.exec(contents)) !== null) {
-    bindings.set(match[1], match[2]);
+    const receiver = match[1];
+    const importedClass = importedBindings.get(match[2]);
+    if (!isDatabaseAdapter(match[2], importedBindings)) continue;
+    bindings.set(receiver, importedClass ?? match[2]);
   }
 
   for (const [receiver, className] of bindings) {
@@ -104,7 +150,8 @@ export function scanDeliverySource(filePath, contents) {
   }
 
   while ((match = DIRECT_DATABASE_CONSTRUCTOR_CALL.exec(contents)) !== null) {
-    const className = match[1];
+    const className = importedBindings.get(match[1]) ?? match[1];
+    if (!isDatabaseAdapter(match[1], importedBindings)) continue;
     const method = match[2];
     if (!isDatabaseWriteMethod(method)) continue;
     addFinding(findings, {
@@ -119,7 +166,9 @@ export function scanDeliverySource(filePath, contents) {
   }
 
   while ((match = DIRECT_DATABASE_SINGLETON_CALL.exec(contents)) !== null) {
-    const className = match[1];
+    const importedClass = importedBindings.get(match[1]);
+    if (!isDatabaseAdapter(match[1], importedBindings)) continue;
+    const className = importedClass ?? match[1];
     const method = match[2];
     if (bindings.has(className)) continue;
     if (!isDatabaseWriteMethod(method)) continue;
@@ -187,27 +236,6 @@ export function scanDeliverySources(root = process.cwd()) {
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 
-function sortForDigest(value) {
-  if (Array.isArray(value)) return value.map(sortForDigest);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => [key, sortForDigest(entry)]),
-  );
-}
-
-export function inventoryDigest(inventory) {
-  return createHash("sha256")
-    .update(`${JSON.stringify(sortForDigest(inventory))}\n`)
-    .digest("hex");
-}
-
-function parseLock(lockText) {
-  const match = String(lockText).trim().match(/^([a-f0-9]{64})\s+(.+)$/);
-  return match?.[2] === INVENTORY_PATH ? match[1] : null;
-}
-
 function assert(condition, message) {
   if (!condition) throw new Error(`Delivery write inventory: ${message}`);
 }
@@ -226,26 +254,53 @@ function validateEntry(entry, label) {
   assert(typeof entry.evidence === "string" && entry.evidence.length > 0, `${label} needs source evidence.`);
 }
 
-function validateExcluded(excluded, index) {
-  const label = `excluded ${index}`;
-  assert(excluded && typeof excluded === "object", `${label} must be an object.`);
-  assert(typeof excluded.id === "string" && excluded.id.length > 0, `${label} needs an id.`);
-  assert(Array.isArray(excluded.paths) && excluded.paths.length > 0, `${label} needs source paths.`);
-  assert(excluded.paths.every((sourcePath) => typeof sourcePath === "string" && sourcePath.length > 0), `${label} needs valid source paths.`);
-  assert(typeof excluded.reason === "string" && excluded.reason.length > 0, `${label} needs a reason.`);
+function validateOutOfScope(outOfScope, index) {
+  const label = `outOfScope ${index}`;
+  assert(outOfScope && typeof outOfScope === "object", `${label} must be an object.`);
+  assert(typeof outOfScope.id === "string" && outOfScope.id.length > 0, `${label} needs an id.`);
+  assert(Array.isArray(outOfScope.paths) && outOfScope.paths.length > 0, `${label} needs source paths.`);
+  assert(outOfScope.paths.every((sourcePath) => typeof sourcePath === "string" && sourcePath.length > 0), `${label} needs valid source paths.`);
+  assert(typeof outOfScope.reason === "string" && outOfScope.reason.length > 0, `${label} needs a reason.`);
 }
 
-export function validateDeliveryWriteInventory({ inventory, findings, lockText }) {
-  assert(inventory && inventory.schemaVersion === 1, "schemaVersion must be 1.");
-  assert(inventory.baseline && typeof inventory.baseline === "object", "baseline must be an object.");
-  assert(typeof inventory.baseline.sourceCommit === "string" && inventory.baseline.sourceCommit.length > 0, "baseline needs a source commit.");
-  assert(typeof inventory.baseline.reviewedAt === "string" && inventory.baseline.reviewedAt.length > 0, "baseline needs a review date.");
-  assert(typeof inventory.baseline.policy === "string" && inventory.baseline.policy.length > 0, "baseline needs a policy.");
-  assert(typeof inventory.baseline.owningTicket === "string" && /#\d+/.test(inventory.baseline.owningTicket), "baseline needs an owning ticket reference.");
+function validateVerification(entry, label, root) {
+  assert(entry.verification && typeof entry.verification === "object", `${label} needs verification evidence.`);
+  assert(entry.verification.status === "complete", `${label} verification must be complete.`);
+  assert(Array.isArray(entry.verification.tests) && entry.verification.tests.length > 0, `${label} needs verification tests.`);
+  assert(entry.verification.tests.every((testPath) => {
+    return typeof testPath === "string" && testPath.length > 0 && existsSync(path.join(root, testPath));
+  }), `${label} references a missing verification test.`);
+  assert(typeof entry.verification.importBoundary === "string" && entry.verification.importBoundary.length > 0, `${label} needs an import-boundary verification link.`);
+  assert(existsSync(path.join(root, entry.verification.importBoundary)), `${label} references a missing import-boundary verification.`);
+  assert(Array.isArray(entry.verification.sqlFixtures), `${label} needs a SQL fixture evidence list.`);
+  assert(entry.verification.sqlFixtures.every((fixturePath) => {
+    return typeof fixturePath === "string" && fixturePath.length > 0 && existsSync(path.join(root, fixturePath));
+  }), `${label} references a missing SQL fixture.`);
+}
+
+export function validateDeliveryWriteInventory({ inventory, findings, root = process.cwd() }) {
+  assert(inventory && inventory.schemaVersion === 2, "schemaVersion must be 2.");
+  assert(inventory.review && typeof inventory.review === "object", "review must be an object.");
+  assert(typeof inventory.review.reviewedAt === "string" && inventory.review.reviewedAt.length > 0, "review needs a review date.");
+  assert(typeof inventory.review.policy === "string" && inventory.review.policy.length > 0, "review needs a policy.");
+  assert(typeof inventory.review.owningTicket === "string" && /#\d+/.test(inventory.review.owningTicket), "review needs an owning ticket reference.");
   assert(Array.isArray(inventory.entries), "entries must be an array.");
+  assert(inventory.entries.length === 0, "temporary direct-write exceptions must be empty.");
   assert(Array.isArray(inventory.priorArt), "priorArt must be an array.");
-  assert(Array.isArray(inventory.excluded), "excluded must be an array.");
-  inventory.excluded.forEach(validateExcluded);
+  assert(Array.isArray(inventory.outOfScope), "outOfScope must be an array.");
+  for (const forbiddenKey of [
+    "baseline",
+    "allowlist",
+    "migrationAllowlist",
+    "temporaryBaseline",
+  ]) {
+    const message =
+      forbiddenKey === "baseline"
+        ? "baseline is not permitted."
+        : "migration allowlists are not permitted.";
+    assert(!Object.hasOwn(inventory, forbiddenKey), message);
+  }
+  inventory.outOfScope.forEach(validateOutOfScope);
 
   const entries = new Map();
   for (const entry of inventory.entries) {
@@ -262,6 +317,9 @@ export function validateDeliveryWriteInventory({ inventory, findings, lockText }
     priorArtIds.add(priorArt.id);
     assert(priorArt.migrationStatus === "migrated", `prior-art ${priorArt.id} must be marked migrated.`);
     assert(typeof priorArt.authority === "string" && priorArt.authority.length > 0, `prior-art ${priorArt.id} needs an authority.`);
+    if (priorArt.retiredFromInventory === true) {
+      validateVerification(priorArt, `prior-art ${priorArt.id}`, root);
+    }
   }
 
   const coveredDomains = new Set([
@@ -271,37 +329,27 @@ export function validateDeliveryWriteInventory({ inventory, findings, lockText }
   const uncoveredDomains = REQUIRED_DOMAINS.filter((domain) => !coveredDomains.has(domain));
   assert(uncoveredDomains.length === 0, `inventory does not cover domain(s): ${uncoveredDomains.join(", ")}.`);
 
-  const findingsById = new Map(findings.map((finding) => [finding.id, finding]));
-  const missing = [...findingsById.keys()].filter((id) => !entries.has(id));
-  assert(missing.length === 0, `qualifying direct write(s) are not recorded: ${missing.join(", ")}.`);
-
-  const stale = [...entries.keys()].filter((id) => !findingsById.has(id));
-  assert(stale.length === 0, `baseline entry/entries no longer match source: ${stale.join(", ")}.`);
-
-  const expectedDigest = inventoryDigest(inventory);
-  const actualDigest = parseLock(lockText);
-  assert(actualDigest === expectedDigest, `baseline lock is stale or missing (expected ${expectedDigest}, found ${actualDigest ?? "none"}).`);
+  assert(Array.isArray(findings), "architecture findings must be an array.");
+  assert(findings.length === 0, `qualifying delivery mutation bypass(es) remain: ${findings.map((finding) => finding.id).join(", ")}.`);
 
   return {
     directWrites: findings.length,
     migratedPriorArt: inventory.priorArt.length,
-    excludedWrites: inventory.excluded.length,
-    digest: expectedDigest,
+    outOfScopeWrites: inventory.outOfScope.length,
   };
 }
 
 export function checkDeliveryWriteInventory(root = process.cwd()) {
   const inventory = JSON.parse(readFileSync(path.join(root, INVENTORY_PATH), "utf8"));
-  const lockText = readFileSync(path.join(root, LOCK_PATH), "utf8");
   const findings = scanDeliverySources(root);
-  return validateDeliveryWriteInventory({ inventory, findings, lockText });
+  return validateDeliveryWriteInventory({ inventory, findings, root });
 }
 
 function main() {
   try {
     const result = checkDeliveryWriteInventory();
     console.log(
-      `Delivery write inventory passed: ${result.directWrites} remaining direct writes, ${result.migratedPriorArt} migrated authorities, ${result.excludedWrites} excluded writes.`,
+      `Delivery mutation boundaries passed: ${result.directWrites} qualifying bypasses, ${result.migratedPriorArt} verified authorities, ${result.outOfScopeWrites} out-of-scope writes.`,
     );
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

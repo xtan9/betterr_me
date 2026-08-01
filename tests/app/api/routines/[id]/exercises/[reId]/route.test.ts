@@ -15,11 +15,11 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
 }));
 
-vi.mock("@/lib/db/routines", () => ({
-  RoutinesDB: class {
-    updateRoutineExercise = mockUpdateRoutineExercise;
-    removeRoutineExercise = mockRemoveRoutineExercise;
-  },
+vi.mock("@/lib/fitness/routine-writes", () => ({
+  createRoutineWrites: () => ({
+    updateExercise: mockUpdateRoutineExercise,
+    removeExercise: mockRemoveRoutineExercise,
+  }),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -49,7 +49,10 @@ describe("PATCH /api/routines/[id]/exercises/[reId]", () => {
 
   it("updates routine exercise successfully", async () => {
     const updated = { id: "re-1", target_sets: 5 };
-    mockUpdateRoutineExercise.mockResolvedValue(updated);
+    mockUpdateRoutineExercise.mockResolvedValue({
+      type: "updated",
+      exercise: updated,
+    });
 
     const response = await PATCH(
       makeRequest("PATCH", { target_sets: 5 }),
@@ -59,6 +62,21 @@ describe("PATCH /api/routines/[id]/exercises/[reId]", () => {
 
     expect(response.status).toBe(200);
     expect(data.exercise).toEqual(updated);
+    expect(mockUpdateRoutineExercise).toHaveBeenCalledWith({
+      userId: "user-123",
+      routineId: "r-1",
+      routineExerciseId: "re-1",
+      changes: {
+        targetSets: 5,
+        targetReps: undefined,
+        targetWeightKg: undefined,
+        targetDurationSeconds: undefined,
+        targetDistanceMeters: undefined,
+        restTimerSeconds: undefined,
+        notes: undefined,
+        sortOrder: undefined,
+      },
+    });
   });
 
   it("returns 400 for empty body", async () => {
@@ -67,9 +85,7 @@ describe("PATCH /api/routines/[id]/exercises/[reId]", () => {
   });
 
   it("returns 404 for not found (PGRST116)", async () => {
-    mockUpdateRoutineExercise.mockRejectedValue(
-      Object.assign(new Error("No rows"), { code: "PGRST116" })
-    );
+    mockUpdateRoutineExercise.mockResolvedValue({ type: "not-found" });
 
     const response = await PATCH(
       makeRequest("PATCH", { target_sets: 5 }),
@@ -112,7 +128,7 @@ describe("DELETE /api/routines/[id]/exercises/[reId]", () => {
   });
 
   it("removes routine exercise successfully", async () => {
-    mockRemoveRoutineExercise.mockResolvedValue(undefined);
+    mockRemoveRoutineExercise.mockResolvedValue({ type: "removed" });
 
     const response = await DELETE(makeRequest("DELETE"), { params });
     const data = await response.json();

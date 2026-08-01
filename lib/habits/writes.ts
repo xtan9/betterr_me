@@ -234,12 +234,29 @@ export interface HabitDeletionPersistence {
   ): Promise<HabitDeletionPersistenceOutcome>;
 }
 
+export interface HabitNudgeDismissalRequest {
+  userId: string;
+  habitId: string;
+}
+
+export type HabitNudgeDismissalOutcome =
+  | { type: "dismissed"; habit: HabitMutationRecord }
+  | { type: "not-found" };
+
+export interface HabitNudgeDismissalPersistence {
+  dismissGraduationNudge(
+    habitId: string,
+    userId: string,
+  ): Promise<HabitMutationRecord | null>;
+}
+
 type HabitWritesPersistence = Partial<HabitCreationPersistence> &
   Partial<HabitUpdatePersistence> &
   Partial<HabitLifecyclePersistence> &
   Partial<HabitGraduationPersistence> &
   Partial<HabitReactivationPersistence> &
   Partial<HabitDeletionPersistence> &
+  Partial<HabitNudgeDismissalPersistence> &
   Partial<HabitReminderConfigurationPersistence>;
 
 export type HabitCreationOutcome =
@@ -897,6 +914,23 @@ export class HabitWrites {
     return this.persistence.deleteHabit(request.habitId, request.userId);
   }
 
+  async dismissGraduationNudge(
+    request: HabitNudgeDismissalRequest,
+  ): Promise<HabitNudgeDismissalOutcome> {
+    if (!this.persistence.dismissGraduationNudge) {
+      throw new Error(
+        "Habit graduation-nudge dismissal is not supported by this persistence",
+      );
+    }
+
+    const habit = await this.persistence.dismissGraduationNudge(
+      request.habitId,
+      request.userId,
+    );
+    if (!habit) return { type: "not-found" };
+    return { type: "dismissed", habit };
+  }
+
   private async transition(
     action: HabitLifecycleAction,
     request: HabitLifecycleRequest,
@@ -1236,6 +1270,15 @@ export function createHabitWrites(supabase: SupabaseClient): HabitWrites {
 
       try {
         const habit = await habitsDB.updateHabit(habitId, userId, updates);
+        return toHabitMutationRecord(habit);
+      } catch (error: unknown) {
+        if (isNotFoundError(error)) return null;
+        throw error;
+      }
+    },
+    dismissGraduationNudge: async (habitId, userId) => {
+      try {
+        const habit = await habitsDB.dismissGraduationNudge(habitId, userId);
         return toHabitMutationRecord(habit);
       } catch (error: unknown) {
         if (isNotFoundError(error)) return null;

@@ -269,6 +269,27 @@ export class RoutinesDB {
     return data;
   }
 
+  /** Get a routine exercise only when it belongs to a routine owned by a user. */
+  async getRoutineExercise(
+    routineExerciseId: string,
+    userId: string,
+  ): Promise<RoutineExercise | null> {
+    const { data, error } = await this.supabase
+      .from("routine_exercises")
+      .select("*, routine:routines!inner(user_id)")
+      .eq("id", routineExerciseId)
+      .eq("routine.user_id", userId)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") return null;
+      log.error("Failed to get routine exercise", error);
+      throw error;
+    }
+
+    return data as RoutineExercise;
+  }
+
   /**
    * Remove an exercise from a routine.
    */

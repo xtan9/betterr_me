@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { RoutinesDB } from "@/lib/db/routines";
+import { createRoutineWrites } from "@/lib/fitness/routine-writes";
 import { validateRequestBody } from "@/lib/validations/api";
 import { routineUpdateSchema } from "@/lib/validations/routine";
 import { log } from "@/lib/logger";
@@ -33,10 +34,10 @@ export async function GET(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const routinesDB = new RoutinesDB(supabase);
-    const routine = await routinesDB.getRoutine(id);
+    const routine = await routinesDB.getRoutine(id, userId);
 
     if (!routine) {
       return NextResponse.json(
@@ -72,16 +73,25 @@ export async function PATCH(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
     const body = await request.json();
     const validation = validateRequestBody(body, routineUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const routinesDB = new RoutinesDB(supabase);
-    const routine = await routinesDB.updateRoutine(id, validation.data);
+    const outcome = await createRoutineWrites(supabase).update({
+      userId,
+      routineId: id,
+      changes: validation.data,
+    });
+    if (outcome.type === "not-found") {
+      return NextResponse.json(
+        { error: "Routine not found" },
+        { status: 404 },
+      );
+    }
 
-    return NextResponse.json({ routine });
+    return NextResponse.json({ routine: outcome.routine });
   } catch (error) {
     log.error("PATCH /api/routines/[id] error", error);
 
@@ -121,10 +131,18 @@ export async function DELETE(
         { status: auth.status },
       );
     }
-    const { client: supabase } = auth;
+    const { principal: { userId }, client: supabase } = auth;
 
-    const routinesDB = new RoutinesDB(supabase);
-    await routinesDB.deleteRoutine(id);
+    const outcome = await createRoutineWrites(supabase).delete({
+      userId,
+      routineId: id,
+    });
+    if (outcome.type === "not-found") {
+      return NextResponse.json(
+        { error: "Routine not found" },
+        { status: 404 },
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

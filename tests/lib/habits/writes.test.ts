@@ -216,7 +216,41 @@ describe("HabitWrites", () => {
 
     await expect(
       writes.pause({ userId: "trusted-user", habitId: "habit-1" }),
-    ).rejects.toThrow("Habit lifecycle transitions are not supported by this persistence");
+      ).rejects.toThrow("Habit lifecycle transitions are not supported by this persistence");
+  });
+
+  it("dismisses a graduation nudge through the trusted habit mutation seam", async () => {
+    const habit = {
+      id: "habit-1",
+      userId: "trusted-user",
+      status: "active",
+      nudgeDismissedAt: "2026-08-01T12:00:00.000Z",
+    };
+    const dismissGraduationNudge = vi.fn().mockResolvedValue(habit);
+    const writes = new HabitWrites({ dismissGraduationNudge });
+
+    await expect(
+      writes.dismissGraduationNudge({
+        userId: "trusted-user",
+        habitId: "habit-1",
+      }),
+    ).resolves.toEqual({ type: "dismissed", habit });
+    expect(dismissGraduationNudge).toHaveBeenCalledWith(
+      "habit-1",
+      "trusted-user",
+    );
+  });
+
+  it("returns not-found without inventing a dismissal", async () => {
+    const dismissGraduationNudge = vi.fn().mockResolvedValue(null);
+    const writes = new HabitWrites({ dismissGraduationNudge });
+
+    await expect(
+      writes.dismissGraduationNudge({
+        userId: "trusted-user",
+        habitId: "missing-habit",
+      }),
+    ).resolves.toEqual({ type: "not-found" });
   });
 
   describe("delete", () => {
