@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { log } from '@/lib/logger';
-import { createTaskWrites } from '@/lib/tasks/writes';
-import { createSupabaseRecurringTaskLifecycle } from '@/lib/recurring-tasks';
+import {
+  createSupabaseOccurrenceAdapter,
+  isOccurrenceSuccess,
+  occurrenceHttpFailure,
+} from '@/lib/recurring-tasks';
 
 const WRITE_REQUEST_POLICY = {
   allowedCredentials: ['apiKey', 'cookie'],
@@ -26,22 +29,20 @@ export async function POST(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const outcome = await createTaskWrites(supabase, {
-      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
-    }).execute({
-      type: 'toggle-completion',
+    const outcome = await createSupabaseOccurrenceAdapter(supabase).toggle({
       taskId: id,
       userId,
     });
+    if (!isOccurrenceSuccess(outcome)) {
+      const failure = occurrenceHttpFailure(outcome);
+      return NextResponse.json(
+        { error: failure.error },
+        { status: failure.status },
+      );
+    }
     return NextResponse.json({ task: outcome.task });
   } catch (error: unknown) {
     log.error('PATCH /api/tasks/[id]/toggle error', error);
-
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('not found')) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
-    }
-
     return NextResponse.json(
       { error: 'Failed to toggle task completion' },
       { status: 500 }

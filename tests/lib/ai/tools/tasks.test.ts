@@ -75,6 +75,7 @@ function makeWritePersistence(): TaskWritePersistence {
 describe("taskTools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetTask.mockResolvedValue({ id: "t1", user_id: "user-123" });
     mockRpc.mockResolvedValue({
       data: { status: "complete" },
       error: null,
@@ -311,7 +312,7 @@ describe("taskTools", () => {
     expect(result).toEqual({ id: "t1", is_completed: true, status: "done" });
   });
 
-  it("toggleTask completes a recurring occurrence through the lifecycle RPC", async () => {
+  it("keeps the prepared lifecycle path inactive for recurring occurrences", async () => {
     const ctx = makeCtx();
     const toggleTask = taskTools().find((t) => t.name === "toggleTask")!;
     const currentTask = {
@@ -320,21 +321,25 @@ describe("taskTools", () => {
       recurring_series_id: "series-1",
       recurring_occurrence_id: "occurrence-1",
     };
-    mockGetTask
-      .mockResolvedValueOnce(currentTask)
-      .mockResolvedValueOnce({ ...currentTask, is_completed: true, status: "done" });
+    mockGetTask.mockResolvedValue(currentTask);
+    mockUpdateTask.mockResolvedValue({
+      ...currentTask,
+      is_completed: true,
+      status: "done",
+    });
 
     const result = await toggleTask.execute({ taskId: "t1" }, ctx);
 
-    expect(mockRpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
-      p_operation: "complete-occurrence",
-      p_request: {
-        userId: "user-123",
-        seriesId: "series-1",
-        occurrenceId: "occurrence-1",
-      },
-    });
-    expect(mockUpdateTask).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockUpdateTask).toHaveBeenCalledWith(
+      "t1",
+      "user-123",
+      expect.objectContaining({
+        is_completed: true,
+        status: "done",
+        completed_at: expect.any(String),
+      }),
+    );
     expect(result).toEqual({
       ...currentTask,
       is_completed: true,
