@@ -16,6 +16,7 @@ function makeProfile(over: Partial<Profile> = {}): Profile {
     timezone: "UTC",
     email_notifications_enabled: true,
     role: "user",
+    preference_revision: 0,
     preferences: {
       date_format: "MM/DD/YYYY",
       week_start_day: 1,
