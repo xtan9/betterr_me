@@ -26,6 +26,21 @@ const storedHabit: Habit = {
   updated_at: "2026-08-01T12:00:00.000Z",
 };
 
+function queueSingleResponses(
+  responses: Array<{ data: unknown; error: unknown }>,
+): void {
+  for (const response of responses) {
+    mockSupabaseClient.single.mockImplementationOnce(() => {
+      mockSupabaseClient.queryLog.push({
+        table: "habits",
+        method: "single",
+        args: [],
+      });
+      return Promise.resolve(response);
+    });
+  }
+}
+
 describe("createHabitWrites persistence adapter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -191,6 +206,161 @@ describe("createHabitWrites persistence adapter", () => {
       { table: "habits", method: "select", args: [] },
       { table: "habits", method: "single", args: [] },
     ]);
+  });
+
+  it("persists a pause through owner-scoped lifecycle reads and updates", async () => {
+    const fixedNow = new Date("2026-08-01T12:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(fixedNow);
+    try {
+      const pausedHabit: Habit = {
+        ...storedHabit,
+        status: "paused",
+        paused_at: fixedNow.toISOString(),
+      };
+      queueSingleResponses([
+        { data: storedHabit, error: null },
+        { data: pausedHabit, error: null },
+      ]);
+      const writes = createHabitWrites(
+        mockSupabaseClient as unknown as SupabaseClient,
+      );
+
+      const outcome = await writes.pause({
+        userId: "trusted-user",
+        habitId: "habit-1",
+      });
+
+      expect(outcome).toMatchObject({
+        type: "transitioned",
+        habit: {
+          id: "habit-1",
+          userId: "trusted-user",
+          status: "paused",
+          pausedAt: fixedNow.toISOString(),
+        },
+      });
+      expect(mockSupabaseClient.queryLog).toEqual([
+        { table: "habits", method: "from", args: ["habits"] },
+        { table: "habits", method: "select", args: ["*"] },
+        { table: "habits", method: "eq", args: ["id", "habit-1"] },
+        { table: "habits", method: "eq", args: ["user_id", "trusted-user"] },
+        { table: "habits", method: "single", args: [] },
+        { table: "habits", method: "from", args: ["habits"] },
+        {
+          table: "habits",
+          method: "update",
+          args: [{ status: "paused", paused_at: fixedNow.toISOString() }],
+        },
+        { table: "habits", method: "eq", args: ["id", "habit-1"] },
+        { table: "habits", method: "eq", args: ["user_id", "trusted-user"] },
+        { table: "habits", method: "select", args: [] },
+        { table: "habits", method: "single", args: [] },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("persists a resume by clearing the pause timestamp", async () => {
+    const pausedHabit: Habit = {
+      ...storedHabit,
+      status: "paused",
+      paused_at: "2026-07-31T12:00:00.000Z",
+    };
+    const activeHabit: Habit = {
+      ...storedHabit,
+      status: "active",
+      paused_at: null,
+    };
+    queueSingleResponses([
+      { data: pausedHabit, error: null },
+      { data: activeHabit, error: null },
+    ]);
+    const writes = createHabitWrites(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    const outcome = await writes.resume({
+      userId: "trusted-user",
+      habitId: "habit-1",
+    });
+
+    expect(outcome).toMatchObject({
+      type: "transitioned",
+      habit: {
+        id: "habit-1",
+        userId: "trusted-user",
+        status: "active",
+        pausedAt: null,
+      },
+    });
+    expect(mockSupabaseClient.queryLog).toContainEqual({
+      table: "habits",
+      method: "update",
+      args: [{ status: "active", paused_at: null }],
+    });
+    expect(mockSupabaseClient.queryLog).toContainEqual({
+      table: "habits",
+      method: "eq",
+      args: ["user_id", "trusted-user"],
+    });
+  });
+
+  it("maps a lifecycle update that lost its owner-scoped row to not-found", async () => {
+    queueSingleResponses([
+      { data: storedHabit, error: null },
+      { data: null, error: { code: "PGRST116", message: "No rows found" } },
+    ]);
+    const writes = createHabitWrites(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    const outcome = await writes.pause({
+      userId: "trusted-user",
+      habitId: "habit-1",
+    });
+
+    expect(outcome).toEqual({ type: "not-found" });
+  });
+
+  it("maps a missing or cross-owner lifecycle read to not-found", async () => {
+    queueSingleResponses([
+      { data: null, error: { code: "PGRST116", message: "No rows found" } },
+    ]);
+    const writes = createHabitWrites(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    const outcome = await writes.resume({
+      userId: "other-user",
+      habitId: "habit-1",
+    });
+
+    expect(outcome).toEqual({ type: "not-found" });
+    expect(mockSupabaseClient.queryLog).toContainEqual({
+      table: "habits",
+      method: "eq",
+      args: ["user_id", "other-user"],
+    });
+    expect(mockSupabaseClient.queryLog).not.toContainEqual({
+      table: "habits",
+      method: "update",
+      args: expect.anything(),
+    });
+  });
+
+  it("propagates an unexpected lifecycle update failure", async () => {
+    const persistenceError = new Error("lifecycle update failed");
+    queueSingleResponses([{ data: storedHabit, error: null }]);
+    mockSupabaseClient.setMockResponse(null, persistenceError);
+    const writes = createHabitWrites(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    await expect(
+      writes.pause({ userId: "trusted-user", habitId: "habit-1" }),
+    ).rejects.toBe(persistenceError);
   });
 
   it("maps a scoped missing row to not-found without disclosing ownership", async () => {

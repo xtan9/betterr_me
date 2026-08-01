@@ -29,6 +29,13 @@ export interface HabitUpdateRequest {
   frequency?: HabitCreationFrequency;
 }
 
+export type HabitLifecycleAction = "pause" | "resume";
+
+export interface HabitLifecycleRequest {
+  userId: string;
+  habitId: string;
+}
+
 export interface HabitCreationRecord {
   userId: string;
   name: string;
@@ -85,8 +92,23 @@ export interface HabitUpdatePersistence {
   ): Promise<UpdatedHabit | null>;
 }
 
+export interface HabitLifecycleChanges {
+  status: Extract<HabitLifecycleState, "active" | "paused">;
+  pausedAt: string | null;
+}
+
+export interface HabitLifecyclePersistence {
+  getHabit(habitId: string, userId: string): Promise<HabitMutationRecord | null>;
+  updateHabitLifecycle(
+    habitId: string,
+    userId: string,
+    changes: HabitLifecycleChanges,
+  ): Promise<HabitMutationRecord | null>;
+}
+
 type HabitWritesPersistence = Partial<HabitCreationPersistence> &
-  Partial<HabitUpdatePersistence>;
+  Partial<HabitUpdatePersistence> &
+  Partial<HabitLifecyclePersistence>;
 
 export type HabitCreationOutcome =
   | { type: "created"; habit: CreatedHabit }
@@ -99,12 +121,29 @@ export type HabitUpdateOutcome =
   | { type: "conflict" }
   | { type: "invalid"; field: string; message: string };
 
+export type HabitLifecycleOutcome =
+  | { type: "transitioned"; habit: HabitMutationRecord }
+  | { type: "already-applied"; habit: HabitMutationRecord }
+  | { type: "not-found" }
+  | {
+      type: "invalid-transition";
+      action: HabitLifecycleAction;
+      currentStatus: HabitLifecycleState;
+      message: string;
+    };
+
 type NormalizedRequest =
   | { ok: true; record: HabitCreationRecord }
   | { ok: false; field: string; message: string };
 
+type Clock = () => Date;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return isRecord(error) && error.code === "PGRST116";
 }
 
 function normalizeFrequency(value: unknown):
@@ -325,7 +364,10 @@ function normalizeUpdateRequest(
 }
 
 export class HabitWrites {
-  constructor(private readonly persistence: HabitWritesPersistence) {}
+  constructor(
+    private readonly persistence: HabitWritesPersistence,
+    private readonly now: Clock = () => new Date(),
+  ) {}
 
   async create(request: HabitCreationRequest): Promise<HabitCreationOutcome> {
     const normalized = normalizeRequest(request);
@@ -377,6 +419,58 @@ export class HabitWrites {
     );
     if (!habit) return { type: "not-found" };
     return { type: "updated", habit };
+  }
+
+  async pause(
+    request: HabitLifecycleRequest,
+  ): Promise<HabitLifecycleOutcome> {
+    return this.transition("pause", request);
+  }
+
+  async resume(
+    request: HabitLifecycleRequest,
+  ): Promise<HabitLifecycleOutcome> {
+    return this.transition("resume", request);
+  }
+
+  private async transition(
+    action: HabitLifecycleAction,
+    request: HabitLifecycleRequest,
+  ): Promise<HabitLifecycleOutcome> {
+    if (!this.persistence.getHabit || !this.persistence.updateHabitLifecycle) {
+      throw new Error("Habit lifecycle transitions are not supported by this persistence");
+    }
+
+    const habit = await this.persistence.getHabit(
+      request.habitId,
+      request.userId,
+    );
+    if (!habit) return { type: "not-found" };
+
+    const targetStatus = action === "pause" ? "paused" : "active";
+    const sourceStatus = action === "pause" ? "active" : "paused";
+    if (habit.status === targetStatus) {
+      return { type: "already-applied", habit };
+    }
+    if (habit.status !== sourceStatus) {
+      return {
+        type: "invalid-transition",
+        action,
+        currentStatus: habit.status,
+        message: `Habit cannot be ${action === "pause" ? "paused" : "resumed"} from ${habit.status} state`,
+      };
+    }
+
+    const changes: HabitLifecycleChanges = action === "pause"
+      ? { status: "paused", pausedAt: this.now().toISOString() }
+      : { status: "active", pausedAt: null };
+    const updated = await this.persistence.updateHabitLifecycle(
+      request.habitId,
+      request.userId,
+      changes,
+    );
+    if (!updated) return { type: "not-found" };
+    return { type: "transitioned", habit: updated };
   }
 }
 
@@ -435,14 +529,25 @@ export function createHabitWrites(supabase: SupabaseClient): HabitWrites {
         const habit = await habitsDB.updateHabit(habitId, userId, updates);
         return toHabitMutationRecord(habit);
       } catch (error: unknown) {
-        if (
-          error &&
-          typeof error === "object" &&
-          "code" in error &&
-          error.code === "PGRST116"
-        ) {
-          return null;
-        }
+        if (isNotFoundError(error)) return null;
+        throw error;
+      }
+    },
+    getHabit: async (habitId, userId) => {
+      const habit = await habitsDB.getHabit(habitId, userId);
+      return habit ? toHabitMutationRecord(habit) : null;
+    },
+    updateHabitLifecycle: async (habitId, userId, changes) => {
+      const updates: HabitUpdate = {
+        status: changes.status,
+        paused_at: changes.pausedAt,
+      };
+
+      try {
+        const habit = await habitsDB.updateHabit(habitId, userId, updates);
+        return toHabitMutationRecord(habit);
+      } catch (error: unknown) {
+        if (isNotFoundError(error)) return null;
         throw error;
       }
     },

@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { PATCH } from "@/app/api/habits/[id]/route";
+import { POST as pausePOST } from "@/app/api/habits/[id]/pause/route";
 import { habitTools } from "@/lib/ai/tools/habits";
 import type { ToolContext } from "@/lib/ai/tools/types";
 
 const {
   mockUpdate,
+  mockPause,
   mockLegacyUpdateHabit,
   httpSupabase,
   aiSupabase,
 } = vi.hoisted(() => ({
   mockUpdate: vi.fn(),
+  mockPause: vi.fn(),
   mockLegacyUpdateHabit: vi.fn(),
   httpSupabase: {
     auth: {
@@ -34,7 +37,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/habits/writes", () => ({
-  createHabitWrites: vi.fn(() => ({ update: mockUpdate })),
+  createHabitWrites: vi.fn(() => ({ update: mockUpdate, pause: mockPause })),
   toHabitResponse: vi.fn((habit) => ({
     id: habit.id,
     user_id: habit.userId,
@@ -103,10 +106,53 @@ function updateHabitTool() {
   return habitTools().find((tool) => tool.name === "updateHabit")!;
 }
 
-describe("AI and HTTP habit update parity", () => {
+function pauseHabitTool() {
+  return habitTools().find((tool) => tool.name === "pauseHabit")!;
+}
+
+describe("AI and HTTP habit mutation parity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUpdate.mockResolvedValue({ type: "updated", habit: updatedHabit });
+  });
+
+  it("maps the same pause transition through both channel adapters", async () => {
+    const pausedHabit = {
+      ...updatedHabit,
+      status: "paused",
+      pausedAt: "2026-08-01T12:10:00.000Z",
+    };
+    const pausedPresentation = {
+      ...presentedHabit,
+      status: "paused",
+      paused_at: "2026-08-01T12:10:00.000Z",
+    };
+    mockPause.mockResolvedValue({ type: "transitioned", habit: pausedHabit });
+
+    const aiOutcome = await pauseHabitTool().execute(
+      { habitId: "habit-1" },
+      aiContext,
+    );
+    const httpResponse = await pausePOST(
+      new NextRequest("http://localhost:3000/api/habits/habit-1/pause", {
+        method: "POST",
+      }),
+      { params },
+    );
+
+    expect(aiOutcome).toEqual(pausedPresentation);
+    expect(httpResponse.status).toBe(200);
+    expect(await httpResponse.json()).toEqual({ habit: pausedPresentation });
+    expect(mockPause).toHaveBeenCalledTimes(2);
+    expect(mockPause).toHaveBeenNthCalledWith(1, {
+      habitId: "habit-1",
+      userId: "user-123",
+    });
+    expect(mockPause).toHaveBeenNthCalledWith(2, {
+      habitId: "habit-1",
+      userId: "user-123",
+    });
+    expect(mockLegacyUpdateHabit).not.toHaveBeenCalled();
   });
 
   it("maps equivalent detail intents through the shared behavior", async () => {

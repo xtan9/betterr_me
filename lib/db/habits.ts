@@ -113,26 +113,6 @@ export class HabitsDB {
   }
 
   /**
-   * Pause a habit
-   */
-  async pauseHabit(habitId: string, userId: string): Promise<Habit> {
-    return this.updateHabit(habitId, userId, {
-      status: 'paused',
-      paused_at: new Date().toISOString(),
-    });
-  }
-
-  /**
-   * Resume a paused habit
-   */
-  async resumeHabit(habitId: string, userId: string): Promise<Habit> {
-    return this.updateHabit(habitId, userId, {
-      status: 'active',
-      paused_at: null,
-    });
-  }
-
-  /**
    * Delete a habit permanently
    */
   async deleteHabit(habitId: string, userId: string): Promise<void> {
