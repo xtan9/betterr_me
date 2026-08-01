@@ -4,6 +4,7 @@ import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
 import { HabitsDB, TasksDB } from "@/lib/db";
 import { getLocalDateString } from "@/lib/utils";
 import { log } from "@/lib/logger";
+import { ensureRecurringTaskCoverageThrough } from "@/lib/recurring-tasks/coverage";
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ["cookie"],
@@ -33,6 +34,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: "Invalid date format. Use YYYY-MM-DD" },
         { status: 400 }
+      );
+    }
+
+    const recurringCoverage = await ensureRecurringTaskCoverageThrough(
+      supabase,
+      userId,
+      date,
+      date,
+    );
+    if (recurringCoverage.status === "partial") {
+      return NextResponse.json(
+        { error: "Recurring task coverage is temporarily unavailable" },
+        { status: 503 },
       );
     }
 

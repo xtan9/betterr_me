@@ -96,6 +96,11 @@ values (
     '57800000-0000-0000-0000-000000000102'
   );
 
+-- This fixture deliberately exercises the legacy recurring_tasks projection
+-- with direct table writes to prove its RLS boundary. Production callers must
+-- use the recurring lifecycle RPC; authorize only this controlled fixture.
+select set_config('betterr.recurring_lifecycle', 'on', true);
+
 select set_config(
   'request.jwt.claim.sub',
   '57800000-0000-0000-0000-000000000001',

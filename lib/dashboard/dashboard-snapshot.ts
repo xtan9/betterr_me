@@ -14,7 +14,8 @@ import type { WorkoutsDB } from "@/lib/db/workouts";
 import { computeMissedDays } from "@/lib/habits/absence";
 import { log } from "@/lib/logger";
 import type { RecurringGenerationResult } from "@/lib/recurring-tasks";
-import { getLocalDateString, getNextDateString } from "@/lib/utils";
+import type { RecurringCoverageResult } from "@/lib/recurring-tasks/coverage";
+import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
 
 export interface DashboardSnapshotDependencies {
   habits: Pick<HabitsDB, "getHabitsWithTodayStatusAcquisition">;
@@ -23,10 +24,14 @@ export interface DashboardSnapshotDependencies {
   milestones: Pick<HabitMilestonesDB, "getTodaysMilestones">;
   profiles: Pick<ProfilesDB, "getWeekStartPreference">;
   workouts: Pick<WorkoutsDB, "getLastCompletedAt" | "getWeekWorkoutCount">;
-  generateRecurringTasks(
+  generateRecurringTasks?(
     userId: string,
     throughDate: string,
   ): Promise<RecurringGenerationResult>;
+  ensureRecurringCoverage?(
+    userId: string,
+    range: { from: string; to: string },
+  ): Promise<RecurringCoverageResult>;
 }
 
 export interface DashboardSnapshotInput {
@@ -68,18 +73,12 @@ export interface DashboardSnapshot {
   load(input: DashboardSnapshotInput): Promise<DashboardSnapshotOutcome>;
 }
 
-function dateParts(date: string): [number, number, number] {
-  const [year, month, day] = date.split("-").map(Number);
-  return [year, month, day];
-}
-
 function offsetDate(date: string, days: number): string {
-  const [year, month, day] = dateParts(date);
-  return getLocalDateString(new Date(year, month - 1, day + days));
+  return addLocalDays(date, days);
 }
 
 function getWeekStartDate(date: string, weekStartDay: number): string {
-  const [year, month, day] = dateParts(date);
+  const [year, month, day] = date.split("-").map(Number);
   const currentDay = new Date(year, month - 1, day).getDay();
   const daysToSubtract = (currentDay - weekStartDay + 7) % 7;
   return offsetDate(date, -daysToSubtract);
@@ -173,16 +172,19 @@ export function createDashboardSnapshot(
 ): DashboardSnapshot {
   return {
     async load({ userId, date }) {
-      const tomorrow = getNextDateString(date);
+      const tomorrow = addLocalDays(date, 1);
       const lookbackStart = offsetDate(date, -30);
-      const recurringThrough = offsetDate(date, 7);
       const warnings: DashboardSnapshotWarning[] = [];
 
       try {
-        const recurringResult = await dependencies.generateRecurringTasks(
-          userId,
-          recurringThrough,
-        );
+        const recurringResult = dependencies.ensureRecurringCoverage
+          ? await dependencies.ensureRecurringCoverage(userId, {
+            from: date,
+            to: tomorrow,
+          })
+          : dependencies.generateRecurringTasks
+            ? await dependencies.generateRecurringTasks(userId, offsetDate(date, 7))
+            : { status: "complete" as const, failedSeriesIds: [] as [] };
         if (recurringResult.status === "partial") {
           warnings.push(warning("recurring_generation_unavailable"));
         }

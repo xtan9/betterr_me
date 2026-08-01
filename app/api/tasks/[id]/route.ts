@@ -7,6 +7,7 @@ import { log } from '@/lib/logger';
 import { taskUpdateSchema } from '@/lib/validations/task';
 import { editScopeSchema } from '@/lib/validations/recurring-task';
 import { createTaskWrites } from '@/lib/tasks/writes';
+import { createSupabaseRecurringTaskLifecycle } from '@/lib/recurring-tasks';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['apiKey', 'cookie'],
@@ -85,7 +86,10 @@ export async function PATCH(
       const validation = validateRequestBody(body, taskUpdateSchema);
       if (!validation.success) return validation.response;
 
-      const writes = createTaskWrites(supabase, { scopedUpdates: true });
+      const writes = createTaskWrites(supabase, {
+        scopedUpdates: true,
+        lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+      });
       await writes.execute({
         type: 'update',
         taskId: id,
@@ -100,7 +104,9 @@ export async function PATCH(
     const validation = validateRequestBody(body, taskUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const writes = createTaskWrites(supabase);
+    const writes = createTaskWrites(supabase, {
+      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+    });
     const outcome = validation.data.sort_order !== undefined
       && Object.keys(validation.data).length === 1
       ? await writes.execute({
@@ -160,13 +166,22 @@ export async function DELETE(
         );
       }
 
-      const recurringTasksDB = new RecurringTasksDB(supabase);
+      const recurringTasksDB = new RecurringTasksDB(supabase, {
+        lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+      });
       await recurringTasksDB.deleteInstanceWithScope(id, userId, scopeResult.data);
       return NextResponse.json({ success: true });
     }
 
     const tasksDB = new TasksDB(supabase);
-    await tasksDB.deleteTask(id, userId);
+    const task = await tasksDB.getTask(id, userId);
+    if (task?.recurring_series_id && task.recurring_occurrence_id) {
+      await new RecurringTasksDB(supabase, {
+        lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+      }).deleteInstanceWithScope(id, userId, 'this');
+    } else {
+      await tasksDB.deleteTask(id, userId);
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     log.error('DELETE /api/tasks/[id] error', error);

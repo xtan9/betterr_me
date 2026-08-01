@@ -3,6 +3,7 @@ import { authenticateRequest } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
 import { log } from '@/lib/logger';
 import { createTaskWrites } from '@/lib/tasks/writes';
+import { createSupabaseRecurringTaskLifecycle } from '@/lib/recurring-tasks';
 
 const WRITE_REQUEST_POLICY = {
   allowedCredentials: ['apiKey', 'cookie'],
@@ -25,7 +26,9 @@ export async function POST(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const outcome = await createTaskWrites(supabase).execute({
+    const outcome = await createTaskWrites(supabase, {
+      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+    }).execute({
       type: 'toggle-completion',
       taskId: id,
       userId,

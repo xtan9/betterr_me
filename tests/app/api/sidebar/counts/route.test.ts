@@ -1,16 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockGetUser, mockGetHabitsWithTodayStatus, mockGetTodayTasks } =
+const {
+  mockGetUser,
+  mockGetHabitsWithTodayStatus,
+  mockGetTodayTasks,
+  mockRpc,
+} =
   vi.hoisted(() => ({
     mockGetUser: vi.fn(),
     mockGetHabitsWithTodayStatus: vi.fn(),
     mockGetTodayTasks: vi.fn(),
+    mockRpc: vi.fn(),
   }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => ({
     auth: { getUser: mockGetUser },
+    rpc: mockRpc,
   }),
 }));
 
@@ -26,6 +33,7 @@ vi.mock("@/lib/db", () => ({
 describe("GET /api/sidebar/counts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRpc.mockResolvedValue({ data: { status: "complete" }, error: null });
   });
 
   it("returns 401 when not authenticated", async () => {

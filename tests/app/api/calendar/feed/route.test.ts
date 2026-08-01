@@ -7,6 +7,9 @@ import { NextRequest } from "next/server";
 // ---------------------------------------------------------------------------
 
 const mockGetUserEvents = vi.fn();
+const { mockEnsureRecurringCoverageThrough } = vi.hoisted(() => ({
+  mockEnsureRecurringCoverageThrough: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => mockSupabase),
@@ -24,6 +27,10 @@ vi.mock("@/lib/calendar/recurrence", () => ({
 
 vi.mock("@/lib/logger", () => ({
   log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
+
+vi.mock("@/lib/recurring-tasks/coverage", () => ({
+  ensureRecurringTaskCoverageThrough: mockEnsureRecurringCoverageThrough,
 }));
 
 // A chainable builder whose terminal methods (non-`single`) resolve to { data, error }.
@@ -68,6 +75,10 @@ describe("GET /api/calendar/feed", () => {
     vi.clearAllMocks();
     mockFromHandlers = {};
     mockGetUserEvents.mockResolvedValue([]);
+    mockEnsureRecurringCoverageThrough.mockResolvedValue({
+      status: "complete",
+      failedSeriesIds: [],
+    });
     vi.mocked(createClient).mockReturnValue(mockSupabase as never);
     mockSupabase.auth.getUser.mockReturnValue({
       data: { user: { id: "user-123", email: "test@example.com" } },
@@ -208,6 +219,27 @@ describe("GET /api/calendar/feed", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.items.some((i: { domain: string }) => i.domain === "tasks")).toBe(true);
+    expect(mockEnsureRecurringCoverageThrough).toHaveBeenCalledWith(
+      mockSupabase,
+      "user-123",
+      "2026-04-01",
+      "2026-04-07",
+    );
+  });
+
+  it("reports partial failure when recurring task coverage is unavailable", async () => {
+    mockEnsureRecurringCoverageThrough.mockResolvedValue({
+      status: "partial",
+      failedSeriesIds: [],
+    });
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/calendar/feed?start_date=2026-04-01&end_date=2026-04-07&layers=tasks",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.partialFailures).toEqual(["tasks"]);
   });
 
   it("reports partial failure when tasks query errors", async () => {

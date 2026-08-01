@@ -163,8 +163,29 @@ describe("PATCH /api/recurring-tasks/[id]", () => {
     expect(mockRecurringTasksDB.resumeRecurringTask).toHaveBeenCalledWith(
       "rt-1",
       "user-123",
-      expect.any(String),
-      expect.any(String),
+      undefined,
+      undefined,
+    );
+  });
+
+  it("passes an explicit resume date through as user intent", async () => {
+    vi.mocked(mockRecurringTasksDB.resumeRecurringTask).mockResolvedValue({
+      id: "rt-1",
+      status: "active",
+    });
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/recurring-tasks/rt-1?action=resume&date=2026-02-17",
+      { method: "PATCH" },
+    );
+
+    await PATCH(request, { params: Promise.resolve({ id: "rt-1" }) });
+
+    expect(mockRecurringTasksDB.resumeRecurringTask).toHaveBeenCalledWith(
+      "rt-1",
+      "user-123",
+      "2026-02-17",
+      "2026-02-24",
     );
   });
 

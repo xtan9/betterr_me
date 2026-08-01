@@ -5,7 +5,8 @@ import { RecurringTasksDB } from '@/lib/db';
 import { validateRequestBody } from '@/lib/validations/api';
 import { log } from '@/lib/logger';
 import { recurringTaskUpdateSchema } from '@/lib/validations/recurring-task';
-import { getLocalDateString } from '@/lib/utils';
+import { addLocalDays } from '@/lib/recurring-tasks/recurrence';
+import { createSupabaseRecurringTaskLifecycle } from '@/lib/recurring-tasks';
 
 const READ_REQUEST_POLICY = {
   allowedCredentials: ['cookie'],
@@ -36,7 +37,9 @@ export async function GET(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const recurringTasksDB = new RecurringTasksDB(supabase);
+    const recurringTasksDB = new RecurringTasksDB(supabase, {
+      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+    });
     const template = await recurringTasksDB.getRecurringTask(id, userId);
 
     if (!template) {
@@ -77,7 +80,9 @@ export async function PATCH(
 
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action');
-    const recurringTasksDB = new RecurringTasksDB(supabase);
+    const recurringTasksDB = new RecurringTasksDB(supabase, {
+      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+    });
 
     // Handle quick actions
     if (action === 'pause') {
@@ -85,10 +90,14 @@ export async function PATCH(
       return NextResponse.json({ recurring_task: template });
     }
     if (action === 'resume') {
-      const today = searchParams.get('date') || getLocalDateString();
-      const [y, m, d] = today.split('-').map(Number);
-      const throughDate = getLocalDateString(new Date(y, m - 1, d + 7));
-      const template = await recurringTasksDB.resumeRecurringTask(id, userId, today, throughDate);
+      const explicitDate = searchParams.get('date') || undefined;
+      const throughDate = explicitDate ? addLocalDays(explicitDate, 7) : undefined;
+      const template = await recurringTasksDB.resumeRecurringTask(
+        id,
+        userId,
+        explicitDate,
+        throughDate,
+      );
       return NextResponse.json({ recurring_task: template });
     }
     if (action) {
@@ -139,7 +148,9 @@ export async function DELETE(
     }
     const { principal: { userId }, client: supabase } = auth;
 
-    const recurringTasksDB = new RecurringTasksDB(supabase);
+    const recurringTasksDB = new RecurringTasksDB(supabase, {
+      lifecycle: createSupabaseRecurringTaskLifecycle(supabase),
+    });
     await recurringTasksDB.deleteRecurringTask(id, userId);
     return NextResponse.json({ success: true });
   } catch (error) {
