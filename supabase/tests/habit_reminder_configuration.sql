@@ -209,6 +209,7 @@ begin
     where id = reminder_id;
     raise exception 'direct Habit Reminder Configuration update unexpectedly succeeded';
   exception
+    when insufficient_privilege then null;
     when raise_exception then
       if sqlerrm <> 'Habit Reminder Configuration must use the Habit lifecycle boundary' then
         raise;
@@ -251,9 +252,20 @@ begin
   end if;
   terminal_reminder_id := (replacement->'reminders'->0->>'id')::uuid;
 
-  update public.reminders
-  set status = 'sent', sent_at = '2026-08-01T12:00:00Z'
-  where id = terminal_reminder_id;
+  outcome := public.transition_reminder_delivery(
+    '65600000-0000-0000-0000-000000000001',
+    terminal_reminder_id,
+    'user',
+    'sent',
+    '2026-08-03T12:00:00Z',
+    '2026-08-01T12:00:00Z',
+    'pending',
+    '2026-08-03T12:00:00Z',
+    null
+  );
+  if outcome->>'type' <> 'transitioned' then
+    raise exception 'Reminder Delivery terminal seed was incorrect: %', outcome;
+  end if;
 
   outcome := public.configure_habit_reminders(
     '65600000-0000-0000-0000-000000000001',

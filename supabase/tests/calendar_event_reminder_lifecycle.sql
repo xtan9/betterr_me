@@ -101,12 +101,12 @@ begin
     raise exception 'authenticated retained direct event lifecycle writes';
   end if;
 
-  if not has_table_privilege(
+  if has_table_privilege(
     'authenticated',
     'public.reminders',
     'UPDATE, DELETE'
   ) then
-    raise exception 'authenticated users cannot transition non-calendar reminders';
+    raise exception 'authenticated retained direct Reminder Delivery writes';
   end if;
 
   if not has_column_privilege(

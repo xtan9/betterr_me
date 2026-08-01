@@ -33,7 +33,7 @@ describe("Habit Reminder Configuration architecture boundaries", () => {
     const habitPatch = section(
       route,
       'if (existing.source_type === "habit" && validation.data.channels !== undefined)',
-      "    // Status, fire_at, and sent_at",
+      "    return transitionReminderDeliveryResponse(",
     );
     const habitDelete = section(
       route,
@@ -52,12 +52,12 @@ describe("Habit Reminder Configuration architecture boundaries", () => {
     const habitCreate = section(
       tools,
       'if (params.sourceType === "habit")',
-      "        // Generic reminder writes are intentionally unavailable",
+      '        return { error: "Unsupported reminder source" };',
     );
     const habitDelete = section(
       tools,
       'if (reminder.source_type === "habit")',
-      "        // Generic reminder writes are intentionally unavailable",
+      '        return { error: "Unsupported reminder source" };',
     );
 
     expect(habitCreate).toContain("createHabitWrites(ctx.supabase).configureReminders");

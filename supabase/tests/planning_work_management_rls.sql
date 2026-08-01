@@ -1822,8 +1822,9 @@ begin
     '42501',
     'authenticated direct calendar reminder insert privilege'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.ralph_578_expect_sqlstate(
     format('update public.reminders set status = ''failed'' where id = %L', calendar_reminder_id),
+    '42501',
     'authenticated direct calendar reminder update'
   );
   perform pg_temp.ralph_578_expect_sqlstate(
@@ -1918,11 +1919,12 @@ begin
     'P0001',
     'calendar owner spoof'
   );
-  perform pg_temp.ralph_578_expect_zero_changes(
+  perform pg_temp.ralph_578_expect_sqlstate(
     format(
       'update public.reminders set status = ''failed'' where id = %L',
       current_setting('ralph.planning_other_habit_reminder_id')::uuid
     ),
+    '42501',
     'non-owner reminder update'
   );
   perform pg_temp.ralph_578_expect_sqlstate(

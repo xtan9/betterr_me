@@ -167,6 +167,12 @@
     "cleanup": "transactional"
   },
   {
+    "path": "reminder_delivery.sql",
+    "domain": "reminders",
+    "role": "constrained",
+    "cleanup": "transactional"
+  },
+  {
     "path": "identity_communication_rls.sql",
     "domain": "identity-communication",
     "role": "constrained",

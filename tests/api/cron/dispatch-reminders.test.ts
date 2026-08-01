@@ -1,30 +1,34 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
-// Hoisted mocks
 const {
   mockGetPendingReminders,
-  mockUpdateReminderStatus,
   mockGetPushQuietWindow,
   mockSendPushNotification,
   mockSendReminderEmail,
   mockCreateAdminClient,
   mockGetVapidDetails,
+  mockDeliveryTransition,
+  mockCreateReminderDelivery,
 } = vi.hoisted(() => ({
   mockGetPendingReminders: vi.fn(),
-  mockUpdateReminderStatus: vi.fn(),
   mockGetPushQuietWindow: vi.fn(),
   mockSendPushNotification: vi.fn(),
   mockSendReminderEmail: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockGetVapidDetails: vi.fn(),
+  mockDeliveryTransition: vi.fn(),
+  mockCreateReminderDelivery: vi.fn(),
 }));
 
 vi.mock("@/lib/db/reminders", () => ({
   RemindersDB: class {
     getPendingReminders = mockGetPendingReminders;
-    updateReminderStatus = mockUpdateReminderStatus;
   },
+}));
+
+vi.mock("@/lib/reminders/delivery-service", () => ({
+  createReminderDelivery: mockCreateReminderDelivery,
 }));
 
 vi.mock("@/lib/db/notifications", () => ({
@@ -59,9 +63,7 @@ const CRON_SECRET = "test-cron-secret";
 
 function createRequest(withAuth = true): NextRequest {
   const headers: Record<string, string> = {};
-  if (withAuth) {
-    headers["Authorization"] = `Bearer ${CRON_SECRET}`;
-  }
+  if (withAuth) headers.Authorization = `Bearer ${CRON_SECRET}`;
   return new NextRequest("http://localhost:3000/api/cron/dispatch-reminders", {
     headers,
   });
@@ -77,9 +79,9 @@ const mockReminder = (overrides: Record<string, unknown> = {}) => ({
   absolute_time: null,
   channels: ["push", "email"],
   status: "pending",
-  fire_at: "2026-04-03T10:00:00Z",
+  fire_at: "2026-08-01T02:30:00Z",
   sent_at: null,
-  created_at: "2026-04-03T09:45:00Z",
+  created_at: "2026-07-31T09:45:00Z",
   ...overrides,
 });
 
@@ -102,7 +104,25 @@ describe("GET /api/cron/dispatch-reminders", () => {
     vi.setSystemTime(new Date("2026-08-01T03:00:00.000Z"));
     vi.stubEnv("CRON_SECRET", CRON_SECRET);
     mockCreateAdminClient.mockReturnValue({});
-    mockUpdateReminderStatus.mockResolvedValue({});
+    mockCreateReminderDelivery.mockReturnValue({
+      transition: mockDeliveryTransition,
+    });
+    mockDeliveryTransition.mockImplementation(async (request) => {
+      if (request.transition.type === "stale") {
+        return {
+          type: "invalid-transition",
+          action: "stale",
+          reason: "Reminder has not exceeded the stale delivery retry horizon",
+        };
+      }
+      return {
+        type: "transitioned",
+        transition: request.transition.type,
+        reminder: mockReminder({
+          status: request.transition.type === "sent" ? "sent" : "failed",
+        }),
+      };
+    });
     mockGetVapidDetails.mockReturnValue({
       subject: "mailto:test@test.com",
       publicKey: "test-public-key",
@@ -115,20 +135,16 @@ describe("GET /api/cron/dispatch-reminders", () => {
   });
 
   it("returns 401 without CRON_SECRET", async () => {
-    const req = createRequest(false);
-    const res = await GET(req);
+    const res = await GET(createRequest(false));
     expect(res.status).toBe(401);
-    const body = await res.json();
-    expect(body.error).toBe("Unauthorized");
+    expect((await res.json()).error).toBe("Unauthorized");
   });
 
   it("returns counts of 0 with no pending reminders", async () => {
     mockGetPendingReminders.mockResolvedValue([]);
-
     const res = await GET(createRequest());
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toEqual({
+    expect(await res.json()).toEqual({
       dispatched: 0,
       failed: 0,
       skipped_quiet_hours: 0,
@@ -136,13 +152,12 @@ describe("GET /api/cron/dispatch-reminders", () => {
   });
 
   it("retires unsupported legacy reminder sources without dispatching", async () => {
-    const reminder = mockReminder({ source_type: "bill" });
-    mockGetPendingReminders.mockResolvedValue([reminder]);
+    mockGetPendingReminders.mockResolvedValue([
+      mockReminder({ source_type: "bill" }),
+    ]);
 
     const res = await GET(createRequest());
-    const body = await res.json();
-
-    expect(body).toEqual({
+    expect(await res.json()).toEqual({
       dispatched: 0,
       failed: 1,
       skipped_quiet_hours: 0,
@@ -150,28 +165,27 @@ describe("GET /api/cron/dispatch-reminders", () => {
     expect(mockGetPushQuietWindow).not.toHaveBeenCalled();
     expect(mockSendPushNotification).not.toHaveBeenCalled();
     expect(mockSendReminderEmail).not.toHaveBeenCalled();
-    expect(mockUpdateReminderStatus).toHaveBeenCalledWith(
-      "user-1",
-      "rem-1",
-      "failed",
-    );
+    expect(mockDeliveryTransition).toHaveBeenCalledWith(expect.objectContaining({
+      reminderId: "rem-1",
+      transition: { type: "retire-unsupported-source" },
+      context: {
+        type: "operational",
+        service: "reminder-dispatcher",
+        userId: "user-1",
+        trusted: true,
+      },
+    }));
   });
 
-  it("dispatches push and email for reminder with both channels", async () => {
-    const reminder = mockReminder();
-    const profile = mockPushQuietWindow();
-    mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetPushQuietWindow.mockResolvedValue(profile);
+  it("dispatches push and email and records sent through shared delivery", async () => {
+    mockGetPendingReminders.mockResolvedValue([mockReminder()]);
+    mockGetPushQuietWindow.mockResolvedValue(mockPushQuietWindow());
     mockSendPushNotification.mockResolvedValue({ sent: 1, failed: 0 });
     mockSendReminderEmail.mockResolvedValue({ success: true });
 
     const res = await GET(createRequest());
     const body = await res.json();
-
-    expect(body.dispatched).toBe(1);
-    expect(body.failed).toBe(0);
-    expect(body.skipped_quiet_hours).toBe(0);
-
+    expect(body).toEqual({ dispatched: 1, failed: 0, skipped_quiet_hours: 0 });
     expect(mockSendPushNotification).toHaveBeenCalledWith(
       "user-1",
       expect.objectContaining({
@@ -179,27 +193,24 @@ describe("GET /api/cron/dispatch-reminders", () => {
         sourceType: "task",
         sourceId: "task-1",
       }),
-      expect.anything()
+      expect.anything(),
     );
     expect(mockSendReminderEmail).toHaveBeenCalledWith(
       "user-1",
-      expect.objectContaining({
-        sourceType: "task",
-      })
+      expect.objectContaining({ sourceType: "task" }),
     );
-    expect(mockUpdateReminderStatus).toHaveBeenCalledWith(
-      "user-1",
-      "rem-1",
-      "sent",
-      expect.any(String)
-    );
+    expect(mockDeliveryTransition).toHaveBeenCalledWith(expect.objectContaining({
+      transition: { type: "sent", sentAt: expect.any(String) },
+    }));
   });
 
-  it("push-only reminder during quiet hours stays pending (not stale)", async () => {
-    // Use a recent fire_at so it doesn't hit the staleness threshold
-    const recentFireAt = new Date(Date.now() - 30 * 60 * 1000).toISOString(); // 30min ago
-    const reminder = mockReminder({ channels: ["push"], fire_at: recentFireAt });
-    const profile = mockPushQuietWindow({
+  it("keeps a recent push-only reminder pending during quiet hours", async () => {
+    const reminder = mockReminder({
+      channels: ["push"],
+      fire_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    });
+    mockGetPendingReminders.mockResolvedValue([reminder]);
+    mockGetPushQuietWindow.mockResolvedValue(mockPushQuietWindow({
       pushQuietWindow: {
         status: "ready" as const,
         value: {
@@ -208,24 +219,39 @@ describe("GET /api/cron/dispatch-reminders", () => {
           endLocal: "07:00",
         },
       },
-    });
-    mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetPushQuietWindow.mockResolvedValue(profile);
+    }));
 
-    const res = await GET(createRequest());
-    const body = await res.json();
-
-    expect(body.skipped_quiet_hours).toBe(1);
-    expect(body.dispatched).toBe(0);
+    const body = await (await GET(createRequest())).json();
+    expect(body).toEqual({ dispatched: 0, failed: 0, skipped_quiet_hours: 1 });
     expect(mockSendPushNotification).not.toHaveBeenCalled();
-    expect(mockUpdateReminderStatus).not.toHaveBeenCalled();
+    expect(mockDeliveryTransition).toHaveBeenCalledWith(expect.objectContaining({
+      transition: { type: "stale" },
+    }));
   });
 
-  it("stale push-only reminder during quiet hours is marked failed", async () => {
-    // fire_at is old enough to exceed staleness threshold
-    const staleFireAt = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(); // 5 hours ago
-    const reminder = mockReminder({ channels: ["push"], fire_at: staleFireAt });
-    const profile = mockPushQuietWindow({
+  it("marks a stale push-only reminder failed through shared delivery", async () => {
+    mockGetPendingReminders.mockResolvedValue([mockReminder({
+      channels: ["push"],
+      fire_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    })]);
+    mockGetPushQuietWindow.mockResolvedValue(mockPushQuietWindow());
+
+    mockDeliveryTransition.mockImplementation(async (request) =>
+      request.transition.type === "stale"
+        ? { type: "transitioned", transition: "stale", reminder: mockReminder({ status: "failed" }) }
+        : { type: "invalid-transition", action: request.transition.type, reason: "unused" },
+    );
+
+    const body = await (await GET(createRequest())).json();
+    expect(body).toEqual({ dispatched: 0, failed: 1, skipped_quiet_hours: 0 });
+    expect(mockDeliveryTransition).toHaveBeenCalledWith(expect.objectContaining({
+      transition: { type: "stale" },
+    }));
+  });
+
+  it("dispatches email during quiet hours", async () => {
+    mockGetPendingReminders.mockResolvedValue([mockReminder({ channels: ["email"] })]);
+    mockGetPushQuietWindow.mockResolvedValue(mockPushQuietWindow({
       pushQuietWindow: {
         status: "ready" as const,
         value: {
@@ -234,46 +260,18 @@ describe("GET /api/cron/dispatch-reminders", () => {
           endLocal: "07:00",
         },
       },
-    });
-    mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetPushQuietWindow.mockResolvedValue(profile);
-
-    const res = await GET(createRequest());
-    const body = await res.json();
-
-    expect(body.failed).toBe(1);
-    expect(body.skipped_quiet_hours).toBe(0);
-    expect(mockUpdateReminderStatus).toHaveBeenCalledWith("user-1", "rem-1", "failed");
-  });
-
-  it("email-only reminder during quiet hours still dispatches", async () => {
-    const reminder = mockReminder({ channels: ["email"] });
-    const profile = mockPushQuietWindow({
-      pushQuietWindow: {
-        status: "ready" as const,
-        value: {
-          status: "enabled" as const,
-          startLocal: "22:00",
-          endLocal: "07:00",
-        },
-      },
-    });
-    mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetPushQuietWindow.mockResolvedValue(profile);
+    }));
     mockSendReminderEmail.mockResolvedValue({ success: true });
 
-    const res = await GET(createRequest());
-    const body = await res.json();
-
-    expect(body.dispatched).toBe(1);
-    expect(body.skipped_quiet_hours).toBe(0);
+    const body = await (await GET(createRequest())).json();
+    expect(body).toEqual({ dispatched: 1, failed: 0, skipped_quiet_hours: 0 });
     expect(mockSendPushNotification).not.toHaveBeenCalled();
     expect(mockSendReminderEmail).toHaveBeenCalled();
   });
 
-  it("push+email during quiet hours dispatches email only, marks sent", async () => {
-    const reminder = mockReminder({ channels: ["push", "email"] });
-    const profile = mockPushQuietWindow({
+  it("dispatches email and records sent for push+email during quiet hours", async () => {
+    mockGetPendingReminders.mockResolvedValue([mockReminder()]);
+    mockGetPushQuietWindow.mockResolvedValue(mockPushQuietWindow({
       pushQuietWindow: {
         status: "ready" as const,
         value: {
@@ -282,64 +280,49 @@ describe("GET /api/cron/dispatch-reminders", () => {
           endLocal: "07:00",
         },
       },
-    });
-    mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetPushQuietWindow.mockResolvedValue(profile);
+    }));
     mockSendReminderEmail.mockResolvedValue({ success: true });
 
-    const res = await GET(createRequest());
-    const body = await res.json();
-
-    expect(body.dispatched).toBe(1);
-    expect(body.skipped_quiet_hours).toBe(0);
+    const body = await (await GET(createRequest())).json();
+    expect(body).toEqual({ dispatched: 1, failed: 0, skipped_quiet_hours: 0 });
     expect(mockSendPushNotification).not.toHaveBeenCalled();
-    expect(mockSendReminderEmail).toHaveBeenCalled();
-    expect(mockUpdateReminderStatus).toHaveBeenCalledWith(
-      "user-1",
-      "rem-1",
-      "sent",
-      expect.any(String)
-    );
+    expect(mockDeliveryTransition).toHaveBeenCalledWith(expect.objectContaining({
+      transition: { type: "sent", sentAt: expect.any(String) },
+    }));
   });
 
-  it("all channels fail sets status to failed", async () => {
-    const reminder = mockReminder({ channels: ["push", "email"] });
-    const profile = mockPushQuietWindow();
-    mockGetPendingReminders.mockResolvedValue([reminder]);
-    mockGetPushQuietWindow.mockResolvedValue(profile);
+  it("records failed when all channels fail", async () => {
+    mockGetPendingReminders.mockResolvedValue([mockReminder()]);
+    mockGetPushQuietWindow.mockResolvedValue(mockPushQuietWindow());
     mockSendPushNotification.mockResolvedValue({ sent: 0, failed: 1 });
     mockSendReminderEmail.mockResolvedValue({ success: false, error: "fail" });
 
-    const res = await GET(createRequest());
-    const body = await res.json();
-
-    expect(body.failed).toBe(1);
-    expect(body.dispatched).toBe(0);
-    expect(mockUpdateReminderStatus).toHaveBeenCalledWith(
-      "user-1",
-      "rem-1",
-      "failed"
-    );
+    const body = await (await GET(createRequest())).json();
+    expect(body).toEqual({ dispatched: 0, failed: 1, skipped_quiet_hours: 0 });
+    expect(mockDeliveryTransition).toHaveBeenCalledWith(expect.objectContaining({
+      transition: { type: "failed" },
+    }));
   });
 
-  it("one reminder failure does not stop the batch", async () => {
+  it("isolates one reminder failure and continues the batch", async () => {
     const reminder1 = mockReminder({ id: "rem-1", user_id: "user-1" });
     const reminder2 = mockReminder({ id: "rem-2", user_id: "user-2" });
-    const profile = mockPushQuietWindow();
-
     mockGetPendingReminders.mockResolvedValue([reminder1, reminder2]);
-    // First Notifications reader call throws (simulating DB error), second succeeds
     mockGetPushQuietWindow
       .mockRejectedValueOnce(new Error("DB connection error"))
-      .mockResolvedValueOnce(profile);
+      .mockResolvedValueOnce(mockPushQuietWindow());
     mockSendPushNotification.mockResolvedValue({ sent: 1, failed: 0 });
     mockSendReminderEmail.mockResolvedValue({ success: true });
 
-    const res = await GET(createRequest());
-    const body = await res.json();
-
-    // First fails (catch at the Notifications reader), second dispatched
-    expect(body.dispatched).toBe(1);
-    expect(body.failed).toBe(1);
+    const body = await (await GET(createRequest())).json();
+    expect(body).toEqual({ dispatched: 1, failed: 1, skipped_quiet_hours: 0 });
+    expect(mockDeliveryTransition).toHaveBeenCalledWith(expect.objectContaining({
+      reminderId: "rem-1",
+      transition: { type: "failed" },
+    }));
+    expect(mockDeliveryTransition).toHaveBeenCalledWith(expect.objectContaining({
+      reminderId: "rem-2",
+      transition: { type: "sent", sentAt: expect.any(String) },
+    }));
   });
 });

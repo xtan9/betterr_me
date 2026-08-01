@@ -19,6 +19,17 @@ import {
   CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR,
   isCalendarEventReminder,
 } from "@/lib/reminders/lifecycle-policy";
+import {
+  userReminderDeliveryContext,
+  type ReminderDeliveryTransitionOutcome,
+} from "@/lib/reminders/delivery";
+import {
+  createReminderDelivery,
+} from "@/lib/reminders/delivery-service";
+import {
+  reminderDeliveryPatchToTransition,
+  toReminderResponse,
+} from "@/lib/reminders/delivery-adapter";
 
 function lifecycleConflict() {
   return NextResponse.json(
@@ -61,42 +72,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Reminder not found" }, { status: 404 });
     }
     if (isCalendarEventReminder(existing.source_type)) {
-      const update = validation.data;
-      const keys = Object.keys(update);
-      if (
-        (update.status === "pending" || update.status === "snoozed") &&
-        update.sent_at !== undefined &&
-        update.sent_at !== null
-      ) {
-        return NextResponse.json(
-          { error: "A snoozed reminder cannot set sent_at" },
-          { status: 400 },
-        );
-      }
-      const isTerminalTransition =
-        (update.status === "sent" || update.status === "failed") &&
-        keys.every((key) => ["status", "sent_at"].includes(key));
-      const isSnoozeTransition =
-        update.status === "pending" &&
-        typeof update.fire_at === "string" &&
-        keys.every((key) => ["status", "fire_at", "sent_at"].includes(key));
-      const isLegacySnoozeTransition =
-        update.status === "snoozed" &&
-        keys.every((key) => ["status", "sent_at"].includes(key));
-      if (!isTerminalTransition && !isSnoozeTransition && !isLegacySnoozeTransition) {
+      if (validation.data.channels !== undefined) {
         return lifecycleConflict();
       }
-      const reminder = await remindersDB.transitionCalendarEventReminder(
+      return transitionReminderDeliveryResponse(
+        supabase,
         userId,
         id,
-        isSnoozeTransition
-          ? { status: "pending", fire_at: update.fire_at, sent_at: update.sent_at }
-          : {
-              status: update.status as "sent" | "failed" | "snoozed",
-              sent_at: update.sent_at,
-            },
+        validation.data,
       );
-      return NextResponse.json({ reminder });
     }
 
     if (existing.source_type === "task" && validation.data.channels !== undefined) {
@@ -146,15 +130,12 @@ export async function PATCH(
       return habitReminderConfigurationResponse(outcome);
     }
 
-    // Status, fire_at, and sent_at are Reminder Delivery transitions. They
-    // remain on the delivery persistence path and do not alter source intent.
-    const reminder = await remindersDB.updateReminder(
+    return transitionReminderDeliveryResponse(
+      supabase,
       userId,
       id,
-      validation.data
+      validation.data,
     );
-
-    return NextResponse.json({ reminder });
   } catch (error) {
     log.error("PATCH /api/reminders/[id] error", error);
     return NextResponse.json(
@@ -276,4 +257,50 @@ function toHabitReminderInput(
     },
     referenceTime: undefined,
   };
+}
+
+async function transitionReminderDeliveryResponse(
+  supabase: Parameters<typeof createReminderDelivery>[0],
+  userId: string,
+  reminderId: string,
+  update: {
+    status?: "pending" | "sent" | "failed" | "snoozed";
+    fire_at?: string;
+    sent_at?: string | null;
+    channels?: readonly ("push" | "email")[];
+  },
+): Promise<NextResponse> {
+  const mapping = reminderDeliveryPatchToTransition(update);
+  if (!mapping.ok) {
+    return NextResponse.json(
+      { error: mapping.reason },
+      { status: mapping.status },
+    );
+  }
+
+  return reminderDeliveryResponse(
+    await createReminderDelivery(supabase).transition({
+      reminderId,
+      context: userReminderDeliveryContext(userId),
+      transition: mapping.transition,
+    }),
+  );
+}
+
+function reminderDeliveryResponse(
+  outcome: ReminderDeliveryTransitionOutcome,
+): NextResponse {
+  if (outcome.type === "transitioned" || outcome.type === "already-applied") {
+    return NextResponse.json({ reminder: toReminderResponse(outcome.reminder) });
+  }
+  if (outcome.type === "not-found") {
+    return NextResponse.json({ error: "Reminder not found" }, { status: 404 });
+  }
+  if (outcome.type === "conflict") {
+    return NextResponse.json(
+      { error: outcome.reason ?? "Reminder Delivery conflicted" },
+      { status: 409 },
+    );
+  }
+  return NextResponse.json({ error: outcome.reason }, { status: 409 });
 }

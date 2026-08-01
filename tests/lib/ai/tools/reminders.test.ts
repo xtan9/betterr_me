@@ -3,10 +3,11 @@ import { reminderTools } from "@/lib/ai/tools/reminders";
 import type { ToolContext } from "@/lib/ai/tools/types";
 
 const mockGetPendingReminders = vi.fn();
-const mockUpdateReminderStatus = vi.fn();
-const mockUpdateReminder = vi.fn();
 const mockGetReminder = vi.fn();
-const mockTransitionCalendarEventReminder = vi.fn();
+const mockDeliveryTransition = vi.fn();
+const { mockCreateReminderDelivery } = vi.hoisted(() => ({
+  mockCreateReminderDelivery: vi.fn(),
+}));
 const { mockConfigureTaskReminders } = vi.hoisted(() => ({
   mockConfigureTaskReminders: vi.fn(),
 }));
@@ -17,11 +18,12 @@ const { mockConfigureHabitReminders } = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({
   RemindersDB: class {
     getPendingReminders = mockGetPendingReminders;
-    updateReminderStatus = mockUpdateReminderStatus;
-    updateReminder = mockUpdateReminder;
     getReminder = mockGetReminder;
-    transitionCalendarEventReminder = mockTransitionCalendarEventReminder;
   },
+}));
+
+vi.mock("@/lib/reminders/delivery-service", () => ({
+  createReminderDelivery: mockCreateReminderDelivery,
 }));
 
 vi.mock("@/lib/tasks/writes", () => ({
@@ -47,6 +49,24 @@ function makeCtx(): ToolContext {
   };
 }
 
+function makeDeliveryReminder(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "r1",
+    userId: "user-123",
+    sourceType: "task",
+    sourceId: "t1",
+    reminderType: "absolute",
+    relativeMinutes: null,
+    absoluteTime: "2026-04-10T09:00:00Z",
+    channels: ["push"],
+    status: "sent",
+    fireAt: "2026-04-10T09:00:00Z",
+    sentAt: "2026-04-10T09:01:00Z",
+    createdAt: "2026-04-09T09:00:00Z",
+    ...overrides,
+  };
+}
+
 function findTool(name: string) {
   return reminderTools().find((tool) => tool.name === name)!;
 }
@@ -54,7 +74,11 @@ function findTool(name: string) {
 describe("reminderTools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetReminder.mockResolvedValue({ id: "r1", source_type: "task", source_id: "t1" });
+    mockGetReminder.mockResolvedValue({
+      id: "r1",
+      source_type: "task",
+      source_id: "t1",
+    });
     mockConfigureTaskReminders.mockResolvedValue({
       type: "configured",
       reminders: [{ id: "r1", source_type: "task" }],
@@ -62,6 +86,14 @@ describe("reminderTools", () => {
     mockConfigureHabitReminders.mockResolvedValue({
       type: "configured",
       reminders: [{ id: "r1", source_type: "habit" }],
+    });
+    mockCreateReminderDelivery.mockReturnValue({
+      transition: mockDeliveryTransition,
+    });
+    mockDeliveryTransition.mockResolvedValue({
+      type: "transitioned",
+      reminder: makeDeliveryReminder(),
+      transition: "sent",
     });
   });
 
@@ -116,45 +148,35 @@ describe("reminderTools", () => {
     ).toBe(false);
   });
 
-  it("dismisses a non-event reminder", async () => {
-    mockUpdateReminderStatus.mockResolvedValue({ id: "r1", status: "sent" });
+  it("routes dismissal through the shared delivery behavior", async () => {
     await findTool("dismissReminder").execute({ reminderId: "r1" }, makeCtx());
-    expect(mockUpdateReminderStatus).toHaveBeenCalledWith("user-123", "r1", "sent");
-  });
-
-  it("snoozes a non-event reminder", async () => {
-    mockUpdateReminder.mockResolvedValue({ id: "r1", status: "pending" });
-    await findTool("dismissReminder").execute(
-      { reminderId: "r1", snoozeUntil: "2026-04-10T14:00:00Z" },
-      makeCtx(),
-    );
-    expect(mockUpdateReminder).toHaveBeenCalledWith("user-123", "r1", {
-      status: "pending",
-      fire_at: "2026-04-10T14:00:00Z",
+    expect(mockDeliveryTransition).toHaveBeenCalledWith({
+      reminderId: "r1",
+      context: { type: "user", userId: "user-123" },
+      transition: { type: "sent" },
     });
   });
 
-  it("routes calendar-event dismissal through the delivery RPC", async () => {
-    mockGetReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
-    await findTool("dismissReminder").execute({ reminderId: "r1" }, makeCtx());
-    expect(mockTransitionCalendarEventReminder).toHaveBeenCalledWith(
-      "user-123",
-      "r1",
-      { status: "sent" },
-    );
-  });
-
-  it("routes calendar-event snooze through the delivery RPC", async () => {
-    mockGetReminder.mockResolvedValue({ id: "r1", source_type: "calendar_event" });
+  it("routes snooze through the shared delivery behavior", async () => {
     await findTool("dismissReminder").execute(
       { reminderId: "r1", snoozeUntil: "2026-04-10T14:00:00Z" },
       makeCtx(),
     );
-    expect(mockTransitionCalendarEventReminder).toHaveBeenCalledWith(
-      "user-123",
-      "r1",
-      { status: "pending", fire_at: "2026-04-10T14:00:00Z" },
-    );
+    expect(mockDeliveryTransition).toHaveBeenCalledWith({
+      reminderId: "r1",
+      context: { type: "user", userId: "user-123" },
+      transition: { type: "snooze", fireAt: "2026-04-10T14:00:00Z" },
+    });
+  });
+
+  it("routes calendar-event delivery transitions through the same behavior", async () => {
+    mockDeliveryTransition.mockResolvedValue({
+      type: "transitioned",
+      reminder: makeDeliveryReminder({ sourceType: "calendar_event", sourceId: "e1" }),
+      transition: "sent",
+    });
+    await findTool("dismissReminder").execute({ reminderId: "r1" }, makeCtx());
+    expect(mockDeliveryTransition).toHaveBeenCalledOnce();
   });
 
   it("requires an ISO datetime for AI snooze", () => {
@@ -166,27 +188,22 @@ describe("reminderTools", () => {
     ).toBe(false);
   });
 
-  it("fails closed when reminder lookup errors", async () => {
-    mockGetReminder.mockRejectedValue(new Error("lookup failed"));
+  it("fails closed when the shared delivery transition errors", async () => {
+    mockDeliveryTransition.mockRejectedValue(new Error("transition failed"));
     await expect(
       findTool("dismissReminder").execute({ reminderId: "r1" }, makeCtx()),
-    ).rejects.toThrow("lookup failed");
-    expect(mockUpdateReminderStatus).not.toHaveBeenCalled();
+    ).rejects.toThrow("transition failed");
   });
 
-  it("does not mutate a missing reminder", async () => {
-    mockGetReminder.mockResolvedValue(null);
+  it("returns not found without mutating a missing reminder", async () => {
+    mockDeliveryTransition.mockResolvedValue({ type: "not-found" });
     await expect(
       findTool("dismissReminder").execute({ reminderId: "missing" }, makeCtx()),
     ).resolves.toEqual({ error: "Reminder not found" });
-    expect(mockUpdateReminderStatus).not.toHaveBeenCalled();
   });
 
   it("routes Task reminder removal through TaskWrites", async () => {
-    mockConfigureTaskReminders.mockResolvedValue({
-      type: "removed",
-      reminders: [],
-    });
+    mockConfigureTaskReminders.mockResolvedValue({ type: "removed", reminders: [] });
     const result = await findTool("deleteReminder").execute({ reminderId: "r1" }, makeCtx());
     expect(mockConfigureTaskReminders).toHaveBeenCalledWith({
       userId: "user-123",
