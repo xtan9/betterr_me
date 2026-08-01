@@ -392,28 +392,40 @@ select set_config(
 
 -- Calendar data has lifecycle-owned event reminders, while ordinary
 -- application reminders/defaults use the Habit-owned configuration surface.
-reset role;
-insert into public.reminders (
-  id,
-  user_id,
-  source_type,
-  source_id,
-  reminder_type,
-  relative_minutes,
-  channels,
-  fire_at
-)
-values
-  (
-    '57800000-0000-0000-0000-000000000901',
+set local role authenticated;
+do $habit_reminder_seed$
+declare
+  outcome jsonb;
+begin
+  outcome := public.configure_habit_reminders(
     '57800000-0000-0000-0000-000000000001',
-    'habit',
     '57800000-0000-0000-0000-000000000401',
-    'relative',
-    15,
-    array['push'],
-    '2026-08-04 08:45:00+00'
+    '[{
+      "reminder_type": "relative",
+      "relative_minutes": 15,
+      "absolute_time": null,
+      "channels": ["push"]
+    }]'::jsonb,
+    '2026-08-04T09:00:00Z'
   );
+  if outcome->>'type' is distinct from 'configured'
+     or jsonb_array_length(outcome->'reminders') <> 1
+     or outcome->'reminders'->0->>'source_type' is distinct from 'habit'
+     or (outcome->'reminders'->0->>'source_id')::uuid
+       is distinct from '57800000-0000-0000-0000-000000000401'::uuid
+     or (outcome->'reminders'->0->>'relative_minutes')::integer <> 15
+     or outcome->'reminders'->0->>'status' is distinct from 'pending'
+     or (outcome->'reminders'->0->>'fire_at')::timestamptz
+       is distinct from timestamptz '2026-08-04 08:45:00+00' then
+    raise exception 'owner Habit reminder seed outcome was incorrect: %', outcome;
+  end if;
+  perform set_config(
+    'ralph.planning_owner_habit_reminder_id',
+    outcome->'reminders'->0->>'id',
+    false
+  );
+end
+$habit_reminder_seed$;
 reset role;
 insert into public.reminder_defaults (
   id,
@@ -435,27 +447,40 @@ select set_config(
   '57800000-0000-0000-0000-000000000002',
   false
 );
-reset role;
-insert into public.reminders (
-  id,
-  user_id,
-  source_type,
-  source_id,
-  reminder_type,
-  relative_minutes,
-  channels,
-  fire_at
-)
-values (
-  '57800000-0000-0000-0000-000000000902',
-  '57800000-0000-0000-0000-000000000002',
-  'habit',
-  '57800000-0000-0000-0000-000000000402',
-  'relative',
-  20,
-  array['push'],
-  '2026-08-04 10:40:00+00'
+set local role authenticated;
+do $habit_reminder_seed$
+declare
+  outcome jsonb;
+begin
+  outcome := public.configure_habit_reminders(
+    '57800000-0000-0000-0000-000000000002',
+    '57800000-0000-0000-0000-000000000402',
+    '[{
+      "reminder_type": "relative",
+      "relative_minutes": 20,
+      "absolute_time": null,
+      "channels": ["push"]
+    }]'::jsonb,
+    '2026-08-04T11:00:00Z'
   );
+  if outcome->>'type' is distinct from 'configured'
+     or jsonb_array_length(outcome->'reminders') <> 1
+     or outcome->'reminders'->0->>'source_type' is distinct from 'habit'
+     or (outcome->'reminders'->0->>'source_id')::uuid
+       is distinct from '57800000-0000-0000-0000-000000000402'::uuid
+     or (outcome->'reminders'->0->>'relative_minutes')::integer <> 20
+     or outcome->'reminders'->0->>'status' is distinct from 'pending'
+     or (outcome->'reminders'->0->>'fire_at')::timestamptz
+       is distinct from timestamptz '2026-08-04 10:40:00+00' then
+    raise exception 'other Habit reminder seed outcome was incorrect: %', outcome;
+  end if;
+  perform set_config(
+    'ralph.planning_other_habit_reminder_id',
+    outcome->'reminders'->0->>'id',
+    false
+  );
+end
+$habit_reminder_seed$;
 reset role;
 insert into public.reminder_defaults (
   id,
@@ -682,6 +707,10 @@ begin
     'EXECUTE'
   ) or not has_function_privilege(
     'authenticated',
+    'public.configure_habit_reminders(uuid,uuid,jsonb,timestamptz)',
+    'EXECUTE'
+  ) or not has_function_privilege(
+    'authenticated',
     'public.set_habit_completion_atomically(uuid,uuid,date,boolean,date)',
     'EXECUTE'
   ) then
@@ -703,6 +732,10 @@ begin
   ) or has_function_privilege(
     'anon',
     'public.transition_calendar_event_reminder(uuid,uuid,text,timestamptz,timestamptz)',
+    'EXECUTE'
+  ) or has_function_privilege(
+    'anon',
+    'public.configure_habit_reminders(uuid,uuid,jsonb,timestamptz)',
     'EXECUTE'
   ) or has_function_privilege(
     'anon',
@@ -1745,7 +1778,10 @@ begin
   if (select count(*) from public.calendar_events where user_id = '57800000-0000-0000-0000-000000000001') <> 1
      or exists (select 1 from public.calendar_events where id = '57800000-0000-0000-0000-000000000802')
      or (select count(*) from public.reminders where user_id = '57800000-0000-0000-0000-000000000001') <> 2
-     or exists (select 1 from public.reminders where id = '57800000-0000-0000-0000-000000000902') then
+     or exists (
+       select 1 from public.reminders
+       where id = current_setting('ralph.planning_other_habit_reminder_id')::uuid
+     ) then
     raise exception 'calendar owner visibility is incorrect';
   end if;
   select id
@@ -1882,11 +1918,17 @@ begin
     'calendar owner spoof'
   );
   perform pg_temp.ralph_578_expect_zero_changes(
-    $$update public.reminders set status = 'failed' where id = '57800000-0000-0000-0000-000000000902'$$,
+    format(
+      'update public.reminders set status = ''failed'' where id = %L',
+      current_setting('ralph.planning_other_habit_reminder_id')::uuid
+    ),
     'non-owner reminder update'
   );
   perform pg_temp.ralph_578_expect_zero_changes(
-    $$delete from public.reminders where id = '57800000-0000-0000-0000-000000000902'$$,
+    format(
+      'delete from public.reminders where id = %L',
+      current_setting('ralph.planning_other_habit_reminder_id')::uuid
+    ),
     'non-owner reminder delete'
   );
   perform pg_temp.ralph_578_expect_sqlstate(
@@ -1952,7 +1994,7 @@ begin
     where id in ('57800000-0000-0000-0000-000000000803', '57800000-0000-0000-0000-000000000804')
   ) or not exists (
     select 1 from public.reminders
-    where id = '57800000-0000-0000-0000-000000000902'
+    where id = current_setting('ralph.planning_other_habit_reminder_id')::uuid
       and status = 'pending'
   ) or not exists (
     select 1 from public.reminder_defaults
@@ -2026,7 +2068,10 @@ begin
   if (select count(*) from public.calendar_events where user_id = '57800000-0000-0000-0000-000000000002') <> 1
      or exists (select 1 from public.calendar_events where id = '57800000-0000-0000-0000-000000000801')
      or (select count(*) from public.reminders where user_id = '57800000-0000-0000-0000-000000000002') <> 2
-     or exists (select 1 from public.reminders where id = '57800000-0000-0000-0000-000000000901') then
+     or exists (
+       select 1 from public.reminders
+       where id = current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+     ) then
     raise exception 'second-user calendar visibility is incorrect';
   end if;
   select id
@@ -2114,7 +2159,10 @@ begin
      or exists (select 1 from public.habit_milestones where id = '57800000-0000-0000-0000-000000000601')
      or exists (select 1 from public.habit_graduations where id = '57800000-0000-0000-0000-000000000701')
      or exists (select 1 from public.calendar_events where id = '57800000-0000-0000-0000-000000000801')
-     or exists (select 1 from public.reminders where id = '57800000-0000-0000-0000-000000000901')
+     or exists (
+       select 1 from public.reminders
+       where id = current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+     )
      or exists (select 1 from public.reminder_defaults where id = '57800000-0000-0000-0000-000000001001')
      or exists (select 1 from public.push_subscriptions where id = '57800000-0000-0000-0000-000000001101') then
     raise exception 'anonymous RLS filtering exposed an owner row';
@@ -2164,7 +2212,7 @@ begin
     'anonymous calendar read'
   );
   perform pg_temp.ralph_578_expect_hidden(
-    $$select count(*) from public.reminders where id = '57800000-0000-0000-0000-000000000901'$$,
+    $$select count(*) from public.reminders where id = current_setting('ralph.planning_owner_habit_reminder_id')::uuid$$,
     'anonymous reminder read'
   );
   perform pg_temp.ralph_578_expect_hidden(
@@ -2307,12 +2355,18 @@ begin
     'anonymous reminder insert'
   );
   perform pg_temp.ralph_578_expect_sqlstate(
-    $$update public.reminders set status = 'failed' where id = '57800000-0000-0000-0000-000000000901'$$,
+    format(
+      'update public.reminders set status = ''failed'' where id = %L',
+      current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+    ),
     '42501',
     'anonymous reminder update'
   );
   perform pg_temp.ralph_578_expect_sqlstate(
-    $$delete from public.reminders where id = '57800000-0000-0000-0000-000000000901'$$,
+    format(
+      'delete from public.reminders where id = %L',
+      current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+    ),
     '42501',
     'anonymous reminder delete'
   );
@@ -2347,7 +2401,11 @@ begin
     'anonymous push-subscription delete'
   );
   perform pg_temp.ralph_578_expect_sqlstate(
-    $$select public.transition_calendar_event_reminder('57800000-0000-0000-0000-000000000001', '57800000-0000-0000-0000-000000000901', 'snoozed', null, null)$$,
+    format(
+      'select public.transition_calendar_event_reminder(%L, %L, ''snoozed'', null, null)',
+      '57800000-0000-0000-0000-000000000001'::uuid,
+      current_setting('ralph.planning_owner_habit_reminder_id')::uuid
+    ),
     '42501',
     'anonymous calendar reminder transition'
   );
@@ -2411,7 +2469,7 @@ begin
       and graduated_streak = 30
   ) or not exists (
     select 1 from public.reminders
-    where id = '57800000-0000-0000-0000-000000000901'
+    where id = current_setting('ralph.planning_owner_habit_reminder_id')::uuid
       and status = 'pending'
   ) or not exists (
     select 1 from public.reminder_defaults
@@ -2470,7 +2528,11 @@ begin
      or not exists (select 1 from public.habit_milestones where id = '57800000-0000-0000-0000-000000000602' and milestone = 14)
      or not exists (select 1 from public.habit_graduations where id = '57800000-0000-0000-0000-000000000702' and graduated_streak = 14)
      or not exists (select 1 from public.calendar_events where id = '57800000-0000-0000-0000-000000000802' and title = 'Other calendar event')
-     or not exists (select 1 from public.reminders where id = '57800000-0000-0000-0000-000000000902' and status = 'pending')
+     or not exists (
+       select 1 from public.reminders
+       where id = current_setting('ralph.planning_other_habit_reminder_id')::uuid
+         and status = 'pending'
+     )
      or not exists (select 1 from public.reminder_defaults where id = '57800000-0000-0000-0000-000000001002' and relative_minutes = 45)
      or not exists (select 1 from public.push_subscriptions where id = '57800000-0000-0000-0000-000000001102' and user_agent = 'planning-other-agent')
      or exists (select 1 from public.tasks where id in ('57800000-0000-0000-0000-000000000204', '57800000-0000-0000-0000-000000000207'))
