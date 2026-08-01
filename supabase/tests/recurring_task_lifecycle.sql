@@ -949,6 +949,386 @@ begin
 end
 $$;
 
+do $$
+declare
+  v_series_id uuid;
+  v_occurrence_id uuid;
+  v_completed_id uuid;
+  v_skipped_id uuid;
+  v_overridden_id uuid;
+  v_outcome jsonb;
+  v_retry jsonb;
+  v_conflict jsonb;
+begin
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000001"}',
+    true
+  );
+
+  v_outcome := public.recurring_task_lifecycle(
+    'create-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'recurrenceRule', jsonb_build_object('frequency', 'daily', 'interval', 1),
+      'recurrenceAnchor', '2026-08-01',
+      'activationDate', '2026-08-01',
+      'timeZone', 'America/New_York',
+      'defaults', jsonb_build_object('title', 'Pause history'),
+      'coverage', jsonb_build_object('from', '2026-08-01', 'to', '2026-08-05'),
+      'idempotencyKey', 'create-pause-683'
+    )
+  );
+  if v_outcome->>'status' <> 'complete' then
+    raise exception 'pause fixture series was not created: %', v_outcome;
+  end if;
+  v_series_id := (v_outcome->'series'->>'id')::uuid;
+
+  select occurrence.id into v_completed_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = '2026-08-02';
+  select occurrence.id into v_skipped_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = '2026-08-03';
+  select occurrence.id into v_overridden_id
+  from public.recurring_task_occurrences occurrence
+  where occurrence.series_id = v_series_id
+    and occurrence.scheduled_date = '2026-08-04';
+
+  v_outcome := public.recurring_task_lifecycle(
+    'complete-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_completed_id,
+      'idempotencyKey', 'complete-pause-683'
+    )
+  );
+  if v_outcome->>'status' <> 'complete' then
+    raise exception 'pause fixture completion failed: %', v_outcome;
+  end if;
+  v_outcome := public.recurring_task_lifecycle(
+    'skip-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_skipped_id,
+      'idempotencyKey', 'skip-pause-683'
+    )
+  );
+  if v_outcome->>'status' <> 'complete' then
+    raise exception 'pause fixture skip failed: %', v_outcome;
+  end if;
+  v_outcome := public.recurring_task_lifecycle(
+    'edit-occurrence',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'occurrenceId', v_overridden_id,
+      'updates', jsonb_build_object('title', 'Retained override'),
+      'idempotencyKey', 'edit-pause-683'
+    )
+  );
+  if v_outcome->>'status' <> 'complete' then
+    raise exception 'pause fixture override failed: %', v_outcome;
+  end if;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'pause-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-02-30',
+      'idempotencyKey', 'invalid-pause-683'
+    )
+  );
+  if v_outcome->>'status' <> 'invalid-transition'
+     or v_outcome->>'type' <> 'invalid-transition'
+     or (select status from public.recurring_task_series where id = v_series_id) <> 'active'
+     or (select revision_token from public.recurring_task_series where id = v_series_id) <> 1 then
+    raise exception 'invalid pause date was not typed or changed state: %', v_outcome;
+  end if;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'pause-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-02',
+      'timeZone', 'UTC',
+      'coverage', jsonb_build_object('from', '2026-08-02', 'to', '2026-08-05'),
+      'idempotencyKey', 'pause-683'
+    )
+  );
+  if v_outcome->>'status' <> 'complete'
+     or (select status from public.recurring_task_series where id = v_series_id) <> 'paused'
+     or (select revision_token from public.recurring_task_series where id = v_series_id) <> 2
+     or (select effective_from from public.recurring_task_series_revisions revision
+         where revision.id = (select current_revision_id from public.recurring_task_series where id = v_series_id)) <> '2026-08-02'
+     or exists (
+       select 1
+       from (values
+         (date '2026-08-02'),
+         (date '2026-08-03'),
+         (date '2026-08-04'),
+         (date '2026-08-05')
+       ) as dates(scheduled_date)
+       where not exists (
+         select 1
+         from public.recurring_task_intentional_absences absence
+         where absence.series_id = v_series_id
+           and absence.scheduled_date = dates.scheduled_date
+       )
+     )
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-02') <> 'completed'
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-03') <> 'skipped'
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-04') <> 'extra'
+     or (select details->>'title' from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-04') <> 'Retained override'
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-05') <> 'withdrawn' then
+    raise exception 'pause did not record the boundary, absence, or retained history: %', v_outcome;
+  end if;
+
+  v_retry := public.recurring_task_lifecycle(
+    'pause-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-02',
+      'timeZone', 'UTC',
+      'coverage', jsonb_build_object('from', '2026-08-02', 'to', '2026-08-05'),
+      'idempotencyKey', 'pause-683'
+    )
+  );
+  if v_retry->>'status' <> 'already-applied'
+     or v_retry->>'type' <> 'already-applied' then
+    raise exception 'pause retry was not typed and idempotent: %', v_retry;
+  end if;
+
+  v_conflict := public.recurring_task_lifecycle(
+    'pause-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-03',
+      'idempotencyKey', 'pause-683'
+    )
+  );
+  if v_conflict->>'status' <> 'conflict'
+     or v_conflict->>'type' <> 'conflict' then
+    raise exception 'pause idempotency conflict was not typed: %', v_conflict;
+  end if;
+
+  v_conflict := public.recurring_task_lifecycle(
+    'resume-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'expectedRevisionToken', 1
+    )
+  );
+  if v_conflict->>'status' <> 'conflict'
+     or v_conflict->>'type' <> 'conflict' then
+    raise exception 'stale resume did not return a typed conflict: %', v_conflict;
+  end if;
+
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000002"}',
+    true
+  );
+  v_conflict := public.recurring_task_lifecycle(
+    'resume-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000002',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-05'
+    )
+  );
+  if v_conflict->>'status' <> 'not-found'
+     or v_conflict->>'type' <> 'not-found' then
+    raise exception 'cross-owner resume did not return a typed not-found outcome: %', v_conflict;
+  end if;
+
+  perform set_config(
+    'request.jwt.claims',
+    '{"sub":"65900000-0000-0000-0000-000000000001"}',
+    true
+  );
+  v_conflict := public.recurring_task_lifecycle(
+    'resume-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-05',
+      'coverage', jsonb_build_object('from', '2026-08-02', 'to', '2026-08-06'),
+      'idempotencyKey', 'resume-683'
+    )
+  );
+  if v_conflict->>'status' <> 'complete'
+     or (select status from public.recurring_task_series where id = v_series_id) <> 'active'
+     or not exists (
+       select 1 from public.recurring_task_intentional_absences absence
+       where absence.series_id = v_series_id
+         and absence.scheduled_date = '2026-08-02'
+     )
+     or not exists (
+       select 1 from public.recurring_task_occurrences occurrence
+       where occurrence.series_id = v_series_id
+         and occurrence.scheduled_date = '2026-08-05'
+         and occurrence.state = 'open'
+     )
+     or not exists (
+       select 1 from public.recurring_task_occurrences occurrence
+       where occurrence.series_id = v_series_id
+         and occurrence.scheduled_date = '2026-08-06'
+         and occurrence.state = 'open'
+     )
+     or (select count(*) from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date between '2026-08-02' and '2026-08-04') <> 3
+     or exists (
+       select 1 from public.recurring_task_occurrences occurrence
+       where occurrence.series_id = v_series_id
+         and occurrence.scheduled_date between '2026-08-02' and '2026-08-04'
+         and occurrence.state not in ('completed', 'skipped', 'extra')
+     ) then
+    raise exception 'resume did not preserve the pause interval or start at its boundary: %', v_conflict;
+  end if;
+
+  v_retry := public.recurring_task_lifecycle(
+    'resume-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-05',
+      'coverage', jsonb_build_object('from', '2026-08-02', 'to', '2026-08-06'),
+      'idempotencyKey', 'resume-683'
+    )
+  );
+  if v_retry->>'status' <> 'already-applied'
+     or v_retry->>'type' <> 'already-applied' then
+    raise exception 'resume retry was not typed and idempotent: %', v_retry;
+  end if;
+
+  v_conflict := public.recurring_task_lifecycle(
+    'pause-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id
+    )
+  );
+  if v_conflict->>'status' <> 'invalid-transition'
+     or v_conflict->>'type' <> 'invalid-transition' then
+    raise exception 'repeated pause did not return a typed invalid transition: %', v_conflict;
+  end if;
+
+  v_conflict := public.recurring_task_lifecycle(
+    'pause-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', '00000000-0000-0000-0000-000000000000'
+    )
+  );
+  if v_conflict->>'status' <> 'not-found'
+     or v_conflict->>'type' <> 'not-found' then
+    raise exception 'missing pause did not return a typed not-found outcome: %', v_conflict;
+  end if;
+
+  v_outcome := public.recurring_task_lifecycle(
+    'create-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'recurrenceRule', jsonb_build_object('frequency', 'daily', 'interval', 1),
+      'recurrenceAnchor', '2026-08-10',
+      'activationDate', '2026-08-10',
+      'defaults', jsonb_build_object('title', 'Same-day pause'),
+      'coverage', jsonb_build_object('from', '2026-08-10', 'to', '2026-08-10'),
+      'idempotencyKey', 'create-same-day-683'
+    )
+  );
+  v_series_id := (v_outcome->'series'->>'id')::uuid;
+  v_outcome := public.recurring_task_lifecycle(
+    'pause-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-10',
+      'coverage', jsonb_build_object('from', '2026-08-10', 'to', '2026-08-10')
+    )
+  );
+  v_outcome := public.recurring_task_lifecycle(
+    'resume-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-10',
+      'coverage', jsonb_build_object('from', '2026-08-10', 'to', '2026-08-10')
+    )
+  );
+  if v_outcome->>'status' <> 'complete'
+     or (select state from public.recurring_task_occurrences occurrence
+         where occurrence.series_id = v_series_id
+           and occurrence.scheduled_date = '2026-08-10') <> 'open' then
+    raise exception 'same-day pause and resume did not reconcile the existing horizon: %', v_outcome;
+  end if;
+end
+$$;
+
+create temporary table recurring_pause_rollback_state (
+  series_id uuid not null,
+  paused_revision_token integer not null
+);
+
+do $$
+declare
+  v_series_id uuid;
+  v_outcome jsonb;
+begin
+  v_outcome := public.recurring_task_lifecycle(
+    'create-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'recurrenceRule', jsonb_build_object('frequency', 'daily', 'interval', 1),
+      'recurrenceAnchor', '2026-08-20',
+      'activationDate', '2026-08-20',
+      'defaults', jsonb_build_object('title', 'Pause rollback'),
+      'coverage', jsonb_build_object('from', '2026-08-20', 'to', '2026-08-20'),
+      'idempotencyKey', 'create-pause-rollback-683'
+    )
+  );
+  v_series_id := (v_outcome->'series'->>'id')::uuid;
+  v_outcome := public.recurring_task_lifecycle(
+    'pause-series',
+    jsonb_build_object(
+      'userId', '65900000-0000-0000-0000-000000000001',
+      'seriesId', v_series_id,
+      'effectiveDate', '2026-08-21',
+      'coverage', jsonb_build_object('from', '2026-08-21', 'to', '2026-08-22'),
+      'idempotencyKey', 'pause-rollback-683'
+    )
+  );
+  if v_outcome->>'status' <> 'complete' then
+    raise exception 'pause rollback fixture did not pause: %', v_outcome;
+  end if;
+  insert into recurring_pause_rollback_state(series_id, paused_revision_token)
+  select series.id, series.revision_token
+  from public.recurring_task_series series
+  where series.id = v_series_id;
+end
+$$;
+
 create function pg_temp.fail_recurring_task_insert()
 returns trigger
 language plpgsql
@@ -988,6 +1368,53 @@ begin
 
   if (select count(*) from public.recurring_task_series) <> v_series_count then
     raise exception 'failed lifecycle left a partially-created series';
+  end if;
+end
+$$;
+
+do $$
+declare
+  v_series_id uuid;
+  v_paused_token integer;
+  v_failed boolean := false;
+  v_outcome jsonb;
+begin
+  select state.series_id, state.paused_revision_token
+  into v_series_id, v_paused_token
+  from recurring_pause_rollback_state state;
+
+  begin
+    v_outcome := public.recurring_task_lifecycle(
+      'resume-series',
+      jsonb_build_object(
+        'userId', '65900000-0000-0000-0000-000000000001',
+        'seriesId', v_series_id,
+        'effectiveDate', '2026-08-21',
+        'coverage', jsonb_build_object('from', '2026-08-21', 'to', '2026-08-22'),
+        'idempotencyKey', 'resume-rollback-683'
+      )
+    );
+  exception when others then
+    v_failed := true;
+  end;
+
+  if not v_failed
+     or (select status from public.recurring_task_series where id = v_series_id) <> 'paused'
+     or (select revision_token from public.recurring_task_series where id = v_series_id) <> v_paused_token
+     or (select count(*) from public.recurring_task_series_revisions revision
+         where revision.series_id = v_series_id) <> 2
+     or not exists (
+       select 1 from public.recurring_task_intentional_absences absence
+       where absence.series_id = v_series_id
+         and absence.scheduled_date = '2026-08-21'
+         and absence.reason = 'paused'
+     )
+     or exists (
+       select 1 from public.recurring_task_occurrences occurrence
+       where occurrence.series_id = v_series_id
+         and occurrence.scheduled_date = '2026-08-21'
+     ) then
+    raise exception 'failed resume did not roll back its boundary and materialization: %', v_outcome;
   end if;
 end
 $$;

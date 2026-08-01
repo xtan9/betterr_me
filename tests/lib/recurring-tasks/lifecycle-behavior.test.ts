@@ -911,6 +911,285 @@ describe("RecurringTaskLifecycle revision behavior", () => {
     ]);
   });
 
+  it("retains completed, skipped, and overridden history while pausing", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-pause-history",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Pause history"),
+      coverage: { from: "2026-08-01", to: "2026-08-05" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const byDate = new Map(
+      created.occurrences.map((occurrence) => [occurrence.scheduledDate, occurrence]),
+    );
+    const completed = byDate.get("2026-08-02");
+    const skipped = byDate.get("2026-08-03");
+    const overridden = byDate.get("2026-08-04");
+    if (!completed || !skipped || !overridden) return;
+
+    await lifecycle.completeOccurrence({
+      userId: "user-pause-history",
+      seriesId: created.series.id,
+      occurrenceId: completed.id,
+    });
+    await lifecycle.skipOccurrence({
+      userId: "user-pause-history",
+      seriesId: created.series.id,
+      occurrenceId: skipped.id,
+    });
+    await lifecycle.editOccurrence({
+      userId: "user-pause-history",
+      seriesId: created.series.id,
+      occurrenceId: overridden.id,
+      updates: { title: "Retained override" },
+    });
+
+    const paused = await lifecycle.pauseSeries({
+      userId: "user-pause-history",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-02",
+      coverage: { from: "2026-08-02", to: "2026-08-05" },
+    });
+
+    expect(paused.status).toBe("complete");
+    if (paused.status !== "complete") return;
+    const retained = new Map(
+      paused.series.occurrences.map((occurrence) => [occurrence.scheduledDate, occurrence]),
+    );
+    expect(retained.get("2026-08-02")).toMatchObject({ state: "completed" });
+    expect(retained.get("2026-08-03")).toMatchObject({ state: "skipped" });
+    expect(retained.get("2026-08-04")).toMatchObject({
+      state: "extra",
+      overrides: { title: "Retained override" },
+    });
+    expect(retained.get("2026-08-05")).toMatchObject({ state: "withdrawn" });
+    expect(paused.intentionalAbsences).toEqual([
+      "2026-08-02",
+      "2026-08-03",
+      "2026-08-04",
+      "2026-08-05",
+    ]);
+  });
+
+  it("returns typed retry, stale, missing, and ownership outcomes for pause commands", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-pause-outcomes",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Pause outcomes"),
+      coverage: { from: "2026-08-01", to: "2026-08-05" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const request = {
+      userId: "user-pause-outcomes",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-03",
+      coverage: { from: "2026-08-03", to: "2026-08-05" },
+      idempotencyKey: "pause-outcomes",
+    };
+    const first = await lifecycle.pauseSeries(request);
+    expect(first.status).toBe("complete");
+    expect(await lifecycle.pauseSeries(request)).toMatchObject({
+      status: "already-applied",
+      type: "already-applied",
+    });
+    expect(await lifecycle.pauseSeries({
+      ...request,
+      effectiveDate: "2026-08-04",
+    })).toMatchObject({
+      status: "conflict",
+      type: "conflict",
+    });
+    expect(await lifecycle.pauseSeries({
+      userId: "user-pause-outcomes",
+      seriesId: created.series.id,
+    })).toMatchObject({
+      status: "invalid-transition",
+      type: "invalid-transition",
+    });
+    expect(await lifecycle.resumeSeries({
+      userId: "user-pause-outcomes",
+      seriesId: created.series.id,
+      expectedRevisionToken: 1,
+    })).toMatchObject({
+      status: "conflict",
+      type: "conflict",
+    });
+    expect(await lifecycle.pauseSeries({
+      userId: "user-pause-outcomes",
+      seriesId: "missing-series",
+    })).toMatchObject({
+      status: "not-found",
+      type: "not-found",
+    });
+    expect(await lifecycle.pauseSeries({
+      userId: "another-user",
+      seriesId: created.series.id,
+    })).toMatchObject({
+      status: "not-found",
+      type: "not-found",
+    });
+  });
+
+  it("rolls back a failed pause before committing its boundary", async () => {
+    let idCalls = 0;
+    let failPause = false;
+    const persistence = new InMemoryRecurringTaskLifecyclePersistence();
+    const lifecycle = new RecurringTaskLifecycle(persistence, {
+      idFactory: () => {
+        if (failPause) throw new Error("pause materialization failed");
+        idCalls += 1;
+        return `pause-id-${idCalls}`;
+      },
+    });
+    const created = await lifecycle.createSeries({
+      userId: "user-pause-rollback",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Pause rollback"),
+      coverage: { from: "2026-08-01", to: "2026-08-05" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    failPause = true;
+    await expect(lifecycle.pauseSeries({
+      userId: "user-pause-rollback",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-03",
+      coverage: { from: "2026-08-03", to: "2026-08-05" },
+    })).rejects.toThrow("pause materialization failed");
+
+    const restored = await lifecycle.getSeries(
+      "user-pause-rollback",
+      created.series.id,
+    );
+    expect(restored.status).toBe("complete");
+    if (restored.status !== "complete") return;
+    expect(restored.series.status).toBe("active");
+    expect(restored.series.revisionToken).toBe(1);
+    expect(restored.series.revisions).toHaveLength(1);
+    expect(restored.series.occurrences.every((occurrence) => occurrence.state === "open")).toBe(true);
+    expect(restored.series.intentionalAbsences).toEqual([]);
+  });
+
+  it("derives an implicit pause boundary from the stored Series timezone", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      {
+        // 2026-08-02 in New York, but 2026-08-03 in UTC.
+        clock: () => new Date("2026-08-03T03:30:00.000Z"),
+      },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-effective-date",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      timeZone: "America/New_York",
+      coverage: { from: "2026-08-01", to: "2026-08-04" },
+      defaults: defaults("Stored timezone"),
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const paused = await lifecycle.pauseSeries({
+      userId: "user-effective-date",
+      seriesId: created.series.id,
+      // Delivery adapters may carry a transport timezone, but it must not
+      // override the timezone stored with the Series.
+      timeZone: "UTC",
+    });
+
+    expect(paused.status).toBe("complete");
+    if (paused.status !== "complete") return;
+    expect(paused.series.revisions.at(-1)).toMatchObject({
+      effectiveFrom: "2026-08-02",
+      state: "paused",
+    });
+  });
+
+  it("gives a valid explicit local date precedence over transport timezone", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-03T03:30:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-explicit-effective-date",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      timeZone: "America/New_York",
+      defaults: defaults("Explicit boundary"),
+      coverage: { from: "2026-08-01", to: "2026-08-04" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const paused = await lifecycle.pauseSeries({
+      userId: "user-explicit-effective-date",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-03",
+      timeZone: "not-a-real-timezone",
+    });
+
+    expect(paused.status).toBe("complete");
+    if (paused.status !== "complete") return;
+    expect(paused.series.revisions.at(-1)?.effectiveFrom).toBe("2026-08-03");
+  });
+
+  it("returns a typed invalid outcome for an invalid explicit local date", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-03T03:30:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-invalid-effective-date",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Invalid boundary"),
+      coverage: { from: "2026-08-01", to: "2026-08-04" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    await expect(lifecycle.pauseSeries({
+      userId: "user-invalid-effective-date",
+      seriesId: created.series.id,
+      effectiveDate: "2026-02-30",
+    })).resolves.toEqual({
+      status: "invalid-transition",
+      type: "invalid-transition",
+      reason: "Effective Date must be a valid local date",
+    });
+
+    const unchanged = await lifecycle.getSeries(
+      "user-invalid-effective-date",
+      created.series.id,
+    );
+    expect(unchanged.status).toBe("complete");
+    if (unchanged.status !== "complete") return;
+    expect(unchanged.series.status).toBe("active");
+    expect(unchanged.series.revisionToken).toBe(1);
+  });
+
   it("schedules on the resume boundary without restoring the paused interval", async () => {
     const lifecycle = new RecurringTaskLifecycle(
       new InMemoryRecurringTaskLifecyclePersistence(),
@@ -949,6 +1228,45 @@ describe("RecurringTaskLifecycle revision behavior", () => {
       "2026-08-06",
     ]);
     expect(resumed.intentionalAbsences).toEqual(["2026-08-03", "2026-08-04"]);
+  });
+
+  it("reconciles a same-day pause and resume across the already-covered horizon", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      { clock: () => new Date("2026-08-01T12:00:00.000Z") },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-same-day-boundary",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Same-day boundary"),
+      coverage: { from: "2026-08-01", to: "2026-08-03" },
+    });
+    expect(created.status).toBe("complete");
+    if (created.status !== "complete") return;
+
+    const paused = await lifecycle.pauseSeries({
+      userId: "user-same-day-boundary",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-02",
+    });
+    expect(paused.status).toBe("complete");
+
+    const resumed = await lifecycle.resumeSeries({
+      userId: "user-same-day-boundary",
+      seriesId: created.series.id,
+      effectiveDate: "2026-08-02",
+    });
+
+    expect(resumed.status).toBe("complete");
+    if (resumed.status !== "complete") return;
+    expect(resumed.occurrences.map((occurrence) => occurrence.scheduledDate)).toEqual([
+      "2026-08-01",
+      "2026-08-02",
+      "2026-08-03",
+    ]);
+    expect(resumed.occurrences.every((occurrence) => occurrence.state === "open")).toBe(true);
   });
 
   it("keeps a skipped occurrence suppressed and makes end terminal", async () => {
