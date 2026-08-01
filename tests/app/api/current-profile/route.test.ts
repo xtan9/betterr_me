@@ -124,6 +124,21 @@ describe("GET /api/current-profile", () => {
     });
   });
 
+  it("fails closed when a profile projection claims admin without authorization", async () => {
+    mockGetCurrentProfileProjection.mockResolvedValue({
+      ...projection,
+      role: "admin",
+    });
+
+    const response = await GET(
+      new NextRequest("http://localhost/api/current-profile"),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      currentProfile: { capabilities: { canAccessAdmin: false } },
+    });
+  });
+
   it("returns a degraded 200 when one stored Preference is malformed", async () => {
     mockGetCurrentProfileProjection.mockResolvedValue({
       ...projection,

@@ -1,5 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
-import { getTranslations } from "next-intl/server";
+"use client";
+
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import {
@@ -13,19 +14,25 @@ import {
 import { Button } from "./ui/button";
 import { User as UserIcon } from "lucide-react";
 import { ProfileAvatarClient } from "./profile-avatar-client";
+import { useCurrentProfile } from "@/lib/hooks/use-current-profile";
 
-export async function ProfileAvatar() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const t = await getTranslations("common.nav");
+export function ProfileAvatar() {
+  const t = useTranslations("common.nav");
+  const { currentProfile, isAuthenticated, status } = useCurrentProfile();
 
-  if (!user) {
+  if (
+    !isAuthenticated ||
+    status !== "available" ||
+    !currentProfile
+  ) {
     return null;
   }
 
-  // Get user initials for fallback
-  const getInitials = (email: string) => {
-    return email
+  const email = currentProfile.identity.email ?? "User";
+  const displayName =
+    currentProfile.profileDetails.fullName || email.split("@")[0] || "User";
+  const getInitials = (value: string) => {
+    return value
       .split('@')[0]
       .split('.')
       .map(name => name.charAt(0).toUpperCase())
@@ -33,30 +40,25 @@ export async function ProfileAvatar() {
       .slice(0, 2);
   };
 
-  // Get display name
-  const getDisplayName = () => {
-    if (user.user_metadata?.full_name) {
-      return user.user_metadata.full_name;
-    }
-    return user.email?.split('@')[0] || 'User';
-  };
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-pill">
           <Avatar className="h-8 w-8">
-            <AvatarImage src={user.user_metadata?.avatar_url} alt={getDisplayName()} />
-            <AvatarFallback>{getInitials(user.email || 'User')}</AvatarFallback>
+            <AvatarImage
+              src={currentProfile.profileDetails.avatarUrl ?? undefined}
+              alt={displayName}
+            />
+            <AvatarFallback>{getInitials(email)}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col gap-1">
-            <p className="text-body font-medium leading-none">{getDisplayName()}</p>
+            <p className="text-body font-medium leading-none">{displayName}</p>
             <p className="text-caption leading-none text-muted-foreground">
-              {user.email}
+              {currentProfile.identity.email}
             </p>
           </div>
         </DropdownMenuLabel>
@@ -72,4 +74,4 @@ export async function ProfileAvatar() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
-} 
+}

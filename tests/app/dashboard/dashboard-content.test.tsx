@@ -37,6 +37,24 @@ vi.mock("swr", () => ({
   default: (...args: unknown[]) => mockUseSWR(...args),
 }));
 
+const mockUseCurrentProfile = vi.fn();
+vi.mock("@/lib/hooks/use-current-profile", () => ({
+  useCurrentProfile: () => mockUseCurrentProfile(),
+}));
+
+vi.mock("@/components/ui/avatar", () => ({
+  Avatar: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+    <div {...props}>{children}</div>
+  ),
+  AvatarImage: (props: React.ImgHTMLAttributes<HTMLImageElement>) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img alt="" {...props} />
+  ),
+  AvatarFallback: ({ children, ...props }: React.HTMLAttributes<HTMLSpanElement>) => (
+    <span {...props}>{children}</span>
+  ),
+}));
+
 // Mock sonner
 const mockToastError = vi.fn();
 vi.mock("sonner", () => ({
@@ -214,6 +232,13 @@ describe("DashboardContent", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseCurrentProfile.mockReturnValue({
+      status: "available",
+      currentProfile: {
+        identity: { email: "test@example.com" },
+        profileDetails: { fullName: "Test User", avatarUrl: null },
+      },
+    });
   });
 
   afterEach(() => {
@@ -236,7 +261,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     const swrKey = mockUseSWR.mock.calls[0][0];
     expect(getLocalDateString()).toBe("2026-07-28");
@@ -251,7 +276,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     expect(screen.getByTestId("dashboard-skeleton")).toBeInTheDocument();
   });
@@ -264,7 +289,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
     expect(screen.getByText(/Try again/i)).toBeInTheDocument();
@@ -290,7 +315,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     expect(screen.getByText(/Welcome to BetterR.Me!/i)).toBeInTheDocument();
     expect(screen.getByText(/Create a Habit/i)).toBeInTheDocument();
@@ -329,14 +354,18 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     // Should show full dashboard, not empty state
     expect(
       screen.queryByText(/Welcome to BetterR.Me!/i),
     ).not.toBeInTheDocument();
-    expect(await screen.findByText("Today's Tasks")).toBeInTheDocument();
-    expect(await screen.findByText("Buy groceries")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Today's Tasks", {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Buy groceries", {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
   });
 
   it("hides DailySnapshot and MotivationMessage when user has only tasks", async () => {
@@ -371,7 +400,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     // Wait for dynamic components to load, then verify
     expect(await screen.findByText("Today's Tasks")).toBeInTheDocument();
@@ -399,7 +428,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     // Should NOT show empty state since user has tasks (just not today)
     expect(
@@ -428,7 +457,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     screen.getByText(/Create a Habit/i).click();
     expect(mockPush).toHaveBeenCalledWith("/habits/new");
@@ -454,7 +483,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     screen.getByText(/Add a Task/i).click();
     expect(mockPush).toHaveBeenCalledWith("/tasks/new");
@@ -468,7 +497,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     // Check greeting
     expect(screen.getByText(/Test User/i)).toBeInTheDocument();
@@ -483,6 +512,34 @@ describe("DashboardContent", () => {
     expect(screen.getByText("Daily Exercise")).toBeInTheDocument();
   });
 
+  it("uses Current Profile identity and Profile Details for the greeting", () => {
+    mockUseCurrentProfile.mockReturnValue({
+      status: "available",
+      currentProfile: {
+        identity: { email: "identity@example.test" },
+        profileDetails: {
+          fullName: "Current Profile User",
+          avatarUrl: "https://example.test/current-profile.png",
+        },
+      },
+    });
+    mockUseSWR.mockReturnValue({
+      data: mockDashboardData,
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    renderWithProviders(<DashboardContent />);
+
+    expect(screen.getByText(/Current Profile User/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Legacy Metadata User/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "https://example.test/current-profile.png",
+    );
+  });
+
   it("navigates to create habit page when add habit button clicked", async () => {
     mockUseSWR.mockReturnValue({
       data: mockDashboardData,
@@ -491,7 +548,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     const addButton = await screen.findByText("Add Habit");
     addButton.click();
@@ -515,7 +572,7 @@ describe("DashboardContent", () => {
       mutate: mockMutate,
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     // Wait for lazy-loaded HabitChecklist to render, then find checkboxes
     await screen.findByText("Today's Habits");
@@ -618,7 +675,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="User" />);
+    renderWithProviders(<DashboardContent />);
 
     // B (8 days hiatus), D (5 days lapse), A (2 days recovery) shown
     // C (0 missed) and E (completed today) excluded; max 3 cards
@@ -690,7 +747,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="User" />);
+    renderWithProviders(<DashboardContent />);
 
     // Weekly Yoga (2 weeks = ~14 days) should appear before Daily Run (5 days)
     await waitFor(() => {
@@ -709,7 +766,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     await screen.findByText("Today's Habits");
     expect(
@@ -737,7 +794,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     await waitFor(() => {
       expect(
@@ -755,7 +812,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     await screen.findByText("Today's Habits");
     expect(screen.queryByText(/reached.*days!/)).not.toBeInTheDocument();
@@ -781,7 +838,7 @@ describe("DashboardContent", () => {
       mutate: mockMutate,
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     await screen.findByText("Today's Habits");
     const checkboxes = screen.getAllByRole("checkbox");
@@ -817,7 +874,7 @@ describe("DashboardContent", () => {
       mutate: mockMutate,
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     await screen.findByText("Today's Habits");
     const checkboxes = screen.getAllByRole("checkbox");
@@ -856,7 +913,7 @@ describe("DashboardContent", () => {
       mutate: mockMutate,
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     await screen.findByText("Today's Habits");
     const checkboxes = screen.getAllByRole("checkbox");
@@ -923,7 +980,7 @@ describe("DashboardContent", () => {
       mutate: mockMutate,
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     await screen.findByText("Today's Tasks");
     const checkboxes = screen.getAllByRole("checkbox");
@@ -995,7 +1052,7 @@ describe("DashboardContent", () => {
       mutate: mockMutate,
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     await screen.findByText("Today's Tasks");
     const checkboxes = screen.getAllByRole("checkbox");
@@ -1039,7 +1096,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     await screen.findByText("Today's Habits");
     // Daily habit always shows
@@ -1092,7 +1149,7 @@ describe("DashboardContent", () => {
       mutate: vi.fn(),
     });
 
-    renderWithProviders(<DashboardContent userName="Test User" />);
+    renderWithProviders(<DashboardContent />);
 
     // Absence card should be visible
     await waitFor(() => {

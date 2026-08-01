@@ -59,6 +59,45 @@ function authenticatedUserProfile(user: User) {
   };
 }
 
+export async function authenticatedCookiePermissions(
+  client: SupabaseClient,
+  userId: string,
+) {
+  const readWritePermissions = ["read", "write"] as const;
+
+  if (typeof client.from !== "function") return readWritePermissions;
+
+  try {
+    const { data, error } = await client
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
+
+    if (error) {
+      if (error.code !== "PGRST116") {
+        log.error(
+          "[auth] Cookie profile capability lookup failed",
+          undefined,
+          sanitizedAuthFailureContext(error),
+        );
+      }
+      return readWritePermissions;
+    }
+
+    return data?.role === "admin"
+      ? (["read", "write", "admin"] as const)
+      : readWritePermissions;
+  } catch (error) {
+    log.error(
+      "[auth] Cookie profile capability lookup failed",
+      undefined,
+      sanitizedAuthFailureContext(error),
+    );
+    return ["read", "write"] as const;
+  }
+}
+
 export async function authenticateCookieCredential(
   request: Request,
 ): Promise<CredentialOutcome<SupabaseClient>> {
@@ -75,6 +114,7 @@ export async function authenticateCookieCredential(
   if (error) return classifyUserError(error, "cookie");
   if (!user) return { outcome: "anonymous" };
   const profile = authenticatedUserProfile(user);
+  const permissions = await authenticatedCookiePermissions(client, user.id);
 
   return {
     outcome: "authenticated",
@@ -84,7 +124,7 @@ export async function authenticateCookieCredential(
       credential: "cookie",
       ...(profile && { profile }),
     },
-    permissions: ["read", "write"],
+    permissions,
     client,
   };
 }

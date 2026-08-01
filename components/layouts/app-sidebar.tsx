@@ -130,9 +130,10 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
   const { habitsIncomplete, tasksDue, error } = useSidebarCounts();
-  const { currentProfile } = useCurrentProfile();
+  const { currentProfile, status } = useCurrentProfile();
   const { data: controlPlaneData } = useSWR("/api/control-plane", fetcher, { shouldRetryOnError: false });
-  const isAdmin = currentProfile?.capabilities.canAccessAdmin === true;
+  const canAccessAdmin =
+    status === "available" && currentProfile?.capabilities.canAccessAdmin === true;
   const hasControlPlaneAccess = Boolean(controlPlaneData);
 
   const badgeCounts: Record<string, number> = error
@@ -226,7 +227,7 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {isAdmin && (
+        {canAccessAdmin && (
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>

@@ -41,6 +41,7 @@ import { revalidateSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
 import { setHabitCompletion } from "@/lib/hooks/use-habit-toggle";
 import { fetcher } from "@/lib/fetcher";
 import type { DashboardData } from "@/lib/db/types";
+import { useCurrentProfile } from "@/lib/hooks/use-current-profile";
 
 const EMPTY_DASHBOARD: DashboardData = {
   habits: [],
@@ -60,8 +61,6 @@ const EMPTY_DASHBOARD: DashboardData = {
 };
 
 interface DashboardContentProps {
-  userName: string;
-  avatarUrl?: string | null;
   initialData?: DashboardData;
 }
 
@@ -75,13 +74,15 @@ function getWeekKey(weekStartDay: number): string {
   return getLocalDateString(weekStart);
 }
 
-export function DashboardContent({
-  userName,
-  avatarUrl,
-  initialData,
-}: DashboardContentProps) {
+export function DashboardContent({ initialData }: DashboardContentProps) {
   const t = useTranslations("dashboard");
   const router = useRouter();
+  const { currentProfile } = useCurrentProfile();
+  const userName =
+    currentProfile?.profileDetails?.fullName ||
+    currentProfile?.identity.email?.split("@")[0] ||
+    "there";
+  const avatarUrl = currentProfile?.profileDetails?.avatarUrl;
 
   const today = getLocalDateString();
 

@@ -75,6 +75,10 @@ describe("authenticated request adapters", () => {
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key");
     vi.stubEnv("API_KEY_HMAC_SECRET", "mcp-token-secret");
     mocks.queryLog.length = 0;
+    mocks.profileSingle.mockResolvedValue({
+      data: { role: "user" },
+      error: null,
+    });
   });
 
   it.each([
@@ -105,6 +109,61 @@ describe("authenticated request adapters", () => {
       permissions: ["read", "write"],
       client: cookieClient,
     });
+  });
+
+  it("presents the server-authorized admin capability for an admin cookie session", async () => {
+    mocks.getUser.mockResolvedValue({
+      data: { user: { id: "admin-cookie-user" } },
+      error: null,
+    });
+    mocks.profileSingle.mockResolvedValue({
+      data: { role: "admin" },
+      error: null,
+    });
+
+    const result = await authenticateCookieCredential(
+      new Request("https://example.test/api/current-profile"),
+    );
+
+    expect(result).toMatchObject({
+      outcome: "authenticated",
+      permissions: ["read", "write", "admin"],
+    });
+  });
+
+  it("fails closed when a cookie session is not server-authorized as admin", async () => {
+    mocks.getUser.mockResolvedValue({
+      data: { user: { id: "regular-cookie-user" } },
+      error: null,
+    });
+
+    const result = await authenticateCookieCredential(
+      new Request("https://example.test/api/current-profile"),
+    );
+
+    expect(result).toMatchObject({
+      outcome: "authenticated",
+      permissions: ["read", "write"],
+    });
+    expect(result).not.toMatchObject({ permissions: expect.arrayContaining(["admin"]) });
+  });
+
+  it("keeps cookie authentication available but denies admin when capability lookup fails", async () => {
+    mocks.getUser.mockResolvedValue({
+      data: { user: { id: "cookie-user" } },
+      error: null,
+    });
+    mocks.profileSingle.mockRejectedValue(new Error("profile lookup unavailable"));
+
+    const result = await authenticateCookieCredential(
+      new Request("https://example.test/api/current-profile"),
+    );
+
+    expect(result).toMatchObject({
+      outcome: "authenticated",
+      permissions: ["read", "write"],
+    });
+    expect(result).not.toMatchObject({ permissions: expect.arrayContaining(["admin"]) });
   });
 
   it("resolves a cookie session when an unrelated authorization scheme is present", async () => {
