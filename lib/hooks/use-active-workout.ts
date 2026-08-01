@@ -15,6 +15,7 @@ import {
   saveWorkoutToStorage,
   clearWorkoutStorage,
 } from "@/lib/fitness/workout-session";
+import { useFitnessPreference } from "@/lib/hooks/use-profile-preferences";
 
 // ---------------------------------------------------------------------------
 // Extended types for API response (includes previousSets enrichment)
@@ -513,21 +514,19 @@ export function useActiveWorkout(): UseActiveWorkoutReturn {
 }
 
 // ---------------------------------------------------------------------------
-// useWeightUnit — reads weight_unit from profile SWR cache
+// useWeightUnit — derives the accepted/pending Fitness Preference from Current Profile.
+// Kilograms are an explicit degraded presentation when the preference is unavailable.
 // ---------------------------------------------------------------------------
 
 export function useWeightUnit(): WeightUnit {
-  const { data, error } = useSWR<{ preferences?: { weight_unit?: string } }>(
-    "/api/profile",
-    fetcher,
-    {
-      dedupingInterval: 600000, // 10 min — profile rarely changes
-      revalidateOnFocus: false,
-    }
-  );
-  if (error) {
-    log.warn("Failed to load weight unit preference, defaulting to kg", { error: String(error) });
+  const { weightUnit } = useFitnessPreference();
+  if (weightUnit.status === "ready" || weightUnit.status === "pending") {
+    return weightUnit.value;
   }
-  const raw = data?.preferences?.weight_unit;
-  return raw === "lbs" ? "lbs" : "kg";
+  if (weightUnit.status === "unavailable") {
+    log.warn("Weight Unit Preference unavailable; using canonical kilograms", {
+      reason: weightUnit.reason,
+    });
+  }
+  return "kg";
 }

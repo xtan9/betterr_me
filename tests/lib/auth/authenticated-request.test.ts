@@ -64,6 +64,7 @@ import {
   authenticateAdminSecretCredential,
   authenticateCookieCredential,
   authenticateMcpCredential,
+  verifiedIdentityEmail,
 } from "@/lib/auth/authenticated-request";
 
 describe("authenticated request adapters", () => {
@@ -74,6 +75,18 @@ describe("authenticated request adapters", () => {
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key");
     vi.stubEnv("API_KEY_HMAC_SECRET", "mcp-token-secret");
     mocks.queryLog.length = 0;
+  });
+
+  it.each([
+    ["verified email", "2026-08-01T00:00:00.000Z", "person@example.test"],
+    ["unverified email", null, null],
+  ])("sources only the %s", (_label, confirmedAt, expected) => {
+    expect(
+      verifiedIdentityEmail({
+        email: "person@example.test",
+        email_confirmed_at: confirmedAt,
+      } as never),
+    ).toBe(expected);
   });
 
   it("resolves a cookie session at the real cookie adapter boundary", async () => {

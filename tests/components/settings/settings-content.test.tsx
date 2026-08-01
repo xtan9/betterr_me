@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContent } from "@/components/settings/settings-content";
+
+const { mockSetWeekStart, mockSetWeightUnit } = vi.hoisted(() => ({
+  mockSetWeekStart: vi.fn(),
+  mockSetWeightUnit: vi.fn(),
+}));
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -74,105 +79,52 @@ vi.mock("@/components/settings/weight-unit-selector", () => ({
   }) => <button onClick={() => onChange("lbs")}>choose-lbs</button>,
 }));
 
-const mockMutate = vi.fn();
-vi.mock("swr", () => ({
-  default: (
-    _key: string,
-    _fetcher: unknown,
-    options: { fallbackData: unknown },
-  ) => ({
-    data: options.fallbackData,
-    error: null,
+vi.mock("@/lib/hooks/use-profile-preferences", () => ({
+  useLocalizationPreference: () => ({
+    weekStart: { status: "ready", value: "monday" },
+    acceptedWeekStart: { status: "ready", value: "monday" },
     isLoading: false,
-    mutate: mockMutate,
+    error: undefined,
+    setWeekStart: mockSetWeekStart,
+  }),
+  useFitnessPreference: () => ({
+    weightUnit: { status: "ready", value: "kg" },
+    acceptedWeightUnit: { status: "ready", value: "kg" },
+    isLoading: false,
+    error: undefined,
+    setWeightUnit: mockSetWeightUnit,
   }),
 }));
-
-const mockFetch = vi.fn();
-
-const initialProfile = {
-  profile: {
-    id: "user-123",
-    email: "person@example.test",
-    full_name: "Person",
-    updated_at: "2026-07-30T12:00:01.000000+00:00",
-    preferences: {
-      date_format: "MM/DD/YYYY",
-      week_start_day: 1,
-      theme: "system" as const,
-      weight_unit: "kg" as const,
-    },
-  },
-};
 
 describe("SettingsContent preference intents", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal("fetch", mockFetch);
-    mockMutate.mockResolvedValue(undefined);
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(initialProfile),
-    });
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    mockSetWeekStart.mockResolvedValue({});
+    mockSetWeightUnit.mockResolvedValue({});
   });
 
   it("sends only the week-start key when only week start changed", async () => {
-    render(<SettingsContent initialProfile={initialProfile} />);
+    render(<SettingsContent />);
 
     fireEvent.click(screen.getByText("choose-sunday"));
-    fireEvent.click(screen.getByText("save"));
+    fireEvent.click(screen.getAllByText("save")[0]);
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({
-      week_start_day: 0,
-    });
+    await waitFor(() => expect(mockSetWeekStart).toHaveBeenCalledWith("sunday"));
+    expect(mockSetWeightUnit).not.toHaveBeenCalled();
   });
 
   it("sends only the weight-unit key when only weight unit changed", async () => {
-    render(<SettingsContent initialProfile={initialProfile} />);
+    render(<SettingsContent />);
 
     fireEvent.click(screen.getByText("choose-lbs"));
-    fireEvent.click(screen.getByText("save"));
+    fireEvent.click(screen.getAllByText("save")[1]);
 
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
-    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({
-      weight_unit: "lbs",
-    });
+    await waitFor(() => expect(mockSetWeightUnit).toHaveBeenCalledWith("lbs"));
+    expect(mockSetWeekStart).not.toHaveBeenCalled();
   });
 
-  it("keeps the accepted cache outcome when revalidation fails", async () => {
-    const accepted = {
-      profile: {
-        ...initialProfile.profile,
-        full_name: "New server name",
-        updated_at: "2026-07-30T12:00:02.000000+00:00",
-        preferences: {
-          ...initialProfile.profile.preferences,
-          week_start_day: 0,
-          theme: "dark" as const,
-        },
-      },
-    };
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(accepted),
-    });
-    mockMutate
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error("revalidation unavailable"));
-    render(<SettingsContent initialProfile={initialProfile} />);
-
-    fireEvent.click(screen.getByText("choose-sunday"));
-    fireEvent.click(screen.getByText("save"));
-
-    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(2));
-    const [cacheUpdater, options] = mockMutate.mock.calls[0];
-    expect(options).toEqual({ revalidate: false });
-    expect(cacheUpdater()).toEqual(accepted);
-    expect(screen.getByText("saved")).toBeInTheDocument();
+  it("keeps preference saves in independent owner sections", () => {
+    render(<SettingsContent />);
+    expect(screen.getAllByText("save")).toHaveLength(2);
   });
 });

@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET, PATCH } from '@/app/api/profile/route';
 import { NextRequest } from 'next/server';
 
+const { mockLegacyInfo } = vi.hoisted(() => ({
+  mockLegacyInfo: vi.fn(),
+}));
+
+vi.mock('@/lib/logger', () => ({
+  log: { error: vi.fn(), warn: vi.fn(), info: mockLegacyInfo },
+}));
+
 // Mock dependencies
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => ({
@@ -45,6 +53,10 @@ describe('GET /api/profile', () => {
     expect(response.status).toBe(200);
     expect(data.profile).toEqual(mockProfile);
     expect(mockProfilesDB.getProfile).toHaveBeenCalledWith('user-123');
+    expect(mockLegacyInfo).toHaveBeenCalledWith(
+      '[legacy-profile] compatibility traffic',
+      { route: '/api/profile', method: 'GET' },
+    );
   });
 
   it('should return 404 if profile not found', async () => {

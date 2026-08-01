@@ -8,10 +8,15 @@ const { mockSWRReturn, mockMutateProfile, mockSetTheme, mockPush, mockSignOut } 
   () => ({
     mockSWRReturn: {
       data: {
-        profile: {
-          full_name: "Jane Doe" as string | null,
-          avatar_url: null as string | null,
-          email: "jane@example.com",
+        currentProfile: {
+          identity: { email: "jane@example.com" },
+          profileDetails: {
+            fullName: "Jane Doe" as string | null,
+            avatarUrl: null as string | null,
+          },
+          preferences: {
+            appearance: { theme: { status: "ready", value: "system" } },
+          },
         },
       },
       error: undefined,
@@ -57,7 +62,18 @@ vi.mock("next/navigation", () => ({
 
 // Mock supabase client
 vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { signOut: mockSignOut } }),
+  createClient: () => ({
+    auth: {
+      signOut: mockSignOut,
+      getSession: vi.fn().mockResolvedValue({
+        data: { session: { user: { id: "user-1" } } },
+      }),
+      onAuthStateChange: vi.fn((callback: (event: string, session: unknown) => void) => {
+        callback("SIGNED_IN", { user: { id: "user-1" } });
+        return { data: { subscription: { unsubscribe: vi.fn() } } };
+      }),
+    },
+  }),
 }));
 
 // Mock shadcn sidebar components
@@ -170,10 +186,12 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
 describe("SidebarUserFooter", () => {
   beforeEach(() => {
     mockSWRReturn.data = {
-      profile: {
-        full_name: "Jane Doe",
-        avatar_url: null,
-        email: "jane@example.com",
+      currentProfile: {
+        identity: { email: "jane@example.com" },
+        profileDetails: { fullName: "Jane Doe", avatarUrl: null },
+        preferences: {
+          appearance: { theme: { status: "ready", value: "system" } },
+        },
       },
     };
     mockSWRReturn.isLoading = false;
@@ -200,10 +218,12 @@ describe("SidebarUserFooter", () => {
 
   it("renders single initial when name has no last name", () => {
     mockSWRReturn.data = {
-      profile: {
-        full_name: "Alice",
-        avatar_url: null,
-        email: "alice@example.com",
+      currentProfile: {
+        identity: { email: "alice@example.com" },
+        profileDetails: { fullName: "Alice", avatarUrl: null },
+        preferences: {
+          appearance: { theme: { status: "ready", value: "system" } },
+        },
       },
     };
     render(<SidebarUserFooter />);
@@ -213,10 +233,12 @@ describe("SidebarUserFooter", () => {
 
   it("renders email initial when no full name", () => {
     mockSWRReturn.data = {
-      profile: {
-        full_name: null,
-        avatar_url: null,
-        email: "bob@example.com",
+      currentProfile: {
+        identity: { email: "bob@example.com" },
+        profileDetails: { fullName: null, avatarUrl: null },
+        preferences: {
+          appearance: { theme: { status: "ready", value: "system" } },
+        },
       },
     };
     render(<SidebarUserFooter />);
@@ -285,10 +307,13 @@ describe("SidebarUserFooter", () => {
     fireEvent.click(darkButton!);
     expect(mockSetTheme).toHaveBeenCalledWith("dark");
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("/api/profile/preferences", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme: "dark" }),
+      expect(global.fetch).toHaveBeenCalledWith("/api/preferences/appearance", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ type: "setTheme", theme: "dark" }),
       });
     });
   });

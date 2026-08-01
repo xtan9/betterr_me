@@ -38,6 +38,11 @@ vi.mock("@/lib/fitness/workout-session", () => ({
   saveWorkoutToStorage,
   clearWorkoutStorage,
 }));
+vi.mock("@/lib/hooks/use-profile-preferences", () => ({
+  useFitnessPreference: () => ({
+    weightUnit: { status: "ready", value: "kg" },
+  }),
+}));
 
 const baseWorkout = {
   id: "w-1",

@@ -2,6 +2,25 @@ import { createClient } from '@/lib/supabase/client';
 import type { PreferencesValues } from '@/lib/validations/preferences';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Profile, ProfileUpdate } from './types';
+import type { CurrentProfileProjection } from '@/lib/current-profile';
+import type {
+  AppearancePreferenceOutcome,
+  AppearancePreferenceIntent,
+  FitnessPreferenceOutcome,
+  FitnessPreferenceIntent,
+  LocalizationPreferenceOutcome,
+  LocalizationPreferenceIntent,
+  NotificationPreferenceIntent,
+  NotificationPreferenceOutcome,
+  ProfileDetailsCommand,
+  ProfileDetailsOutcome,
+  UserTimeZoneCommand,
+  UserTimeZoneOutcome,
+} from '@/lib/preferences/commands';
+import type {
+  PreferenceStorage,
+  WeightUnitPreference,
+} from '@/lib/preferences/types';
 
 export class ProfilesDB {
   constructor(private supabase: SupabaseClient) {}
@@ -22,6 +41,95 @@ export class ProfilesDB {
     }
 
     return data;
+  }
+
+  /**
+   * Read only the storage projection needed to compose Current Profile.
+   * Identity Email is deliberately sourced from authenticated identity.
+   */
+  async getCurrentProfileProjection(
+    userId: string,
+  ): Promise<CurrentProfileProjection | null> {
+    const { data, error } = await this.supabase
+      .from('profiles')
+      .select(
+        'full_name, avatar_url, timezone, role, preferences, preference_revision',
+      )
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+
+    return data as CurrentProfileProjection | null;
+  }
+
+  async getWeightUnitPreference(
+    userId: string,
+  ): Promise<WeightUnitPreference | null> {
+    const { data, error } = await this.supabase
+      .from('profiles')
+      .select('weight_unit:preferences->>weight_unit')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+    const value = (data as { weight_unit?: unknown } | null)?.weight_unit;
+    return value === 'kg' || value === 'lbs' ? value : null;
+  }
+
+  async getWeekStartPreference(userId: string): Promise<0 | 1 | null> {
+    const { data, error } = await this.supabase
+      .from('profiles')
+      .select('week_start:preferences->>week_start_day')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+    const value = (data as { week_start?: unknown } | null)?.week_start;
+    return value === 0 || value === '0'
+      ? 0
+      : value === 1 || value === '1'
+        ? 1
+        : null;
+  }
+
+  async getNotificationPreferenceProjection(userId: string): Promise<{
+    preferences: PreferenceStorage;
+    timezone: string | null;
+  } | null> {
+    const { data, error } = await this.supabase
+      .from('profiles')
+      .select('preferences, timezone')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+    return data as {
+      preferences: PreferenceStorage;
+      timezone: string | null;
+    } | null;
+  }
+
+  async getUserTimeZone(userId: string): Promise<string | null> {
+    const { data, error } = await this.supabase
+      .from('profiles')
+      .select('timezone')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
+    return (data as { timezone?: string | null } | null)?.timezone ?? null;
   }
 
   /**
@@ -61,6 +169,89 @@ export class ProfilesDB {
     }
     if (!data) throw new Error(`Profile not found for user ${userId}`);
     return data as Profile;
+  }
+
+  async setAppearancePreference(
+    theme: AppearancePreferenceIntent['theme'],
+  ): Promise<AppearancePreferenceOutcome> {
+    return this.callPreferenceCommand<AppearancePreferenceOutcome>(
+      'set_appearance_preference',
+      { theme },
+    );
+  }
+
+  async setLocalizationPreference(
+    weekStart: LocalizationPreferenceIntent['weekStart'],
+  ): Promise<LocalizationPreferenceOutcome> {
+    return this.callPreferenceCommand<LocalizationPreferenceOutcome>(
+      'set_localization_preference',
+      { week_start: weekStart },
+    );
+  }
+
+  async setFitnessPreference(
+    weightUnit: FitnessPreferenceIntent['weightUnit'],
+  ): Promise<FitnessPreferenceOutcome> {
+    return this.callPreferenceCommand<FitnessPreferenceOutcome>(
+      'set_fitness_preference',
+      { weight_unit: weightUnit },
+    );
+  }
+
+  async setNotificationPreference(
+    intent: NotificationPreferenceIntent,
+  ): Promise<NotificationPreferenceOutcome> {
+    return this.callPreferenceCommand<NotificationPreferenceOutcome>(
+      'set_notification_preference',
+      { intent },
+    );
+  }
+
+  async updateProfileDetails(
+    details: ProfileDetailsCommand,
+  ): Promise<ProfileDetailsOutcome> {
+    const { data, error } = await this.supabase.rpc('update_profile_details', {
+      details_patch: {
+        ...(details.fullName !== undefined && { full_name: details.fullName || null }),
+        ...(details.avatarUrl !== undefined && { avatar_url: details.avatarUrl || null }),
+      },
+    });
+    if (error) throw this.normalizeRpcError(error);
+    if (!data) throw new Error('Profile not found');
+    return data as ProfileDetailsOutcome;
+  }
+
+  async setUserTimeZone(
+    timeZone: UserTimeZoneCommand['timeZone'],
+  ): Promise<UserTimeZoneOutcome> {
+    const { data, error } = await this.supabase.rpc('set_user_time_zone', {
+      time_zone: timeZone,
+    });
+    if (error) throw this.normalizeRpcError(error);
+    if (!data) throw new Error('Profile not found');
+    return data as UserTimeZoneOutcome;
+  }
+
+  private async callPreferenceCommand<Outcome>(
+    functionName: string,
+    args: Record<string, unknown>,
+  ): Promise<Outcome> {
+    const { data, error } = await this.supabase.rpc(functionName, args);
+    if (error) throw this.normalizeRpcError(error);
+    if (!data) throw new Error('Profile not found');
+    return data as Outcome;
+  }
+
+  private normalizeRpcError(error: unknown) {
+    const normalized = new Error(
+      typeof error === 'object' && error !== null && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : String(error),
+    );
+    if (typeof error === 'object' && error !== null && 'code' in error) {
+      Object.assign(normalized, { code: (error as { code: unknown }).code });
+    }
+    return normalized;
   }
 }
 

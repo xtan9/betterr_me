@@ -39,24 +39,28 @@ vi.mock('next-intl', () => ({
   },
 }));
 
-// Mock SWR
-const mockMutate = vi.fn();
-vi.mock('swr', () => ({
-  default: vi.fn(),
+const { mockUpdateProfileDetails, mockProfileState } = vi.hoisted(() => ({
+  mockUpdateProfileDetails: vi.fn(),
+  mockProfileState: {
+    details: {
+      fullName: 'John Doe',
+      avatarUrl: 'https://example.com/avatar.jpg',
+    } as { fullName: string; avatarUrl: string } | undefined,
+    currentProfile: {
+      identity: { email: 'test@example.com' },
+    },
+    isLoading: false,
+    error: undefined,
+    updateProfileDetails: vi.fn(),
+  },
 }));
 
-import useSWR from 'swr';
-import { ProfileForm } from '@/components/settings/profile-form';
+mockProfileState.updateProfileDetails = mockUpdateProfileDetails;
+vi.mock('@/lib/hooks/use-profile-preferences', () => ({
+  useProfileDetails: () => mockProfileState,
+}));
 
-const mockProfile = {
-  id: 'user-1',
-  email: 'test@example.com',
-  full_name: 'John Doe',
-  avatar_url: 'https://example.com/avatar.jpg',
-  preferences: { date_format: 'YYYY-MM-DD', week_start_day: 0, theme: 'system' as const },
-  created_at: '2026-01-01T00:00:00Z',
-  updated_at: '2026-01-01T00:00:00Z',
-};
+import { ProfileForm } from '@/components/settings/profile-form';
 
 describe('ProfileForm', () => {
   const user = userEvent.setup();
@@ -64,23 +68,19 @@ describe('ProfileForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     global.fetch = vi.fn();
-    vi.mocked(useSWR).mockReturnValue({
-      data: { profile: mockProfile },
-      error: undefined,
-      isLoading: false,
-      mutate: mockMutate,
-      isValidating: false,
-    } as any);
+    mockProfileState.details = {
+      fullName: 'John Doe',
+      avatarUrl: 'https://example.com/avatar.jpg',
+    };
+    mockProfileState.currentProfile = { identity: { email: 'test@example.com' } };
+    mockProfileState.isLoading = false;
+    mockProfileState.error = undefined;
+    mockUpdateProfileDetails.mockResolvedValue({});
   });
 
   it('renders loading skeleton while profile is loading', () => {
-    vi.mocked(useSWR).mockReturnValue({
-      data: undefined,
-      error: undefined,
-      isLoading: true,
-      mutate: mockMutate,
-      isValidating: false,
-    } as any);
+    mockProfileState.details = undefined;
+    mockProfileState.isLoading = true;
 
     render(<ProfileForm />);
     expect(screen.getByTestId('profile-form-skeleton')).toBeInTheDocument();
@@ -156,12 +156,6 @@ describe('ProfileForm', () => {
   });
 
   it('saves profile successfully', async () => {
-    mockMutate.mockResolvedValue(undefined);
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ profile: { ...mockProfile, full_name: 'Jane Doe' } }),
-    } as Response);
-
     render(<ProfileForm />);
 
     const nameInput = screen.getByDisplayValue('John Doe');
@@ -170,21 +164,14 @@ describe('ProfileForm', () => {
 
     await user.click(screen.getByRole('button', { name: 'Save Profile' }));
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: expect.any(String),
-      });
-    });
+    await waitFor(() => expect(mockUpdateProfileDetails).toHaveBeenCalledWith({
+      fullName: 'Jane Doe',
+    }));
     expect(mockToastSuccess).toHaveBeenCalledWith('Profile updated successfully');
   });
 
   it('shows error toast on save failure', async () => {
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: false,
-      json: () => Promise.resolve({ error: 'Server error' }),
-    } as Response);
+    mockUpdateProfileDetails.mockRejectedValueOnce(new Error('Server error'));
 
     render(<ProfileForm />);
 
@@ -200,11 +187,6 @@ describe('ProfileForm', () => {
   });
 
   it('accepts empty avatar URL', async () => {
-    mockMutate.mockResolvedValue(undefined);
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ profile: { ...mockProfile, avatar_url: null } }),
-    } as Response);
 
     render(<ProfileForm />);
 
@@ -218,8 +200,9 @@ describe('ProfileForm', () => {
 
     await user.click(screen.getByRole('button', { name: 'Save Profile' }));
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
-    });
+    await waitFor(() => expect(mockUpdateProfileDetails).toHaveBeenCalledWith({
+      fullName: 'Updated',
+      avatarUrl: null,
+    }));
   });
 });

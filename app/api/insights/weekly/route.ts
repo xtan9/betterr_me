@@ -29,8 +29,7 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get("date") || undefined;
 
     const profilesDB = new ProfilesDB(supabase);
-    const profile = await profilesDB.getProfile(userId);
-    const weekStartDay = profile?.preferences?.week_start_day ?? 1;
+    const weekStartDay = (await profilesDB.getWeekStartPreference(userId)) ?? 1;
 
     const insightsDB = new InsightsDB(supabase);
     const insights = await insightsDB.getWeeklyInsights(

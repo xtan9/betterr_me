@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/tooltip";
 import { SidebarUserFooter } from "@/components/layouts/sidebar-user-footer";
 import { useSidebarCounts } from "@/lib/hooks/use-sidebar-counts";
+import { useCurrentProfile } from "@/lib/hooks/use-current-profile";
 import { SIDEBAR_TRANSITION, SIDEBAR_HOVER } from "@/lib/sidebar-styles";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
@@ -129,9 +130,9 @@ export function AppSidebar({ pinned, onTogglePin, onDropdownOpenChange }: AppSid
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
   const { habitsIncomplete, tasksDue, error } = useSidebarCounts();
-  const { data: profileData } = useSWR("/api/profile", fetcher, { keepPreviousData: true });
+  const { currentProfile } = useCurrentProfile();
   const { data: controlPlaneData } = useSWR("/api/control-plane", fetcher, { shouldRetryOnError: false });
-  const isAdmin = profileData?.profile?.role === "admin";
+  const isAdmin = currentProfile?.capabilities.canAccessAdmin === true;
   const hasControlPlaneAccess = Boolean(controlPlaneData);
 
   const badgeCounts: Record<string, number> = error

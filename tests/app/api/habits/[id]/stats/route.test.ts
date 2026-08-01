@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from '@/app/api/habits/[id]/stats/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetHabit, mockGetDetailedHabitStats, mockGetProfile } = vi.hoisted(() => ({
+const { mockGetHabit, mockGetDetailedHabitStats, mockGetWeekStartPreference } = vi.hoisted(() => ({
   mockGetHabit: vi.fn(),
   mockGetDetailedHabitStats: vi.fn(),
-  mockGetProfile: vi.fn(),
+  mockGetWeekStartPreference: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -24,7 +24,7 @@ vi.mock('@/lib/db', () => ({
     getDetailedHabitStats = mockGetDetailedHabitStats;
   },
   ProfilesDB: class {
-    getProfile = mockGetProfile;
+    getWeekStartPreference = mockGetWeekStartPreference;
   },
 }));
 
@@ -56,11 +56,8 @@ describe('GET /api/habits/[id]/stats', () => {
     vi.mocked(createClient).mockReturnValue({
       auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
     } as any);
-    // Default profile with Sunday week start
-    mockGetProfile.mockResolvedValue({
-      id: 'user-123',
-      preferences: { week_start_day: 0 },
-    });
+    // Default Localization Preference is Monday when unavailable.
+    mockGetWeekStartPreference.mockResolvedValue(1);
   });
 
   it('should return detailed stats for a habit', async () => {
@@ -86,15 +83,12 @@ describe('GET /api/habits/[id]/stats', () => {
       'user-123',
       { type: 'daily' },
       '2026-01-01T00:00:00Z',
-      0 // Sunday week start
+      1 // Monday degraded/default week start
     );
   });
 
   it('should use Monday week start from user preferences', async () => {
-    mockGetProfile.mockResolvedValue({
-      id: 'user-123',
-      preferences: { week_start_day: 1 },
-    });
+    mockGetWeekStartPreference.mockResolvedValue(1);
     mockGetHabit.mockResolvedValue(mockHabit as any);
     mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
 
@@ -111,11 +105,8 @@ describe('GET /api/habits/[id]/stats', () => {
     );
   });
 
-  it('should default to Sunday if profile has no preferences', async () => {
-    mockGetProfile.mockResolvedValue({
-      id: 'user-123',
-      preferences: null,
-    });
+  it('should default to Monday if the Localization Preference is unavailable', async () => {
+    mockGetWeekStartPreference.mockResolvedValue(null);
     mockGetHabit.mockResolvedValue(mockHabit as any);
     mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
 
@@ -128,7 +119,7 @@ describe('GET /api/habits/[id]/stats', () => {
       'user-123',
       { type: 'daily' },
       '2026-01-01T00:00:00Z',
-      0 // Default to Sunday
+      1 // Default to Monday
     );
   });
 

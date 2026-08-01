@@ -1,17 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetProfile, mockSend } = vi.hoisted(() => ({
-  mockGetProfile: vi.fn(),
+const { mockGetNotificationProjection, mockGetUserById, mockSend } = vi.hoisted(() => ({
+  mockGetNotificationProjection: vi.fn(),
+  mockGetUserById: vi.fn(),
   mockSend: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({}),
+  createAdminClient: () => ({
+    auth: { admin: { getUserById: mockGetUserById } },
+  }),
 }));
 
 vi.mock("@/lib/db", () => ({
   ProfilesDB: class {
-    getProfile = mockGetProfile;
+    getNotificationPreferenceProjection = mockGetNotificationProjection;
   },
 }));
 
@@ -38,24 +41,30 @@ vi.mock("@/lib/logger", () => ({
 
 import { sendReminderEmail } from "@/lib/email/send";
 
-const profile = {
-  id: "user-1",
-  email: "person@example.test",
-  email_notifications_enabled: true,
+const projection = {
   preferences: {
     email_notifications_enabled: false,
   },
+  timezone: "America/Los_Angeles",
 };
 
 describe("sendReminderEmail preference intent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSend.mockResolvedValue({ data: { id: "email-1" }, error: null });
+    mockGetNotificationProjection.mockResolvedValue(projection);
+    mockGetUserById.mockResolvedValue({
+      data: {
+        user: {
+          email: "person@example.test",
+          email_confirmed_at: "2026-08-01T00:00:00.000Z",
+        },
+      },
+      error: null,
+    });
   });
 
   it("honors the accepted preference document over the legacy column", async () => {
-    mockGetProfile.mockResolvedValue(profile);
-
     const result = await sendReminderEmail("user-1", {
       sourceType: "task",
       itemName: "Plan tomorrow",
@@ -66,9 +75,8 @@ describe("sendReminderEmail preference intent", () => {
   });
 
   it("sends when the accepted preference enables email", async () => {
-    mockGetProfile.mockResolvedValue({
-      ...profile,
-      email_notifications_enabled: false,
+    mockGetNotificationProjection.mockResolvedValue({
+      ...projection,
       preferences: { email_notifications_enabled: true },
     });
 

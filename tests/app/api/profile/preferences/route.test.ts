@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PATCH } from '@/app/api/profile/preferences/route';
 import { NextRequest } from 'next/server';
 
-const { mockAuthenticateRequest } = vi.hoisted(() => ({
+const { mockAuthenticateRequest, mockLegacyInfo } = vi.hoisted(() => ({
   mockAuthenticateRequest: vi.fn(),
+  mockLegacyInfo: vi.fn(),
 }));
 
 vi.mock('@/lib/auth/authenticated-request', () => ({
@@ -13,7 +14,7 @@ vi.mock('@/lib/auth/authenticated-request', () => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
-  log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+  log: { error: vi.fn(), warn: vi.fn(), info: mockLegacyInfo },
 }));
 
 const mockProfilesDB = {
@@ -53,6 +54,10 @@ describe('PATCH /api/profile/preferences', () => {
       allowedCredentials: ['cookie'],
       requiredPermission: 'write',
     });
+    expect(mockLegacyInfo).toHaveBeenCalledWith(
+      '[legacy-profile] compatibility traffic',
+      { route: '/api/profile/preferences', method: 'PATCH' },
+    );
   });
 
   it('should update preferences', async () => {

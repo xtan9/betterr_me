@@ -56,9 +56,7 @@ function createDependencies(
       ]),
     } as DashboardSnapshotDependencies["milestones"],
     profiles: {
-      getProfile: vi.fn().mockResolvedValue({
-        preferences: { week_start_day: 0 },
-      }),
+      getWeekStartPreference: vi.fn().mockResolvedValue(0),
     } as DashboardSnapshotDependencies["profiles"],
     workouts: {
       getLastCompletedAt: vi.fn().mockResolvedValue("2026-02-08T10:00:00Z"),
@@ -249,7 +247,7 @@ describe("DashboardSnapshot", () => {
           .mockRejectedValue(new Error("milestones unavailable")),
       } as DashboardSnapshotDependencies["milestones"],
       profiles: {
-        getProfile: vi.fn().mockRejectedValue(new Error("profile unavailable")),
+        getWeekStartPreference: vi.fn().mockRejectedValue(new Error("profile unavailable")),
       } as DashboardSnapshotDependencies["profiles"],
       workouts: {
         getLastCompletedAt: vi
