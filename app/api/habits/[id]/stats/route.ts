@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, cookieRouteErrorMessage } from '@/lib/auth/authenticated-request';
 import type { AuthenticatedRequestPolicy } from '@/lib/auth/request-context';
-import { HabitsDB, HabitLogsDB, ProfilesDB } from '@/lib/db';
+import { HabitsDB, HabitLogsDB, LocalizationDB } from '@/lib/db';
+import {
+  DEFAULT_WEEK_START_PREFERENCE,
+  weekStartPreferenceToDay,
+} from '@/lib/preferences/owners';
 import { log } from '@/lib/logger';
 
 // Cache TTL for HTTP headers (5 minutes in seconds)
@@ -36,7 +40,7 @@ export async function GET(
 
     const habitsDB = new HabitsDB(supabase);
     const habitLogsDB = new HabitLogsDB(supabase);
-    const profilesDB = new ProfilesDB(supabase);
+    const localizationDB = new LocalizationDB(supabase);
 
     const habit = await habitsDB.getHabit(habitId, userId);
     if (!habit) {
@@ -44,7 +48,10 @@ export async function GET(
     }
 
     // Monday is the explicit degraded presentation when Localization is unavailable.
-    const weekStartDay = (await profilesDB.getWeekStartPreference(userId)) ?? 1;
+    const weekStartPreference =
+      (await localizationDB.getWeekStartPreference(userId)) ??
+      DEFAULT_WEEK_START_PREFERENCE;
+    const weekStartDay = weekStartPreferenceToDay(weekStartPreference);
 
     // Get detailed completion stats
     const detailedStats = await habitLogsDB.getDetailedHabitStats(

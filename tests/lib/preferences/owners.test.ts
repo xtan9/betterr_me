@@ -5,6 +5,8 @@ import {
   decodeLocalizationPreferences,
   decodeNotificationPreferences,
   decodeUserTimeZone,
+  weekStartDayToPreference,
+  weekStartPreferenceToDay,
 } from "@/lib/preferences/owners";
 
 describe("Preference Owners", () => {
@@ -29,6 +31,31 @@ describe("Preference Owners", () => {
   it("keeps an invalid stored Theme Preference unavailable", () => {
     expect(decodeAppearancePreferences({ theme: "sepia" })).toEqual({
       theme: { status: "unavailable", reason: "invalidStoredValue" },
+    });
+  });
+
+  it("uses Monday as the Localization default when Week Start is missing", () => {
+    expect(decodeLocalizationPreferences(null)).toEqual({
+      weekStart: { status: "ready", value: "monday" },
+    });
+    expect(decodeLocalizationPreferences({})).toEqual({
+      weekStart: { status: "ready", value: "monday" },
+    });
+  });
+
+  it("converts only accepted Week Start values to their boundary days", () => {
+    expect(weekStartPreferenceToDay("sunday")).toBe(0);
+    expect(weekStartPreferenceToDay("monday")).toBe(1);
+    expect(weekStartDayToPreference(0)).toBe("sunday");
+    expect(weekStartDayToPreference(1)).toBe("monday");
+  });
+
+  it("keeps unsupported stored Week Start values unavailable", () => {
+    expect(decodeLocalizationPreferences({ week_start_day: 2 })).toEqual({
+      weekStart: { status: "unavailable", reason: "invalidStoredValue" },
+    });
+    expect(decodeLocalizationPreferences("sunday" as never)).toEqual({
+      weekStart: { status: "unavailable", reason: "invalidStoredValue" },
     });
   });
 

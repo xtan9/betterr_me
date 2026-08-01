@@ -4,7 +4,7 @@ import {
   HabitLogsDB,
   HabitMilestonesDB,
   HabitsDB,
-  ProfilesDB,
+  LocalizationDB,
   TasksDB,
 } from "@/lib/db";
 import { WorkoutsDB } from "@/lib/db/workouts";
@@ -23,7 +23,7 @@ export function createSupabaseDashboardSnapshot(
     tasks: new TasksDB(supabase),
     habitLogs: new HabitLogsDB(supabase),
     milestones: new HabitMilestonesDB(supabase),
-    profiles: new ProfilesDB(supabase),
+    localization: new LocalizationDB(supabase),
     workouts: new WorkoutsDB(supabase),
     ensureRecurringCoverage: (userId, range) =>
       ensureRecurringTaskCoverage(supabase, userId, range),

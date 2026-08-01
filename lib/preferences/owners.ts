@@ -48,6 +48,8 @@ export function isWeightUnitPreference(
   );
 }
 
+export type WeekStartDay = 0 | 1;
+
 const unavailable = <Value>(
   reason: import("./types").PreferenceUnavailableReason,
 ): PreferenceState<Value> => ({
@@ -66,6 +68,20 @@ const decodeEnum = <Value extends string>(
     ? { status: "ready", value: value as Value }
     : unavailable("invalidStoredValue");
 
+export const DEFAULT_WEEK_START_PREFERENCE: WeekStartPreference = "monday";
+
+export function weekStartPreferenceToDay(
+  preference: WeekStartPreference,
+): WeekStartDay {
+  return preference === "sunday" ? 0 : 1;
+}
+
+export function weekStartDayToPreference(
+  day: WeekStartDay,
+): WeekStartPreference {
+  return day === 0 ? "sunday" : "monday";
+}
+
 export function decodeAppearancePreferences(
   preferences: PreferenceStorage,
 ): AppearancePreferences {
@@ -82,11 +98,23 @@ export function decodeAppearancePreferences(
 export function decodeLocalizationPreferences(
   preferences: PreferenceStorage,
 ): LocalizationPreferences {
+  if (
+    preferences !== null &&
+    preferences !== undefined &&
+    !isRecord(preferences)
+  ) {
+    return {
+      weekStart: unavailable("invalidStoredValue"),
+    };
+  }
   const stored = isRecord(preferences) ? preferences : null;
+  const storedWeekStart = stored?.week_start_day;
   const weekStart =
-    stored?.week_start_day === 0
+    storedWeekStart === undefined || storedWeekStart === null
+      ? ({ status: "ready", value: DEFAULT_WEEK_START_PREFERENCE } as const)
+      : storedWeekStart === 0
       ? ({ status: "ready", value: "sunday" } as const)
-      : stored?.week_start_day === 1
+      : storedWeekStart === 1
         ? ({ status: "ready", value: "monday" } as const)
         : unavailable<WeekStartPreference>("invalidStoredValue");
 

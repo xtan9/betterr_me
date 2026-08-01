@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, cookieRouteErrorMessage } from "@/lib/auth/authenticated-request";
 import type { AuthenticatedRequestPolicy } from "@/lib/auth/request-context";
-import { ProfilesDB, InsightsDB } from "@/lib/db";
+import { InsightsDB, LocalizationDB } from "@/lib/db";
+import {
+  DEFAULT_WEEK_START_PREFERENCE,
+  weekStartPreferenceToDay,
+} from "@/lib/preferences/owners";
 import { log } from "@/lib/logger";
 
 const READ_REQUEST_POLICY = {
@@ -28,8 +32,11 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const date = searchParams.get("date") || undefined;
 
-    const profilesDB = new ProfilesDB(supabase);
-    const weekStartDay = (await profilesDB.getWeekStartPreference(userId)) ?? 1;
+    const localizationDB = new LocalizationDB(supabase);
+    const weekStartPreference =
+      (await localizationDB.getWeekStartPreference(userId)) ??
+      DEFAULT_WEEK_START_PREFERENCE;
+    const weekStartDay = weekStartPreferenceToDay(weekStartPreference);
 
     const insightsDB = new InsightsDB(supabase);
     const insights = await insightsDB.getWeeklyInsights(

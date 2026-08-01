@@ -44,7 +44,8 @@ const HabitCalendar = dynamic(() =>
 );
 import { fetcher } from "@/lib/fetcher";
 import type { Habit, HabitLog } from "@/lib/db/types";
-import { useLocalizationPreference } from "@/lib/hooks/use-profile-preferences";
+import { useLocalization } from "@/lib/hooks/use-localization";
+import { weekStartPreferenceToDay } from "@/lib/preferences/owners";
 
 interface HabitDetailContentProps {
   habitId: string;
@@ -106,13 +107,8 @@ export function HabitDetailContent({ habitId }: HabitDetailContentProps) {
     fetcher,
   );
 
-  const { weekStart } = useLocalizationPreference();
-  const weekStartDay =
-    weekStart.status === "ready" || weekStart.status === "pending"
-      ? weekStart.value === "sunday"
-        ? 0
-        : 1
-      : 1;
+  const { weekStart } = useLocalization();
+  const weekStartDay = weekStartPreferenceToDay(weekStart);
 
   const logs = useMemo(
     () => (Array.isArray(logsData?.logs) ? logsData.logs : []),

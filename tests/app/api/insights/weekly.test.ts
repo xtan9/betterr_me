@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { GET } from "@/app/api/insights/weekly/route";
 
 const mockGetWeeklyInsights = vi.fn();
-const mockGetWeekStartPreference = vi.fn();
+const mockGetLocalizationWeekStartPreference = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(() => ({
@@ -17,9 +17,11 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/db", () => ({
-  ProfilesDB: class {
+  LocalizationDB: class {
     constructor() {
-      return { getWeekStartPreference: mockGetWeekStartPreference };
+      return {
+        getWeekStartPreference: mockGetLocalizationWeekStartPreference,
+      };
     }
   },
   InsightsDB: class {
@@ -60,7 +62,7 @@ describe("GET /api/insights/weekly", () => {
         priority: 80,
       },
     ];
-    mockGetWeekStartPreference.mockResolvedValue(1);
+    mockGetLocalizationWeekStartPreference.mockResolvedValue("monday");
     mockGetWeeklyInsights.mockResolvedValue(mockInsights);
 
     const response = await GET(createRequest());
@@ -76,7 +78,7 @@ describe("GET /api/insights/weekly", () => {
   });
 
   it("forwards date query param to InsightsDB", async () => {
-    mockGetWeekStartPreference.mockResolvedValue(0);
+    mockGetLocalizationWeekStartPreference.mockResolvedValue("sunday");
     mockGetWeeklyInsights.mockResolvedValue([]);
 
     const response = await GET(createRequest("2026-02-10"));
@@ -118,7 +120,7 @@ describe("GET /api/insights/weekly", () => {
   });
 
   it("defaults to Monday when profile has no week_start_day", async () => {
-    mockGetWeekStartPreference.mockResolvedValue(null);
+    mockGetLocalizationWeekStartPreference.mockResolvedValue(null);
     mockGetWeeklyInsights.mockResolvedValue([]);
 
     const response = await GET(createRequest());
@@ -131,7 +133,7 @@ describe("GET /api/insights/weekly", () => {
   });
 
   it("returns 500 on internal error", async () => {
-    mockGetWeekStartPreference.mockRejectedValue(new Error("DB error"));
+    mockGetLocalizationWeekStartPreference.mockRejectedValue(new Error("DB error"));
 
     const response = await GET(createRequest());
     const data = await response.json();

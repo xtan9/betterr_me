@@ -3,10 +3,11 @@
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import type { WeekStartDay } from "@/lib/preferences/owners";
 
 interface WeekStartSelectorProps {
-  value: number; // 0 = Sunday, 1 = Monday
-  onChange: (value: number) => void;
+  value: WeekStartDay;
+  onChange: (value: WeekStartDay) => void;
   disabled?: boolean;
 }
 
@@ -22,9 +23,8 @@ export function WeekStartSelector({
       type="single"
       value={String(value)}
       onValueChange={(val) => {
-        if (val) {
-          onChange(Number(val));
-        }
+        if (val === "0") onChange(0);
+        if (val === "1") onChange(1);
       }}
       disabled={disabled}
       className="justify-start"

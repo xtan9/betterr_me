@@ -162,10 +162,10 @@ describe('PATCH /api/profile/preferences', () => {
     expect(data.error).toBe('Validation failed');
   });
 
-  it('should validate week_start_day', async () => {
+  it.each([2, 6, 10])('should accept only Sunday or Monday for week_start_day (%s)', async (weekStartDay) => {
     const request = new NextRequest('http://localhost:3000/api/profile/preferences', {
       method: 'PATCH',
-      body: JSON.stringify({ week_start_day: 10 }),
+      body: JSON.stringify({ week_start_day: weekStartDay }),
     });
 
     const response = await PATCH(request);

@@ -150,6 +150,26 @@ describe('computeMissedDays', () => {
     expect(result.absence_unit).toBe('weeks');
   });
 
+  it('uses the accepted Monday boundary for weekly absence periods', () => {
+    const weekly: HabitFrequency = { type: 'weekly' };
+    const completed = new Set(['2026-01-31']);
+
+    const result = computeMissedDays(
+      weekly,
+      completed,
+      '2026-02-08',
+      '2026-01-01',
+      undefined,
+      1,
+    );
+
+    expect(result).toEqual({
+      missed_scheduled_periods: 0,
+      previous_streak: 1,
+      absence_unit: 'weeks',
+    });
+  });
+
   // --- times_per_week frequency: week-based absence tracking ---
 
   it('returns 0 missed for times_per_week habit with current week in progress and prior week met', () => {

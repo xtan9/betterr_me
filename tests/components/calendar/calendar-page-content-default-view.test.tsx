@@ -2,10 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- Hoisted mocks ---
 
-const { mockReplace, mockPush, mockSearchParams } = vi.hoisted(() => ({
+const { mockReplace, mockPush, mockSearchParams, mockLocalization } = vi.hoisted(() => ({
   mockReplace: vi.fn(),
   mockPush: vi.fn(),
   mockSearchParams: new URLSearchParams(),
+  mockLocalization: {
+    weekStart: "monday" as "sunday" | "monday",
+    weekStartPreference: { status: "ready", value: "monday" },
+    isLoading: false,
+    error: undefined as Error | undefined,
+  },
 }));
 
 // Mock next/navigation
@@ -37,7 +43,9 @@ vi.mock("@/lib/fetcher", () => ({
 
 // Mock child components to avoid rendering full UI
 vi.mock("@/components/calendar/calendar-header", () => ({
-  CalendarHeader: () => <div data-testid="calendar-header" />,
+  CalendarHeader: ({ weekStartDay }: { weekStartDay: number }) => (
+    <div data-testid="calendar-header" data-week-start={weekStartDay} />
+  ),
 }));
 vi.mock("@/components/calendar/calendar-sidebar", () => ({
   CalendarSidebar: () => <div data-testid="calendar-sidebar" />,
@@ -66,13 +74,18 @@ vi.mock("@/components/calendar/event-dialog", () => ({
 vi.mock("@/hooks/use-keyboard-shortcuts", () => ({
   useKeyboardShortcuts: vi.fn(),
 }));
+vi.mock("@/lib/hooks/use-localization", () => ({
+  useLocalization: () => mockLocalization,
+}));
 
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { CalendarPageContent } from "@/components/calendar/calendar-page-content";
 
 describe("CalendarPageContent default view routing (VIEW-11)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLocalization.weekStart = "monday";
+    mockLocalization.error = undefined;
     // Reset searchParams to have no ?view=
     mockSearchParams.delete("view");
     mockSearchParams.delete("date");
@@ -147,5 +160,40 @@ describe("CalendarPageContent default view routing (VIEW-11)", () => {
 
     // Should not call router.replace (no default view redirect)
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("keeps the accepted Sunday boundary in calendar consumers", () => {
+    mockLocalization.weekStart = "sunday";
+
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(min-width: 768px)",
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    render(<CalendarPageContent />);
+
+    expect(screen.getByTestId("calendar-header")).toHaveAttribute(
+      "data-week-start",
+      "0",
+    );
+  });
+
+  it("keeps the calendar usable with Monday when Localization is unavailable", () => {
+    mockLocalization.weekStart = "monday";
+    mockLocalization.error = new Error("Current Profile unavailable");
+
+    render(<CalendarPageContent />);
+
+    expect(screen.getByTestId("calendar-header")).toBeInTheDocument();
+    expect(screen.queryByText("error")).not.toBeInTheDocument();
   });
 });

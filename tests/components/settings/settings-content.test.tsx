@@ -2,9 +2,16 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContent } from "@/components/settings/settings-content";
 
-const { mockSetWeekStart, mockSetWeightUnit } = vi.hoisted(() => ({
+const { mockSetWeekStart, mockSetWeightUnit, mockLocalization } = vi.hoisted(() => ({
   mockSetWeekStart: vi.fn(),
   mockSetWeightUnit: vi.fn(),
+  mockLocalization: {
+    weekStart: "monday",
+    acceptedWeekStart: { status: "ready", value: "monday" },
+    isLoading: false,
+    error: undefined as Error | undefined,
+    setWeekStart: vi.fn(),
+  },
 }));
 
 vi.mock("next-intl", () => ({
@@ -66,10 +73,12 @@ vi.mock("@/components/settings/api-keys-section", () => ({
 }));
 vi.mock("@/components/settings/week-start-selector", () => ({
   WeekStartSelector: ({
+    value,
     onChange,
   }: {
+    value: number;
     onChange: (value: number) => void;
-  }) => <button onClick={() => onChange(0)}>choose-sunday</button>,
+  }) => <button data-week-start={value} onClick={() => onChange(0)}>choose-sunday</button>,
 }));
 vi.mock("@/components/settings/weight-unit-selector", () => ({
   WeightUnitSelector: ({
@@ -80,19 +89,8 @@ vi.mock("@/components/settings/weight-unit-selector", () => ({
 }));
 
 vi.mock("@/lib/hooks/use-profile-preferences", () => ({
-  useLocalizationPreference: () => ({
-    weekStart: { status: "ready", value: "monday" },
-    acceptedWeekStart: { status: "ready", value: "monday" },
-    isLoading: false,
-    error: undefined,
-    setWeekStart: mockSetWeekStart,
-  }),
-}));
-
-vi.mock("@/lib/hooks/use-fitness", () => ({
-  useFitness: () => ({
-    weightUnit: "kg",
-    weightUnitPreference: { status: "ready", value: "kg" },
+  useFitnessPreference: () => ({
+    weightUnit: { status: "ready", value: "kg" },
     acceptedWeightUnit: { status: "ready", value: "kg" },
     isLoading: false,
     error: undefined,
@@ -100,9 +98,20 @@ vi.mock("@/lib/hooks/use-fitness", () => ({
   }),
 }));
 
+vi.mock("@/lib/hooks/use-localization", () => ({
+  useLocalization: () => mockLocalization,
+}));
+
 describe("SettingsContent preference intents", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.assign(mockLocalization, {
+      weekStart: "monday",
+      acceptedWeekStart: { status: "ready", value: "monday" },
+      isLoading: false,
+      error: undefined,
+      setWeekStart: mockSetWeekStart,
+    });
     mockSetWeekStart.mockResolvedValue({});
     mockSetWeightUnit.mockResolvedValue({});
   });
@@ -130,5 +139,16 @@ describe("SettingsContent preference intents", () => {
   it("keeps preference saves in independent owner sections", () => {
     render(<SettingsContent />);
     expect(screen.getAllByText("save")).toHaveLength(2);
+  });
+
+  it("keeps the Week Start section usable with an explicit Monday degraded presentation", () => {
+    mockLocalization.error = new Error("Current Profile unavailable");
+
+    render(<SettingsContent />);
+
+    expect(screen.getByRole("button", { name: "choose-sunday" })).toHaveAttribute(
+      "data-week-start",
+      "1",
+    );
   });
 });

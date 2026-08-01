@@ -763,6 +763,60 @@ describe("useCurrentProfile", () => {
     });
   });
 
+  it("uses the Localization owner command and applies its accepted Week Start outcome", async () => {
+    const { useLocalizationPreference } = await import(
+      "@/lib/hooks/use-profile-preferences"
+    );
+    let resolveRevalidation!: (value: CurrentProfileResponse) => void;
+    const revalidation = new Promise<CurrentProfileResponse>((resolve) => {
+      resolveRevalidation = resolve;
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          weekStart: "sunday",
+          preferenceRevision: 4,
+          changed: true,
+        }),
+    });
+    currentSWRData = baseProfile;
+    mockMutate.mockReturnValue(revalidation);
+
+    const { result } = renderHook(() => useLocalizationPreference());
+    await waitFor(() =>
+      expect(mockSWR).toHaveBeenLastCalledWith(
+        ["current-profile", "user-a"],
+        expect.any(Function),
+        expect.any(Object),
+      ),
+    );
+
+    let accepted: Promise<unknown> | undefined;
+    act(() => {
+      accepted = result.current.setWeekStart("sunday");
+    });
+    await waitFor(() => expect(mockMutate).toHaveBeenCalled());
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/preferences/localization",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ type: "setWeekStart", weekStart: "sunday" }),
+      }),
+    );
+    expect(result.current.weekStart).toEqual({
+      status: "ready",
+      value: "sunday",
+    });
+    expect(result.current.currentProfile?.preferences.preferenceRevision).toBe(4);
+
+    resolveRevalidation(baseProfile);
+    await act(async () => {
+      await accepted;
+    });
+  });
+
   it("does not apply a no-op outcome as a new accepted revision", async () => {
     const { useFitnessPreference } = await import(
       "@/lib/hooks/use-profile-preferences"

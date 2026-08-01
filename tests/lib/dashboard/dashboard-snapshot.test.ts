@@ -55,9 +55,9 @@ function createDependencies(
         { id: "milestone-1", milestone: 7 },
       ]),
     } as DashboardSnapshotDependencies["milestones"],
-    profiles: {
-      getWeekStartPreference: vi.fn().mockResolvedValue(0),
-    } as DashboardSnapshotDependencies["profiles"],
+    localization: {
+      getWeekStartPreference: vi.fn().mockResolvedValue("sunday"),
+    } as DashboardSnapshotDependencies["localization"],
     workouts: {
       getLastCompletedAt: vi.fn().mockResolvedValue("2026-02-08T10:00:00Z"),
       getWeekWorkoutCount: vi.fn().mockResolvedValue(3),
@@ -246,9 +246,9 @@ describe("DashboardSnapshot", () => {
           .fn()
           .mockRejectedValue(new Error("milestones unavailable")),
       } as DashboardSnapshotDependencies["milestones"],
-      profiles: {
+      localization: {
         getWeekStartPreference: vi.fn().mockRejectedValue(new Error("profile unavailable")),
-      } as DashboardSnapshotDependencies["profiles"],
+      } as DashboardSnapshotDependencies["localization"],
       workouts: {
         getLastCompletedAt: vi
           .fn()
@@ -312,9 +312,9 @@ describe("DashboardSnapshot", () => {
             "Some recurring tasks may not appear because generation is temporarily unavailable.",
         },
         {
-          code: "profile_unavailable",
+          code: "localization_unavailable",
           message:
-            "The default Monday week boundary was used because profile preferences are temporarily unavailable.",
+            "The default Monday week boundary was used because Localization Preference is temporarily unavailable.",
         },
         {
           code: "milestones_unavailable",

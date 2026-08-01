@@ -8,8 +8,6 @@ import type {
   AppearancePreferenceIntent,
   FitnessPreferenceOutcome,
   FitnessPreferenceIntent,
-  LocalizationPreferenceOutcome,
-  LocalizationPreferenceIntent,
   NotificationPreferenceIntent,
   NotificationPreferenceOutcome,
   ProfileDetailsCommand,
@@ -91,24 +89,6 @@ export class ProfilesDB {
     return isWeightUnitPreference(value) ? value : null;
   }
 
-  async getWeekStartPreference(userId: string): Promise<0 | 1 | null> {
-    const { data, error } = await this.supabase
-      .from('profiles')
-      .select('week_start:preferences->>week_start_day')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
-    const value = (data as { week_start?: unknown } | null)?.week_start;
-    return value === 0 || value === '0'
-      ? 0
-      : value === 1 || value === '1'
-        ? 1
-        : null;
-  }
-
   async getNotificationPreferenceProjection(userId: string): Promise<{
     preferences: PreferenceStorage;
     timezone: string | null;
@@ -186,15 +166,6 @@ export class ProfilesDB {
     return this.callPreferenceCommand<AppearancePreferenceOutcome>(
       'set_appearance_preference',
       { theme },
-    );
-  }
-
-  async setLocalizationPreference(
-    weekStart: LocalizationPreferenceIntent['weekStart'],
-  ): Promise<LocalizationPreferenceOutcome> {
-    return this.callPreferenceCommand<LocalizationPreferenceOutcome>(
-      'set_localization_preference',
-      { week_start: weekStart },
     );
   }
 
