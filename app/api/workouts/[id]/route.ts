@@ -58,7 +58,7 @@ export async function GET(
 
 /**
  * PATCH /api/workouts/[id]
- * Update a workout: title, notes, status (finish/discard).
+ * Update workout details or transition an active workout to a terminal state.
  */
 export async function PATCH(
   request: NextRequest,
@@ -79,7 +79,8 @@ export async function PATCH(
     const validation = validateRequestBody(body, workoutUpdateSchema);
     if (!validation.success) return validation.response;
 
-    const outcome = await createWorkoutWrites(supabase).update({
+    const writes = createWorkoutWrites(supabase);
+    const details = {
       userId,
       workoutId: id,
       ...(validation.data.title !== undefined
@@ -88,10 +89,12 @@ export async function PATCH(
       ...(validation.data.notes !== undefined
         ? { notes: validation.data.notes }
         : {}),
-      ...(validation.data.status !== undefined
-        ? { status: validation.data.status }
-        : {}),
-    });
+    };
+    const outcome = validation.data.status === "completed"
+      ? await writes.complete(details)
+      : validation.data.status === "discarded"
+      ? await writes.discard(details)
+      : await writes.update(details);
 
     if (outcome.type === "not-found") {
       return NextResponse.json({ error: "Workout not found" }, { status: 404 });

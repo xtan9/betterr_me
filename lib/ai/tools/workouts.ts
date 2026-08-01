@@ -77,10 +77,9 @@ export function workoutTools(): ToolDefinition[] {
         notes: z.string().optional().describe("Notes about the workout"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        const outcome = await createWorkoutWrites(ctx.supabase).update({
+        const outcome = await createWorkoutWrites(ctx.supabase).complete({
           userId: ctx.userId,
           workoutId: params.workoutId,
-          status: "completed",
           notes: params.notes ?? null,
         });
         if (outcome.type === "not-found") return { error: "Workout not found" };

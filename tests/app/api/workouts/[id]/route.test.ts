@@ -5,12 +5,16 @@ import { NextRequest } from "next/server";
 const {
   mockGetUser,
   mockUpdateWorkout,
+  mockCompleteWorkout,
+  mockDiscardWorkout,
   mockGetWorkoutWithExercises,
   mockToWorkoutResponse,
 } =
   vi.hoisted(() => ({
     mockGetUser: vi.fn(),
     mockUpdateWorkout: vi.fn(),
+    mockCompleteWorkout: vi.fn(),
+    mockDiscardWorkout: vi.fn(),
     mockGetWorkoutWithExercises: vi.fn(),
     mockToWorkoutResponse: vi.fn((workout: Record<string, unknown>) => ({
       id: workout.id,
@@ -35,7 +39,11 @@ vi.mock("@/lib/db/workouts", () => ({
 }));
 
 vi.mock("@/lib/fitness/writes", () => ({
-  createWorkoutWrites: vi.fn(() => ({ update: mockUpdateWorkout })),
+  createWorkoutWrites: vi.fn(() => ({
+    update: mockUpdateWorkout,
+    complete: mockCompleteWorkout,
+    discard: mockDiscardWorkout,
+  })),
   toWorkoutResponse: mockToWorkoutResponse,
 }));
 
@@ -100,8 +108,8 @@ describe("PATCH /api/workouts/[id]", () => {
       completedAt: "2026-02-28T12:00:00Z",
       durationSeconds: 3600,
     });
-    mockUpdateWorkout.mockResolvedValue({
-      type: "updated",
+    mockCompleteWorkout.mockResolvedValue({
+      type: "transitioned",
       workout: completedWorkout,
     });
 
@@ -113,16 +121,15 @@ describe("PATCH /api/workouts/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.workout.status).toBe("completed");
-    expect(mockUpdateWorkout).toHaveBeenCalledWith({
+    expect(mockCompleteWorkout).toHaveBeenCalledWith({
       userId: "user-123",
       workoutId: "w-1",
-      status: "completed",
     });
   });
 
   it("discards a workout", async () => {
-    mockUpdateWorkout.mockResolvedValue({
-      type: "updated",
+    mockDiscardWorkout.mockResolvedValue({
+      type: "transitioned",
       workout: mutationWorkout({ status: "discarded" }),
     });
 
@@ -134,6 +141,65 @@ describe("PATCH /api/workouts/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(data.workout.status).toBe("discarded");
+    expect(mockDiscardWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w-1",
+    });
+  });
+
+  it("treats an already-applied completion as a successful idempotent response", async () => {
+    const completedWorkout = mutationWorkout({
+      status: "completed",
+      completedAt: "2026-02-28T12:00:00Z",
+      durationSeconds: 3600,
+    });
+    mockCompleteWorkout.mockResolvedValue({
+      type: "already-applied",
+      workout: completedWorkout,
+    });
+
+    const response = await callPATCH(
+      makePatchRequest("w-1", { status: "completed", notes: "Repeated" }),
+      "w-1",
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockCompleteWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w-1",
+      notes: "Repeated",
+    });
+  });
+
+  it("maps a missing discard target to 404", async () => {
+    mockDiscardWorkout.mockResolvedValue({ type: "not-found" });
+
+    const response = await callPATCH(
+      makePatchRequest("w-1", { status: "discarded" }),
+      "w-1",
+    );
+
+    expect(response.status).toBe(404);
+    expect(mockDiscardWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w-1",
+    });
+  });
+
+  it("maps an invalid discard transition to 409", async () => {
+    mockDiscardWorkout.mockResolvedValue({
+      type: "invalid-transition",
+      currentStatus: "completed",
+    });
+
+    const response = await callPATCH(
+      makePatchRequest("w-1", { status: "discarded" }),
+      "w-1",
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.error).toBe("Workout is no longer editable");
   });
 
   it("maps a missing or cross-owner workout outcome to 404", async () => {
@@ -188,7 +254,7 @@ describe("PATCH /api/workouts/[id]", () => {
   });
 
   it("returns 500 when DB update fails", async () => {
-    mockUpdateWorkout.mockRejectedValue(new Error("DB error"));
+    mockCompleteWorkout.mockRejectedValue(new Error("DB error"));
 
     const response = await callPATCH(
       makePatchRequest("w-1", { status: "completed" }),

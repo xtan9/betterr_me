@@ -19,7 +19,10 @@ describe("Active workout editing architecture boundaries", () => {
     const route = source("app/api/workouts/[id]/route.ts");
     const patch = section(route, "export async function PATCH", "\n}");
 
-    expect(patch).toContain("createWorkoutWrites(supabase).update");
+    expect(patch).toContain("createWorkoutWrites(supabase)");
+    expect(patch).toContain("writes.update");
+    expect(patch).toContain("writes.complete");
+    expect(patch).toContain("writes.discard");
     expect(patch).not.toMatch(/new WorkoutsDB|\.updateWorkout\(/);
   });
 
@@ -48,7 +51,7 @@ describe("Active workout editing architecture boundaries", () => {
     const tools = source("lib/ai/tools/workouts.ts");
     const completion = section(tools, 'name: "completeWorkout"', 'name: "getWorkoutDetails"');
 
-    expect(completion).toContain("createWorkoutWrites(ctx.supabase).update");
+    expect(completion).toContain("createWorkoutWrites(ctx.supabase).complete");
     expect(completion).not.toMatch(/\.updateWorkout\(/);
   });
 
@@ -57,6 +60,8 @@ describe("Active workout editing architecture boundaries", () => {
     const workoutExercisesDb = source("lib/db/workout-exercises.ts");
 
     expect(workoutsDb).not.toMatch(/async updateWorkout\s*\(/);
+    expect(workoutsDb).not.toMatch(/async completeWorkout\s*\(/);
+    expect(workoutsDb).not.toMatch(/async discardWorkout\s*\(/);
     expect(workoutExercisesDb).not.toMatch(/export\s+(?:class|function|const)\s+\w+/);
   });
 });

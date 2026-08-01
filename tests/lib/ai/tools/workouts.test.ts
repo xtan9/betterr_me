@@ -6,6 +6,7 @@ const mockGetWorkoutsWithSummary = vi.fn();
 const mockGetActiveWorkout = vi.fn();
 const mockStartWorkout = vi.fn();
 const mockUpdateWorkout = vi.fn();
+const mockCompleteWorkout = vi.fn();
 const { mockToWorkoutResponse } = vi.hoisted(() => ({
   mockToWorkoutResponse: vi.fn((workout: unknown) => workout),
 }));
@@ -33,6 +34,7 @@ vi.mock("@/lib/fitness/writes", () => ({
   createWorkoutWrites: vi.fn(() => ({
     start: mockStartWorkout,
     update: mockUpdateWorkout,
+    complete: mockCompleteWorkout,
   })),
   toWorkoutResponse: mockToWorkoutResponse,
 }));
@@ -128,16 +130,15 @@ describe("workoutTools", () => {
   it("completeWorkout verifies ownership then completes", async () => {
     const ctx = makeCtx();
     const completed = { id: "w1", status: "completed" };
-    mockUpdateWorkout.mockResolvedValue({ type: "updated", workout: completed });
+    mockCompleteWorkout.mockResolvedValue({ type: "transitioned", workout: completed });
     const result = await findTool("completeWorkout").execute(
       { workoutId: "w1", notes: "Great session" },
       ctx,
     );
     expect(mockGetWorkoutWithExercises).not.toHaveBeenCalled();
-    expect(mockUpdateWorkout).toHaveBeenCalledWith({
+    expect(mockCompleteWorkout).toHaveBeenCalledWith({
       userId: "user-123",
       workoutId: "w1",
-      status: "completed",
       notes: "Great session",
     });
     expect(mockToWorkoutResponse).toHaveBeenCalledWith(completed);
@@ -146,18 +147,45 @@ describe("workoutTools", () => {
 
   it("completeWorkout returns error when not found", async () => {
     const ctx = makeCtx();
-    mockUpdateWorkout.mockResolvedValue({ type: "not-found" });
+    mockCompleteWorkout.mockResolvedValue({ type: "not-found" });
     const result = await findTool("completeWorkout").execute(
       { workoutId: "w999" },
       ctx,
     );
     expect(result).toEqual({ error: "Workout not found" });
-    expect(mockUpdateWorkout).toHaveBeenCalledWith({
+    expect(mockCompleteWorkout).toHaveBeenCalledWith({
       userId: "user-123",
       workoutId: "w999",
-      status: "completed",
       notes: null,
     });
+  });
+
+  it("completeWorkout presents an already-applied transition as success", async () => {
+    const completed = { id: "w1", status: "completed" };
+    mockCompleteWorkout.mockResolvedValue({
+      type: "already-applied",
+      workout: completed,
+    });
+
+    await expect(
+      findTool("completeWorkout").execute({ workoutId: "w1" }, makeCtx()),
+    ).resolves.toEqual(completed);
+    expect(mockCompleteWorkout).toHaveBeenCalledWith({
+      userId: "user-123",
+      workoutId: "w1",
+      notes: null,
+    });
+  });
+
+  it("completeWorkout presents an invalid transition as a conversational error", async () => {
+    mockCompleteWorkout.mockResolvedValue({
+      type: "invalid-transition",
+      currentStatus: "discarded",
+    });
+
+    await expect(
+      findTool("completeWorkout").execute({ workoutId: "w1" }, makeCtx()),
+    ).resolves.toEqual({ error: "Workout is no longer editable" });
   });
 
   it("getWorkoutDetails calls getWorkoutWithExercises", async () => {
