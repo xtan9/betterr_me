@@ -4,7 +4,8 @@
 -- a shared or production database. The repository migrations define RLS
 -- policies for the retained primary user journey, but the disposable reset
 -- does not inherit the grants present in the hosted database. Keep this list
--- limited to tables exercised by the Chromium journey suite.
+-- limited to tables exercised by the Chromium journey and registered SQL
+-- acceptance suites.
 
 grant usage on schema public to authenticated;
 
@@ -24,7 +25,12 @@ begin
     'projects',
     'journal_entries',
     'journal_entry_links',
-    'workouts'
+    'exercises',
+    'routines',
+    'routine_exercises',
+    'workouts',
+    'workout_exercises',
+    'workout_sets'
   ] loop
     if to_regclass(format('public.%I', table_name)) is not null then
       execute format(
@@ -33,5 +39,18 @@ begin
       );
     end if;
   end loop;
+end
+$$;
+
+do $$
+begin
+  if to_regclass('public.finance_cushions') is not null then
+    revoke all on table public.finance_cushions from authenticated;
+    grant select, insert, update on table public.finance_cushions to authenticated;
+  end if;
+  if to_regclass('public.finance_cushion_snapshots') is not null then
+    revoke all on table public.finance_cushion_snapshots from authenticated;
+    grant select, insert on table public.finance_cushion_snapshots to authenticated;
+  end if;
 end
 $$;

@@ -15,6 +15,20 @@ Use `pnpm test:db:calendar` for the bounded calendar lifecycle verification.
 It runs the registry and constrained-fixture policy tests, then executes only
 the registered `calendar` acceptance fixtures against disposable PostgreSQL.
 
+The personal-record and finance authorization matrix can be run alone with
+`pnpm test:db -- --domain personal-records-finance`.
+
+After a local `supabase db reset --local`, apply the disposable authenticated
+test grants before running the acceptance fixtures:
+
+```bash
+psql postgresql://postgres:postgres@127.0.0.1:54322/postgres \
+  -v ON_ERROR_STOP=1 -f supabase/tests/e2e_local_authenticated_grants.sql
+```
+
+The pull-request E2E workflow applies this support file before invoking the
+fixture runner.
+
 Every top-level `.sql` file in this directory must have one registry entry.
 Acceptance entries declare their domain, cleanup contract, and whether they run
 as the dedicated constrained role or require the disposable database

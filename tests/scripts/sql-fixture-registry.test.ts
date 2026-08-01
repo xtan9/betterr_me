@@ -36,6 +36,21 @@ afterEach(() => {
 });
 
 describe("SQL fixture registry", () => {
+  it("registers the personal-records and finance RLS group as one targeted fixture", () => {
+    const repositoryRoot = path.resolve(__dirname, "../..");
+    const registry = loadSqlFixtureRegistry(repositoryRoot);
+
+    expect(selectSqlFixtures(registry, { domain: "personal-records-finance" })).toEqual([
+      {
+        path: "personal_records_finance_rls.sql",
+        domain: "personal-records-finance",
+        role: "constrained",
+        cleanup: "transactional",
+      },
+    ]);
+    expect(validateSqlFixtureRegistry(repositoryRoot, registry)).toEqual([]);
+  });
+
   it("keeps the complete calendar lifecycle group registered in stable order", () => {
     const registry = loadSqlFixtureRegistry(process.cwd());
 
