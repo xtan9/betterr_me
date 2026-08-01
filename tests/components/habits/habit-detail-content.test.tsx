@@ -22,6 +22,7 @@ vi.mock("next-intl", () => ({
 
 // ─── next-themes ──────────────────────────────────────────────────────────────
 const mockResolvedTheme = { value: "light" };
+const mockLocalization = { weekStart: "monday" as "sunday" | "monday" };
 
 vi.mock("next-themes", () => ({
   useTheme: () => ({ resolvedTheme: mockResolvedTheme.value }),
@@ -82,10 +83,8 @@ vi.mock("@/lib/hooks/use-toggling-set", () => ({
   }),
 }));
 
-vi.mock("@/lib/hooks/use-profile-preferences", () => ({
-  useLocalizationPreference: () => ({
-    weekStart: { status: "ready", value: "monday" },
-  }),
+vi.mock("@/lib/hooks/use-localization", () => ({
+  useLocalization: () => mockLocalization,
 }));
 
 // ─── colors ───────────────────────────────────────────────────────────────────
@@ -116,8 +115,17 @@ vi.mock("@/lib/categories/get-category-display-name", () => ({
 // synchronously. We don't assert on heatmap rendering — just verify the habit
 // detail flow works without it.
 vi.mock("@/components/habits/heatmap", () => ({
-  HabitCalendar: ({ habitId }: { habitId: string }) => (
-    <div data-testid={`habit-calendar-${habitId}`} />
+  HabitCalendar: ({
+    habitId,
+    weekStartDay,
+  }: {
+    habitId: string;
+    weekStartDay: number;
+  }) => (
+    <div
+      data-testid={`habit-calendar-${habitId}`}
+      data-week-start={weekStartDay}
+    />
   ),
 }));
 
@@ -344,6 +352,7 @@ describe("HabitDetailContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockResolvedTheme.value = "light";
+    mockLocalization.weekStart = "monday";
     mockCategories.length = 0;
     mockGetCategoryDisplayName.mockImplementation((name: string) => name);
     vi.stubGlobal(
@@ -409,6 +418,20 @@ describe("HabitDetailContent", () => {
     expect(screen.getByTestId("streak-counter")).toHaveTextContent("current:7");
     expect(screen.getByTestId("streak-counter")).toHaveTextContent("best:21");
     expect(screen.getByTestId("next-milestone")).toHaveTextContent("7");
+  });
+
+  it("passes the accepted Sunday boundary to the habit calendar", async () => {
+    mockLocalization.weekStart = "sunday";
+    setupSWR();
+
+    render(<HabitDetailContent habitId={HABIT_ID} />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`habit-calendar-${HABIT_ID}`)).toHaveAttribute(
+        "data-week-start",
+        "0",
+      ),
+    );
   });
 
   // ── 4. Category — with color in light mode ───────────────────────────────────

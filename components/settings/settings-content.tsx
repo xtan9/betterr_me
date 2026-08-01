@@ -17,10 +17,12 @@ import { toast } from "sonner";
 import { log } from "@/lib/logger";
 import type { CurrentProfileResponse } from "@/lib/current-profile";
 import type { WeightUnitPreference } from "@/lib/preferences/types";
+import { useFitnessPreference } from "@/lib/hooks/use-profile-preferences";
+import { useLocalization } from "@/lib/hooks/use-localization";
 import {
-  useLocalizationPreference,
-} from "@/lib/hooks/use-profile-preferences";
-import { useFitness } from "@/lib/hooks/use-fitness";
+  weekStartDayToPreference,
+  type WeekStartDay,
+} from "@/lib/preferences/owners";
 
 interface SettingsContentProps {
   initialData?: CurrentProfileResponse;
@@ -30,23 +32,21 @@ interface SettingsContentProps {
 export function SettingsContent({ initialData, initialSubject }: SettingsContentProps) {
   const t = useTranslations("settings");
   const profileOptions = { initialData, initialSubject };
-  const localization = useLocalizationPreference(profileOptions);
-  const fitness = useFitness(profileOptions);
+  const localization = useLocalization(profileOptions);
+  const fitness = useFitnessPreference(profileOptions);
 
-  const [weekStartDay, setWeekStartDay] = useState<number>(1);
+  const [weekStartDay, setWeekStartDay] = useState<WeekStartDay>(1);
   const [weightUnit, setWeightUnit] = useState<WeightUnitPreference>("kg");
   const [savingConcept, setSavingConcept] = useState<"weekStart" | "weightUnit" | null>(null);
   const [savedConcept, setSavedConcept] = useState<"weekStart" | "weightUnit" | null>(null);
   const acceptedWeekStart = localization.acceptedWeekStart;
   const acceptedWeightUnit = fitness.acceptedWeightUnit;
   const remoteWeekStart =
-    localization.weekStart.status === "ready" || localization.weekStart.status === "pending"
-      ? localization.weekStart.value
-      : undefined;
+    localization.weekStart;
   const remoteWeightUnit =
-    fitness.weightUnitPreference.status === "ready" ||
-    fitness.weightUnitPreference.status === "pending"
-      ? fitness.weightUnitPreference.value
+    fitness.weightUnit.status === "ready" ||
+    fitness.weightUnit.status === "pending"
+      ? fitness.weightUnit.value
       : undefined;
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export function SettingsContent({ initialData, initialSubject }: SettingsContent
     setSavingConcept("weekStart");
     setSavedConcept(null);
     try {
-      await localization.setWeekStart(weekStartDay === 0 ? "sunday" : "monday");
+      await localization.setWeekStart(weekStartDayToPreference(weekStartDay));
       setSavedConcept("weekStart");
     } catch (err) {
       log.error("[settings] Failed to save Week Start Preference", err);
@@ -88,12 +88,12 @@ export function SettingsContent({ initialData, initialSubject }: SettingsContent
 
   const hasWeekStartChanges =
     acceptedWeekStart?.status !== "ready" ||
-    (acceptedWeekStart.value === "sunday" ? 0 : 1) !== weekStartDay;
+    acceptedWeekStart.value !== weekStartDayToPreference(weekStartDay);
   const hasWeightUnitChanges =
     acceptedWeightUnit?.status !== "ready" || acceptedWeightUnit.value !== weightUnit;
   const isLoading = localization.isLoading || fitness.isLoading;
 
-  if (localization.error || fitness.error) {
+  if (fitness.error) {
     return (
       <div className="flex flex-col gap-section-gap">
         <PageHeader title={t("title")} />

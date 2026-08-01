@@ -29,7 +29,8 @@ import type { ExpandedCalendarEvent } from "@/lib/calendar/recurrence";
 import type { CalendarFeedItem } from "@/lib/calendar/feed-types";
 import { feedItemsToExpandedEvents } from "@/lib/calendar/feed-aggregation";
 import type { DomainCalendarEvent } from "@/lib/calendar/feed-types";
-import { useLocalizationPreference } from "@/lib/hooks/use-profile-preferences";
+import { useLocalization } from "@/lib/hooks/use-localization";
+import { weekStartPreferenceToDay } from "@/lib/preferences/owners";
 
 interface EventsResponse {
   events: ExpandedCalendarEvent[];
@@ -44,15 +45,9 @@ export function CalendarPageContent() {
   const searchParams = useSearchParams();
   const { mutate: globalMutate } = useSWRConfig();
 
-  const localization = useLocalizationPreference();
+  const localization = useLocalization();
   const profileLoading = localization.isLoading;
-  const profileError = localization.error;
-  const weekStartDay =
-    localization.weekStart.status === "ready" || localization.weekStart.status === "pending"
-      ? localization.weekStart.value === "sunday"
-        ? 0
-        : 1
-      : 1;
+  const weekStartDay = weekStartPreferenceToDay(localization.weekStart);
 
   // Navigation hook
   const {
@@ -143,9 +138,8 @@ export function CalendarPageContent() {
   // Log SWR fetch errors for debugging
   useEffect(() => {
     if (eventsError) console.error("Failed to fetch calendar events:", eventsError);
-    if (profileError) console.error("Failed to fetch user profile:", profileError);
     if (feedError) console.error("Failed to fetch calendar feed:", feedError);
-  }, [eventsError, profileError, feedError]);
+  }, [eventsError, feedError]);
 
   // --- Inline actions ---
 
@@ -301,7 +295,7 @@ export function CalendarPageContent() {
           />
 
           <div className="flex-1 overflow-auto p-4">
-            {eventsError || profileError || feedError ? (
+            {eventsError || feedError ? (
               <div className="flex flex-col items-center justify-center h-64 gap-2 text-destructive">
                 <span>{t("error")}</span>
               </div>

@@ -9,7 +9,7 @@ const quietHoursTimeSchema = z
 export const preferencesSchema = z
   .object({
     date_format: z.string().min(1).max(50).optional(),
-    week_start_day: z.number().int().min(0).max(6).optional(),
+    week_start_day: z.union([z.literal(0), z.literal(1)]).optional(),
     theme: z.enum(["system", "light", "dark"]).optional(),
     weight_unit: z.enum(WEIGHT_UNITS).optional(),
     quiet_hours_start: quietHoursTimeSchema.optional(),

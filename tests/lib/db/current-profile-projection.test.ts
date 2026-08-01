@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfilesDB } from "@/lib/db/profiles";
+import { LocalizationDB } from "@/lib/db/localization";
 import { mockSupabaseClient } from "../../setup";
 import { restoreMockSupabaseThen } from "../../helpers/mock-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -60,7 +61,12 @@ describe("ProfilesDB Current Profile projection", () => {
     ).resolves.toBeNull();
 
     mockSupabaseClient.setMockResponse({ week_start: "0" });
-    await expect(db.getWeekStartPreference("user-123")).resolves.toBe(0);
+    const localizationDB = new LocalizationDB(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+    await expect(
+      localizationDB.getWeekStartPreference("user-123"),
+    ).resolves.toBe("sunday");
     expect(mockSupabaseClient.queryLog.findLast((entry) => entry.method === "select")?.args[0]).toBe(
       "week_start:preferences->>week_start_day",
     );

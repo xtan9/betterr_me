@@ -2,9 +2,13 @@ import type {
   HabitLogsDB,
   HabitMilestonesDB,
   HabitsDB,
-  ProfilesDB,
+  LocalizationDB,
   TasksDB,
 } from "@/lib/db";
+import {
+  DEFAULT_WEEK_START_PREFERENCE,
+  weekStartPreferenceToDay,
+} from "@/lib/preferences/owners";
 import {
   ZERO_ABSENCE,
   type DashboardData,
@@ -22,7 +26,7 @@ export interface DashboardSnapshotDependencies {
   tasks: Pick<TasksDB, "getTodayTasks" | "getTaskCount" | "getUserTasks">;
   habitLogs: Pick<HabitLogsDB, "getAllUserLogs">;
   milestones: Pick<HabitMilestonesDB, "getTodaysMilestones">;
-  profiles: Pick<ProfilesDB, "getWeekStartPreference">;
+  localization: Pick<LocalizationDB, "getWeekStartPreference">;
   workouts: Pick<WorkoutsDB, "getLastCompletedAt" | "getWeekWorkoutCount">;
   generateRecurringTasks?(
     userId: string,
@@ -104,9 +108,9 @@ const WARNING_DEFINITIONS = {
       "Some recurring tasks may not appear because generation is temporarily unavailable.",
     priority: 3,
   },
-  profile_unavailable: {
+  localization_unavailable: {
     message:
-      "The default Monday week boundary was used because profile preferences are temporarily unavailable.",
+      "The default Monday week boundary was used because Localization Preference is temporarily unavailable.",
     priority: 4,
   },
   milestones_unavailable: {
@@ -228,14 +232,16 @@ export function createDashboardSnapshot(
         warnings.push(warning("habit_history_unavailable"));
       }
 
-      const profileResult = await optional(
-        dependencies.profiles.getWeekStartPreference(userId),
+      const localizationResult = await optional(
+        dependencies.localization.getWeekStartPreference(userId),
         null,
-        "profile_unavailable",
+        "localization_unavailable",
         { userId, date },
       );
-      if (profileResult.warning) warnings.push(profileResult.warning);
-      const weekStartDay = profileResult.value ?? 1;
+      if (localizationResult.warning) warnings.push(localizationResult.warning);
+      const weekStartPreference =
+        localizationResult.value ?? DEFAULT_WEEK_START_PREFERENCE;
+      const weekStartDay = weekStartPreferenceToDay(weekStartPreference);
       const weekStartDate = getWeekStartDate(date, weekStartDay);
 
       const [
@@ -315,6 +321,7 @@ export function createDashboardSnapshot(
               date,
               habit.created_at,
               lookbackStart,
+              weekStartDay,
             ),
           };
         } catch (error) {

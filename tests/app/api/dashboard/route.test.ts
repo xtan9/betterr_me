@@ -42,8 +42,8 @@ const mockHabitLogsDB = {
 const mockMilestonesDB = {
   getTodaysMilestones: vi.fn().mockResolvedValue([]),
 };
-const mockProfilesDB = {
-  getWeekStartPreference: vi.fn().mockResolvedValue(1),
+const mockLocalizationDB = {
+  getWeekStartPreference: vi.fn().mockResolvedValue("monday"),
 };
 
 vi.mock('@/lib/db', () => ({
@@ -59,8 +59,8 @@ vi.mock('@/lib/db', () => ({
   HabitMilestonesDB: class {
     constructor() { return mockMilestonesDB; }
   },
-  ProfilesDB: class {
-    constructor() { return mockProfilesDB; }
+  LocalizationDB: class {
+    constructor() { return mockLocalizationDB; }
   },
 }));
 

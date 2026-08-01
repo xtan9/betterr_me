@@ -10,7 +10,7 @@ import { PUT as putUserTimeZone } from "@/app/api/user-time-zone/route";
 const {
   mockAuthenticateRequest,
   mockSetAppearancePreference,
-  mockSetLocalizationPreference,
+  mockSetWeekStartPreference,
   mockSetFitnessPreference,
   mockSetNotificationPreference,
   mockUpdateProfileDetails,
@@ -18,7 +18,7 @@ const {
 } = vi.hoisted(() => ({
   mockAuthenticateRequest: vi.fn(),
   mockSetAppearancePreference: vi.fn(),
-  mockSetLocalizationPreference: vi.fn(),
+  mockSetWeekStartPreference: vi.fn(),
   mockSetFitnessPreference: vi.fn(),
   mockSetNotificationPreference: vi.fn(),
   mockUpdateProfileDetails: vi.fn(),
@@ -34,11 +34,13 @@ vi.mock("@/lib/auth/authenticated-request", () => ({
 vi.mock("@/lib/db", () => ({
   ProfilesDB: class {
     setAppearancePreference = mockSetAppearancePreference;
-    setLocalizationPreference = mockSetLocalizationPreference;
     setFitnessPreference = mockSetFitnessPreference;
     setNotificationPreference = mockSetNotificationPreference;
     updateProfileDetails = mockUpdateProfileDetails;
     setUserTimeZone = mockSetUserTimeZone;
+  },
+  LocalizationDB: class {
+    setWeekStartPreference = mockSetWeekStartPreference;
   },
 }));
 
@@ -150,7 +152,7 @@ describe("domain-owned Preference commands", () => {
   });
 
   it("routes Localization and Fitness intents to their owning commands", async () => {
-    mockSetLocalizationPreference.mockResolvedValue({
+    mockSetWeekStartPreference.mockResolvedValue({
       weekStart: "monday",
       preferenceRevision: 5,
       changed: false,
@@ -161,7 +163,7 @@ describe("domain-owned Preference commands", () => {
       changed: true,
     });
 
-    await postLocalization(
+    const localizationResponse = await postLocalization(
       request("/api/preferences/localization", {
         type: "setWeekStart",
         weekStart: "monday",
@@ -174,7 +176,13 @@ describe("domain-owned Preference commands", () => {
       }),
     );
 
-    expect(mockSetLocalizationPreference).toHaveBeenCalledWith("monday");
+    expect(localizationResponse.status).toBe(200);
+    await expect(localizationResponse.json()).resolves.toEqual({
+      weekStart: "monday",
+      preferenceRevision: 5,
+      changed: false,
+    });
+    expect(mockSetWeekStartPreference).toHaveBeenCalledWith("monday");
     expect(mockSetFitnessPreference).toHaveBeenCalledWith("lbs");
   });
 
@@ -218,6 +226,18 @@ describe("domain-owned Preference commands", () => {
       expect(mockSetFitnessPreference).not.toHaveBeenCalled();
     },
   );
+
+  it("rejects a Localization intent outside Sunday or Monday", async () => {
+    const response = await postLocalization(
+      request("/api/preferences/localization", {
+        type: "setWeekStart",
+        weekStart: "tuesday",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockSetWeekStartPreference).not.toHaveBeenCalled();
+  });
 
   it("accepts discriminated Notification Preference intents", async () => {
     mockSetNotificationPreference.mockResolvedValue({

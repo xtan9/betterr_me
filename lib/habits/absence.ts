@@ -45,6 +45,7 @@ export function computeMissedDays(
   todayStr: string,
   createdAtStr: string,
   dataStartStr?: string,
+  weekStartDay: 0 | 1 = 0,
 ): AbsenceData {
   // Stryker disable next-line ConditionalExpression,BlockStatement: empty-string fallthrough also fails the downstream isNaN(createdDate) check and returns identical ZERO_ABSENCE — equivalent mutant
   if (!createdAtStr) {
@@ -66,8 +67,6 @@ export function computeMissedDays(
   // Weekly-type frequencies: count missed WEEKS, not days
   if (frequency.type === 'times_per_week' || frequency.type === 'weekly') {
     const targetPerWeek = frequency.type === 'times_per_week' ? frequency.count : 1;
-    const weekStartDay = 0; // Sunday default, matching calculateWeeklyStreak
-
     // Group completed dates by week
     const weekCompletions = new Map<string, number>();
     for (const dateStr of completedDatesSet) {

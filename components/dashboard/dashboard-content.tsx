@@ -42,6 +42,8 @@ import { setHabitCompletion } from "@/lib/hooks/use-habit-toggle";
 import { fetcher } from "@/lib/fetcher";
 import type { DashboardData } from "@/lib/db/types";
 import { useCurrentProfile } from "@/lib/hooks/use-current-profile";
+import { useLocalization } from "@/lib/hooks/use-localization";
+import { weekStartPreferenceToDay } from "@/lib/preferences/owners";
 
 const EMPTY_DASHBOARD: DashboardData = {
   habits: [],
@@ -87,9 +89,9 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
   const today = getLocalDateString();
 
   // Weekly insight — only fetch on the user's week start day
+  const localization = useLocalization();
   const dayOfWeek = new Date().getDay();
-  // Default to Monday (1) if no profile data yet; real check uses profile pref
-  const weekStartDay = 1;
+  const weekStartDay = weekStartPreferenceToDay(localization.weekStart);
   const isWeekStartDay = dayOfWeek === weekStartDay;
   const weekKey = getWeekKey(weekStartDay);
   const dismissKey = `insight-dismissed-${weekKey}`;

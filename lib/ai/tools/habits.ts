@@ -1,7 +1,11 @@
 import { z } from "zod";
-import { HabitsDB, HabitLogsDB } from "@/lib/db";
+import { HabitsDB, HabitLogsDB, LocalizationDB } from "@/lib/db";
 import { createHabitCompletion } from "@/lib/habits/completion";
 import { createHabitWrites, toHabitResponse } from "@/lib/habits/writes";
+import {
+  DEFAULT_WEEK_START_PREFERENCE,
+  weekStartPreferenceToDay,
+} from "@/lib/preferences/owners";
 import type {
   HabitCreationFrequency,
   HabitGraduationOutcome,
@@ -261,11 +265,16 @@ export function habitTools(): ToolDefinition[] {
         const habit = await habitsDB.getHabit(params.habitId, ctx.userId);
         if (!habit) return { error: "Habit not found" };
         const logsDB = new HabitLogsDB(ctx.supabase);
+        const localizationDB = new LocalizationDB(ctx.supabase);
+        const weekStartPreference =
+          (await localizationDB.getWeekStartPreference(ctx.userId)) ??
+          DEFAULT_WEEK_START_PREFERENCE;
         return logsDB.getDetailedHabitStats(
           params.habitId,
           ctx.userId,
           habit.frequency,
           habit.created_at,
+          weekStartPreferenceToDay(weekStartPreference),
         );
       },
     },

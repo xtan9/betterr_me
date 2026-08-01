@@ -24,6 +24,7 @@ const mockReactivateHabit = vi.fn();
 const mockDeleteHabitWrite = vi.fn();
 const mockGetHabit = vi.fn();
 const mockGetDetailedHabitStats = vi.fn();
+const mockGetLocalizationWeekStartPreference = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   HabitsDB: class {
@@ -35,6 +36,9 @@ vi.mock("@/lib/db", () => ({
   HabitLogsDB: class {
     getHabitStats = mockGetHabitStats;
     getDetailedHabitStats = mockGetDetailedHabitStats;
+  },
+  LocalizationDB: class {
+    getWeekStartPreference = mockGetLocalizationWeekStartPreference;
   },
 }));
 
@@ -441,6 +445,7 @@ describe("habitTools", () => {
 
   it("getDetailedHabitStats fetches habit then gets detailed stats", async () => {
     const ctx = makeCtx();
+    mockGetLocalizationWeekStartPreference.mockResolvedValue("sunday");
     mockGetHabit.mockResolvedValue({
       id: "h1",
       frequency: { type: "daily" },
@@ -457,13 +462,36 @@ describe("habitTools", () => {
       ctx,
     );
     expect(mockGetHabit).toHaveBeenCalledWith("h1", "user-123");
+    expect(mockGetLocalizationWeekStartPreference).toHaveBeenCalledWith("user-123");
     expect(mockGetDetailedHabitStats).toHaveBeenCalledWith(
       "h1",
       "user-123",
       { type: "daily" },
       "2026-01-01",
+      0,
     );
     expect(result).toEqual(stats);
+  });
+
+  it("uses Monday when Localization is unavailable for detailed stats", async () => {
+    const ctx = makeCtx();
+    mockGetLocalizationWeekStartPreference.mockResolvedValue(null);
+    mockGetHabit.mockResolvedValue({
+      id: "h1",
+      frequency: { type: "weekly" },
+      created_at: "2026-01-01",
+    });
+    mockGetDetailedHabitStats.mockResolvedValue({});
+
+    await findTool("getDetailedHabitStats").execute({ habitId: "h1" }, ctx);
+
+    expect(mockGetDetailedHabitStats).toHaveBeenCalledWith(
+      "h1",
+      "user-123",
+      { type: "weekly" },
+      "2026-01-01",
+      1,
+    );
   });
 
   it("getDetailedHabitStats returns error when habit not found", async () => {

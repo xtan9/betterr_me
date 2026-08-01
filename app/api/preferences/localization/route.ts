@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ProfilesDB } from "@/lib/db";
+import { LocalizationDB } from "@/lib/db";
 import { validateRequestBody } from "@/lib/validations/api";
 import { localizationPreferenceIntentSchema } from "@/lib/preferences/commands";
 import { readJson, runPreferenceCommand } from "@/lib/preferences/api";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       );
       if (!validation.success) return validation.response;
 
-      const result = await new ProfilesDB(auth.client).setLocalizationPreference(
+      const result = await new LocalizationDB(auth.client).setWeekStartPreference(
         validation.data.weekStart,
       );
       return NextResponse.json(result);

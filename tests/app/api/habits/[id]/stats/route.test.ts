@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GET } from '@/app/api/habits/[id]/stats/route';
 import { NextRequest } from 'next/server';
 
-const { mockGetHabit, mockGetDetailedHabitStats, mockGetWeekStartPreference } = vi.hoisted(() => ({
+const { mockGetHabit, mockGetDetailedHabitStats, mockGetLocalizationWeekStartPreference } = vi.hoisted(() => ({
   mockGetHabit: vi.fn(),
   mockGetDetailedHabitStats: vi.fn(),
-  mockGetWeekStartPreference: vi.fn(),
+  mockGetLocalizationWeekStartPreference: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -23,8 +23,8 @@ vi.mock('@/lib/db', () => ({
   HabitLogsDB: class {
     getDetailedHabitStats = mockGetDetailedHabitStats;
   },
-  ProfilesDB: class {
-    getWeekStartPreference = mockGetWeekStartPreference;
+  LocalizationDB: class {
+    getWeekStartPreference = mockGetLocalizationWeekStartPreference;
   },
 }));
 
@@ -57,7 +57,7 @@ describe('GET /api/habits/[id]/stats', () => {
       auth: { getUser: vi.fn(() => ({ data: { user: { id: 'user-123' } } })) },
     } as any);
     // Default Localization Preference is Monday when unavailable.
-    mockGetWeekStartPreference.mockResolvedValue(1);
+    mockGetLocalizationWeekStartPreference.mockResolvedValue("monday");
   });
 
   it('should return detailed stats for a habit', async () => {
@@ -88,7 +88,7 @@ describe('GET /api/habits/[id]/stats', () => {
   });
 
   it('should use Monday week start from user preferences', async () => {
-    mockGetWeekStartPreference.mockResolvedValue(1);
+    mockGetLocalizationWeekStartPreference.mockResolvedValue("monday");
     mockGetHabit.mockResolvedValue(mockHabit as any);
     mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
 
@@ -106,7 +106,7 @@ describe('GET /api/habits/[id]/stats', () => {
   });
 
   it('should default to Monday if the Localization Preference is unavailable', async () => {
-    mockGetWeekStartPreference.mockResolvedValue(null);
+    mockGetLocalizationWeekStartPreference.mockResolvedValue(null);
     mockGetHabit.mockResolvedValue(mockHabit as any);
     mockGetDetailedHabitStats.mockResolvedValue(mockDetailedStats);
 

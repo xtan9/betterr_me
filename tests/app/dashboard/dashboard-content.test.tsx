@@ -32,7 +32,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Mock SWR
-const mockUseSWR = vi.fn();
+const { mockLocalization, mockUseSWR } = vi.hoisted(() => ({
+  mockLocalization: {
+    weekStart: "monday" as "sunday" | "monday",
+    error: undefined as Error | undefined,
+  },
+  mockUseSWR: vi.fn(),
+}));
 vi.mock("swr", () => ({
   default: (...args: unknown[]) => mockUseSWR(...args),
 }));
@@ -53,6 +59,10 @@ vi.mock("@/components/ui/avatar", () => ({
   AvatarFallback: ({ children, ...props }: React.HTMLAttributes<HTMLSpanElement>) => (
     <span {...props}>{children}</span>
   ),
+}));
+
+vi.mock("@/lib/hooks/use-localization", () => ({
+  useLocalization: () => mockLocalization,
 }));
 
 // Mock sonner
@@ -239,6 +249,8 @@ describe("DashboardContent", () => {
         profileDetails: { fullName: "Test User", avatarUrl: null },
       },
     });
+    mockLocalization.weekStart = "monday";
+    mockLocalization.error = undefined;
   });
 
   afterEach(() => {
