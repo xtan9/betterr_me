@@ -22,8 +22,11 @@ describe("ProfilesDB Current Profile projection", () => {
   it("selects only the explicit Current Profile storage projection", async () => {
     const db = new ProfilesDB(mockSupabaseClient as unknown as SupabaseClient);
 
-    await expect(db.getCurrentProfileProjection("user-123")).resolves.toMatchObject({
+    await expect(db.getCurrentProfileProjection("user-123")).resolves.toEqual({
       full_name: "Taylor Example",
+      avatar_url: null,
+      timezone: "America/Los_Angeles",
+      preferences: { theme: "system" },
       preference_revision: 0,
     });
 
@@ -31,7 +34,7 @@ describe("ProfilesDB Current Profile projection", () => {
       table: "profiles",
       method: "select",
       args: [
-        "full_name, avatar_url, timezone, role, preferences, preference_revision",
+        "full_name, avatar_url, timezone, preferences, preference_revision",
       ],
     });
     expect(

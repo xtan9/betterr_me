@@ -44,6 +44,9 @@ export async function GET(request: Request) {
       {
         currentProfile: composeCurrentProfile({
           identityEmail: auth.principal.profile?.email ?? null,
+          capabilities: {
+            canAccessAdmin: auth.permissions.includes("admin"),
+          },
           projection,
         }),
       },
