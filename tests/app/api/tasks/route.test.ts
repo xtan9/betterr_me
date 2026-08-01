@@ -56,6 +56,7 @@ vi.mock('@supabase/supabase-js', async (importOriginal) => {
 const mockTasksDB = {
   getUserTasks: vi.fn(),
   getOverdueTasks: vi.fn(),
+  getUpcomingTasks: vi.fn(),
   createTask: vi.fn(),
   getTask: vi.fn(),
   updateTask: vi.fn(),
@@ -73,6 +74,27 @@ vi.mock('@/lib/db/ensure-profile', () => ({
 
 vi.mock('@/lib/recurring-tasks/coverage', () => ({
   ensureRecurringTaskCoverageThrough: mockEnsureRecurringCoverageThrough,
+  taskReadCoverageRange: ({
+    date,
+    dueDate,
+    view,
+    days,
+  }: { date: string; dueDate?: string; view?: string; days?: number }) => {
+    const from = dueDate ?? date;
+    if (view === 'upcoming') {
+      const end = new Date(`${from}T00:00:00.000Z`);
+      end.setUTCDate(end.getUTCDate() + (days ?? 7));
+      return { from, to: end.toISOString().slice(0, 10) };
+    }
+    return { from, to: from };
+  },
+  recurringCoverageWarning: (requestedRange: { from: string; to: string }) => ({
+    code: 'recurring_coverage_unavailable',
+    type: 'coverage-unavailable',
+    message: 'Recurring task coverage is unavailable for the requested date range.',
+    requestedRange,
+    failedSeriesIds: [],
+  }),
 }));
 
 import { createClient } from '@/lib/supabase/server';
@@ -187,6 +209,51 @@ describe('GET /api/tasks', () => {
       '2026-02-17',
       '2026-02-17',
     );
+  });
+
+  it('ensures the exact requested coverage for an upcoming read', async () => {
+    vi.mocked(mockTasksDB.getUpcomingTasks).mockResolvedValue([]);
+
+    const request = new NextRequest(
+      'http://localhost:3000/api/tasks?view=upcoming&date=2026-02-17&days=14',
+    );
+    await GET(request);
+
+    expect(mockEnsureRecurringCoverageThrough).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-123',
+      '2026-02-17',
+      '2026-03-03',
+    );
+  });
+
+  it('returns a typed warning when a date-bounded task read is degraded', async () => {
+    vi.mocked(mockTasksDB.getUserTasks).mockResolvedValue([]);
+    mockEnsureRecurringCoverageThrough.mockResolvedValueOnce({
+      status: 'partial',
+      warning: {
+        code: 'recurring_coverage_unavailable',
+        type: 'coverage-unavailable',
+        message: 'Recurring task coverage is unavailable for the requested date range.',
+        requestedRange: { from: '2026-02-17', to: '2026-02-17' },
+        failedSeriesIds: ['series-2'],
+      },
+      failedSeriesIds: ['series-2'],
+    });
+
+    const response = await GET(new NextRequest(
+      'http://localhost:3000/api/tasks?due_date=2026-02-17',
+    ));
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data._warnings).toEqual([
+      expect.objectContaining({
+        code: 'recurring_coverage_unavailable',
+        requestedRange: { from: '2026-02-17', to: '2026-02-17' },
+        failedSeriesIds: ['series-2'],
+      }),
+    ]);
   });
 
   it('should return 401 if not authenticated', async () => {

@@ -364,7 +364,7 @@ describe('GET /api/dashboard', () => {
     // Critical: _warnings must be present when logs fetch fails
     expect(data._warnings).toBeDefined();
     expect(data._warnings.length).toBeGreaterThan(0);
-    expect(data._warnings[0]).toContain('Absence');
+    expect(data._warnings[0].message).toContain('Absence');
   });
 
   it('should pass client date to getTodayTasks', async () => {

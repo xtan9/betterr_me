@@ -18,7 +18,10 @@ import type { WorkoutsDB } from "@/lib/db/workouts";
 import { computeMissedDays } from "@/lib/habits/absence";
 import { log } from "@/lib/logger";
 import type { RecurringGenerationResult } from "@/lib/recurring-tasks";
-import type { RecurringCoverageResult } from "@/lib/recurring-tasks/coverage";
+import type {
+  RecurringCoverageResult,
+} from "@/lib/recurring-tasks/coverage";
+import type { LocalDateRange } from "@/lib/recurring-tasks/lifecycle";
 import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
 
 export interface DashboardSnapshotDependencies {
@@ -28,6 +31,7 @@ export interface DashboardSnapshotDependencies {
   milestones: Pick<HabitMilestonesDB, "getTodaysMilestones">;
   localization: Pick<LocalizationDB, "getWeekStartPreference">;
   workouts: Pick<WorkoutsDB, "getLastCompletedAt" | "getWeekWorkoutCount">;
+  /** Transitional legacy seam; production adapters supply ensureRecurringCoverage. */
   generateRecurringTasks?(
     userId: string,
     throughDate: string,
@@ -51,6 +55,9 @@ export interface CompleteDashboardSnapshot {
 export interface DashboardSnapshotWarning {
   code: DashboardSnapshotWarningCode;
   message: string;
+  type?: "coverage-unavailable";
+  requestedRange?: LocalDateRange;
+  failedSeriesIds?: string[];
   habitId?: string;
 }
 
@@ -103,9 +110,9 @@ const WARNING_DEFINITIONS = {
       "Habit completion rates and graduation eligibility are temporarily unavailable.",
     priority: 2,
   },
-  recurring_generation_unavailable: {
+  recurring_coverage_unavailable: {
     message:
-      "Some recurring tasks may not appear because generation is temporarily unavailable.",
+      "Some recurring tasks may not appear because Coverage Horizon is unavailable for the requested range.",
     priority: 3,
   },
   localization_unavailable: {
@@ -131,9 +138,29 @@ export type DashboardSnapshotWarningCode = keyof typeof WARNING_DEFINITIONS;
 
 function warning(
   code: DashboardSnapshotWarningCode,
-  details: Pick<DashboardSnapshotWarning, "habitId"> = {},
+  details: Partial<Pick<
+    DashboardSnapshotWarning,
+    "type" | "requestedRange" | "failedSeriesIds" | "habitId"
+  >> = {},
 ): DashboardSnapshotWarning {
   return { code, message: WARNING_DEFINITIONS[code].message, ...details };
+}
+
+function recurringWarningDetails(
+  requestedRange: LocalDateRange,
+  result?: RecurringCoverageResult | RecurringGenerationResult,
+): Pick<
+  DashboardSnapshotWarning,
+  "type" | "requestedRange" | "failedSeriesIds"
+> {
+  const failedSeriesIds = result && "failedSeriesIds" in result
+    ? result.failedSeriesIds
+    : [];
+  return {
+    type: "coverage-unavailable",
+    requestedRange,
+    failedSeriesIds,
+  };
 }
 
 async function optional<T>(
@@ -187,10 +214,17 @@ export function createDashboardSnapshot(
             to: tomorrow,
           })
           : dependencies.generateRecurringTasks
-            ? await dependencies.generateRecurringTasks(userId, offsetDate(date, 7))
-            : { status: "complete" as const, failedSeriesIds: [] as [] };
+            ? await dependencies.generateRecurringTasks(userId, tomorrow)
+            : {
+              status: "complete" as const,
+              requestedRange: { from: date, to: tomorrow },
+              failedSeriesIds: [] as [],
+            };
         if (recurringResult.status === "partial") {
-          warnings.push(warning("recurring_generation_unavailable"));
+          warnings.push(warning(
+            "recurring_coverage_unavailable",
+            recurringWarningDetails({ from: date, to: tomorrow }, recurringResult),
+          ));
         }
       } catch (error) {
         log.error(
@@ -198,7 +232,10 @@ export function createDashboardSnapshot(
           error,
           { userId, date },
         );
-        warnings.push(warning("recurring_generation_unavailable"));
+        warnings.push(warning(
+          "recurring_coverage_unavailable",
+          recurringWarningDetails({ from: date, to: tomorrow }),
+        ));
       }
 
       let requiredData: Awaited<

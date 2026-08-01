@@ -31,6 +31,34 @@ vi.mock("@/lib/logger", () => ({
 
 vi.mock("@/lib/recurring-tasks/coverage", () => ({
   ensureRecurringTaskCoverageThrough: mockEnsureRecurringCoverageThrough,
+  recurringCoverageWarning: (requestedRange: { from: string; to: string }) => ({
+    code: "recurring_coverage_unavailable",
+    type: "coverage-unavailable",
+    message: "Recurring task coverage is unavailable for the requested date range.",
+    requestedRange,
+    failedSeriesIds: [],
+  }),
+  RecurringCoverageUnavailableError: class extends Error {
+    warning: {
+      code: string;
+      type: string;
+      message: string;
+      requestedRange: { from: string; to: string };
+      failedSeriesIds: string[];
+    };
+
+    constructor(warning: {
+      code: string;
+      type: string;
+      message: string;
+      requestedRange: { from: string; to: string };
+      failedSeriesIds: string[];
+    }) {
+      super(warning.message);
+      this.name = "RecurringCoverageUnavailableError";
+      this.warning = warning;
+    }
+  },
 }));
 
 // A chainable builder whose terminal methods (non-`single`) resolve to { data, error }.
@@ -240,6 +268,15 @@ describe("GET /api/calendar/feed", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.partialFailures).toEqual(["tasks"]);
+    expect(body.warnings).toEqual([
+      {
+        code: "recurring_coverage_unavailable",
+        type: "coverage-unavailable",
+        message: "Recurring task coverage is unavailable for the requested date range.",
+        requestedRange: { from: "2026-04-01", to: "2026-04-07" },
+        failedSeriesIds: [],
+      },
+    ]);
   });
 
   it("reports partial failure when tasks query errors", async () => {

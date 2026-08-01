@@ -136,6 +136,107 @@ describe("RecurringTaskLifecycle revision behavior", () => {
     expect(result.intentionalAbsences).toEqual(["2026-08-02", "2026-08-03"]);
   });
 
+  it("reports partial user coverage without hiding the Series that failed", async () => {
+    const backing = new InMemoryRecurringTaskLifecyclePersistence();
+    const failedSeriesIds = new Set<string>();
+    const persistence: RecurringTaskLifecyclePersistence = {
+      read: backing.read.bind(backing),
+      transaction: async (serializationKey, operation) => {
+        if (
+          serializationKey.startsWith("series:")
+          && failedSeriesIds.has(serializationKey.slice("series:".length))
+        ) {
+          throw new Error("Series coverage unavailable");
+        }
+        return backing.transaction(serializationKey, operation);
+      },
+    };
+    const lifecycle = new RecurringTaskLifecycle(persistence, {
+      clock: () => new Date("2026-08-01T12:00:00.000Z"),
+    });
+
+    const first = await lifecycle.createSeries({
+      userId: "user-partial",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("First"),
+      coverage: { from: "2026-08-01", to: "2026-08-01" },
+    });
+    const second = await lifecycle.createSeries({
+      userId: "user-partial",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Second"),
+      coverage: { from: "2026-08-01", to: "2026-08-01" },
+    });
+    expect(first.status).toBe("complete");
+    expect(second.status).toBe("complete");
+    if (first.status !== "complete" || second.status !== "complete") return;
+    failedSeriesIds.add(second.series.id);
+
+    const result = await lifecycle.ensureUserCoverage({
+      userId: "user-partial",
+      range: { from: "2026-08-01", to: "2026-08-03" },
+    });
+
+    expect(result.status).toBe("partial");
+    if (result.status !== "partial") return;
+    expect(result.failedSeriesIds).toEqual([second.series.id]);
+    expect(result.series.map((series) => series.id)).toEqual([first.series.id]);
+    expect(result.series[0].coverageHorizon).toBe("2026-08-03");
+  });
+
+  it("keeps repeated user coverage reads monotonic and occurrence-idempotent", async () => {
+    const lifecycle = new RecurringTaskLifecycle(
+      new InMemoryRecurringTaskLifecyclePersistence(),
+      {
+        clock: () => new Date("2026-08-01T12:00:00.000Z"),
+        idFactory: (() => {
+          let sequence = 0;
+          return () => `lifecycle-id-${++sequence}`;
+        })(),
+      },
+    );
+    const created = await lifecycle.createSeries({
+      userId: "user-repeated-read",
+      recurrenceRule: { frequency: "daily", interval: 1 },
+      recurrenceAnchor: "2026-08-01",
+      activationDate: "2026-08-01",
+      defaults: defaults("Repeated read"),
+    });
+    expect(created.status).toBe("complete");
+
+    const first = await lifecycle.ensureUserCoverage({
+      userId: "user-repeated-read",
+      range: { from: "2026-08-01", to: "2026-08-03" },
+    });
+    const repeated = await lifecycle.ensureUserCoverage({
+      userId: "user-repeated-read",
+      range: { from: "2026-08-01", to: "2026-08-03" },
+    });
+    const narrower = await lifecycle.ensureUserCoverage({
+      userId: "user-repeated-read",
+      range: { from: "2026-08-01", to: "2026-08-02" },
+    });
+
+    expect(first.status).toBe("complete");
+    expect(repeated.status).toBe("complete");
+    expect(narrower.status).toBe("complete");
+    if (
+      first.status !== "complete"
+      || repeated.status !== "complete"
+      || narrower.status !== "complete"
+    ) return;
+    expect(first.series[0].coverageHorizon).toBe("2026-08-03");
+    expect(repeated.series[0].coverageHorizon).toBe("2026-08-03");
+    expect(narrower.series[0].coverageHorizon).toBe("2026-08-03");
+    expect(new Set(repeated.occurrences.map((occurrence) => occurrence.id)).size)
+      .toBe(3);
+    expect(repeated.occurrences).toHaveLength(3);
+  });
+
   it("rejects invalid requests and reports missing, conflicting, and reused operations", async () => {
     const lifecycle = new RecurringTaskLifecycle(
       new InMemoryRecurringTaskLifecyclePersistence(),

@@ -9,8 +9,11 @@ import {
   toOccurrenceEditIntent,
 } from "@/lib/recurring-tasks/occurrence-adapter";
 import { createSupabaseOccurrenceAdapter } from "@/lib/recurring-tasks/supabase-occurrence-adapter";
-import { ensureRecurringTaskCoverageThrough } from "@/lib/recurring-tasks/coverage";
-import { addLocalDays } from "@/lib/recurring-tasks/recurrence";
+import {
+  ensureRecurringTaskCoverage,
+  RecurringCoverageUnavailableError,
+  taskReadCoverageRange,
+} from "@/lib/recurring-tasks/coverage";
 import {
   createSeriesCreation,
   initialSeriesCoverage,
@@ -65,7 +68,10 @@ export function taskTools(): ToolDefinition[] {
         date: z.string().describe("Date in YYYY-MM-DD format"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        await ensureAiRecurringCoverage(ctx, params.date, params.date);
+        await ensureAiRecurringCoverage(ctx, taskReadCoverageRange({
+          view: "today",
+          date: params.date,
+        })!);
         const db = new TasksDB(ctx.supabase);
         return db.getTodayTasks(ctx.userId, params.date);
       },
@@ -81,11 +87,11 @@ export function taskTools(): ToolDefinition[] {
           .describe("Number of days to look ahead (default 7)"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        await ensureAiRecurringCoverage(
-          ctx,
-          params.date,
-          addLocalDays(params.date, params.days ?? 7),
-        );
+        await ensureAiRecurringCoverage(ctx, taskReadCoverageRange({
+          view: "upcoming",
+          date: params.date,
+          days: params.days,
+        })!);
         const db = new TasksDB(ctx.supabase);
         return db.getUpcomingTasks(ctx.userId, params.date, params.days);
       },
@@ -97,7 +103,10 @@ export function taskTools(): ToolDefinition[] {
         date: z.string().describe("Current date in YYYY-MM-DD format"),
       }),
       execute: async (params, ctx: ToolContext) => {
-        await ensureAiRecurringCoverage(ctx, params.date, params.date);
+        await ensureAiRecurringCoverage(ctx, taskReadCoverageRange({
+          view: "overdue",
+          date: params.date,
+        })!);
         const db = new TasksDB(ctx.supabase);
         return db.getOverdueTasks(ctx.userId, params.date);
       },
@@ -400,16 +409,14 @@ export function taskTools(): ToolDefinition[] {
 
 async function ensureAiRecurringCoverage(
   ctx: ToolContext,
-  fromDate: string,
-  throughDate: string,
+  range: { from: string; to: string },
 ): Promise<void> {
-  const coverage = await ensureRecurringTaskCoverageThrough(
+  const coverage = await ensureRecurringTaskCoverage(
     ctx.supabase,
     ctx.userId,
-    fromDate,
-    throughDate,
+    range,
   );
   if (coverage.status === "partial") {
-    throw new Error("Recurring task coverage is temporarily unavailable");
+    throw new RecurringCoverageUnavailableError(coverage.warning);
   }
 }

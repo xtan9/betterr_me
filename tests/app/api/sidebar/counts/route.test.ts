@@ -97,6 +97,35 @@ describe("GET /api/sidebar/counts", () => {
     expect(body).toEqual({ habits_incomplete: 0, tasks_due: 0 });
   });
 
+  it("returns a typed warning instead of counts when coverage is partial", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+    });
+    mockRpc.mockResolvedValue({
+      data: {
+        status: "partial",
+        type: "partial",
+        failedSeriesIds: ["series-2"],
+      },
+      error: null,
+    });
+
+    const { GET } = await import("@/app/api/sidebar/counts/route");
+    const response = await GET(new NextRequest(
+      "http://localhost/api/sidebar/counts?date=2026-02-17",
+    ));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.warning).toEqual(expect.objectContaining({
+      code: "recurring_coverage_unavailable",
+      type: "coverage-unavailable",
+      requestedRange: { from: "2026-02-17", to: "2026-02-17" },
+      failedSeriesIds: ["series-2"],
+    }));
+    expect(mockGetTodayTasks).not.toHaveBeenCalled();
+  });
+
   it("returns 500 on database error", async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: "user-1" } },

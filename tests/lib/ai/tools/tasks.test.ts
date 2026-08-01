@@ -119,6 +119,25 @@ describe("taskTools", () => {
     expect(result).toEqual([{ id: "t1", title: "Buy groceries" }]);
   });
 
+  it("does not present AI tasks as complete when coverage cannot be ensured", async () => {
+    const ctx = makeCtx();
+    const getTodayTasks = taskTools().find((t) => t.name === "getTodayTasks")!;
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: new Error("coverage unavailable"),
+    });
+
+    await expect(getTodayTasks.execute({ date: "2026-04-08" }, ctx))
+      .rejects.toMatchObject({
+        name: "RecurringCoverageUnavailableError",
+        warning: expect.objectContaining({
+          code: "recurring_coverage_unavailable",
+          requestedRange: { from: "2026-04-08", to: "2026-04-08" },
+        }),
+      });
+    expect(mockGetTodayTasks).not.toHaveBeenCalled();
+  });
+
   it("createTask applies HTTP defaults and deterministic bottom placement", async () => {
     const ctx = makeCtx();
     const tools = taskTools();
@@ -213,6 +232,13 @@ describe("taskTools", () => {
       "2026-04-08",
       14,
     );
+    expect(mockRpc).toHaveBeenCalledWith("recurring_task_lifecycle", {
+      p_operation: "ensure-user-coverage",
+      p_request: {
+        userId: "user-123",
+        range: { from: "2026-04-08", to: "2026-04-22" },
+      },
+    });
     expect(result).toEqual([{ id: "t1" }]);
   });
 

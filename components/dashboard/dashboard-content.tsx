@@ -33,6 +33,7 @@ import { AbsenceCard } from "./absence-card";
 import { WorkoutStatsWidget } from "./workout-stats-widget";
 import { toast } from "sonner";
 import { log } from "@/lib/logger";
+import type { DashboardSnapshotWarning } from "@/lib/dashboard/dashboard-snapshot";
 import { ListChecks, Repeat, RefreshCw, Sparkles } from "lucide-react";
 import { getLocalDateString } from "@/lib/utils";
 import { shouldTrackOnDate } from "@/lib/habits/format";
@@ -120,9 +121,18 @@ export function DashboardContent({ initialData }: DashboardContentProps) {
 
   // Log non-fatal degradation warnings from the API
   useEffect(() => {
-    const warnings = (data as DashboardData & { _warnings?: string[] })?._warnings;
+    const warnings = (data as DashboardData & {
+      _warnings?: DashboardSnapshotWarning[];
+    })?._warnings;
     if (warnings?.length) {
-      for (const w of warnings) log.warn("Dashboard degradation", { warning: w });
+      for (const warning of warnings) {
+        log.warn("Dashboard degradation", {
+          warning: warning.message,
+          code: warning.code,
+          requestedRange: warning.requestedRange,
+          failedSeriesIds: warning.failedSeriesIds,
+        });
+      }
     }
   }, [data]);
 
