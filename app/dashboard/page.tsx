@@ -12,14 +12,5 @@ export default async function DashboardPage() {
     redirect("/auth/login");
   }
 
-  const userName =
-    user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
-  const avatarUrl = user?.user_metadata?.avatar_url ?? null;
-
-  return (
-    <DashboardContent
-      userName={userName}
-      avatarUrl={avatarUrl}
-    />
-  );
+  return <DashboardContent />;
 }

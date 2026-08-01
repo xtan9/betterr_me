@@ -3,6 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AppSidebar } from "@/components/layouts/app-sidebar";
 
+const { mockUseCurrentProfile, mockUseSWR } = vi.hoisted(() => ({
+  mockUseCurrentProfile: vi.fn(),
+  mockUseSWR: vi.fn(),
+}));
+
 // Mock next/navigation
 const mockPathname = vi.fn(() => "/dashboard");
 vi.mock("next/navigation", () => ({
@@ -69,6 +74,17 @@ vi.mock("@/lib/hooks/use-sidebar-counts", () => ({
   useSidebarCounts: () => mockUseSidebarCounts(),
 }));
 
+vi.mock("@/lib/hooks/use-current-profile", () => ({
+  useCurrentProfile: () => mockUseCurrentProfile(),
+}));
+
+vi.mock("swr", () => ({
+  default: (...args: unknown[]) => {
+    mockUseSWR(...args);
+    return { data: undefined, error: undefined, isLoading: false };
+  },
+}));
+
 // Mock shadcn tooltip components
 vi.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: any) => <>{children}</>,
@@ -98,6 +114,11 @@ describe("AppSidebar", () => {
       error: null,
       mutate: vi.fn(),
     });
+    mockUseCurrentProfile.mockReturnValue({
+      currentProfile: undefined,
+      status: "loading",
+    });
+    mockUseSWR.mockReset();
   });
 
   it("renders logo link + 8 nav items as links", () => {
@@ -363,6 +384,38 @@ describe("AppSidebar", () => {
 
       const badges = screen.getAllByTestId("sidebar-menu-badge");
       expect(badges).toHaveLength(2);
+    });
+  });
+
+  describe("admin navigation", () => {
+    it("shows the admin link only for an accepted permitted capability", () => {
+      mockUseCurrentProfile.mockReturnValue({
+        status: "available",
+        currentProfile: { capabilities: { canAccessAdmin: true } },
+      });
+
+      render(<AppSidebar {...defaultProps} />);
+
+      expect(screen.getByRole("link", { name: "admin" })).toHaveAttribute(
+        "href",
+        "/dashboard/admin",
+      );
+    });
+
+    it.each([
+      ["denied", { status: "available", currentProfile: { capabilities: { canAccessAdmin: false } } }],
+      ["loading", { status: "loading", currentProfile: undefined }],
+      ["unavailable", { status: "unavailable", currentProfile: undefined }],
+      [
+        "forged unavailable snapshot",
+        { status: "unavailable", currentProfile: { capabilities: { canAccessAdmin: true } } },
+      ],
+    ])("hides the admin link when capability data is %s", (_state, profileState) => {
+      mockUseCurrentProfile.mockReturnValue(profileState);
+
+      render(<AppSidebar {...defaultProps} />);
+
+      expect(screen.queryByRole("link", { name: "admin" })).not.toBeInTheDocument();
     });
   });
 });

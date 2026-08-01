@@ -26,6 +26,7 @@ describe("Current Profile architecture boundaries", () => {
       expect(contents, path).not.toMatch(
         /\/api\/(?:current-profile|preferences\/|profile-details|user-time-zone)/,
       );
+      expect(contents, path).not.toMatch(/\buser_metadata\b/);
       expect(contents, path).not.toMatch(
         /import\s+type\s+\{[\s\S]*?\bProfile\b[\s\S]*?\}\s+from\s+["']@\/lib\/db\/types["']|import\s+\{[\s\S]*?\bProfile\b[\s\S]*?\}\s+from\s+["']@\/lib\/db\/types["']/,
       );
