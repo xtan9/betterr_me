@@ -17,6 +17,7 @@ AS $function$
 DECLARE
   v_outcome JSONB;
   v_series_id UUID;
+  v_invalid_series_id BOOLEAN := false;
   v_user_id UUID := CASE
     WHEN COALESCE(auth.role(), '') = 'service_role'
       THEN COALESCE(
@@ -36,10 +37,15 @@ BEGIN
   BEGIN
     v_series_id := NULLIF(p_request->>'seriesId', '')::UUID;
   EXCEPTION WHEN others THEN
-    -- Let the underlying lifecycle function return its typed non-disclosing
-    -- outcome for malformed identifiers instead of raising in observability.
+    -- Preserve the typed non-disclosing outcome for malformed identifiers
+    -- instead of allowing a later lifecycle wrapper to raise during casting.
     v_series_id := NULL;
+    v_invalid_series_id := true;
   END;
+
+  IF v_invalid_series_id THEN
+    RETURN jsonb_build_object('status', 'not-found', 'type', 'not-found');
+  END IF;
 
   IF v_series_id IS NOT NULL THEN
     SELECT COUNT(*)::INTEGER
