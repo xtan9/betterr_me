@@ -4,6 +4,7 @@ import type {
   NotificationPreferenceOutcome,
 } from "@/lib/preferences/commands";
 import {
+  decodeReminderEmailPreference,
   decodePushQuietWindow,
   decodeUserTimeZone,
 } from "@/lib/preferences/owners";
@@ -53,6 +54,29 @@ export class NotificationsDB {
       ),
       userTimeZone,
     };
+  }
+
+  async getReminderEmailPreference(
+    userId: string,
+    identityEmail: string | null,
+  ): Promise<NotificationPreferences["reminderEmail"] | null> {
+    const { data, error } = await this.supabase
+      .from("profiles")
+      .select("preferences")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === "PGRST116") return null;
+      throw error;
+    }
+
+    if (!data) return null;
+
+    return decodeReminderEmailPreference(
+      (data as { preferences: PreferenceStorage }).preferences,
+      identityEmail,
+    );
   }
 
   async setNotificationPreference(

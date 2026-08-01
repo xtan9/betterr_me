@@ -57,7 +57,7 @@ interface SidebarUserFooterProps {
 
 export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterProps) {
   const { theme, selectTheme } = useAppearance();
-  const { data, error, status } = useCurrentProfile();
+  const { currentProfile, error, status } = useCurrentProfile();
   const locale = useLocale();
   const t = useTranslations("common.nav");
   const tSidebar = useTranslations("common.sidebar");
@@ -68,7 +68,6 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
   // eslint-disable-next-line react-hooks/set-state-in-effect -- standard hydration guard pattern
   useEffect(() => { setMounted(true); }, []);
 
-  const currentProfile = data?.currentProfile;
   const profileDetails = currentProfile?.profileDetails;
   const displayEmail = currentProfile?.identity.email ?? "";
   const initials = currentProfile
@@ -116,7 +115,7 @@ export function SidebarUserFooter({ onDropdownOpenChange }: SidebarUserFooterPro
     );
   }
 
-  if (!data) {
+  if (!currentProfile) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>

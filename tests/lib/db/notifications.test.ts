@@ -66,6 +66,27 @@ describe("NotificationsDB", () => {
     });
   });
 
+  it("reads only the Notifications-owned Reminder Email Preference", async () => {
+    const db = new NotificationsDB(
+      mockSupabaseClient as unknown as SupabaseClient,
+    );
+
+    mockSupabaseClient.setMockResponse({
+      preferences: { email_notifications_enabled: true },
+    });
+
+    await expect(
+      db.getReminderEmailPreference("user-123", "person@example.test"),
+    ).resolves.toEqual({
+      status: "ready",
+      value: { enabled: true },
+    });
+    expect(
+      mockSupabaseClient.queryLog.findLast((entry) => entry.method === "select")
+        ?.args[0],
+    ).toBe("preferences");
+  });
+
   it("submits the discriminated Notification Intent and returns its owner outcome", async () => {
     const outcome = {
       reminderEmail: { enabled: false },

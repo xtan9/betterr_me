@@ -4,6 +4,7 @@ import {
   decodeFitnessPreferences,
   decodeLocalizationPreferences,
   decodeNotificationPreferences,
+  decodeReminderEmailPreference,
   decodeUserTimeZone,
   weekStartDayToPreference,
   weekStartPreferenceToDay,
@@ -91,6 +92,15 @@ describe("Preference Owners", () => {
     expect(
       decodeNotificationPreferences({}, null, null).reminderEmail,
     ).toEqual({ status: "ready", value: { enabled: false } });
+  });
+
+  it("decodes only the Reminder Email owner value for narrow readers", () => {
+    expect(
+      decodeReminderEmailPreference(
+        { email_notifications_enabled: true },
+        "person@example.com",
+      ),
+    ).toEqual({ status: "ready", value: { enabled: true } });
   });
 
   it("does not claim enabled Reminder Email is accepted without an Identity Email", () => {

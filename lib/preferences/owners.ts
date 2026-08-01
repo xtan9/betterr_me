@@ -157,6 +157,16 @@ function decodeReminderEmail(
   return { status: "ready", value: { enabled: true } };
 }
 
+export function decodeReminderEmailPreference(
+  preferences: PreferenceStorage,
+  identityEmail: string | null,
+): NotificationPreferences["reminderEmail"] {
+  return decodeReminderEmail(
+    isRecord(preferences) ? preferences : null,
+    identityEmail,
+  );
+}
+
 export function decodePushQuietWindow(
   stored: PreferenceStorage,
   timeZone: UserTimeZone,
@@ -189,7 +199,7 @@ export function decodeNotificationPreferences(
 ): NotificationPreferences {
   const stored = isRecord(preferences) ? preferences : null;
   return {
-    reminderEmail: decodeReminderEmail(stored, identityEmail),
+    reminderEmail: decodeReminderEmailPreference(preferences, identityEmail),
     pushQuietWindow: decodePushQuietWindow(
       stored,
       decodeUserTimeZone(timeZone),

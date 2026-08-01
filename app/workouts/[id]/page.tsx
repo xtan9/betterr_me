@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { WorkoutsDB } from "@/lib/db/workouts";
-import { ProfilesDB } from "@/lib/db/profiles";
+import { FitnessDB } from "@/lib/db/fitness";
 import { log } from "@/lib/logger";
 import { PageHeader } from "@/components/layouts/page-header";
 import { WorkoutDetailView } from "@/components/fitness/workout-history/workout-detail-view";
@@ -47,13 +47,13 @@ export default async function WorkoutDetailPage({
     redirect("/workouts/active");
   }
 
-  const profilesDB = new ProfilesDB(supabase);
+  const fitnessDB = new FitnessDB(supabase);
   // Canonical kilograms are the explicit degraded presentation when Fitness
   // storage is unavailable or contains no accepted unit.
   let weightUnit: WeightUnitPreference = DEFAULT_WEIGHT_UNIT_PREFERENCE;
   try {
     weightUnit =
-      (await profilesDB.getFitnessWeightUnitPreference(user.id)) ??
+      (await fitnessDB.getWeightUnitPreference(user.id)) ??
       DEFAULT_WEIGHT_UNIT_PREFERENCE;
   } catch (error) {
     log.error("Failed to read Fitness Weight Unit Preference", error);

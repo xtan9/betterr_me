@@ -19,8 +19,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import {
-  profileFormSchema,
-  type ProfileFormValues,
+  profileDetailsFormSchema,
+  type ProfileDetailsFormValues,
 } from "@/lib/validations/profile";
 import type { CurrentProfileResponse } from "@/lib/current-profile";
 import { useProfileDetails } from "@/lib/hooks/use-profile-preferences";
@@ -57,11 +57,11 @@ export function ProfileForm({
   const { details, currentProfile, isLoading, updateProfileDetails } =
     useProfileDetails({ initialData, initialSubject });
 
-  const form = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileFormSchema),
+  const form = useForm<ProfileDetailsFormValues>({
+    resolver: zodResolver(profileDetailsFormSchema),
     defaultValues: {
-      full_name: "",
-      avatar_url: "",
+      fullName: "",
+      avatarUrl: "",
     },
   });
 
@@ -69,32 +69,32 @@ export function ProfileForm({
   useEffect(() => {
     if (details) {
       form.reset({
-        full_name: details.fullName ?? "",
-        avatar_url: details.avatarUrl ?? "",
+        fullName: details.fullName ?? "",
+        avatarUrl: details.avatarUrl ?? "",
       });
     }
   }, [details, form]);
 
-  const handleSubmit = async (data: ProfileFormValues) => {
+  const handleSubmit = async (data: ProfileDetailsFormValues) => {
     setIsSaving(true);
     try {
       const patch: { fullName?: string | null; avatarUrl?: string | null } = {};
-      if (form.formState.dirtyFields.full_name) {
-        patch.fullName = data.full_name || null;
+      if (form.formState.dirtyFields.fullName) {
+        patch.fullName = data.fullName || null;
       }
-      if (form.formState.dirtyFields.avatar_url) {
-        patch.avatarUrl = data.avatar_url || null;
+      if (form.formState.dirtyFields.avatarUrl) {
+        patch.avatarUrl = data.avatarUrl || null;
       }
       const outcome = await updateProfileDetails(patch);
       form.reset({
-        full_name: outcome.fullName,
-        avatar_url: outcome.avatarUrl,
+        fullName: outcome.fullName,
+        avatarUrl: outcome.avatarUrl,
       });
       toast.success(t("success"));
     } catch (error) {
       form.reset({
-        full_name: details?.fullName ?? "",
-        avatar_url: details?.avatarUrl ?? "",
+        fullName: details?.fullName ?? "",
+        avatarUrl: details?.avatarUrl ?? "",
       });
       console.error("Update profile error:", error);
       toast.error(t("error"));
@@ -114,7 +114,7 @@ export function ProfileForm({
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
-          name="full_name"
+          name="fullName"
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("fullName")}</FormLabel>
@@ -145,7 +145,7 @@ export function ProfileForm({
 
         <FormField
           control={form.control}
-          name="avatar_url"
+          name="avatarUrl"
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("avatarUrl")}</FormLabel>
