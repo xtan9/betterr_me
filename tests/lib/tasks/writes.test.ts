@@ -442,3 +442,113 @@ describe('TaskWrites', () => {
     expect(editOccurrence).not.toHaveBeenCalled();
   });
 });
+
+describe('Task Reminder Configuration', () => {
+  it('normalizes a complete desired intent before delegating to persistence', async () => {
+    const persistence = createPersistence();
+    const configureTaskReminders = vi.fn().mockResolvedValue({
+      type: 'configured',
+      reminders: [],
+    });
+    persistence.configureTaskReminders = configureTaskReminders;
+    const writes = new TaskWrites(persistence);
+
+    await expect(writes.configureReminders({
+      userId: ' user-1 ',
+      taskId: ' task-1 ',
+      reminders: [
+        {
+          reminderType: 'relative',
+          relativeMinutes: 15,
+          channels: ['email', 'push'],
+        },
+      ],
+    })).resolves.toEqual({ type: 'configured', reminders: [] });
+
+    expect(configureTaskReminders).toHaveBeenCalledWith({
+      userId: 'user-1',
+      taskId: 'task-1',
+      reminders: [
+        {
+          reminderType: 'relative',
+          relativeMinutes: 15,
+          absoluteTime: null,
+          channels: ['email', 'push'],
+        },
+      ],
+    });
+  });
+
+  it('returns typed invalid and conflict outcomes without opening persistence', async () => {
+    const persistence = createPersistence();
+    const configureTaskReminders = vi.fn();
+    persistence.configureTaskReminders = configureTaskReminders;
+    const writes = new TaskWrites(persistence);
+
+    await expect(writes.configureReminders({
+      userId: 'user-1',
+      taskId: 'task-1',
+      reminders: [{
+        reminderType: 'absolute',
+        absoluteTime: 'not-a-datetime',
+        channels: ['push'],
+      }],
+    })).resolves.toEqual({
+      type: 'invalid',
+      field: 'reminders[0].absoluteTime',
+      message: 'absoluteTime must be a valid datetime',
+    });
+
+    await expect(writes.configureReminders({
+      userId: 'user-1',
+      taskId: 'task-1',
+      reminders: [
+        { reminderType: 'absolute', absoluteTime: '2026-08-03T09:00:00Z', channels: ['push'] },
+        { reminderType: 'absolute', absoluteTime: '2026-08-03T09:00:00Z', channels: ['push'] },
+      ],
+    })).resolves.toEqual({
+      type: 'conflict',
+      resource: 'reminder',
+      reason: 'Duplicate reminder configuration',
+    });
+
+    expect(configureTaskReminders).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['configured', { type: 'configured', reminders: [] }],
+    ['removed', { type: 'removed', reminders: [] }],
+    ['already-applied', { type: 'already-applied', reminders: [] }],
+    ['not-found', { type: 'not-found' }],
+    ['conflict', { type: 'conflict', resource: 'reminder' }],
+    ['invalid', { type: 'invalid', field: 'taskId', message: 'Task identity is required' }],
+  ] as const)('preserves the typed %s persistence outcome', async (_label, outcome) => {
+    const persistence = createPersistence();
+    persistence.configureTaskReminders = vi.fn().mockResolvedValue(outcome);
+    const writes = new TaskWrites(persistence);
+
+    const request = outcome.type === 'invalid'
+      ? { userId: 'user-1', taskId: 'task-1', reminders: [] }
+      : { userId: 'user-1', taskId: 'task-1', reminders: [] };
+    await expect(writes.configureReminders(request)).resolves.toEqual(outcome);
+  });
+
+  it('does not accept a calendar or habit source discriminator', async () => {
+    const persistence = createPersistence();
+    const configureTaskReminders = vi.fn();
+    persistence.configureTaskReminders = configureTaskReminders;
+    const writes = new TaskWrites(persistence);
+
+    await expect(writes.configureReminders({
+      userId: 'user-1',
+      taskId: 'task-1',
+      reminders: [],
+      sourceType: 'calendar_event',
+    } as never)).resolves.toEqual({
+      type: 'invalid',
+      field: 'sourceType',
+      message: 'Task reminder configuration cannot select another source',
+    });
+    expect(configureTaskReminders).not.toHaveBeenCalled();
+  });
+});

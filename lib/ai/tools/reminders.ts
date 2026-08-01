@@ -5,6 +5,11 @@ import {
   CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR,
   isCalendarEventReminder,
 } from "@/lib/reminders/lifecycle-policy";
+import {
+  createTaskWrites,
+  toTaskReminderResponse,
+  type TaskReminderConfigurationPersistenceOutcome,
+} from "@/lib/tasks/writes";
 
 const lifecycleConflict = { error: CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR };
 
@@ -39,9 +44,21 @@ export function reminderTools(): ToolDefinition[] {
           ),
       }),
       execute: async (params, ctx: ToolContext) => {
+        if (params.sourceType === "task") {
+          const outcome = await createTaskWrites(ctx.supabase).configureReminders({
+            userId: ctx.userId,
+            taskId: params.sourceId,
+            reminders: [{
+              reminderType: "absolute",
+              absoluteTime: params.fireAt,
+              channels: ["push"],
+            }],
+          });
+          return taskReminderOutcomeForAi(outcome);
+        }
         const db = new RemindersDB(ctx.supabase);
         return db.createReminder(ctx.userId, {
-          source_type: params.sourceType,
+          source_type: "habit",
           source_id: params.sourceId,
           reminder_type: "absolute",
           relative_minutes: null,
@@ -105,9 +122,33 @@ export function reminderTools(): ToolDefinition[] {
         if (isCalendarEventReminder(reminder.source_type)) {
           return lifecycleConflict;
         }
+        if (reminder.source_type === "task") {
+          const outcome = await createTaskWrites(ctx.supabase).configureReminders({
+            userId: ctx.userId,
+            taskId: reminder.source_id,
+            reminders: [],
+          });
+          return taskReminderOutcomeForAi(outcome);
+        }
         await db.deleteReminder(ctx.userId, params.reminderId);
         return { success: true };
       },
     },
   ];
+}
+
+function taskReminderOutcomeForAi(
+  outcome: TaskReminderConfigurationPersistenceOutcome,
+) {
+  if (outcome.type === "not-found") return { error: "Task not found" };
+  if (outcome.type === "conflict") {
+    return { error: outcome.reason ?? "Task reminder configuration conflicted" };
+  }
+  if (outcome.type === "invalid") {
+    return { error: outcome.message, field: outcome.field };
+  }
+  if (outcome.type === "removed") return { success: true };
+  return outcome.reminders[0]
+    ? toTaskReminderResponse(outcome.reminders[0])
+    : { success: true };
 }

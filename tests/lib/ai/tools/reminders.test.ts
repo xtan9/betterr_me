@@ -9,6 +9,9 @@ const mockUpdateReminder = vi.fn();
 const mockDeleteReminder = vi.fn();
 const mockGetReminder = vi.fn();
 const mockTransitionCalendarEventReminder = vi.fn();
+const { mockConfigureTaskReminders } = vi.hoisted(() => ({
+  mockConfigureTaskReminders: vi.fn(),
+}));
 
 vi.mock("@/lib/db", () => ({
   RemindersDB: class {
@@ -20,6 +23,13 @@ vi.mock("@/lib/db", () => ({
     getReminder = mockGetReminder;
     transitionCalendarEventReminder = mockTransitionCalendarEventReminder;
   },
+}));
+
+vi.mock("@/lib/tasks/writes", () => ({
+  createTaskWrites: vi.fn(() => ({
+    configureReminders: mockConfigureTaskReminders,
+  })),
+  toTaskReminderResponse: (reminder: unknown) => reminder,
 }));
 
 function makeCtx(): ToolContext {
@@ -38,7 +48,11 @@ function findTool(name: string) {
 describe("reminderTools", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetReminder.mockResolvedValue({ id: "r1", source_type: "task" });
+    mockGetReminder.mockResolvedValue({ id: "r1", source_type: "task", source_id: "t1" });
+    mockConfigureTaskReminders.mockResolvedValue({
+      type: "configured",
+      reminders: [{ id: "r1", source_type: "task" }],
+    });
   });
 
   it("returns 4 tool definitions", () => {
@@ -50,15 +64,32 @@ describe("reminderTools", () => {
     ]);
   });
 
-  it("creates task and habit reminders through the standalone tool", async () => {
-    mockCreateReminder.mockResolvedValue({ id: "r1" });
+  it("routes task reminder configuration through TaskWrites", async () => {
     await findTool("createReminder").execute(
       { sourceType: "task", sourceId: "t1", fireAt: "2026-04-10T09:00:00Z" },
       makeCtx(),
     );
+    expect(mockConfigureTaskReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      taskId: "t1",
+      reminders: [{
+        reminderType: "absolute",
+        absoluteTime: "2026-04-10T09:00:00Z",
+        channels: ["push"],
+      }],
+    });
+    expect(mockCreateReminder).not.toHaveBeenCalled();
+  });
+
+  it("keeps Habit reminder configuration on the generic source adapter", async () => {
+    mockCreateReminder.mockResolvedValue({ id: "r1" });
+    await findTool("createReminder").execute(
+      { sourceType: "habit", sourceId: "h1", fireAt: "2026-04-10T09:00:00Z" },
+      makeCtx(),
+    );
     expect(mockCreateReminder).toHaveBeenCalledWith("user-123", {
-      source_type: "task",
-      source_id: "t1",
+      source_type: "habit",
+      source_id: "h1",
       reminder_type: "absolute",
       relative_minutes: null,
       absolute_time: "2026-04-10T09:00:00Z",
@@ -143,7 +174,23 @@ describe("reminderTools", () => {
     expect(mockUpdateReminderStatus).not.toHaveBeenCalled();
   });
 
-  it("deletes an existing non-event reminder", async () => {
+  it("routes Task reminder removal through TaskWrites", async () => {
+    mockConfigureTaskReminders.mockResolvedValue({
+      type: "removed",
+      reminders: [],
+    });
+    const result = await findTool("deleteReminder").execute({ reminderId: "r1" }, makeCtx());
+    expect(mockConfigureTaskReminders).toHaveBeenCalledWith({
+      userId: "user-123",
+      taskId: "t1",
+      reminders: [],
+    });
+    expect(mockDeleteReminder).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: true });
+  });
+
+  it("keeps Habit reminder removal on the generic source adapter", async () => {
+    mockGetReminder.mockResolvedValue({ id: "r1", source_type: "habit" });
     const result = await findTool("deleteReminder").execute({ reminderId: "r1" }, makeCtx());
     expect(mockDeleteReminder).toHaveBeenCalledWith("user-123", "r1");
     expect(result).toEqual({ success: true });

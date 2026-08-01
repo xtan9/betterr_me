@@ -43,6 +43,22 @@ select set_config(
   true
 );
 
+reset role;
+insert into public.tasks (
+  id,
+  user_id,
+  title,
+  due_date,
+  due_time
+) values (
+  '49900000-0000-0000-0000-000000000803',
+  '49900000-0000-0000-0000-000000000001',
+  'Unrelated Task reminder source',
+  '2026-08-05',
+  '12:00:00'
+);
+set local role authenticated;
+
 do $$
 begin
   if not has_function_privilege(
@@ -402,6 +418,18 @@ begin
   );
   target_event_id := (created_target->'event'->>'id')::uuid;
 
+  task_reminder_id := (
+    public.configure_task_reminders(
+      '49900000-0000-0000-0000-000000000001',
+      '49900000-0000-0000-0000-000000000803',
+      '[{
+        "reminder_type": "absolute",
+        "absolute_time": "2026-08-05T11:00:00Z",
+        "channels": ["push"]
+      }]'::jsonb
+    )->'reminders'->0->>'id'
+  )::uuid;
+
   created_unrelated := public.create_calendar_event_with_reminder(
     '49900000-0000-0000-0000-000000000001',
     '{
@@ -424,25 +452,6 @@ begin
 
   insert into ralph_499_ids(label, event_id, reminder_id)
   values ('same_owner', same_owner_event_id, same_owner_reminder_id);
-
-  insert into public.reminders (
-    user_id,
-    source_type,
-    source_id,
-    reminder_type,
-    absolute_time,
-    channels,
-    fire_at
-  ) values (
-    '49900000-0000-0000-0000-000000000001',
-    'task',
-    target_event_id,
-    'absolute',
-    '2026-08-05 11:00:00+00',
-    array['push'],
-    '2026-08-05 11:00:00+00'
-  )
-  returning id into task_reminder_id;
 
   deleted := public.delete_calendar_event_with_reminders(
     '49900000-0000-0000-0000-000000000001',
@@ -468,12 +477,12 @@ begin
       and source_type = 'calendar_event'
       and source_id = same_owner_event_id
   ) or not exists (
-    select 1
-    from public.reminders
-    where id = task_reminder_id
-      and source_type = 'task'
-      and source_id = target_event_id
-      and calendar_event_source_id is null
+      select 1
+      from public.reminders
+      where id = task_reminder_id
+        and source_type = 'task'
+        and source_id = '49900000-0000-0000-0000-000000000803'
+        and calendar_event_source_id is null
   ) then
     raise exception 'event-only delete changed unrelated caller-owned data';
   end if;

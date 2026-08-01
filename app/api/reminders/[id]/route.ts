@@ -6,6 +6,11 @@ import { reminderUpdateSchema } from "@/lib/validations/reminders";
 import { validateRequestBody } from "@/lib/validations/api";
 import { log } from "@/lib/logger";
 import {
+  createTaskWrites,
+  type TaskReminderInput,
+} from "@/lib/tasks/writes";
+import { taskReminderConfigurationResponse } from "@/lib/reminders/task-configuration-response";
+import {
   CALENDAR_EVENT_REMINDER_LIFECYCLE_ERROR,
   isCalendarEventReminder,
 } from "@/lib/reminders/lifecycle-policy";
@@ -88,6 +93,32 @@ export async function PATCH(
       );
       return NextResponse.json({ reminder });
     }
+
+    if (existing.source_type === "task" && validation.data.channels !== undefined) {
+      const updateKeys = Object.keys(validation.data);
+      if (updateKeys.some((key) => ["status", "fire_at", "sent_at"].includes(key))) {
+        return NextResponse.json(
+          { error: "Task reminder configuration cannot be combined with delivery updates" },
+          { status: 400 },
+        );
+      }
+      const reminder = toTaskReminderInput(existing, validation.data.channels);
+      if (!reminder) {
+        return NextResponse.json(
+          { error: "Stored Task reminder configuration is invalid" },
+          { status: 500 },
+        );
+      }
+      const outcome = await createTaskWrites(supabase).configureReminders({
+        userId,
+        taskId: existing.source_id,
+        reminders: [reminder],
+      });
+      return taskReminderConfigurationResponse(outcome);
+    }
+
+    // Status, fire_at, and sent_at are Reminder Delivery transitions. They
+    // remain on the delivery persistence path and do not alter Task intent.
     const reminder = await remindersDB.updateReminder(
       userId,
       id,
@@ -131,6 +162,14 @@ export async function DELETE(
     if (isCalendarEventReminder(existing.source_type)) {
       return lifecycleConflict();
     }
+    if (existing.source_type === "task") {
+      const outcome = await createTaskWrites(supabase).configureReminders({
+        userId,
+        taskId: existing.source_id,
+        reminders: [],
+      });
+      return taskReminderConfigurationResponse(outcome);
+    }
     await remindersDB.deleteReminder(userId, id);
 
     return NextResponse.json({ success: true });
@@ -141,4 +180,28 @@ export async function DELETE(
       { status: 500 }
     );
   }
+}
+
+function toTaskReminderInput(
+  reminder: {
+    reminder_type: "relative" | "absolute";
+    relative_minutes: number | null;
+    absolute_time: string | null;
+  },
+  channels: readonly ("push" | "email")[],
+): TaskReminderInput | null {
+  if (reminder.reminder_type === "relative") {
+    if (reminder.relative_minutes === null) return null;
+    return {
+      reminderType: "relative",
+      relativeMinutes: reminder.relative_minutes,
+      channels,
+    };
+  }
+  if (reminder.absolute_time === null) return null;
+  return {
+    reminderType: "absolute",
+    absoluteTime: reminder.absolute_time,
+    channels,
+  };
 }
